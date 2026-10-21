@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, MoreHorizontal, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, FolderInput, FolderPlus, MoreHorizontal, Plus } from 'lucide-react';
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
-import { promptText } from '../store';
+import { promptText, useApp } from '../store';
+import { DEFAULT_FOLDER, folderOf, storedFolder } from '../lib/folders';
 import { cx, Menu, rowActionClass, type MenuItem } from './ui';
 import { LABEL } from '../lib/vocabulary';
 import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu';
@@ -94,8 +95,15 @@ export function TreeHeader({
   );
 }
 
-/** Ask for a new folder's name. */
-export const askFolderName = async () => (await promptText('New folder', { message: 'Folder name', okLabel: 'Create' }))?.trim() || undefined;
+/** Ask for a new folder's name (General is the built-in folder every list has: asking for it says so and makes nothing). */
+export const askFolderName = async () => {
+  const name = (await promptText('New folder', { message: 'Folder name', okLabel: 'Create' }))?.trim() || undefined;
+  if (name === DEFAULT_FOLDER) {
+    useApp.getState().toast(`The folder ${DEFAULT_FOLDER} exists: every list has it`, 'info');
+    return undefined;
+  }
+  return name;
+};
 
 const SHORT_METHOD: Record<string, string> = { DELETE: 'DEL', OPTIONS: 'OPT' };
 
@@ -131,15 +139,19 @@ export const KIND_COLOR = {
   dataset: 'kind-dataset',
 } as const;
 
-/** "Move to folder" in an item's menu: each folder, a new one, or the top level. */
+/**
+ * "Move to folder" in an item's menu: each folder (General included: moving there stores no folder) and a new one. `current` is
+ * the item's folder as stored (none = General); `folders` are the names the list shows (lib/folders.ts folderNamesOf).
+ */
 export function moveToFolderItem({ folders, current, move }: { folders: string[]; current?: string; move(folder: string | undefined): unknown }): MenuItem {
-  const others = folders.filter((f) => f !== current);
+  const here = folderOf(current);
+  const others = folders.filter((f) => f !== here);
   return {
     label: LABEL.moveToFolder,
     icon: <FolderInput size={14} />,
     onSelect: () => undefined,
     items: [
-      ...others.map((f) => ({ label: f, icon: <Folder size={14} />, onSelect: () => void move(f) })),
+      ...others.map((f) => ({ label: f, icon: <Folder size={14} />, onSelect: () => void move(storedFolder(f)) })),
       {
         label: LABEL.newFolder,
         icon: <FolderPlus size={14} />,
@@ -149,7 +161,6 @@ export function moveToFolderItem({ folders, current, move }: { folders: string[]
           if (name) await move(name);
         },
       },
-      ...(current ? [{ label: 'Move to top level', icon: <FolderOpen size={14} />, onSelect: () => void move(undefined) }] : []),
     ],
   };
 }
@@ -182,7 +193,7 @@ export function InlineRename({ value, onCommit, onCancel, validate, label = 'Nam
   // a click anywhere else ends the rename, even if the field lost the focus to something else
   useEffect(() => {
     const away = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) ref.current.blur(), finishRef.current();
+      if (ref.current && !ref.current.contains(e.target as Node)) (ref.current.blur(), finishRef.current());
     };
     document.addEventListener('pointerdown', away, true);
     return () => document.removeEventListener('pointerdown', away, true);
@@ -228,7 +239,11 @@ export function InlineRename({ value, onCommit, onCancel, validate, label = 'Nam
         onDragStart={(e) => (e.preventDefault(), e.stopPropagation())}
         className={cx('w-full h-6 px-1.5 -ml-1.5 rounded-md bg-field text-fg text-sm border outline-none focus:ring-2', error ? 'border-bad focus:ring-bad/30' : 'border-accent focus:ring-accent/30')}
       />
-      {error && <span role="alert" className="absolute left-0 top-full mt-1 z-20 rounded-md bg-bad text-white text-xs px-2 py-0.5 shadow whitespace-nowrap">{error}</span>}
+      {error && (
+        <span role="alert" className="absolute left-0 top-full mt-1 z-20 rounded-md bg-bad text-white text-xs px-2 py-0.5 shadow whitespace-nowrap">
+          {error}
+        </span>
+      )}
     </span>
   );
 }
@@ -330,8 +345,7 @@ export function treeKeys(e: React.KeyboardEvent<HTMLElement>): void {
       next?.focus();
       next?.scrollIntoView({ block: 'nearest' });
     }, 80);
-  }
-  else if ((e.key === 'ArrowRight' && row.getAttribute('aria-expanded') === 'false') || (e.key === 'ArrowLeft' && row.getAttribute('aria-expanded') === 'true')) {
+  } else if ((e.key === 'ArrowRight' && row.getAttribute('aria-expanded') === 'false') || (e.key === 'ArrowLeft' && row.getAttribute('aria-expanded') === 'true')) {
     e.preventDefault();
     row.click();
   } else if (e.key.length === 1 && e.key !== '*' && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {

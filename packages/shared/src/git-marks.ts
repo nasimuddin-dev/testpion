@@ -21,6 +21,12 @@ export function gitRefKey(ref: ItemRef): string {
 /** The key of a folder of a kind's list (a library folder, a folder of test files, a collection's folder uses its ref). */
 export const gitFolderKey = (kind: KindId, folder: string): string => `folder|${kind}|${folder}`;
 
+/**
+ * The built-in folder of every list of saved items: an item with no folder is shown in it (a view of the list, not
+ * stored: the file keeps `folder` unset), and an item whose stored folder is literally this name is in it too.
+ */
+export const DEFAULT_FOLDER = 'General';
+
 /** The key of a section header: every change of a kind. */
 export const gitSectionKey = (kind: KindId): string => `section|${kind}`;
 

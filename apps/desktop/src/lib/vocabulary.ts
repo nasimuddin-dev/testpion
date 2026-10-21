@@ -1,3 +1,5 @@
+import { DEFAULT_FOLDER } from '@testpion/shared';
+
 /**
  * WF-13: one word for one action, in every menu, toolbar and palette. Menus use these, and a unit test keeps the
  * retired variants out of the window's code. Node menus (every tree and list row) are built by lib/node-menu.ts from
@@ -43,6 +45,8 @@ export const LABEL = {
   createTestFileFromFolder: 'Create test file from folder…',
   /** Asks for the folder's name (the ellipsis says so, as every item that opens a dialog). */
   newFolder: 'New folder…',
+  /** The built-in folder of every list: where the items that have no folder are shown (lib/folders.ts). */
+  defaultFolder: DEFAULT_FOLDER,
   /** The submenu of the other request kinds a collection can hold. */
   newRequest: 'New request',
   import: 'Import…',

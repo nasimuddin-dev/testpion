@@ -1,4 +1,4 @@
-import { KIND_INFO, gitFolderKey, type KindId } from '@testpion/shared';
+import { DEFAULT_FOLDER, KIND_INFO, gitFolderKey, type KindId } from '@testpion/shared';
 import { sameValue } from '../storage/stable-files.js';
 import type { SemanticChange } from './semantic.js';
 
@@ -35,7 +35,8 @@ export function folderLibraryChanges(file: string, library: string, before: stri
   const folderOf = (l: FolderLib) => new Map((l.items ?? []).map((i) => [i.id, i.folder ?? '']));
   const [fa, fb] = [new Set(a.folders ?? []), new Set(b.folders ?? [])];
   const out: SemanticChange[] = [];
-  const own = (folder: string) => (folder ? [gitFolderKey(kind, folder)] : []);
+  // an item in no folder is in General (the list shows it there)
+  const own = (folder: string) => [gitFolderKey(kind, folder || DEFAULT_FOLDER)];
   const row = (c: Pick<SemanticChange, 'change' | 'title' | 'details' | 'containers'> & Partial<SemanticChange>): SemanticChange => ({ file, kind, kindId: kind, ...c });
   for (const f of fb) if (!fa.has(f)) out.push(row({ change: 'added', title: `${info.label} folder ${f}`, details: [], containers: own(f) }));
   for (const f of fa) if (!fb.has(f)) out.push(row({ change: 'removed', title: `${info.label} folder ${f}`, details: [], containers: own(f) }));

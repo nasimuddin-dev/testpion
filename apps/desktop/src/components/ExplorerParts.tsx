@@ -1,15 +1,15 @@
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { baseKind, type ItemRef } from '@testpion/shared';
-import { promptText } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
+import { useApp } from '../store';
 import type { NodeKind, NodeMenuCtx } from '../lib/node-menu';
-import { LABEL } from '../lib/vocabulary';
 import { treeKey, useTreeOpen } from '../lib/tree-state';
 import { restoreFolder } from './FolderList';
 import { TreeRowShell } from './TreeRowShell';
 import type { GitTarget } from './GitMark';
-import { CLOSED_ICON, CountPill, FOLDER_ICON, OPEN_ICON, focusRow, moveToFolderItem } from './TreeParts';
+import { CLOSED_ICON, CountPill, FOLDER_ICON, OPEN_ICON, askFolderName, focusRow, moveToFolderItem } from './TreeParts';
+import { DEFAULT_FOLDER, DEFAULT_FOLDER_WHY, folderNamesOf, groupByFolder, keptFolders } from '../lib/folders';
 import { Button } from './ui';
 import { sameProps } from '../lib/same-node';
 import { useIsOpenItem } from './open-request-id';
@@ -101,31 +101,15 @@ interface ItemRowViewProps {
   git?: GitTarget;
 }
 
-const ItemRowView = memo(
-  function ItemRowView({ kind, nodeId, icon, label, sub, active, indent, onClick, ctx, renaming, done, drag, git }: ItemRowViewProps) {
-    return (
-      <TreeRowShell
-        kind={kind}
-        nodeId={nodeId}
-        label={label}
-        depth={indent ? 2 : 1}
-        active={active}
-        onClick={onClick}
-        onOpen={onClick}
-        ctx={ctx}
-        drag={drag}
-        git={git}
-        rename={renaming ? { value: label, done } : undefined}
-        className={indent ? 'pl-10' : 'pl-6'}
-      >
-        {icon && <span className="text-muted shrink-0">{icon}</span>}
-        <span className="truncate flex-1">{label}</span>
-        {sub && <span className="text-xs text-muted truncate max-w-[45%]">{sub}</span>}
-      </TreeRowShell>
-    );
-  },
-  sameProps,
-);
+const ItemRowView = memo(function ItemRowView({ kind, nodeId, icon, label, sub, active, indent, onClick, ctx, renaming, done, drag, git }: ItemRowViewProps) {
+  return (
+    <TreeRowShell kind={kind} nodeId={nodeId} label={label} depth={indent ? 2 : 1} active={active} onClick={onClick} onOpen={onClick} ctx={ctx} drag={drag} git={git} rename={renaming ? { value: label, done } : undefined} className={indent ? 'pl-10' : 'pl-6'}>
+      {icon && <span className="text-muted shrink-0">{icon}</span>}
+      <span className="truncate flex-1">{label}</span>
+      {sub && <span className="text-xs text-muted truncate max-w-[45%]">{sub}</span>}
+    </TreeRowShell>
+  );
+}, sameProps);
 
 /**
  * A row of a section (an MCP server, an API definition, a dataset, a favorite): its kind's node. The section builds its rows
@@ -167,26 +151,29 @@ export interface FolderOps {
   assign(fn: (id: string, folder: string | undefined) => string | undefined): Promise<void>;
 }
 
-/** All folder names of a section: the kept ones and the ones its items are in. */
-export const folderNames = (ops: FolderOps, items: Array<{ folder?: string }>) =>
-  [...new Set([...ops.folders, ...items.map((i) => i.folder).filter((x): x is string => !!x)])].sort((a, b) => a.localeCompare(b));
+/** All folder names of a section: General (built in, first), the kept ones and the ones its items are in. */
+export const folderNames = (ops: FolderOps, items: Array<{ folder?: string }>) => folderNamesOf(ops.folders, items);
 
 export async function newFolderIn(ops: FolderOps) {
-  const name = (await promptText(LABEL.newFolder, { message: 'Folder name', okLabel: 'Create' }))?.trim();
+  const name = await askFolderName();
   if (name) await ops.setFolders((fs) => (fs.includes(name) ? fs : [...fs, name]));
 }
 
 async function renameFolderIn(ops: FolderOps, name: string, next: string) {
+  if (next === DEFAULT_FOLDER) {
+    useApp.getState().toast(`The folder ${DEFAULT_FOLDER} exists: every list has it`, 'info');
+    return;
+  }
   await ops.assign((_, folder) => (folder === name ? next : folder));
   await ops.setFolders((fs) => fs.map((x) => (x === name ? next : x)));
 }
 
-/** Delete a folder at once, with Undo: its items move to the top level, and come back into it. */
+/** Delete a folder at once, with Undo: its items move to General (they lose their folder), and come back into it. */
 function deleteFolderIn(ops: FolderOps, name: string, itemNoun: string) {
   return deleteWithUndo({
     kind: 'folder',
     name,
-    note: `Its ${itemNoun}s moved to the top level`,
+    note: `Its ${itemNoun}s moved to ${DEFAULT_FOLDER}`,
     run: async () => {
       const was = new Set<string>();
       const at = ops.folders.indexOf(name);
@@ -200,19 +187,19 @@ function deleteFolderIn(ops: FolderOps, name: string, itemNoun: string) {
   });
 }
 
-/** "Move to folder ▸" of an item: each folder, a new one, or the top level. */
+/** "Move to folder ▸" of an item: each folder (General included), or a new one. Moving to General stores no folder. */
 export function moveToFolderSubmenu(ops: FolderOps, all: Array<{ folder?: string }>, itemId: string, current: string | undefined) {
   return moveToFolderItem({
     folders: folderNames(ops, all),
     current,
     move: async (to) => {
-      if (to && !ops.folders.includes(to)) await ops.setFolders((fs) => [...fs, to]);
+      if (to && to !== DEFAULT_FOLDER && !ops.folders.includes(to)) await ops.setFolders((fs) => keptFolders([...fs, to]));
       await ops.assign((id, folder) => (id === itemId ? to : folder));
     },
   }).items!;
 }
 
-/** A section's items in their folders (each folder a `folder:<kind>` node), then the ones in none. */
+/** A section's items in their folders (each folder a `folder:<kind>` node); the ones in none are in General (first, always there). */
 export function FolderedRows<T extends { id: string; folder?: string }>({
   section,
   kind,
@@ -233,22 +220,19 @@ export function FolderedRows<T extends { id: string; folder?: string }>({
   itemNoun: string;
   /** The "New … here" items of a folder. */
   create?(folder: string): NodeMenuCtx['create'];
-  row(item: T, inFolder: boolean): ReactNode;
+  /** One item's row: always inside a folder (its `indent` is true). */
+  row(item: T): ReactNode;
 }) {
   const [renaming, setRenaming] = useState<string>();
   // what a folder row calls, through one ref that is always current: the rows are memoized
   const host = useRef<FolderHost>(null!);
   host.current = { ops, sections, itemNoun, create, setRenaming };
   // the items of each folder, grouped once (not one pass over the items per folder)
-  const { names, byFolder, top } = useMemo(() => {
-    const names = folderNames(ops, items);
-    const known = new Set(names);
-    const byFolder = new Map<string, T[]>(names.map((n) => [n, []]));
-    const top: T[] = [];
-    for (const i of items) (i.folder && known.has(i.folder) ? byFolder.get(i.folder)! : top).push(i);
-    return { names, byFolder, top };
+  const { names, byFolder } = useMemo(
+    () => groupByFolder(items, ops.folders),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ops.folders, items]);
+    [ops.folders, items],
+  );
   return (
     <>
       {names.map((name) => {
@@ -259,15 +243,10 @@ export function FolderedRows<T extends { id: string; folder?: string }>({
         return (
           <div key={key}>
             <SectionFolderRow kind={kind as NodeKind} section={section} name={name} count={inside.length} open={isOpen} renaming={renaming === name} host={host} />
-            {isOpen && (
-              <div role="group">
-                {inside.length ? inside.map((i) => row(i, true)) : <p className="pl-10 py-1 text-xs text-muted">Empty folder</p>}
-              </div>
-            )}
+            {isOpen && <div role="group">{inside.length ? inside.map((i) => row(i)) : <p className="pl-10 py-1 text-xs text-muted">Empty folder</p>}</div>}
           </div>
         );
       })}
-      {top.map((i) => row(i, false))}
     </>
   );
 }
@@ -317,6 +296,8 @@ const SectionFolderRow = memo(function SectionFolderRow({ kind, section, name, c
           rename: () => h().setRenaming(name),
           delete: () => void deleteFolderIn(h().ops, name, h().itemNoun),
         },
+        // General is built in: it always exists
+        disabled: name === DEFAULT_FOLDER ? { rename: DEFAULT_FOLDER_WHY, delete: DEFAULT_FOLDER_WHY } : undefined,
       })}
     >
       {open ? OPEN_ICON : CLOSED_ICON}

@@ -1,6 +1,6 @@
 import { isRecord } from '@testpion/shared';
 import { basename } from 'node:path';
-import { KIND_INFO, gitFolderKey, kindOfPath, type ItemRef, type KindId } from '@testpion/shared';
+import { DEFAULT_FOLDER, KIND_INFO, gitFolderKey, kindOfPath, type ItemRef, type KindId } from '@testpion/shared';
 import { diffOpenApi } from '../openapi/diff.js';
 import { sameValue } from '../storage/stable-files.js';
 import { csvTable } from './csv-rows.js';
@@ -106,7 +106,7 @@ function listChanges(file: string, kind: 'mcp-server' | 'provider', before: stri
   const named = (i: Rec) => `${labelOf(kind)} ${String(i.name ?? i.id)}`;
   // the folder of the list an item is in (and the one it left) shows the change too
   const inside = (...items: Array<Rec | undefined>): Pick<Part, 'containers'> => ({
-    containers: [...new Set(items.map((i) => (typeof i?.folder === 'string' && i.folder ? gitFolderKey(kind, i.folder) : '')).filter(Boolean))],
+    containers: [...new Set(items.map((i) => (i ? gitFolderKey(kind, typeof i.folder === 'string' && i.folder ? i.folder : DEFAULT_FOLDER) : '')).filter(Boolean))],
   });
   const was = new Map(a.map((i) => [String(i.id), i]));
   const now = new Map(b.map((i) => [String(i.id), i]));

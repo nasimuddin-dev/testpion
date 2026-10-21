@@ -9,6 +9,8 @@ import { TreeRowShell } from './TreeRowShell';
 import { useAreaMenu } from './AreaMenu';
 import { treeKey, useTreeOpen } from '../lib/tree-state';
 import { openRef } from '../lib/open-ref';
+import { DEFAULT_FOLDER, DEFAULT_FOLDER_WHY, folderNamesOf, folderOf, groupByFolder, keptFolders, storedFolder } from '../lib/folders';
+import { useApp } from '../store';
 import { REF_MIME } from '../lib/drag-ref';
 import type { NodeKind, NodeMenuCtx } from '../lib/node-menu';
 import { uniqueKeys } from '../lib/unique-keys';
@@ -31,7 +33,7 @@ export interface FolderListOps {
   duplicateItem?(id: string): void | Promise<void>;
   setFolders(folders: string[]): void | Promise<void>;
   renameFolder(from: string, to: string): void | Promise<void>;
-  /** Remove a folder; its items move to the top level. Returns what puts the folder and its items back. */
+  /** Remove a folder; its items lose their folder (they are then in General). Returns what puts the folder and its items back. */
   deleteFolder(name: string): Undo | Promise<Undo>;
 }
 
@@ -98,29 +100,28 @@ export function FolderList({
   // filter by name, subtitle or folder (like the REST collection tree)
   const [q, setQ] = useState('');
   const ql = q.trim().toLowerCase();
-  const shown = ql ? items.filter((i) => [i.name, i.folder ?? '', typeof i.subtitle === 'string' ? i.subtitle : ''].some((t) => t.toLowerCase().includes(ql))) : items;
-  const [dropTarget, setDropTarget] = useState<string | null>();
+  const shown = ql ? items.filter((i) => [i.name, folderOf(i.folder), typeof i.subtitle === 'string' ? i.subtitle : ''].some((t) => t.toLowerCase().includes(ql))) : items;
+  const [dropTarget, setDropTarget] = useState<string>();
   const isOpen = (f: string) => opened[f] ?? true;
   const toggle = (f: string) => setOpened((o) => ({ ...o, [f]: !(o[f] ?? true) }));
-  const allFolders = useMemo(() => [...new Set([...folders, ...items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b)), [folders, items]);
-  // the shown items of each folder, grouped once (not one pass over the items per folder), and the ones in none
-  const { byFolder, top } = useMemo(() => {
-    const byFolder = new Map<string, FolderListItem[]>(allFolders.map((f) => [f, []]));
-    const top: FolderListItem[] = [];
-    for (const i of shown) (i.folder && byFolder.has(i.folder) ? byFolder.get(i.folder)! : top).push(i);
-    return { byFolder, top };
+  // every folder, General (the built-in one, for the items that have none) first; and the shown items of each, grouped once
+  const allFolders = useMemo(() => folderNamesOf(folders, items), [folders, items]);
+  const { byFolder } = useMemo(
+    () => groupByFolder(shown, folders),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allFolders, items, ql]);
+    [folders, items, ql],
+  );
   const library = KIND_INFO[kind].library;
   const refOf = (itemId: string): ItemRef => (kind === 'mcp-server' ? { kind: 'mcp-server', serverId: itemId } : savedItemRef(library!, itemId));
 
   const newFolder = async () => {
     const name = await askFolderName();
-    if (name && !allFolders.includes(name)) await ops.setFolders([...allFolders, name]);
+    if (name && !allFolders.includes(name)) await ops.setFolders(keptFolders([...allFolders, name]));
   };
+  /** Move an item to a folder (undefined = General: the item then has no folder). */
   const moveTo = async (itemId: string, folder: string | undefined) => {
-    if (folder && !allFolders.includes(folder)) await ops.setFolders([...allFolders, folder]);
-    await ops.moveItem(itemId, folder);
+    if (folder && !allFolders.includes(folder)) await ops.setFolders(keptFolders([...allFolders, folder]));
+    await ops.moveItem(itemId, storedFolder(folder));
   };
   const setAll = (to: boolean) => setOpened((o) => ({ ...o, ...Object.fromEntries(allFolders.map((f) => [f, to])) }));
   /** The list's header (and its blank area): new item, new folder, expand or collapse every folder. */
@@ -148,14 +149,16 @@ export function FolderList({
   };
   const folderCtx = (f: string): NodeMenuCtx => ({
     name: f,
-    create: [{ label: `${addLabel} here`, icon: <Plus size={14} />, onSelect: () => onAdd(f) }],
+    create: [{ label: `${addLabel} here`, icon: <Plus size={14} />, onSelect: () => onAdd(storedFolder(f)) }],
     on: {
       expandAll: () => setOpened((o) => ({ ...o, [f]: true })),
       collapseAll: () => setOpened((o) => ({ ...o, [f]: false })),
       rename: () => setRenaming(`folder:${f}`),
-      // at once, with Undo in the message: nothing is lost (its items move to the top level)
-      delete: () => void deleteWithUndo({ kind: 'folder', name: f, run: () => ops.deleteFolder(f), note: `Its ${itemNoun}s moved to the top level` }),
+      // at once, with Undo in the message: nothing is lost (its items move to General)
+      delete: () => void deleteWithUndo({ kind: 'folder', name: f, run: () => ops.deleteFolder(f), note: `Its ${itemNoun}s moved to ${DEFAULT_FOLDER}` }),
     },
+    // General is built in: it always exists
+    disabled: f === DEFAULT_FOLDER ? { rename: DEFAULT_FOLDER_WHY, delete: DEFAULT_FOLDER_WHY } : undefined,
   });
 
   // drag an item onto a folder (or the top level) to move it: the one drag type every list and tree uses (its ItemRef)
@@ -168,7 +171,7 @@ export function FolderList({
       return [];
     }
   };
-  const dropProps = (folder: string | null) => ({
+  const dropProps = (folder: string) => ({
     onDragOver: (e: DragEvent) => {
       if (!e.dataTransfer.types.includes(REF_MIME)) return;
       e.preventDefault();
@@ -180,7 +183,7 @@ export function FolderList({
       setDropTarget(undefined);
       if (!ids.length) return;
       e.preventDefault();
-      for (const itemId of ids) void ops.moveItem(itemId, folder ?? undefined);
+      for (const itemId of ids) void ops.moveItem(itemId, storedFolder(folder));
     },
     over: dropTarget === folder,
   });
@@ -188,7 +191,7 @@ export function FolderList({
   // what the rows call, through one ref that is always current: the rows are memoized
   const host = useRef<ListHost>(null!);
   host.current = { kind, onSelect, onOpen, itemCtx, refOf, finishRename };
-  const row = (it: FolderListItem, nested: boolean) => <FolderListRow key={rowKey.get(it) ?? it.id} it={it} nodeId={treeKey(id, rowKey.get(it) ?? it.id)} nested={nested} active={selected === it.id} renaming={renaming === it.id} host={host} />;
+  const row = (it: FolderListItem) => <FolderListRow key={rowKey.get(it) ?? it.id} it={it} nodeId={treeKey(id, rowKey.get(it) ?? it.id)} active={selected === it.id} renaming={renaming === it.id} host={host} />;
 
   const area = useAreaMenu(`section:${kind}` as NodeKind, headerCtx, title);
   return (
@@ -228,7 +231,8 @@ export function FolderList({
                           label: 'Folder name',
                           done: (to) => {
                             setRenaming(undefined);
-                            if (to && to !== f) void ops.renameFolder(f, to);
+                            if (to === DEFAULT_FOLDER) useApp.getState().toast(`The folder ${DEFAULT_FOLDER} exists: every list has it`, 'info');
+                            else if (to && to !== f) void ops.renameFolder(f, to);
                             focusRow(treeKey(id, 'folder', to || f));
                           },
                         }
@@ -242,17 +246,15 @@ export function FolderList({
                 </TreeRowShell>
                 {open && (
                   <div role="group">
-                    {inFolder.map((it) => row(it, true))}
-                    {!inFolder.length && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
+                    {inFolder.map((it) => row(it))}
+                    {!inFolder.length && !ql && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
                   </div>
                 )}
               </div>
             );
           })}
-        {/* the top level is a drop target too (its 'over' is the highlight below, not an attribute) */}
-        <div {...(({ over: _over, ...props }) => props)(dropProps(null))} className={cx(dropTarget === null && 'bg-accent-soft/60')}>
-          {top.map((it) => row(it, false))}
-          {!items.length && !allFolders.length && (
+        <div>
+          {!items.length && !folders.some((f) => f !== DEFAULT_FOLDER) && (
             <>
               {empty}
               <div className="flex flex-wrap justify-center gap-2 px-3 pb-3">
@@ -266,7 +268,7 @@ export function FolderList({
             </>
           )}
           {ql && !shown.length && <p className="px-3 py-4 text-sm text-muted text-center">No {itemNoun}s match this filter.</p>}
-          {allFolders.length > 0 && <div className="h-6" aria-hidden />}
+          <div className="h-6" aria-hidden />
         </div>
       </div>
       {area.menu}
@@ -285,14 +287,14 @@ interface ListHost {
 }
 
 /** One item of the list (a name, with its icon, badge and subtitle). Memoized: only its own props re-render it. */
-const FolderListRow = memo(function FolderListRow({ it, nodeId, nested, active, renaming, host }: { it: FolderListItem; nodeId: string; nested: boolean; active: boolean; renaming: boolean; host: RefObject<ListHost> }) {
+const FolderListRow = memo(function FolderListRow({ it, nodeId, active, renaming, host }: { it: FolderListItem; nodeId: string; active: boolean; renaming: boolean; host: RefObject<ListHost> }) {
   const h = () => host.current;
   return (
     <TreeRowShell
       kind={h().kind}
       nodeId={nodeId}
       label={it.name}
-      depth={nested ? 1 : 0}
+      depth={1}
       tall={!!it.subtitle}
       active={active}
       onClick={() => !renaming && h().onSelect(it.id)}
@@ -301,7 +303,7 @@ const FolderListRow = memo(function FolderListRow({ it, nodeId, nested, active, 
       drag={[h().refOf(it.id)]}
       git={h().refOf(it.id)}
       rename={renaming ? { value: it.name, done: (name) => h().finishRename(it.id, name) } : undefined}
-      className={nested ? 'pl-9' : 'pl-3'}
+      className="pl-9"
     >
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-2">

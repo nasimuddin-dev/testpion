@@ -590,6 +590,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   {
     "change": "removed",
     "containers": [
+      "folder|load-test|General",
       "section|load-test",
     ],
     "details": [],
@@ -608,6 +609,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   {
     "change": "changed",
     "containers": [
+      "folder|monitor|General",
       "section|monitor",
     ],
     "details": [
@@ -627,6 +629,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
   {
     "change": "renamed",
     "containers": [
+      "folder|mcp-server|General",
       "section|mcp-server",
     ],
     "details": [
