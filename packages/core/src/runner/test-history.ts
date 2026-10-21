@@ -1,7 +1,7 @@
 /** One test across earlier runs: did it pass, how long it took, which checks failed. */
 import { join } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { readResultsFile } from './runner.js';
+import { jsonNeedle, readResultsFile } from './runner.js';
 
 interface TestHistoryPoint {
   runId: string;
@@ -24,9 +24,11 @@ export async function testHistory(store: WorkspaceStore, test: { id?: string; na
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 200);
   const runs = store.meta.listRuns({ limit: Math.min(Math.max(opts.runs ?? 60, 1), 500) }).items;
   const out: TestHistoryPoint[] = [];
+  // a line without the test's id (or name) cannot be its result: those lines are not parsed
+  const needle = jsonNeedle((test.id ? test.id : test.name)!);
   for (const run of runs) {
     if (out.length >= limit) break;
-    for await (const r of await readResultsFile(join(store.runDir(run.id), 'results.jsonl'))) {
+    for await (const r of await readResultsFile(join(store.runDir(run.id), 'results.jsonl'), { contains: needle })) {
       if (test.id ? r.id !== test.id : r.name !== test.name) continue;
       out.push({
         runId: run.id,

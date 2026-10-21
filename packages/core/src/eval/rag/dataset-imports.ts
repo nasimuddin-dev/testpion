@@ -24,7 +24,8 @@ interface ImportedRecords {
   notes: string[];
 }
 
-const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v));
+/** A field as text: a string as it is, a map or list as JSON, a number or boolean as its text, nothing as undefined. */
+export const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v));
 const jsonl = (text: string): Rec[] =>
   text
     .split(/\r?\n/)

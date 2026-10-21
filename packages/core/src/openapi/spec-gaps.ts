@@ -18,7 +18,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import { deref, operationParameters } from '../util/json-ref.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
+import { coveragePct as pct, findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
 
 type Json = Record<string, any>;
 
@@ -114,7 +114,6 @@ export interface SpecGapReport {
 }
 
 const METHODS = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options'];
-const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : 100);
 
 /* ------------------------------------------------------------------ the requests that exist */
 

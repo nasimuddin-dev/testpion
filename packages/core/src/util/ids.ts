@@ -1,4 +1,20 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomFillSync, randomUUID } from 'node:crypto';
+
+/**
+ * Random hex for ids that name things (runs, spans, messages, files), not for secrets: the bytes come from a pool refilled
+ * by the system in one call per 4,096 bytes, instead of a call per id (a run makes about ten ids per step).
+ */
+const POOL = Buffer.allocUnsafe(4096);
+let poolAt = POOL.length;
+function randomHex(bytes: number): string {
+  if (poolAt + bytes > POOL.length) {
+    randomFillSync(POOL);
+    poolAt = 0;
+  }
+  const hex = POOL.toString('hex', poolAt, poolAt + bytes);
+  poolAt += bytes;
+  return hex;
+}
 
 export function uuid(): string {
   return randomUUID();
@@ -7,17 +23,16 @@ export function uuid(): string {
 /** Short, URL-safe, sortable-ish id: time prefix + random suffix. */
 export function shortId(prefix = ''): string {
   const t = Date.now().toString(36);
-  const r = randomBytes(5).toString('hex');
-  return `${prefix}${t}${r}`;
+  return `${prefix}${t}${randomHex(5)}`;
 }
 
 /** 16-hex-char span id / 32-hex-char trace id (OpenTelemetry-compatible sizes). */
 export function spanId(): string {
-  return randomBytes(8).toString('hex');
+  return randomHex(8);
 }
 
 export function traceId(): string {
-  return randomBytes(16).toString('hex');
+  return randomHex(16);
 }
 
 /** `base`, or `base-2`, `base-3` … when `used` has it already; the id is added to `used`. */

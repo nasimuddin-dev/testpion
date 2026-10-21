@@ -25,6 +25,9 @@ const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'tr
 const docs = new BoundedMap<string, OpenApiDoc>(20);
 
 /** Parse an OpenAPI / Swagger document (YAML or JSON), cached by content. */
+/** A share as a percentage with one decimal (100 when there is nothing to cover). */
+export const coveragePct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : 100);
+
 export function loadOpenApi(text: string): OpenApiDoc {
   const key = sha1Hex(text);
   let d = docs.get(key);

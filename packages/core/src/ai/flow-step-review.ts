@@ -31,7 +31,8 @@ export interface StepDiff {
 
 type Step = Record<string, unknown>;
 
-const stepsOf = (text: string): Step[] => {
+/** The steps of a test file's YAML text (a list, or `tests:` of a map); none when it does not parse. */
+export const yamlSteps = (text: string): Step[] => {
   let doc: unknown;
   try {
     doc = parseYaml(text);
@@ -109,8 +110,8 @@ function changesOf(draft: Step, ai: Step, order?: { before: number; after: numbe
  * with the fields that differ, in the model's order.
  */
 export function diffFlowSteps(draftYaml: string, aiYaml: string): StepDiff[] {
-  const draft = stepsOf(draftYaml);
-  const ai = stepsOf(aiYaml);
+  const draft = yamlSteps(draftYaml);
+  const ai = yamlSteps(aiYaml);
   // the id first; a renamed step by its name, then by what it calls
   const same = (key: (s: Step, i: number) => string | undefined) => ({ seek: key, pool: key });
   const partner = matchSteps(ai, draft, [same(idOf), same((s) => str(s.name) || undefined), same(endpointKey)]);

@@ -4,7 +4,7 @@ import type { HistoryEntry, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { readResultsFile } from '../runner/runner.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
+import { coveragePct as pct, findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
 
 /**
  * API coverage: which operations of an OpenAPI document (and which of their documented response
@@ -65,7 +65,6 @@ interface ApiCoverageReport {
 }
 
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
-const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : 100);
 
 /** Does an observed status match a documented response key (`200`, `2XX`, `2xx`)? */
 function statusMatches(key: string, status: number): boolean {

@@ -4,7 +4,7 @@
  */
 import { checkSubject } from '@testpion/shared';
 import type { CheckConfig, CheckResult, CheckSource, NormalizedError, RetrievedDoc, TestType, TokenUsage } from '../model/types.js';
-import { exists, query } from '../util/jsonpath.js';
+import { queryAll } from '../util/jsonpath.js';
 import type { ProviderRegistry } from '../ai/index.js';
 import type { SpanHandle } from '../trace/tracer.js';
 import { compileSchema } from '../util/json-schema.js';
@@ -62,6 +62,8 @@ export interface CheckContext {
 export type CheckFn = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult> | CheckResult;
 
 const registry = new Map<string, CheckFn>();
+/** The sorted type names (the "known types" of an unknown-type message, the editor's list): rebuilt only after a registration changes. */
+let sortedTypes: string[] | undefined;
 
 /** What a check of a response reads, in one line, and one example of it: the AI format reference and lint hints read these. */
 export interface CheckDoc {
@@ -78,12 +80,14 @@ const docs = new Map<string, CheckDoc>();
 export function registerCheck(type: string, fn: CheckFn, doc?: CheckDoc): void {
   if (registry.has(type)) throw new Error(`check type "${type}" is already registered (use overrideCheck to replace it on purpose)`);
   registry.set(type, fn);
+  sortedTypes = undefined;
   if (doc) docs.set(type, doc);
 }
 
 /** Replaces a registered check type on purpose (the strict RAG metrics over the older checks of the same name; a custom metric whose file changed). */
 export function overrideCheck(type: string, fn: CheckFn, doc?: CheckDoc): void {
   registry.set(type, fn);
+  sortedTypes = undefined;
   if (doc) docs.set(type, doc);
 }
 
@@ -92,6 +96,7 @@ export function aliasCheck(alias: string, type: string): void {
   const fn = registry.get(type);
   if (!fn) throw new Error(`cannot alias "${alias}": check type "${type}" is not registered`);
   registry.set(alias, fn);
+  sortedTypes = undefined;
 }
 
 /** The function that runs a check config: its type, or what the resolver makes of an unknown one (the config comes back with the options the spelling implies). */
@@ -107,6 +112,7 @@ export function resolveCheck(cfg: CheckConfig): { fn: CheckFn; cfg: CheckConfig 
 export function unregisterCheck(type: string): void {
   registry.delete(type);
   docs.delete(type);
+  sortedTypes = undefined;
 }
 
 /** A registered check type's function (a metric that wraps a check of this file reads the original here). */
@@ -145,7 +151,7 @@ export function checkDocs(): Array<CheckDoc & { type: string }> {
 }
 
 export function checkTypes(): string[] {
-  return [...registry.keys()].sort();
+  return [...(sortedTypes ??= [...registry.keys()].sort())];
 }
 
 export function validateSchema(schema: unknown, data: unknown): { valid: boolean; errors: string[] } {
@@ -177,7 +183,10 @@ function defaultName(cfg: CheckConfig): string {
 
 /** Value addressed by `path`, or the whole body/text when no path is given. */
 export function target(cfg: CheckConfig, ctx: CheckContext): { found: boolean; value: unknown } {
-  if (cfg.path) return { found: exists(ctx.body, String(cfg.path)), value: query(ctx.body, String(cfg.path)) };
+  if (cfg.path) {
+    const hits = queryAll(ctx.body, String(cfg.path)); // one evaluation answers both questions
+    return { found: hits.length > 0, value: hits[0] };
+  }
   return { found: true, value: ctx.body ?? ctx.text };
 }
 

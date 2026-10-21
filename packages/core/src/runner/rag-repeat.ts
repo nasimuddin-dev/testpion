@@ -11,11 +11,11 @@ import { getMetric, resolveMetric } from '../eval/rag/metric-registry.js';
 import { scoreRagSample } from '../eval/rag/score.js';
 import { mean, stdev as sd } from '../util/stats.js';
 import { addUsage, noUsage, type Usage } from '../eval/rag/judged-kit.js';
+import { round3 as r3 } from '../eval/rag/measures.js';
 import type { RagRunResult } from './rag-run.js';
 
 const MAX_TARGET_REPEATS = 10;
 
-const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 interface RepeatOutcome {
   checks: CheckResult[];

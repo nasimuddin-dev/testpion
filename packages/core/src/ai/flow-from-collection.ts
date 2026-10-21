@@ -33,7 +33,7 @@ import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalIt
 import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
 import { stringList } from '../util/collections.js';
 import { flowVariableProblems, registerVerifier, verifyItems, type VerifyContext } from './verify.js';
-import { diffFlowSteps, flowDiffSummary } from './flow-step-review.js';
+import { diffFlowSteps, flowDiffSummary, yamlSteps } from './flow-step-review.js';
 
 export type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
 
@@ -559,19 +559,10 @@ export function describeFlow(value: unknown, items: ProposalItem[]): ProposalDes
 
 /* ------------------------------------------------------------------ verification */
 
-const stepsOf = (text: string): Array<Record<string, unknown>> => {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
-  return (Array.isArray(doc) ? doc : ((doc as { tests?: unknown[] })?.tests ?? [])).filter((s): s is Record<string, unknown> => !!s && typeof s === 'object');
-};
 
 /** A step uses a value another step extracts without waiting for that step (dependsOn, directly or through others). */
 export function flowOrderProblems(text: string): string[] {
-  const steps = stepsOf(text);
+  const steps = yamlSteps(text);
   const idOf = (s: Record<string, unknown>) => String(s.id ?? s.name ?? '');
   const deps = new Map(steps.map((s) => [idOf(s), (Array.isArray(s.dependsOn) ? s.dependsOn : s.dependsOn ? [s.dependsOn] : []).map(String)]));
   const extractedBy = new Map<string, string>();

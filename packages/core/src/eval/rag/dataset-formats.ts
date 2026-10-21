@@ -11,7 +11,7 @@
  */
 import { datasetFormatOf, previewDatasetRecords, type DatasetTextFormat } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
-import { importNvidia, importPromptfoo } from './dataset-imports.js';
+import { importNvidia, importPromptfoo, str } from './dataset-imports.js';
 import { listOf } from './lists.js';
 import { turnsOf } from './record.js';
 
@@ -50,7 +50,6 @@ const pick = (r: Rec, ...keys: string[]) => {
   for (const k of keys) if (r[k] !== undefined && r[k] !== null && r[k] !== '') return r[k];
   return undefined;
 };
-const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
 /** Which format a dataset's records are in, by the column names each tool uses. */
 export function detectRagFormat(records: Rec[]): RagDatasetFormat {

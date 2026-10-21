@@ -5,6 +5,7 @@
  * agreement) because most RAG samples pass, and a judge that always says "pass" agrees with them most of the time.
  */
 import { mulberry32 } from '../../../util/random.js';
+import { round3 as r3 } from '../measures.js';
 
 export interface Pair {
   /** The judge's verdict at the metric's threshold. */
@@ -37,7 +38,6 @@ export interface Agreement {
   recall?: number;
 }
 
-const r3 = (x: number) => Math.round(x * 1000) / 1000;
 const div = (a: number, b: number): number | undefined => (b > 0 ? a / b : undefined);
 
 export function confusionOf(pairs: ReadonlyArray<Pair>): Confusion {

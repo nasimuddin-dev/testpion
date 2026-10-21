@@ -152,11 +152,25 @@ function asResult(v: unknown): TestResult | undefined {
   return (Array.isArray(r.checks) ? r : { ...r, checks: [] }) as TestResult;
 }
 
-export async function readResultsFile(path: string): Promise<AsyncGenerator<TestResult>> {
+/**
+ * The JSON text a line holds for `text` when it is a plain ASCII word-ish text that every JSON writer spells the same way
+ * (so a line that does not contain it cannot hold `text` as a value), else undefined: no cheap test is safe for it.
+ */
+export function jsonNeedle(text: string): string | undefined {
+  return text && /^[A-Za-z0-9 _.:@#()-]+$/.test(text) ? JSON.stringify(text) : undefined;
+}
+
+/**
+ * A run's results, streamed. With `contains` (a `jsonNeedle`), lines without that text are skipped before they are parsed:
+ * looking for one test in a file of thousands costs a search of each line, not a parse of each.
+ */
+export async function readResultsFile(path: string, o: { contains?: string } = {}): Promise<AsyncGenerator<TestResult>> {
+  const contains = o.contains;
   async function* gen() {
     if (!existsSync(path)) return;
     const rl = createInterface({ input: createReadStream(path, 'utf8'), crlfDelay: Infinity });
     for await (const line of rl) {
+      if (contains !== undefined && !line.includes(contains)) continue;
       if (!line.trim()) continue;
       let r: TestResult | undefined;
       try {
@@ -440,6 +454,11 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const finallyByFile = new Map<string, TestCase[]>();
   const fileInflight = new Map<string, Set<Promise<void>>>();
   const finallyRuns: Array<Promise<void>> = [];
+  const holdFinally = (file: string, t: TestCase) => {
+    const list = finallyByFile.get(file);
+    if (list) list.push(t);
+    else finallyByFile.set(file, [t]);
+  };
   const runFinally = async (t: TestCase) => {
     const id = t.id ?? t.name;
     if (t.skip) return record(skippedResult(t, 'marked skip'));
@@ -595,7 +614,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         if (t.finally && !done.has(t.id ?? t.name) && (!only || only.has(t.id ?? t.name))) {
           seen.add(t.id ?? t.name);
           finallyIds.add(t.id ?? t.name);
-          finallyByFile.set(fileKey, [...(finallyByFile.get(fileKey) ?? []), t]);
+          holdFinally(fileKey, t);
         }
         continue;
       }
@@ -624,7 +643,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         // a step that waits for it is told so (finally steps run last), never left waiting
         finallyIds.add(id);
         dep(id).resolve('skipped');
-        finallyByFile.set(fileKey, [...(finallyByFile.get(fileKey) ?? []), t]);
+        holdFinally(fileKey, t);
         continue;
       }
       // backpressure: never pull more than 2×concurrency tests from the source ahead of the workers (a parallel group's steps may go a little further, to run together)

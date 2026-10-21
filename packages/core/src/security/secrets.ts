@@ -241,8 +241,25 @@ const DEFAULT_FIELDS = secretKeyFields();
  * (ends with a field of 5+ characters: `accessToken`, `client_secret`; `totalTokens` and `maxTokens` do not), or
  * `none`. Allow-listed names (`Content-Type` …) are always `none`.
  */
-export function matchSecretKey(key: string, fields: SecretKeyFields = DEFAULT_FIELDS): 'exact' | 'suffix' | 'none' {
+export function matchSecretKey(key: string, fields: SecretKeyFields = DEFAULT_FIELDS): KeyMatch {
   if (typeof key !== 'string' || !key) return 'none';
+  // the same few names come back for every object of every result: the answer per (field list, name) is remembered
+  let memo = KEY_MEMO.get(fields);
+  if (!memo) KEY_MEMO.set(fields, (memo = new Map()));
+  const known = memo.get(key);
+  if (known) return known;
+  const answer = matchKey(key, fields);
+  if (memo.size >= KEY_MEMO_MAX) memo.clear();
+  memo.set(key, answer);
+  return answer;
+}
+
+type KeyMatch = 'exact' | 'suffix' | 'none';
+/** At most this many names are remembered per field list (an object with thousands of different keys must not grow it without end). */
+const KEY_MEMO_MAX = 2048;
+const KEY_MEMO = new WeakMap<SecretKeyFields, Map<string, KeyMatch>>();
+
+function matchKey(key: string, fields: SecretKeyFields): KeyMatch {
   const k = normKey(key);
   if (NON_SECRET_KEYS.has(k)) return 'none';
   if (fields.raw.has(key.toLowerCase()) || fields.norm.has(k)) return 'exact';
