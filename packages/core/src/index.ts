@@ -99,7 +99,9 @@ export * from './eval/rag/judge-prompts-more.js';
 export * from './eval/rag/failure.js';
 export * from './eval/rag/score.js';
 export * from './eval/rag/r4.js';
+export { prepareAuthorContext, authorInputs, choicesOf as authorChoicesOf, targetShape, docsOutline, type AuthorChoices } from './runner/rag-author-context.js';
 export * from './runner/rag-calibrate.js';
+export * from './runner/rag-trend.js';
 export { needsJudgeService } from './eval/rag/metrics-judged.js';
 export { limiterOf, limitsProblems } from './eval/rag/limiter.js';
 export * from './eval/rag/estimate.js';
@@ -176,6 +178,7 @@ export * from './runner/saved-evaluations.js';
 export * from './eval/matrix.js';
 export * from './runner/eval-matrix-runs.js';
 export * from './runner/monitors.js';
+export { rotateEvaluation, runMonitorEvaluation, type MonitorRagInfo, type RagMonitorOutcome } from './runner/monitor-rag.js';
 export * from './runner/ci-config.js';
 export * from './runner/env-request-compare.js';
 
