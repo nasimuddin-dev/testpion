@@ -39,6 +39,7 @@ On the command line: `testpion import <file|folder|zip|link> -w <workspace>` (se
 ## What does not come over
 
 - Auth schemes TestPion has not: No auth and a placeholder header
+- A password or variable the export holds encrypted: left empty and named (enter it again)
 - A file body the export gives without a path (choose it again)
 
 ## Importing again and going back

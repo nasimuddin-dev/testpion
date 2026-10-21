@@ -51,6 +51,7 @@ On the command line: `testpion import <file|folder|zip|link> -w <workspace>` (se
 ## What does not come over
 
 - Auth schemes TestPion has not (ASAP, WSSE): the request gets No auth and a disabled placeholder header
+- A Postman v3 `$ref` to a file outside the imported folder, to a missing file or in a loop: named and left out (a `$ref` inside the folder is followed)
 - `pm.datasets` and `pm.mock` (marked `TODO(import)`; `pm.state` is `tp.state`)
 - `{{vault:name}}` secrets (a value to enter), mock servers, monitors and Flows (Postman does not export them)
 - Settings with no equivalent (`insecureHTTPParser`, `tlsCipherSelection` …)

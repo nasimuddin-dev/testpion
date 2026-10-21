@@ -40,6 +40,7 @@ On the command line: `testpion import <file|folder|zip|link> -w <workspace>` (se
 ## What does not come over
 
 - Pre/post operations other than custom scripts (database, assertions, extract variable …)
+- An environment value or credential the export holds encrypted: left empty and named (enter it again)
 - Schemas as such (the OpenAPI export keeps them: it is also kept in `specs/` when you import that)
 
 ## Importing again and going back

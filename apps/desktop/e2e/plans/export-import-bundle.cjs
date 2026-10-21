@@ -280,7 +280,7 @@ module.exports = withExpect(
     'a-bundle-to-drop': /^copied$/,
     'a-dropped-bundle-opens-one-dialog': /^dialogs: 1 \| generic import: false \| title: Import a bundle$/,
     'a-file-that-is-not-a-bundle-has-a-way-out': /^error said: true \| choose another: true \| picker back: true$/,
-    'folder-and-request-menus': /^folder: Export…,Import here… \| request: Export… \| collection: Import here…$/,
+    'folder-and-request-menus': /^folder: Import here…,Export… \| request: Export… \| collection: Import here…$/,
     'export-a-folder-as-a-part': /^items: 1 \| a collection of its own: true \| tree: true \| globals switch: true$/,
     'import-here-opens-the-import-dialog-for-that-folder': /^title: Import a bundle into “[^”]+”$/,
     'file-menu-and-palette-have-the-bundle-commands': /^import command: true \| export command: true$/,

@@ -29,18 +29,19 @@ On the command line: `testpion import <file|folder|zip|link> -w <workspace>` (se
 ## What comes over
 
 - Folders (headers, auth, description) and requests in order, URL parameters, headers, bodies (JSON, XML, text, form, multipart, GraphQL, binary)
-- Auth: basic, bearer, API key, digest, NTLM, JWT, OAuth 1, OAuth 2, AWS, Hawk
+- Auth: basic, bearer, API key, digest, NTLM, JWT, OAuth 1, OAuth 2, AWS, Hawk, Akamai EdgeGrid
 - The workspace's headers and description, environments (the base environment is merged into the others)
 - gRPC and WebSocket requests (as the collection's gRPC calls and connections)
 
 ## What is changed on the way
 
-- `${[ name ]}` becomes `{{name}}`; `${[ uuid.v4() ]}` and `${[ timestamp.iso8601() ]}` become dynamic variables
+- `${[ name ]}` becomes `{{name}}`; `${[ uuid.v4() ]}`, `${[ timestamp.iso8601() ]}` and `${[ random.range(1, 9) ]}` become dynamic variables
 
 ## What does not come over
 
 - `${[ response.body.path(…) ]}`: reading another request's response stays as text and is reported (chain it with a script or a flow)
-- Auth plugins TestPion has not: No auth and a placeholder header
+- Functions of Yaak itself with no TestPion variable (`hash.*`, `encode.*` …) stay as text and are reported (compute the value in a pre-request script)
+- Auth types and template functions that a Yaak plugin brings: named as coming from a plugin, No auth and a placeholder header (TestPion does not run Yaak plugins)
 - The `.proto` file of a gRPC request
 
 ## Importing again and going back
