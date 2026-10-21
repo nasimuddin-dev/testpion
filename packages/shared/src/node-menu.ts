@@ -41,6 +41,8 @@ export type MenuLabelKey =
   | 'createTestFileFromCollection'
   | 'createTestFileFromFolder'
   | 'generateFlow'
+  | 'describeWithAi'
+  | 'generateWithAi'
   | 'generateSecurityTests'
   | 'checkTraffic'
   | 'suggestChecks'

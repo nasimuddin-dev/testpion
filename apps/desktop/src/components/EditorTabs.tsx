@@ -1,4 +1,5 @@
-import { Copy, PanelLeft, Pin, PinOff, Plug, Plus, Radio, Send, Sparkles, Waypoints } from 'lucide-react';
+import { Copy, PanelLeft, Pin, PinOff, Plug, Plus, Radio, Send, Waypoints } from 'lucide-react';
+import { aiButton } from '../lib/ai-menu';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { useApp, type ViewId } from '../store';
@@ -243,7 +244,7 @@ export function NoOpenTabs({ onDescribe }: { onDescribe?(): void }) {
       title="No open requests"
       actions={[
         { label: 'New request', icon: <Plus size={13} />, items: newRequestItems() },
-        ...(aiOn ? [{ label: 'Describe with AI', icon: <Sparkles size={13} />, onClick: describe, title: 'Describe a request in plain words; the AI assistant drafts it and you review it before sending' }] : []),
+        ...(aiOn ? [{ ...aiButton('describeRequest'), onClick: describe, title: 'Describe a request in plain words; the AI assistant drafts it and you review it before sending' }] : []),
       ]}
     >
       Open a request from the sidebar, or start a new one.

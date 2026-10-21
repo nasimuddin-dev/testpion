@@ -26,6 +26,8 @@ export const LABEL = {
   runInEnvironments: 'Run in several environments…',
   monitor: 'Monitor on a schedule…',
   generateFlow: 'Generate integration flow with AI…',
+  describeWithAi: 'Describe with AI',
+  generateWithAi: 'Generate with AI',
   generateSecurityTests: 'Generate security tests with AI…',
   checkTraffic: 'Check traffic against this spec with AI…',
   suggestChecks: 'Suggest checks with AI…',

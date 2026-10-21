@@ -163,6 +163,37 @@ export const AI_ACTIONS = [
     mcp: 'ai_run_task',
     text: 'What the script does step by step, which variables it reads and sets, and what would go wrong.',
   },
+  // not a tree node's menu: the empty states' buttons (the window takes their label and icon with aiButton)
+  {
+    id: 'describeRequest',
+    label: 'describeWithAi',
+    icon: 'sparkles',
+    group: 'tools',
+    task: 'generate-request',
+    cli: 'testpion ai run generate-request',
+    mcp: 'ai_run_task',
+    text: 'A request drafted from a description in plain words (method, URL, headers, body, checks), shown for review before it is sent.',
+  },
+  {
+    id: 'designFlow',
+    label: 'generateWithAi',
+    icon: 'sparkles',
+    group: 'tools',
+    task: 'design-flow',
+    cli: 'testpion flow generate',
+    mcp: 'flow_generate',
+    text: 'A flow described in words, or drawn from a collection or folder, written by the assistant and reviewed before it is saved.',
+  },
+  {
+    id: 'designToolset',
+    label: 'generateWithAi',
+    icon: 'sparkles',
+    group: 'tools',
+    task: 'design-toolset',
+    cli: 'testpion ai run design-toolset',
+    mcp: 'ai_run_task',
+    text: 'A toolset for an MCP mock (names, descriptions, input schemas and the answers the mock gives) designed from a description.',
+  },
   // not a tree node's menu: the ⋯ menu of a row of the Problems list (the window builds it with aiMenuItems)
   {
     id: 'askProblem',

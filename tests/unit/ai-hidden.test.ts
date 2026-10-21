@@ -256,6 +256,13 @@ describe('every entry point of the window honours Hide all AI actions', () => {
     expect(text.get('App.tsx')).toMatch(/aiOn && tidyImport/);
   });
 
+  it('no view writes an AI button of its own either: an empty state takes "Describe with AI" / "Generate with AI" from the table (aiButton)', () => {
+    for (const [file, src] of text) {
+      if (file === 'lib/vocabulary.ts') continue;
+      expect(/label:\s*['"`](Describe|Generate) with AI['"`]/.test(src), `${file} writes an AI button label: use aiButton(id)`).toBe(false);
+    }
+  });
+
   it('no view writes an AI menu item of its own: the labels come from the table', () => {
     const aiKeys = AI_ACTIONS.map((a) => a.label as string);
     const allowed = new Set(['lib/vocabulary.ts', 'lib/ai-menu.ts', 'lib/node-menu.ts', 'components/ai/ai-analysis.ts']);
