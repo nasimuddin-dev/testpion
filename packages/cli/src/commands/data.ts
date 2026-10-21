@@ -704,6 +704,10 @@ export function registerDataCommands(program: Command): void {
     .option('--rag-max-cost <usd>', 'with --rag-evaluation: stop judging once this much is spent')
     .option('--rag-compat <name>', 'with --rag-evaluation: ragas reads the Ragas metric names with Ragas options')
     .option('--rag-repeat-target <n>', 'with --rag-evaluation: call the RAG system n times per question (2 to 10)')
+    .option('--rag-nightly <cron>', 'with --rag-evaluation: a nightly job on this cron schedule (UTC, "0 3 * * *") instead of every push')
+    .option('--rag-sample <n>', 'with --rag-nightly: score n questions per night, a different set each day')
+    .option('--rag-regression', 'with --rag-nightly: fail when a metric dropped against the previous night')
+    .option('--rag-max-drop <n>', 'with --rag-regression: the smallest drop that fails (default 0.05)')
     .option('--rag-comment', 'with --rag-evaluation (GitHub): post the metrics table as a pull-request comment')
     .option('--run <runId>', 'instead of --suite / --collection / --tests: what this finished run ran, in its environment ("last": the newest finished run of test files or a collection)')
     .option('--data [file]', 'one flow file (--tests file): run it once per row of this data (a dataset; without a value, the file\'s own data:)')
@@ -729,7 +733,7 @@ export function registerDataCommands(program: Command): void {
           collection: o.collection,
           folders: o.folder,
           tests: o.tests,
-          ...(o.ragEvaluation ? { ragEvaluation: o.ragEvaluation, ragPreset: o.ragPreset, ragJudge: o.ragJudge, ragMin: o.ragMin, ragBaseline: o.ragBaseline, ragMaxCost: o.ragMaxCost !== undefined ? Number(o.ragMaxCost) : undefined, ragCompat: o.ragCompat, ragRepeatTarget: o.ragRepeatTarget ? Number(o.ragRepeatTarget) : undefined, ragComment: o.ragComment } : {}),
+          ...(o.ragEvaluation ? { ragEvaluation: o.ragEvaluation, ragPreset: o.ragPreset, ragJudge: o.ragJudge, ragMin: o.ragMin, ragBaseline: o.ragBaseline, ragMaxCost: o.ragMaxCost !== undefined ? Number(o.ragMaxCost) : undefined, ragCompat: o.ragCompat, ragRepeatTarget: o.ragRepeatTarget ? Number(o.ragRepeatTarget) : undefined, ragComment: o.ragComment, ragNightly: o.ragNightly, ragSample: o.ragSample ? Number(o.ragSample) : undefined, ragRegression: o.ragRegression, ragMaxDrop: o.ragMaxDrop ? Number(o.ragMaxDrop) : undefined } : {}),
           ...fromRun?.target,
           data: o.data === true ? '' : o.data,
           envMatrix: o.envMatrix,

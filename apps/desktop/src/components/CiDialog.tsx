@@ -62,7 +62,7 @@ export function CiDialog() {
   // a saved RAG evaluation: the pipeline runs `testpion rag run` (its metrics, gates and a report); the judge key is a CI secret
   const evaluations = useLibrary<{ type?: string }>('evaluations');
   const ragEvaluations = evaluations.lib.items.filter((i) => i.data.type === 'rag');
-  const [rag, setRag] = useState({ preset: '', min: '', baseline: '', maxCost: '', compat: '', repeatTarget: '', comment: true });
+  const [rag, setRag] = useState({ preset: '', min: '', baseline: '', maxCost: '', compat: '', repeatTarget: '', comment: true, nightly: false, cron: '0 3 * * *', sample: '', regression: true, maxDrop: '' });
   useEffect(() => void call<Array<{ path: string }>>('datasets.list').then((d) => setDatasets(d.map((x) => x.path)), () => setDatasets([])), []);
   const shellCapable = useShellCapable();
   const production = !!environments.find((e) => e.name === environment)?.isProduction || (target.startsWith('file:') && flowRun === 'matrix' && environments.some((e) => matrix.includes(e.name) && e.isProduction));
@@ -97,6 +97,7 @@ export function CiDialog() {
             ragCompat: rag.compat || undefined,
             ragRepeatTarget: rag.repeatTarget ? Number(rag.repeatTarget) : undefined,
             ragComment: provider === 'github' && rag.comment ? true : undefined,
+            ...(rag.nightly ? { ragNightly: rag.cron.trim() || '0 3 * * *', ragSample: rag.sample ? Number(rag.sample) : undefined, ragRegression: rag.regression && provider !== 'jenkins' ? true : undefined, ragMaxDrop: rag.regression && rag.maxDrop ? Number(rag.maxDrop) : undefined } : {}),
           }
         : kind === 'suite'
         ? { suite: value }
@@ -236,6 +237,27 @@ export function CiDialog() {
             <Field label="Calls per question" hint="2 to 10 measures the system's own noise.">
               <Input type="number" min={1} max={10} value={rag.repeatTarget} onChange={(e) => setRag({ ...rag, repeatTarget: e.target.value })} placeholder="1" aria-label="Calls per question" />
             </Field>
+            <label className="flex items-center gap-1.5 text-xs col-span-3">
+              <input type="checkbox" checked={rag.nightly} onChange={(e) => setRag({ ...rag, nightly: e.target.checked })} data-ci-rag-nightly />
+              A nightly job on a schedule instead of every push (sampled, compared with the previous night)
+            </label>
+            {rag.nightly && (
+              <>
+                <Field label="Schedule (cron, UTC)" hint="Minute hour day month weekday. GitLab: create the pipeline schedule with it in the project.">
+                  <Input className="mono" value={rag.cron} onChange={(e) => setRag({ ...rag, cron: e.target.value })} placeholder="0 3 * * *" aria-label="Cron schedule" data-ci-rag-cron />
+                </Field>
+                <Field label="Questions per night" hint="A different set each day, so a month covers the dataset. Empty scores them all.">
+                  <Input type="number" min={1} value={rag.sample} onChange={(e) => setRag({ ...rag, sample: e.target.value })} placeholder="all" aria-label="Questions per night" data-ci-rag-sample />
+                </Field>
+                <Field label="Largest drop allowed" hint={provider === 'jenkins' ? 'Jenkins needs the Copy Artifact plugin to fetch the previous night: no regression gate is generated.' : 'Fails when a metric fell against the previous night’s results (kept as the pipeline artifact).'}>
+                  <Input type="number" min={0.01} max={1} step={0.01} disabled={!rag.regression || provider === 'jenkins'} value={rag.maxDrop} onChange={(e) => setRag({ ...rag, maxDrop: e.target.value })} placeholder="0.05" aria-label="Largest drop allowed" data-ci-rag-maxdrop />
+                </Field>
+                <label className="flex items-center gap-1.5 text-xs col-span-3">
+                  <input type="checkbox" checked={rag.regression && provider !== 'jenkins'} disabled={provider === 'jenkins'} onChange={(e) => setRag({ ...rag, regression: e.target.checked })} data-ci-rag-regression />
+                  Fail on a regression against the previous night
+                </label>
+              </>
+            )}
             {provider === 'github' && (
               <label className="flex items-center gap-1.5 text-xs col-span-3">
                 <input type="checkbox" checked={rag.comment} onChange={(e) => setRag({ ...rag, comment: e.target.checked })} data-ci-rag-comment />
