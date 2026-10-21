@@ -19,6 +19,9 @@ export interface WorkspaceChange {
   kind: WorkspaceChangeKind;
 }
 
+/** The open walks the folder in slices of this many milliseconds; a burst of events is reported at the latest this long after its first. */
+const SLICE_MS = 8;
+const MAX_WAIT_MS = 5000;
 const IGNORED_TOP = new Set(['runs', 'traces', 'payloads', 'reports', 'baselines', 'trash', '.local', '.git', 'node_modules']);
 // debugger/*.har: capture sessions are git-ignored and written constantly while a capture runs (debugger/shared/ is tracked and still reported)
 const IGNORED_FILE = /(^|\/)(database\.sqlite.*|metadata\.jsonl|\.template-offered\.json)$|^debugger\/[^/]+\.har$|\.tmp-\d+-[0-9a-f]+$|~$|\.swp$/;
@@ -49,9 +52,12 @@ const nodeWatch: WatchSource = (root, listener) => {
 };
 
 /** Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. */
-export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; watch?: WatchSource } = {}): WorkspaceWatch {
+export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; maxWaitMs?: number; watch?: WatchSource } = {}): WorkspaceWatch {
   const pending = new Map<string, WorkspaceChange>();
+  const debounce = opts.debounceMs ?? 400;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let firstEventAt = 0;
+  let lastEventAt = 0;
   let watcher: { close(): void } | undefined;
   /**
    * What each file was when last seen: its size and last write. Windows reports a file being read (its access time)
@@ -103,9 +109,53 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
       else seen.set(path, fingerprint(path, 'stat'));
     }
   };
-  snapshot('');
+  /**
+   * The same walk at open, in slices of about 8 ms between event-loop turns: a 50,000-file workspace took 3 s of
+   * stat calls to open, all of it blocking. The first slice runs now (a small workspace is known when this returns).
+   * A file that reports an event before its turn is not in `seen`, so it counts as changed (the safe side), and the
+   * walk never overwrites a file an event already touched.
+   */
+  let walk = 0;
+  const snapshotSliced = () => {
+    const mine = ++walk;
+    const stack: Array<{ dir: string; depth: number; entries?: import('node:fs').Dirent[]; i: number }> = [{ dir: '', depth: 0, i: 0 }];
+    const slice = () => {
+      if (mine !== walk) return;
+      const until = performance.now() + SLICE_MS;
+      let n = 0;
+      while (stack.length) {
+        const f = stack[stack.length - 1]!;
+        if (!f.entries) {
+          if (f.depth > 8) {
+            stack.pop();
+            continue;
+          }
+          try {
+            f.entries = readdirSync(join(root, f.dir), { withFileTypes: true });
+          } catch {
+            stack.pop();
+            continue;
+          }
+        }
+        if (f.i >= f.entries.length) {
+          stack.pop();
+          continue;
+        }
+        const e = f.entries[f.i++]!;
+        const path = f.dir ? `${f.dir}/${e.name}` : e.name;
+        if (!changeKind(path)) continue;
+        if (e.isDirectory()) stack.push({ dir: path, depth: f.depth + 1, i: 0 });
+        else if (!seen.has(path) && !pending.has(path)) seen.set(path, fingerprint(path, 'stat'));
+        if (++n % 64 === 0 && performance.now() > until) break;
+      }
+      if (stack.length && mine === walk) setImmediate(slice).unref();
+    };
+    slice();
+  };
+  snapshotSliced();
   const flush = () => {
     timer = undefined;
+    firstEventAt = 0;
     if (!pending.size) return;
     const batch = [...pending.values()].filter((c) => {
       const { now, same } = compare(c.path);
@@ -137,8 +187,19 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     }
     // a just-written temp file renamed into place reports the final name too: one entry per path
     pending.set(path, { path, kind });
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(flush, opts.debounceMs ?? 400);
+    // one timer per burst (not a clearTimeout / setTimeout per event: a branch switch is tens of thousands), re-armed
+    // while events keep coming, but never later than MAX_WAIT_MS after the first: a build that writes for minutes
+    // is reported in batches instead of when it ends (and `pending` stays one entry per file)
+    lastEventAt = Date.now();
+    if (!firstEventAt) firstEventAt = lastEventAt;
+    if (!timer) timer = setTimeout(check, debounce);
+  };
+  const check = () => {
+    timer = undefined;
+    const now = Date.now();
+    const wait = Math.min(debounce - (now - lastEventAt), (opts.maxWaitMs ?? MAX_WAIT_MS) - (now - firstEventAt));
+    if (wait > 0 && pending.size) timer = setTimeout(check, wait);
+    else flush();
   };
   try {
     watcher = (opts.watch ?? nodeWatch)(root, (_event, name) => onEvent(name));
@@ -149,9 +210,11 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
   const stop = () => {
     if (timer) clearTimeout(timer);
     timer = undefined;
+    walk++;
     watcher?.close();
   };
   const adopt = () => {
+    walk++;
     seen.clear();
     snapshot('');
   };

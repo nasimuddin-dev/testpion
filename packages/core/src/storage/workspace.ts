@@ -1,7 +1,7 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import type { AppSettings, Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
 import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
 import { normalizeUiPrefs } from '../model/ui-prefs.js';
@@ -35,6 +35,11 @@ export interface TestFileNode {
   kind: 'file' | 'dir';
   children?: TestFileNode[];
 }
+
+const TEST_FILE_EXT = /\.(ya?ml|json|jsonl|csv|md)$/i;
+// folders first, then by name in the user's locale (a Collator gives what localeCompare gives, without building one per comparison)
+const nameOrder = new Intl.Collator().compare;
+const byDirsThenName = (a: { name: string; isDirectory(): boolean }, b: { name: string; isDirectory(): boolean }) => Number(b.isDirectory()) - Number(a.isDirectory()) || nameOrder(a.name, b.name);
 
 /**
  * On-disk layout (spec §25):
@@ -418,16 +423,20 @@ export class WorkspaceStore {
 
   /* tests */
   testTree(dir = this.path('tests')): TestFileNode[] {
+    return this.testTreeUnder(dir, relative(this.path('tests'), dir).split(sep).join('/'));
+  }
+
+  /** (the path of a node is its parent's plus its name: no `relative()` per file, which cost more than reading a 50,000-file folder) */
+  private testTreeUnder(dir: string, relDir: string): TestFileNode[] {
     if (!existsSync(dir)) return [];
-    return readdirSync(dir, { withFileTypes: true })
-      .filter((e) => !e.name.startsWith('.'))
-      .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
-      .map((e) => {
-        const p = join(dir, e.name);
-        const rel = relative(this.path('tests'), p).split(sep).join('/');
-        return e.isDirectory() ? { name: e.name, path: rel, kind: 'dir' as const, children: this.testTree(p) } : { name: e.name, path: rel, kind: 'file' as const };
-      })
-      .filter((n) => n.kind === 'dir' || /\.(ya?ml|json|jsonl|csv|md)$/i.test(n.name));
+    const out: TestFileNode[] = [];
+    for (const e of readdirSync(dir, { withFileTypes: true }).sort(byDirsThenName)) {
+      if (e.name.startsWith('.')) continue;
+      const rel = relDir ? `${relDir}/${e.name}` : e.name;
+      if (e.isDirectory()) out.push({ name: e.name, path: rel, kind: 'dir', children: this.testTreeUnder(join(dir, e.name), rel) });
+      else if (TEST_FILE_EXT.test(e.name)) out.push({ name: e.name, path: rel, kind: 'file' });
+    }
+    return out;
   }
 
   readTestFile(rel: string): string {
