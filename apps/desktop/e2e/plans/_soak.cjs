@@ -398,7 +398,7 @@ const cycle = (c) => {
        const drawn = await __t.waitFor(() => nodes().length === 2, 6000);
        let inspector = false;
        if (drawn) { nodes()[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); inspector = !!(await __t.waitFor(() => document.querySelector('[data-step-inspector]'), 3000)); }
-       await __t.tab('Editor'); await __t.sleep(300);
+       await __t.tab('soak-flow.yaml'); await __t.sleep(300);
        const open = await __t.waitFor(() => vis('[data-run-with-data-open]')[0], 4000);
        let grid = 'no button';
        if (open) {

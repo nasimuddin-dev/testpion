@@ -36,9 +36,9 @@ const steps = [
   step('tests-close-others', `await pick('Close other tabs'); return names('Open test files');`),
   step(
     'tests-fixed-tabs-have-no-menu',
-    `await __t.esc(); const runs = tabsOf('Open test files').find((x) => x.textContent.trim().startsWith('Runs')); runs.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 60 })); await __t.sleep(500); return 'menu: ' + !!document.querySelector('[role=menuitem]');`,
+    `await __t.esc(); const runs = tabsOf('Open test files').find((x) => x.textContent.trim().startsWith('Flow')); runs.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 60 })); await __t.sleep(500); return 'menu: ' + !!document.querySelector('[role=menuitem]');`,
   ),
-  step('tests-close-all', `const t = tabsOf('Open test files').find((x) => x.textContent.includes('countries.yaml')); await menuOf(t); await pick('Close all tabs'); return names('Open test files');`),
+  step('tests-close-all', `const t = tabsOf('Open test files').find((x) => x.textContent.includes('countries.yaml')); await menuOf(t); await pick('Close all tabs'); return 'tabs: ' + tabsOf('Open test files').length + ' | ' + (/No open test files/.test(document.querySelector('main')?.innerText ?? '') ? 'No open test files' : 'NO EMPTY STATE');`),
   step(
     'monitors-tab-menu',
     `await __t.view('Monitors'); await __t.sleep(1000); if (!(await openRow('Public APIs health'))) return 'NO ROW'; const tabs = tabsOf('Open monitors'); if (!tabs.length) return 'NO MONITOR TABS'; return 'tabs: ' + tabs.length + ' | ' + (await menuOf(tabs[0]));`,
@@ -73,11 +73,11 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'tests-open-three': /^HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ \*WSecho\.yaml \/ Flow \/ Runs/,
+  'tests-open-three': /^HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ \*WSecho\.yaml \/ Flow$/,
   'tests-tab-menu': /^Run \| Expose as MCP tool… \| Run with data… \| Run in several environments… \| Rename \| Close tab \| Close other tabs \| Close tabs to the right \| Close all tabs \| Reopen closed tab( \(off\))?$/,
-  'tests-close-others': /^\*GQLcountries\.yaml \/ Flow \/ Runs/,
+  'tests-close-others': /^\*GQLcountries\.yaml \/ Flow$/,
   'tests-fixed-tabs-have-no-menu': /^menu: false$/,
-  'tests-close-all': /^\*Editor \/ Runs/,
+  'tests-close-all': /^tabs: 0 \| No open test files$/,
   // key hints (F2, Middle-click, Ctrl+Shift+T) are drawn by CSS: a menu item's text is its label alone
   'monitors-tab-menu': /^tabs: 1 \| Run now \| Rename \| Close tab \| Close other tabs \(off\) \| Close tabs to the right \(off\) \| Close all tabs \| Reopen closed tab( \(off\))?$/,
   'monitors-close-others-disabled': /^one tab, close others disabled: true \| tabs: 1$/,

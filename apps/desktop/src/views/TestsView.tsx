@@ -34,6 +34,7 @@ import { finishSave, type SaveResult } from '../lib/files';
 import { saveRunReport } from '../components/output/run-specs';
 import { dataLanguageOf } from '../data-languages';
 import { Badge, Button, Empty, IconButton, Input, SectionTitle, Spinner, Split, VirtualList } from '../components/ui';
+import { NoOpenItems } from '../components/LibraryTabStrip';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { RunList } from './TestsRunsList';
 import { NoTestFiles, TestFileBadge, TestFileTree, type TestNode, type TestsHost } from './TestsTreeRows';
@@ -206,6 +207,11 @@ export function TestsView() {
   const [runId, setRunId] = useState<string>();
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [tab, setTab] = useState<'editor' | 'run' | 'flow'>('editor');
+  // the Runs tab is a tab like the files: there once something opened it (a run, Run all tests), closable like them
+  const [runsOpen, setRunsOpen] = useState(false);
+  useEffect(() => {
+    if (tab === 'run') setRunsOpen(true);
+  }, [tab]);
   // the file whose expose: block (the flow as an MCP tool) is being edited
   const [exposing, setExposing] = useState<string>();
   // Run with data… / in environments: the dialog's file, and the data run or matrix the Runs tab shows
@@ -720,6 +726,8 @@ export function TestsView() {
     <Split id="tests-main" initial={22} min={14}>
       <SidebarShell
         id="tests"
+        // the Runs pane opens the Runs tab (the overview): the runs are reachable before any run is picked
+        onChange={(p) => p === 'runs' && setTab('run')}
         panes={[
           {
             id: 'tests',
@@ -786,35 +794,49 @@ export function TestsView() {
         ]}
       />
       <div className="h-full flex flex-col min-w-0">
+        {!openFiles.length && !runsOpen ? (
+          <NoOpenItems icon={FileCode2} title="No open test files" newLabel="New test file" onNew={() => void newFile('http')}>
+            Pick a file on the left to edit it and preview its tests; <b>Run all tests</b> below the list runs every file with the active environment.
+          </NoOpenItems>
+        ) : (
         <DocTabStrip<string>
           label="Open test files"
-          activeId={tab === 'run' ? 'run' : tab === 'flow' ? 'flow' : file ? `file:${file}` : 'editor'}
-          onSelect={({ id }) => (id === 'run' ? setTab('run') : id === 'flow' ? setTab('flow') : id === 'editor' ? setTab('editor') : show(id.slice(5)))}
+          activeId={tab === 'run' ? 'run' : tab === 'flow' ? 'flow' : `file:${file}`}
+          onSelect={({ id }) => (id === 'run' ? setTab('run') : id === 'flow' ? setTab('flow') : show(id.slice(5)))}
           onClose={async (_ids, closing) => {
             // one at a time: each asks about its unsaved changes
-            for (const t of closing) await closeFile(t.data!);
+            for (const t of closing) {
+              if (t.id !== 'run') await closeFile(t.data!);
+              else {
+                setRunsOpen(false);
+                setTab('editor');
+              }
+            }
           }}
           onRename={(t) => void renameFile(t.data!)}
-          extraItems={({ data: p }) => [
-            { label: LABEL.run, icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
-            { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), onSelect: () => void exposeFile(p!) },
-            { label: 'Run with data…', icon: <FileSpreadsheet size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'data') },
-            { label: LABEL.runInEnvironments, icon: <Layers size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'matrix') },
-          ]}
+          extraItems={({ id, data: p }) =>
+            id === 'run'
+              ? []
+              : [
+                  { label: LABEL.run, icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
+                  { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), onSelect: () => void exposeFile(p!) },
+                  { label: 'Run with data…', icon: <FileSpreadsheet size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'data') },
+                  { label: LABEL.runInEnvironments, icon: <Layers size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'matrix') },
+                ]
+          }
           tabs={[
-            ...(openFiles.length
-              ? openFiles.map((p) => ({
-                  id: `file:${p}`,
-                  title: p.split('/').pop() ?? p,
-                  tooltip: `tests/${p}`,
-                  badge: <TestFileBadge path={p} />,
-                  dirty: p === file ? dirty : buffers.current[p] ? buffers.current[p]!.content !== buffers.current[p]!.saved : false,
-                  rename: 'dialog' as const,
-                  data: p,
-                }))
-              : [{ id: 'editor', title: 'Editor', closable: false }]),
+            ...openFiles.map((p) => ({
+              id: `file:${p}`,
+              title: p.split('/').pop() ?? p,
+              tooltip: `tests/${p}`,
+              badge: <TestFileBadge path={p} />,
+              dirty: p === file ? dirty : buffers.current[p] ? buffers.current[p]!.content !== buffers.current[p]!.saved : false,
+              rename: 'dialog' as const,
+              data: p,
+            })),
+            // the file's flow: part of the file, it goes with it
             ...(file ? [{ id: 'flow', title: 'Flow', closable: false }] : []),
-            { id: 'run', title: 'Runs', count: runs.length, closable: false },
+            ...(runsOpen ? [{ id: 'run', title: 'Runs', count: runs.length }] : []),
           ]}
           actions={
             tab !== 'run' &&
@@ -846,6 +868,7 @@ export function TestsView() {
             )
           }
         />
+        )}
         {/* where the file lives: Tests › folder › file (› the step chosen on the canvas) */}
         {file && tab !== 'run' && (() => {
           const parts = file.split('/');
@@ -952,17 +975,7 @@ export function TestsView() {
                 />
             </div>
           )}
-          {tab === 'editor' ? (
-            !file && (
-              <Empty
-                icon={<FileCode2 size={28} />}
-                title="Select a test file"
-                actions={[{ label: 'New test file', icon: <FilePlus2 size={12} />, onClick: () => void newFile('http'), primary: false }]}
-              >
-                Pick a file on the left to edit it and preview its tests; <b>Run all tests</b> below the list runs every file with the active environment.
-              </Empty>
-            )
-          ) : tab === 'flow' ? (
+          {tab === 'editor' ? null : tab === 'flow' ? (
             !file ? (
               <Empty icon={<Workflow size={28} />} title="Select a test file">
                 Open a test file to see its steps as a flow.

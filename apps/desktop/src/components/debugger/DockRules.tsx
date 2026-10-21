@@ -2,7 +2,7 @@ import { Check, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
-import { Button, cx, Empty, Field, Input, Menu, Segmented, Select, type MenuItem } from '../ui';
+import { Button, cx, Empty, Field, Input, Menu, Segmented, Select, type EmptyAction, type MenuItem } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
@@ -17,7 +17,8 @@ export function useLiveRules(onChange: (s: RulesState) => void) {
 
 /**
  * One list of rules of some kinds, the same in every rule panel: a filter, a box that turns a rule on or off, its
- * name (what it does on hover), how many requests it acted on; double-click or the pencil edits, the bin removes.
+ * name with what it does under it, how many requests it acted on; double-click or the pencil edits, the bin removes.
+ * With no rules yet, the panel says what a rule does here and offers to make one (the same action as the + button).
  */
 export function RuleList({
   state,
@@ -45,6 +46,10 @@ export function RuleList({
       Add
     </Button>
   );
+  // the empty state's buttons: the + button's action, or each of its menu's choices
+  const addActions: EmptyAction[] = add.onClick
+    ? [{ label: add.label, icon: <Plus size={13} />, onClick: add.onClick }]
+    : (add.items ?? []).filter((i) => i.onSelect).map((i) => ({ label: String(i.label), icon: <Plus size={13} />, onClick: () => void i.onSelect!() }));
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-rule-list={kinds.join(',')}>
       <div className="flex items-center gap-1 p-2 border-b border-line">
@@ -52,14 +57,18 @@ export function RuleList({
         <Button size="sm" variant="ghost" icon={<RotateCcw size={12} />} title="Count the hits from zero" aria-label="Reset hits" onClick={() => act(call<RulesState>('debug.resetRuleHits'))} />
         {add.items ? <Menu width={220} items={add.items} trigger={addButton} /> : addButton}
       </div>
-      <div className="flex items-center h-7 text-[11px] text-muted bg-panel border-b border-line px-2 shrink-0">
-        <span className="w-6" />
-        <span className="flex-1">Name</span>
-        <span className="w-14 text-right">Hits</span>
-        <span className="w-12" />
-      </div>
+      {rules.length > 0 && (
+        <div className="flex items-center h-7 text-[11px] text-muted bg-panel border-b border-line px-2 shrink-0">
+          <span className="w-6" />
+          <span className="flex-1">Rule</span>
+          <span className="w-14 text-right">Hits</span>
+          <span className="w-12" />
+        </div>
+      )}
       {!rules.length ? (
-        <Empty title={f ? 'No rule matches' : 'No rules yet'}>{f ? 'Change the filter.' : empty}</Empty>
+        <Empty title={f ? 'No rule matches' : 'No rules yet'} actions={f ? undefined : addActions}>
+          {f ? 'Change the filter.' : empty}
+        </Empty>
       ) : (
         <div className="flex-1 min-h-0 overflow-auto">
           {rules.map((r) => (
@@ -67,9 +76,9 @@ export function RuleList({
               key={r.id}
               role="row"
               data-rule={r.id}
-              className={cx('group flex items-center h-7 px-2 text-xs border-b border-line/40 hover:bg-hover', !r.enabled && 'text-muted')}
+              className={cx('group flex items-center min-h-8 py-1 px-2 text-xs border-b border-line/40 hover:bg-hover', !r.enabled && 'text-muted')}
               onDoubleClick={() => onEdit(r)}
-              title={r.summary}
+              title="Double-click to edit"
             >
               <input
                 type="checkbox"
@@ -78,9 +87,14 @@ export function RuleList({
                 aria-label={`${r.enabled ? 'Turn off' : 'Turn on'} ${r.name}`}
                 onChange={(e) => act(call<RulesState>('debug.setRuleEnabled', { id: r.id, enabled: e.target.checked }))}
               />
-              <span className="flex-1 truncate">{r.name}</span>
-              <span className="w-14 text-right tabular-nums">{hits[r.id] ?? 0}</span>
-              <span className="w-12 flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+              <span className="flex-1 min-w-0">
+                <span className="block truncate">{r.name}</span>
+                {r.summary && <span className="block truncate text-[11px] text-muted">{r.summary}</span>}
+              </span>
+              <span className="w-14 text-right tabular-nums" title="Requests this rule acted on">
+                {hits[r.id] ?? 0}
+              </span>
+              <span className="w-12 flex justify-end gap-0.5">
                 <button type="button" className="p-0.5 text-muted hover:text-fg" aria-label={`Edit ${r.name}`} onClick={() => onEdit(r)}>
                   <Pencil size={12} />
                 </button>
@@ -129,8 +143,8 @@ export function FilterPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
         add={{ label: side === 'ignore' ? 'New Filter Out rule' : 'New Capture Only rule', onClick: () => onNewRule({ kind: side, enabled: true, match: {} }) }}
         empty={
           side === 'ignore'
-            ? 'Right-click a request ▸ Filter out to add one from its program, URL, domain or method.'
-            : 'Right-click a request ▸ Capture only to add one from its program, URL, domain or method.'
+            ? 'A Filter Out rule hides the requests it matches (by program, domain, URL or method); they still go through. The quickest one starts from a request: right-click it ▸ Filter out.'
+            : 'A Capture Only rule lists just the requests it matches (by program, domain, URL or method). The quickest one starts from a request: right-click it ▸ Capture only.'
         }
       />
     </>
@@ -146,7 +160,7 @@ export function HighlightPanel({ state, onChange, onEdit }: { state?: RulesState
       onChange={onChange}
       onEdit={onEdit}
       add={{ label: 'New highlight rule', onClick: () => onEdit(undefined) }}
-      empty="Highlight requests by status, URL, time, size or program."
+      empty="A highlight rule colours the rows that match a condition: a status range, a URL, a slow response, a size or a program."
     />
   );
 }
@@ -160,7 +174,7 @@ export function AutoReplyPanel({ state, onChange, onNewRule, onEdit }: { state?:
       onChange={onChange}
       onEdit={onEdit}
       add={{ label: 'New auto-reply rule', onClick: () => onNewRule({ kind: 'reply', enabled: true, match: {}, reply: { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' } }) }}
-      empty="Answer requests without the server: right-click a request ▸ Auto-reply ▸ Reply with this response."
+      empty="An auto-reply rule answers the requests it matches with a response you write (status, headers, body); the server never sees them. The quickest one starts from a captured request: right-click it ▸ Auto-reply ▸ Reply with this response."
     />
   );
 }
@@ -180,7 +194,7 @@ export function ModifyPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
           { label: 'Redirect connections', onSelect: () => onNewRule({ kind: 'redirect', enabled: true, match: {}, redirect: { host: 'localhost:3000', scheme: 'http' } }) },
         ],
       }}
-      empty="Change request and response headers or bodies, add a delay, or send a host's requests to another host."
+      empty="A modify rule changes the headers or bodies of the requests it matches, or delays them; a redirect rule sends a host's requests to another host (a local build, a staging server)."
     />
   );
 }
