@@ -256,11 +256,13 @@ describe('every entry point of the window honours Hide all AI actions', () => {
     expect(text.get('App.tsx')).toMatch(/aiOn && tidyImport/);
   });
 
-  it('no view writes an AI button of its own either: an empty state takes "Describe with AI" / "Generate with AI" from the table (aiButton)', () => {
+  it('no view writes an AI button of its own either: an empty state or a block picker row takes "Describe with AI" / "Generate with AI" from the table (aiButton)', () => {
     for (const [file, src] of text) {
       if (file === 'lib/vocabulary.ts') continue;
-      expect(/label:\s*['"`](Describe|Generate) with AI['"`]/.test(src), `${file} writes an AI button label: use aiButton(id)`).toBe(false);
+      expect(/label:\s*['"`][^'"`]*\b(Describe|Generate|Draft)\b[^'"`]*\bwith AI\b/.test(src), `${file} writes an AI button label: use aiButton(id)`).toBe(false);
     }
+    // the flow designer's block picker row is the table's designFlow row
+    expect(text.get('components/FlowDesignerParts.tsx')).toContain("aiButton('designFlow')");
   });
 
   it('no view writes an AI menu item of its own: the labels come from the table', () => {

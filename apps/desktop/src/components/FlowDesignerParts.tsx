@@ -5,6 +5,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Bot, CheckCheck, Code2, Columns2, Cpu, Eraser, FolderInput, GitBranch, Globe, Hourglass, LogOut, Radio, Repeat, ScrollText, Share2, Sparkles, Timer, Variable, Workflow } from 'lucide-react';
+import { aiButton } from '../lib/ai-menu';
 import { setDragBlock } from '../lib/drag-ref';
 import type { PaletteCommand } from './Shell';
 import type { FlowStep } from '@testpion/shared';
@@ -616,7 +617,7 @@ export function blockPickerCommands(o: {
     ...saved,
     ...o.subflows.map((f) => ({ id: `subflow:${f}`, label: f, group: 'Sub-flows', detail: 'Run this flow file as one step', icon: <Workflow size={16} />, run: () => o.add({ name: f.split('/').pop()!.replace(/\.[^.]+$/, ''), type: 'flow', file: f }) })),
     { id: 'more:collection', label: 'From a collection…', group: 'More', detail: 'A folder of saved requests, chained', icon: <FolderInput size={16} />, run: o.fromCollection },
-    ...(o.generate ? [{ id: 'more:ai', label: 'Generate the flow with AI…', group: 'More', detail: 'Describe the flow; review the YAML', icon: <Sparkles size={16} />, run: o.generate }] : []),
+    ...(o.generate ? [{ id: 'more:ai', ...aiButton('designFlow'), group: 'More', detail: 'Describe the flow; review the YAML', run: o.generate }] : []),
   ];
   // the blocks' groups in their order (a command of a group may be written apart from the others)
   const rank = ['Requests', 'Logic', 'Data', 'Flow', 'Saved requests', 'Sub-flows', 'More'];
