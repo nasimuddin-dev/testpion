@@ -97,7 +97,7 @@ describe('MCP rag_author_evaluation', () => {
     const { store, tool: t1 } = tool();
     try {
       expect(t1.description).toMatch(/When to use: Setting up the evaluation/);
-      const r = (await t1.run({ target: 'Clinic HTTP', dataset: 'clinic.jsonl', goal: 'x' })) as { value: { proposal: { id: string; items: Array<{ kind: string; verification: Array<{ verifier: string }> }> }; next: string } };
+      const r = (await t1.run({ target: 'Clinic HTTP', dataset: 'clinic.jsonl', goal: 'x', confirm: true })) as { value: { proposal: { id: string; items: Array<{ kind: string; verification: Array<{ verifier: string }> }> }; next: string } };
       expect(r.value.proposal.items[0]).toMatchObject({ kind: 'evaluation' });
       expect(r.value.proposal.items[0]!.verification.map((b) => b.verifier)).toContain('rag-eval-dry-run');
       expect(r.value.next).toMatch(/ai_apply_proposal/);

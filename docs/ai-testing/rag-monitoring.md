@@ -87,7 +87,7 @@ The command it runs is `testpion rag run … --limit 25 --rotate --baseline-resu
 
 A missing `previous/results.jsonl` is not an error: the run says it is the baseline of the next one. `--rotate` needs `--limit`.
 
-**The pull-request comment.** With `--markdown file`, the metrics table is followed by a section **Against <baseline>**: every metric
+**The pull-request comment.** With `--markdown file`, the metrics table is followed by a section **Against `<baseline>`**: every metric
 that moved (regressions first) with before, after, the change, the 95% interval, the number of samples in both runs, the judge and
 what the judging cost. One function writes it for `testpion rag run`, the CI comment and the monitor's alert, so the three agree.
 

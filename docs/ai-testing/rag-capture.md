@@ -1,3 +1,5 @@
+::: v-pre
+
 # RAG dataset from real calls {#top}
 
 Real questions are the best test set: they are what your users ask, in the words they use. **Capture from traffic** turns calls that
@@ -70,3 +72,5 @@ testpion rag capture --run run_2026-10-20_ab12 --name last-run-answers
 * HTTP and server-sent-event targets only. A WebSocket, gRPC or MCP target has no request body in History to read a question from.
 * A response body is read from `payloads/` (History) or the HAR file; a response that was not recorded is skipped with that reason.
 * Drafting reference answers with a model is not part of capture. Do it from the dataset afterwards, as a reviewed proposal.
+
+:::

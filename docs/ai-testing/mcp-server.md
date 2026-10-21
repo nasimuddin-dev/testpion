@@ -88,6 +88,12 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `rag_list_custom_metrics` | The custom metrics of the workspace (`metrics/*.yaml`): id, kind, threshold, direction, the number of examples. |
 | `rag_validate_metric` | Checks a metric file (text or saved id) and runs its examples; a judged kind spends the judge. Says whether the metric agrees with its examples. |
 | `rag_save_custom_metric` | Writes `metrics/<id>.yaml` after the same check; replacing an existing file asks for confirmation. See [Custom RAG metrics](/ai-testing/custom-metrics). |
+| `rag_generate_testset` | A RAG test set from documents as ONE proposal (questions, references, chunk ids, verification badges); asks first, `dry_run` returns the estimate. Add rows with `ai_apply_proposal`. See [Test sets from documents](/ai-testing/rag-testset). |
+| `rag_capture_dataset` | A dataset from real calls (History, a saved Debugger session, a HAR file, a run), masked; asks first; `dry_run` previews. See [Datasets from real calls](/ai-testing/rag-capture). |
+| `rag_label` | Records a person's pass/fail label of a result in `labels/*.json`. A label is the person's verdict, not the agent's. |
+| `rag_calibrate` | Judge vs labels per metric and judge: kappa, accuracy, confusion matrix, intervals, disagreements, the best pass mark (`tune`). No model call. See [Calibrating a judge](/ai-testing/rag-calibration). |
+| `rag_author_evaluation` | A proposed evaluation for a target (metrics, pass marks, judge options, gates), dry-run on a few samples; asks first; `dry_run` shows what would be sent. See [Drafting an evaluation](/ai-testing/rag-author). |
+| `rag_trend` | Metric means across the runs of an evaluation, with judge changes marked. |
 | `rag_try_metric` | One metric on one sample: `dry_run` shows the exact judge prompts and sends nothing; otherwise the result with its items, the judge and the cost. The sample is given, taken from a run (`run_id` + `record`) or probed from a target. |
 | `rag_estimate` | What a RAG evaluation (or the re-scoring of a run, exactly) will cost before it runs: judge calls, tokens, a cost range, the calls to your system and the limits it would break. Nothing is sent. |
 | `rag_run` | Run a saved RAG evaluation with chosen metrics and gates (`min: ["faithfulness=0.8"]`), a `baseline`, `two_phase`, a jury, `swap`, `repeat`, `short_circuit`, `max_cost_usd`: aggregates per metric, why samples failed, the gates, the comparison and the worst samples. Stops before the first question without a usable target or judge. |

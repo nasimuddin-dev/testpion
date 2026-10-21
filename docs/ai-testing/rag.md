@@ -265,6 +265,19 @@ An agent has the same: `rag_metrics`, `rag_try_metric`, `rag_estimate`, `rag_run
 `evaluate_rag_system` (probe → metrics → estimate → run → compare). `rag_run` stops before the first question when the target cannot
 be called or a judged metric has no judge.
 
+### Make the test set, trust the judge, keep watching {#r4}
+
+* **Generate a test set from your documents** (AI Lab ▸ RAG ▸ Data): questions of five kinds with reference answers and the chunk
+  ids they come from, every one verified and reviewed before it joins a dataset: [Test sets from documents](./rag-testset.md).
+* **Build a dataset from real calls** (History, the Debugger, a run): the question, answer and contexts of calls that already
+  happened, masked before they are written: [Datasets from real calls](./rag-capture.md).
+* **Calibrate the judge**: label some results pass or fail, and see how well a judge agrees with you (Cohen's kappa, a confusion
+  matrix, intervals) and which pass mark agrees most: [Calibrating a judge](./rag-calibration.md).
+* **Let the AI draft the evaluation**: metrics with pass marks and reasons, judge options and gates, dry-run on a few samples
+  before it is offered: [Drafting an evaluation](./rag-author.md).
+* **Trends, nightly runs and CI**: metric means run by run, a rotating nightly sample with a budget, a regression gate against a
+  baseline: [RAG: trends, nightly runs and CI](./rag-monitoring.md).
+
 ## Recipes {#recipes}
 
 **Is my retriever the problem?** Run the *Retrieval only* preset: it needs the gold ids and no model. A low `recall@5` with a high

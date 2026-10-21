@@ -112,7 +112,7 @@ describe('rag_generate_testset (MCP)', () => {
   it('dry_run returns the estimate; a run returns one proposal whose rows carry their badges; paths outside the workspace are refused', async () => {
     const d = await call<{ dryRun: boolean; estimate: { total: { llmCalls: number } } }>({ paths: ['docs'], count: 2, types: ['single-hop', 'unanswerable'], dry_run: true });
     expect(d.data).toMatchObject({ dryRun: true, estimate: { total: { llmCalls: 2 } } });
-    const r = await call<{ proposal: { id: string; items: Array<{ type: string; question: string; reference_ids: string[]; verification: Array<{ status: string }> }> }; next: string }>({ paths: ['docs'], count: 2, types: ['single-hop', 'unanswerable'], name: 'mcp-set' });
+    const r = await call<{ proposal: { id: string; items: Array<{ type: string; question: string; reference_ids: string[]; verification: Array<{ status: string }> }> }; next: string }>({ paths: ['docs'], count: 2, types: ['single-hop', 'unanswerable'], name: 'mcp-set', confirm: true });
     expect(r.isError).toBeFalsy();
     expect(r.data.proposal.items.map((i) => i.type)).toEqual(['single-hop', 'unanswerable']);
     expect(r.data.proposal.items[0]).toMatchObject({ reference_ids: ['docs-handbook#1'] });
@@ -120,7 +120,7 @@ describe('rag_generate_testset (MCP)', () => {
     expect(r.data.next).toContain('ai_apply_proposal');
     // it only proposes: the dataset file is not there until the person agrees
     expect(existsSync(join(ws, 'datasets', 'mcp-set.jsonl'))).toBe(false);
-    const outside = await call({ paths: [join(t.dir, 'outside', 'notes.txt')], count: 2 });
+    const outside = await call({ paths: [join(t.dir, 'outside', 'notes.txt')], count: 2, confirm: true });
     expect(outside.isError).toBe(true);
     expect(outside.text).toMatch(/outside the workspace/);
   });

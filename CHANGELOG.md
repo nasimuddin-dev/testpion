@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### RAG R4: generate, capture, calibrate, author, watch
+
+- **Test sets from documents.** AI Lab ▸ RAG ▸ Data ▸ *Generate a test set from documents…*: documents (md, txt, html, https pages) are chunked deterministically, the AI task `rag-generate-testset` writes single-hop, multi-hop, abstract, unanswerable and adversarial questions with reference answers and chunk ids, and every sample is verified (lexical and judge entailment support, a keyword-retrieval check that unanswerable questions are unanswerable, duplicates) and reviewed in the shared proposal review before it is added to `datasets/<name>.jsonl`. Estimate, caps and *What will be sent* come first; document URLs are https only, public addresses only, same-host redirects, 2 MB. `testpion rag generate-dataset`, MCP `rag_generate_testset`.
+- **Datasets from real calls.** *Create dataset from captured calls…* (History, the Debugger, AI Lab ▸ RAG ▸ Data): the question is read from the request where the RAG target writes it, the answer and contexts with its mapping; secrets and personal data are masked before anything is written; dedupe, seeded sampling, preview. `testpion rag capture`, MCP `rag_capture_dataset`.
+- **Judge calibration.** Pass/Fail labels on a result's metrics (the matrix drill-down) stored in `labels/*.json` with provenance; *Calibrate judge* shows Cohen's kappa, accuracy, TPR/TNR, the confusion matrix, bootstrap intervals, the numbers per judge model, disagreements, and the pass mark that agrees most (applied to the evaluation or the metric file). `testpion rag label|calibrate` (`--min-kappa` gate), MCP `rag_label`, `rag_calibrate`.
+- **Draft an evaluation with AI** (AI-11). `rag-author-evaluation` proposes a complete RAG evaluation (metrics with pass marks and reasons, judge options, gates); metrics that cannot run on the data are dropped with a note, and a dry run on a few samples (free metrics for real, judged prompts counted, nothing sent) is the badge on the proposal. `testpion rag author`, MCP `rag_author_evaluation`.
+- **Trends, nightly runs, CI.** `testpion rag trend` / MCP `rag_trend` / a Trend view with the shared chart output control (a change of judge or prompt is marked, not read as a regression); monitors get a rotating nightly sample, a per-run budget and a regression gate against a baseline, with the alert carrying the metric table; the CI dialog and `ci` get a scheduled nightly RAG workflow and a regression section in the PR comment. The metric editor has *Save as…*; the redactor now masks a phone number that ends a sentence.
+- New proposal item kinds `dataset-row` and `evaluation`; AI tasks that read a folder or a target (`prepareContext`) run without a workspace item.
+
 ### Security hardening
 
 - **MCP `save_output` only writes under `exports/`.** `save_to` is an allow-list now: a new file under `exports/` or `.local/exports/`, never over a file, never in a hidden folder (`.husky/`, `.vscode/`) or as a program file, and it asks for confirmation (`confirm: true`). `export_bundle` follows the same rule (a numbered name instead of overwriting the default file).

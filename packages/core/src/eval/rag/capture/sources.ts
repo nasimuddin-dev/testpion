@@ -111,7 +111,7 @@ function sessionFile(store: Reader, session: string): string {
 
 async function readRun(store: Reader, run: string): Promise<CapturedCall[]> {
   const file = store.safePath('results.jsonl', store.runDir(run));
-  if (!existsSync(file)) throw new ApsError('ConfigurationError', `No results for run "${run}"`, { suggestions: ['`testpion runs` lists the runs.'] });
+  if (!existsSync(file)) throw new ApsError('ConfigurationError', `No results for run "${run}"`, { suggestions: ['`testpion history list` shows the runs.'] });
   const out: CapturedCall[] = [];
   const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
   for await (const line of rl) {

@@ -87,10 +87,10 @@ describe('rag_capture_dataset over MCP', () => {
     const dry = await call({ target: 'Clinic HTTP', dedupe: true, dry_run: true });
     expect(dry.data.report.records).toBe(2);
     expect(dry.data.written).toBeUndefined();
-    const real = await call({ target: 'Clinic HTTP', name: 'mcp-made', limit: 1 });
+    const real = await call({ target: 'Clinic HTTP', name: 'mcp-made', limit: 1, confirm: true });
     expect(real.data.written?.path).toBe('datasets/mcp-made.jsonl');
     expect(readFileSync(ws.path('datasets', 'mcp-made.jsonl'), 'utf8')).not.toContain('415-555-0199');
-    const again = await call({ target: 'Clinic HTTP', name: 'mcp-made' });
+    const again = await call({ target: 'Clinic HTTP', name: 'mcp-made', confirm: true });
     expect(again.isError).toBe(true);
     expect(again.text).toMatch(/exists already/);
   });
