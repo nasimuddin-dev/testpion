@@ -1,13 +1,85 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.54 (bundles to save and export everything, imports from every other tool with preview, report and Undo, Git history, restore, stage and conflicts for every item, AI that checks its work: tests from a spec, tidy import, security tests, contract drift, Ask; RAG testing, one row and one menu, a faster command line), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.52](#behaviour-changes-in-0-52), [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.54](#behaviour-changes-in-0-54), [0.52](#behaviour-changes-in-0-52), [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.54: the everything release {#whats-new-in-0-54}
+
+0.54 (which also holds the changes of 0.53) lets you take anything you made in TestPion out, bring in anything from another tool, and see every change in git, item by item. It adds AI that checks its own work, a way to test RAG systems, and a window and command line that start and run faster.
+
+### Save and export everything {#whats-new-save-export}
+- **A bundle for every kind of item.** **Export…** and **Import…** are on every list header and every item's menu: collections, environments, API definitions, datasets, MCP servers, prompts, monitors, tests and flows and more go into one `.testpion.zip` file. Nothing moves on disk; secrets are replaced by `{{variables}}` you fill in ([steps](#bundles)).
+- **Export a part, or everything it uses.** Export a folder or one request as a collection of its own, or **Export with everything it uses…** to add the environments, API definitions, datasets and tests it needs; untick what you do not want.
+- **Import here…** adds a bundle's requests under a collection or one of its folders, with one **Undo**.
+- **The workspace export is a bundle now.** The workspace variables (Globals) travel in it too, with blank secrets.
+- **For Postman or Bruno, with what it uses.** A `.zip` with the environments, API definitions, data files and workspace variables next to the collection, and a README listing what those tools cannot hold.
+- **Every output has the down arrow.** History, traces, a Debugger exchange, MCP results, AI answers, Git changes, lint and coverage reports, charts, monitor runs and more ([Save and export results](/getting-started/save-and-export-results)).
+- **From the terminal and for AI agents.** `testpion output <output> --format <format> --out <file>` writes the same bytes as the app; the MCP tool `save_output` does it for an agent, but only into a new file under `exports/` ([Export and import](/getting-started/export-import)).
+
+### Import from anywhere {#whats-new-import}
+- **Preview, report, Undo.** Drop files, a folder, a ZIP, a link or pasted text on the window: you see what will be created and what will not come over, then the result with an **Undo import**. Home's **Migrate from…** shows how to export from each tool ([Import fidelity](/getting-started/import-fidelity), [Migrate](/migrate/)).
+- **More tools.** Thunder Client, Yaak, HTTPie, Apidog, Postman's older and newer formats and its Git layout, Bruno's OpenCollection YAML, GraphQL schemas and links to GitHub or GitLab repositories, besides Postman, Insomnia, Bruno, Hoppscotch, OpenAPI, HAR and cURL.
+- **Importing again updates.** Importing the same source twice shows what would be replaced, added or skipped, item by item, and never overwrites what you edited unless you choose Replace.
+- **Scripts become `tp.*`.** Scripts of the other tools are converted by their structure; what has no equivalent is marked `// TODO(import)`, and **Fix what the import left…** asks AI to rewrite those as a reviewed proposal. **Lift simple tests into assertions** moves a status or header check out of the script.
+- **Export to Insomnia and OpenCollection** too, listing what the format cannot hold.
+
+### Git for every item {#whats-new-git}
+- **Every kind of item is a change you can read.** *MCP server Weather: URL*, *Dataset users.csv: 12 rows added*: each row and section shows a change mark, and the Git view names changes by item instead of by file ([Keep your workspace in git](/getting-started/git)).
+- **History, restore, discard, stage and who changed what, for one item.** Only that item goes back; the rest of its file stays, with **Undo**. **Set changes aside** (stash) with a name.
+- **Conflicts settled by item, field or step.** Two people changing different fields of one request no longer clash; test and flow files are settled step by step.
+- **The commit checks what is staged.** A secret typed in refuses the commit and names the `{{variable}}` to use; **Fix all** does it for every kind, and **Allow…** records a reviewed value in a file you commit.
+- **Fix git setup** completes `.gitignore` and `.gitattributes`, makes plain `git diff` readable, and can untrack ignored files. Big files go to Git LFS or by reference; **Share session** gives the team a masked Debugger capture; **Create CODEOWNERS…** drafts one.
+
+### AI that checks its work {#whats-new-ai}
+- **Tests from a spec**: first a report of what your tests never prove about the API definition (no model needed), then tests that close the gaps, with the coverage before and after ([Tests from a spec](/ai-testing/ai-features#tests-from-a-spec)).
+- **Tidy this import**: names, folders, hosts and tokens as variables, ids chained from earlier responses, tracking requests dropped, each change checked so every request still sends what it sent ([Tidy an import](/ai-testing/ai-features#tidy-an-import)).
+- **Security tests** (OWASP API): a second user repeating the owner's request, no or bad credentials, privileged fields in a body, an admin function called by a normal user. The verdicts are checks on the responses, never the model's opinion ([Security tests](/ai-testing/ai-features#security-tests)).
+- **Contract drift**: compare History, a HAR file or a run with an OpenAPI document; the AI says who is right and proposes a verified spec fix ([Contract drift](/ai-testing/ai-features#contract-drift-explained)).
+- **Script with AI**: write, fix or explain a script with the real `tp.*` API, run once in the sandbox before it is offered ([Script helper](/ai-testing/ai-features#script-helper)).
+- **Ask: search in your own words** ("failed payment calls last week over 2 s") in History, runs, test results and traces. The model only translates the question into a search; you see how it was understood ([Ask](/ai-testing/ai-features#ask-search-in-your-own-words)).
+- **The cost comes before every send**, and **Hide all AI actions** (Settings ▸ AI assistant) removes every AI button from the window.
+
+### RAG testing {#whats-new-rag}
+- **Test a RAG system that runs somewhere else**: connect it over HTTP, a stream, WebSocket, gRPC or MCP, click its answer and retrieved documents once, and run a dataset against it ([RAG testing](/ai-testing/rag)).
+- **138 metrics**, free or judged, for retrieval, answers, conversations, agents, safety and pictures, the **cost shown first**, and a samples × metrics matrix ([metrics](/ai-testing/rag-metrics)).
+- **Your own metrics** as files, with a decision-tree editor and **Draft with AI** ([custom metrics](/ai-testing/custom-metrics)).
+- **Test sets from documents** and **datasets from real calls** ([test sets](/ai-testing/rag-testset), [captured calls](/ai-testing/rag-capture)); **judge calibration** against your own pass/fail labels ([calibration](/ai-testing/rag-calibration)); trends, nightly monitors and CI ([monitoring](/ai-testing/rag-monitoring)).
+- **From the terminal and for agents**: `testpion rag …` and the `rag_*` MCP tools. A SQL metric reads only databases its saved definition names.
+
+### One row, one menu, tabs that close {#whats-new-ui}
+- **One row in every list** (collections, environments, providers, History, runs) with the same keys: <kbd>Shift</kbd>+<kbd>F10</kbd> opens the menu, <kbd>F2</kbd> renames, <kbd>Delete</kbd> deletes with Undo.
+- **Expand all and Collapse all are one toggle** in the explorer and the JSON tree.
+- **Every click on a request opens its own tab**, a sent request keeps its tab until you close it, and the last tab of Evaluations, Load tests, the Playground or Environments closes to an empty state. A tab only partly in view is hidden into the overflow button.
+- **Delete and Undo for any item** from the terminal and agents: `testpion item delete|restore`, `delete_item`, `restore_item` ([Finding your way](/getting-started/finding-your-way#menus)).
+- **Plain words and one drop**: a bundle dropped on the window opens one dialog, and Git writes (resolving a conflict, discarding) have Undo.
+
+### Faster and safer {#whats-new-fast}
+- **The command line starts in about half the time**, and opening a workspace of tens of thousands of files no longer stalls.
+- **Switching tabs redraws about half as much**, and big lists come in pages (`limit`, `cursor`, `truncated`, `nextCursor`) in History, runs, flaky tests, search, requests, environments and datasets, in the app, the CLI and MCP.
+- **Runs are cheaper**: about 13% less CPU per test, and a collection of more than 1,000 requests runs to the end.
+- **Safer**: imports and Fiddler `.saz` files use one hardened zip reader, imports from a link follow the network policy, MCP tools that send or spend (`export_traces`, `security_tests_run`, the RAG runs) ask first, and downloads never run on a double-click.
+
+### Behaviour changes in 0.54 {#behaviour-changes-in-0-54}
+- **Workspace export writes a bundle** (`<name>.testpion.zip`). The one-file export of 0.53 and earlier is still read, and still written by **File ▸ Export ▸ Workspace (older format)…** or `testpion workspace export --legacy`, for two more releases.
+- **MCP `save_output` writes only under `exports/`** (or `.local/exports/`): a new file, never over a file, never in a hidden folder, and only after confirmation. `export_bundle` follows the same rule.
+- **Git commit refuses a certain secret** with no "commit anyway"; only probable ones can be confirmed. An agent cannot allow-list a value.
+- **Open after a save is for documents only.** A raw body, an HTML page, a script or a file the OS would run is shown in its folder instead.
+- **Expand all and Collapse all are one toggle button** (the right-click menus keep both).
+- **Importing the same source again updates the collection it made** (`testpion import --new-copy` adds a copy instead).
+- **Long lists are paged.** `history list`, `history flaky`, run results, `search`, `requests`, `env list` and dataset rows on the CLI and over MCP return one page and say `truncated` with a `nextCursor` (a list that fits is unchanged; [Paging](/cli/reference#paging)).
+- **`hallucination` means the share of unsupported claims** (lower is better); it used to be another name of `faithfulness`. In a RAG target run, the judged context metrics need a judge and are n/a without one.
+- **Workspace variables stay out of a selection** unless you tick **Include the workspace variables**; a whole-workspace export carries them.
+
+### Bundles {#bundles}
+1. Right-click any list header or item and choose **Export…**; pick the items, see why each one is in, untick what you do not need, and save the `.testpion.zip`.
+2. In another workspace, choose **Import…** (or drop the file on the window). Each item is New, Already here, Conflict or Refused; choose **Keep both**, **Replace** or **Skip**, then import.
+3. **Undo import** takes everything back, byte for byte. More in [Export and import](/getting-started/export-import).
 
 ## What's new in 0.52: one registry, one menu {#whats-new-in-0-52}
 

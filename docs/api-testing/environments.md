@@ -69,6 +69,12 @@ Under an environment's variables, *Not used anywhere in the workspace* lists the
 | Business | `$randomCompanyName`, `$randomCompanySuffix`, `$randomDepartment`, `$randomProduct`, `$randomProductName`, `$randomProductAdjective`, `$randomProductMaterial`, `$randomCatchPhrase`, `$randomCurrencyCode`, `$randomCurrencyName`, `$randomCurrencySymbol` |
 | Text | `$randomWord`, `$randomWords`, `$randomLoremWord`, `$randomLoremWords`, `$randomLoremSentence`, `$randomLoremSentences`, `$randomLoremParagraph`, `$randomLoremSlug`, `$randomAbbreviation`, `$randomAlphaNumeric`, `$randomColor`, `$randomHexColor` |
 | Files | `$randomFileName`, `$randomFileExt`, `$randomFileType`, `$randomMimeType` |
+| Finance and crypto | `$randomBankAccountIban`, `$randomBankAccountBic`, `$randomBankAccountName`, `$randomCreditCardMask`, `$randomTransactionType`, `$randomBitcoin` |
+| Images | `$randomImageDataUri`, `$randomAbstractImage`, `$randomAnimalsImage`, `$randomBusinessImage`, `$randomCatsImage`, `$randomCityImage`, `$randomFashionImage`, `$randomFoodImage`, `$randomNatureImage`, `$randomNightlifeImage`, `$randomPeopleImage`, `$randomSportsImage`, `$randomTransportImage` |
+| Database | `$randomDatabaseColumn`, `$randomDatabaseType`, `$randomDatabaseCollation`, `$randomDatabaseEngine` |
+| Words and grammar | `$randomAdjective`, `$randomNoun`, `$randomVerb`, `$randomIngverb`, `$randomPhrase`, `$randomBs`, `$randomBsAdjective`, `$randomBsBuzz`, `$randomBsNoun`, `$randomCatchPhraseAdjective`, `$randomCatchPhraseDescriptor`, `$randomCatchPhraseNoun`, `$randomLoremLines`, `$randomLoremText` |
+| Files and paths | `$randomCommonFileName`, `$randomCommonFileExt`, `$randomCommonFileType`, `$randomFilePath`, `$randomDirectoryPath` |
+| Jobs, directions, addresses | `$randomJobDescriptor`, `$randomJobType`, `$randomCardinalDirection`, `$randomOrdinalDirection`, `$randomDirectionAbbreviation`, `$randomStreetSuffix`, `$randomZipCode`, `$randomPort` |
 
 The values are made up: emails use `example.test` / `example.com`, phone numbers the fictional 555 range, domains `*.example.*`.
 

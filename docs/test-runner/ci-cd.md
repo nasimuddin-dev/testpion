@@ -106,7 +106,7 @@ The generated files still install the CLI from the repository, which works for a
 
 To run a collection instead, use `run-collection "My API" -w . -e Staging -r console junit -o test-results`. For GitLab, Azure DevOps and Jenkins, publish `test-results/junit.xml` with `reports: junit`, *PublishTestResults* or the `junit` step.
 
-**Explain the failures in the log:** add `--triage` to the run line. After a run with failures, TestPion groups them by likely cause and, with an AI model set up for the job (`TESTPION_AI_PROVIDER` and its key, or a model on the runner), explains each with evidence and a verified fix; it writes `test-results/triage.md` and `triage.json` and adds a *Triage (AI)* section to the JUnit, HTML and Markdown reports. The exit code stays the run's. See [Explain the failures in the job](/test-runner/integration-testing#explain-the-failures-in-the-job).
+**Explain the failures in the log:** add `--triage` to the run line. After a run with failures, TestPion groups them by likely cause and, with an AI model set up for the job (`TESTPION_AI_PROVIDER` and its key, or a model on the runner), explains each with evidence and a verified fix; it writes `test-results/triage.md` and `triage.json` and adds a *Triage (AI)* section to the JUnit, HTML and Markdown reports. The exit code stays the run's. With the GitHub Action, `triage: true` adds `--triage` and shows the failure triage from `triage.md` in the job summary beside the run's Markdown report. See [Explain the failures in the job](/test-runner/integration-testing#explain-the-failures-in-the-job).
 
 ## API coverage
 

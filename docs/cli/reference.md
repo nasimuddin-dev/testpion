@@ -102,6 +102,8 @@ testpion grpc <target> [method] [-p protos]   Call a gRPC method, or list the me
 testpion report <results.jsonl>              Re-generate reports
 ```
 
+The command line starts from one bundled file, `dist/bundle.js`, which `bin/testpion.js` loads while it is newer than the build (a command takes about half the time it did: roughly 0.9 s instead of 2.0 s on a loaded machine); `--version` and `--help` answer from an index written at build time. Set `TESTPION_UNBUNDLED=1` to load the separate files instead.
+
 ## JSON output, dry runs and scripts
 
 Every command that takes `--json` prints **one envelope** on stdout, whatever happens (success, a failed check, a wrong argument, a missing file):
