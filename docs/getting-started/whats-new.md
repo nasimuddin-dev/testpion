@@ -184,7 +184,7 @@ Terminal: `testpion workspace export <workspace> [-o file] [--json]` (`--json` r
 5. For a Bruno folder with a `.env`, activate the *Bruno .env* environment (or any imported one): its secret values are in the secret store. A GraphQL schema file (`.graphql`) becomes a request for `{{graphqlUrl}}`: set that variable. What each importer maps: [Import fidelity](/getting-started/import-fidelity).
 
 <figure class="aps-screenshot">
-  <img src="/images/import-notes.jpg" alt="After importing a Postman collection with a Hawk request: the message Check after import (1 note) names the request, set to No auth with a disabled X-Imported-Auth-Hawk header" width="1440" height="900" loading="lazy">
+  <img src="/images/import-notes.jpg" alt="After importing a Postman collection with an ASAP request: the message Check after import (1 note) names the request, set to No auth with a disabled X-Imported-Auth-Hawk header" width="1440" height="900" loading="lazy">
 </figure>
 
 ### Importing an API definition never overwrites one {#spec-keep-both}

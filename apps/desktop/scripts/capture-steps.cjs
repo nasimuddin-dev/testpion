@@ -405,7 +405,7 @@ module.exports = async function run(win) {
   await sendAndWait();
   // the JSON tree (the request also has a visualizer, which the Body tab shows first)
   await click('Pretty', 'main [role=radio]');
-  await until(`__cap.screen().includes('"items"') && __cap.screen().includes('"total"')`, 'the JSON tree');
+  await until(`__cap.screen().includes('"items"')`, 'the JSON tree');
   await shot('rest');
   // the JSONPath filter: the response's own paths suggested as you type
   const JSONPATH = `__cap.one('main input[aria-label="Filter with JSONPath"]')`;
@@ -420,7 +420,7 @@ module.exports = async function run(win) {
   await js(`__cap.key('Escape'); true`);
   await until(`!__cap.all('[role=listbox]').length`, 'the suggestions to close');
   await js(`__cap.input(${JSONPATH}, ''); true`);
-  await until(`!${JSONPATH}.value && __cap.screen().includes('"total"')`, 'the filter to clear');
+  await until(`!${JSONPATH}.value && __cap.screen().includes('"items"')`, 'the filter to clear');
   // the response's timeline: connection set-up, waiting and download
   await responseTab('Timeline');
   await until(`__cap.screen().includes('waiting (TTFB)')`, 'the timeline');
@@ -754,7 +754,7 @@ module.exports = async function run(win) {
   await clickOn(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab]').find((t) => __cap.text(t).includes('List patients'))`, 'the List patients tab');
   await until(`__cap.all('[role=tablist][aria-label="Open requests"] [role=tab][aria-selected="true"]').some((t) => __cap.text(t).includes('List patients'))`, 'the request in compact density');
   await click('Pretty', 'main [role=radio]');
-  await until(`__cap.screen().includes('"total"')`, 'the JSON tree in compact density');
+  await until(`__cap.screen().includes('"items"')`, 'the JSON tree in compact density');
   await shot('density-compact');
   await density('Comfortable');
   // the terminal opens over the run's charts, as before
@@ -899,6 +899,9 @@ module.exports = async function run(win) {
   const unfoldRest = `__cap.all('${EXPLORER} [data-tree-row][aria-expanded="false"]').find((b) => ['Veterinary API', 'REST'].some((n) => __cap.text(b).startsWith(n)))`;
   await until(`${patients} || ((${unfoldRest})?.click(), false)`, 'the Patients folder in the explorer');
   await js(`(() => { const r = ${patients}; const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.left + 20, clientY: b.top + 8, button: 2 })); return true; })()`);
+  // a folder has several AI items: they sit together in the AI submenu
+  await click('AI', '[role=menuitem]');
+  await until(`__cap.all('[role=menuitem]').some((m) => __cap.text(m) === 'Generate integration flow with AI…')`, 'the AI submenu');
   await click('Generate integration flow with AI…', '[role=menuitem]');
   await until(`__cap.one('[data-flow-generate-dialog]') && /tokens in/.test(__cap.text(__cap.one('[data-flow-estimate]')))`, 'the Generate integration flow dialog with its estimate', 20000);
   await realClick(`__cap.one('[data-flow-generate-dialog] input[aria-label="Hint for the flow"]')`, 'the hint field');
@@ -1128,7 +1131,7 @@ tests:
       await openRequest('List patients');
       await sendAndWait();
       await click('Pretty', 'main [role=radio]');
-      await until(`__cap.screen().includes('"total"')`, 'the JSON tree');
+      await until(`__cap.screen().includes('"items"')`, 'the JSON tree');
       await formatsMenu('response.body', ['JSON (pretty)', 'JSON (minified)', 'Raw body', 'Table as CSV', 'Table as TSV', 'HAR']);
       await shot('output-format-menu');
       await closeMenu();
@@ -1226,13 +1229,19 @@ tests:
   await clickSel(`${EXPLORER} button[aria-label^="Import ("]`, 'the Import button');
   const pasted = `__cap.one('[role=dialog] textarea')`;
   await until(pasted, 'the Import dialog');
-  const hawk = require('node:fs').readFileSync(join(__dirname, '..', 'e2e', 'fixtures', 'postman-hawk', 'hawk.postman_collection.json'), 'utf8');
+  // Hawk imports as Hawk now: the same request with an auth scheme TestPion does not support (ASAP) shows the notes
+  const hawk = require('node:fs').readFileSync(join(__dirname, '..', 'e2e', 'fixtures', 'postman-hawk', 'hawk.postman_collection.json'), 'utf8').replace(/"hawk"/g, '"asap"');
   await js(`__cap.input(${pasted}, ${J(hawk)}); true`);
-  await click('Import pasted content', '[role=dialog] button');
-  await until(`!__cap.one('[role=dialog]') && __cap.all('[data-sonner-toast]').some((t) => /Check after import \\(\\d+ notes?\\)/.test(__cap.text(t)))`, 'the import notes');
+  // the dialog previews first (nothing is written), then imports, then stays open on its result with the notes toast
+  await click('Preview pasted content', '[role=dialog] button');
+  await until(`__cap.all('[role=dialog] button').some((b) => /^Import\\b/.test(__cap.text(b)) && !b.disabled)`, 'the import preview');
+  await click('Import', '[role=dialog] button');
+  await until(`__cap.all('[data-sonner-toast]').some((t) => /Check after import \\(\\d+ notes?\\)/.test(__cap.text(t)))`, 'the import notes');
   await holdToasts(true);
   await shot('import-notes', { toasts: true });
   await holdToasts(false);
+  await click('Close', '[role=dialog] button');
+  await until(`!__cap.one('[role=dialog]')`, 'the import dialog to close');
 
   // an API definition an import replaced (Replace instead): the old one goes to Recently deleted
   await settle();
