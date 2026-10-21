@@ -11,6 +11,7 @@ import type { TokenUsage } from '../model/types.js';
 import { nlSearchAnswer } from '../ai/nl-search.js';
 import { runAiTask, type AiPreview, type AiRunDeps } from '../ai/tasks/run.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { offsetOfCursor } from '../util/page.js';
 import { runSearchQuery, type SearchOutcome } from './query-engine.js';
 import { explainQuery, parseSearchQuery, queryChips, SEARCH_VALUE_MAX, textQuery, type SearchChip, type SearchQuery, type SearchSource } from './query-spec.js';
 
@@ -49,6 +50,25 @@ interface AskOptions {
   dryRun?: boolean;
   /** For tests: the time "now" is. */
   now?: number;
+  /** Which page of the matches: replaces the query's own `limit` and `offset` (the model's included). */
+  page?: SearchPage;
+}
+
+/** `limit` (1 to 200) and `offset` of a page of matches, or the `cursor` an earlier answer gave. */
+export interface SearchPage {
+  limit?: number;
+  offset?: number;
+  cursor?: string | number;
+}
+
+/** The query with the page asked for (validated like any query: a limit out of range says what is allowed). */
+function withPage(q: SearchQuery, page: SearchPage | undefined): SearchQuery {
+  if (!page || (page.limit === undefined && page.offset === undefined && page.cursor === undefined)) return q;
+  const offset = page.cursor !== undefined ? offsetOfCursor(page.cursor) : page.offset;
+  const { offset: _o, ...rest } = q;
+  const r = parseSearchQuery({ ...rest, ...(page.limit !== undefined ? { limit: page.limit } : {}), ...(offset ? { offset } : {}) });
+  if (!r.query) throw invalidQuery(r.problems);
+  return r.query;
 }
 
 function inScope(q: SearchQuery, scope: SearchSource[] | undefined): { query?: SearchQuery; problems: string[] } {
@@ -58,7 +78,8 @@ function inScope(q: SearchQuery, scope: SearchSource[] | undefined): { query?: S
   return parseSearchQuery({ ...q, sources: sources.length ? sources : scope });
 }
 
-async function answerOf(store: WorkspaceStore, a: Omit<SearchAnswer, 'explain' | 'chips' | 'outcome'>, now?: number): Promise<SearchAnswer> {
+async function answerOf(store: WorkspaceStore, a0: Omit<SearchAnswer, 'explain' | 'chips' | 'outcome'>, now?: number, page?: SearchPage): Promise<SearchAnswer> {
+  const a = { ...a0, query: withPage(a0.query, page) };
   return { ...a, explain: explainQuery(a.query), chips: queryChips(a.query), outcome: await runSearchQuery(store, a.query, { now }) };
 }
 
@@ -67,18 +88,18 @@ const invalidQuery = (problems: string[]): ApsError =>
   new ApsError('ValidationError', `Invalid search query: ${problems.join('; ')}`, { details: { problems }, suggestions: problems.slice(0, 5) });
 
 /** A query given directly (edited chips, `--query-json`, MCP `search_query`): validated, run, explained. No model. */
-export async function runQuerySpec(store: WorkspaceStore, input: unknown, o: { question?: string; now?: number; scope?: SearchSource[] } = {}): Promise<SearchAnswer> {
+export async function runQuerySpec(store: WorkspaceStore, input: unknown, o: { question?: string; now?: number; scope?: SearchSource[]; page?: SearchPage } = {}): Promise<SearchAnswer> {
   const parsed = parseSearchQuery(input);
   const scoped = parsed.query ? inScope(parsed.query, o.scope) : parsed;
   if (!scoped.query) throw invalidQuery(scoped.problems);
-  return answerOf(store, { question: o.question ?? '', mode: 'query', query: scoped.query, assumptions: [] }, o.now);
+  return answerOf(store, { question: o.question ?? '', mode: 'query', query: scoped.query, assumptions: [] }, o.now, o.page);
 }
 
 /** A plain text search over the question (also what the box does with no model). */
-const runTextSearch = (store: WorkspaceStore, text: string, o: { scope?: SearchSource[]; fallback?: string; now?: number } = {}): Promise<SearchAnswer> => {
+const runTextSearch = (store: WorkspaceStore, text: string, o: { scope?: SearchSource[]; fallback?: string; now?: number; page?: SearchPage } = {}): Promise<SearchAnswer> => {
   const q = textQuery(text);
   const scoped = inScope(q, o.scope).query ?? q;
-  return answerOf(store, { question: text, mode: 'text', query: scoped, assumptions: [], ...(o.fallback ? { fallback: o.fallback } : {}) }, o.now);
+  return answerOf(store, { question: text, mode: 'text', query: scoped, assumptions: [], ...(o.fallback ? { fallback: o.fallback } : {}) }, o.now, o.page);
 };
 
 export async function askSearch(deps: AiRunDeps, o: AskOptions): Promise<SearchAnswer> {
@@ -87,7 +108,7 @@ export async function askSearch(deps: AiRunDeps, o: AskOptions): Promise<SearchA
   const question = o.question.trim().slice(0, 1000);
   if (!question) throw new ApsError('ValidationError', 'Ask a question, or type words to search for');
   const now = o.now ?? Date.now();
-  const plain = (fallback: string) => runTextSearch(store, question.slice(0, SEARCH_VALUE_MAX), { scope: o.scope, fallback, now });
+  const plain = (fallback: string) => runTextSearch(store, question.slice(0, SEARCH_VALUE_MAX), { scope: o.scope, fallback, now, page: o.page });
   if (o.noAi) return plain('Searched for the words as typed (no AI, as asked).');
   try {
     const r = await runAiTask(deps, {
@@ -128,6 +149,7 @@ export async function askSearch(deps: AiRunDeps, o: AskOptions): Promise<SearchA
           repairs: r.repairs,
         },
         now,
+        o.page,
       )),
     };
   } catch (e) {

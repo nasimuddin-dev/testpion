@@ -4,6 +4,7 @@ import { kindOfLibrary, type ItemRef } from '@testpion/shared';
 import type { CollectionNode } from '../model/types.js';
 import type { TestFileNode, WorkspaceStore } from './workspace.js';
 import { listSpecs } from '../openapi/spec-files.js';
+import { pageOf, type ListPage } from '../util/page.js';
 
 export interface SearchHit {
   kind: 'request' | 'graphql' | 'collection' | 'test' | 'environment' | 'environment-variable' | 'mcp-server' | 'provider' | 'history' | 'trace' | 'run' | 'saved' | 'spec' | 'dataset';
@@ -144,6 +145,15 @@ export class WorkspaceSearch {
   }
 
   search(query: string, limit = 50): SearchHit[] {
+    return this.ranked(query).slice(0, limit);
+  }
+
+  /** A page of the hits, best first: `limit` (20 unless asked, at most 1,000) from the position `cursor` names. */
+  searchPage(query: string, o: { limit?: number; cursor?: string | number } = {}): ListPage<SearchHit> {
+    return pageOf(this.ranked(query), o, { limit: 20, max: 1000 });
+  }
+
+  private ranked(query: string): SearchHit[] {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const terms = q.split(/\s+/);
@@ -161,6 +171,6 @@ export class WorkspaceSearch {
       hits.push({ kind: 'trace', id: t.id, title: t.name, subtitle: `Trace · ${t.kind} · ${t.status}`, ref: { kind: 'trace', traceId: t.id }, score: 0.4 });
     for (const r of this.store.meta.listRuns({ query, limit: 10 }).items)
       hits.push({ kind: 'run', id: r.id, title: r.name, subtitle: `Run · ${r.passed}/${r.total} passed`, ref: { kind: 'run', runId: r.id }, score: 0.3 });
-    return hits.sort((a, b) => b.score - a.score).slice(0, limit);
+    return hits.sort((a, b) => b.score - a.score);
   }
 }

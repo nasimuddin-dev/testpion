@@ -14,6 +14,7 @@ import type { TestResult } from '../model/types.js';
 import { historyOk, type RunMeta } from '../storage/metastore.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readResultsFile } from '../runner/runner.js';
+import { cursorOf } from '../util/page.js';
 import { flakyTests } from '../runner/test-history.js';
 import { parseSearchQuery, parseWhen, parseWithin, searchField, SOURCE_LABEL, type SearchCondition, type SearchQuery, type SearchSource } from './query-spec.js';
 
@@ -41,6 +42,8 @@ export interface SearchOutcome {
   truncated: boolean;
   /** The offset of the next page, when there is one. */
   nextOffset?: number;
+  /** The same position as a cursor (the one name every list uses for it). */
+  nextCursor?: string;
   /** Per source: entries looked at and matches. */
   perSource: Partial<Record<SearchSource, { scanned: number; matched: number }>>;
   /** Sources whose scan stopped at a cap: older entries were not looked at. */
@@ -395,7 +398,7 @@ export async function runSearchQuery(store: WorkspaceStore, query: SearchQuery, 
     rows: page.map(({ sortTime: _t, ...row }) => row),
     matched,
     truncated,
-    ...(truncated ? { nextOffset: offset + page.length } : {}),
+    ...(truncated ? { nextOffset: offset + page.length, nextCursor: cursorOf(offset + page.length) } : {}),
     perSource: s.perSource,
     capped: [...s.capped],
     notes: s.notes,

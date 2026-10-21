@@ -19,9 +19,11 @@ import type { Tool, ToolDoc } from './tool.js';
 
 /**
  * Tools whose result is a list (or holds one in `field`). The wrapper pages it; a tool with its own `limit` is asked
- * for enough rows to fill the page (within its own maximum).
+ * for enough rows to fill the page (within its own maximum). A `native` tool pages itself (it takes `offset` as well as
+ * `limit`, and is asked for one row more than the page, to know there is a next one): its list can be longer than any
+ * maximum of its own.
  */
-export const LIST_TOOLS: Record<string, { field?: string }> = {
+export const LIST_TOOLS: Record<string, { field?: string; native?: boolean }> = {
   list_collections: {},
   list_requests: {},
   list_environments: {},
@@ -38,14 +40,14 @@ export const LIST_TOOLS: Record<string, { field?: string }> = {
   variable_usages: {},
   flaky_tests: {},
   what_needs_attention: {},
-  recent_failures: {},
-  history_list: {},
-  request_history: {},
+  recent_failures: { native: true },
+  history_list: { native: true },
+  request_history: { native: true },
   monitor_results: {},
   monitor_requests: {},
   load_history: {},
   score_trend: {},
-  search_workspace: {},
+  search_workspace: { native: true },
   git_log: {},
   git_diff: {},
   git_changes: { field: 'items' },
@@ -450,7 +452,10 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
           const asked = args.limit === undefined || args.limit === null || args.limit === '' ? DEFAULT_PAGE : Number(args.limit);
           if (!Number.isFinite(asked) || asked < 1) throw new ApsError('ValidationError', `limit is a number from 1 to ${MAX_PAGE}`);
           pageSize = Math.min(MAX_PAGE, Math.floor(asked));
-          if (ownLimit) args.limit = offset + pageSize + 1;
+          if (list.native) {
+            args.limit = pageSize + 1;
+            args.offset = offset;
+          } else if (ownLimit) args.limit = offset + pageSize + 1;
           else delete args.limit;
         }
         const out = await t.run(args);
@@ -460,15 +465,18 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
         if (list) {
           const arr = Array.isArray(out) ? out : list.field && out && typeof out === 'object' && Array.isArray((out as Args)[list.field]) ? ((out as Args)[list.field] as unknown[]) : undefined;
           if (arr) {
-            const page = arr.slice(offset, offset + pageSize);
-            const more = arr.length > offset + pageSize;
+            // a native tool gave the page itself (and one row more); the others gave the whole list
+            const from = list.native ? 0 : offset;
+            const page = arr.slice(from, from + pageSize);
+            const more = arr.length > from + pageSize;
             const nextCursor = more ? encodeCursor(t.name, offset + pageSize) : undefined;
             // a tool that cut the list itself (its own limit) does not know the total
-            const total = ownLimit && more ? undefined : arr.length;
+            const total = list.native ? (more ? undefined : offset + page.length) : ownLimit && more ? undefined : arr.length;
             const paging = { ...(total !== undefined ? { total } : {}), ...(nextCursor ? { nextCursor } : {}) };
             if (Array.isArray(out)) {
               value = page;
-              structured = { items: page, ...paging };
+              // (`truncated` here says more follow; in an object result that name is the size cut's, below)
+              structured = { items: page, ...paging, truncated: more };
             } else {
               value = { ...(out as Args), [list.field!]: page, ...paging };
             }
@@ -488,7 +496,8 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
           notes.push(`Truncated — ${what}${fit.cuts.length > 5 ? ` and ${fit.cuts.length - 5} more` : ''}. ${how ? `To see more or less: ${how}.` : ''}`.trim());
           value = fit.value;
           if (structured) structured = { ...structured, items: value };
-          else if (value && typeof value === 'object' && !Array.isArray(value)) value = { ...(value as Args), truncated: fit.cuts.slice(0, 20) };
+          // (a page that says `truncated: true` for more rows keeps that name: the size cut is `cut` then)
+          else if (value && typeof value === 'object' && !Array.isArray(value)) value = { ...(value as Args), [typeof (value as Args).truncated === 'boolean' ? 'cut' : 'truncated']: fit.cuts.slice(0, 20) };
         }
         return contract(value, structured, notes);
       },

@@ -25,11 +25,13 @@ export function datasetTools({ store }: { store: WorkspaceStore }): Tool[] {
         properties: {
           name: str('The file under datasets/, e.g. users.csv or intents.jsonl (list_datasets shows them)'),
           limit: { type: 'number', description: 'How many rows (default 20, up to 10000)' },
+          cursor: str('Where the page starts: the `nextCursor` of the page before (leave out for the first page)'),
+          offset: { type: 'number', description: 'Where the page starts, as a number (the same as cursor)' },
           query: str('SQLite only: the SELECT whose rows are the records'),
         },
         required: ['name'],
       },
-      run: (a) => readWorkspaceDataset(store, String(a.name), { limit: Number(a.limit) || 20, query: a.query ? String(a.query) : undefined }),
+      run: (a) => readWorkspaceDataset(store, String(a.name), { limit: Number(a.limit) || 20, query: a.query ? String(a.query) : undefined, ...(a.cursor ? { cursor: String(a.cursor) } : { offset: Number(a.offset) || 0 }) }),
     },
     {
       name: 'add_dataset_row',

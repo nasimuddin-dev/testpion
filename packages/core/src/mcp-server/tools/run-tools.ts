@@ -11,11 +11,12 @@ import { dbKindOf } from '../../runner/db-datasets.js';
 import { webhookFlows } from '../../runner/flow-webhook-config.js';
 import { isSuiteFile, streamTests } from '../../runner/loader.js';
 import { compareRuns } from '../../runner/run-records.js';
-import { breakdownOfRun, reviewResult, runResultsFile, runReviewReport } from '../../runner/run-results.js';
+import { breakdownOfRun, pageRunResults, reviewResult, runResultsFile, runReviewReport } from '../../runner/run-results.js';
 import type { RunEvent } from '../../runner/runner.js';
 import { evaluationTests, findSavedEvaluation, listSavedEvaluations } from '../../runner/saved-evaluations.js';
 import { lintTestFile } from '../../runner/test-schema.js';
 import { shortId } from '../../util/ids.js';
+import { pageArgs } from '../../util/page.js';
 import { planFlowRun } from './flow-graph-tools.js';
 import { str } from '../tool.js';
 import type { Tool } from '../tool.js';
@@ -180,6 +181,28 @@ export function runTools(d: ModuleToolDeps): Tool[] {
       run: (a) => {
         if (!existsSync(runResultsFile(store, String(a.runId)))) throw new ApsError('ValidationError', `No finished run ${String(a.runId)}`);
         return breakdownOfRun(store, String(a.runId));
+      },
+    },
+    {
+      name: 'run_results',
+      description:
+        "The results of a finished run, a page at a time (id from run_tests, recent_failures or the app): id, name, status, latency, error and the checks that failed, with the person's rating when there is one. Filter by `status` (failed means failed or error; passed, skipped, reviewed, unreviewed) or by part of a name. A long run comes in pages of 100 (at most 500): `truncated` says more follow and `nextCursor` is the `cursor` of the next page.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          runId: str('Run id'),
+          status: str('Only results with this status: failed, passed, skipped, error, reviewed, unreviewed, all'),
+          query: str('Only results whose name contains this (or whose id it is)'),
+          limit: { type: 'number', description: 'How many (default 100, at most 500)' },
+          cursor: str('Where the page starts: the `nextCursor` of the page before (leave out for the first page)'),
+          offset: { type: 'number', description: 'Where the page starts, as a number (the same as cursor)' },
+        },
+        required: ['runId'],
+      },
+      run: async (a) => {
+        if (!existsSync(runResultsFile(store, String(a.runId)))) throw new ApsError('ValidationError', `No finished run ${String(a.runId)}`);
+        const page = await pageRunResults(store, { runId: String(a.runId), status: a.status ? String(a.status) : undefined, query: a.query ? String(a.query) : undefined, ...pageArgs(a), limit: Math.min(pageArgs(a).limit ?? 100, 500) });
+        return { ...page, items: page.items.map((r) => ({ id: r.id, ...summarizeResult(r), ...(r.review ? { review: r.review } : {}) })) };
       },
     },
     {
