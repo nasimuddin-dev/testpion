@@ -8,7 +8,7 @@ import { SCHEMA_VERSION } from '../model/types.js';
 import { commandLine } from '../storage/trust.js';
 import { slugify, uniqueId } from '../util/ids.js';
 import { LIBRARY_OF, SAFE_ID, isPlainId, parseJsonSafe, type BundleKindId } from './format.js';
-import { canonicalJson, importedName, mapStrings, replacePaths, type CommitWrite, type ItemAdapter, type JournalSink, type Listed } from './items.js';
+import { canonicalJson, importedName, listIndex, mapStrings, replacePaths, seedOnce, type CommitWrite, type ItemAdapter, type JournalSink, type Listed } from './items.js';
 import { isRecord } from '@testpion/shared';
 
 
@@ -22,16 +22,37 @@ function parseObject(data: Buffer): Record<string, unknown> | string {
   }
 }
 
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-const byIdOrName = (existing: readonly Listed[], x: { id: string; name: string }): Listed | undefined => existing.find((e) => e.id === x.id) ?? existing.find((e) => same(e.name, x.name));
+const byIdOrName = (existing: readonly Listed[], x: { id: string; name: string }): Listed | undefined => {
+  const ix = listIndex(existing);
+  return ix.byId.get(x.id) ?? ix.byName.get(x.name.toLowerCase());
+};
+/** The counterpart of a collection or environment: the same id (or the same id once slugified), else the same name. */
+const byIdSlugOrName = (existing: readonly Listed[], x: { id: string; name: string }): Listed | undefined => {
+  const ix = listIndex(existing);
+  return ix.bySlug.get(slugify(x.id)) ?? ix.byName.get(x.name.toLowerCase());
+};
 
-/** `id`, `id-2` … not in `taken.ids`; the name made "X (imported)" unique in `taken.names`. */
+/** `id`, `id-2` … not in `taken.ids`; the name made "X (imported)" unique in `taken.names` (kept in lowercase). */
 function freshTarget(existing: readonly Listed[], x: { id: string; name: string }, taken: { ids: Set<string>; names: Set<string> }) {
-  for (const e of existing) {
-    taken.ids.add(e.id);
-    taken.names.add(e.name);
-  }
+  // what is here is added once, not for every conflict
+  seedOnce(taken.ids, () => {
+    for (const e of existing) {
+      taken.ids.add(e.id);
+      taken.names.add(e.name.toLowerCase());
+    }
+  });
   return { id: uniqueId(taken.ids, x.id), name: importedName(taken.names, x.name) };
+}
+
+/** The item with this id in a library's list: an index made once per list (the list is read once per run), not a scan for each item. */
+const itemIndexes = new WeakMap<readonly LibraryItem[], Map<string, LibraryItem>>();
+function byIdIn(items: readonly LibraryItem[], id: string): LibraryItem | undefined {
+  let ix = itemIndexes.get(items);
+  if (!ix) {
+    itemIndexes.set(items, (ix = new Map()));
+    for (const i of items) if (!ix.has(i.id)) ix.set(i.id, i);
+  }
+  return ix.get(id);
 }
 
 /** The text of every `*Script` field of a JSON value that is not empty: scripts that will run when requests are sent. */
@@ -115,7 +136,7 @@ const collection: ItemAdapter = {
     const n = typeof o === 'string' ? 0 : countScripts(o);
     return n ? [`${n} script${n === 1 ? '' : 's'} in the collection run when you send its requests (nothing runs on import)`] : [];
   },
-  match: (existing, x) => existing.find((e) => e.id === x.id || slugify(e.id) === slugify(x.id)) ?? existing.find((e) => same(e.name, x.name)),
+  match: byIdSlugOrName,
   fresh: (existing, x, taken) => freshTarget(existing, { id: slugify(x.id), name: x.name }, taken),
   rewrite(_item, data, remap) {
     const o = parseObject(data);
@@ -164,7 +185,7 @@ const environment: ItemAdapter = {
     const o = parseObject(data);
     return typeof o !== 'string' && o.isProduction ? [`Environment "${item.name}" is marked production: data-changing requests to it ask first`] : [];
   },
-  match: (existing, x) => existing.find((e) => e.id === x.id || slugify(e.id) === slugify(x.id)) ?? existing.find((e) => same(e.name, x.name)),
+  match: byIdSlugOrName,
   fresh: (existing, x, taken) => freshTarget(existing, { id: slugify(x.id), name: x.name }, taken),
   rewrite: (_item, data) => data,
   commit(store, writes, journal) {
@@ -381,7 +402,7 @@ function libraryAdapter(kind: BundleKindId, label: string): ItemAdapter {
     label,
     list: (store) => store.getLibrary(library).items.map((i) => ({ id: i.id, name: i.name })),
     snapshot(store, id, strip) {
-      const i = store.getLibrary(library).items.find((x) => x.id === id);
+      const i = byIdIn(store.getLibrary(library).items, id);
       if (!i) return undefined;
       const { updatedAt: _u, ...rest } = i;
       void _u;
@@ -395,9 +416,9 @@ function libraryAdapter(kind: BundleKindId, label: string): ItemAdapter {
       return undefined;
     },
     review: () => [],
-    match: (existing, x) => existing.find((e) => e.id === x.id),
+    match: (existing, x) => listIndex(existing).byId.get(x.id),
     fresh: (existing, x, taken) => {
-      for (const e of existing) taken.ids.add(e.id);
+      seedOnce(taken.ids, () => existing.forEach((e) => taken.ids.add(e.id)));
       return { id: uniqueId(taken.ids, x.id), name: x.name };
     },
     rewrite(_item, data, remap) {

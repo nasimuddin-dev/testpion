@@ -50,9 +50,12 @@ export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], 
   const queue = [...roots];
   let tests: Array<{ ref: BundleRef; text: string }> | undefined;
 
+  // an edge once per pair (a set, not a scan of the edges: a collection that 2,500 saved items belong to makes 2,500 of them)
+  const edgeKeys = new Set<string>();
   const use = (from: BundleRef, to: BundleRef, via: string) => {
     const key = itemKey(to.kind, to.id);
-    if (!edges.some((e) => e.from === itemKey(from.kind, from.id) && e.to === key)) edges.push({ from: itemKey(from.kind, from.id), to: key, via });
+    const edge = `${itemKey(from.kind, from.id)}\0${key}`;
+    if (!edgeKeys.has(edge)) (edgeKeys.add(edge), edges.push({ from: itemKey(from.kind, from.id), to: key, via }));
     if (!seen.has(key)) {
       seen.set(key, to);
       queue.push(to);

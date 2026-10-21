@@ -1,6 +1,6 @@
 import { Plus, ArrowLeftRight, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
-import { useGit } from '../lib/git';
+import { useGitRepo } from '../lib/git';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
@@ -33,7 +33,7 @@ import { AlsoAddDialog } from '../components/AlsoAddTo';
 const envDrafts = persisted<Environment | null>('env-edit', null);
 
 export function EnvironmentsView() {
-  const git = useGit();
+  const inGit = useGitRepo();
   const ws = useApp((s) => s.workspace);
   const settings = useApp((s) => s.settings);
   const activeEnv = useApp((s) => s.environment);
@@ -200,7 +200,7 @@ export function EnvironmentsView() {
   const envMenu = (e: Environment): NodeMenuCtx => ({
     ref: { kind: 'environment', environmentId: e.id },
     name: e.name,
-    repo: !!git.status?.repository,
+    repo: inGit,
     on: {
       open: () => setSel(e.id),
       makeActive: () => void useApp.getState().setEnvironment(e.name),
@@ -400,7 +400,7 @@ export function EnvironmentsView() {
                         'environment',
                         withRefDefaults({
                           ref: { kind: 'environment', environmentId: draft.id },
-                          repo: !!git.status?.repository,
+                          repo: inGit,
                           on: { duplicate: () => void duplicateEnv(draft), delete: () => void deleteEnv(draft) },
                         }, 'environment'),
                       )}

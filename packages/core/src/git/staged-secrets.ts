@@ -7,7 +7,9 @@ import { isBinaryPath } from './item-changes.js';
 import { largeLevel, type LargeFile } from './large-files.js';
 import { allowSalt, isAllowed, readSecretsAllow, secretFingerprint } from './secrets-allow.js';
 import { requireRepo } from './item-ops.js';
-import { runGit, toRepoPath } from './git.js';
+import { realFolder, runGit } from './git.js';
+import { gitBlobInfos, gitBlobTexts } from './blob-batch.js';
+import { relative, resolve, sep } from 'node:path';
 
 /**
  * The secret scan of a commit, over what is STAGED (release B of planning/git-everything.md §4e): the blobs in the index,
@@ -217,7 +219,18 @@ export async function stagedFiles(ws: string): Promise<string[]> {
   return out.split('\0').filter(Boolean);
 }
 
-/** Scan what is staged (the blobs in the index) with the one detector; see {@link StagedSecret}. */
+/**
+ * What a blob held, by blob, file and salt: the findings before the allowlist is applied. A commit scans everything staged
+ * and the Git view asks again after each click, so a blob that did not change is not read and scanned a second time.
+ */
+const scanned = new Map<string, StagedSecret[]>();
+const SCANNED_MAX = 5000;
+
+/**
+ * Scan what is staged (the blobs in the index) with the one detector; see {@link StagedSecret}. However many files are
+ * staged, git is asked twice: what each staged blob is (its size), then the texts of those worth reading (not binary, not
+ * past the limit, not scanned before) in one batch. It was two processes per staged file, about 17 s for a staged workspace.
+ */
 export async function scanStagedSecrets(ws: string): Promise<StagedScan> {
   const repo = await requireRepo(ws);
   const staged = await stagedFiles(ws);
@@ -225,22 +238,42 @@ export async function scanStagedSecrets(ws: string): Promise<StagedScan> {
   const allow = readSecretsAllow(ws);
   const salt = allowSalt(ws);
   if (allow.problem) scan.allowProblem = allow.problem;
+  const base = realFolder(ws);
+  const specOf = (file: string) => `:${relative(repo, resolve(base, file)).split(sep).join('/')}`;
+  const infos = await gitBlobInfos(ws, staged.map(specOf));
+  // the texts that are wanted: one batch, for the blobs not scanned before
+  const sizes = new Map<string, number>();
+  const key = (file: string, oid: string) => `${oid}\0${file}\0${salt ?? ''}`;
+  const wanted: string[] = [];
   for (const file of staged) {
-    const inRepo = toRepoPath(repo, ws, file);
+    const info = infos.get(specOf(file));
+    if (!info || isBinaryPath(file) || info.size > MAX_SCAN || scanned.has(key(file, info.oid))) continue;
+    wanted.push(info.oid);
+    sizes.set(info.oid, info.size);
+  }
+  const texts = wanted.length ? await gitBlobTexts(ws, wanted, sizes) : new Map<string, string>();
+  for (const file of staged) {
+    const info = infos.get(specOf(file));
     // the size of the staged blob (an LFS pointer is small, so a file that is tracked by LFS is never "large")
-    const size = Number((await runGit(ws, ['cat-file', '-s', `:${inRepo}`]).catch(() => '0')).trim()) || 0;
+    const size = info?.size ?? 0;
     const level = largeLevel(size);
     if (level) scan.large.push({ file, bytes: size, level });
-    if (isBinaryPath(file) || size > MAX_SCAN) {
+    if (!info || isBinaryPath(file) || size > MAX_SCAN) {
       scan.skipped.push(file);
       continue;
     }
-    const text = await runGit(ws, ['show', `:${inRepo}`]).catch(() => undefined);
-    if (text === undefined || text.includes('\0')) {
-      scan.skipped.push(file);
-      continue;
+    let findings = scanned.get(key(file, info.oid));
+    if (!findings) {
+      const text = texts.get(info.oid);
+      if (text === undefined || text.includes('\0')) {
+        scan.skipped.push(file);
+        continue;
+      }
+      findings = scanFileText(file, text, salt);
+      if (scanned.size >= SCANNED_MAX) scanned.delete(scanned.keys().next().value!);
+      scanned.set(key(file, info.oid), findings);
     }
-    for (const f of scanFileText(file, text, salt)) {
+    for (const f of findings) {
       if (isAllowed(allow.entries, { file: f.file, item: f.item, field: f.field, hash: f.hash })) scan.allowed.push(f);
       else (f.confidence === 'high' ? scan.blocking : scan.confirm).push(f);
     }

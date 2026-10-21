@@ -14,7 +14,7 @@ import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
 import { plural, uid } from '../lib/format';
 import { FolderEditor } from './FolderEditor';
-import { useGit } from '../lib/git';
+import { useGitRepo } from '../lib/git';
 import { fullCollection } from '../lib/collections-store';
 import { matchIndex, requestCategory, type RequestCategory } from '../lib/collection-filter';
 
@@ -159,7 +159,7 @@ export const CollectionTree = memo(function CollectionTree({
   };
   const health = useCollectionsHealth();
   const [moving, setMoving] = useState<{ c: Collection; n: CollectionNode }>();
-  const git = useGit();
+  const inGit = useGitRepo();
   /** A copy of the collection with everything it holds (its gRPC calls and connections too). */
   const duplicateCollection = async (c: Collection) => {
     try {
@@ -557,7 +557,7 @@ export const CollectionTree = memo(function CollectionTree({
     newRequest,
     newRequestLabel,
   };
-  const canHistory = !!git.status?.repository;
+  const canHistory = inGit;
   // the dragged row stays drawn while the list scrolls or changes under the drag (its dragend must reach React)
   const dragIndex = useMemo(() => (drag ? rows.findIndex((r) => (r.t === 'req' || r.t === 'folder') && r.c.id === drag.c.id && r.n.id === drag.n.id) : -1), [drag, rows]);
   const rowHeight = 2 * useApp((s) => s.settings?.fontSize ?? 14);

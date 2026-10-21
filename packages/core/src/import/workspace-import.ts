@@ -1,3 +1,4 @@
+import { withCollectionListing } from './listing-cache.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
@@ -147,7 +148,7 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
  * The result carries the compatibility `report` and a `receipt` of what was created (`undoImport` takes it back).
  */
 export function importIntoWorkspace(
-  store: WorkspaceStore,
+  realStore: WorkspaceStore,
   text: string,
   /** `scripts: 'keep'` leaves Postman's `pm.*` in imported scripts; the default rewrites them to `tp.*`. */
   /** `specs`: an API definition whose path holds a different document is kept beside it (`keep-both`, the default: x-2.yaml) or replaces it (the old one goes to the trash). */
@@ -165,6 +166,8 @@ export function importIntoWorkspace(
     sinks?: ImportSinks;
   } = {},
 ): WorkspaceImportResult {
+  // the collections of the workspace are read once for this import (its node ids, its taken ids, an update's target)
+  const store = withCollectionListing(realStore);
   if (detectFormat(text) === 'arazzo') return withReceipt(store, importArazzoIntoWorkspace(store, text, opts.arazzo), text);
   // node ids never repeat across the workspace's collections: colliding ones are renamed (with a note)
   const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()), liftTests: opts.liftTests });

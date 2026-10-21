@@ -7,9 +7,10 @@ import { ApsError } from '../errors.js';
 import { SecretStripper, type ReplacedSecret } from '../storage/bundle-secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ENGINE_VERSION } from '../version.js';
-import { assemble, serialize, wantsZip, type BundlePart } from './container.js';
+import { assemble, serialize, serializeAsync, wantsZip, type BundlePart } from './container.js';
 import { DATASET_EMBED_BYTES, itemKey, type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
-import { noun } from './items.js';
+import { noun, type Snapshot } from './items.js';
+import { cachedReads } from './read-cache.js';
 import { adapter, ALL_BUNDLE_KINDS } from './registry.js';
 import { everythingRefs, uniqueRefs } from './selection.js';
 import type { BundleRef } from './types.js';
@@ -59,17 +60,38 @@ const isTextual = (b: Buffer) => !b.includes(0);
 
 /** Build a bundle of `selection` (the picked items; `opts.uses` adds what they use). Throws when a picked item is not there. */
 export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef[] | 'all', opts: BuildOptions = {}): BuildResult {
+  const p = prepareBundle(store, selection, opts);
+  return p.finish(serialize(p.bundle, p.format));
+}
+
+/** The same bundle, byte for byte, with the compression done off the caller's thread (the app's main process keeps serving). */
+export async function buildBundleAsync(store: WorkspaceStore, selection: readonly BundleRef[] | 'all', opts: BuildOptions = {}): Promise<BuildResult> {
+  const p = prepareBundle(store, selection, opts);
+  return p.finish(await serializeAsync(p.bundle, p.format));
+}
+
+/** Everything up to the file's bytes; `finish` adds them and the words that describe the result. */
+function prepareBundle(realStore: WorkspaceStore, selection: readonly BundleRef[] | 'all', opts: BuildOptions): { bundle: ParsedBundle; format: 'zip' | 'json'; finish: (bytes: Buffer) => BuildResult } {
+  // each library, environment list and collection is read once for the whole run, not once for each item that is in it
+  const store = cachedReads(realStore);
   const roots = selection === 'all' ? everythingRefs(store, { providers: opts.providers }) : uniqueRefs(selection);
   if (!roots.length) throw new ApsError('ValidationError', 'Nothing to export: the selection is empty');
   const strip = new SecretStripper();
   const notes: string[] = [];
 
-  // what an item says about what it uses is read from a stripper of its own: only items that end up in the bundle count
+  // what an item says about what it uses is read from a stripper of its own: only items that end up in the bundle count.
+  // The existence check and the uses read the same snapshot, made once.
+  const plain = new Map<string, Snapshot | undefined>();
+  const plainSnapshot = (r: BundleRef): Snapshot | undefined => {
+    const key = itemKey(r.kind, r.id);
+    if (!plain.has(key)) plain.set(key, adapter(r.kind).snapshot(store, r.id, new SecretStripper()));
+    return plain.get(key);
+  };
   const texts = new Map<string, string | undefined>();
   const readText = (r: BundleRef): string | undefined => {
     const key = itemKey(r.kind, r.id);
     if (!texts.has(key)) {
-      const s = adapter(r.kind).snapshot(store, r.id, new SecretStripper());
+      const s = plainSnapshot(r);
       texts.set(key, s && isTextual(s.data) ? s.data.toString('utf8') : undefined);
     }
     return texts.get(key);
@@ -77,7 +99,7 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
 
   if (selection !== 'all')
     for (const r of roots)
-      if (!adapter(r.kind).snapshot(store, r.id, new SecretStripper()))
+      if (!plainSnapshot(r))
         throw new ApsError('ValidationError', `No ${noun(adapter(r.kind).label)} "${r.id}" in this workspace`, {
           suggestions: ['`testpion export --section <kind>` lists nothing by itself: use `testpion kinds` for the kinds and the app for the names'],
         });
@@ -147,7 +169,6 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
     parts,
   );
   const format = opts.format && opts.format !== 'auto' ? opts.format : wantsZip(bundle) ? 'zip' : 'json';
-  const bytes = serialize(bundle, format);
 
   const counts: Partial<Record<BundleKindId, number>> = {};
   for (const i of bundle.manifest.items) counts[i.kind] = (counts[i.kind] ?? 0) + 1;
@@ -164,5 +185,5 @@ export function buildBundle(store: WorkspaceStore, selection: readonly BundleRef
         .join(', ')}${missing.length > 5 ? ' …' : ''}.`,
     );
   lines.push(...notes);
-  return { bytes, format, fileName: bundleFileName(title, format), manifest: bundle.manifest, counts, replaced, notes, lines };
+  return { bundle, format, finish: (bytes) => ({ bytes, format, fileName: bundleFileName(title, format), manifest: bundle.manifest, counts, replaced, notes, lines }) };
 }

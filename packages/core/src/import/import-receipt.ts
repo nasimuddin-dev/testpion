@@ -45,6 +45,67 @@ export interface ImportReceipt extends Created {
 
 const dir = (store: WorkspaceStore) => join(store.root, '.local', 'import-reports');
 const KEEP = 30;
+const INDEX_FILE = 'index.json';
+
+/** What the list of imports shows of one: kept in `index.json`, so listing them never reads a receipt (each can hold whole collections). */
+interface IndexEntry {
+  id: string;
+  at: string;
+  format: string;
+  collections: string[];
+  environments: string[];
+  summary: ImportReport['summary'];
+}
+const entryOf = (receipt: ImportReceipt, report: ImportReport): IndexEntry => ({
+  id: receipt.id,
+  at: receipt.at,
+  format: receipt.format,
+  collections: receipt.collections.map((c) => c.name),
+  environments: receipt.environments.map((e) => e.name),
+  summary: report.summary,
+});
+
+/**
+ * The index of the stored imports, newest first, matched against the files: an import whose file is gone is dropped, and a
+ * file the index does not know (an older version's, or one copied in) is read once and added. `skip` is an import just written
+ * whose entry the caller adds itself. Otherwise no receipt is read.
+ */
+function readIndex(store: WorkspaceStore, skip?: string): IndexEntry[] {
+  if (!existsSync(dir(store))) return [];
+  const ids = new Set(readdirSync(dir(store)).filter((f) => f.endsWith('.json') && f !== INDEX_FILE).map((f) => f.slice(0, -'.json'.length)));
+  let entries: IndexEntry[] = [];
+  try {
+    const raw = JSON.parse(readFileSync(join(dir(store), INDEX_FILE), 'utf8')) as { receipts?: IndexEntry[] };
+    entries = Array.isArray(raw.receipts) ? raw.receipts : [];
+  } catch {
+    /* no index yet (or a damaged one): made from the files below */
+  }
+  const before = entries.length;
+  entries = entries.filter((e) => ids.has(e.id));
+  let changed = entries.length !== before;
+  const known = new Set(entries.map((e) => e.id));
+  for (const id of ids) {
+    if (known.has(id) || id === skip) continue;
+    try {
+      const { receipt, report } = JSON.parse(readFileSync(join(dir(store), `${id}.json`), 'utf8')) as { receipt: ImportReceipt; report: ImportReport };
+      entries.push(entryOf(receipt, report));
+      changed = true;
+    } catch {
+      /* not a receipt */
+    }
+  }
+  entries.sort((a, b) => b.at.localeCompare(a.at));
+  if (changed && skip === undefined) writeIndex(store, entries);
+  return entries;
+}
+
+function writeIndex(store: WorkspaceStore, entries: IndexEntry[]): void {
+  try {
+    atomicWrite(join(dir(store), INDEX_FILE), JSON.stringify({ receipts: entries }));
+  } catch {
+    /* read-only disk: the next listing makes it again */
+  }
+}
 
 const hashOf = sha1Hex;
 
@@ -61,9 +122,10 @@ export function withReceipt(store: WorkspaceStore, out: WorkspaceImportResult, t
   try {
     mkdirSync(dir(store), { recursive: true });
     atomicWrite(join(dir(store), `${receipt.id}.json`), JSON.stringify({ receipt, report }));
-    // (ids are random: the oldest are found by their time)
-    const files = stored(store);
-    for (const old of files.slice(KEEP)) rmSync(join(dir(store), `${old.receipt.id}.json`), { force: true });
+    // the newest KEEP are kept (ids are random: the oldest are found by their time, from the index, not from the receipts)
+    const entries = [entryOf(receipt, report), ...readIndex(store, receipt.id)].sort((a, b) => b.at.localeCompare(a.at));
+    for (const old of entries.slice(KEEP)) rmSync(join(dir(store), `${old.id}.json`), { force: true });
+    writeIndex(store, entries.slice(0, KEEP));
   } catch {
     /* a workspace on a read-only disk still imports; it just cannot be undone */
   }
@@ -78,21 +140,6 @@ function safeHash(store: WorkspaceStore, rel: string): string {
   }
 }
 
-/** Every stored import, newest first. */
-function stored(store: WorkspaceStore): Array<{ receipt: ImportReceipt; report: ImportReport }> {
-  if (!existsSync(dir(store))) return [];
-  return readdirSync(dir(store))
-    .filter((f) => f.endsWith('.json'))
-    .flatMap((f) => {
-      try {
-        return [JSON.parse(readFileSync(join(dir(store), f), 'utf8')) as { receipt: ImportReceipt; report: ImportReport }];
-      } catch {
-        return [];
-      }
-    })
-    .sort((a, b) => b.receipt.at.localeCompare(a.receipt.at));
-}
-
 /** A stored import: its receipt and report. */
 export function readImportReport(store: WorkspaceStore, id: string): { receipt: ImportReceipt; report: ImportReport } {
   if (!/^imp-[\w-]+$/.test(id)) throw new ApsError('ValidationError', `Not an import id: ${id}`, { suggestions: ['`testpion import-report` lists the imports of the workspace.'] });
@@ -103,7 +150,7 @@ export function readImportReport(store: WorkspaceStore, id: string): { receipt: 
 
 /** The imports of the workspace, newest first. */
 export function listImportReceipts(store: WorkspaceStore): Array<{ id: string; at: string; format: string; collections: string[]; environments: string[]; summary: ImportReport['summary'] }> {
-  return stored(store).map(({ receipt, report }) => ({ id: receipt.id, at: receipt.at, format: receipt.format, collections: receipt.collections.map((c) => c.name), environments: receipt.environments.map((e) => e.name), summary: report.summary }));
+  return readIndex(store).map(({ id, at, format, collections, environments, summary }) => ({ id, at, format, collections, environments, summary }));
 }
 
 export interface UndoResult {
@@ -121,12 +168,14 @@ export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { for
   const { receipt } = readImportReport(store, id);
   const refused: string[] = [];
   if (!opts.force) {
+    // the collections are read once, not once for each collection the import made
+    const live = new Map(store.listCollections().map((x) => [x.id, x]));
     for (const u of receipt.updated ?? []) {
-      const now = store.listCollections().find((x) => x.id === u.id);
+      const now = live.get(u.id);
       if (now && now.version !== u.version) refused.push(`Collection "${u.name}" was edited after the import`);
     }
     for (const c of receipt.collections) {
-      const now = store.listCollections().find((x) => x.id === c.id);
+      const now = live.get(c.id);
       if (now && now.version !== c.version) refused.push(`Collection "${c.name}" was edited after the import`);
     }
     for (const f of receipt.flows) if (existsSync(store.safePath(f.path)) && f.hash && safeHash(store, f.path) !== f.hash) refused.push(`Flow ${f.path} was edited after the import`);
@@ -178,12 +227,14 @@ export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { for
   }
   for (const l of receipt.library) {
     const lib = store.getLibrary(l.kind);
-    const keep = lib.items.filter((i) => !l.ids.includes(i.id));
+    const gone = new Set(l.ids);
+    const keep = lib.items.filter((i) => !gone.has(i.id));
     if (keep.length !== lib.items.length) {
       store.saveLibrary(l.kind, { folders: lib.folders, items: keep });
       removed.push(`${l.ids.length} ${l.kind} item${l.ids.length === 1 ? '' : 's'}`);
     }
   }
   rmSync(join(dir(store), `${id}.json`), { force: true });
+  readIndex(store); // the import is no longer there: the index drops it
   return { id, trashed, removed };
 }

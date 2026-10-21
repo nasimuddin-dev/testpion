@@ -13,7 +13,7 @@ import { tempDir } from '../helpers';
  * view and `git status --by-item` show) must take under one second, and making the change marks from them under 100 ms. The
  * budget is the owner's; the median of three runs is held to it so one slow moment does not fail a build.
  */
-const BUDGET_STATUS_MS = 1000;
+const BUDGET_STATUS_MS = 700;
 const BUDGET_MARKS_MS = 100;
 
 const t = tempDir('tp-git-perf-');
