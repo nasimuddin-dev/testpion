@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  allowProductionFor,
   IMAGE_LIMITS,
   PROBE_SETS,
   applyMapping,
@@ -191,6 +192,23 @@ describe('the DAG checker', () => {
     expect(await run({ type: 'dag', tree }, { text: 'We open at 8am.' })).toMatchObject({ score: 1, passed: true });
     expect(await run({ type: 'dag', tree }, { text: 'We open early.' })).toMatchObject({ score: 0, passed: false });
     expect((await run({ type: 'dag', tree: { root: 'x', nodes: {} } }, { text: 'a' })).message).toMatch(/dag has a problem/);
+  });
+});
+
+describe('a production database is asked about once', () => {
+  const cfg = { type: 'datacompy-score', inputs: 'sql', database: { path: 'shop.db', production: true } };
+
+  it('the SQL metric refuses without consent, with the production guard’s question; with consent it goes on to the database', async () => {
+    const refused = await run(cfg, { text: 'SELECT 1', expected: 'SELECT 1' });
+    expect(refused.passed).toBe(false);
+    expect(refused.message).toMatch(/is a production environment/);
+    expect(refused.message).toMatch(/--allow-production/);
+    // consent given: the guard lets it through, and the missing file is what stops it now
+    const allowed = await allowProductionFor(true, () => run(cfg, { text: 'SELECT 1', expected: 'SELECT 1' }));
+    expect(allowed.message).not.toMatch(/is a production environment/);
+    // a database that is not marked is never asked about
+    const plain = await run({ ...cfg, database: { path: 'shop.db' } }, { text: 'SELECT 1', expected: 'SELECT 1' });
+    expect(plain.message).not.toMatch(/is a production environment/);
   });
 });
 

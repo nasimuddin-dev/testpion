@@ -33,8 +33,8 @@ const DEFS: MetricDef[] = [
     check: 'g-eval',
     aliases: ['geval'],
     options: {
-      criteria: { type: 'string', description: 'What a good answer is, in words (required).' },
-      steps: { type: 'string', description: 'The evaluation steps, when you want to give them instead of having them written (a list).' },
+      criteria: { type: 'string', required: true, description: 'What a good answer is, in words.' },
+      steps: { type: 'string', description: 'The evaluation steps, when you want to give them instead of having them written (separated by ; or one per line).' },
       params: { type: 'string', description: 'Which parts of the sample the judge reads: question, answer, reference, contexts (DeepEval’s input, actual_output, expected_output, retrieval_context work too).' },
       scale: { type: 'string', default: '[1, 5]', description: 'The score range, two whole numbers.' },
       samples: { type: 'number', default: 1, description: 'Ask n times and average (estimates the probability-weighted score).' },
@@ -57,8 +57,8 @@ const DEFS: MetricDef[] = [
     threshold: 0.5,
     check: 'conversational-g-eval',
     options: {
-      criteria: { type: 'string', description: 'What a good conversation is, in words (required).' },
-      steps: { type: 'string', description: 'The evaluation steps, when you give them (a list).' },
+      criteria: { type: 'string', required: true, description: 'What a good conversation is, in words.' },
+      steps: { type: 'string', description: 'The evaluation steps, when you give them (separated by ; or one per line).' },
       scale: { type: 'string', default: '[1, 5]', description: 'The score range, two whole numbers.' },
       samples: { type: 'number', default: 1, description: 'Ask n times and average.' },
     },
@@ -80,7 +80,7 @@ const DEFS: MetricDef[] = [
     optional: ['question', 'reference', 'contexts'],
     threshold: 0.5,
     check: 'dag',
-    options: { tree: { type: 'string', description: 'The tree (required): { root, nodes }.' }, inputs: { type: 'string', description: 'What the judge may read: question, reference, contexts (the answer always).' } },
+    options: { tree: { type: 'string', required: true, description: 'The tree as JSON: { "root": "a", "nodes": { … } }.' }, inputs: { type: 'string', description: 'What the judge may read: question, reference, contexts (the answer always).' } },
     prompts: ['dag-binary-v1', 'dag-choice-v1', 'dag-task-v1'],
     calls: '1 per judged node on the path taken (a rule node costs nothing)',
     version: 'dag-v1',
@@ -144,7 +144,7 @@ const DEFS: MetricDef[] = [
     check: 'faithfulness-hhem',
     ragas: { names: ['faithfulness_with_hhem', 'FaithfulnesswithHHEM', 'faithfulness_with_hhem_score'] },
     options: {
-      classifier: { type: 'string', description: 'The endpoint (required): { url, premiseField, hypothesisField, scorePath }. Local only requires an address on this computer.' },
+      classifier: { type: 'string', required: true, description: 'The endpoint as JSON: { "url": "http://127.0.0.1:8000/hhem", "premiseField", "hypothesisField", "scorePath" }. Local only requires an address on this computer.' },
       entailment: { type: 'number', default: 0.5, description: 'A claim is entailed above this classifier score.' },
     },
     prompts: ['claims-v1'],
@@ -169,7 +169,7 @@ const DEFS: MetricDef[] = [
     threshold: 0.6,
     check: 'reward-score',
     options: {
-      provider: { type: 'string', description: 'The workspace provider that serves the reward model (required).' },
+      provider: { type: 'string', required: true, description: 'The workspace provider that serves the reward model.' },
       model: { type: 'string', description: 'The model name at that provider.' },
       kind: { type: 'string', default: 'attributes', values: ['attributes', 'scalar', 'genrm'], description: 'How the reply is read.' },
       attribute: { type: 'string', default: 'helpfulness', description: 'attributes: which rating.' },

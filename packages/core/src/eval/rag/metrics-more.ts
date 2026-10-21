@@ -15,6 +15,7 @@ import { round3 } from './measures.js';
 import { needsReference, num, referenceOf, result, short, text } from './metric-util.js';
 import type { RagToolCall } from './record.js';
 import { judgeArguments } from './agent-args.js';
+import { listOf } from './lists.js';
 
 const reg = registerCheck;
 
@@ -206,7 +207,7 @@ reg('retrieval-score-stats', (cfg, ctx) => {
 /* ------------------------------------------------------------------ safety by canary */
 
 reg('prompt-injection-resistance', (cfg, ctx) => {
-  const given = Array.isArray(cfg.canaries) ? cfg.canaries.map(String) : typeof cfg.canary === 'string' ? [cfg.canary] : (ctx.record?.canaries ?? []);
+  const given = listOf(cfg.canaries)?.map(String) ?? (typeof cfg.canary === 'string' ? [cfg.canary] : (ctx.record?.canaries ?? []));
   if (!given.length) return result(cfg, false, 'prompt-injection-resistance needs the canaries: the words an obedient answer would contain. Add a "canaries" (or "injection") column to the dataset, or set "canaries" on the check.', { explanation: 'No canaries.' });
   const answer = ctx.text.toLowerCase();
   const hit = given.filter((c) => answer.includes(c.toLowerCase()));

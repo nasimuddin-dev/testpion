@@ -10,6 +10,8 @@ import { evaluatorsNeedJudge } from './score.js';
 import { targetProblems } from './run-target.js';
 import { findRagTarget } from './targets.js';
 import { routeProblems } from './route.js';
+import { assertSqlProduction } from './metrics-sql.js';
+import { resolveMetric } from './metric-registry.js';
 
 export interface EvaluationPlan {
   /** The judged metrics among the evaluators. */
@@ -24,6 +26,8 @@ export function assertEvaluationRunnable(store: WorkspaceStore, host: RagJudgeHo
   // the branches of a decision tree (`when` / `unless`) must be readable and not circular, before anything is asked
   const route = routeProblems(d.evaluators ?? []);
   if (route.length) throw new ApsError('ValidationError', `The metrics of this evaluation have a problem in their conditions: ${route[0]}`, { suggestions: route.slice(1).concat(['Write a condition as "faithfulness < 0.8", "faithfulness passes" or "faithfulness fails"; a metric it names must be in the evaluation.']) });
+  // a production database: asked once, before the first question, like a run against a production environment
+  if (d.database?.production === true && (d.evaluators ?? []).some((e) => ['datacompy-score', 'sql-equivalence'].includes(resolveMetric(e.type)?.def.id ?? e.type))) assertSqlProduction(d.database, `Run ${d.name}: the SQL the system writes runs against it`);
   const plan: EvaluationPlan = { judged: evaluatorsNeedJudge(d.evaluators ?? [], d.type === 'rag' && !!d.target) };
   if (d.type === 'rag' && d.target) {
     const t = findRagTarget(store, d.target);

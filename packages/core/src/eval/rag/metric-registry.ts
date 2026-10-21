@@ -64,6 +64,8 @@ export interface MetricOption {
   default?: string | number | boolean;
   values?: string[];
   description: string;
+  /** The metric cannot run without it (the picker marks it). */
+  required?: boolean;
 }
 
 /** The size of a typical sample, for the estimate (token counts, not characters). */

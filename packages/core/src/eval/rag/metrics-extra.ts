@@ -14,10 +14,21 @@ import { runTemplate, type TemplateInput } from './judge-templates.js';
 import { addUsage, assertJudgeUsable, claimsPass, guarded, judgeMeta, judgePanel, meets, na, needsField, noUsage, panelOf, referenceText, round3, single, type Usage } from './judged-kit.js';
 import { gevalSteps, PAIRWISE, SUMMARY_ALIGNMENT, SUMMARY_ANSWERS, SUMMARY_QUESTIONS, summaryCoverage } from './prompts-extra.js';
 import { num, result } from './metric-util.js';
+import { listOf } from './lists.js';
 
 const fail = (cfg: CheckConfig, msg: string): CheckResult => result(cfg, false, msg, { source: 'ai-judge', explanation: msg });
 
 /* ------------------------------------------------------------------ g-eval */
+
+/** The score range: [1, 5] as a list, as text ("1-5", "[1, 5]"), default 1 to 5. */
+function scaleOf(v: unknown): [number, number] {
+  let x = v;
+  if (typeof v === 'string') {
+    const m = /(-?\d+)\s*(?:-|–|to|,)\s*(-?\d+)/.exec(v);
+    x = m ? [Number(m[1]), Number(m[2])] : undefined;
+  }
+  return Array.isArray(x) && x.length === 2 && x.every((n) => typeof n === 'number') ? [x[0] as number, x[1] as number] : typeof v === 'string' && v.trim() ? [Number.NaN, Number.NaN] : [1, 5];
+}
 
 /** DeepEval's parameter names are accepted beside TestPion's. */
 const PARAM: Record<string, TemplateInput> = { question: 'question', input: 'question', answer: 'answer', actual_output: 'answer', output: 'answer', reference: 'reference', expected_output: 'reference', contexts: 'contexts', context: 'contexts', retrieval_context: 'contexts', conversation: 'conversation' };
@@ -26,13 +37,12 @@ function gevalCheck(id: 'g-eval' | 'conversational-g-eval') {
   return async (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> => {
     const criteria = typeof cfg.criteria === 'string' ? cfg.criteria.trim() : '';
     if (!criteria) return fail(cfg, `${id} needs "criteria": what a good answer is, in words (G-Eval turns it into evaluation steps).`);
-    const inputs = [...new Set((Array.isArray(cfg.params) ? cfg.params : id === 'conversational-g-eval' ? ['conversation'] : ['question']).map((p) => PARAM[String(p)]).filter((x): x is TemplateInput => !!x))];
+    const inputs = [...new Set((listOf(cfg.params) ?? (id === 'conversational-g-eval' ? ['conversation'] : ['question'])).map((p) => PARAM[String(p).trim()]).filter((x): x is TemplateInput => !!x))];
     if (id === 'conversational-g-eval' && !inputs.includes('conversation')) inputs.push('conversation');
     if (id === 'conversational-g-eval' && !conversationInput(ctx.record?.turns).some((m) => m.role === 'assistant')) return needsField(cfg, id, 'a conversation', 'add a "turns" column to the dataset and run it against a RAG target.');
-    const scale = Array.isArray(cfg.scale) && cfg.scale.length === 2 ? (cfg.scale as number[]) : [1, 5];
-    const [min, max] = scale as [number, number];
+    const [min, max] = scaleOf(cfg.scale);
     if (!Number.isInteger(min) || !Number.isInteger(max) || max <= min) return fail(cfg, `${id} scale must be two whole numbers with the second larger (got ${JSON.stringify(cfg.scale)}).`);
-    let steps = Array.isArray(cfg.steps) ? cfg.steps.map(String).filter((s) => s.trim()) : [];
+    let steps = listOf(cfg.steps) ?? [];
     if (!steps.length) {
       // the steps are written once by the judge from the criteria and cached (same criteria, same judge: the same steps)
       const gm = gevalSteps(criteria);

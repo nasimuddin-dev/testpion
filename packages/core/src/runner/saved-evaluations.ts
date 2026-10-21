@@ -42,7 +42,7 @@ export interface SavedEvaluation {
   /** type `rag` with a target: call it this many times per question (2 to 10) and score the mean of the calls. */
   targetRepeats?: number;
   /** type `rag`: a SQLite file inside the workspace, or a read-only PostgreSQL / MySQL connection, for the SQL metrics (datacompy-score, sql-equivalence). */
-  database?: { path?: string; url?: string; connectionEnv?: string; readOnly?: boolean };
+  database?: { path?: string; url?: string; connectionEnv?: string; readOnly?: boolean; /** This is a production database: a run asks once before the generated SQL touches it (the production guard). */ production?: boolean };
 }
 
 export const EVALUATIONS_LIBRARY = 'evaluations';

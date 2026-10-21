@@ -1,5 +1,5 @@
 // RAG testing, second half, with real mouse and keys (__t.real): an evaluation of type RAG against the local demo RAG
-// system (examples/servers/rag-server.mjs) and a mock judge. The metric picker (84 metrics, a Ragas name finds its metric,
+// system (examples/servers/rag-server.mjs) and a mock judge. The metric picker (134 metrics, a Ragas name finds its metric,
 // the RAG triad preset in one click, the inputs a dataset lacks said in amber, the estimate under the list), Try on one
 // sample (ask the target, the exact prompt before anything is sent, then the score), the estimate dialog before a run, the
 // samples × metrics matrix (columns grouped by type, the aggregates, an edited pass mark deciding pass and fail again, why
@@ -243,9 +243,9 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
-    'a-rag-evaluation-with-the-metrics-tab': /^metrics listed: 84 \| groups: 11 \| presets: 9 \| judge options: true$/,
+    'a-rag-evaluation-with-the-metrics-tab': /^metrics listed: 134 \| groups: 13 \| presets: 13 \| judge options: true$/,
     'a-ragas-name-finds-its-metric': /^LLMContextRecall: context-recall(,context-recall-lexical)? \| nv_context_relevance: context-relevance \| cleared: true$/,
-    'a-preset-chooses-the-triad': /^chosen: answer-relevance,context-relevance,faithfulness \| context-relevance mode: chunks$/,
+    'a-preset-chooses-the-triad': /^chosen: answer-relevance,context-relevance,faithfulness \| context-relevance mode: chunks(,always run)?$/,
     'the-estimate-follows-the-choice': /^judge calls: 6 \| text: .*judge calls/,
     'the-inputs-a-dataset-lacks-are-said': /^missing: needs a "reference_contexts" column/,
     'try-faithfulness-on-a-sample-from-the-target': /^answer: .*8am.* \| will send: .*faithfulness-v1/,

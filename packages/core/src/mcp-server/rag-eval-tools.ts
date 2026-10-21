@@ -18,6 +18,7 @@ import { METRIC_PRESETS } from '../eval/rag/catalogue-presets.js';
 import { buildMetricMatrix, checkGates, parseGates } from '../eval/rag/metric-matrix.js';
 import { compareMetricRuns } from '../eval/rag/metric-compare.js';
 import { tryMetric, type TrySample } from '../eval/rag/try-metric.js';
+import { pickRecord } from '../eval/rag/record.js';
 import { findRagTarget } from '../eval/rag/targets.js';
 import type { AppSettings, TestResult } from '../model/types.js';
 import type { SecretStore } from '../storage/secrets.js';
@@ -35,11 +36,18 @@ const judgeProps = {
   share_claims: { type: 'boolean', description: 'Split the answer into claims once, shared by faithfulness and answer-relevance' },
   max_cost_usd: { type: 'number', description: 'Stop judging once this much is spent; the rest is n/a' },
   max_calls: { type: 'number', description: 'Stop judging after this many model calls' },
+  allow_images: { type: 'boolean', description: 'Let pictures of the sample (an image chunk, a question image) go to the judge as data. Off by default: pictures cannot be redacted. The judge must be able to see (a vision model)' },
+};
+const branchProps = {
+  when: { type: 'object', description: 'A decision tree: { "<metric>": "<other metric> < 0.8" } — the metric runs only when the condition on another metric of the sample holds', additionalProperties: { type: 'string' } },
+  unless: { type: 'object', description: 'The opposite of `when`: the metric runs only when the condition does NOT hold', additionalProperties: { type: 'string' } },
 };
 const metricProps = {
-  metrics: strList('Metric names replacing the evaluation’s evaluators: ids, aliases, Ragas names, recall@5 … (rag_metrics lists them)'),
+  metrics: strList('Metric names replacing the evaluation’s evaluators: ids, aliases, Ragas names, recall@5, per-turn:faithfulness … (rag_metrics lists them)'),
   preset: str(`A metric preset: ${METRIC_PRESETS.map((p) => p.id).join(', ')}`),
 };
+
+const stringMap = (v: unknown): Record<string, string> | undefined => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string').map(([k, x]) => [k, String(x)])) : undefined);
 
 const choices = (a: Record<string, unknown>): RagRunChoices => ({
   metrics: Array.isArray(a.metrics) ? a.metrics.map(String) : undefined,
@@ -54,6 +62,9 @@ const choices = (a: Record<string, unknown>): RagRunChoices => ({
   shareClaims: typeof a.share_claims === 'boolean' ? a.share_claims : undefined,
   maxJudgeCostUsd: typeof a.max_cost_usd === 'number' ? a.max_cost_usd : undefined,
   maxJudgeCalls: typeof a.max_calls === 'number' ? a.max_calls : undefined,
+  allowImages: a.allow_images === true ? true : undefined,
+  when: stringMap(a.when),
+  unless: stringMap(a.unless),
   limit: typeof a.limit === 'number' ? Math.min(500, a.limit) : undefined,
 });
 
@@ -101,7 +112,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       doc: {"when":"Checking a metric on one sample before an evaluation, or seeing exactly what a judge would receive (dry_run).","whenNot":"To score a dataset (rag_run) or to list metrics (rag_metrics).","example":{"metric":"faithfulness","answer":"It opens at 8am.","contexts":["The clinic opens at 8am."],"dry_run":true}},
       write: true,
       description:
-        'Try one metric on one sample. With `dry_run` it shows the exact judge prompts that would be sent (after redaction, with size and cost, and whether the verdict is cached) and sends nothing; without it the sample is scored and the result comes back with its items, the judge and the cost. The sample is given (question, answer, contexts, reference, reference_ids), taken from a finished run (`run_id` + `record`), or probed from a RAG target (`target` + `question`).',
+        'Try one metric on one sample. With `dry_run` it shows the exact judge prompts that would be sent (after redaction, with size and cost, and whether the verdict is cached) and sends nothing; without it the sample is scored and the result comes back with its items, the judge and the cost. The sample is given (question, answer, contexts, reference, reference_ids), taken from a finished run (`run_id` + `record`), or probed from a RAG target (`target` + `question`). The other metrics read more: `fields` carries a conversation (`turns`), `reference_tool_calls`, `expected_outcome`, `reference_topics`, `should_refuse`, `canaries`; `tool_calls` the calls the system made; `images` pictures (with `allow_images`, for a vision judge — they go as data and a dry run lists them).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -112,6 +123,10 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
           contexts: strList('The retrieved contexts (texts)'),
           reference: str('The reference answer'),
           reference_ids: strList('The gold chunk ids'),
+          images: strList('Pictures the retrieved context holds: a file of the workspace, an http(s) URL or a data: URI. Needs allow_images and a vision judge'),
+          allow_images: judgeProps.allow_images,
+          tool_calls: { type: 'array', items: { type: 'object' }, description: 'The tool calls the system made: [{ name, arguments }]' },
+          fields: { type: 'object', description: 'Other fields of a dataset record the metric reads: turns (a conversation: user messages, or { role, content, tool_calls, contexts }), reference_tool_calls, expected_outcome, reference_topics, should_refuse, canaries / injection, source, rubric, baseline_answer, answerable, relevance' },
           run_id: str('Take the sample from a finished run'),
           record: str('With run_id: the dataset record id'),
           target: str('A RAG target: ask it `question` and score what it answers'),
@@ -122,7 +137,18 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
         required: ['metric'],
       },
       run: async (a) => {
-        let sample: TrySample = { question: a.question as string | undefined, answer: a.answer as string | undefined, contexts: Array.isArray(a.contexts) ? a.contexts.map((text) => ({ text: String(text) })) : undefined, reference: a.reference as string | undefined, referenceIds: Array.isArray(a.reference_ids) ? a.reference_ids.map(String) : undefined };
+        const pictures = Array.isArray(a.images) ? a.images.map((image) => ({ text: '', image: String(image) })) : [];
+        const written = a.fields && typeof a.fields === 'object' && !Array.isArray(a.fields) ? pickRecord(a.fields as Record<string, unknown>) : undefined;
+        const calls = Array.isArray(a.tool_calls) ? pickRecord({ tool_calls: a.tool_calls })?.toolCalls : undefined;
+        let sample: TrySample = {
+          question: a.question as string | undefined,
+          answer: a.answer as string | undefined,
+          contexts: Array.isArray(a.contexts) || pictures.length ? [...(Array.isArray(a.contexts) ? a.contexts.map((text) => ({ text: String(text) })) : []), ...pictures] : undefined,
+          reference: a.reference as string | undefined,
+          referenceIds: Array.isArray(a.reference_ids) ? a.reference_ids.map(String) : undefined,
+          ...(written ? { record: written } : {}),
+          ...(calls ? { toolCalls: calls } : {}),
+        };
         const ctx = context(checkEnvironment(a.environment));
         try {
           if (a.run_id) {
@@ -139,8 +165,8 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
             const p = await probeRagTarget(ctx, target as RagTarget, String(a.question ?? ''));
             sample = { ...sample, answer: p.sample.answer, contexts: p.sample.contexts, latencyMs: p.latencyMs };
           }
-          const j = a.judge ? { provider: String(a.judge).split('/')[0], ...(String(a.judge).includes('/') ? { model: String(a.judge).split('/').slice(1).join('/') } : {}) } : undefined;
-          const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge! }, { metric: { ...((a.options as Record<string, unknown>) ?? {}), type: String(a.metric) }, sample, judge: j, dryRun: a.dry_run === true });
+          const j = a.judge || a.allow_images === true ? { ...(a.judge ? { provider: String(a.judge).split('/')[0], ...(String(a.judge).includes('/') ? { model: String(a.judge).split('/').slice(1).join('/') } : {}) } : {}), ...(a.allow_images === true ? { allowImages: true } : {}) } : undefined;
+          const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: store.root }, { metric: { ...((a.options as Record<string, unknown>) ?? {}), type: String(a.metric) }, sample, judge: j, dryRun: a.dry_run === true });
           return { ...r, sample: { question: sample.question, answer: sample.answer?.slice(0, 1000), contexts: sample.contexts?.length } };
         } finally {
           await ctx.dispose();
@@ -152,7 +178,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       doc: {"when":"Before rag_run or rag_rescore: the judge calls, tokens, cost range and caps it would hit.","whenNot":"To run anything.","example":{"evaluation":"Clinic RAG","preset":"rag-triad"}},
       description:
         'What a RAG evaluation will cost BEFORE it runs: judge calls (per metric and in total), tokens, a cost range from the price table, the calls it makes to your RAG system, and any cap it would break (the daily token or budget cap, max_cost_usd, max_calls). Nothing is sent. Run this before rag_run. With `run_id` it estimates re-scoring that run, exactly: every prompt is built for the stored samples, so the calls and the cache hits are real.',
-      inputSchema: { type: 'object', properties: { evaluation: str('A saved RAG evaluation (list_evaluations)'), run_id: str('Estimate re-scoring this finished run instead'), limit: { type: 'number' }, ...metricProps, ...judgeProps }, required: [] },
+      inputSchema: { type: 'object', properties: { evaluation: str('A saved RAG evaluation (list_evaluations)'), run_id: str('Estimate re-scoring this finished run instead'), limit: { type: 'number' }, ...metricProps, ...branchProps, ...judgeProps }, required: [] },
       run: async (a) => {
         const ctx = context();
         try {
@@ -185,6 +211,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
           min: strList('Gates: "metric=value" the mean of the metric must reach, e.g. ["faithfulness=0.8", "recall@5=0.9"]'),
           baseline: str('A run id to compare with, metric by metric'),
           ...metricProps,
+          ...branchProps,
           ...judgeProps,
         },
         required: ['evaluation'],

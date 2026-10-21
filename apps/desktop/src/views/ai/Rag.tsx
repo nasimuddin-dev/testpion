@@ -8,6 +8,7 @@ import type { RagTargetInfo } from '@testpion/core';
 import { FolderList } from '../../components/FolderList';
 import { RagConnectDialog } from '../../components/rag/RagConnectDialog';
 import { CustomMetricsList, MetricEditor } from '../../components/rag/CustomMetrics';
+import { ProbeSets } from '../../components/rag/ProbeSets';
 import { Badge, Button, Empty, Segmented } from '../../components/ui';
 
 /**
@@ -102,6 +103,7 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
           <li>A judged metric needs a judge model: choose one for the evaluation, or set Settings ▸ AI assistant. It never falls back on a mock silently.</li>
           <li>Metrics tab: write your own metric (a criterion a judge decides, a checklist, rules, a formula, a script), check it against examples, and use it in the picker like any other.</li>
         </ol>
+        <ProbeSets />
       </div>
       {metric && <MetricEditor id={metric.id} onClose={() => setMetric(undefined)} onSaved={(id) => setMetric((m) => (m && !m.id ? { id } : m))} />}
       {dialog && <RagConnectDialog id={dialog.id} onClose={() => setDialog(undefined)} onSaved={(id) => (void targets.reload(), setSelected(id))} />}

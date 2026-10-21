@@ -81,7 +81,7 @@ export async function rescoreRun(store: WorkspaceStore, o: RescoreOptions): Prom
         skipped++;
         out[i] = r;
       } else {
-        const ctx = contextOfSample(sample, { judge: o.judge, providers: o.providers, ragJudge: o.ragJudge, signal: o.signal });
+        const ctx = contextOfSample(sample, { judge: o.judge, providers: o.providers, ragJudge: o.ragJudge, signal: o.signal, workspaceRoot: store.root });
         ctx.tokens = r.tokens;
         ctx.costUsd = r.costUsd;
         const { checks, failure } = await scoreRagSample(evaluators, ctx, { warnings: sample.warnings });

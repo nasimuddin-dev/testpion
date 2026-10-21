@@ -8,6 +8,10 @@
 import {
   ApsError,
   JUDGED_METRICS,
+  defaultImageSource,
+  listProbeSets,
+  loadImages,
+  seedProbeSets,
   METRIC_GROUPS,
   METRIC_PRESETS,
   applyMapping,
@@ -22,6 +26,7 @@ import {
   metricCatalogueRows,
   metricToCheck,
   parseRagImportText,
+  pickRecord,
   presetChecks,
   readRunSummary,
   rescoreRun,
@@ -118,10 +123,12 @@ export function ragHandlers(be: Backend): Handlers {
      * Try one metric on one sample: given, taken from a result of a run (`runId` + `resultId`), or probed from a target.
      * `dryRun` shows the exact judge prompts and sends nothing.
      */
-    'rag.metric.try': async (p: { metric: string; options?: Record<string, unknown>; sample?: TrySample; runId?: string; resultId?: string; target?: string; question?: string; judge?: SavedEvaluation['judge']; dryRun?: boolean; environment?: string }) => {
+    'rag.metric.try': async (p: { metric: string; options?: Record<string, unknown>; sample?: TrySample; runId?: string; resultId?: string; target?: string; question?: string; judge?: SavedEvaluation['judge']; dryRun?: boolean; environment?: string; fields?: Record<string, unknown> }) => {
       const ctx = be.context({ environment: p.environment });
       try {
         let sample: TrySample = p.sample ?? {};
+        // the other fields of a dataset record, as typed in the dialog (turns, tool_calls, should_refuse …)
+        const extra = p.fields ? pickRecord(p.fields) : undefined;
         if (p.runId && p.resultId) {
           let found: TrySample | undefined;
           for await (const r of runResults(be.ws, p.runId)) if (r.id === p.resultId) found = storedSample(r);
@@ -132,11 +139,27 @@ export function ragHandlers(be: Backend): Handlers {
           const probe = await probeRagTarget(ctx, t as RagTarget, String(p.question ?? sample.question ?? ''));
           sample = { ...sample, question: p.question ?? sample.question, answer: probe.sample.answer, contexts: probe.sample.contexts, latencyMs: probe.latencyMs };
         }
-        const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge! }, { metric: { ...(p.options ?? {}), type: p.metric }, sample, judge: p.judge, dryRun: p.dryRun });
+        if (extra) sample = { ...sample, record: { ...(sample.record ?? {}), ...extra }, ...(extra.toolCalls ? { toolCalls: extra.toolCalls } : {}) };
+        const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: be.ws.root }, { metric: { ...(p.options ?? {}), type: p.metric }, sample, judge: p.judge, dryRun: p.dryRun });
         return { ...r, sample };
       } finally {
         await ctx.dispose();
       }
+    },
+    /** The seeded safety probe sets, and which are in the workspace. */
+    'rag.probeSets': () => listProbeSets(be.ws),
+    /** Write probe sets into the workspace as datasets (a file that exists is left as it is). */
+    'rag.probeSets.add': ({ sets }: { sets?: string[] } = {}) => seedProbeSets(be.ws, sets),
+    /**
+     * A picture of a chunk for the drill-down: the renderer cannot read files or fetch private URLs, so the backend reads it
+     * (a file inside the workspace, or a URL under the network policy), checks it like the judge's copy (type by content, no
+     * SVG, 5 MB) and returns it as a data URI to show. Nothing is sent to a model.
+     */
+    'rag.image': async ({ ref }: { ref: string }) => {
+      const set = await loadImages([{ ref: String(ref ?? ''), from: 'the chunk' }], defaultImageSource(be.ws.root));
+      if (set.problem) return { problem: set.problem };
+      const i = set.images[0]!;
+      return { dataUri: `data:${i.prepared.mime};base64,${i.prepared.bytes.toString('base64')}`, mime: i.prepared.mime, bytes: i.prepared.bytes.length, width: i.prepared.width, height: i.prepared.height, sha256: i.prepared.sha256, stripped: i.prepared.stripped };
     },
     /** The samples × metrics matrix of a run: a page of rows, the columns grouped by type, the aggregates over every sample. */
     'rag.matrix': async ({ runId, ...q }: { runId: string } & MatrixQuery) => buildMetricMatrix(runResults(be.ws, runId), { ...q, runId }),

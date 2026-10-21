@@ -15,6 +15,7 @@ import { ARGUMENT_CORRECTNESS, GOAL_INFER, goalCompare, MCP_TASK_COMPLETION, MCP
 import { num, result } from './metric-util.js';
 import type { RagToolCall } from './record.js';
 import { frozen } from './metrics-more.js';
+import { listOf } from './lists.js';
 
 const NEED_CALLS = 'map the tool calls in the RAG target (click the list of tool calls in the sample response), use an MCP target, or add a "tool_calls" column for offline scoring.';
 
@@ -141,7 +142,10 @@ registerCheck('task-completion', traceCheck({ id: 'task-completion', threshold: 
 registerCheck('step-efficiency', traceCheck({ id: 'step-efficiency', threshold: 0.6, metric: () => STEP_EFFICIENCY, needsCalls: true }));
 registerCheck('plan-adherence', traceCheck({ id: 'plan-adherence', threshold: 0.6, metric: () => PLAN_ADHERENCE }));
 registerCheck('plan-quality', traceCheck({ id: 'plan-quality', threshold: 0.6, metric: () => PLAN_QUALITY }));
-const availableTools = (cfg: CheckConfig) => (Array.isArray(cfg.tools) ? cfg.tools.slice(0, 60).map((t) => (typeof t === 'string' ? { name: t } : { name: String((t as { name?: unknown }).name ?? ''), description: String((t as { description?: unknown }).description ?? '').slice(0, 300) })) : undefined);
+const availableTools = (cfg: CheckConfig) => {
+  const list = Array.isArray(cfg.tools) ? cfg.tools : listOf(cfg.tools);
+  return list?.slice(0, 60).map((t) => (typeof t === 'string' ? { name: t } : { name: String((t as { name?: unknown }).name ?? ''), description: String((t as { description?: unknown }).description ?? '').slice(0, 300) }));
+};
 registerCheck('mcp-use', traceCheck({ id: 'mcp-use', threshold: 0.6, metric: () => MCP_USE, needsCalls: true, extra: (cfg) => ({ ...(availableTools(cfg) ? { availableTools: availableTools(cfg) } : {}) }) }));
 registerCheck('mcp-task-completion', traceCheck({ id: 'mcp-task-completion', threshold: 0.8, metric: () => MCP_TASK_COMPLETION, needsCalls: true }));
 

@@ -16,6 +16,7 @@ import { contextsInput, judgedCheck, referenceText } from './judged-kit.js';
 import type { JudgedMetric } from './judge-prompts.js';
 import { num, result } from './metric-util.js';
 import { conversationInput } from './conversation-input.js';
+import { listOf } from './lists.js';
 
 
 export type TemplateInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
@@ -118,7 +119,7 @@ export function runTemplate(cfg: CheckConfig, ctx: CheckContext, t: Template, o:
 
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 const inputsOf = (cfg: CheckConfig, dflt: TemplateInput[]): TemplateInput[] => {
-  const given = Array.isArray(cfg.inputs) ? (cfg.inputs.filter((x) => ['question', 'answer', 'reference', 'contexts', 'conversation'].includes(String(x))) as TemplateInput[]) : undefined;
+  const given = listOf(cfg.inputs)?.filter((x) => ['question', 'answer', 'reference', 'contexts', 'conversation'].includes(String(x).trim())).map((x) => String(x).trim()) as TemplateInput[] | undefined;
   return given?.length ? given : dflt;
 };
 
@@ -177,7 +178,7 @@ function instanceRubric(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResul
 }
 
 function checklist(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
-  const raw = Array.isArray(cfg.items) ? cfg.items : Array.isArray(cfg.criteria) ? cfg.criteria : [];
+  const raw = Array.isArray(cfg.items) ? cfg.items : Array.isArray(cfg.criteria) ? cfg.criteria : (listOf(cfg.items) ?? []);
   const items = raw
     .map((x) => (typeof x === 'string' ? { text: x } : x && typeof x === 'object' && typeof (x as { text?: unknown }).text === 'string' ? (x as { text: string; weight?: number }) : undefined))
     .filter((x): x is { text: string; weight?: number } => !!x && !!x.text.trim());
@@ -187,7 +188,7 @@ function checklist(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
 
 /** DeepEval's PromptAlignment: the instructions the answer had to follow, each checked. */
 function promptAlignment(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
-  const instr = Array.isArray(cfg.instructions) ? cfg.instructions.map(String).filter((s) => s.trim()) : [];
+  const instr = listOf(cfg.instructions) ?? [];
   if (!instr.length) return Promise.resolve(failure(cfg, 'prompt-alignment needs "instructions": the list of instructions the answer had to follow.'));
   return runTemplate(cfg, ctx, { id: 'prompt-alignment', kind: 'checklist', items: instr.map((text) => ({ text: `The answer follows this instruction: ${text}` })), inputs: inputsOf(cfg, ['question']) }, { threshold: 1 });
 }

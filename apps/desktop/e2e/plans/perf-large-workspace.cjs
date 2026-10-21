@@ -3,7 +3,7 @@
 // regression that makes an interaction several times slower fails here.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect } = require('../lib.cjs');
-const { writeFileSync } = require('node:fs');
+const { closeSync, mkdirSync, openSync, writeFileSync, writeSync } = require('node:fs');
 const { join } = require('node:path');
 
 // TESTPION_PERF_SCALE=6 makes it 3,000 requests (a big Postman import), for measuring by hand; the suite runs 500
@@ -36,6 +36,28 @@ function bigCollection(ws) {
     items.push({ kind: 'folder', id: `big-folder-${f}`, name: `Folder ${f}`, items: reqs });
   }
   writeFileSync(join(ws, 'collections', 'big.json'), JSON.stringify({ schemaVersion: '1.0', id: 'big', name: 'Big collection', variables: [{ key: 'page', value: '1', enabled: true }], items }, null, 2));
+}
+
+/**
+ * A finished RAG run of 5,000 samples x 40 metrics (the metrics matrix budget, planning/rag-testing.md section 5.1): written as the
+ * runner writes it, one result per line, so the matrix is built from a real results file.
+ */
+const RAG_RUN = 'perf-rag-5000';
+const RAG_METRICS = ['faithfulness', 'answer-relevance', 'context-precision', 'context-recall', 'context-relevance', 'factual-correctness', 'answer-correctness', 'hallucination', 'correctness', 'completeness', 'factuality', 'citation-accuracy', 'claim-precision', 'claim-recall', 'claim-f1', 'noise-sensitivity-relevant', 'context-precision-ids', 'context-recall-ids', 'mrr@k', 'map@k', 'token-f1', 'rouge', 'string-similarity', 'bleu', 'chrf', 'semantic-similarity', 'toxicity', 'bias', 'pii-leakage', 'refusal-correctness', 'knowledge-retention', 'turn-relevancy', 'topic-adherence', 'trajectory-match', 'tool-call-f1', 'goal-accuracy', 'g-eval', 'summarization', 'latency', 'tokens'];
+function ragRun(ws) {
+  const dir = join(ws, 'runs', RAG_RUN);
+  mkdirSync(dir, { recursive: true });
+  const fd = openSync(join(dir, 'results.jsonl'), 'w');
+  for (let i = 0; i < 5000; i++) {
+    const checks = RAG_METRICS.map((id, k) => {
+      const score = ((i * 31 + k * 17) % 101) / 100;
+      if ((i + k) % 29 === 0) return { type: id, name: id, passed: true, source: 'ai-judge', message: id + ' is n/a: nothing to judge', metadata: { na: 'nothing to judge', metric: id } };
+      return { type: id, name: id, passed: score >= 0.5, source: 'ai-judge', message: id + ' ' + score + ': 3 of 4 supported', score, metadata: { threshold: 0.5, metric: id } };
+    });
+    const r = { id: 'perf:' + i, name: 'sample ' + i, type: 'rag', status: 'passed', startedAt: '2026-01-01T00:00:00.000Z', durationMs: 5, attempts: 1, checks, tags: ['tag-' + (i % 12), i % 2 ? 'odd' : 'even'], metadata: { rag: { query: 'question ' + i } } };
+    writeSync(fd, `${JSON.stringify(r)}\n`);
+  }
+  closeSync(fd);
 }
 
 /** Milliseconds from an action until the next two frames painted. */
@@ -134,6 +156,18 @@ const steps = [
     })()`,
   ],
   [
+    // the metrics matrix of a run of 5,000 samples x 40 metrics: the page, the by-tag and chart data come with it; a re-cut (sorted by a metric) is another call
+    'rag-matrix-5000-by-40',
+    `(async () => {
+      const t0 = performance.now();
+      const m = await window.aps.invoke('rag.matrix', { runId: '${RAG_RUN}', offset: 0, limit: 50 });
+      const first = ${ms('t0')};
+      const t1 = performance.now();
+      const s = await window.aps.invoke('rag.matrix', { runId: '${RAG_RUN}', offset: 0, limit: 50, sort: m.columns[0].key });
+      return 'total: ' + m.total + ' | columns: ' + m.columns.length + ' | rows: ' + m.rows.length + ' | tags: ' + m.byTag.length + ' | bins: ' + m.aggregates[0].distribution.length + ' | first ms: ' + first + ' | re-cut ms: ' + ${ms('t1')} + ' | sorted rows: ' + s.rows.length;
+    })()`,
+  ],
+  [
     'save-and-refresh',
     `(async () => {
       // a save of the big collection: the explorer and everything else refreshes
@@ -157,7 +191,8 @@ module.exports = withExpect(
     'filter-tree': (r) => num(r, 'max keystroke') < 200 ? undefined : 'slow: ' + r,
     'open-tabs-and-type': (r) => (SCALE > 1 || /^tabs: 1[23] \|/.test(r)) && num(r, 'open 12') < 1500 && num(r, 'max keystroke') < 150 && num(r, '10 switches') < 1200 ? undefined : 'slow or wrong: ' + r,
     'save-and-refresh': (r) => num(r, 'save to tree') < 3000 ? undefined : 'slow: ' + r,
+    'rag-matrix-5000-by-40': (r) => /^total: 5000 \| columns: 40 \| rows: 50 \| tags: 14 \| bins: 10 /.test(r) && num(r, 'first') < 10000 && num(r, 're-cut') < 10000 && /sorted rows: 50$/.test(r) ? undefined : 'slow or wrong: ' + r,
   },
-  { prepare: bigCollection },
+  { prepare: (ws) => (bigCollection(ws), ragRun(ws)) },
 );
 module.exports.bigCollection = bigCollection;

@@ -158,6 +158,8 @@ export interface SqlSource {
   connectionEnv?: string;
   /** Declared by the person: this connection (and its user) cannot write. Required for PostgreSQL and MySQL. */
   readOnly?: boolean;
+  /** A production database: generated SQL runs against it only with the production guard's consent (the app asks once, the CLI takes --allow-production). */
+  production?: boolean;
 }
 
 export interface SqlLimits {

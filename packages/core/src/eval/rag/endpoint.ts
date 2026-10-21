@@ -47,7 +47,16 @@ export interface ClassifierConfig {
   timeoutMs?: number;
 }
 
-export function classifierOf(v: unknown): ClassifierConfig | string {
+export function classifierOf(raw: unknown): ClassifierConfig | string {
+  // typed in the picker as JSON text
+  let v = raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      v = JSON.parse(raw);
+    } catch {
+      return 'the classifier is not valid JSON: { "url": "http://127.0.0.1:8000/hhem" }';
+    }
+  }
   if (!v || typeof v !== 'object') return 'set "classifier": { url } — the endpoint that scores whether a claim follows from the documents (a local server around the Vectara HHEM model).';
   const c = v as ClassifierConfig;
   if (typeof c.url !== 'string' || !/^https?:\/\//i.test(c.url)) return 'the classifier needs a "url" (http or https).';

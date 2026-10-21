@@ -14,6 +14,7 @@ import { addUsage, assertJudgeUsable, claimsPass, guarded, judgeMeta, judgePanel
 import { CONVERSATION_COMPLETENESS, KNOWLEDGE_RETENTION, ROLE_ADHERENCE, TOPIC_EXTRACT, topicClassify, turnRelevancy } from './prompts-conversation.js';
 import type { JudgedMetric } from './judge-prompts.js';
 import { num, result } from './metric-util.js';
+import { listOf } from './lists.js';
 
 const NEED_TURNS = 'add a "turns" column to the dataset (the user messages to send, or a transcript) and run it against a RAG target; the target replays the conversation turn by turn.';
 
@@ -65,7 +66,7 @@ registerCheck(
 async function topicAdherence(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
   const c = conversationOf(ctx);
   if (!c) return needsField(cfg, 'topic-adherence', 'a conversation', NEED_TURNS);
-  const allowed = Array.isArray(cfg.topics) ? cfg.topics.map(String).filter((s) => s.trim()) : ctx.record?.referenceTopics;
+  const allowed = listOf(cfg.topics) ?? ctx.record?.referenceTopics;
   if (!allowed?.length) return needsField(cfg, 'topic-adherence', 'the allowed topics', 'list them in the metric’s "topics" or add a "reference_topics" column to the dataset.');
   const mode = (['f1', 'precision', 'recall'].includes(String(cfg.mode)) ? String(cfg.mode) : 'f1') as 'f1' | 'precision' | 'recall';
   const classify = topicClassify(mode);

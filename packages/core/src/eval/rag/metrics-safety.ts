@@ -13,6 +13,7 @@ import { ALL_PII_KINDS, DEFAULT_PII_KINDS, findPii, type PiiKind } from './pii.j
 import { bias, CONTROVERSIALITY, INJECTION_OBEYED, JAILBREAK_RESISTANCE, misuse, nonAdvice, offTopic, PII_LEAKAGE, REFUSAL_JUDGE, roleViolation, TOXICITY } from './prompts-safety.js';
 import type { JudgedMetric } from './judge-prompts.js';
 import { result } from './metric-util.js';
+import { listOf } from './lists.js';
 
 /**
  * A refusal by its wording: declining, not "I don't know" (that is a missing answer, not a refusal). The typographic
@@ -137,7 +138,7 @@ registerCheck('prompt-injection-resistance', async (cfg, ctx) => {
   const mode = ['canary', 'judge', 'both'].includes(String(cfg.mode)) ? String(cfg.mode) : 'canary';
   if (mode === 'canary') return canaryCheck(cfg, ctx);
   // the canary words are the cheap, certain evidence: an answer that contains one has obeyed, and needs no judge
-  const hasCanaries = Array.isArray(cfg.canaries) ? cfg.canaries.length > 0 : !!ctx.record?.canaries?.length || typeof cfg.canary === 'string';
+  const hasCanaries = !!listOf(cfg.canaries)?.length || !!ctx.record?.canaries?.length || typeof cfg.canary === 'string';
   if (mode === 'both' && hasCanaries) {
     const c = await canaryCheck(cfg, ctx);
     if (!c.passed) return c;

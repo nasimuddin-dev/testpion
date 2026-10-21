@@ -48,6 +48,11 @@ export interface RagRunChoices {
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
   limit?: number;
+  /** Pictures of the sample may be sent to the judge, as data (multimodal metrics; off by default, they cannot be redacted). */
+  allowImages?: boolean;
+  /** A decision tree from the command line: metric name → condition ("faithfulness < 0.8"); the metric runs only then (`when`) or only otherwise (`unless`). */
+  when?: Record<string, string>;
+  unless?: Record<string, string>;
 }
 
 const refOf = (j: string): { provider: string; model?: string } => {
@@ -66,6 +71,21 @@ export function chooseRagRun(d: SavedEvaluation, c: RagRunChoices): SavedEvaluat
     if (c.preset && !preset) throw new ApsError('ValidationError', `No metric preset "${c.preset}"`, { suggestions: ['List them with `testpion rag presets`.'] });
     evaluators = [...(preset ? presetChecks(preset.metrics) : []), ...(c.metrics ?? []).map((m) => metricToCheck(m))];
   }
+  // the branches of a decision tree: the condition goes onto the entry of the metric it names
+  const branch = (key: 'when' | 'unless', by: Record<string, string> | undefined) => {
+    for (const [name, cond] of Object.entries(by ?? {})) {
+      const id = resolveMetric(name)?.def.id;
+      let hit = false;
+      evaluators = (evaluators ?? []).map((e) => {
+        if (e.name !== name && e.type !== name && (id === undefined || resolveMetric(e.type)?.def.id !== id)) return e;
+        hit = true;
+        return { ...e, [key]: cond };
+      });
+      if (!hit) throw new ApsError('ValidationError', `--${key} names "${name}", which is not one of the evaluation's metrics`, { suggestions: ['Name a metric of the evaluation (or of --metrics / --preset): --when "context-recall=faithfulness < 0.8".'] });
+    }
+  };
+  branch('when', c.when);
+  branch('unless', c.unless);
   out.evaluators = evaluators;
   if (c.target) out.target = c.target;
   if (c.compat) out.compat = c.compat;
@@ -75,7 +95,7 @@ export function chooseRagRun(d: SavedEvaluation, c: RagRunChoices): SavedEvaluat
   if (c.limit) out.limit = c.limit;
   if (c.judge) out.judge = { ...out.judge, ...(typeof c.judge === 'string' ? refOf(c.judge) : c.judge) };
   if (c.judges?.length) out.judge = { ...out.judge, judges: c.judges.map(refOf) };
-  for (const k of ['aggregate', 'swap', 'repeat', 'shortCircuit', 'shareClaims'] as const) if (c[k] !== undefined) (out.judge as Record<string, unknown>)[k] = c[k];
+  for (const k of ['aggregate', 'swap', 'repeat', 'shortCircuit', 'shareClaims', 'allowImages'] as const) if (c[k] !== undefined) (out.judge as Record<string, unknown>)[k] = c[k];
   if (c.maxJudgeCostUsd !== undefined) out.maxJudgeCostUsd = c.maxJudgeCostUsd;
   if (c.maxJudgeCalls !== undefined) out.maxJudgeCalls = c.maxJudgeCalls;
   return out;

@@ -824,7 +824,7 @@ Faithfulness with a classifier as the verifier (Ragas FaithfulnesswithHHEM): the
 
 **Options.**
 
-- `classifier` (string): The endpoint (required): { url, premiseField, hypothesisField, scorePath }. Local only requires an address on this computer.
+- `classifier` (string): The endpoint as JSON: { "url": "http://127.0.0.1:8000/hhem", "premiseField", "hypothesisField", "scorePath" }. Local only requires an address on this computer.
 - `entailment` (number), default `0.5`: A claim is entailed above this classifier score.
 
 **Also called.** `faithfulness_with_hhem`, `FaithfulnesswithHHEM`, `faithfulness_with_hhem_score`
@@ -1480,8 +1480,8 @@ A criterion you write, turned into evaluation steps by the judge (once, cached) 
 
 **Options.**
 
-- `criteria` (string): What a good answer is, in words (required).
-- `steps` (string): The evaluation steps, when you want to give them instead of having them written (a list).
+- `criteria` (string): What a good answer is, in words.
+- `steps` (string): The evaluation steps, when you want to give them instead of having them written (separated by ; or one per line).
 - `params` (string): Which parts of the sample the judge reads: question, answer, reference, contexts (DeepEval’s input, actual_output, expected_output, retrieval_context work too).
 - `scale` (string), default `[1, 5]`: The score range, two whole numbers.
 - `samples` (number), default `1`: Ask n times and average (estimates the probability-weighted score).
@@ -1504,7 +1504,7 @@ A decision tree of small judgements (DeepEval DAG): each node asks one question,
 
 **Options.**
 
-- `tree` (string): The tree (required): { root, nodes }.
+- `tree` (string): The tree as JSON: { "root": "a", "nodes": { … } }.
 - `inputs` (string): What the judge may read: question, reference, contexts (the answer always).
 
 **Prompts.** `dag-binary-v1`, `dag-choice-v1`, `dag-task-v1`
@@ -1543,7 +1543,7 @@ A reward model’s rating of the answer (NVIDIA Nemotron reward models, served b
 
 **Options.**
 
-- `provider` (string): The workspace provider that serves the reward model (required).
+- `provider` (string): The workspace provider that serves the reward model.
 - `model` (string): The model name at that provider.
 - `kind` (attributes | scalar | genrm), default `attributes`: How the reply is read.
 - `attribute` (string), default `helpfulness`: attributes: which rating.
@@ -1644,7 +1644,7 @@ The share of the answer’s statements that stay within the assistant’s purpos
 
 **Options.**
 
-- `domain` (string): What the assistant is for, in one phrase (required).
+- `domain` (string): What the assistant is for, in one phrase.
 
 **Prompts.** `misuse-v1`
 
@@ -1680,7 +1680,7 @@ Whether the answer breaks the role the assistant was given (drops the persona, c
 
 **Options.**
 
-- `role` (string): The role, in one sentence (required).
+- `role` (string): The role, in one sentence.
 
 **Prompts.** `role-violation-v1`
 
@@ -1746,7 +1746,7 @@ The share of your policy’s rules the answer follows: write the policy as a lis
 
 **Options.**
 
-- `rules` (string): The policy as a list of rules (required).
+- `rules` (string): The policy as a list of rules, separated by ; or one per line.
 
 **Prompts.** `policy-adherence-t<hash>`
 
@@ -1842,7 +1842,7 @@ Whether every assistant turn stays in the role the assistant was given (its remi
 
 **Options.**
 
-- `role` (string): The assistant’s role in one sentence (required).
+- `role` (string): The assistant’s role in one sentence.
 
 **Prompts.** `role-adherence-v1`
 
@@ -1961,7 +1961,7 @@ Faithfulness of every assistant turn to the chunks the system retrieved for that
 
 **Prompts.** `faithfulness-v1`
 
-### Per-turn metric (per-turn:<metric>) {#per-turn}
+### Per-turn metric (per-turn:faithfulness …) {#per-turn}
 
 `per-turn` · judge model · higher is better · passes at 0.8 · judge calls: the chosen metric’s calls, per assistant turn
 
@@ -1975,7 +1975,7 @@ Scores every assistant turn of a conversation with any single-turn metric and re
 
 **Options.**
 
-- `metric` (string): The single-turn metric to score each turn with (required when written as `per-turn`).
+- `metric` (string): The single-turn metric to score each turn with (faithfulness, answer-relevance …).
 - `aggregate` (mean | min), default `mean`: Combine the turns by their mean or their lowest score.
 
 **Also called.** `conversation-relevance`
@@ -1996,8 +1996,8 @@ G-Eval over a whole conversation: a criterion you write, scored on a scale from 
 
 **Options.**
 
-- `criteria` (string): What a good conversation is, in words (required).
-- `steps` (string): The evaluation steps, when you give them (a list).
+- `criteria` (string): What a good conversation is, in words.
+- `steps` (string): The evaluation steps, when you give them (separated by ; or one per line).
 - `scale` (string), default `[1, 5]`: The score range, two whole numbers.
 - `samples` (number), default `1`: Ask n times and average.
 

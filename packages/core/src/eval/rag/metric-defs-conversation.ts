@@ -49,7 +49,7 @@ const DEFS: MetricDef[] = [
     requires: ['turns'],
     threshold: 0.8,
     check: 'role-adherence',
-    options: { role: { type: 'string', description: 'The assistant’s role in one sentence (required).' } },
+    options: { role: { type: 'string', required: true, description: 'The assistant’s role in one sentence.' } },
     prompts: ['role-adherence-v1'],
     calls: '1',
     version: 'role-adherence-v1',
@@ -185,7 +185,7 @@ const DEFS: MetricDef[] = [
   {
     ...COMMON,
     id: 'per-turn',
-    name: 'Per-turn metric (per-turn:<metric>)',
+    name: 'Per-turn metric (per-turn:faithfulness …)',
     direction: 'higher',
     what: 'Scores every assistant turn of a conversation with any single-turn metric and reports the mean and the lowest turn. Write it as `per-turn:faithfulness`, `per-turn:answer-relevance` …',
     how: 'Each assistant turn is a sample of its own (the user message before it, its answer, the chunks retrieved for it); turns with a score are combined by mean (default) or `aggregate: min`.',
@@ -195,7 +195,7 @@ const DEFS: MetricDef[] = [
     check: 'per-turn',
     aliases: ['conversation-relevance'],
     options: {
-      metric: { type: 'string', description: 'The single-turn metric to score each turn with (required when written as `per-turn`).' },
+      metric: { type: 'string', required: true, description: 'The single-turn metric to score each turn with (faithfulness, answer-relevance …).' },
       aggregate: { type: 'string', default: 'mean', values: ['mean', 'min'], description: 'Combine the turns by their mean or their lowest score.' },
     },
     prompts: ['(the chosen metric’s)'],

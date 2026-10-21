@@ -28,6 +28,7 @@ import {
 import { datasetFormatOfName } from '@testpion/shared';
 import { registerRagEvalCommands } from './rag-eval.js';
 import { registerRagMetricFileCommands } from './rag-metric-files.js';
+import { registerRagProbeCommands } from './rag-probes.js';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, readResults, red, yellow, withWorkspace } from '../shared.js';
 
 const FORMATS = RAG_DATASET_FORMATS.join(', ');
@@ -45,6 +46,7 @@ export function registerRagCommands(program: Command): void {
   const rag = program.command('rag').description('RAG systems under test: connect and probe a target, the metric catalogue, run an evaluation with metrics and gates, re-score and compare runs, convert datasets from and to Ragas, DeepEval, BEIR, NVIDIA and promptfoo');
   registerRagEvalCommands(rag);
   registerRagMetricFileCommands(rag);
+  registerRagProbeCommands(rag);
 
   rag
     .command('targets')

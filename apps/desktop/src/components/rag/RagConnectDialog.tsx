@@ -25,6 +25,13 @@ const slotValue = (m: RagMapping, slot: RagMapSlot): string => {
       return m.contexts ?? '';
     case 'latencyMs':
       return m.latencyMs ?? '';
+    case 'toolCalls':
+      return m.toolCalls ?? '';
+    case 'toolCall.name':
+    case 'toolCall.arguments':
+      return m.toolCall?.[slot.slice(9) as 'name'] ?? '';
+    case 'conversationId':
+      return m.conversationId ?? '';
     default:
       return slot.startsWith('usage.') ? (m.usage?.[slot.slice(6) as 'input'] ?? '') : (m.context?.[slot.slice(8) as 'text'] ?? '');
   }
@@ -36,6 +43,9 @@ function setSlotText(m: RagMapping, slot: RagMapSlot, text: string): RagMapping 
   if (slot === 'answer') return { ...m, answer: text.trim() };
   if (slot === 'contexts') return { ...m, contexts: v };
   if (slot === 'latencyMs') return { ...m, latencyMs: v };
+  if (slot === 'toolCalls') return { ...m, toolCalls: v };
+  if (slot === 'conversationId') return { ...m, conversationId: v };
+  if (slot === 'toolCall.name' || slot === 'toolCall.arguments') return { ...m, toolCall: { ...m.toolCall, [slot.slice(9)]: v } };
   if (slot.startsWith('usage.')) return { ...m, usage: { ...m.usage, [slot.slice(6)]: v } };
   return { ...m, context: { ...m.context, [slot.slice(8)]: v } };
 }
@@ -58,6 +68,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
   const [mapping, setMapping] = useState<RagMapping>(emptyMapping());
   const [readOnly, setReadOnly] = useState(false);
   const [limits, setLimits] = useState<RagLimits>({});
+  const [conversation, setConversation] = useState<'' | 'stateless-history' | 'server-session'>('');
   const [presetId, setPresetId] = useState('');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestNotes, setSuggestNotes] = useState<string[]>([]);
@@ -79,6 +90,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
     setMapping(existing.data.mapping ?? emptyMapping());
     setReadOnly(existing.data.readOnly === true);
     setLimits(existing.data.limits ?? {});
+    setConversation(existing.data.conversation?.mode ?? '');
   }, [existing, loaded]);
 
   const parsed = useMemo((): { step?: Record<string, unknown>; problem?: string } => {
@@ -90,7 +102,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
     }
   }, [stepText]);
   const cleanLimits = Object.fromEntries(Object.entries(limits).filter(([, v]) => typeof v === 'number' && v >= 0)) as RagLimits;
-  const target: RagTarget | undefined = parsed.step ? { protocol, step: parsed.step, mapping, ...(readOnly ? { readOnly: true } : {}), ...(Object.keys(cleanLimits).length ? { limits: cleanLimits } : {}) } : undefined;
+  const target: RagTarget | undefined = parsed.step ? { protocol, step: parsed.step, mapping, ...(readOnly ? { readOnly: true } : {}), ...(Object.keys(cleanLimits).length ? { limits: cleanLimits } : {}), ...(conversation ? { conversation: { mode: conversation } } : {}) } : undefined;
 
   /** One-click start from a framework's request and mapping (OpenAI-compatible, LangServe, LlamaIndex, Haystack, Dify, Flowise …). */
   const applyPreset = (id: string) => {
@@ -261,6 +273,14 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
               </Field>
               <label className="flex items-center gap-1.5 text-xs">
                 <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} /> This endpoint only answers questions: a production environment may call it
+              </label>
+              <label className="flex items-center gap-1.5 text-xs" title="A dataset record with `turns` is replayed turn by turn. History in each request: the request uses {{messages}} (or {{history}}, {{historyText}}). Server session: click the conversation id in the sample response; the request uses {{conversationId}}." data-rag-conversation>
+                Conversations
+                <Select className="h-7 min-h-7 py-0 text-xs flex-1" value={conversation} onChange={(e) => setConversation(e.target.value as typeof conversation)} aria-label="How the system keeps a conversation">
+                  <option value="">one question per call</option>
+                  <option value="stateless-history">the request carries the history ({'{{messages}}'})</option>
+                  <option value="server-session">the system keeps a session ({'{{conversationId}}'})</option>
+                </Select>
               </label>
               <details className="text-xs rounded-lg border border-line px-2 py-1" data-rag-limits>
                 <summary className="cursor-pointer text-muted select-none">Limits on the calls an evaluation makes{Object.keys(cleanLimits).length ? ' · set' : ''}</summary>

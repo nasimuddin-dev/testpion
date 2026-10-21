@@ -23,7 +23,7 @@ export function RagJudgeOptions({
     <details className="text-xs rounded-lg border border-line px-2 py-1" data-rag-judge-options>
       <summary className="cursor-pointer text-muted select-none">
         Judge options
-        {judges.length || judge.swap || (judge.repeat ?? 1) > 1 || judge.shortCircuit || judge.shareClaims || maxCostUsd || maxCalls ? ' · set' : ''}
+        {judges.length || judge.swap || (judge.repeat ?? 1) > 1 || judge.shortCircuit || judge.shareClaims || judge.allowImages || maxCostUsd || maxCalls ? ' · set' : ''}
       </summary>
       <div className="grid gap-2 mt-2 pb-1">
         <div>
@@ -73,6 +73,9 @@ export function RagJudgeOptions({
           </label>
           <label className="flex items-center gap-1" title="Split the answer into claims once and let faithfulness and answer relevance judge them (on by default from three metrics that read claims)">
             <input type="checkbox" checked={judge.shareClaims === true} onChange={(e) => set({ shareClaims: e.target.checked || undefined })} /> Share the answer’s claims
+          </label>
+          <label className="flex items-center gap-1 col-span-2" title="Pictures in the question or in the retrieved chunks go to the judge as data. A picture cannot be masked, so this is off unless you turn it on; the judge must be a model that can see (a local vision model works). The estimate and Try say how many pictures are sent.">
+            <input type="checkbox" checked={judge.allowImages === true} onChange={(e) => set({ allowImages: e.target.checked || undefined })} data-rag-allow-images /> Send pictures to the judge (multimodal metrics; they cannot be masked)
           </label>
         </div>
         <div className="grid grid-cols-2 gap-2">

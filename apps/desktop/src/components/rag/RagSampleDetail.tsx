@@ -9,6 +9,7 @@ import { CheckList } from '../Results';
 import { AiAction } from '../ai/AiAction';
 import { TraceView } from '../TraceView';
 import { Badge, Button, cx, Modal, Spinner } from '../ui';
+import { ChunkImage } from './ChunkImage';
 import { RagTryDialog } from './RagTryDialog';
 
 interface Sample {
@@ -121,6 +122,33 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                 <div data-rag-detail-answer>{sample.answer}</div>
                 {sample.reference && <div className="text-xs text-muted mt-1">Reference: {sample.reference}</div>}
               </div>
+              {(sample.record?.turns?.length ?? 0) > 0 && (
+                <div data-rag-transcript>
+                  <div className="text-xs text-muted">The conversation ({sample.record!.turns!.filter((t) => t.role === 'assistant').length} answers from your system)</div>
+                  <ol className="mt-1 space-y-1">
+                    {sample.record!.turns!.map((t, i) => (
+                      <li key={i} className={cx('rounded px-2 py-1 border-l-2', t.role === 'user' ? 'border-line bg-surface/40' : 'border-accent/60')}>
+                        <span className="text-xs text-muted mr-2">{t.role === 'user' ? 'User' : t.role === 'tool' ? 'Tool' : 'System'}</span>
+                        {t.content}
+                        {(t.toolCalls?.length ?? 0) > 0 && <div className="text-xs mono text-muted mt-0.5">called {t.toolCalls!.map((c) => `${c.name}(${JSON.stringify(c.arguments)})`).join(', ')}</div>}
+                        {(t.contexts?.length ?? 0) > 0 && <div className="text-xs text-muted">retrieved {t.contexts!.map((c) => c.id).join(', ')}</div>}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {(sample.toolCalls ?? sample.record?.toolCalls ?? []).length > 0 && !(sample.record?.turns?.length ?? 0) && (
+                <div data-rag-toolcalls>
+                  <div className="text-xs text-muted">Tool calls the system made</div>
+                  <ol className="mt-1 text-xs mono">
+                    {(sample.toolCalls ?? sample.record?.toolCalls ?? []).map((c, i) => (
+                      <li key={i}>
+                        {i + 1}. {c.name}({JSON.stringify(c.arguments)})
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               {claims.length > 0 && (
                 <div data-rag-claims>
                   <div className="text-xs text-muted">What {focus} judged in the answer</div>
@@ -160,7 +188,10 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                           <td className="pr-2 whitespace-nowrap">
                             {gold.has(cid) && <Badge tone="ok">gold</Badge>} {v && <Badge tone={v.ok ? 'ok' : 'bad'}>{v.rating !== undefined ? `rated ${v.rating}` : v.ok ? 'useful' : 'not useful'}</Badge>}
                           </td>
-                          <td>{c.text.length > 220 ? `${c.text.slice(0, 219)}…` : c.text}</td>
+                          <td>
+                            {c.text.length > 220 ? `${c.text.slice(0, 219)}…` : c.text}
+                            {c.image && <ChunkImage image={c.image} />}
+                          </td>
                         </tr>
                       );
                     })}

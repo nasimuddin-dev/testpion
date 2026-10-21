@@ -11,6 +11,7 @@ import { contextsInput, referenceText } from './judged-kit.js';
 import { addUsage, assertJudgeUsable, guarded, judgePanel, meets, na, needsField, noUsage, panelOf, round3, single, type Usage } from './judged-kit.js';
 import { dagBinary, dagChoice, dagTask } from './prompts-extra.js';
 import { num, result } from './metric-util.js';
+import { listOf } from './lists.js';
 
 export type DagBranch = string | { score: number; reason?: string };
 export type DagNode =
@@ -119,7 +120,7 @@ export async function runDag(spec: DagSpec, cfg: CheckConfig, ctx: CheckContext)
   const notes: string[] = [];
   const host = ctx.services?.ragJudge;
   const t = num(cfg.threshold, 0.5);
-  const inputs = new Set(Array.isArray(cfg.inputs) ? cfg.inputs.map(String) : ['question']);
+  const inputs = new Set(listOf(cfg.inputs) ?? ['question']);
   const sample = () => ({
     ...(inputs.has('question') ? { question: ctx.question ?? '' } : {}),
     answer: ctx.text,
@@ -181,7 +182,7 @@ registerCheck('dag', async (cfg, ctx) => {
   if (Array.isArray(spec)) return result(cfg, false, `dag has a problem: ${spec[0]}${spec.length > 1 ? ` (and ${spec.length - 1} more)` : ''}`, { source: 'ai-judge', explanation: spec.join('; ') });
   if (!ctx.text.trim()) return na(cfg, { id: 'dag', version: 'dag-v1' }, 'the answer is empty');
   const judgedNodes = Object.values(spec.nodes).some((n) => n.type !== 'rule');
-  if (judgedNodes && new Set(Array.isArray(cfg.inputs) ? cfg.inputs.map(String) : ['question']).has('question') && !ctx.question?.trim()) return needsField(cfg, 'dag', 'the question', 'the dataset needs a "question" column, or set "inputs: [answer]" on the check.');
+  if (judgedNodes && new Set(listOf(cfg.inputs) ?? ['question']).has('question') && !ctx.question?.trim()) return needsField(cfg, 'dag', 'the question', 'the dataset needs a "question" column, or set "inputs: [answer]" on the check.');
   const m = { id: 'dag', version: 'dag-v1' };
   const body = async (): Promise<CheckResult> => {
     const t = num(cfg.threshold, 0.5);
