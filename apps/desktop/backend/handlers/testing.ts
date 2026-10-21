@@ -33,6 +33,7 @@ import {
   dropIntoFlow,
   type DropTarget,
   flakyTests,
+  flakyTestsPage,
   scoreTrend,
   latestResults,
   workspaceAttention,
@@ -174,13 +175,14 @@ export function testingHandlers(be: Backend): Handlers {
     'runs.scoreTrend': ({ runIds, name, limit }: { runIds?: string[]; name?: string; limit?: number } = {}) => scoreTrend(be.ws, { runIds, name, limit }),
     // the latest result of each named test (the test file preview)
     'runs.latestResults': ({ names }: { names: string[] }) => latestResults(be.ws, names ?? []),
-    'runs.flaky': ({ runs }: { runs?: number } = {}) => flakyTests(be.ws, { runs }),
+    // a plain list for the window (it asks for one run window); a page ({ items, total, truncated, nextCursor }) when `limit` or `cursor` is given
+    'runs.flaky': ({ runs, limit, cursor }: { runs?: number; limit?: number; cursor?: string | number } = {}) => (limit === undefined && cursor === undefined ? flakyTests(be.ws, { runs }) : flakyTestsPage(be.ws, { runs, limit, cursor })),
     'runs.testHistory': ({ id, name, limit }: { id?: string; name?: string; limit?: number }) => testHistory(be.ws, { id, name }, { limit }),
     /** Where a test is, by its id (a test-case link): its file and line, or null. */
     'tests.locate': async ({ testId }: { testId: string }) => (await locateTest(be.ws, testId)) ?? null,
     'runs.summary': ({ runId }: { runId: string }) => readRunSummary(be.ws, runId) ?? null,
     /** A page of a run's results, each with `refs` to where it came from (its test file at the step, or the saved request: WF-08). */
-    'runs.results': async (q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }) => {
+    'runs.results': async (q: { runId: string; offset?: number; limit?: number; cursor?: string | number; status?: string; query?: string }) => {
       const page = await be.pageResults(q);
       const origin = readRunSummary(be.ws, q.runId)?.origin;
       return { ...page, items: page.items.map((r) => ({ ...r, refs: resultSourceRefs(be.ws, r, origin) })) };

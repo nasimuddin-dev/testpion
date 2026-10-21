@@ -727,7 +727,7 @@ export class Backend {
     return runResults(this.ws, runId);
   }
 
-  pageResults(q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }) {
+  pageResults(q: { runId: string; offset?: number; limit?: number; cursor?: string | number; status?: string; query?: string }) {
     return pageRunResults(this.ws, q);
   }
 

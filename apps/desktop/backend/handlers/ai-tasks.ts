@@ -5,6 +5,9 @@
 import { aiUsageSummary, applyProposal, askSearch, OP_LABEL, runQuerySpec, SEARCH_FIELDS, SEARCH_SOURCES, SOURCE_LABEL, discardProposal, draftFlowProposal, getProposal, listProposals, reverifyProposal, undoProposal, type ItemRef, type Proposal, type ReverifyOptions } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
+/** The page a window call asked for (nothing asked: the engine's default page). */
+const searchPageOf = (p: { limit?: number; offset?: number; cursor?: string | number }) => (p.limit === undefined && p.offset === undefined && p.cursor === undefined ? undefined : p);
+
 /**
  * A proposal that saves into a library (an authored RAG evaluation goes to library/evaluations.json) is a change the lists
  * of the window have to hear of: the file watcher does not report the app's own writes, so it is announced here.
@@ -71,10 +74,10 @@ export function aiTaskHandlers(be: Backend): Handlers {
      * query shown in words and as chips. No model, or a failure: the words are searched as typed (`mode: 'text'`, why in
      * `fallback`). `scope` keeps the search inside the view it was asked in (History, Runs, Traces).
      */
-    'search.ask': ({ question, scope, noAi, privacy, dryRun, requestId }: { question: string; scope?: string[]; noAi?: boolean; privacy?: string; dryRun?: boolean; requestId?: string }) =>
-      be.withAiDeps({ requestId, dryRun }, (deps) => askSearch(deps, { question, scope: scope as never, noAi, privacy, dryRun })),
+    'search.ask': ({ question, scope, noAi, privacy, dryRun, requestId, limit, offset, cursor }: { question: string; scope?: string[]; noAi?: boolean; privacy?: string; dryRun?: boolean; requestId?: string; limit?: number; offset?: number; cursor?: string | number }) =>
+      be.withAiDeps({ requestId, dryRun }, (deps) => askSearch(deps, { question, scope: scope as never, noAi, privacy, dryRun, page: searchPageOf({ limit, offset, cursor }) })),
     /** Run a query the window holds (the chips edited by hand): validated by the same schema, no model. */
-    'search.query': ({ query, scope }: { query: unknown; scope?: string[] }) => runQuerySpec(be.ws, query, { scope: scope as never }),
+    'search.query': ({ query, scope, limit, offset, cursor }: { query: unknown; scope?: string[]; limit?: number; offset?: number; cursor?: string | number }) => runQuerySpec(be.ws, query, { scope: scope as never, page: searchPageOf({ limit, offset, cursor }) }),
     /** The fields, operators and sources a query may use: what the chip editor offers. */
     'search.fields': () => ({ fields: SEARCH_FIELDS, sources: SEARCH_SOURCES.map((id) => ({ id, label: SOURCE_LABEL[id] })), ops: OP_LABEL }),
     /** The AI features' usage in this workspace (app, CLI, MCP, CI), the caps and what is left today, and AI Lab per model. */
