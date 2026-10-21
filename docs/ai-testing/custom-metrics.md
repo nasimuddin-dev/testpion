@@ -62,6 +62,8 @@ Each example is a small sample and the verdict the metric must give it (`expect:
 `testpion rag metric validate --examples`) score them and say `agrees with 2/2 examples`. A metric whose examples disagree can still be saved; the AI draft says in its proposal when its own examples do not agree. Write the examples first: they are the part that stays true when
 the criterion is reworded or the judge model changes.
 
+**Run examples** of a judged metric (a criterion or a checklist) asks first: *About 6 judge calls: one for each example* (a checklist: one for each example and item), because each call is paid for; the line beside the button says the same before you press it. A rule, formula or script metric runs on this computer and says *free*. Closing the editor with unsaved edits (**Discard**, Esc or the ×) asks first, and **Delete** has **Undo**; the delete message only says the history keeps the file when the workspace is a git repository.
+
 ## What a custom metric costs {#cost}
 
 A `rule`, `formula` of free metrics and `script` metric costs nothing. A `judge` or `checklist` metric is one judge call per sample,

@@ -4,6 +4,7 @@ import { Upload } from 'lucide-react';
 import { toastError, useApp } from '../store';
 import type { ImportSource } from '../types';
 import { dragHasImportable, readDrop } from '../lib/import-files';
+import { importBundleFile, isBundleFile } from '../lib/transfer';
 import { ImportDialog, type MigrateTool } from './ImportDialog';
 
 interface Request {
@@ -56,6 +57,9 @@ export function ImportHost() {
       e.preventDefault();
       // a drop on a file input or an element that takes files itself keeps working
       if ((e.target as HTMLElement | null)?.closest?.('[data-accepts-drop]')) return;
+      // a bundle has its own Import (it previews and merges items); this listener is the only one on the window, so exactly one dialog opens
+      const bundle = [...(e.dataTransfer.files ?? [])].find((f) => isBundleFile(f.name));
+      if (bundle) return void importBundleFile(bundle).catch(toastError);
       readDrop(e.dataTransfer).then(
         (src) => (src ? openImport({ initial: src }) : useApp.getState().toast('Nothing importable in what was dropped', 'warning')),
         toastError,
@@ -79,7 +83,7 @@ export function ImportHost() {
           <div className="border-2 border-dashed border-accent rounded-xl px-10 py-8 text-center">
             <Upload size={28} className="mx-auto mb-2 text-accent" />
             <div className="text-lg font-medium">Drop to import</div>
-            <div className="text-sm text-muted">Collections, environments, API definitions, a folder or a link. You see what will be created before anything is written.</div>
+            <div className="text-sm text-muted">Collections, environments, API definitions, a bundle (.testpion.zip), a folder or a link. You see what will be created before anything is written.</div>
           </div>
         </div>
       )}

@@ -50,7 +50,7 @@ export function AiSettingsPanel({ s, set, providers }: { s: AppSettings; set(p: 
         <Toggle checked={!!ai.preferStable} onChange={(v) => put({ preferStable: v })} label="Prefer stable checks" />
       </div>
       <p className="text-xs text-muted -mt-2 pl-1">
-        Suggested checks assert types, formats and presence instead of literal ids, times and tokens, and a check that pins a value the server makes up is offered in its stable form. CLI and MCP: preferStable.
+        Suggested checks assert types, formats and presence instead of literal ids, times and tokens, and a check that pins a value the server makes up is offered in its stable form. The CLI and MCP tools have the same switch (prefer-stable).
       </p>
       <div className="font-medium">Models per task</div>
       <div className="grid grid-cols-2 gap-3">

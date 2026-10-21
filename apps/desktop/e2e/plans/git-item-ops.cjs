@@ -77,8 +77,8 @@ const steps = [
   s(
     'history-lists-the-versions',
     `if ((await pick('mcp:deepwiki', 'History in git')) !== 'ok') return 'NO ITEM';
-     const d = await __t.waitFor(() => top()?.querySelectorAll('[aria-label=Versions] li').length >= 2 && top(), 8000); if (!d) return 'NO DIALOG: ' + short(top()?.textContent);
-     const lis = [...d.querySelectorAll('[aria-label=Versions] li')];
+     const d = await __t.waitFor(() => top()?.querySelectorAll('[aria-label=Versions] [data-version]').length >= 2 && top(), 8000); if (!d) return 'NO DIALOG: ' + short(top()?.textContent);
+     const lis = [...d.querySelectorAll('[aria-label=Versions] [data-version]')];
      return 'versions: ' + lis.length + ' | newest: ' + short(lis[0].textContent, 80) + ' | oldest: ' + short(lis[1].textContent, 80);`,
   ),
   s(
@@ -93,7 +93,7 @@ const steps = [
     'restore-previews-and-can-be-undone',
     `const d = top();
      const versions = [...d.querySelectorAll('button, [role=radio]')].find((b) => b.textContent.trim() === 'Versions'); await __t.real.click(versions);
-     const second = await __t.waitFor(() => [...d.querySelectorAll('[aria-label=Versions] li button')][1], 4000); if (!second) return 'NO VERSION';
+     const second = await __t.waitFor(() => [...d.querySelectorAll('[aria-label=Versions] [data-version]')][1], 4000); if (!second) return 'NO VERSION';
      await __t.real.click(second);
      await __t.waitFor(() => d.querySelector('[data-history-diff] table, [data-history-diff] [data-part]'), 6000);
      await __t.real.click(btn(d, 'Restore this version'));
@@ -138,6 +138,33 @@ const steps = [
      return 'buttons: ' + buttons.filter((b) => ['Compare', 'History', 'Discard'].includes(b)).join('+') + ' | row gone: ' + !!gone;`,
   ),
   [
+    'a-change-to-discard-whole',
+    `main:
+      ${mainFile}
+      const d = doc(); d.servers.find((x) => x.id === 'deepwiki').name = 'DeepWiki whole file'; save(d);
+      return 'written';`,
+    false,
+  ],
+  s(
+    'whole-file-discard-can-be-undone',
+    `await __t.view('Git');
+     const file = await __t.waitFor(() => vis('main [data-change-file="mcp-servers.json"]')[0], 10000); if (!file) return 'NO FILE ROW';
+     // the file's own Discard (the item's has data-item-discard)
+     const discard = [...file.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Discard' && !b.hasAttribute('data-item-discard')); if (!discard) return 'NO FILE DISCARD';
+     await __t.real.click(discard);
+     const ask = await __t.waitFor(() => top() && /Throw away the changes to mcp-servers\\.json/.test(top().textContent) && top(), 6000); if (!ask) return 'NO CONFIRM';
+     const saysUndo = /Undo puts it back/.test(ask.textContent);
+     await __t.real.click(btn(ask, 'Discard'));
+     const done = await __t.waitFor(() => toastText(/^Discarded the changes to mcp-servers\\.json/), 8000);
+     const gone = await __t.waitFor(() => !vis('main [data-change-file="mcp-servers.json"]')[0], 10000);
+     const undo = [...document.querySelectorAll('[data-sonner-toast]')].filter((t) => /^Discarded the changes to mcp-servers/.test(t.textContent.trim())).flatMap((t) => [...t.querySelectorAll('button')]).find((b) => b.textContent.trim() === 'Undo'); if (!undo) return 'NO UNDO';
+     await __t.real.click(undo);
+     const back = await __t.waitFor(() => vis('main [data-change-file="mcp-servers.json"]')[0], 10000);
+     return 'confirm says undo: ' + saysUndo + ' | toast: ' + !!done + ' | change gone: ' + !!gone + ' | change back after Undo: ' + !!back;`,
+  ),
+  // (the app reads the repository after a change: a call that meets its lock tries again)
+  s('whole-file-discard-for-real', `for (let i = 0; i < 5; i++) { try { await window.aps.invoke('git.discard', { files: [{ path: 'mcp-servers.json', state: 'modified', staged: false }] }); break; } catch (e) { if (i === 4) return 'ERR ' + e.message; await __t.sleep(1000); } } await __t.sleep(800); return 'discarded';`),
+  [
     'conflicting-branches',
     `main:
       ${mainFile}
@@ -162,6 +189,38 @@ const steps = [
      await __t.real.click(btn(d, 'Resolve with these choices'));
      const done = await __t.waitFor(() => toastText(/resolved/), 8000);
      return 'fields: ' + fields.join(',') + ' | resolved: ' + !!done;`,
+  ),
+  s(
+    'resolving-can-be-undone',
+    `await __t.sleep(400);
+     const undo = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].filter((t) => /resolved/.test(t.textContent)).flatMap((t) => [...t.querySelectorAll('button')]).find((b) => b.textContent.trim() === 'Undo'), 6000); if (!undo) return 'NO UNDO';
+     await __t.real.click(undo);
+     const back = await __t.waitFor(() => [...document.querySelectorAll('[role=alert]')].find((a) => /Conflicts/.test(a.textContent)), 10000);
+     return 'conflict is back: ' + !!back;`,
+  ),
+  [
+    'the-index-has-the-conflict-again',
+    `main:
+      ${gitIn}
+      return 'unmerged entries: ' + git('ls-files', '-u').trim().split('\\n').filter(Boolean).length;`,
+    false,
+  ],
+  s(
+    'no-choice-asks-first',
+    `const panel = await __t.waitFor(() => [...document.querySelectorAll('[role=alert]')].find((a) => /Conflicts/.test(a.textContent)), 10000); if (!panel) return 'NO CONFLICTS';
+     await __t.real.click(btn(panel, 'Resolve…'));
+     const d = await __t.waitFor(() => top() && top().querySelector('[data-conflict-field]') && top(), 8000); if (!d) return 'NO DIALOG';
+     const counter = d.querySelector('[data-conflict-count]')?.textContent ?? '';
+     await __t.real.click(btn(d, 'Resolve with these choices'));
+     const ask = await __t.waitFor(() => dialogs().length > 1 && top(), 6000); if (!ask) return 'NO CONFIRM';
+     const titled = /Keep all of mine/.test(ask.textContent);
+     await __t.real.click(btn(ask, 'Cancel'));
+     await __t.sleep(400);
+     // choosing makes the same button go straight through
+     const theirs = [...d.querySelector('[data-conflict-field]').querySelectorAll('button, [role=radio]')].find((b) => b.textContent.trim() === 'Keep theirs'); await __t.real.click(theirs);
+     await __t.real.click(btn(d, 'Resolve with these choices'));
+     const done = await __t.waitFor(() => toastText(/resolved/), 8000);
+     return 'counter says nothing chosen: ' + /nothing chosen yet/.test(counter) + ' | asked first: ' + titled + ' | resolved after choosing: ' + !!done;`,
   ),
   [
     'the-file-has-their-name',
@@ -250,6 +309,12 @@ module.exports = withExpect(
     'git-view-row-discards-the-new-server': /^buttons: Compare\+History\+Discard \| row gone: true$/,
     'conflicting-branches': /^UU mcp-servers\.json$/,
     'resolve-field-by-field': /^fields: item:deepwiki#name \| resolved: true$/,
+    'resolving-can-be-undone': /^conflict is back: true$/,
+    'the-index-has-the-conflict-again': /^unmerged entries: [1-9]\d*$/,
+    'no-choice-asks-first': /^counter says nothing chosen: true \| asked first: true \| resolved after choosing: true$/,
+    'a-change-to-discard-whole': /^written$/,
+    'whole-file-discard-can-be-undone': /^confirm says undo: true \| toast: true \| change gone: true \| change back after Undo: true$/,
+    'whole-file-discard-for-real': /^discarded$/,
     'the-file-has-their-name': /^name: DeepWiki Theirs \| unmerged left: no$/,
     'a-secret-is-staged': /^written$/,
     'commit-is-refused-with-the-item-and-the-variable': /^blocked: true \| names the item: true \| variable: true \| commit anyway offered: false \| value shown: false$/,

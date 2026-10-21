@@ -149,3 +149,27 @@ export const RETIRED_LABELS = [
  * print the same shapes).
  */
 export { MENU_GROUPS, type MenuGroup } from '@testpion/shared';
+
+/**
+ * Words explained once, in plain language, where a screen needs them. A screen shows the sentence; it does not make up its
+ * own (and tests/unit/vocabulary.test.ts keeps the jargon of the tools underneath out of what a person reads).
+ */
+/** The Changes list's "stage". */
+export const STAGE_HINT = 'Stage means choose what the next commit includes. If you stage nothing, the commit takes every change.';
+/** The Set aside section's "stash". */
+export const SET_ASIDE_HINT = 'Set aside puts your uncommitted changes away under a name, so the workspace is back at the last commit; bring them back later.';
+/** The one definition of a bundle (the Export and Import dialogs show it). */
+export const BUNDLE_HINT = 'A bundle is one file that holds several items (requests, environments, tests …) so you can move them to another workspace.';
+/** File ▸ Export and File ▸ Import: the whole workspace as a bundle, and the older whole-workspace file that stays reachable. */
+export const MENU_TEXT = {
+  exportBundle: 'Workspace as a Bundle…',
+  exportLegacy: 'Workspace (older format)…',
+  importBundle: 'Import a Bundle…',
+  import: 'Import…',
+} as const;
+
+/**
+ * Words of the tools underneath that a person using TestPion should not have to know. The unit test fails when one of them
+ * is in a string a screen shows (menus, buttons, hints, dialogs): each is said in the words of what it does.
+ */
+export const JARGON = ['textconv', 'serializer', 'preferStable', 'stable format', 'pre-commit hook', 'tracked files', 'merge and diff drivers', 'attribute files', 'TODO(import)', 'LFS server', '.ref file'] as const;

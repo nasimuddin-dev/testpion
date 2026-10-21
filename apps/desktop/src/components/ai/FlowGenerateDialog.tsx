@@ -4,7 +4,7 @@ import type { AiTaskResult, Proposal, ProposalItem, SpecGapReport } from '@testp
 import { asError, call } from '../../api';
 import { useCollectionTree } from '../../lib/collections-store';
 import { aiSetupAction } from '../../lib/ai-errors';
-import { formatCost } from '../../lib/format';
+import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
 import { toastError, useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
 import type { CollectionNode } from '../../types';
 import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced } from '../ui';
@@ -74,7 +74,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   const [error, setError] = useState<ReturnType<typeof asError>>();
   const [proposal, setProposal] = useState<Proposal>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
-  const [estimate, setEstimate] = useState<{ text: string; ok: boolean }>();
+  const [estimate, setEstimate] = useState<EstimateState>();
   const col = cols.find((c) => c.id === collectionId) ?? cols[0];
   const folders = useMemo(() => (col ? foldersOf(col.items) : []), [col]);
   const folder = folders.find((f) => f.id === folderId);
@@ -169,10 +169,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
     call<AiTaskResult>('ai.preview', JSON.parse(key) as Record<string, unknown>).then(
       ({ preview: p }) =>
         live &&
-        setEstimate({
-          ok: true,
-          text: `${p.providerName} · ${p.model}${p.local ? ' (on this computer)' : ''} · ≈ ${p.estimate.inputTokens.toLocaleString()} tokens in${p.estimate.priceKnown ? ` · up to ${formatCost(p.estimate.maxCostUsd ?? 0)}` : ''}`,
-        }),
+        setEstimate(estimateOf(p)),
       (e) => live && setEstimate({ ok: false, text: asError(e).message }),
     );
     return () => {
@@ -436,7 +433,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           <span className="text-muted">Sent</span>
           <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted min-h-5" data-flow-estimate>
+        <AiEstimateLine className="flex items-center gap-2 text-xs text-muted min-h-5" estimate={estimate} waiting={ready} data-flow-estimate="">
           {(mode === 'collection' || mode === 'security') && col && (
             <Badge>
               {folder ? <FolderTree size={10} /> : <Workflow size={10} />} {requests} request{requests === 1 ? '' : 's'}
@@ -452,8 +449,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
               <FileText size={10} /> {request.path ? `tests/${request.path}` : 'a new flow file'}
             </Badge>
           )}
-          {estimate ? <span className={estimate.ok ? '' : 'text-warn'}>{estimate.text}</span> : ready ? <Spinner size={11} /> : null}
-        </div>
+        </AiEstimateLine>
         <p className="text-xs text-muted">
           Variable names are sent, never their values; secrets, tokens and personal data are masked. The flow is linted, its variables checked and, when the collection has saved examples, tried on a
           mock — then you review it. Nothing is saved or run before you accept it.

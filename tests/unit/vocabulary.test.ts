@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { LABEL, MENU_GROUPS, RETIRED_LABELS } from '../../apps/desktop/src/lib/vocabulary';
+import { BUNDLE_HINT, JARGON, LABEL, MENU_GROUPS, MENU_TEXT, RETIRED_LABELS, SET_ASIDE_HINT, STAGE_HINT } from '../../apps/desktop/src/lib/vocabulary';
 import { railOrder, railShortcut, railTarget } from '../../apps/desktop/src/lib/rail';
 
 // WF-13: one word per action and one menu order everywhere; the shortcuts follow the rail.
@@ -80,5 +80,36 @@ describe('vocabulary', () => {
     expect(railShortcut(order, 'v7', 'Ctrl')).toBeUndefined(); // past 9
     expect(railTarget(order, 3)).toBe('debugger');
     expect(railTarget(order, 0)).toBeUndefined();
+  });
+
+  it('the words of the tools underneath are not in what a screen shows: each is said in plain words', () => {
+    // the text a person reads: string literals and JSX text (comments and identifiers are not), in every component and view
+    const literal = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]+</g;
+    const found: string[] = [];
+    for (const f of files(SRC)) {
+      const rel = f.slice(SRC.length + 1).replace(/\\/g, '/');
+      if (!/^(components|views)\//.test(rel)) continue;
+      const code = readFileSync(f, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .split('\n')
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join('\n');
+      for (const m of code.matchAll(literal)) for (const w of JARGON) if (m[0].includes(w)) found.push(`${rel}: ${w}`);
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('stage, set aside and bundle are explained once, in plain words', () => {
+    expect(STAGE_HINT).toMatch(/^Stage means choose what the next commit includes/);
+    expect(SET_ASIDE_HINT).toMatch(/^Set aside puts your uncommitted changes away/);
+    expect(BUNDLE_HINT).toMatch(/^A bundle is one file that holds several items/);
+    for (const text of [STAGE_HINT, SET_ASIDE_HINT, BUNDLE_HINT]) for (const w of JARGON) expect(text).not.toContain(w);
+    // the whole-workspace entries of File ▸ Export say which is which, in the menu of the window too
+    expect(MENU_TEXT.exportBundle).toBe('Workspace as a Bundle…');
+    expect(MENU_TEXT.exportLegacy).toContain('older format');
+    const menu = readFileSync(join(SRC, '..', 'electron', 'app-menu.ts'), 'utf8');
+    expect(menu).toContain(`label: '${MENU_TEXT.exportBundle}'`);
+    expect(menu).toContain(`label: '${MENU_TEXT.exportLegacy}'`);
+    expect(menu).toContain(`label: '${MENU_TEXT.importBundle}'`);
   });
 });

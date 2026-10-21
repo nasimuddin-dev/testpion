@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { plural } from '../lib/format';
+import { SET_ASIDE_HINT } from '../lib/vocabulary';
 import { Button, SectionTitle } from './ui';
 
 interface Stash {
@@ -60,7 +61,7 @@ export function GitStash({ changed, afterChange }: { changed: boolean; afterChan
     <section data-git-stash>
       <SectionTitle
         right={
-          <Button size="sm" variant="ghost" icon={<Archive size={12} />} disabled={!changed || busy} onClick={() => void setAside()} title="Take the uncommitted changes away under a name, to put them back later">
+          <Button size="sm" variant="ghost" icon={<Archive size={12} />} disabled={!changed || busy} onClick={() => void setAside()} title={SET_ASIDE_HINT}>
             Set changes aside…
           </Button>
         }
@@ -68,7 +69,7 @@ export function GitStash({ changed, afterChange }: { changed: boolean; afterChan
         Set aside {list.length ? <span className="text-muted font-normal">· {list.length}</span> : null}
       </SectionTitle>
       {!list.length ? (
-        <div className="text-sm text-muted py-2">Nothing set aside.</div>
+        <div className="text-sm text-muted py-2">Nothing set aside. {SET_ASIDE_HINT}</div>
       ) : (
         <ul className="grid gap-1 text-sm" aria-label="Changes set aside">
           {list.map((s) => (

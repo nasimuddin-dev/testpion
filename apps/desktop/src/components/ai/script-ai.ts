@@ -54,6 +54,7 @@ export function writeScriptAi(o: {
     ...(o.ctx?.previous ? { previous: o.ctx.previous } : {}),
     ...(o.ctx?.item ? { item: o.ctx.item } : {}),
     autoReview: true,
+    preflight: true,
     apply: { label: mode === 'append' ? 'Add to the script' : 'Use this script', run: (code) => o.use(code, mode) },
   };
 }
@@ -79,6 +80,6 @@ export function scriptAiItems(o: { phase: Phase; script: string; ctx?: ScriptAiC
           }).then((error) => error && startAi(writeScriptAi({ ...o, description: 'Fix this script', error })));
         })
       : []),
-    ...(has ? aiMenuItems('explainScript', () => startAi({ task: 'explain-script', title: 'Explain this script', context: { phase: o.phase === 'pre' ? 'pre' : 'test', script: o.script } })) : []),
+    ...(has ? aiMenuItems('explainScript', () => startAi({ task: 'explain-script', title: 'Explain this script', context: { phase: o.phase === 'pre' ? 'pre' : 'test', script: o.script }, preflight: true })) : []),
   ];
 }
