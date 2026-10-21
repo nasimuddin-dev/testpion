@@ -1,4 +1,4 @@
-import { Database, FlaskConical, Plus, Ruler } from 'lucide-react';
+import { Database, FlaskConical, Layers, Plus, Ruler } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../../api';
 import { useApp } from '../../store';
@@ -8,6 +8,7 @@ import type { RagTargetInfo } from '@testpion/core';
 import { FolderList } from '../../components/FolderList';
 import { RagConnectDialog } from '../../components/rag/RagConnectDialog';
 import { CustomMetricsList, MetricEditor } from '../../components/rag/CustomMetrics';
+import { RagDataIntro, RagDatasetsList } from '../../components/rag/RagDataPanel';
 import { Badge, Button, Empty, Segmented } from '../../components/ui';
 
 /**
@@ -18,7 +19,7 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
   const targets = useLibrary<RagTarget>('rag-targets');
   const [dialog, setDialog] = useState<{ id?: string }>();
   const [selected, setSelected] = useState<string>();
-  const [side, setSide] = useState<'targets' | 'metrics'>('targets');
+  const [side, setSide] = useState<'targets' | 'metrics' | 'data'>('targets');
   const [metric, setMetric] = useState<{ id?: string }>();
   const [info, setInfo] = useState<RagTargetInfo[]>([]);
   useEffect(() => {
@@ -55,10 +56,13 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
             options={[
               { value: 'targets', label: 'RAG targets', icon: <Database size={11} /> },
               { value: 'metrics', label: 'Metrics', icon: <Ruler size={11} />, title: 'Your own metrics: files in the workspace (metrics/*.yaml) that score an answer by your rule' },
+              { value: 'data', label: 'Data', icon: <Layers size={11} />, title: 'Datasets: generate a test set from your documents, or build one from real calls' },
             ]}
           />
         </div>
-        {side === 'metrics' ? (
+        {side === 'data' ? (
+          <RagDatasetsList />
+        ) : side === 'metrics' ? (
           <CustomMetricsList selected={metric?.id} onSelect={(id) => setMetric({ id })} onNew={() => setMetric({})} />
         ) : (
         <FolderList
@@ -83,6 +87,10 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
         )}
       </div>
       <div className="flex-1 min-w-0 overflow-auto p-6 text-sm">
+        {side === 'data' ? (
+          <RagDataIntro />
+        ) : (
+          <>
         <h2 className="text-lg font-semibold mb-1">Test a RAG system</h2>
         <p className="text-muted max-w-2xl mb-4">
           Connect the system you run: ask it one question, click its answer and the documents it retrieved in the response, and save the target. Then an evaluation of type RAG sends every question of a dataset to it and scores the answers: against the reference answer, against the gold documents, and with a judge model
@@ -102,6 +110,8 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
           <li>A judged metric needs a judge model: choose one for the evaluation, or set Settings ▸ AI assistant. It never falls back on a mock silently.</li>
           <li>Metrics tab: write your own metric (a criterion a judge decides, a checklist, rules, a formula, a script), check it against examples, and use it in the picker like any other.</li>
         </ol>
+          </>
+        )}
       </div>
       {metric && <MetricEditor id={metric.id} onClose={() => setMetric(undefined)} onSaved={(id) => setMetric((m) => (m && !m.id ? { id } : m))} />}
       {dialog && <RagConnectDialog id={dialog.id} onClose={() => setDialog(undefined)} onSaved={(id) => (void targets.reload(), setSelected(id))} />}
