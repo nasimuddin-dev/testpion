@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { TestResult } from '../../packages/core/src/index.js';
+import { WorkspaceStore, applyThreshold, parseCustomMetric, readMetricFile, writeMetricFile, type TestResult } from '../../packages/core/src/index.js';
 import { agreementOf, bootstrapAgreement, calibrationReport, clearLabel, cohenKappa, collectSamples, confusionOf, hash12, readLabels, setLabel, tuneThreshold } from '../../packages/core/src/index.js';
 
 describe('Cohen’s kappa and the agreement numbers (hand-computed tables)', () => {
@@ -111,6 +111,32 @@ describe('pairing results with labels', () => {
   it('a good/bad review of a result counts as an overall label where there is none', async () => {
     const c = await collectSamples(stream(rs), { reviews: { 'eval:r1': { rating: 'good' }, 'eval:r3': { rating: 'good' } } });
     expect(c.samples.map((s) => [s.metric, s.source, s.judgePass, s.humanPass])).toEqual([['overall', 'review', true, true], ['overall', 'review', false, true]]);
+  });
+});
+
+describe('applying a tuned pass mark', () => {
+  it('sets the evaluator’s threshold in the saved evaluation, and threshold + calibration in a custom metric file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-cal-apply-'));
+    const ws = WorkspaceStore.create(join(dir, 'ws'), 'cal');
+    try {
+      ws.saveLibrary('evaluations', { folders: [], items: [{ id: 'ev', name: 'Clinic RAG', data: { name: 'Clinic RAG', type: 'rag', evaluators: [{ type: 'faithfulness', threshold: 0.8 }, { type: 'token-f1' }] } as never }] });
+      expect(applyThreshold(ws, { metric: 'faithfulness', threshold: 0.55, evaluation: 'clinic rag' })).toEqual({ changed: 'evaluation Clinic RAG', threshold: 0.55 });
+      const ev = ws.getLibrary<{ evaluators: Array<{ type: string; threshold?: number }> }>('evaluations').items[0]!.data.evaluators;
+      expect(ev).toEqual([{ type: 'faithfulness', threshold: 0.55 }, { type: 'token-f1' }]);
+      expect(() => applyThreshold(ws, { metric: 'recall@5', threshold: 0.5, evaluation: 'Clinic RAG' })).toThrow(/no evaluator/);
+      expect(() => applyThreshold(ws, { metric: 'faithfulness', threshold: 0.5 })).toThrow(/saved evaluation/);
+
+      writeMetricFile(ws, 'tone', 'id: tone\nversion: 1\nkind: judge\ncriteria: Polite.\nthreshold: 1\ncalibration: { old: true }\n');
+      applyThreshold(ws, { metric: 'custom/tone', threshold: 0.6, calibration: { run: 'run-1', n: 40, kappa: 0.71, tpr: 0.9, tnr: 0.8 } });
+      const text = readMetricFile(ws, 'tone')!.text;
+      expect(text).toMatch(/^threshold: 0\.6$/m);
+      expect(text).toMatch(/^calibration: \{ reviewedRun: "run-1", n: 40, kappa: 0.71, tpr: 0.9, tnr: 0.8, at: "\d{4}-\d{2}-\d{2}" \}$/m);
+      expect(text).not.toContain('old: true');
+      expect(parseCustomMetric(text, { fileId: 'tone' }).metric?.threshold).toBe(0.6);
+    } finally {
+      ws.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

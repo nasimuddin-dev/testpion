@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, RefreshCw, Scale } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { MatrixCell, MetricMatrix } from '@testpion/core';
 import { outputFileName, type RagJudgeSetup } from '@testpion/shared';
@@ -10,6 +10,7 @@ import { OutputActions } from '../output/OutputFrame';
 import type { OutputSpec } from '../output/output-core';
 import { RagByTag, RagCharts, RagCompare, RagPivot, RagRescoreDialog, type RunChoice } from './RagResultViews';
 import { RagSampleDetail } from './RagSampleDetail';
+import { RagCalibration } from './RagCalibration';
 
 const PAGE = 100;
 
@@ -42,8 +43,11 @@ export function RagMetricMatrix({
   evaluators = [],
   providers = [],
   onRescored,
+  evaluation,
 }: {
   runId: string;
+  /** The saved evaluation (name or id) a tuned pass mark can be saved in (Calibrate judge). */
+  evaluation?: string;
   target?: string;
   judge?: RagJudgeSetup;
   /** The evaluation's runs (compare, the variant pivot). */
@@ -55,6 +59,7 @@ export function RagMetricMatrix({
 }) {
   const [view, setView] = useState<'samples' | 'tags' | 'charts' | 'compare' | 'pivot'>('samples');
   const [rescoring, setRescoring] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
   const [query, setQuery] = useState('');
   const [failure, setFailure] = useState('');
   const [sort, setSort] = useState('');
@@ -122,6 +127,9 @@ export function RagMetricMatrix({
         <Button size="sm" icon={<RefreshCw size={12} />} onClick={() => setRescoring(true)} title="Score the stored answers again with other metrics or another judge: the RAG system is not called" data-rag-rescore-open>
           Score again…
         </Button>
+        <Button size="sm" icon={<Scale size={12} />} onClick={() => setCalibrating(true)} title="How well the judges agree with the Pass / Fail labels you gave in the sample detail: kappa, accuracy, the disagreements, and the pass mark that agrees most" data-rag-calibrate-open>
+          Calibrate judge…
+        </Button>
         <OutputActions spec={spec} />
       </div>
       {view === 'tags' && (
@@ -132,6 +140,15 @@ export function RagMetricMatrix({
       {view === 'charts' && <RagCharts m={m} />}
       {view === 'compare' && <RagCompare runId={runId} runs={runs} />}
       {view === 'pivot' && <RagPivot runs={runs} />}
+      {calibrating && (
+        <RagCalibration
+          runId={runId}
+          evaluation={evaluation}
+          onUseThreshold={(metric, v) => (setThr((s) => ({ ...s, [metric]: v })), setCalibrating(false))}
+          onOpenSample={(id, metric) => (setCalibrating(false), setDetail({ id, metric }))}
+          onClose={() => setCalibrating(false)}
+        />
+      )}
       {rescoring && <RagRescoreDialog runId={runId} evaluators={evaluators} judge={judge} providers={providers} onDone={(id) => onRescored?.(id)} onClose={() => setRescoring(false)} />}
       <div className={cx('flex items-center gap-2 p-2 border-b border-line flex-wrap', view !== 'samples' && 'hidden')}>
         <Input className="w-56" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search samples, questions, tags" aria-label="Search samples" />

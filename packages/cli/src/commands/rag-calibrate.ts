@@ -125,19 +125,25 @@ export function registerRagCalibrateCommands(rag: Command): void {
           throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
         }
         const applied: Array<{ metric: string; changed: string; threshold: number }> = [];
+        const notApplied: Array<{ metric: string; why: string }> = [];
         if (o.apply)
           for (const m of report.metrics) {
             if (!m.tuning || m.metric === 'overall' || (m.tuning.gain ?? 0) <= 0) continue;
-            const metric = m.metric.startsWith('custom/') ? m.metric : m.metric;
-            const a = wrap(() => applyThreshold(store, { metric, threshold: m.tuning!.threshold, evaluation: o.evaluation, calibration: { run: o.run, n: m.agreement.n, kappa: m.tuning!.agreement.kappa, tpr: m.tuning!.agreement.tpr, tnr: m.tuning!.agreement.tnr } }));
-            applied.push({ metric: m.metric, ...a });
+            try {
+              const a = applyThreshold(store, { metric: m.metric, threshold: m.tuning.threshold, evaluation: o.evaluation, calibration: { run: o.run, n: m.agreement.n, kappa: m.tuning.agreement.kappa, tpr: m.tuning.agreement.tpr, tnr: m.tuning.agreement.tnr } });
+              applied.push({ metric: m.metric, ...a });
+            } catch (e) {
+              // a metric the evaluation does not score (or no --evaluation for it) is reported, not fatal: the others still apply
+              notApplied.push({ metric: m.metric, why: (e as Error).message });
+            }
           }
         const low = o.minKappa === undefined ? [] : report.metrics.filter((m) => m.agreement.kappa === undefined || m.agreement.kappa < o.minKappa!);
-        if (o.json) printJson({ ...report, ...(applied.length ? { applied } : {}), ...(o.minKappa !== undefined ? { minKappa: o.minKappa, belowMinKappa: low.map((m) => m.metric) } : {}) });
+        if (o.json) printJson({ ...report, ...(applied.length ? { applied } : {}), ...(notApplied.length ? { notApplied } : {}),...(o.minKappa !== undefined ? { minKappa: o.minKappa, belowMinKappa: low.map((m) => m.metric) } : {}) });
         else {
           if (!report.metrics.length) console.log(dim(`No labelled results in run ${o.run} (label set "${name}"${report.missing ? `, ${report.missing} labels are about records this run does not have` : ''}). Label some with \`testpion rag label\`.`));
           for (const m of report.metrics) printMetric(m);
           if (report.stale) console.log(yellow(`${report.stale} labels are about an answer this run did not give and were left out.`));
+          for (const n of notApplied) console.log(yellow(`Not applied: ${n.metric}: ${n.why}`));
           for (const a of applied) console.log(`${green('Applied')} ${a.metric} pass mark ${a.threshold} → ${a.changed}`);
         }
         if (low.length) {

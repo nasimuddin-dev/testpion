@@ -9,6 +9,7 @@ import { CheckList } from '../Results';
 import { AiAction } from '../ai/AiAction';
 import { TraceView } from '../TraceView';
 import { Badge, Button, cx, Modal, Spinner } from '../ui';
+import { RagLabelControl } from './RagLabelControl';
 import { RagTryDialog } from './RagTryDialog';
 
 interface Sample {
@@ -187,13 +188,16 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
             <CheckList
               checks={checks}
               compact
-              actions={(c) =>
-                (c.name || c.type) === focus || c.source === 'ai-judge' ? (
-                  <Button size="sm" className="ml-auto" onClick={() => setTryCheck(c)} data-rag-tryagain>
-                    Try again with another judge
-                  </Button>
-                ) : null
-              }
+              actions={(c) => (
+                <>
+                  {c.score !== undefined && <RagLabelControl runId={runId} resultId={resultId} metric={c.name || c.type} />}
+                  {((c.name || c.type) === focus || c.source === 'ai-judge') && (
+                    <Button size="sm" className="ml-auto" onClick={() => setTryCheck(c)} data-rag-tryagain>
+                      Try again with another judge
+                    </Button>
+                  )}
+                </>
+              )}
             />
           </div>
           {traceId && (

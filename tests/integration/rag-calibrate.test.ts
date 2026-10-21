@@ -3,7 +3,7 @@
  * scored by a mock judge (no key, no network beyond 127.0.0.1). Labels are a workspace file; the report is statistics only.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { McpSession, WorkspaceStore, mcpResultBody, type CalibrationReport, type MockRule, type SavedEvaluation } from '../../packages/core/src/index.js';
 // @ts-expect-error - plain JS example module
@@ -80,11 +80,11 @@ describe('rag label and rag calibrate (CLI)', () => {
     expect(gate.out).toMatch(/faithfulness/);
   });
 
-  it('--tune --apply writes the tuned pass mark into the saved evaluation’s evaluator', async () => {
+  it('--tune --apply never fails on a metric the evaluation does not score: nothing is applied and the exit is 0', async () => {
     const r = await cli(['rag', 'calibrate', '--run', runId, '-w', ws.root, '--tune', '--apply', '--evaluation', 'Clinic RAG', '--json']);
-    expect(r.status, r.err).toBe(1 === 0 ? 0 : r.status);
+    expect(r.status, r.err).toBe(0);
     const out = cliData<{ applied?: Array<{ metric: string }> }>(r.out);
-    // the evaluation scores token-f1 only, so there is no faithfulness evaluator to change: nothing is applied, and it is not an error
+    // faithfulness is judged in this run but the saved evaluation scores token-f1 only; here the tuned mark gains nothing either (one class of labels)
     expect(out.applied ?? []).toEqual([]);
   });
 });
@@ -116,4 +116,3 @@ describe('rag_label and rag_calibrate (MCP)', () => {
   });
 });
 
-void writeFileSync;
