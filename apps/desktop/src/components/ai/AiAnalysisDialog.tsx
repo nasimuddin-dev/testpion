@@ -1,13 +1,13 @@
-import { Eye, FlaskConical, RotateCcw, Sparkles, Square, Undo2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { FlaskConical, RotateCcw, Undo2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { FlakyReport, Proposal, ProposalAttempt, ProposalFinding, ProposalItem, TriageResult } from '@testpion/core';
 import { asError, call } from '../../api';
-import { aiSetupAction } from '../../lib/ai-errors';
 import { runAgain } from '../../lib/run-again';
 import { toastError, useApp, type AiAnalysisRequest, type AssistantRequest } from '../../store';
-import { Badge, Button, Field, Input, Modal, Segmented, Spinner } from '../ui';
+import { Badge, Button, Modal, Spinner } from '../ui';
 import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
-import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
+import { AiPreviewDialog, type AiPrivacy } from './AiPreviewDialog';
+import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiPrivacyRow, AiRunFooter, AiTitle, initialPrivacy, proposalReviewProps, useAiRun } from './ai-run';
 import { Findings } from './Findings';
 import { ProposalReview } from './ProposalReview';
 
@@ -40,10 +40,9 @@ function Verdict({ a }: { a: ProposalAttempt }) {
  */
 export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnalysisRequest, { kind: 'drift' }>; onClose(): void }) {
   const triage = isTriage(request);
-  const [privacy, setPrivacy] = useState<AiPrivacy>(useApp.getState().settings?.ai?.privacy ?? 'full');
+  const [privacy, setPrivacy] = useState<AiPrivacy>(initialPrivacy());
   const [hint, setHint] = useState('');
-  const [busy, setBusy] = useState<string>();
-  const [error, setError] = useState<ReturnType<typeof asError>>();
+  const { busy, setBusy, error, run, stop } = useAiRun('an');
   const [draft, setDraft] = useState<Report>();
   const [estimate, setEstimate] = useState<EstimateState>();
   const [result, setResult] = useState<Report>();
@@ -85,30 +84,8 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [privacy]);
 
-  const runId = useRef<string>(undefined);
-  const analyse = async (extra: { privacy?: AiPrivacy; hint?: string } = {}) => {
-    if (busy) return;
-    const id = `an-${Date.now().toString(36)}`;
-    runId.current = id;
-    setBusy(id);
-    setError(undefined);
-    try {
-      const r = await call<Report>(method, { ...params(), ...(extra.privacy ? { privacy: extra.privacy } : {}), ...(extra.hint ? { hint: extra.hint } : {}), requestId: id });
-      if (runId.current !== id) return;
-      setResult(r);
-    } catch (e) {
-      if (runId.current !== id) return;
-      const err = asError(e);
-      if (!(err.kind === 'CancelledError' || /abort|cancel/i.test(err.message))) setError(err);
-    } finally {
-      if (runId.current === id) setBusy(undefined);
-    }
-  };
-  const stop = () => {
-    if (busy) void call('ai.cancel', { id: busy }).catch(() => undefined);
-    runId.current = undefined;
-    setBusy(undefined);
-  };
+  const analyse = (extra: { privacy?: AiPrivacy; hint?: string } = {}) =>
+    run((id) => call<Report>(method, { ...params(), ...(extra.privacy ? { privacy: extra.privacy } : {}), ...(extra.hint ? { hint: extra.hint } : {}), requestId: id }), setResult);
 
   /** Accept: the ticked fixes through the workspace's writers (one Undo), then the affected tests can run again. */
   const accept = async (proposal: Proposal, items: ProposalItem[]) => {
@@ -184,17 +161,16 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
   if (result?.proposal)
     return (
       <ProposalReview
-        proposal={result.proposal}
+        {...proposalReviewProps(result.proposal, {
+          onClose,
+          reset: () => setResult(undefined),
+          regenerate: (h) => {
+            setHint(h);
+            void analyse({ hint: h });
+          },
+        })}
         acceptLabel={triage ? 'Apply selected fixes' : attempt ? 'Keep the fix' : 'Accept selected'}
         onAccept={(items) => accept(result.proposal!, items)}
-        onRegenerate={(h) => {
-          void call('ai.discardProposal', { id: result.proposal!.id }).catch(() => undefined);
-          setResult(undefined);
-          setHint(h);
-          void analyse({ hint: h });
-        }}
-        onDiscard={() => void call('ai.discardProposal', { id: result.proposal!.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError)}
-        onClose={onClose}
         banner={attempt ? <Verdict a={attempt} /> : undefined}
         actions={
           triage
@@ -215,49 +191,33 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
       />
     );
 
-  const setup = error ? aiSetupAction(error) : undefined;
   const shown = result ?? draft;
   const groups = draft && 'groups' in draft ? draft : undefined;
+  const cancel = () => (stop(), onClose());
   return (
     <Modal
-      title={
-        <span className="flex items-center gap-2">
-          <Sparkles size={16} /> {title}
-        </span>
-      }
-      onClose={() => (stop(), onClose())}
+      title={<AiTitle>{title}</AiTitle>}
+      onClose={cancel}
       width={720}
       footer={
-        <>
-          <Button
-            variant="ghost"
-            icon={<Eye size={13} />}
-            className="mr-auto"
-            disabled={!!busy}
-            onClick={() =>
-              setPreviewing({
-                task: triage ? 'triage-run' : 'analyze-flaky',
-                title,
-                context: {},
-                item: triage ? { kind: 'run', runId: request.runId } : { kind: 'test-case', testId: request.testId },
-                privacy,
-              })
-            }
-            data-ai-preview-open
-          >
-            What will be sent…
-          </Button>
-          <Button onClick={() => (stop(), onClose())}>Cancel</Button>
-          {busy ? (
-            <Button icon={<Square size={12} />} onClick={stop}>
-              Stop
-            </Button>
-          ) : (
-            <Button variant="primary" icon={<Sparkles size={13} />} onClick={() => void analyse()} data-ai-analyse>
-              {triage ? 'Explain and fix' : 'Analyse'}
-            </Button>
-          )}
-        </>
+        <AiRunFooter
+          busy={!!busy}
+          onPreview={() =>
+            setPreviewing({
+              task: triage ? 'triage-run' : 'analyze-flaky',
+              title,
+              context: {},
+              item: triage ? { kind: 'run', runId: request.runId } : { kind: 'test-case', testId: request.testId },
+              privacy,
+            })
+          }
+          onCancel={cancel}
+          onStop={stop}
+        >
+          <AiPrimaryButton onClick={() => void analyse()} data-ai-analyse="">
+            {triage ? 'Explain and fix' : 'Analyse'}
+          </AiPrimaryButton>
+        </AiRunFooter>
       }
     >
       <div className="grid gap-3 text-sm" data-ai-analysis={request.kind}>
@@ -283,41 +243,16 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
             <Spinner size={11} />
           )}
         </div>
-        <Field label="Hint (optional)">
-          <Input
-            value={hint}
-            onChange={(e) => setHint(e.target.value)}
-            placeholder={triage ? 'e.g. the token was rotated yesterday' : 'e.g. it fails mostly at night'}
-            aria-label="Hint for the analysis"
-          />
-        </Field>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-muted">Sent</span>
-          <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
-        </div>
+        <AiHintField value={hint} onChange={setHint} placeholder={triage ? 'e.g. the token was rotated yesterday' : 'e.g. it fails mostly at night'} label="Hint for the analysis" />
+        <AiPrivacyRow value={privacy} onChange={setPrivacy} />
         <AiEstimateLine estimate={estimate} data-ai-analysis-estimate="" />
         <p className="text-xs text-muted">
           {triage
             ? 'TestPion groups the failures first; the model sees each group’s examples (the request, the response, the failed check, what changed since the last passing run), never all of them. Secrets, tokens and personal data are masked; Metadata only sends no body values and no failure messages. Every fix is checked against the failing and the last passing response before you see it; nothing changes before you accept it.'
             : 'The model sees the test’s results across runs and a failing and a passing response (masked). Its fix is checked before you see it; skipping or quarantining the test is never offered. Attempt to fix applies it and runs the test 5 times.'}
         </p>
-        {busy && (
-          <div className="flex items-center gap-2 text-muted" role="status">
-            <Spinner /> {triage ? 'Explaining the failures and checking the fixes…' : 'Analysing the history and checking the fix…'}
-          </div>
-        )}
-        {error && (
-          <div className="rounded-lg border border-bad/40 bg-bad/5 p-3 grid gap-2" role="alert" data-ai-analysis-error>
-            <span>{error.message}</span>
-            {setup && (
-              <div>
-                <Button size="sm" variant="primary" onClick={() => (onClose(), setup.onClick())} data-ai-setup>
-                  {setup.label}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+        {busy && <AiBusyLine>{triage ? 'Explaining the failures and checking the fixes…' : 'Analysing the history and checking the fix…'}</AiBusyLine>}
+        {error && <AiErrorPanel error={error} onClose={onClose} data-ai-analysis-error="" />}
         {shown && (result || !estimate?.ok) && (
           <div className="grid gap-2" data-ai-analysis-findings>
             {shown.fallback && <p className="text-xs text-warn">{shown.fallback}</p>}

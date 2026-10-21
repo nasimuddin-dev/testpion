@@ -1,14 +1,14 @@
-import { Eye, Sparkles, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { AiTaskResult, Proposal, ProposalItem } from '@testpion/core';
-import { asError, call } from '../../api';
+import { call } from '../../api';
 import { useCollectionTree } from '../../lib/collections-store';
-import { aiSetupAction } from '../../lib/ai-errors';
-import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
-import { toastError, useApp, type AssistantRequest, type TidyImportRequest } from '../../store';
-import { Badge, Button, Field, Input, Modal, Segmented, Spinner, Toggle, useDebounced } from '../ui';
-import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
+import { plural } from '../../lib/format';
+import { AiEstimateLine } from './AiEstimateLine';
+import { type AssistantRequest, type TidyImportRequest } from '../../store';
+import { Badge, Button, Modal, Toggle, useDebounced } from '../ui';
+import { AiPreviewDialog, type AiPrivacy } from './AiPreviewDialog';
 import { ProposalReview } from './ProposalReview';
+import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiPrivacyRow, AiRunFooter, AiTitle, applyProposalItems, initialPrivacy, proposalReviewProps, skippedNote, useAiEstimate, useAiRun } from './ai-run';
 
 /**
  * "Tidy this import with AI" (AI-10): after a Postman / curl / HAR / Insomnia / Bruno import, or on any collection. TestPion
@@ -23,12 +23,10 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
   const leftovers = request.task === 'import-leftovers';
   const [flow, setFlow] = useState(false);
   const [hint, setHint] = useState('');
-  const [privacy, setPrivacy] = useState<AiPrivacy>(useApp.getState().settings?.ai?.privacy ?? 'full');
-  const [busy, setBusy] = useState<string>();
-  const [error, setError] = useState<ReturnType<typeof asError>>();
+  const [privacy, setPrivacy] = useState<AiPrivacy>(initialPrivacy());
+  const { busy, error, run, stop } = useAiRun('ti');
   const [proposal, setProposal] = useState<Proposal>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
-  const [estimate, setEstimate] = useState<EstimateState>();
   const params = (extra: { hint?: string; privacy?: AiPrivacy } = {}) => ({
     task: leftovers ? 'import-leftovers' : 'tidy-import',
     item: { kind: 'collection', collectionId: request.collectionId },
@@ -37,104 +35,58 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
     privacy: extra.privacy ?? privacy,
   });
   const key = useDebounced(JSON.stringify(params()), 400);
-  useEffect(() => {
-    if (proposal) return setEstimate(undefined);
-    let live = true;
-    call<AiTaskResult>('ai.preview', JSON.parse(key) as Record<string, unknown>).then(
-      ({ preview: p }) =>
-        live &&
-        setEstimate(estimateOf(p)),
-      (e) => live && setEstimate({ ok: false, text: asError(e).message }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [key, proposal]);
+  const estimate = useAiEstimate(proposal ? undefined : () => call<AiTaskResult>('ai.preview', JSON.parse(key) as Record<string, unknown>), [key, proposal]);
 
-  const runId = useRef<string>(undefined);
-  const generate = async (extra: { hint?: string; privacy?: AiPrivacy; noAi?: boolean } = {}) => {
-    if (busy) return;
-    const id = `ti-${Date.now().toString(36)}`;
-    runId.current = id;
-    setBusy(id);
-    setError(undefined);
-    try {
-      const r = extra.noAi && !leftovers
-        ? await call<{ proposal: Proposal }>('ai.tidyImport', { collectionId: request.collectionId, source: request.source, noAi: true })
-        : await call<AiTaskResult>('ai.runTask', { ...params(extra), requestId: id });
-      if (runId.current !== id) return;
-      if (!r.proposal) throw new Error(`Nothing to tidy${'problems' in r && r.problems.length ? `: ${r.problems.join('; ')}` : ''}.`);
-      setProposal(r.proposal);
-    } catch (e) {
-      if (runId.current !== id) return;
-      const err = asError(e);
-      if (!(err.kind === 'CancelledError' || /abort|cancel/i.test(err.message))) setError(err);
-    } finally {
-      if (runId.current === id) setBusy(undefined);
-    }
-  };
-  const stop = () => {
-    if (busy) void call('ai.cancel', { id: busy }).catch(() => undefined);
-    runId.current = undefined;
-    setBusy(undefined);
-  };
+  const generate = (extra: { hint?: string; privacy?: AiPrivacy; noAi?: boolean } = {}) =>
+    run(
+      (id) =>
+        extra.noAi && !leftovers
+          ? call<{ proposal?: Proposal; problems?: string[] }>('ai.tidyImport', { collectionId: request.collectionId, source: request.source, noAi: true })
+          : call<{ proposal?: Proposal; problems?: string[] }>('ai.runTask', { ...params(extra), requestId: id }),
+      (r) => {
+        if (!r.proposal) throw new Error(`Nothing to tidy${r.problems?.length ? `: ${r.problems.join('; ')}` : ''}.`);
+        setProposal(r.proposal);
+      },
+    );
   const accept = async (items: ProposalItem[]) => {
     if (!proposal) return;
-    try {
-      const r = await call<{ applied: unknown[]; skipped: Array<{ reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
-      await useApp.getState().refreshWorkspace();
-      useApp.getState().toast(`Applied ${r.applied.length} change${r.applied.length === 1 ? '' : 's'} to ${col?.name ?? 'the collection'}${r.skipped.length ? ` (${r.skipped.length} skipped: ${r.skipped[0]!.reason})` : ''}`, r.skipped.length ? 'info' : 'success', undefined, {
-        undo: () => call('ai.undoProposal', { id: proposal.id }).then(() => useApp.getState().refreshWorkspace()),
-      });
-      onClose();
-    } catch (e) {
-      toastError(e);
-    }
+    const r = await applyProposalItems<{ applied: unknown[]; skipped: Array<{ reason: string }> }>(proposal, items, (r) => `Applied ${plural(r.applied.length, 'change')} to ${col?.name ?? 'the collection'}${skippedNote(r, true)}`);
+    if (r) onClose();
   };
 
   if (proposal)
     return (
       <ProposalReview
-        proposal={proposal}
+        {...proposalReviewProps(proposal, {
+          onClose,
+          reset: () => setProposal(undefined),
+          regenerate: (h) => {
+            setHint(h);
+            void generate({ hint: h });
+          },
+        })}
         acceptLabel="Apply selected changes"
         onAccept={accept}
-        onRegenerate={(h) => {
-          void call('ai.discardProposal', { id: proposal.id }).catch(() => undefined);
-          setProposal(undefined);
-          setHint(h);
-          void generate({ hint: h });
-        }}
-        onDiscard={() => void call('ai.discardProposal', { id: proposal.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError)}
-        onClose={onClose}
       />
     );
 
-  const setup = error ? aiSetupAction(error) : undefined;
+  const cancel = () => (stop(), onClose());
   return (
     <Modal
-      title={
-        <span className="flex items-center gap-2">
-          <Sparkles size={16} /> {leftovers ? 'Fix what the import left with AI' : 'Tidy this import with AI'}
-        </span>
-      }
-      onClose={() => (stop(), onClose())}
+      title={<AiTitle>{leftovers ? 'Fix what the import left with AI' : 'Tidy this import with AI'}</AiTitle>}
+      onClose={cancel}
       width={640}
       footer={
-        <>
-          <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={!!busy} onClick={() => setPreviewing({ task: leftovers ? 'import-leftovers' : 'tidy-import', title: leftovers ? 'Fix what the import left' : 'Tidy this import', context: params().context, item: params().item as AssistantRequest['item'], privacy })} data-ai-preview-open>
-            What will be sent…
-          </Button>
-          <Button onClick={() => (stop(), onClose())}>Cancel</Button>
-          {busy ? (
-            <Button icon={<Square size={12} />} onClick={stop}>
-              Stop
-            </Button>
-          ) : (
-            <Button variant="primary" icon={<Sparkles size={13} />} onClick={() => void generate()} data-tidy-generate>
-              {leftovers ? 'Rewrite the scripts' : 'Tidy'}
-            </Button>
-          )}
-        </>
+        <AiRunFooter
+          busy={!!busy}
+          onPreview={() => setPreviewing({ task: leftovers ? 'import-leftovers' : 'tidy-import', title: leftovers ? 'Fix what the import left' : 'Tidy this import', context: params().context, item: params().item as AssistantRequest['item'], privacy })}
+          onCancel={cancel}
+          onStop={stop}
+        >
+          <AiPrimaryButton onClick={() => void generate()} data-tidy-generate="">
+            {leftovers ? 'Rewrite the scripts' : 'Tidy'}
+          </AiPrimaryButton>
+        </AiRunFooter>
       }
     >
       <div className="grid gap-3 text-sm" data-tidy-import-dialog>
@@ -142,14 +94,9 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
           <Badge>{col?.name ?? request.collectionId}</Badge>
           {request.source && <span className="text-xs text-muted">imported from {request.source}</span>}
         </div>
-        <Field label="Hint (optional)">
-          <Input value={hint} onChange={(e) => setHint(e.target.value)} placeholder="e.g. group by resource, keep the login first" aria-label="Hint for the tidy" />
-        </Field>
+        <AiHintField value={hint} onChange={setHint} placeholder="e.g. group by resource, keep the login first" label="Hint for the tidy" />
         {!leftovers && <Toggle checked={flow} onChange={setFlow} label="Also write a flow that wires the requests" />}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-muted">Sent</span>
-          <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
-        </div>
+        <AiPrivacyRow value={privacy} onChange={setPrivacy} />
         <AiEstimateLine estimate={estimate} data-tidy-estimate="" />
         {leftovers ? (
           <p className="text-xs text-muted">
@@ -157,32 +104,20 @@ export function TidyImportDialog({ request, onClose }: { request: TidyImportRequ
             is run in the sandbox against the saved response (never against the real API). Nothing changes before you accept, and Undo puts it back.
           </p>
         ) : (
-        <p className="text-xs text-muted">
-          TestPion finds the hosts and tokens typed into requests, tracking, static and duplicate requests, and the ids an earlier saved response returns; the model names the requests, groups them in folders and picks the chains. Request URLs, names and a short
-          saved response are sent, never header values or tokens. Every change is checked: the collection stays valid and every request sends exactly what it sent. Nothing changes before you accept, and Undo puts it back.
-        </p>
+          <p className="text-xs text-muted">
+            TestPion finds the hosts and tokens typed into requests, tracking, static and duplicate requests, and the ids an earlier saved response returns; the model names the requests, groups them in folders and picks the chains. Request URLs, names and a short
+            saved response are sent, never header values or tokens. Every change is checked: the collection stays valid and every request sends exactly what it sent. Nothing changes before you accept, and Undo puts it back.
+          </p>
         )}
-        {busy && (
-          <div className="flex items-center gap-2 text-muted" role="status">
-            <Spinner /> {leftovers ? 'Rewriting and checking the scripts…' : 'Tidying and checking the changes…'}
-          </div>
-        )}
+        {busy && <AiBusyLine>{leftovers ? 'Rewriting and checking the scripts…' : 'Tidying and checking the changes…'}</AiBusyLine>}
         {error && (
-          <div className="rounded-lg border border-bad/40 bg-bad/5 p-3 grid gap-2" role="alert" data-tidy-error>
-            <span>{error.message}</span>
-            <div className="flex gap-2 flex-wrap">
-              {setup && (
-                <Button size="sm" variant="primary" onClick={() => (onClose(), setup.onClick())} data-ai-setup>
-                  {setup.label}
-                </Button>
-              )}
-              {!leftovers && (
-                <Button size="sm" onClick={() => void generate({ noAi: true })} data-tidy-draft>
-                  Use what TestPion finds without AI
-                </Button>
-              )}
-            </div>
-          </div>
+          <AiErrorPanel error={error} onClose={onClose} data-tidy-error="">
+            {!leftovers && (
+              <Button size="sm" onClick={() => void generate({ noAi: true })} data-tidy-draft>
+                Use what TestPion finds without AI
+              </Button>
+            )}
+          </AiErrorPanel>
         )}
       </div>
       {previewing && (

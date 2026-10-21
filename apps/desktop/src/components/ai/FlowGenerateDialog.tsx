@@ -1,16 +1,17 @@
-import { Eye, FileCode2, FileText, FolderTree, Sparkles, Square, Workflow } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileCode2, FileText, FolderTree, Workflow } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AiTaskResult, Proposal, ProposalItem, SpecGapReport } from '@testpion/core';
 import { asError, call } from '../../api';
 import { useCollectionTree } from '../../lib/collections-store';
-import { aiSetupAction } from '../../lib/ai-errors';
-import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
-import { toastError, useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
+import { AiEstimateLine } from './AiEstimateLine';
+import { useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
 import type { CollectionNode } from '../../types';
 import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced } from '../ui';
-import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
+import { AiPreviewDialog, type AiPrivacy } from './AiPreviewDialog';
 import { FlowProposalReview } from './FlowProposalReview';
 import { ProposalReview } from './ProposalReview';
+import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiPrivacyRow, AiRunFooter, AiTitle, applyProposalItems, initialPrivacy, proposalReviewProps, skippedNote, useAiEstimate, useAiRun } from './ai-run';
+import { plural } from '../../lib/format';
 import { SecurityRunDialog } from './SecurityRunDialog';
 
 type Mode = 'collection' | 'describe' | 'spec' | 'security';
@@ -69,12 +70,10 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   const [folderId, setFolderId] = useState(request.source?.folderId ?? '');
   const [description, setDescription] = useState('');
   const [hint, setHint] = useState('');
-  const [privacy, setPrivacy] = useState<AiPrivacy>(useApp.getState().settings?.ai?.privacy ?? 'full');
-  const [busy, setBusy] = useState<string>();
-  const [error, setError] = useState<ReturnType<typeof asError>>();
+  const [privacy, setPrivacy] = useState<AiPrivacy>(initialPrivacy());
+  const { busy, error, run, stop } = useAiRun('fg');
   const [proposal, setProposal] = useState<Proposal>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
-  const [estimate, setEstimate] = useState<EstimateState>();
   const col = cols.find((c) => c.id === collectionId) ?? cols[0];
   const folders = useMemo(() => (col ? foldersOf(col.items) : []), [col]);
   const folder = folders.find((f) => f.id === folderId);
@@ -163,130 +162,56 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
 
   // the estimate before anything is sent (a dry run: nothing leaves the computer)
   const key = useDebounced(JSON.stringify(ready ? params() : null), 400);
-  useEffect(() => {
-    if (!ready || proposal) return setEstimate(undefined);
-    let live = true;
-    call<AiTaskResult>('ai.preview', JSON.parse(key) as Record<string, unknown>).then(
-      ({ preview: p }) =>
-        live &&
-        setEstimate(estimateOf(p)),
-      (e) => live && setEstimate({ ok: false, text: asError(e).message }),
-    );
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, proposal]);
+  const estimate = useAiEstimate(!ready || proposal ? undefined : () => call<AiTaskResult>('ai.preview', JSON.parse(key) as Record<string, unknown>), [key, proposal]);
 
-  const runId = useRef<string>(undefined);
-  const generate = async (extra: { hint?: string; privacy?: AiPrivacy; noAi?: boolean } = {}) => {
-    if (!ready || busy) return;
-    const id = `fg-${Date.now().toString(36)}`;
-    runId.current = id;
-    setBusy(id);
-    setError(undefined);
-    try {
-      const r = extra.noAi
-        ? mode === 'spec'
-          ? await call<{ proposal: Proposal }>('ai.specTests', { spec, ...specOptions, environment: env, noAi: true })
-          : mode === 'security'
-            ? await call<{ proposal: Proposal }>('ai.securityTests', { collectionId: col!.id, folderId: folder?.id, ...secOptions, noAi: true })
-            : await call<{ proposal: Proposal }>('ai.generateFlow', { collectionId: col!.id, folderId: folder?.id, path: request.path, environment: env, noAi: true })
-        : await call<AiTaskResult>('ai.runTask', { ...params(extra), requestId: id });
-      if (runId.current !== id) return;
-      if (!r.proposal) throw new Error(`The model proposed no ${mode === 'spec' ? 'tests' : mode === 'security' ? 'probes' : 'flow'}${'problems' in r && r.problems.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint, or a smaller folder.`);
-      setProposal(r.proposal);
-    } catch (e) {
-      if (runId.current !== id) return;
-      const err = asError(e);
-      if (!(err.kind === 'CancelledError' || /abort|cancel/i.test(err.message))) setError(err);
-    } finally {
-      if (runId.current === id) setBusy(undefined);
-    }
-  };
-  const stop = () => {
-    if (busy) void call('ai.cancel', { id: busy }).catch(() => undefined);
-    runId.current = undefined;
-    setBusy(undefined);
-  };
+  const generate = (extra: { hint?: string; privacy?: AiPrivacy; noAi?: boolean } = {}) =>
+    ready &&
+    run(
+      (id) =>
+        extra.noAi
+          ? mode === 'spec'
+            ? call<{ proposal?: Proposal; problems?: string[] }>('ai.specTests', { spec, ...specOptions, environment: env, noAi: true })
+            : mode === 'security'
+              ? call<{ proposal?: Proposal; problems?: string[] }>('ai.securityTests', { collectionId: col!.id, folderId: folder?.id, ...secOptions, noAi: true })
+              : call<{ proposal?: Proposal; problems?: string[] }>('ai.generateFlow', { collectionId: col!.id, folderId: folder?.id, path: request.path, environment: env, noAi: true })
+          : call<{ proposal?: Proposal; problems?: string[] }>('ai.runTask', { ...params(extra), requestId: id }),
+      (r) => {
+        if (!r.proposal) throw new Error(`The model proposed no ${mode === 'spec' ? 'tests' : mode === 'security' ? 'probes' : 'flow'}${r.problems?.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint, or a smaller folder.`);
+        setProposal(r.proposal);
+      },
+    );
 
   /** Accept: the ticked test files through the workspace's writers (one Undo), then they can be opened. */
   const acceptTests = async (items: ProposalItem[]) => {
     if (!proposal) return;
-    try {
-      const r = await call<{ applied: Array<{ path?: string }>; skipped: Array<{ reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
-      await useApp.getState().refreshWorkspace();
-      useApp.getState().toast(`Wrote ${r.applied.length} test file${r.applied.length === 1 ? '' : 's'}${r.applied[0]?.path ? ` (tests/${r.applied[0].path})` : ''}${r.skipped.length ? `; ${r.skipped.length} skipped: ${r.skipped[0]!.reason}` : ''}`, r.skipped.length ? 'info' : 'success', undefined, {
-        undo: () => call('ai.undoProposal', { id: proposal.id }).then(() => useApp.getState().refreshWorkspace()),
-      });
-      // security tests are run next, in a test environment, one step at a time (the verdicts are the runner's)
-      const file = r.applied.find((a) => a.path)?.path;
-      if (mode === 'security' && file) return setWritten({ path: file });
-      onClose();
-    } catch (e) {
-      toastError(e);
-    }
+    const r = await applyProposalItems<{ applied: Array<{ path?: string }>; skipped: Array<{ reason: string }> }>(
+      proposal,
+      items,
+      (r) => `Wrote ${plural(r.applied.length, 'test file')}${r.applied[0]?.path ? ` (tests/${r.applied[0].path})` : ''}${skippedNote(r)}`,
+    );
+    if (!r) return;
+    // security tests are run next, in a test environment, one step at a time (the verdicts are the runner's)
+    const file = r.applied.find((a) => a.path)?.path;
+    if (mode === 'security' && file) return setWritten({ path: file });
+    onClose();
   };
   if (written) return <SecurityRunDialog path={written.path} environment={env} onClose={onClose} />;
-  if (proposal && (mode === 'spec' || mode === 'security'))
-    return (
-      <ProposalReview
-        proposal={proposal}
-        acceptLabel={mode === 'security' ? 'Write the security tests' : 'Write the tests'}
-        onAccept={acceptTests}
-        onRegenerate={(h) => {
-          void call('ai.discardProposal', { id: proposal.id }).catch(() => undefined);
-          setProposal(undefined);
-          setHint(h);
-          void generate({ hint: h });
-        }}
-        onDiscard={() => void call('ai.discardProposal', { id: proposal.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError)}
-        onClose={onClose}
-      />
-    );
-  if (proposal)
-    return (
-      <FlowProposalReview
-        proposal={proposal}
-        environment={env}
-        onAccept={request.onAccept}
-        onRegenerate={(h) => {
-          // the one it replaces is discarded (the usage ledger counts the outcome)
-          void call('ai.discardProposal', { id: proposal.id }).catch(() => undefined);
-          setProposal(undefined);
-          setHint(h);
-          void generate({ hint: h });
-        }}
-        onClose={onClose}
-      />
-    );
+  const review = proposal && proposalReviewProps(proposal, { onClose, reset: () => setProposal(undefined), regenerate: (h) => (setHint(h), void generate({ hint: h })) });
+  if (review && (mode === 'spec' || mode === 'security')) return <ProposalReview {...review} acceptLabel={mode === 'security' ? 'Write the security tests' : 'Write the tests'} onAccept={acceptTests} />;
+  if (review) return <FlowProposalReview proposal={review.proposal} environment={env} onAccept={request.onAccept} onRegenerate={review.onRegenerate} onClose={onClose} />;
 
-  const setup = error ? aiSetupAction(error) : undefined;
+  const cancel = () => (stop(), onClose());
   return (
     <Modal
-      title={
-        <span className="flex items-center gap-2">
-          <Sparkles size={16} /> {mode === 'spec' ? 'Generate tests from a spec with AI' : mode === 'security' ? 'Generate security tests with AI' : 'Generate integration flow with AI'}
-        </span>
-      }
-      onClose={() => (stop(), onClose())}
+      title={<AiTitle>{mode === 'spec' ? 'Generate tests from a spec with AI' : mode === 'security' ? 'Generate security tests with AI' : 'Generate integration flow with AI'}</AiTitle>}
+      onClose={cancel}
       width={680}
       footer={
-        <>
-          <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={!ready || !!busy} onClick={() => setPreviewing(asRequest())} data-ai-preview-open>
-            What will be sent…
-          </Button>
-          <Button onClick={() => (stop(), onClose())}>Cancel</Button>
-          {busy ? (
-            <Button icon={<Square size={12} />} onClick={stop}>
-              Stop
-            </Button>
-          ) : (
-            <Button variant="primary" icon={<Sparkles size={13} />} disabled={!ready} onClick={() => void generate()} data-flow-generate>
-              Generate
-            </Button>
-          )}
-        </>
+        <AiRunFooter busy={!!busy} previewDisabled={!ready} onPreview={() => setPreviewing(asRequest())} onCancel={cancel} onStop={stop}>
+          <AiPrimaryButton disabled={!ready} onClick={() => void generate()} data-flow-generate="">
+            Generate
+          </AiPrimaryButton>
+        </AiRunFooter>
       }
     >
       <div className="grid gap-3 text-sm" data-flow-generate-dialog>
@@ -426,13 +351,8 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
             />
           </Field>
         )}
-        <Field label="Hint (optional)">
-          <Input value={hint} onChange={(e) => setHint(e.target.value)} placeholder="e.g. also test pagination, include the refund path" aria-label="Hint for the flow" />
-        </Field>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-muted">Sent</span>
-          <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
-        </div>
+        <AiHintField value={hint} onChange={setHint} placeholder="e.g. also test pagination, include the refund path" label="Hint for the flow" />
+        <AiPrivacyRow value={privacy} onChange={setPrivacy} />
         <AiEstimateLine className="flex items-center gap-2 text-xs text-muted min-h-5" estimate={estimate} waiting={ready} data-flow-estimate="">
           {(mode === 'collection' || mode === 'security') && col && (
             <Badge>
@@ -454,27 +374,15 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           Variable names are sent, never their values; secrets, tokens and personal data are masked. The flow is linted, its variables checked and, when the collection has saved examples, tried on a
           mock — then you review it. Nothing is saved or run before you accept it.
         </p>
-        {busy && (
-          <div className="flex items-center gap-2 text-muted" role="status">
-            <Spinner /> Writing and checking the {mode === 'security' ? 'probes' : 'flow'}…
-          </div>
-        )}
+        {busy && <AiBusyLine>Writing and checking the {mode === 'security' ? 'probes' : 'flow'}…</AiBusyLine>}
         {error && (
-          <div className="rounded-lg border border-bad/40 bg-bad/5 p-3 grid gap-2" role="alert" data-flow-generate-error>
-            <span>{error.message}</span>
-            <div className="flex gap-2 flex-wrap">
-              {setup && (
-                <Button size="sm" variant="primary" onClick={() => (onClose(), setup.onClick())} data-ai-setup>
-                  {setup.label}
-                </Button>
-              )}
-              {(mode === 'spec' ? !!spec : (mode === 'collection' || mode === 'security') && col) && (
-                <Button size="sm" onClick={() => void generate({ noAi: true })} data-flow-draft>
-                  {mode === 'spec' ? 'Use the tests TestPion builds without AI' : mode === 'security' ? 'Use the probes TestPion makes without AI' : 'Use the draft without AI'}
-                </Button>
-              )}
-            </div>
-          </div>
+          <AiErrorPanel error={error} onClose={onClose} data-flow-generate-error="">
+            {(mode === 'spec' ? !!spec : (mode === 'collection' || mode === 'security') && col) && (
+              <Button size="sm" onClick={() => void generate({ noAi: true })} data-flow-draft>
+                {mode === 'spec' ? 'Use the tests TestPion builds without AI' : mode === 'security' ? 'Use the probes TestPion makes without AI' : 'Use the draft without AI'}
+              </Button>
+            )}
+          </AiErrorPanel>
         )}
       </div>
       {previewing && (

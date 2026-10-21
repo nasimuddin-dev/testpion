@@ -10,6 +10,7 @@ import { FlowDiagram } from '../FlowDiagram';
 import { DiffText } from '../GitCommitPanel';
 import { Badge, Button, Input, Modal, Segmented, Spinner } from '../ui';
 import { VerificationBadgeView } from './ProposalReview';
+import { discardProposal } from './ai-run';
 
 type Tab = 'canvas' | 'yaml' | 'changes' | 'draft';
 
@@ -157,7 +158,7 @@ export function FlowProposalReview({
       setBusy(undefined);
     }
   };
-  const discard = () => void call('ai.discardProposal', { id: proposal.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError);
+  const discard = () => discardProposal(proposal.id, onClose);
 
   return (
     <Modal
