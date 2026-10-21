@@ -593,7 +593,7 @@ export function EvaluationsView() {
         {pane === 'metrics' && d.type === 'rag' && evalRuns.length > 0 ? (
           <div className="flex-1 min-h-0">
             {runId ? (
-              <RagMetricMatrix runId={runId} target={d.target} judge={d.judge} runs={evalRuns} evaluators={d.evaluators} evaluation={savedId} providers={providers} onRescored={(id) => (setRunId(id), void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError))} />
+              <RagMetricMatrix runId={runId} evaluationName={d.name} target={d.target} judge={d.judge} runs={evalRuns} evaluators={d.evaluators} evaluation={savedId} providers={providers} onRescored={(id) => (setRunId(id), void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError))} />
             ) : (
               <Empty icon={<BarChart3 size={26} />} title="Choose a run">
                 Pick a run in the Runs list to see its samples against every metric.

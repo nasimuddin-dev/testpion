@@ -54,6 +54,11 @@ const cellClass = (c: MatrixCell | null) => (!c ? '' : c.failed ? 'bg-bad/10 tex
 function PassMark({ column, value, onCommit }: { column: string; value: number | undefined; onCommit(key: string, v: number): void }) {
   const [text, setText] = useState(value === undefined ? '' : String(value));
   const first = useRef(true);
+  // a mark set from outside (the tuned pass mark of Calibrate judge) replaces what is typed; typing commits the same number back, so it does not loop
+  useEffect(() => {
+    if (value !== undefined && value !== Number(text)) setText(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
   useEffect(() => {
     if (first.current) {
       first.current = false;
@@ -137,6 +142,7 @@ export function RagMetricMatrix({
   providers = [],
   onRescored,
   evaluation,
+  evaluationName,
 }: {
   runId: string;
   target?: string;
@@ -147,6 +153,8 @@ export function RagMetricMatrix({
   evaluators?: CheckConfig[];
   /** The saved evaluation: the database of its SQL metrics is used when the run is scored again; a tuned pass mark (Calibrate judge) and the Trend are saved in or read from it. */
   evaluation?: string;
+  /** The evaluation's name, for an evaluation that is not saved yet: its runs are found by it (Trend, Calibrate judge). */
+  evaluationName?: string;
   providers?: ProviderConfig[];
   onRescored?(runId: string): void;
 }) {
@@ -281,7 +289,7 @@ export function RagMetricMatrix({
             { value: 'charts', label: 'Charts', title: 'The distribution of every metric' },
             { value: 'compare', label: 'Compare', title: 'This run against another, metric by metric, with a paired bootstrap' },
             { value: 'pivot', label: 'Runs × metrics', title: 'Several runs side by side: the mean of every metric' },
-            ...(evaluation ? [{ value: 'trend' as const, label: 'Trend', title: 'The mean of every metric run by run; a change of judge or wording is marked' }] : []),
+            ...(evaluation ?? evaluationName ? [{ value: 'trend' as const, label: 'Trend', title: 'The mean of every metric run by run; a change of judge or wording is marked' }] : []),
           ]}
         />
         <Button size="sm" icon={<RefreshCw size={12} />} onClick={() => setRescoring(true)} title="Score the stored answers again with other metrics or another judge: the RAG system is not called" data-rag-rescore-open>
@@ -300,11 +308,11 @@ export function RagMetricMatrix({
       {view === 'charts' && <RagCharts m={m} />}
       {view === 'compare' && <RagCompare runId={runId} runs={runs} />}
       {view === 'pivot' && <RagPivot runs={runs} />}
-      {view === 'trend' && evaluation && <RagTrend evaluation={evaluation} />}
+      {view === 'trend' && (evaluation ?? evaluationName) && <RagTrend evaluation={(evaluation ?? evaluationName)!} />}
       {calibrating && (
         <RagCalibration
           runId={runId}
-          evaluation={evaluation}
+          evaluation={evaluation ?? evaluationName}
           onUseThreshold={(metric, v) => (setThr((s) => ({ ...s, [metric]: v })), setCalibrating(false))}
           onOpenSample={(id, metric) => (setCalibrating(false), setDetail({ id, metric }))}
           onClose={() => setCalibrating(false)}
