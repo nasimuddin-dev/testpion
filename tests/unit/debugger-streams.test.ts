@@ -7,9 +7,8 @@ import { duplexPair } from 'node:stream';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
 import { WebSocketServer } from 'ws';
-import { ensureRootCertificate, exchangesFromSaz, leafSigner, parseRawHttp, sseParser, startDebuggerProxy, webSocketFrameParser, type DebuggerProxy } from '@testpion/core';
+import { ensureRootCertificate, exchangesFromSaz, leafSigner, parseRawHttp, sseParser, startDebuggerProxy, webSocketFrameParser, writeZip, type DebuggerProxy } from '@testpion/core';
 
 // DBG-4: HTTPS decrypted with the root certificate, WebSocket frames and SSE events read on the way, Fiddler SAZ files opened.
 
@@ -43,39 +42,7 @@ describe('debugger: frame and event parsers', () => {
 });
 
 describe('debugger: Fiddler SAZ', () => {
-  const zip = (files: Record<string, string>) => {
-    const locals: Buffer[] = [];
-    const centrals: Buffer[] = [];
-    let offset = 0;
-    for (const [name, text] of Object.entries(files)) {
-      const nameBuf = Buffer.from(name);
-      const data = deflateRawSync(Buffer.from(text));
-      const local = Buffer.alloc(30);
-      local.writeUInt32LE(0x04034b50, 0);
-      local.writeUInt16LE(8, 8);
-      local.writeUInt32LE(data.length, 18);
-      local.writeUInt32LE(Buffer.byteLength(text), 22);
-      local.writeUInt16LE(nameBuf.length, 26);
-      const central = Buffer.alloc(46);
-      central.writeUInt32LE(0x02014b50, 0);
-      central.writeUInt16LE(8, 10);
-      central.writeUInt32LE(data.length, 20);
-      central.writeUInt32LE(Buffer.byteLength(text), 24);
-      central.writeUInt16LE(nameBuf.length, 28);
-      central.writeUInt32LE(offset, 42);
-      locals.push(local, nameBuf, data);
-      centrals.push(central, nameBuf);
-      offset += local.length + nameBuf.length + data.length;
-    }
-    const cd = Buffer.concat(centrals);
-    const eocd = Buffer.alloc(22);
-    eocd.writeUInt32LE(0x06054b50, 0);
-    eocd.writeUInt16LE(Object.keys(files).length, 8);
-    eocd.writeUInt16LE(Object.keys(files).length, 10);
-    eocd.writeUInt32LE(cd.length, 12);
-    eocd.writeUInt32LE(offset, 16);
-    return Buffer.concat([...locals, cd, eocd]);
-  };
+  const zip = (files: Record<string, string>) => writeZip(Object.entries(files).map(([name, text]) => ({ name, data: Buffer.from(text) })));
 
   it('opens the sessions of a SAZ file with timings and the process', () => {
     const saz = zip({
@@ -103,6 +70,37 @@ describe('debugger: Fiddler SAZ', () => {
     });
     expect(list[1]).toMatchObject({ kind: 'tunnel', method: 'CONNECT', url: 'https://secure.test:443', status: 200 });
     expect(parseRawHttp('GET / HTTP/1.1\r\nA: 1\r\n\r\nbody').headers).toEqual({ a: '1' });
+  });
+
+  // B-41e: a SAZ file is untrusted input; it goes through the same hardened zip reader as a bundle
+  const REQ = 'GET / HTTP/1.1\r\nHost: a.test\r\n\r\n';
+  const hostile = {
+    'a name that leaves the archive': () => zip({ 'raw/1_c.txt': REQ, '../../evil.txt': 'x' }),
+    'an absolute name': () => zip({ 'raw/1_c.txt': REQ, '/etc/passwd': 'x' }),
+    'a backslash name': () => zip({ 'raw/1_c.txt': REQ, 'raw\\..\\x.txt': 'x' }),
+    'names that differ only in case': () => zip({ 'raw/1_c.txt': REQ, 'RAW/1_C.TXT': REQ }),
+    'a zip bomb': () => writeZip([{ name: 'raw/1_c.txt', data: Buffer.alloc(8 * 1024 * 1024) }]),
+  } as const;
+  for (const [what, make] of Object.entries(hostile))
+    it(`refuses ${what}`, () => {
+      expect(() => exchangesFromSaz(make())).toThrow(/Not a valid SAZ file/);
+    });
+
+  it('refuses too many entries, a damaged entry, a link and an encrypted entry', () => {
+    const many = writeZip(Array.from({ length: 20_001 }, (_, i) => ({ name: `raw/${i}_c.txt`, data: Buffer.from('x') })));
+    expect(() => exchangesFromSaz(many)).toThrow(/at most 20000/);
+    const damaged = zip({ 'raw/1_c.txt': REQ });
+    damaged[damaged.lastIndexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])) + 16] ^= 0x01; // the checksum no longer matches
+    expect(() => exchangesFromSaz(damaged)).toThrow(/Not a valid SAZ file/);
+    const link = zip({ 'raw/1_c.txt': REQ });
+    const cd = link.lastIndexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    link.writeUInt16LE((3 << 8) | 20, cd + 4);
+    link.writeUInt32LE((0o120777 << 16) >>> 0, cd + 38);
+    expect(() => exchangesFromSaz(link)).toThrow(/link or a special file/);
+    const enc = zip({ 'raw/1_c.txt': REQ });
+    enc.writeUInt16LE(1, enc.lastIndexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02])) + 8);
+    expect(() => exchangesFromSaz(enc)).toThrow(/encrypted/);
+    expect(() => exchangesFromSaz(Buffer.from('not a zip at all, just text'))).toThrow(/Not a valid SAZ file/);
   });
 });
 

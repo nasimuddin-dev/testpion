@@ -37,8 +37,8 @@ export interface ZipEntry {
   data: Buffer;
 }
 
-const bad = (why: string): never => {
-  throw new ApsError('ValidationError', `Not a valid TestPion bundle: ${why}`);
+const badZip = (why: string, subject = 'TestPion bundle'): never => {
+  throw new ApsError('ValidationError', `Not a valid ${subject}: ${why}`);
 };
 
 /* ------------------------------------------------------------------ writer */
@@ -203,7 +203,8 @@ export function dataStart(buf: Buffer, rec: Pick<ZipRecord, 'local'>): number {
 }
 
 /** Read every file of the archive, or throw with what is wrong (see the module comment for what is refused). */
-export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[] {
+export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS, subject = 'TestPion bundle'): ZipEntry[] {
+  const bad = (why: string): never => badZip(why, subject);
   if (!looksLikeZip(buf)) bad('it is not a zip archive');
   const eocd = findEndOfDirectory(buf);
   if (eocd < 0) bad('the zip directory is missing (a damaged or cut-off file)');

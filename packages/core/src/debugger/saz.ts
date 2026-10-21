@@ -1,55 +1,12 @@
-import { inflateRawSync } from 'node:zlib';
 import { shortId } from '../util/ids.js';
+import { readZip, type ZipEntry } from '../transfer/zip.js';
 import type { DebuggerExchange } from './proxy.js';
 
 /**
  * Fiddler's SAZ archives (DBG-4): a zip with `raw/<n>_c.txt` (the request as sent), `raw/<n>_s.txt` (the response)
- * and `raw/<n>_m.xml` (timers, the client port, the process). Read here without a zip library: the central
- * directory, then each entry inflated.
+ * and `raw/<n>_m.xml` (timers, the client port, the process). A SAZ file is untrusted input, so it is opened by the
+ * one hardened zip reader (transfer/zip.ts: entry count, inflated size, ratio, names, CRC), never by a reader of its own.
  */
-interface ZipEntry {
-  name: string;
-  data(): Buffer;
-}
-
-function readZip(zip: Buffer): ZipEntry[] {
-  // the end of central directory record is the last 22+ bytes (a comment may follow)
-  let eocd = -1;
-  for (let i = zip.length - 22; i >= Math.max(0, zip.length - 65_557); i--) {
-    if (zip.readUInt32LE(i) === 0x06054b50) {
-      eocd = i;
-      break;
-    }
-  }
-  if (eocd < 0) throw new Error('Not a zip file');
-  const count = zip.readUInt16LE(eocd + 10);
-  let p = zip.readUInt32LE(eocd + 16);
-  const entries: ZipEntry[] = [];
-  for (let i = 0; i < count; i++) {
-    if (zip.readUInt32LE(p) !== 0x02014b50) break;
-    const method = zip.readUInt16LE(p + 10);
-    const compressed = zip.readUInt32LE(p + 20);
-    const nameLen = zip.readUInt16LE(p + 28);
-    const extraLen = zip.readUInt16LE(p + 30);
-    const commentLen = zip.readUInt16LE(p + 32);
-    const localOffset = zip.readUInt32LE(p + 42);
-    const name = zip.subarray(p + 46, p + 46 + nameLen).toString('utf8');
-    entries.push({
-      name,
-      data: () => {
-        const ln = zip.readUInt16LE(localOffset + 26);
-        const le = zip.readUInt16LE(localOffset + 28);
-        const start = localOffset + 30 + ln + le;
-        const raw = zip.subarray(start, start + compressed);
-        if (method === 0) return Buffer.from(raw);
-        if (method === 8) return inflateRawSync(raw);
-        throw new Error(`Unsupported zip method ${method} for ${name}`);
-      },
-    });
-    p += 46 + nameLen + extraLen + commentLen;
-  }
-  return entries;
-}
 
 /** Raw HTTP text (a request or a response) split into its line, headers and body. */
 export function parseRawHttp(text: string): { line: string; headers: Record<string, string>; body: string } {
@@ -69,7 +26,7 @@ export function parseRawHttp(text: string): { line: string; headers: Record<stri
 
 /** The exchanges of a SAZ file, in Fiddler's order. */
 export function exchangesFromSaz(zip: Buffer): DebuggerExchange[] {
-  const entries = readZip(zip);
+  const entries = readZip(zip, undefined, 'SAZ file');
   const byId = new Map<string, { c?: ZipEntry; s?: ZipEntry; m?: ZipEntry }>();
   for (const e of entries) {
     const m = /^raw\/(\d+)_([csm])\.(txt|xml)$/i.exec(e.name);
@@ -81,7 +38,7 @@ export function exchangesFromSaz(zip: Buffer): DebuggerExchange[] {
   const out: DebuggerExchange[] = [];
   for (const [id, slot] of [...byId.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))) {
     if (!slot.c) continue;
-    const req = parseRawHttp(slot.c.data().toString('utf8'));
+    const req = parseRawHttp(slot.c.data.toString('utf8'));
     const [method = 'GET', target = '/'] = req.line.split(' ');
     let url = target;
     let host = req.headers.host ?? '';
@@ -92,7 +49,7 @@ export function exchangesFromSaz(zip: Buffer): DebuggerExchange[] {
     } catch {
       /* keep */
     }
-    const meta = slot.m ? slot.m.data().toString('utf8') : '';
+    const meta = slot.m ? slot.m.data.toString('utf8') : '';
     const timer = (name: string) => /ClientBeginRequest|ServerBeginResponse|ClientDoneResponse|ClientConnected/.test(name) && new RegExp(`${name}="([^"]+)"`).exec(meta)?.[1];
     const began = timer('ClientBeginRequest') || timer('ClientConnected');
     const started = began ? Date.parse(began) : NaN;
@@ -116,7 +73,7 @@ export function exchangesFromSaz(zip: Buffer): DebuggerExchange[] {
       rules: [`Fiddler session ${id}`],
     };
     if (slot.s) {
-      const res = parseRawHttp(slot.s.data().toString('utf8'));
+      const res = parseRawHttp(slot.s.data.toString('utf8'));
       const m = /^HTTP\/[\d.]+\s+(\d{3})\s*(.*)$/.exec(res.line);
       e.status = m ? Number(m[1]) : undefined;
       e.statusText = m?.[2] ?? '';
