@@ -19,7 +19,8 @@
  * proposal says the coverage before → after, computed with the same gap report over the existing and the proposed tests.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { stringifyYaml, parseYaml } from '../util/lazy-yaml.js';
+import { stringifyYaml } from '../util/lazy-yaml.js';
+import { tryParseYaml } from '../util/yaml-doc.js';
 import { type ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { fuzzCases } from '../openapi/fuzz.js';
@@ -485,12 +486,9 @@ registerVerifier('spec-tests', (item, ctx: VerifyContext) => {
   if (!spec) return undefined;
   if (!ctx.store) return { verifier: 'spec-tests', status: 'skip', label: 'not checked against the document (no workspace)' };
   const { text, doc } = loadSpec(ctx.store, spec);
-  let parsed: unknown;
-  try {
-    parsed = parseYaml(item.after);
-  } catch {
-    return undefined; // the test-file verifier says why
-  }
+  const read = tryParseYaml(item.after);
+  if (!read.ok) return undefined; // the test-file verifier says why
+  const parsed = read.value;
   const steps = ((parsed as Json | null)?.tests ?? []) as Json[];
   const defaults = ((parsed as Json | null)?.defaults ?? {}) as Json;
   const fails: string[] = [];

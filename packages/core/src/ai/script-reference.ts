@@ -10,6 +10,7 @@
  */
 import { runScript } from '../scripts/sandbox.js';
 import { levenshtein } from '../util/text-distance.js';
+import type { VerificationBadge } from './proposal.js';
 import { estimateTokens } from './types.js';
 
 type MemberKind = 'method' | 'value' | 'object' | 'flag' | 'word' | 'modifier';
@@ -95,6 +96,24 @@ export function loadScriptApi(): Promise<ScriptApi> {
   cached.catch(() => (cached = undefined));
   return cached;
 }
+
+/** Names TestPion never writes: `pm.*` / `postman.*` run (Postman compatibility) but TestPion's own scripts use `tp.*`. */
+const POSTMAN_API = /(^|[^\w$.])(pm|postman)\s*\.\s*[A-Za-z_$]/;
+
+/** The failing badge of a script that misuses the tp.* API (each misuse says what to write instead), or undefined when it does not. */
+export async function scriptMisuseBadge(verifier: string, code: string): Promise<VerificationBadge | undefined> {
+  const misuse = scriptApiProblems(code, await loadScriptApi());
+  if (!misuse.length) return undefined;
+  return {
+    verifier,
+    status: 'fail',
+    label: POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')) ? 'uses pm.* / postman.*' : 'misuses the tp.* script API',
+    detail: misuse.slice(0, 6).join('\n'),
+  };
+}
+
+/** A stored response as the script sandbox takes it (the time is the response's latency). */
+export const sandboxResponse = (r: { status?: number; headers?: Array<[string, string]>; body?: string; latencyMs?: number } | undefined) => (r ? { status: r.status, headers: r.headers, body: r.body, time: r.latencyMs } : undefined);
 
 /** The API once it was read (undefined before the first `loadScriptApi()` finished). */
 export const scriptApiIfLoaded = (): ScriptApi | undefined => ready;

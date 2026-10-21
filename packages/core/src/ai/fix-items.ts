@@ -23,7 +23,7 @@ import type { ProposalItem, VerificationBadge } from './proposal.js';
 import type { DraftItem } from './tasks/registry.js';
 import { pinsGeneratedValue, registerVerifier, saferChecks, verifyTestFile, type StoredResponse } from './verify.js';
 import { exists, query } from '../util/jsonpath.js';
-import { loadScriptApi, scriptApiProblems } from './script-reference.js';
+import { loadScriptApi, sandboxResponse, scriptApiProblems } from './script-reference.js';
 import { stepOfResult, type FailureSource } from './run-evidence.js';
 
 /** What a model proposes for one cause (the JSON answer's `fix`). */
@@ -130,10 +130,16 @@ function stepChecks(text: string, path: string, step: string): CheckConfig[] {
   return (Array.isArray(st?.assertions) ? st.assertions : Array.isArray(st?.checks) ? st.checks : []) as CheckConfig[];
 }
 
+/** A changed test file as a proposal item (the fix to verify rides in `data`). */
+function testFileItem(finding: string, path: string, what: string, before: string, after: string, fix: FixCheckData): DraftItem {
+  return { kind: 'file', finding, title: `tests/${path}: ${what}`, path, target: { kind: 'test', path }, before, after, language: 'yaml', data: { fix } };
+}
+
 /**
  * The items of one fix for its targets (see the module comment): one item per saved request or test file, `finding`
  * naming the cause it fixes. What could not be made is said in `notes`.
  */
+
 export function fixItems(fix: FixSpec, targets: FixTarget[], o: { finding: string; title: string; environment?: string; caution?: string; engine?: boolean }): { items: DraftItem[]; notes: string[] } {
   const items: DraftItem[] = [];
   const notes: string[] = [];
@@ -196,17 +202,7 @@ export function fixItems(fix: FixSpec, targets: FixTarget[], o: { finding: strin
           );
           continue;
         }
-        items.push({
-          kind: 'file',
-          finding: o.finding,
-          title: `tests/${s.path}: ${checkLabel(changes[0]!.was)} → ${checkLabel(to)}`,
-          path: s.path,
-          target: { kind: 'test', path: s.path },
-          before: s.text,
-          after: text,
-          language: 'yaml',
-          data: { fix: { changes, verifyOn: verifyOn(ts), base: s.text, ...(o.engine ? { engine: true } : {}) } satisfies FixCheckData },
-        });
+        items.push(testFileItem(o.finding, s.path, `${checkLabel(changes[0]!.was)} → ${checkLabel(to)}`, s.text, text, { changes, verifyOn: verifyOn(ts), base: s.text, ...(o.engine ? { engine: true } : {}) }));
       }
     }
     return { items, notes };
@@ -229,17 +225,7 @@ export function fixItems(fix: FixSpec, targets: FixTarget[], o: { finding: strin
           continue;
         }
         if (text === s.text) continue;
-        items.push({
-          kind: 'file',
-          finding: o.finding,
-          title: `tests/${s.path}: ${Object.keys(fix.set).join(', ')} on ${steps.join(', ')}`,
-          path: s.path,
-          target: { kind: 'test', path: s.path },
-          before: s.text,
-          after: text,
-          language: 'yaml',
-          data: { fix: { verifyOn: verifyOn(ts), base: s.text, ...(o.caution ? { caution: o.caution } : {}) } satisfies FixCheckData },
-        });
+        items.push(testFileItem(o.finding, s.path, `${Object.keys(fix.set).join(', ')} on ${steps.join(', ')}`, s.text, text, { verifyOn: verifyOn(ts), base: s.text, ...(o.caution ? { caution: o.caution } : {}) }));
         continue;
       }
       const find = typeof fix.find === 'string' ? fix.find : '';
@@ -263,17 +249,7 @@ export function fixItems(fix: FixSpec, targets: FixTarget[], o: { finding: strin
           data: { phase: 'test', fix: { script: after, verifyOn: verifyOn(ts), base: text } satisfies FixCheckData },
         });
       else
-        items.push({
-          kind: 'file',
-          finding: o.finding,
-          title: `tests/${s.path}: edit`,
-          path: s.path,
-          target: { kind: 'test', path: s.path },
-          before: text,
-          after,
-          language: 'yaml',
-          data: { fix: { verifyOn: verifyOn(ts), base: text } satisfies FixCheckData },
-        });
+        items.push(testFileItem(o.finding, s.path, 'edit', text, after, { verifyOn: verifyOn(ts), base: text }));
     }
     return { items, notes };
   }
@@ -415,7 +391,7 @@ export async function verifyCheckChange(check: CheckConfig, cases: VerifyCase[])
 async function verifyScriptChange(code: string, cases: VerifyCase[]): Promise<VerificationBadge> {
   const misuse = scriptApiProblems(code, await loadScriptApi());
   if (misuse.length) return { verifier: 'fix', status: 'fail', label: 'misuses the tp.* script API', detail: misuse.slice(0, 5).join('\n') };
-  const run = (r: StoredResponse) => runScript(code, { variables: {}, response: { status: r.status, headers: r.headers, body: r.body, time: r.latencyMs } }, { timeoutMs: 3000, maxRequests: 0 });
+  const run = (r: StoredResponse) => runScript(code, { variables: {}, response: sandboxResponse(r) }, { timeoutMs: 3000, maxRequests: 0 });
   const failing = cases.filter((c) => c.failing?.body !== undefined);
   if (!failing.length) return { verifier: 'fix', status: 'skip', label: 'no stored response to run the script on' };
   for (const c of failing) {

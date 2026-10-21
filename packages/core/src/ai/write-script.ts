@@ -15,7 +15,7 @@ import { runScript } from '../scripts/sandbox.js';
 import type { ItemRef } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { contextOfItem } from './item-context.js';
-import { loadScriptApi, scriptApiProblems } from './script-reference.js';
+import { sandboxResponse, scriptMisuseBadge } from './script-reference.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
 import { stringList } from '../util/collections.js';
 import type { VerificationBadge } from './proposal.js';
@@ -139,8 +139,6 @@ export function describeScript(value: unknown): { summary?: string; assumptions?
 
 /* ------------------------------------------------------------------ verification */
 
-const POSTMAN_API = /(^|[^\w$.])(pm|postman)\s*\.\s*[A-Za-z_$]/;
-
 /** What a script did in the sandbox, in words ("sets nonce; adds the X-Trace header; runs 3 tests"). */
 function effects(out: Awaited<ReturnType<typeof runScript>>, before?: SampleRequest): string[] {
   const set = [...Object.keys(out.vars), ...Object.values(out.scopeSets).flatMap((s) => Object.keys(s))];
@@ -163,19 +161,13 @@ function effects(out: Awaited<ReturnType<typeof runScript>>, before?: SampleRequ
  * current one: a test that passes now but failed then depends on a value that changes.
  */
 export async function dryRunScript(code: string, phase: ScriptPhase, o: { request?: SampleRequest; response?: StoredResponse; previous?: StoredResponse }): Promise<VerificationBadge> {
-  const misuse = scriptApiProblems(code, await loadScriptApi());
-  if (misuse.length)
-    return {
-      verifier: 'script-dry-run',
-      status: 'fail',
-      label: POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')) ? 'uses pm.* / postman.*' : 'misuses the tp.* script API',
-      detail: misuse.slice(0, 6).join('\n'),
-    };
+  const misuse = await scriptMisuseBadge('script-dry-run', code);
+  if (misuse) return misuse;
   if (/\b(async|await|import|fetch|XMLHttpRequest)\b|\brequire\s*\(\s*['"](?!crypto-js['"]|uuid['"])/.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '""')))
     return { verifier: 'script-dry-run', status: 'fail', label: 'uses something the sandbox does not have', detail: 'The sandbox is synchronous and has no network, imports or fetch: use tp.sendRequest for a request (it is not run here), tp.require("crypto-js") for hashing.' };
   const input = (r: StoredResponse | undefined) => ({
     variables: {},
-    ...(phase === 'pre' ? { request: o.request ?? { method: 'GET', url: 'https://example.test/', headers: [] } } : { response: r ? { status: r.status, headers: r.headers, body: r.body, time: r.latencyMs } : undefined, ...(o.request ? { request: o.request } : {}) }),
+    ...(phase === 'pre' ? { request: o.request ?? { method: 'GET', url: 'https://example.test/', headers: [] } } : { response: sandboxResponse(r), ...(o.request ? { request: o.request } : {}) }),
   });
   if (phase === 'test' && o.response && o.response.latencyMs === undefined && /\bresponseTime\b/.test(code))
     return { verifier: 'script-dry-run', status: 'fail', label: 'reads the response time, which the response it was written for does not have', detail: 'Leave the timing out, or send the request again and write the script for that response.' };

@@ -17,7 +17,7 @@ import { readResultsFile } from '../runner/runner.js';
 import { readRunSummary } from '../runner/run-records.js';
 import { flakyTests } from '../runner/test-history.js';
 import { requestIdOfResult } from '../runner/result-source.js';
-import { parseYaml } from '../util/lazy-yaml.js';
+import { testStepsOf, tryParseYaml } from '../util/yaml-doc.js';
 import { slugify } from '../util/ids.js';
 import type { AiPrivacy } from './ai-settings.js';
 import type { ProposalFinding, ProposalItem } from './proposal.js';
@@ -108,15 +108,9 @@ const median = (xs: number[]) => {
 
 /** A test file's step ids as the loader makes them (explicit id, or <file>:<name>). */
 function stepIds(text: string, path: string): Array<{ id: string; ref: string }> {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
-  const steps = (Array.isArray(doc) ? doc : Array.isArray((doc as { tests?: unknown })?.tests) ? (doc as { tests: unknown[] }).tests : doc && typeof doc === 'object' ? [doc] : []) as Array<
-    Record<string, unknown>
-  >;
+  const parsed = tryParseYaml(text);
+  if (!parsed.ok) return [];
+  const steps = testStepsOf(parsed.value);
   const file = slugify(
     path
       .split('/')

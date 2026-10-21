@@ -28,7 +28,8 @@ import type { AiSurface } from '../storage/ai-usage.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { exists, query } from '../util/jsonpath.js';
-import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
+import { stringifyYaml } from '../util/lazy-yaml.js';
+import { tryParseYaml } from '../util/yaml-doc.js';
 import { freePath, isValueSegment, requestContext, sameEndpoint, segmentsOf, sourceRequests, type Saved } from './flow-from-collection.js';
 import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
 import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
@@ -628,13 +629,9 @@ registerVerifier('security-tests', (item) => {
   const sec = (item.data as { security?: { expected: SecurityExpected; options: SecurityLocal['options'] } } | undefined)?.security;
   if (!sec || (item.kind !== 'flow' && item.kind !== 'file')) return undefined;
   const problems: string[] = [];
-  let doc: unknown;
-  try {
-    doc = parseYaml(item.after);
-  } catch {
-    return undefined; // the test-file verifier says why
-  }
-  const d = doc as { defaults?: Record<string, unknown>; tests?: Array<Record<string, unknown>> } | null;
+  const parsed = tryParseYaml(item.after);
+  if (!parsed.ok) return undefined; // the test-file verifier says why
+  const d = parsed.value as { defaults?: Record<string, unknown>; tests?: Array<Record<string, unknown>> } | null;
   const tests = Array.isArray(d?.tests) ? d!.tests! : [];
   if (!tests.length) return undefined;
   const byId = new Map(sec.expected.steps.map((s) => [s.id, s]));

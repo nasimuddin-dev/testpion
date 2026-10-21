@@ -9,6 +9,7 @@ import {
   collectionRequests,
   collectionRequestToTest,
   executeHttp,
+  existingRequests,
   flakyTests,
   flakyTestsPage,
   matchSecretKey,
@@ -327,6 +328,31 @@ describe('scanning the test files of a workspace', () => {
     expect(exposedFlows(store).map((f) => f.tool)).toContain('now_exposed');
     writeFileSync(join(tests, 'f1.yaml'), 'name: F1\nexpose:\n  tool: Bad Name\ntests: []\n');
     expect(exposedFlows(store).find((f) => f.file === 'f1.yaml')!.problem).toMatch(/snake_case/);
+  });
+});
+
+describe('the requests a spec gap analysis reads from a workspace', () => {
+  it('come from 1,500 test files, the same on a second look, and follow an edit', () => {
+    const ws = join(tmp.dir, 'ws-gaps');
+    const tests = join(ws, 'tests');
+    mkdirSync(tests, { recursive: true });
+    for (let i = 0; i < 1500; i++) writeFileSync(join(tests, `g${String(i).padStart(4, '0')}.yaml`), `tests:\n  - id: s${i}\n    name: Get ${i}\n    method: GET\n    url: "{{baseUrl}}/items/${i}?page=1"\n    assertions: [{ type: status, expected: 200 }]\n`);
+    const store = { path: (...p: string[]) => join(ws, ...p), listCollections: () => [] } as unknown as WorkspaceStore;
+    const first = existingRequests(store);
+    expect(first).toHaveLength(1500);
+    expect(first[0]).toMatchObject({ source: 'tests/g0000.yaml#s0', method: 'GET', query: ['page'], statuses: ['200'] });
+    // what a caller does to its copy does not reach the next answer
+    first[0]!.query.push('junk');
+    const t1 = performance.now();
+    const second = existingRequests(store);
+    const ms = performance.now() - t1;
+    expect(second[0]!.query).toEqual(['page']);
+    expect(second.map((r) => r.source)).toEqual(first.map((r) => r.source));
+    writeFileSync(join(tests, 'g0001.yaml'), `tests:\n  - id: changed\n    method: POST\n    url: "{{baseUrl}}/other"\n`);
+    const third = existingRequests(store);
+    expect(third).toHaveLength(1500);
+    expect(third[1]).toMatchObject({ source: 'tests/g0001.yaml#changed', method: 'POST' });
+    expect(ms, `a second look took ${Math.round(ms)} ms`).toBeLessThan(8000);
   });
 });
 

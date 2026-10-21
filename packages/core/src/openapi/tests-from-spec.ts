@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseYaml, stringifyYaml as stringify } from '../util/lazy-yaml.js';
+import type { HttpRequestSpec, KeyValue } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { fuzzCases, fuzzFindingsToTests, type FuzzCase, type FuzzReport } from './fuzz.js';
@@ -23,6 +24,18 @@ export interface GeneratedTestFile {
 
 const NEGATIVE_ORDER = ['missing-required', 'wrong-type', 'enum', 'not-json', 'bad-path', 'missing-query'];
 
+/** The method, URL, query parameters, headers and auth of a request as the keys of a test step (`headers`: the ones to write). */
+export function stepRequestKeys(r: HttpRequestSpec, headers: KeyValue[]): Record<string, unknown> {
+  const params = (r.params ?? []).filter((p) => p.enabled !== false);
+  return {
+    method: r.method,
+    url: r.url,
+    ...(params.length ? { params: Object.fromEntries(params.map((p) => [p.key, p.value])) } : {}),
+    ...(headers.length ? { headers: Object.fromEntries(headers.map((h) => [h.key, h.value])) } : {}),
+    ...(r.auth && r.auth.type !== 'inherit' && r.auth.type !== 'none' ? { auth: r.auth } : {}),
+  };
+}
+
 function testOf(c: FuzzCase, o: { id: string; name: string; status?: string; specPath?: string; negative?: boolean }): Record<string, unknown> {
   const r = c.request;
   let body: unknown;
@@ -35,15 +48,10 @@ function testOf(c: FuzzCase, o: { id: string; name: string; status?: string; spe
     }
   }
   const headers = (r.headers ?? []).filter((h) => h.key.toLowerCase() !== 'content-type' || typeof body === 'string');
-  const params = (r.params ?? []).filter((p) => p.enabled !== false);
   const t: Record<string, unknown> = {
     id: o.id,
     name: o.name,
-    method: r.method,
-    url: r.url,
-    ...(params.length ? { params: Object.fromEntries(params.map((p) => [p.key, p.value])) } : {}),
-    ...(headers.length ? { headers: Object.fromEntries(headers.map((h) => [h.key, h.value])) } : {}),
-    ...(r.auth && r.auth.type !== 'inherit' && r.auth.type !== 'none' ? { auth: r.auth } : {}),
+    ...stepRequestKeys(r, headers),
     ...(body !== undefined ? (typeof body === 'string' ? { body: { type: 'json', content: body } } : { body }) : {}),
   };
   t.assertions = o.negative
@@ -66,6 +74,13 @@ export function testsFromSpec(text: string, opts: { specPath?: string; negative?
   const { cases } = fuzzCases(text, { baseUrl: '{{baseUrl}}', includeDelete: opts.includeDelete, maxPerOperation: 60 });
   const api = slugify(opts.specPath?.replace(/^specs\//, '').replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '') || outline.title) || 'api';
   const files: GeneratedTestFile[] = [];
+  // the cases of each operation, found once (not by a pass over all the cases for each operation)
+  const casesOf = new Map<string, FuzzCase[]>();
+  for (const c of cases) {
+    const list = casesOf.get(c.operation);
+    if (list) list.push(c);
+    else casesOf.set(c.operation, [c]);
+  }
   const used = new Set<string>();
   const idOf = (s: string) => {
     let id = slugify(s) || 'test';
@@ -77,7 +92,7 @@ export function testsFromSpec(text: string, opts: { specPath?: string; negative?
     const tests: Array<Record<string, unknown>> = [];
     for (const op of tag.operations) {
       const label = `${op.method} ${op.path}`;
-      const mine = cases.filter((c) => c.operation === label);
+      const mine = casesOf.get(label) ?? [];
       const valid = mine.find((c) => c.mutation === 'valid');
       if (!valid) continue; // DELETE without includeDelete
       const success = successCode(op.responses.map((r) => r.code));

@@ -5,13 +5,17 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   buildAiContext,
   checkTypes,
+  lintOpenApi,
   matchSecretKey,
+  openApiOutline,
   Redactor,
   registerCheck,
   secretKeyFields,
   shortId,
   spanId,
+  stringifyYaml,
   testHistory,
+  testsFromSpec,
   traceId,
   unregisterCheck,
   type WorkspaceStore,
@@ -232,6 +236,62 @@ describe('the history of a test across runs', () => {
     expect(await testHistory(store, { id: 'plai' })).toEqual([]);
     expect(await testHistory(store, { name: 'Plain other2' })).toEqual([]);
     expect(await testHistory(store, {})).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ the OpenAPI tools on a big document */
+
+const goldenSpec = (n: number) => {
+  const paths: Record<string, unknown> = {};
+  for (let i = 0; i < n; i++)
+    paths[`/res${i % 40}/{id}/sub${i}${i % 7 === 0 ? '/' : ''}`] = {
+      get: {
+        ...(i % 3 ? { operationId: 'get' + (i % 250) } : {}),
+        ...(i % 5 ? { summary: 'Get ' + i, tags: ['t' + (i % 6)] } : {}),
+        parameters: [
+          { name: i % 11 === 0 ? 'other' : 'id', in: 'path', required: i % 13 !== 0, schema: { type: 'string' } },
+          { name: 'q', in: 'query', schema: { type: 'integer', minimum: 1, example: i % 17 === 0 ? 'x' : 3 } },
+        ],
+        responses:
+          i % 19 === 0
+            ? {}
+            : {
+                200: { description: 'ok', content: { 'application/json': { schema: i % 4 ? { type: 'object', properties: { id: { type: 'string' }, n: { type: 'integer' } }, required: ['id'] } : { $ref: i % 9 === 0 ? '#/components/schemas/Missing' : '#/components/schemas/Item' } } } },
+                404: { description: 'nf' },
+              },
+      },
+      post: {
+        operationId: 'post' + i,
+        tags: ['t' + (i % 6)],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string', maxLength: 20 }, qty: { type: 'integer', minimum: 0, maximum: 100 }, kind: { type: 'string', enum: ['a', 'b'] } }, required: ['name'] } } } },
+        responses: { 201: { description: 'created' } },
+      },
+    };
+  return { openapi: '3.0.3', info: { title: 'Golden API', version: '1' }, servers: [{ url: 'http://example.com' }], paths, components: { schemas: { Item: { type: 'object', properties: { id: { type: 'string' } } }, Unused: { type: 'string' } } } };
+};
+const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 16);
+
+describe('the OpenAPI tools answer for a 300-operation document as they did', () => {
+  const json = JSON.stringify(goldenSpec(300));
+  const yaml = stringifyYaml(goldenSpec(300));
+  it('lints it, in JSON and in YAML, with each problem at its place', () => {
+    const j = lintOpenApi(json);
+    const y = lintOpenApi(yaml);
+    expect(j.problems).toHaveLength(986);
+    expect(y.problems).toHaveLength(986);
+    expect(hash(j)).toBe('d4c36ebc9e7d3f7d');
+    expect(hash(y)).toBe('443aa581a100cf60');
+    // a path that two keys spell the same way: the first key is where the problem is shown
+    const dup = JSON.parse(json);
+    dup.paths['/dup/{id}'] = dup.paths['/res1/{id}/sub1'];
+    expect(hash(lintOpenApi(JSON.stringify(dup), { minSeverity: 'warning' }))).toBe('ee2b86bf4ee038a0');
+  });
+  it('makes the same test files and the same outline', () => {
+    for (const text of [json, yaml]) {
+      expect(hash(testsFromSpec(text, { specPath: 'specs/golden.yaml' }))).toBe('7b23984858722fe1');
+      expect(hash(testsFromSpec(text, { negative: false, includeDelete: true }))).toBe('be4df74cd18ab9c2');
+      expect(hash(openApiOutline(text))).toBe('31c5879a1620f370');
+    }
   });
 });
 

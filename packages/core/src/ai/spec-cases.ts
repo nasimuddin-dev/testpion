@@ -7,6 +7,7 @@ import type { HttpRequestSpec, KeyValue } from '../model/types.js';
 import { type FuzzCase } from '../openapi/fuzz.js';
 import { findOperation, schemaProblems, type OpenApiDoc } from '../openapi/contract.js';
 import { successCode } from '../openapi/outline.js';
+import { stepRequestKeys } from '../openapi/tests-from-spec.js';
 import { bodySchemaOf, matchUrl, propertiesOf, SPEC_CATEGORIES, specOperations, type ExistingRequest, type SpecCategory, type SpecGapReport, type SpecOperation } from '../openapi/spec-gaps.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { deref, typeOf } from '../util/json-ref.js';
@@ -311,17 +312,12 @@ export function stepOf(c: SpecCase, id: string, op: SpecOperation | undefined, d
   const r = c.request;
   const body = jsonBody(r);
   const headers = (r.headers ?? []).filter((h) => h.enabled !== false && (h.key.toLowerCase() !== 'content-type' || (body === undefined && !!r.body && r.body.type !== 'none')));
-  const params = (r.params ?? []).filter((p) => p.enabled !== false);
   const raw = r.body && 'content' in r.body ? (r.body as { content: string }).content : undefined;
   return {
     id,
     name: c.name,
     tags: ['spec-gap', c.category, ...(c.origin === 'ai' ? ['ai'] : [])],
-    method: r.method,
-    url: r.url,
-    ...(params.length ? { params: Object.fromEntries(params.map((p) => [p.key, p.value])) } : {}),
-    ...(headers.length ? { headers: Object.fromEntries(headers.map((h) => [h.key, h.value])) } : {}),
-    ...(r.auth && r.auth.type !== 'inherit' && r.auth.type !== 'none' ? { auth: r.auth } : {}),
+    ...stepRequestKeys(r, headers),
     ...(body !== undefined ? { body } : raw !== undefined ? { body: { type: 'json', content: raw } } : {}),
     assertions: checksOf(c, op, doc, spec),
   };

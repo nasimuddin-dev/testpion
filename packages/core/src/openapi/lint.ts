@@ -1,4 +1,4 @@
-import type { Node } from 'yaml';
+import type { Node, Pair, YAMLMap } from 'yaml';
 import { isMap, isScalar, isSeq, lineCounter, parseDocument } from '../util/lazy-yaml.js';
 import { schemaProblems, type OpenApiDoc } from './contract.js';
 import { jsonPointerGet } from '../util/json-ref.js';
@@ -77,13 +77,32 @@ export function lintOpenApi(text: string, opts: { disable?: string[]; minSeverit
   const yd = parseDocument(text, { lineCounter: lc, prettyErrors: false, uniqueKeys: false });
 
   const pos = (offset: number) => lc.linePos(Math.max(0, Math.min(offset, text.length)));
+  /** The pair of a key in a map: found by a scan for a small map, through an index (built once, the first of a duplicate key wins) for a big one such as `paths`. */
+  const keyIndex = new WeakMap<object, Map<string, Pair>>();
+  const pairOf = (node: YAMLMap, seg: Seg): Pair | undefined => {
+    const name = String(seg);
+    const keyOf = (p: Pair) => (isScalar(p.key) ? String(p.key.value) : String(p.key));
+    if (node.items.length < 32) return node.items.find((p) => keyOf(p) === name);
+    let index = keyIndex.get(node);
+    if (!index) {
+      index = new Map();
+      for (const p of node.items) {
+        const k = keyOf(p);
+        if (!index.has(k)) index.set(k, p);
+      }
+      keyIndex.set(node, index);
+    }
+    return index.get(name);
+  };
   /** The place of a key (or of the deepest part of the path that exists). */
+  // (the end of the first line is where a problem with no place of its own points; found once: a document of one line is scanned whole)
+  const firstLineEnd = Math.min(text.length, (text.indexOf('\n') + 1 || text.length + 1) - 1);
   const locate = (path: Seg[]) => {
     let node: unknown = yd.contents;
-    let range: [number, number] = [0, Math.min(text.length, (text.indexOf('\n') + 1 || text.length + 1) - 1)];
+    let range: [number, number] = [0, firstLineEnd];
     for (const seg of path) {
       if (isMap(node)) {
-        const pair = node.items.find((p) => (isScalar(p.key) ? String(p.key.value) : String(p.key)) === String(seg));
+        const pair = pairOf(node, seg);
         if (!pair) break;
         const k = pair.key as Node | undefined;
         if (k?.range) range = [k.range[0], k.range[1]];

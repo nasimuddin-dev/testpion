@@ -16,7 +16,7 @@ import { ApsError } from '../errors.js';
 import { readResultsFile } from '../runner/runner.js';
 import { runResults } from '../runner/run-results.js';
 import { finishedRun, latestFinishedRun, requestIdOfResult, resultSourceRefs, testsPathOf } from '../runner/result-source.js';
-import { parseYaml } from '../util/lazy-yaml.js';
+import { testStepsOf, tryParseYaml } from '../util/yaml-doc.js';
 import { slugify } from '../util/ids.js';
 import type { StoredResponse } from './verify.js';
 
@@ -220,15 +220,9 @@ export function sourceOfResult(store: WorkspaceStore, r: TestResult, origin: Run
 
 /** A step of a test file: its id or name as the result names it (an explicit id, or <file>:<name> as the loader makes it). */
 export function stepOfResult(text: string, path: string, r: { id: string; name: string }): { ref: string; step: Record<string, unknown> } | undefined {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return undefined;
-  }
-  const steps = (Array.isArray(doc) ? doc : Array.isArray((doc as { tests?: unknown })?.tests) ? (doc as { tests: unknown[] }).tests : doc && typeof doc === 'object' ? [doc] : []) as Array<
-    Record<string, unknown>
-  >;
+  const parsed = tryParseYaml(text);
+  if (!parsed.ok) return undefined;
+  const steps = testStepsOf(parsed.value);
   const fileSlug = slugify(
     path
       .split('/')

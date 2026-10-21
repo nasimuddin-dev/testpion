@@ -6,7 +6,7 @@
  * moved Get order after Update" instead of two YAML files.
  */
 import { checkLabel } from '@testpion/shared';
-import { parseYaml } from '../util/lazy-yaml.js';
+import { tryParseYaml } from '../util/yaml-doc.js';
 import { matchSteps } from '../util/step-match.js';
 
 interface StepFieldChange {
@@ -33,12 +33,9 @@ type Step = Record<string, unknown>;
 
 /** The steps of a test file's YAML text (a list, or `tests:` of a map); none when it does not parse. */
 export const yamlSteps = (text: string): Step[] => {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
+  const parsed = tryParseYaml(text);
+  if (!parsed.ok) return [];
+  const doc = parsed.value;
   const list = Array.isArray(doc) ? doc : ((doc as { tests?: unknown[] } | null)?.tests ?? []);
   return (Array.isArray(list) ? list : []).filter((s): s is Step => !!s && typeof s === 'object' && !Array.isArray(s));
 };

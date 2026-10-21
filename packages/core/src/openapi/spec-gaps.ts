@@ -15,6 +15,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
+import { BoundedMap } from '../util/collections.js';
 import { deref, operationParameters } from '../util/json-ref.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -202,14 +203,27 @@ const walkFiles = (dir: string, out: string[] = [], depth = 0): string[] => {
   return out;
 };
 
+/** What a test file said, by its size and time: a second analysis reads only the files that changed (up to 20,000 files are remembered). */
+const requestsByFile = new BoundedMap<string, { key: string; rel: string; requests: ExistingRequest[] }>(20_000);
+
 /** Every HTTP request of the workspace that a gap analysis reads: test files and saved collection requests. */
 export function existingRequests(store: WorkspaceStore): ExistingRequest[] {
   const out: ExistingRequest[] = [];
   const root = store.path('tests');
   for (const f of walkFiles(root).sort()) {
     try {
-      if (statSync(f).size > 2 * 1024 * 1024) continue;
-      out.push(...requestsOfTestFile(f.slice(root.length + 1).replace(/\\/g, '/'), readFileSync(f, 'utf8')));
+      const st = statSync(f);
+      if (st.size > 2 * 1024 * 1024) continue;
+      const rel = f.slice(root.length + 1).replace(/\\/g, '/');
+      const key = `${st.size}:${st.mtimeMs}`;
+      let hit = requestsByFile.get(f);
+      if (!hit || hit.key !== key || hit.rel !== rel) {
+        hit = { key, rel, requests: requestsOfTestFile(rel, readFileSync(f, 'utf8')) };
+        requestsByFile.delete(f);
+        requestsByFile.set(f, hit);
+      }
+      // (copies: a caller may change what it gets)
+      for (const r of hit.requests) out.push({ ...r, query: [...r.query], headers: [...r.headers], bodyFields: [...r.bodyFields], statuses: [...r.statuses], tags: [...r.tags] });
     } catch {
       /* unreadable: skipped */
     }
