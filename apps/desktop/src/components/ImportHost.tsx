@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { Upload } from 'lucide-react';
 import { toastError, useApp } from '../store';
 import type { ImportSource } from '../types';
 import { dragHasImportable, readDrop } from '../lib/import-files';
 import { importBundleFile, isBundleFile } from '../lib/transfer';
-import { ImportDialog, type MigrateTool } from './ImportDialog';
+import type { MigrateTool } from './ImportDialog';
+import { ViewBoundary } from './ViewBoundary';
+
+/** Loaded when something is imported, not at startup. */
+const ImportDialog = lazy(async () => ({ default: (await import('./ImportDialog')).ImportDialog }));
 
 interface Request {
   initial?: ImportSource;
@@ -87,7 +91,13 @@ export function ImportHost() {
           </div>
         </div>
       )}
-      {request && <ImportDialog key={request.n} initial={request.initial} tool={request.tool} migrate={request.migrate} onClose={close} onDone={() => undefined} />}
+      {request && (
+        <ViewBoundary view="import" variant="bar" label="import" onDismiss={close} className="fixed bottom-9 left-1/2 -translate-x-1/2 z-[60] w-[min(720px,92vw)] rounded-lg border shadow-lg">
+          <Suspense fallback={null}>
+            <ImportDialog key={request.n} initial={request.initial} tool={request.tool} migrate={request.migrate} onClose={close} onDone={() => undefined} />
+          </Suspense>
+        </ViewBoundary>
+      )}
     </>
   );
 }
