@@ -5,7 +5,7 @@ import { signAwsV4 } from '../../protocols/http/signing.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
 
-type Block = { text?: string; toolUse?: { toolUseId: string; name: string; input: unknown }; toolResult?: { toolUseId: string; content: Array<{ json?: unknown; text?: string }> } };
+type Block = { text?: string; image?: { format: string; source: { bytes: string } }; toolUse?: { toolUseId: string; name: string; input: unknown }; toolResult?: { toolUseId: string; content: Array<{ json?: unknown; text?: string }> } };
 type ConverseResponse = {
   output?: { message?: { role: string; content?: Block[] } };
   stopReason?: string;
@@ -98,7 +98,10 @@ export class BedrockProvider implements LlmProvider {
       } else if (m.role === 'assistant') {
         if (m.content) push('assistant', { text: m.content });
         for (const t of m.toolCalls ?? []) push('assistant', { toolUse: { toolUseId: t.id, name: t.name, input: t.arguments } });
-      } else push('user', { text: m.content });
+      } else {
+        for (const i of m.images ?? []) push('user', { image: { format: i.mime.slice(6), source: { bytes: i.data } } });
+        push('user', { text: m.content });
+      }
     }
     return { system, messages: out };
   }

@@ -49,7 +49,7 @@ export const METRIC_PRESETS: readonly MetricPreset[] = [
     id: 'free',
     name: 'Free (no model at all)',
     description: 'Every metric that needs no judge and no embedding model: ids and rank, lexical, answer text and the limits.',
-    metrics: ['context-precision-ids', 'context-recall-ids', 'recall@k', 'ndcg@k', 'context-precision-lexical', 'context-recall-lexical', 'context-entity-recall', 'normalized-match', 'token-f1', 'rouge', 'string-similarity', 'citation', 'latency', 'tokens'],
+    metrics: ['context-precision-ids', 'context-recall-ids', 'recall@k', 'ndcg@k', 'context-precision-lexical', 'context-recall-lexical', 'context-entity-recall', 'normalized-match', 'token-f1', 'rouge', 'string-similarity', 'citation', { metric: 'pii-leakage', options: { mode: 'regex' } }, 'no-leak', 'latency', 'tokens'],
   },
   {
     id: 'answer-vs-reference',
@@ -62,6 +62,30 @@ export const METRIC_PRESETS: readonly MetricPreset[] = [
     name: 'Ragas NL comparison',
     description: 'Ragas’ natural-language comparison group that this release has (BLEU and chrF come later).',
     metrics: ['factual-correctness', { metric: 'semantic-similarity', options: { method: 'embedding' } }, 'string-similarity', 'rouge', 'contains', 'exact-match'],
+  },
+  {
+    id: 'safety',
+    name: 'Safety',
+    description: 'Run it on the seeded probe sets (`testpion rag probes add`): toxicity, bias, personal data, secrets, planted instructions, jailbreaks and whether the system refuses what it should (and answers what it should).',
+    metrics: ['toxicity', 'bias', 'pii-leakage', 'no-leak', { metric: 'prompt-injection-resistance', options: { mode: 'both' } }, 'refusal-correctness', 'jailbreak-resistance', 'harmfulness'],
+  },
+  {
+    id: 'conversational',
+    name: 'Conversational',
+    description: 'Multi-turn conversations (a dataset with `turns`): does the assistant remember, finish what the user came for, stay relevant and keep each answer grounded. Add role-adherence and topic-adherence with your role and topics.',
+    metrics: ['knowledge-retention', 'conversation-completeness', 'turn-relevancy', 'user-friction', 'per-turn:faithfulness'],
+  },
+  {
+    id: 'agentic-rag',
+    name: 'Agentic RAG',
+    description: 'A system that calls tools: the right calls (Ragas tool-call accuracy and F1, trajectory), good arguments, and whether the goal was reached.',
+    metrics: ['tool-call-accuracy', 'tool-call-f1', 'trajectory-match', 'argument-correctness', 'goal-accuracy', 'task-completion'],
+  },
+  {
+    id: 'multimodal',
+    name: 'Multimodal',
+    description: 'RAG over pictures: the answer against the images and texts that were retrieved (needs a vision judge and `allowImages` on the evaluation).',
+    metrics: ['multimodal-faithfulness', 'multimodal-relevance', 'answer-relevance'],
   },
   { id: 'ops', name: 'Ops', description: 'Latency, time to first token, tokens and cost of the system under test.', metrics: ['latency', 'ttft', 'tokens', 'cost'] },
 ];

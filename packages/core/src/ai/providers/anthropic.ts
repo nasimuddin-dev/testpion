@@ -40,7 +40,8 @@ export class AnthropicProvider implements LlmProvider {
         if (m.content) content.push({ type: 'text', text: m.content });
         for (const t of m.toolCalls) content.push({ type: 'tool_use', id: t.id, name: t.name, input: t.arguments });
         out.push({ role: 'assistant', content });
-      } else out.push({ role: m.role, content: m.content });
+      } else if (m.images?.length) out.push({ role: m.role, content: [...m.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } })), { type: 'text', text: m.content }] });
+      else out.push({ role: m.role, content: m.content });
     }
     return { system, messages: out };
   }

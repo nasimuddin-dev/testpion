@@ -18,7 +18,7 @@ import { evalFormula, parseFormula, type Value } from './formula.js';
 export type CustomCheck = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult>;
 
 const inputsOf = (f: CustomMetricFile): TemplateInput[] => {
-  const given = (f.inputs ?? ['question', 'answer']).filter((i): i is TemplateInput => ['question', 'answer', 'reference', 'contexts'].includes(i));
+  const given = (f.inputs ?? ['question', 'answer']).filter((i): i is TemplateInput => ['question', 'answer', 'reference', 'contexts', 'conversation'].includes(i));
   if (f.reference === 'guided' && !given.includes('reference')) given.push('reference');
   return given;
 };

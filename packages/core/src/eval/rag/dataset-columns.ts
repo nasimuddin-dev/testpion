@@ -93,6 +93,13 @@ export function missingDatasetInputs(requires: ReadonlyArray<string>, columns: s
     rubric: cols.has('rubric') || cols.has('rubrics'),
     goodAnswers: cols.has('good_answers'),
     relevance: cols.has('relevance') || cols.has('qrels'),
+    // pictures may also come from the target (a context's image); turns from a conversation column
+    images: hasTarget || ['images', 'image', 'question_images', 'question_image'].some((n) => cols.has(n)),
+    turns: ['turns', 'conversation', 'messages', 'user_input'].some((n) => cols.has(n)),
+    referenceTopics: ['reference_topics', 'topics'].some((n) => cols.has(n)),
+    expectedOutcome: ['expected_outcome', 'goal'].some((n) => cols.has(n)),
+    shouldRefuse: ['should_refuse', 'expect_refusal'].some((n) => cols.has(n)),
+    otherAnswer: ['baseline_answer', 'answer_b', 'other_answer', 'baseline_response'].some((n) => cols.has(n)),
   };
   return requires.filter((r) => has[r] === false);
 }

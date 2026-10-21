@@ -7,7 +7,7 @@
 export type CustomMetricKind = 'judge' | 'checklist' | 'rule' | 'formula' | 'embedding-set' | 'script';
 
 /** What a custom metric may see of the sample. */
-export type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts';
+export type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
 
 export interface CustomMetricExampleSample {
   question?: string;

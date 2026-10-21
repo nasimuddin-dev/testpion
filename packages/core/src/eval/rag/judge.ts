@@ -19,6 +19,8 @@ import type { AiSurface } from '../../storage/ai-usage.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { ProviderRegistry } from '../../ai/index.js';
 import type { Redactor } from '../../util/redact.js';
+import type { ChatImage } from '../../ai/types.js';
+import { visionCapable } from '../../ai/vision.js';
 import { VERDICT_SCHEMA, type JudgedMetric, type Verdict } from './judge-prompts.js';
 import { validateSchema } from '../checks.js';
 
@@ -99,7 +101,7 @@ export function judgeSetupError(why: string, extra: string[] = []): ApsError {
  * Checks, before any sample is run, that the judge can be used: a route exists, its provider is configured and allowed
  * by Local only. Throws the setup error with what to configure otherwise.
  */
-export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provider: string; model: string } {
+export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provider: string; model: string; vision: boolean } {
   const { deps } = host;
   let route;
   try {
@@ -120,15 +122,20 @@ export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provi
     throw e;
   }
   assertLocalAllowed(resolved.provider.config, localOnly);
-  return { provider: resolved.provider.config.name, model: resolved.model };
+  return { provider: resolved.provider.config.name, model: resolved.model, vision: visionCapable(resolved.provider.config, resolved.model) };
 }
 
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
 /** The AI task request of a metric's judge call. */
 export function judgeRequest(metric: JudgedMetric, input: Record<string, unknown>, judge?: JudgeRef): AiTaskRequest {
-  return { task: 'rag-judge', question: metric.instruction, context: input, provider: judge?.provider, model: judge?.model };
+  // images ride beside the text fields (`__images`, from eval/rag/images.ts): they are data for a vision judge, never text in the context
+  const { __images, __allowImages, ...context } = input as Record<string, unknown> & { __images?: ChatImage[]; __allowImages?: boolean };
+  return { task: 'rag-judge', question: metric.instruction, context, provider: judge?.provider, model: judge?.model, ...(__images?.length ? { images: __images, allowImages: __allowImages === true } : {}) };
 }
+
+/** The messages as the cache key sees them: an image by its hash, so the same picture hits and a different one misses. */
+const keyMessages = (messages: AiPreview['messages']) => messages.map(({ images, ...m }) => (images?.length ? { ...m, images: images.map((i) => `${i.mime}:${i.sha256}`) } : m));
 
 /** "What will be sent": the exact messages, the context sections, the estimate and the redactions of a judge call (nothing is sent). */
 export function previewJudge(host: RagJudgeHost, metric: JudgedMetric, input: Record<string, unknown>, judge?: JudgeRef): AiPreview {
@@ -161,10 +168,12 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   if (cut.length) throw new ApsError('ValidationError', `The sample is too long for the judge (${cut.map((s) => `${s.name}: ${s.notes.join(', ')}`).join('; ')})`, { suggestions: ['Retrieve fewer or shorter documents, or score this sample with the metrics that need no model.'] });
   const judge = { provider: preview.providerName, model: preview.model, metric: metric.id, promptVersion: metric.version };
   // the key is the exact prompt (after redaction) with the model that answers: any change to the sample, the wording, the model or the task misses
-  const key = hash({ task: 'rag-judge', provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: preview.messages });
+  const key = hash({ task: 'rag-judge', provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: keyMessages(preview.messages) });
   const cache = host.deps.store?.meta;
   if (host.dry) {
-    host.dry.push({ metric: metric.id, version: metric.version, input, preview, cached: !o.fresh && !!cache?.getJudgeCache(key) });
+    // what a dry run lists goes to the window: the pictures are in preview.images (thumbnails), never twice as base64
+    const { __images: _img, ...shown } = input as Record<string, unknown>;
+    host.dry.push({ metric: metric.id, version: metric.version, input: shown, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, cached: !o.fresh && !!cache?.getJudgeCache(key) });
     return { verdict: { reasoning: '', items: [] }, cached: true, judge, usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, redactionCount: preview.redactionCount };
   }
   // `fresh` asks again whatever the cache holds (a repeat measures the judge's own noise); the answer is still stored

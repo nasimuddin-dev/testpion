@@ -10,7 +10,7 @@ import type { CheckConfig } from '../../model/types.js';
 import { setCheckResolver } from '../checks.js';
 
 /** What a metric reads from a sample (planning §2.2). */
-export type MetricInput = 'question' | 'answer' | 'contexts' | 'reference' | 'referenceIds' | 'referenceContexts' | 'canaries' | 'toolCalls' | 'referenceToolCalls' | 'answerable' | 'source' | 'rubric' | 'goodAnswers' | 'latency' | 'scores' | 'relevance';
+export type MetricInput = 'question' | 'answer' | 'contexts' | 'reference' | 'referenceIds' | 'referenceContexts' | 'canaries' | 'toolCalls' | 'referenceToolCalls' | 'answerable' | 'source' | 'rubric' | 'goodAnswers' | 'latency' | 'scores' | 'relevance' | 'images' | 'turns' | 'referenceTopics' | 'expectedOutcome' | 'shouldRefuse' | 'otherAnswer';
 
 export const INPUT_LABELS: Record<MetricInput, string> = {
   question: 'the question',
@@ -29,12 +29,18 @@ export const INPUT_LABELS: Record<MetricInput, string> = {
   latency: 'the time the system took (the target call measures it)',
   scores: 'the retrieval scores of the contexts (map the score of a context in the target)',
   relevance: 'graded relevance of the gold chunks (dataset column "relevance": {id: grade})',
+  images: 'pictures in the question or the retrieved chunks (map the image of a context in the target, or the dataset column "images"); the evaluation must allow images',
+  turns: 'a conversation (dataset column "turns": the user messages to send, or a transcript; the target runs it in conversation mode)',
+  referenceTopics: 'the topics the conversation may stay on (dataset column "reference_topics")',
+  expectedOutcome: 'what the user wanted to achieve, in words (dataset column "expected_outcome")',
+  shouldRefuse: 'whether the system must refuse this prompt (dataset column "should_refuse": true or false)',
+  otherAnswer: 'the other system’s answer to the same question (dataset column "baseline_answer")',
 };
 
 /** How a metric is computed: from numbers and text, by a judge model, by an embedding model, or by running SQL. */
 export type MetricKind = 'deterministic' | 'judged' | 'embedding' | 'sql';
 
-export type MetricGroup = 'retrieval-judged' | 'retrieval-ir' | 'generation' | 'claims' | 'reference' | 'embedding' | 'judge-template' | 'safety' | 'agent' | 'sql' | 'operational' | 'custom';
+export type MetricGroup = 'retrieval-judged' | 'retrieval-ir' | 'generation' | 'claims' | 'reference' | 'embedding' | 'judge-template' | 'safety' | 'conversation' | 'agent' | 'multimodal' | 'sql' | 'operational' | 'custom';
 
 export const METRIC_GROUPS: ReadonlyArray<{ id: MetricGroup; label: string }> = [
   { id: 'retrieval-judged', label: 'Retrieval, judged' },
@@ -45,7 +51,9 @@ export const METRIC_GROUPS: ReadonlyArray<{ id: MetricGroup; label: string }> = 
   { id: 'claims', label: 'Claim-level analysis' },
   { id: 'judge-template', label: 'Judge templates' },
   { id: 'safety', label: 'Safety' },
+  { id: 'conversation', label: 'Conversation (multi-turn)' },
   { id: 'agent', label: 'Agent and tool use' },
+  { id: 'multimodal', label: 'Multimodal (pictures)' },
   { id: 'sql', label: 'Text-to-SQL' },
   { id: 'operational', label: 'Operational' },
   { id: 'custom', label: 'Custom (this workspace)' },
@@ -162,6 +170,13 @@ export function resolveMetric(name: string): ResolvedMetric | undefined {
     ragasPrefix = true;
     raw = raw.slice(6);
   }
+  // per-turn:<metric> scores every assistant turn of a conversation with a single-turn metric
+  const pt = /^per-turn:(.+)$/i.exec(raw);
+  if (pt) {
+    const inner = resolveMetric(pt[1]!);
+    const def = registry.get('per-turn');
+    return inner && def && inner.def.id !== 'per-turn' ? { def, options: { ...inner.options, metric: inner.def.id }, viaRagas: false } : undefined;
+  }
   const at = /^(.+)@(\d+)$/.exec(raw);
   const key = normalizeMetricName(at ? `${at[1]}@k` : raw);
   // a trailing "score" is dropped when that finds exactly one metric (Ragas class names end with it)
@@ -194,6 +209,7 @@ export function metricCatalogueRows(): Array<Omit<MetricDef, 'estimate'>> {
  * (or two modes of context-relevance) are two columns, not one that is overwritten.
  */
 export function columnName(id: string, options: Record<string, unknown> = {}): string {
+  if (id === 'per-turn' && typeof options.metric === 'string') return `per-turn:${options.metric}`;
   const base = typeof options.k === 'number' ? id.replace('@k', `@${options.k}`) : id;
   const def = registry.get(id);
   const dflt = def?.options?.mode?.default;

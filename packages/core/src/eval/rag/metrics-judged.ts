@@ -187,6 +187,11 @@ export function needsJudgeService(type: string, strictRun: boolean, cfg?: object
   if (!def) return false;
   // the model mode of entity recall (Ragas) asks a judge; its regex mode does not
   if (id === 'context-entity-recall') return ((cfg as { mode?: unknown } | undefined)?.mode ?? resolved.options.mode) === 'llm';
+  // metrics that are free in their default mode and ask a judge in another
+  const mode = (cfg as { mode?: unknown } | undefined)?.mode ?? resolved?.options.mode;
+  if (id === 'prompt-injection-resistance') return mode === 'judge' || mode === 'both';
+  if (id === 'refusal-correctness') return mode === 'judge';
+  if (id === 'pii-leakage') return mode !== 'regex';
   if (def.kind !== 'judged' && def.judge !== 'service') return false;
   // these keep an older heuristic-or-`judge:` implementation outside a RAG run
   return def.judge === 'service' && (!HAS_LEGACY.has(id) || strictRun);

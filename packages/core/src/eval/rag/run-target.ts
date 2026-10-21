@@ -35,6 +35,8 @@ export function targetProblems(t: RagTarget | undefined): string[] {
     else if (!allowed.includes(type)) out.push(`A ${t.protocol} target's request is of type ${allowed.join(' or ')}, not "${type || 'unset'}".`);
   }
   out.push(...mappingProblems(t.mapping), ...limitsProblems(t.limits));
+  if (t.conversation && !['stateless-history', 'server-session'].includes(t.conversation.mode)) out.push(`conversation.mode must be stateless-history or server-session (got ${JSON.stringify(t.conversation.mode)}).`);
+  if (t.conversation?.mode === 'server-session' && !t.mapping?.conversationId) out.push('A server-session conversation needs the conversation id of the response: click it in the sample response and choose "Conversation id".');
   return out;
 }
 
@@ -83,5 +85,10 @@ export async function callTarget(target: RagTarget, question: string, scope: Var
   const sample = o.probe && mapped.length ? { answer: '', contexts: [], warnings: mapped } : applyMapping(response, target.mapping);
   if (!o.probe && sample.warnings.some((w) => w.startsWith('The answer path')))
     throw new ApsError('ConfigurationError', `The mapping found no answer in the response: ${sample.warnings[0]}`, { suggestions: ['Probe the target and click the answer in the sample response to map it again.'], details: { response: ctx.text.slice(0, 500) } });
+  // an MCP target IS a tool call: unless the mapping reads a longer trace out of the response, the call itself is the trace
+  if (target.protocol === 'mcp' && !target.mapping.toolCalls && typeof raw.tool === 'string' && raw.tool) {
+    const args = raw.arguments ?? raw.args;
+    sample.toolCalls = [{ name: raw.tool, arguments: args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {} }];
+  }
   return { sample, response, ctx, latencyMs: sample.latencyMs ?? ctx.latencyMs ?? latencyMs };
 }

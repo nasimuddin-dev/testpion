@@ -4,6 +4,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, RagTest, SuiteConfig, TestCase, UntilSpec } from '../model/types.js';
 import type { RagTarget } from '@testpion/shared';
 import { docsOf, listOf } from '../eval/rag/lists.js';
+import { turnsOf } from '../eval/rag/record.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { globToRegex } from '../util/glob.js';
@@ -467,7 +468,10 @@ export async function* expandDataset(template: Record<string, unknown>, file: st
       t.input = { ...((tpl.input as object) ?? {}), ...vars };
       if (rec[expectedField] !== undefined) t.expected = rec[expectedField];
     } else if (t.type === 'rag') {
-      t.question = rec.question ?? rec.query ?? rec.input ?? rec.user_input ?? tpl.question;
+      // a conversation record (turns, or Ragas' user_input as a message list) asks its first user message first
+      const convo = turnsOf(rec.turns ?? rec.conversation ?? rec.messages ?? (Array.isArray(rec.user_input) ? rec.user_input : undefined));
+      const firstUser = convo?.find((x) => x.role === 'user')?.content;
+      t.question = rec.question ?? rec.query ?? rec.input ?? (Array.isArray(rec.user_input) ? undefined : rec.user_input) ?? firstUser ?? tpl.question;
       if (rec.contexts) t.contexts = rec.contexts;
       if (rec.answer) t.answer = rec.answer;
       // the reference answer: the evaluation's expected field, else the names RAG datasets use (Ragas `reference`, DeepEval `expected_output`)
