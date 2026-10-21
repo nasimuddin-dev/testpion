@@ -21,7 +21,7 @@ import {
   type ItemRef,
   type Proposal,
 } from '@testpion/core';
-import { bold, cliContext, CliError, dim, EXIT, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { bold, cliContext, CliError, dim, EXIT, green, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { dryRunActive } from '../dry-run.js';
 import { registerAiTriageCommands } from './ai-triage.js';
@@ -71,7 +71,7 @@ export function registerAiCommands(program: Command): void {
 
   ai.command('tasks')
     .description('list the AI tasks: what each does, its tier (small/large model), its output and whether it proposes changes')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action((o: { json?: boolean }) => {
       const tasks = listAiTasks();
       if (o.json || machine()) return printJson({ tasks });
@@ -97,9 +97,9 @@ export function registerAiCommands(program: Command): void {
     .option('--apply', 'apply the proposal right away (the ticked items; --items to choose)')
     .option('--items <ids>', 'with --apply: the items to apply, comma-separated (i1,i3)')
     .option('-e, --environment <name>', 'environment whose variable names (never values) the task may use')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--no-ai', "analyze-flaky: TestPion's own signals (the signature, the likely pattern) without a model (also what you get when none is set up)")
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(
       (
         task: string,
@@ -215,8 +215,8 @@ export function registerAiCommands(program: Command): void {
     .description('apply an AI proposal: all its ticked items, or the ones you name (writes test files / collections)')
     .argument('<id>', 'proposal id (ai-…)')
     .option('--items <ids>', 'the items to apply, comma-separated (i1,i3)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((id: string, o: { items?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const r = applyProposal(store, id, {
@@ -241,8 +241,8 @@ export function registerAiCommands(program: Command): void {
   ai.command('undo')
     .description('put back what an applied AI proposal replaced')
     .argument('<id>', 'proposal id (ai-…)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((id: string, o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const r = undoProposal(store, id);
@@ -254,8 +254,8 @@ export function registerAiCommands(program: Command): void {
   ai.command('discard')
     .description('discard an AI proposal (it can no longer be applied)')
     .argument('<id>', 'proposal id (ai-…)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((id: string, o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const p = discardProposal(store, id);
@@ -268,8 +268,8 @@ export function registerAiCommands(program: Command): void {
     .description('the AI proposals of this workspace (kept a day), or one of them with its items (--id)')
     .option('--id <id>', 'one proposal with its items, before/after text and verification')
     .option('--status <status>', 'open | applied | discarded')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((o: { id?: string; status?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         if (o.id) {
@@ -287,8 +287,8 @@ export function registerAiCommands(program: Command): void {
   ai.command('usage')
     .description('what the AI features used in this workspace: today, per task, model and surface (app, CLI, MCP, CI), and the caps')
     .option('--days <n>', 'the period (default 30)', (v) => Number(v))
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((o: { days?: number; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const s = aiUsageSummary(store, { days: o.days, settings: new WorkspaceManager().loadSettings().ai, recent: 20 });

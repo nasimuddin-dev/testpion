@@ -1,5 +1,5 @@
 import { withCollectionListing } from './listing-cache.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';

@@ -8,7 +8,7 @@
 import { Command } from 'commander';
 import { formatUsd } from '@testpion/shared';
 import { ApsError, aiRunDeps, applyProposal, estimateGeneration, generateTestset, DEDUPE_MODES, TESTSET_STYLES, TESTSET_TYPES, WorkspaceManager, type DedupeMode, type GenerateOptions } from '@testpion/core';
-import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { printProposal } from './ai-print.js';
 import { printEstimate } from './rag-eval.js';
@@ -59,7 +59,7 @@ export function registerRagTestsetCommands(rag: Command): void {
     .option('--apply', 'add the ticked rows to the dataset when the run is done')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
     .option('-e, --environment <name>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (docs: string[], o: Flags & { judgeCheck?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);

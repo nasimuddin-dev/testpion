@@ -1,7 +1,7 @@
 /** Where the time of a collection's requests went, from the timing kept with each response sent in the app. */
 import type { WorkspaceStore } from './workspace.js';
 
-export interface PhaseTotals {
+interface PhaseTotals {
   requests: number;
   newConnections: number;
   reused: number;

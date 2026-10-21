@@ -125,7 +125,7 @@ export function planImport(realStore: WorkspaceStore, text: string, opts: { name
 }
 
 /** One input of a multi-file import, planned or failed. */
-export type PlannedInput = { input: Pick<ImportInput, 'name' | 'source' | 'fileCount'>; plan: ImportPlan } | { input: Pick<ImportInput, 'name' | 'source' | 'fileCount'>; error: NormalizedError };
+type PlannedInput = { input: Pick<ImportInput, 'name' | 'source' | 'fileCount'>; plan: ImportPlan } | { input: Pick<ImportInput, 'name' | 'source' | 'fileCount'>; error: NormalizedError };
 
 export interface ImportManyPlan {
   inputs: PlannedInput[];
@@ -161,7 +161,7 @@ export function planInputs(realStore: WorkspaceStore, inputs: ImportInput[], ski
   };
 }
 
-export interface ImportedInput {
+interface ImportedInput {
   input: Pick<ImportInput, 'name' | 'source' | 'fileCount'>;
   result?: WorkspaceImportResult;
   error?: NormalizedError;

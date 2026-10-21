@@ -29,7 +29,7 @@ export function historyResponse(store: WorkspaceStore, h: HistoryEntry): { heade
   return { headers: meta.headers ?? [], body, bodyMissing: body === undefined, bodyTruncated: truncated };
 }
 
-export interface HistoryComparison {
+interface HistoryComparison {
   before: { id: string; timestamp: string; status?: number | string };
   after: { id: string; timestamp: string; status?: number | string };
   diff: ResponseDiff;

@@ -30,7 +30,7 @@ import { gitSetupTextconv } from './textconv.js';
  * file it writes is copied aside first (git/journal.ts), so `testpion git undo` and the app's Undo put them back; the git
  * config and the hook are left (they only register TestPion's drivers).
  */
-export interface GitFixOptions {
+interface GitFixOptions {
   /** Plan only: change nothing. */
   dryRun?: boolean;
   /** The command git runs as the merge driver (without the file arguments); omitted: the driver is not touched. */
@@ -43,7 +43,7 @@ export interface GitFixOptions {
   untrack?: boolean;
 }
 
-export type GitFixStepId = 'gitignore' | 'gitattributes' | 'merge-driver' | 'diff-driver' | 'stable-format' | 'line-endings' | 'hook' | 'untrack' | 'repository' | 'large-files' | 'crlf-documents';
+type GitFixStepId = 'gitignore' | 'gitattributes' | 'merge-driver' | 'diff-driver' | 'stable-format' | 'line-endings' | 'hook' | 'untrack' | 'repository' | 'large-files' | 'crlf-documents';
 
 export interface GitFixStep {
   id: GitFixStepId;
@@ -56,7 +56,7 @@ export interface GitFixStep {
   state: 'todo' | 'advice' | 'skipped';
 }
 
-export interface GitFixRewrite {
+interface GitFixRewrite {
   file: string;
   reason: 'stable-format' | 'line-endings';
   lines: { before: number; after: number };

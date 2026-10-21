@@ -34,7 +34,7 @@ export interface ArazzoFlowFile {
   steps: number;
 }
 
-export interface ArazzoImportResult {
+interface ArazzoImportResult {
   title: string;
   version?: string;
   flows: ArazzoFlowFile[];
@@ -46,7 +46,7 @@ export interface ArazzoImportResult {
   baseUrls: Record<string, string | undefined>;
 }
 
-export interface ArazzoImportOptions {
+interface ArazzoImportOptions {
   /** OpenAPI documents (text or parsed) by source description name, found by the caller (resolveArazzoSources). */
   sources?: Record<string, string | ArazzoJson | undefined>;
   /** The folder the files go to, relative to the workspace (default tests/arazzo). */
@@ -60,7 +60,7 @@ export function isArazzo(d: unknown): boolean {
   return (typeof v === 'string' || typeof v === 'number') && /^1(\.|$)/.test(String(v)) && Array.isArray((d as ArazzoJson).workflows);
 }
 
-export function parseArazzo(text: string): ArazzoJson {
+function parseArazzo(text: string): ArazzoJson {
   let d: unknown;
   try {
     d = text.trimStart().startsWith('{') ? JSON.parse(text) : parseYaml(text);
@@ -83,7 +83,7 @@ const parseDoc = (v: string | ArazzoJson | undefined): ArazzoJson | undefined =>
 };
 
 /** A variable name from parts (step id and output name): letters, digits and _. */
-export const arazzoVarName = (...parts: string[]) =>
+const arazzoVarName = (...parts: string[]) =>
   parts
     .join('_')
     .replace(/[^A-Za-z0-9_]/g, '_')
@@ -177,7 +177,7 @@ function splitAnd(cond: string): string[] | undefined {
 }
 
 /** A check (assertion) of a test file. */
-export type ArazzoCheck = Record<string, unknown>;
+type ArazzoCheck = Record<string, unknown>;
 
 /**
  * Arazzo success criteria → checks. Simple conditions joined by && (each part one check), jsonpath criteria on the
@@ -424,7 +424,7 @@ const toolName = (id: string) =>
   ).slice(0, 64);
 
 /** The file a workflow goes to. */
-export const arazzoFlowPath = (folder: string, workflowId: string) => `${folder.replace(/\/+$/, '')}/${slugify(workflowId)}.yaml`;
+const arazzoFlowPath = (folder: string, workflowId: string) => `${folder.replace(/\/+$/, '')}/${slugify(workflowId)}.yaml`;
 
 /** Header comments of an imported flow file: export reads them back (the workflow id and the sources). */
 export const ARAZZO_WORKFLOW_MARK = 'arazzo-workflow:';

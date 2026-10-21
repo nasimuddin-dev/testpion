@@ -7,7 +7,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import type { WorkspaceStore } from './workspace.js';
 
 /** What the context panel (WF-20) and agents show about one item: where it is kept, its text for variable lookup, the runs that included it. */
-export interface ItemInfo {
+interface ItemInfo {
   ref: ItemRef;
   label: string;
   detail?: string;

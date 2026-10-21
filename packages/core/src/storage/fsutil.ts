@@ -172,7 +172,7 @@ function ownKey(path: string): string {
 }
 
 /** The content fingerprint the watcher compares: `hash:<size>:<sha1>`. */
-export function contentFingerprint(bytes: Buffer): string {
+function contentFingerprint(bytes: Buffer): string {
   return `hash:${bytes.length}:${sha1Hex(bytes)}`;
 }
 
@@ -207,11 +207,6 @@ function recordOwn(path: string, fingerprint: string, dir?: boolean): void {
 export function onOwnWrite(listener: (path: string) => void): () => void {
   ownWriteListeners.add(listener);
   return () => void ownWriteListeners.delete(listener);
-}
-
-export function writtenByUs(path: string, withinMs = OWN_WRITE_TTL_MS): boolean {
-  const f = ownWrite(path, withinMs);
-  return f !== undefined;
 }
 
 /**
@@ -481,7 +476,7 @@ function keepBrokenFile(path: string): void {
 }
 
 /** Why a JSON file's text does not parse, in words (git conflict markers are named as such). */
-export function jsonProblem(text: string, error: unknown): string {
+function jsonProblem(text: string, error: unknown): string {
   if (/^(<{7}|={7}|>{7})( |$)/m.test(text)) return 'it has unresolved git merge conflict markers (<<<<<<< ======= >>>>>>>)';
   if (!text.trim()) return 'the file is empty';
   return `it is not valid JSON (${(error as Error).message})`;

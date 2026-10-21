@@ -5,7 +5,7 @@
  */
 import { Command, Option } from 'commander';
 import { ApsError, captureDataset, type CaptureSourceSpec } from '@testpion/core';
-import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 interface Opts {
   target?: string;
@@ -91,7 +91,7 @@ export function registerRagCaptureCommands(rag: Command): void {
     .option('--dry-run', 'show the first records and the report, write nothing')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
     .option('-e, --environment <name>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: Opts) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);

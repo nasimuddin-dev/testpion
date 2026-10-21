@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { applyTidy, draftTidyProposal, tidyCollection } from '@testpion/core';
-import { green, yellow, dim, bold, printJson, withWorkspace, requireCollection, cliContext } from '../shared.js';
+import { green, yellow, dim, bold, printJson, withWorkspace, requireCollection, cliContext, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -33,8 +33,8 @@ export function registerTidyCommand(program: Command): void {
     .option('--apply', 'with --ai: apply the ticked changes (the verified ones; the model’s opt-in suggestions stay unticked)')
     .option('--dry-run', 'change nothing: with --remove-*, say how many would be removed; with --ai, send nothing and print what would be sent')
     .option('-e, --environment <name>', 'with --ai: environment whose variable names (never values) the model may know')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action(
       (
         ref: string,

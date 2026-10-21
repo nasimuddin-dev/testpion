@@ -8,7 +8,7 @@
  */
 import type { Command } from 'commander';
 import { contractDrift, draftDriftProposal, driftMarkdown, sourceOf } from '@testpion/core';
-import { bold, cliContext, dim, printJson, withWorkspace } from '../shared.js';
+import { bold, cliContext, dim, printJson, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -33,7 +33,7 @@ export function registerAiDriftCommand(program: Command): void {
     .option('--dry-run', 'with --ai: send nothing, print what would be sent')
     .option('--apply', 'with --ai / --propose: write the patches whose verification did not fail (else they stay a proposal)')
     .option('-e, --environment <name>', 'with --ai: environment whose variable names (never values) the model may know')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print the report (or { proposal, … }) as JSON (for scripts and AI agents)')
     .action(
       async (o: {

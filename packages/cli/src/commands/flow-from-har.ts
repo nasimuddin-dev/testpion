@@ -3,10 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import type { Command } from 'commander';
 import { ApsError, flowFromHar, isSecretRef, recordedFlowPath, Redactor, requireEnvironment, secretKeys } from '@testpion/core';
-import { cliSecrets, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
+import { cliSecrets, dim, green, printJson, withWorkspace, yellow, WORKSPACE_OPTION, groupOptions, subcommand } from '../shared.js';
 
 export function registerFlowFromHarCommand(program: Command): void {
-  const flow = program.commands.find((c) => c.name() === 'flow');
+  const flow = subcommand(program, 'flow');
   if (!flow) return;
   flow
     .command('from-har')
@@ -20,14 +20,13 @@ export function registerFlowFromHarCommand(program: Command): void {
     .option('--keep-noise', 'keep static assets, preflights and analytics requests')
     .option('--noise-host <host...>', 'more hosts to leave out as telemetry')
     .option('--dry-run', 'print the flow without writing it')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { file, steps, links, variables, secrets, dropped, notes, text } as JSON (for scripts and AI agents)')
     .action(async (file: string, o: { out?: string; name?: string; environment?: string; keepNoise?: boolean; noiseHost?: string[]; dryRun?: boolean; workspace?: string; json?: boolean }) => {
-      const parent = flow.opts() as { workspace?: string; json?: boolean };
-      o.json ||= parent.json;
+      const workspace = groupOptions(flow, o);
       if (!existsSync(file)) throw new ApsError('ValidationError', `No file ${file}`);
       const text = readFileSync(file, 'utf8');
-      return withWorkspace(o.workspace ?? parent.workspace, (store) => {
+      return withWorkspace(workspace, (store) => {
         const name = o.name?.trim() || basename(file, extname(file));
         const env = o.environment ? requireEnvironment(store, o.environment) : undefined;
         const secrets = cliSecrets();

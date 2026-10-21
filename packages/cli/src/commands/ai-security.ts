@@ -7,7 +7,7 @@
  */
 import type { Command } from 'commander';
 import { draftSecurityProposal, flowSourceRef, productionAllowed, runSecurityTests, securityReportMarkdown, SECURITY_PROBES } from '@testpion/core';
-import { bold, cliContext, dim, EXIT, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { bold, cliContext, dim, EXIT, green, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -37,7 +37,7 @@ export function registerAiSecurityCommands(program: Command): void {
     .option('--dry-run', 'send nothing: print what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'write the file if its verification did not fail (else it stays a proposal)')
     .option('-e, --environment <name>', 'the test environment the tests are for (its variable names, never values, are known to the model); a production one is refused')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { proposal, usage, applied } as JSON (for scripts and AI agents)')
     .action(
       async (o: {
@@ -112,7 +112,7 @@ export function registerAiSecurityCommands(program: Command): void {
     )
     .argument('<file>', 'the generated file under tests/, e.g. security/clinic.yaml')
     .requiredOption('-e, --environment <name>', 'the test environment to run in')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print the report as JSON (for scripts and AI agents)')
     .action(async (file: string, o: { environment: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store) => {

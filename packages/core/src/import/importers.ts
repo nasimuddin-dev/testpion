@@ -38,7 +38,7 @@ export type { ImportAnyResult } from './pipeline.js';
 const withFormat = (doc: ImportDocument, format: string): ImportDocument => ({ ...doc, format });
 
 /** Read any supported text into an import document (scripts not yet converted, ids not yet made unique). */
-export function parseImport(textIn: string, opts: { name?: string } = {}): ImportDocument {
+function parseImport(textIn: string, opts: { name?: string } = {}): ImportDocument {
   // (a file saved with a byte order mark)
   const text = textIn.charCodeAt(0) === 0xfeff ? textIn.slice(1) : textIn;
   const format = detectFormat(text);

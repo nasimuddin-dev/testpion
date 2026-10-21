@@ -135,7 +135,7 @@ export function summarizeActivity(
 }
 
 /** A history row for summarizeActivity with its local day and historyOk(status) already worked out. */
-export interface ActivityRow {
+interface ActivityRow {
   day: string;
   ok: boolean | number;
   kind: string;
@@ -190,7 +190,7 @@ export interface Page<T> {
   total: number;
 }
 
-export interface ListQuery {
+interface ListQuery {
   query?: string;
   kind?: string;
   /** History only: entries sent from this saved request. */
@@ -248,7 +248,7 @@ export interface MetaStore {
 export const HISTORY_VALUE_MAX = 64 * 1024;
 
 /** The request with every string longer than HISTORY_VALUE_MAX cut to that length, and whether anything was cut. */
-export function capHistoryRequest(v: unknown): { value: unknown; cut: boolean } {
+function capHistoryRequest(v: unknown): { value: unknown; cut: boolean } {
   let cut = false;
   const walk = (x: unknown, depth: number): unknown => {
     if (typeof x === 'string') {
@@ -314,7 +314,7 @@ const MAX_TRACES = 50_000;
 /** Pruning runs once per this many inserts (not on every one: a run can add thousands of traces). */
 const PRUNE_EVERY = 200;
 /** Verdicts kept in the judge cache; the oldest go first. */
-export const MAX_JUDGE_CACHE = 200_000;
+const MAX_JUDGE_CACHE = 200_000;
 
 /**
  * Delete the files of removed history entries (response bodies in payloads/) and traces (traces/…).

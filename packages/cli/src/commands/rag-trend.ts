@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { ApsError, ragTrend, trendCsv, trendTable } from '@testpion/core';
-import { EXIT, CliError, bold, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 export function registerRagTrendCommands(rag: Command): void {
   rag
@@ -21,7 +21,7 @@ export function registerRagTrendCommands(rag: Command): void {
     .option('-o, --out <file>', 'write it here instead of printing')
     .option('--fail-on-drop', 'exit 1 when the newest run got worse on a metric')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (evaluation: string, o: { metric?: string; runs: string; since?: string; minDelta: string; format: 'table' | 'csv' | 'json'; out?: string; failOnDrop?: boolean; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);

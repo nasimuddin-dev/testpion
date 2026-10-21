@@ -12,10 +12,10 @@ import type { WorkspaceStore } from './workspace.js';
  * (library/grpc.json, library/websocket.json) and point at their collection with `collectionId`; ones saved by
  * older versions may have none.
  */
-export type CollectionItemKind = (typeof COLLECTION_ITEM_KINDS)[number];
+type CollectionItemKind = (typeof COLLECTION_ITEM_KINDS)[number];
 
 /** The collection an item without a folder goes to, by kind. */
-export const LOOSE_DEFAULT_COLLECTION: Record<CollectionItemKind, string> = { grpc: 'gRPC calls', websocket: 'Connections' };
+const LOOSE_DEFAULT_COLLECTION: Record<CollectionItemKind, string> = { grpc: 'gRPC calls', websocket: 'Connections' };
 
 export interface AdoptedRequests {
   /** Items moved, in total. */

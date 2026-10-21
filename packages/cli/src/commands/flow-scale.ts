@@ -26,7 +26,7 @@ import {
   type FlowMatrixResult,
 } from '@testpion/core';
 import { formatMs } from '@testpion/shared';
-import { EXIT, CliError, bold, cliContext, dim, green, openWorkspace, printJson, red, requireEnvironment, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, green, openWorkspace, printJson, red, requireEnvironment, withWorkspace, yellow, WORKSPACE_OPTION, subcommand } from '../shared.js';
 import { cli, emitEvent, machine, noteError, streamData } from '../output.js';
 
 export interface ScaleCliOptions {
@@ -236,7 +236,7 @@ function printMatrix(m: FlowMatrixResult, status: string): void {
 
 /** `testpion flow report <file> [--run id] [--html out.html | --json]`. */
 export function registerFlowReportCommand(program: Command): void {
-  const flow = program.commands.find((c) => c.name() === 'flow');
+  const flow = subcommand(program, 'flow');
   if (!flow) return;
   flow
     .command('report')
@@ -247,7 +247,7 @@ export function registerFlowReportCommand(program: Command): void {
     .option('--run <runId>', 'the run (default: the latest run that included the file; see testpion flow runs)')
     .option('--html <out>', 'write the timeline as a self-contained HTML file (no network needed to view it)')
     .option('--json', 'print the timeline as JSON (bars, lanes, criticalPath, slowest; for scripts and AI agents)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .action(async (file: string, o: { run?: string; html?: string; json?: boolean; workspace?: string }) => {
       const parent = flow.opts() as { workspace?: string; json?: boolean };
       return withWorkspace(o.workspace ?? parent.workspace, async (store) => {

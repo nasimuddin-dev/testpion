@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { AGENT_ENVIRONMENT, agentCommands, agentMcp, ENGINE_VERSION, EXIT_CODES } from '@testpion/core';
-import { withWorkspace } from '../shared.js';
+import { withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 /**
  * `testpion agent-info`: what an AI agent needs to drive TestPion from this machine, as one JSON object — the version,
@@ -11,7 +11,7 @@ export function registerAgentInfoCommand(program: Command): void {
   program
     .command('agent-info')
     .description('what an AI agent needs to use TestPion here, as JSON: the workspace, the commands and exit codes, environment variables, the MCP server setup, the docs for agents')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .action(async (o: { workspace?: string }) => {
       let workspace: Record<string, unknown> | null = null;
       try {

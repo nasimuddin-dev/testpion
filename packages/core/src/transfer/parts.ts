@@ -11,7 +11,7 @@ import { ApsError } from '../errors.js';
 import type { Collection, CollectionNode } from '../model/types.js';
 import { slugify } from '../util/ids.js';
 
-export const PART_MARK = '#';
+const PART_MARK = '#';
 
 /** The ref id of a part of a collection. */
 export const partId = (collectionId: string, nodeIds: readonly string[]): string => `${collectionId}${PART_MARK}${nodeIds.join(',')}`;
@@ -47,7 +47,7 @@ function keep(nodes: readonly CollectionNode[], want: Set<string>, found: Set<st
   return out;
 }
 
-export interface PartialCollection {
+interface PartialCollection {
   collection: Collection;
   /** Names of the picked folders and requests, in tree order. */
   names: string[];

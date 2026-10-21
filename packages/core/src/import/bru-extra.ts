@@ -1,4 +1,5 @@
 import type { BruBlock } from './bru.js';
+import { toLf } from '../util/text.js';
 
 type Any = Record<string, any>;
 
@@ -10,8 +11,8 @@ type Any = Record<string, any>;
  */
 
 /** Parse the inside of a nested block: `key: value`, `key: { … }` and `key: '''…'''` (multi-line text). */
-export function parseBruDict(text: string): Any {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+function parseBruDict(text: string): Any {
+  const lines = toLf(text).split('\n');
   let i = 0;
   const unindent = (ls: string[]) => {
     const pad = Math.min(...ls.filter((l) => l.trim()).map((l) => /^\s*/.exec(l)![0].length), 1e9);
@@ -63,7 +64,7 @@ export function bruExample(block: BruBlock): Any | undefined {
 /** `body:grpc` / `body:ws` hold the messages as repeated `name:` / `type:` / `content: '''…'''` groups. */
 function messages(text: string): Array<{ name: string; type?: string; content: string }> {
   const out: Array<{ name: string; type?: string; content: string }> = [];
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const lines = toLf(text).split('\n');
   let cur: { name: string; type?: string; content: string } | undefined;
   for (let i = 0; i < lines.length; i++) {
     const t = lines[i]!.trim();

@@ -1,8 +1,7 @@
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { basename, resolve as resolvePath, sep } from 'node:path';
 import type { Command } from 'commander';
 import {
-  fetchImportText,
   findCollection,
   fuzzCases,
   writeFlows,
@@ -16,7 +15,7 @@ import {
   type FuzzVerdict,
   type HttpRequestSpec,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment, readDefinition } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment, readDefinition, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** `testpion openapi-ops <spec>`: an OpenAPI document's operations, the way its docs read. */
 export function registerOpenApiCommands(program: Command): void {
@@ -59,7 +58,7 @@ export function registerOpenApiCommands(program: Command): void {
     .argument('<spec>', 'the OpenAPI document: a file or an http(s) link')
     .option('--base-url <url>', "the API's address (default: the document's first server)")
     .option('-e, --environment <name>', 'resolve {{variables}} (tokens, {{baseUrl}}) from this workspace environment')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--operation <op...>', 'only these operations: "POST /patients" or an operationId')
     .option('--var <key=value...>', 'set a variable for the requests (repeatable), e.g. --var accessToken=…')
     .option('--include-delete', 'also fuzz DELETE operations')
@@ -160,8 +159,8 @@ export function registerOpenApiCommands(program: Command): void {
     )
     .argument('<source>', 'the API definition (specs/clinic.yaml) or a collection name or id')
     .option('--overwrite', 'replace test files that exist')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((source: string, o: { overwrite?: boolean; workspace?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const spec = source.replace(/\\/g, '/');
@@ -186,8 +185,8 @@ export function registerOpenApiCommands(program: Command): void {
     .option('--no-negative', 'leave out the invalid requests')
     .option('--include-delete', 'also test DELETE operations')
     .option('--overwrite', 'replace test files that exist')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((spec: string, o: { negative: boolean; includeDelete?: boolean; overwrite?: boolean; workspace?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const r = writeTestsFromSpec(store, spec.replace(/\\/g, '/'), { negative: o.negative, includeDelete: o.includeDelete, overwrite: o.overwrite });

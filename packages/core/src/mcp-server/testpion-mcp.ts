@@ -35,7 +35,7 @@ import type { ModuleToolDeps } from './tools/deps.js';
  * can browse a workspace's collections, send requests and run collections. Output is redacted with the
  * workspace's redaction rules; secret values never leave the machine through this server.
  */
-export interface TestPionMcpOptions {
+interface TestPionMcpOptions {
   store: WorkspaceStore;
   secrets: SecretStore;
   settings: AppSettings;

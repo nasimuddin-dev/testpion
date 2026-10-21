@@ -2,10 +2,10 @@
 import { writeFileSync } from 'node:fs';
 import type { Command } from 'commander';
 import { ApsError, exportArazzoFromWorkspace } from '@testpion/core';
-import { dim, green, printJson, withWorkspace, yellow } from '../shared.js';
+import { dim, green, printJson, withWorkspace, yellow, WORKSPACE_OPTION, groupOptions, subcommand } from '../shared.js';
 
 export function registerFlowExportCommand(program: Command): void {
-  const flow = program.commands.find((c) => c.name() === 'flow');
+  const flow = subcommand(program, 'flow');
   if (!flow) return;
   flow
     .command('export')
@@ -20,12 +20,11 @@ export function registerFlowExportCommand(program: Command): void {
     )
     .option('--workflow-id <id>', 'the workflowId (default: the one an import noted, else the file name)')
     .option('-o, --out <file>', 'write the document here (default: print it)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { file, document, notes, sources } as JSON (for scripts and AI agents)')
     .action(async (file: string, o: { spec?: string; workflowId?: string; out?: string; workspace?: string; json?: boolean }) => {
-      const parent = flow.opts() as { workspace?: string; json?: boolean };
-      o.json ||= parent.json;
-      return withWorkspace(o.workspace ?? parent.workspace, (store) => {
+      const workspace = groupOptions(flow, o);
+      return withWorkspace(workspace, (store) => {
         const r = exportArazzoFromWorkspace(store, file, { spec: o.spec, workflowId: o.workflowId });
         if (o.out) {
           if (!/\.(ya?ml|json)$/i.test(o.out)) throw new ApsError('ValidationError', '--out is a .yaml, .yml or .json file (e.g. checkout.arazzo.yaml)');

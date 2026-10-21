@@ -347,7 +347,7 @@ export interface ContractResult {
   structured?: Record<string, unknown>;
   notes: string[];
 }
-export const CONTRACT = Symbol('testpion.tool-contract');
+const CONTRACT = Symbol('testpion.tool-contract');
 export const isContractResult = (v: unknown): v is ContractResult => !!v && typeof v === 'object' && (v as Record<symbol, unknown>)[CONTRACT] === true;
 
 /** `runId` → `run_id`: the snake_case name of a camelCase id parameter, or undefined when it is not one. */
@@ -361,7 +361,7 @@ export type Confirmer = (message: string) => Promise<boolean | undefined>;
 const prop = (description: string, type = 'string', extra: Record<string, unknown> = {}) => ({ type, description, ...extra });
 
 /** The description as the agent reads it: what, when, when not, an example, then what the contract adds. */
-export function composeDescription(t: Tool, doc: ToolDoc | undefined): string {
+function composeDescription(t: Tool, doc: ToolDoc | undefined): string {
   const parts = [t.description.trim()];
   if (doc) parts.push(`\nWhen to use: ${doc.when}\nWhen not: ${doc.whenNot}\nExample: ${JSON.stringify(doc.example)}`);
   const notes: string[] = [];

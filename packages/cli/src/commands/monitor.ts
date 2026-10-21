@@ -23,7 +23,7 @@ import {
   type MonitorResult,
   type WorkspaceStore,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, cliContext, requireCollection } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { resolveSelection } from '../run.js';
 import { parseGates } from '@testpion/core';
@@ -65,7 +65,7 @@ export function registerMonitorCommands(program: Command): void {
     .command('list')
     .description('monitors with their schedule, last result and next run')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) =>
       withWorkspace(o.workspace, (store) => {
         const rows = listMonitors(store).map((m) => monitorStatus(store, m));
@@ -180,7 +180,7 @@ export function registerMonitorCommands(program: Command): void {
       .argument('<nameOrId>')
       .requiredOption('-w, --workspace <nameOrPath>')
       .option('-n, --limit <n>', 'how many', '20')
-      .option('--json', 'print as JSON'),
+      .option(...JSON_OPTION),
     'monitor.runs',
   ).action((ref: string, o) =>
       withWorkspace(o.workspace, async (store) => {
@@ -204,7 +204,7 @@ export function registerMonitorCommands(program: Command): void {
     .argument('<nameOrId>')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-n, --runs <n>', 'how many of the latest runs', '20')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (ref: string, o) => {
       // not withStore: the results are read asynchronously, so the store closes after them
       return withWorkspace(o.workspace, async (store) => {
@@ -224,7 +224,7 @@ export function registerMonitorCommands(program: Command): void {
     .argument('<nameOrId>')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-d, --days <n>', 'how many days', '30')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((ref: string, o) =>
       withWorkspace(o.workspace, (store) => {
         const m = findMonitor(store, ref);

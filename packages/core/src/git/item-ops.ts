@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { ApsError } from '../errors.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { canonicalText, stableValue } from '../storage/stable-files.js';
@@ -7,6 +7,7 @@ import { addNestedItem, addressOf, holdsNoItems, matchEol, readItem, removeNeste
 import { isBinaryPath } from './item-changes.js';
 import { beginJournal } from './journal.js';
 import { describeFile, describeGitChanges, diffTexts, type PartChange } from './semantic.js';
+import { toLf } from '../util/text.js';
 
 /**
  * The per-item git operations of release B (planning/git-everything.md §4c): the versions of one item and what changed
@@ -26,7 +27,7 @@ export async function requireRepo(ws: string): Promise<string> {
 const textAt = (ws: string, file: string, rev: string) => gitShow(ws, file, rev);
 
 /** The file as the working folder has it; undefined when it is not there. */
-export function workingText(ws: string, file: string): string | undefined {
+function workingText(ws: string, file: string): string | undefined {
   try {
     return readFileSync(workspaceFile(ws, file), 'utf8');
   } catch {
@@ -61,7 +62,7 @@ const nameOf = (a: ItemAddress, text: string | undefined, fallback?: string): st
 
 /* ------------------------------------------------------------------ history and blame */
 
-export interface ItemVersion {
+interface ItemVersion {
   commit: GitCommit;
   /** What this version changed, in words (the parts that differ from the version before; for a whole file its changes by item). */
   changed: string[];
@@ -69,7 +70,7 @@ export interface ItemVersion {
   parts: PartChange[];
 }
 
-export interface ItemHistory {
+interface ItemHistory {
   file: string;
   itemId?: string;
   title: string;
@@ -140,7 +141,7 @@ export async function itemHistory(ws: string, a: ItemAddress, limit = 30): Promi
   return { file: a.file, ...(a.itemId ? { itemId: a.itemId } : {}), title: nameOf(a, latest), versions: out };
 }
 
-export interface BlameLine {
+interface BlameLine {
   /** The field (part) of the item: "URL", "Headers", "Name" …; for a whole file the same parts a Compare shows. */
   field: string;
   /** The value now (secrets are hidden by the parts, as in Compare). */
@@ -309,7 +310,7 @@ export async function discardItem(ws: string, a: ItemAddress, o: { dryRun?: bool
 
 /* ------------------------------------------------------------------ stage */
 
-export interface ItemStageResult {
+interface ItemStageResult {
   file: string;
   itemId?: string;
   title: string;
@@ -357,7 +358,7 @@ async function stageItemBlob(ws: string, a: ItemAddress, title: string, others: 
   const base = idx ?? head;
   const verb = o.unstage ? 'unstage' : 'stage';
   // a staged version that is not stable would stage the formatting of every other item too: the file goes whole
-  if (base !== undefined && canonicalText(a.file, base) !== base.replace(/\r\n?/g, '\n')) return undefined;
+  if (base !== undefined && canonicalText(a.file, base) !== toLf(base)) return undefined;
   let next: string | undefined;
   let emptied = false;
   if (base === undefined) {
@@ -402,14 +403,5 @@ async function stageItemBlob(ws: string, a: ItemAddress, title: string, others: 
     message: `${o.dryRun ? `Would ${verb}` : o.unstage ? 'Unstaged' : 'Staged'} ${title} only${left}`,
   };
 }
-
-/** The size of a text file in the working folder (the Git UI hides previews of very big ones). */
-export const workingSize = (ws: string, file: string): number => {
-  try {
-    return statSync(workspaceFile(ws, file)).size;
-  } catch {
-    return 0;
-  }
-};
 
 export { addressOf };

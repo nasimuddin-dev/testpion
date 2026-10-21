@@ -1,5 +1,5 @@
 import { aiRunDeps } from '../../ai/tasks/run.js';
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import type { AppSettings } from '../../model/types.js';
 import { askSearch, runQuerySpec } from '../../search/ask.js';
@@ -54,8 +54,7 @@ export function searchAskTools({ store, secrets, settings }: { store: WorkspaceS
           return await runQuerySpec(store, a.query, { scope });
         }
         if (!a.question || !String(a.question).trim()) throw new ApsError('ValidationError', 'Pass `question` (plain words) or `query` (a search query)');
-        const ctx = createEngineContext({ store, secrets, settings });
-        try {
+        return withEngine({ store, secrets, settings }, {}, async (ctx) => {
           return await askSearch(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
             question: String(a.question),
             scope,
@@ -63,9 +62,7 @@ export function searchAskTools({ store, secrets, settings }: { store: WorkspaceS
             noAi: a.noAi === true,
             dryRun: a.dryRun === true,
           });
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
   ];

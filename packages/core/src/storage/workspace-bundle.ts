@@ -27,12 +27,12 @@ import { isRecord } from '@testpion/shared';
 export const BUNDLE_LIMITS = { fileBytes: 10 * 1024 * 1024, totalBytes: 50 * 1024 * 1024 } as const;
 
 /** The workspace folders whose files travel in `files[]` (tests/ has its own section). */
-export const BUNDLE_FILE_FOLDERS = ['specs', 'datasets', 'mocks', 'protos'] as const;
+const BUNDLE_FILE_FOLDERS = ['specs', 'datasets', 'mocks', 'protos'] as const;
 
 export { WORKSPACE_FORMATS };
 
 /** One file of specs/, datasets/, mocks/ or protos/: its path from the workspace root with `/`, and its bytes. */
-export interface BundleFile {
+interface BundleFile {
   path: string;
   encoding: 'utf8' | 'base64';
   content: string;
@@ -234,7 +234,7 @@ export function exportSummary(b: WorkspaceBundle): ExportSummary {
 }
 
 /** What importing an export did: the new workspace, what was skipped (notes) and the values to fill in. */
-export interface BundleImportResult {
+interface BundleImportResult {
   store: WorkspaceStore;
   /** What this import skipped, in its own words (never the export's `notes`, which anyone could have written). */
   notes: string[];

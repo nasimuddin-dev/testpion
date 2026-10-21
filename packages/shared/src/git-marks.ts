@@ -35,7 +35,7 @@ export interface GitMarkInfo {
 }
 
 /** The slice of a semantic change the marks are made from. */
-export interface MarkedChange {
+interface MarkedChange {
   change: GitMarkInfo['change'];
   ref?: ItemRef;
   /** The keys of the containers it is inside (folders, the collection, the section). */

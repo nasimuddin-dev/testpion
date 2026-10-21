@@ -9,7 +9,7 @@ import { ApsError } from '../errors.js';
  * be the repository or a folder inside one. See planning/git-integration.md.
  */
 
-export type GitFileState = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
+type GitFileState = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'conflicted';
 
 export interface GitFile {
   /** Path inside the workspace, forward slashes. */
@@ -23,7 +23,7 @@ export interface GitFile {
   from?: string;
 }
 
-export interface GitStatus {
+interface GitStatus {
   repository: boolean;
   /** Repository root (absolute). */
   root?: string;
@@ -47,7 +47,7 @@ export interface GitCommit {
   subject: string;
 }
 
-export interface GitBranches {
+interface GitBranches {
   current?: string;
   local: string[];
   remote: string[];
@@ -156,6 +156,7 @@ export async function repoRoot(dir: string): Promise<string | undefined> {
   } catch {
     root = undefined;
   }
+  if (roots.size >= 500) roots.delete(roots.keys().next().value!); // bounded: one entry per folder asked about
   roots.set(dir, { root, at: Date.now() });
   return root;
 }
@@ -307,7 +308,7 @@ export async function gitCommit(ws: string, message: string, opts: { paths?: str
 
 /** Commits, newest first; with `path`, only those that changed that file (following renames). */
 /** A commit as the Git view shows it when picked: its message, and the files it changed in the workspace. */
-export interface GitCommitDetail extends GitCommit {
+interface GitCommitDetail extends GitCommit {
   body: string;
   files: Array<{ path: string; state: GitFileState; additions: number; deletions: number }>;
 }
@@ -413,7 +414,7 @@ export async function gitFetch(ws: string, opts: { quiet?: boolean } = {}): Prom
 }
 
 /** What a pull did: stopped on conflicts or not, and whether uncommitted changes had to be set aside for it. */
-export interface GitPullResult {
+interface GitPullResult {
   conflicted: boolean;
   /** Uncommitted changes were set aside (git stash) for the pull and put back. */
   setAside?: boolean;
@@ -605,6 +606,7 @@ export async function gitRemoteUrl(ws: string): Promise<string | undefined> {
   } catch {
     url = undefined;
   }
+  if (remotes.size >= 500) remotes.delete(remotes.keys().next().value!);
   remotes.set(ws, { url, at: Date.now() });
   return url;
 }

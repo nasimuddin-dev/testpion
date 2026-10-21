@@ -36,7 +36,7 @@ const REQUEST_SHIM = [
 const keepResponse = (name: string) =>
   `// REST Client chaining: {{${name}.response.body…}} and {{${name}.response.headers…}} read this\ntp.variables.set(${JSON.stringify(name)}, { response: { status: tp.response.code, body: (() => { try { return tp.response.json(); } catch { return tp.response.text(); } })(), headers: tp.response.headers.toObject() } });`;
 
-export interface HttpFileImport {
+interface HttpFileImport {
   collection: Collection;
   /** What did not come over, for the import message. */
   notes: string[];

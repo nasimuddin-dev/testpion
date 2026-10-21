@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { replaceInCollection, REPLACE_FIELDS, type CollectionNode, type ReplaceField } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** `testpion replace <collection> <find> <replacement>`: find and replace across a collection's requests (preview, then --apply). */
 export function registerReplaceCommands(program: Command): void {
@@ -15,8 +15,8 @@ export function registerReplaceCommands(program: Command): void {
     .option('--in <fields>', `only these fields, comma separated: ${REPLACE_FIELDS.join(', ')}`)
     .option('--folder <name>', 'only the requests in this folder')
     .option('--apply', 'save the changes (without it, only show them)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((ref: string, find: string, replacement: string, o: { regex?: boolean; caseSensitive?: boolean; in?: string; folder?: string; apply?: boolean; workspace?: string; json?: boolean }) => {
       const fields = o.in ? (o.in.split(',').map((x) => x.trim()) as ReplaceField[]) : undefined;
       const bad = fields?.filter((f) => !REPLACE_FIELDS.includes(f));

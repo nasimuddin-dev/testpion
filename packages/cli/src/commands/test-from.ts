@@ -1,7 +1,7 @@
 /** `testpion test from-request`: Save as test from the terminal (WF-07), the same as the app's and the `save_test` MCP tool. */
 import type { Command } from 'commander';
 import { ApsError, parseItemRef, saveTest, type CollectionNode, type ItemRef, type WorkspaceStore } from '@testpion/core';
-import { EXIT, CliError, green, printJson, requireCollection, withWorkspace } from '../shared.js';
+import { EXIT, CliError, green, printJson, requireCollection, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 /** "Collection/Folder/Request", "Collection/Folder" or "Collection": the item it names, as a ref. */
 function refOfPath(store: WorkspaceStore, target: string): ItemRef {
@@ -29,7 +29,7 @@ export function registerTestFromCommand(program: Command): void {
     .command('from-request')
     .description('save a saved request as a test file under tests/ (a folder or a whole collection: one file with a test per request), like Save as test in the app')
     .argument('<item>', '"Collection/Folder/Request", "Collection/Folder", "Collection", or an item ref (testpion://open?… or kind:id)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-n, --name <name>', 'test name (default: the request’s)')
     .option('--json', 'print { path, tests, ref } as JSON')
     // `test` has -w and --json of its own, and commander gives a parent's options to the parent: read them from both

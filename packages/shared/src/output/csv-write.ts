@@ -9,7 +9,7 @@ const RISKY = /^[=+\-@\t\r\n＝＋－＠]/;
 const NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
 
 /** A cell as text: null / undefined empty, objects as JSON, dates as ISO. */
-export function cellText(v: unknown): string {
+function cellText(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'string') return v;
   if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint') return String(v);
@@ -38,7 +38,7 @@ export function csvField(v: unknown, delimiter = ',', guard = true): string {
   return quote ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export interface CsvOptions {
+interface CsvOptions {
   /** ',' (CSV, the default) or '\t' (TSV). */
   delimiter?: string;
   /** Start with a UTF-8 byte-order mark, so Excel reads the file as UTF-8 ("CSV for Excel"). */

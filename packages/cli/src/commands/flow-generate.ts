@@ -7,12 +7,12 @@
 import type { Command } from 'commander';
 import { formatUsd, plural } from '@testpion/shared';
 import { aiRunDeps, applyProposal, draftFlowProposal, flowSourceRef, isAiSetupError, normalizeError, runAiTask, WorkspaceManager, type Proposal } from '@testpion/core';
-import { cliContext, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
+import { cliContext, dim, green, printJson, withWorkspace, yellow, WORKSPACE_OPTION, subcommand } from '../shared.js';
 import { machine } from '../output.js';
 import { printPreview, printProposal } from './ai-print.js';
 
 export function registerFlowGenerateCommand(program: Command): void {
-  const flow = program.commands.find((c) => c.name() === 'flow');
+  const flow = subcommand(program, 'flow');
   if (!flow) return;
   flow
     .command('generate')
@@ -30,7 +30,7 @@ export function registerFlowGenerateCommand(program: Command): void {
     .option('--dry-run', 'send nothing: print what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'write the flow when its verification did not fail (else it stays a proposal)')
     .option('-e, --environment <name>', 'environment whose variable names (never values) the flow may use')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { proposal, preview, usage, applied } as JSON (for scripts and AI agents)')
     .action(
       async (o: {

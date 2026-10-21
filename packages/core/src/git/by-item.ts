@@ -9,7 +9,7 @@ import { describeGitChanges, type SemanticChange } from './semantic.js';
  * the file it is in (secondary: the file is what a commit takes). The same rows as the Git view; `testpion git status
  * --by-item --json` and the MCP tool `git_changes` return this.
  */
-export interface GitItemRow {
+interface GitItemRow {
   /** The registry kind of the item (`mcp-server`, `prompt`, `request`, `dataset` …); undefined for a file of no kind. */
   kind?: KindId;
   change: SemanticChange['change'];
@@ -25,7 +25,7 @@ export interface GitItemRow {
   staged: boolean;
 }
 
-export interface GitItemsResult {
+interface GitItemsResult {
   repository: boolean;
   branch?: string;
   ahead: number;
@@ -35,7 +35,7 @@ export interface GitItemsResult {
 }
 
 /** The kinds a `--kind` / `kind` filter names (ids or aliases); an unknown name is an error that lists the valid ones. */
-export function gitKindFilter(names: readonly string[] | undefined): Set<KindId> | undefined {
+function gitKindFilter(names: readonly string[] | undefined): Set<KindId> | undefined {
   if (!names?.length) return undefined;
   const out = new Set<KindId>();
   for (const name of names) {

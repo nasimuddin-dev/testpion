@@ -5,14 +5,16 @@ import type { Redactor } from '../../util/redact.js';
 import { shortId } from '../../util/ids.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { SecretStore } from '../../storage/secrets.js';
-import { createEngineContext } from '../../engine.js';
+import { aiRunDeps, runAiTask } from '../../ai/tasks/run.js';
+import type { Proposal } from '../../ai/proposal.js';
+import { createEngineContext, type ContextOptions, type EngineContext } from '../../engine.js';
 import { runTests, type RunEvent } from '../../runner/runner.js';
 import { resultSourceRefs } from '../../runner/result-source.js';
 import { recordRun } from '../../runner/run-records.js';
 import { detectRequestSnippet, parseRequestSnippet } from '../../import/snippet.js';
 
 /** What the tools share (the server builds them once per workspace): flattening a collection, finding a request, clipping text, reading a request from a snippet, summarizing and recording runs. */
-export const BODY_CHARS = 20_000;
+const BODY_CHARS = 20_000;
 
 export type Flat = { node: Exclude<CollectionNode, { kind: 'folder' }>; folder: string };
 
@@ -99,4 +101,36 @@ export function runRecorder(d: { store: WorkspaceStore; secrets: SecretStore; se
       await ctx.dispose();
     }
   };
+}
+
+/** An engine context for one tool call, disposed when it ends (the one place the create / try / finally dispose is written). */
+export async function withEngine<T>(d: { store: WorkspaceStore; secrets: SecretStore; settings?: AppSettings }, o: Omit<ContextOptions, 'store' | 'secrets' | 'settings'>, fn: (ctx: EngineContext) => Promise<T> | T): Promise<T> {
+  const ctx = createEngineContext({ ...d, ...o });
+  try {
+    return await fn(ctx);
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+/** What an AI task of the RAG tools made, as the agent reads it: the model, usage and cost, the proposal with the items `shape.items` makes, and what to do next (a dry run returns what would be sent). */
+export async function runRagProposal(
+  d: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings },
+  a: Record<string, unknown>,
+  task: { task: string; question?: string; context: Record<string, unknown> },
+  shape: { items: (p: Proposal) => unknown[]; next: (p: Proposal) => string },
+): Promise<Record<string, unknown>> {
+  const { store, settings } = d;
+  return withEngine(d, { environment: a.environment ? String(a.environment) : undefined, aiSurface: 'mcp' }, async (ctx) => {
+    const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), { ...task, dryRun: a.dry_run === true });
+    if (r.dryRun) return { dryRun: true, preview: r.preview };
+    const p = r.proposal;
+    return {
+      model: `${r.provider}/${r.model}`,
+      usage: r.usage,
+      costUsd: r.costUsd,
+      problems: r.problems,
+      ...(p ? { proposal: { id: p.id, title: p.title, summary: p.summary, assumptions: p.assumptions, notes: p.notes, items: shape.items(p) }, next: shape.next(p) } : {}),
+    };
+  });
 }

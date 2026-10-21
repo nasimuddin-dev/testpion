@@ -26,7 +26,7 @@ export interface ZipLimits {
   maxRatio: number;
 }
 
-export const DEFAULT_ZIP_LIMITS: ZipLimits = { maxEntries: 20_000, maxBytes: 200 * 1024 * 1024, maxEntryBytes: 50 * 1024 * 1024, maxRatio: 200 };
+const DEFAULT_ZIP_LIMITS: ZipLimits = { maxEntries: 20_000, maxBytes: 200 * 1024 * 1024, maxEntryBytes: 50 * 1024 * 1024, maxRatio: 200 };
 
 /** Is this the start of a ZIP file? */
 export const isZip = (b: Buffer): boolean => b.length > 22 && b[0] === 0x50 && b[1] === 0x4b && (b[2] === 3 || b[2] === 5);

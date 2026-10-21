@@ -13,7 +13,7 @@ import { ApsError, normalizeError } from '@testpion/core';
 
 export const SCHEMA_VERSION = 1;
 
-export interface EnvelopeError {
+interface EnvelopeError {
   code: string;
   message: string;
   hint?: string;
@@ -112,7 +112,7 @@ export function noteError(e: unknown): void {
 const RETRYABLE = new Set(['NetworkError', 'TimeoutError', 'RateLimitError', 'ServerError']);
 
 /** An error as the envelope lists it: a stable code, the message, what to do, and whether trying again may help. */
-export function envelopeError(e: unknown, exitCode?: number): EnvelopeError {
+function envelopeError(e: unknown, exitCode?: number): EnvelopeError {
   const n = normalizeError(e);
   const kind = e instanceof ApsError || n.kind !== 'InternalError' ? n.kind : undefined;
   const code = kind ?? (exitCode === 2 ? 'ConfigurationError' : 'ExecutionError');

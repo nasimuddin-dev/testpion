@@ -1,4 +1,4 @@
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import { fetchImportText } from '../../import/fetch-url.js';
 import { importIntoWorkspace } from '../../import/workspace-import.js';
@@ -22,12 +22,9 @@ export function definitionTools(d: ModuleToolDeps): Tool[] {
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), environment: str('Environment whose variables count as defined') }, required: ['collection'] },
       run: async (a) => {
         const c = findCollection(a.collection);
-        const ctx = createEngineContext({ store, secrets, settings, environment: checkEnvironment(a.environment), collectionId: c.id });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: checkEnvironment(a.environment), collectionId: c.id }, async (ctx) => {
           return collectionSecurityFindings(store, c, ctx, settings.redactFields);
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {

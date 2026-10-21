@@ -22,7 +22,7 @@ export interface TimelineStepInput {
   type?: string;
 }
 
-export interface TimelineBar {
+interface TimelineBar {
   id: string;
   name: string;
   status: string;
@@ -216,7 +216,7 @@ export function timelineSvg(t: FlowTimeline, o: { width?: number } = {}): string
 }
 
 /** The timeline's colours: light and dark (the app sets them from its theme tokens; the HTML file carries these). */
-export const TIMELINE_CSS = `
+const TIMELINE_CSS = `
 :root{--tl-bg:#fff;--tl-fg:#1f2230;--tl-muted:#6b6f80;--tl-grid:#e6e8ef;--tl-stripe:rgba(120,130,160,.06);--tl-ok:#2e9e5b;--tl-bad:#d9483b;--tl-skip:#b8bccb;--tl-accent:#2f7bff;--tl-critical:#8b5cff;--tl-line:#e2e4ec}
 @media (prefers-color-scheme: dark){:root{--tl-bg:#171a26;--tl-fg:#eceef6;--tl-muted:#a2a7bb;--tl-grid:#2a2e3e;--tl-stripe:rgba(255,255,255,.03);--tl-ok:#3fbf73;--tl-bad:#f0645a;--tl-skip:#5b6075;--tl-accent:#5e9bff;--tl-critical:#b18cff;--tl-line:#2c3040}}
 `;

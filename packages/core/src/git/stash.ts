@@ -7,7 +7,7 @@ import { describeGitChanges, describeRevChanges, type SemanticChange } from './s
  * Set the workspace's uncommitted changes aside with a name, and put them back (release B of planning/git-everything.md):
  * `git stash` limited to the workspace folder (untracked files too), listed with what each holds by item.
  */
-export interface StashEntry {
+interface StashEntry {
   /** Position in git's stash list now (0 = newest): it shifts when others are made or dropped, so use `hash` to be sure. */
   index: number;
   hash: string;
@@ -43,7 +43,7 @@ async function find(ws: string, ref: { index?: number; hash?: string }): Promise
   return hit;
 }
 
-export interface StashPushResult {
+interface StashPushResult {
   name: string;
   applied: boolean;
   /** The changes set aside (or that would be), by item. */
@@ -74,7 +74,7 @@ export async function stashShow(ws: string, ref: { index?: number; hash?: string
   return { stash, changes, newFiles };
 }
 
-export interface StashApplyResult {
+interface StashApplyResult {
   stash: StashEntry;
   /** Put back and removed from the list (pop), or kept (apply). */
   dropped: boolean;

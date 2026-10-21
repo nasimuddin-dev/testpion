@@ -1,4 +1,4 @@
-import type { BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, EnvironmentVariable, HttpSettings, KeyValue, LibraryItem, SavedExample } from '../model/types.js';
+import type { BodyConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, Environment, EnvironmentVariable, HttpSettings, LibraryItem, SavedExample } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { bruFilesToBrunoExport, looksLikeBru } from './bru.js';
 import { brunoAssertionScript } from '../scripts/bruno.js';
@@ -17,7 +17,7 @@ import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.j
  */
 
 /** Bruno assertions like `res.status: eq 200` become status checks; others become generated tests. */
-export function brunoAssertions(list: Any[] | undefined): CheckConfig[] | undefined {
+function brunoAssertions(list: Any[] | undefined): CheckConfig[] | undefined {
   const out: CheckConfig[] = [];
   for (const a of list ?? []) {
     if (a.enabled === false) continue;
@@ -71,7 +71,7 @@ export function brunoScript(...parts: Array<string | undefined>): string | undef
 }
 
 /** A request's vars:pre-request (request variables) and vars:post-response (values taken from the response). */
-export function brunoVars(vars: Any | undefined): { pre?: string; post?: string } {
+function brunoVars(vars: Any | undefined): { pre?: string; post?: string } {
   const on = (l: Any[] | undefined) => (l ?? []).filter((v: Any) => v?.name && v.enabled !== false);
   const pre = on(vars?.req).map((v: Any) => `tp.variables.set(${JSON.stringify(v.name)}, ${JSON.stringify(normalizeTemplate(v.value ?? ''))});`);
   // post-response values are expressions over res, e.g. res.body.token (runtime variables: they last for the run, like Bruno's)

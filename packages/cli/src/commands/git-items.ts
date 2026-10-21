@@ -32,7 +32,7 @@ import {
   type StagedSecret,
   type WorkspaceStore,
 } from '@testpion/core';
-import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, JSON_OPTION } from '../shared.js';
 
 const MARK: Record<string, string> = { added: 'A', untracked: 'A', removed: 'D', deleted: 'D', changed: 'M', modified: 'M', renamed: 'R', conflicted: '!' };
 const out = (json: boolean, value: unknown, text: () => void) => (json ? printJson(value) : text());
@@ -58,7 +58,7 @@ const printWrite = (r: ItemWriteResult, verbDone: string, verbWould: string) => 
 };
 
 /** Settle what a commit would publish: the findings of the staged scan, in words. */
-export function printStagedScan(scan: StagedScan) {
+function printStagedScan(scan: StagedScan) {
   const line = (f: StagedSecret) => `  ${f.item} ${dim(`(${f.file})`)}\n    ${f.message}`;
   if (scan.blocking.length) {
     console.log(red(`${scan.blocking.length} secret${scan.blocking.length === 1 ? '' : 's'} typed in (a commit is refused, --allow-secrets does not change that):`));
@@ -111,7 +111,7 @@ export async function commitScanned(store: WorkspaceStore, o: { message: string;
 }
 
 export function registerGitItemCommands(git: Command): void {
-  const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option('--json', 'print as JSON');
+  const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option(...JSON_OPTION);
   const ITEM = 'the item: a link from the app (testpion://…), kind:id such as mcp-server:weather or environment:staging, or a file with the item id, mcp-servers.json#weather';
   const dry = (c: Command) => c.option('--dry-run', 'change nothing: print what would change');
 

@@ -91,7 +91,7 @@ export function parsePostmanV1(text: string): ImportDocument {
 
 /* ------------------------------------------------------------------ v3 */
 
-export interface V3File {
+interface V3File {
   path: string;
   text: string;
 }
@@ -211,7 +211,7 @@ function v3Item(y: Any, examples: Any[], findings: Findings, where: string): Any
 }
 
 /** The files of a v3 collection folder (paths relative to its root) as a v2.1 collection object. */
-export function postmanV3ToV21(files: V3File[], name: string, findings: Findings): Any {
+function postmanV3ToV21(files: V3File[], name: string, findings: Findings): Any {
   const byPath = new Map(files.map((f) => [f.path, f]));
   /**
    * `{ $ref: "../shared/auth.yaml" }` (or `#/pointer` after the path): the value is the other file's content. The path is

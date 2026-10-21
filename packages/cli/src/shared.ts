@@ -26,6 +26,7 @@ import {
   type Collection,
   type TestResult,
 } from '@testpion/core';
+import type { Command } from 'commander';
 import { noteWarning } from './output.js';
 import { dryRunWorkspace } from './dry-run.js';
 
@@ -40,6 +41,21 @@ export function warnProblems(items: Array<{ name: string; problem?: string }>, w
 }
 
 /** Exit codes (spec §37). */
+/** The options most commands repeat, spelled once: `.option(...WORKSPACE_OPTION)`. */
+export const WORKSPACE_OPTION: [string, string] = ['-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)'];
+export const JSON_OPTION: [string, string] = ['--json', 'print as JSON'];
+export const JSON_RESULT_OPTION: [string, string] = ['--json', 'print the result as JSON (for scripts and AI agents)'];
+
+/** A command group registered earlier (`flow`, `test`) to hang more subcommands on; undefined when it is not there. */
+export const subcommand = (program: Command, name: string): Command | undefined => program.commands.find((c) => c.name() === name);
+
+/** A group reads -w and --json wherever they are written (`flow -w x report`): the workspace to open, with --json taken from the group too. */
+export function groupOptions(group: Command, o: { workspace?: string; json?: boolean }): string | undefined {
+  const parent = group.opts() as { workspace?: string; json?: boolean };
+  o.json ||= parent.json;
+  return o.workspace ?? parent.workspace;
+}
+
 export const EXIT = { SUCCESS: 0, TEST_FAILURE: 1, CONFIG_ERROR: 2, EXECUTION_ERROR: 3 } as const;
 
 const tty = process.stdout.isTTY && !process.env.NO_COLOR && !process.env.CI;
@@ -125,15 +141,6 @@ export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore()]);
 /** An engine context as every command builds it: the workspace, the CLI's secrets, the app settings and an environment. */
 export function cliContext(store: WorkspaceStore, environment?: string, extra: Partial<Omit<ContextOptions, 'store' | 'secrets' | 'settings' | 'environment'>> = {}): EngineContext {
   return createEngineContext({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), environment, aiEnv: process.env, ...extra });
-}
-
-/** A core lookup that failed ("not found") as the CLI reports it: the message alone, with the configuration exit code. */
-function configError<T>(fn: () => T): T {
-  try {
-    return fn();
-  } catch (e) {
-    throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
-  }
 }
 
 /** The collection `ref` names (id or name), or a configuration error listing the collections; `hint` is added to it. */

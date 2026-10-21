@@ -82,7 +82,7 @@ function toolTitle(name: string): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
-export interface ToolAnnotations {
+interface ToolAnnotations {
   title: string;
   readOnlyHint: boolean;
   destructiveHint?: boolean;
@@ -179,7 +179,7 @@ Other types: \`graphql\` (\`endpoint\`, \`query\`, \`variables\`), \`grpc\` (\`t
 `;
 }
 
-export interface PromptDef {
+interface PromptDef {
   name: string;
   title: string;
   description: string;

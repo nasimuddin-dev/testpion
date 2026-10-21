@@ -22,9 +22,9 @@ import { mergeModeOfPath, mergeWorkspaceTexts, requestParts, type FieldConflict,
  * Each conflict is settled with Keep mine (ours), Keep theirs, or an edit; the result is written in the stable form.
  */
 
-export type ConflictMode = 'items' | 'text' | 'binary';
+type ConflictMode = 'items' | 'text' | 'binary';
 
-export interface ConflictHunk {
+interface ConflictHunk {
   /** `hunk:<n>`: the key to settle it with. */
   key: string;
   /** Where it is, in words: "near step create-order", "line 14". */
@@ -37,14 +37,14 @@ export interface ConflictHunk {
 }
 
 /** The hunks of one step of a test or flow file: one choice for the step (`key`: `step:<id>`) settles them all. */
-export interface ConflictStep {
+interface ConflictStep {
   key: string;
   step: string;
   /** The keys of its hunks. */
   hunks: string[];
 }
 
-export interface ConflictField {
+interface ConflictField {
   /** The field of the item (`request.url`, `data.prompt`). */
   path: string;
   /** The key to settle it with: `<item key>#<path>`. */
@@ -59,7 +59,7 @@ export interface ConflictField {
 
 type Part = { part: string; base?: string; ours?: string; theirs?: string; differs: boolean };
 
-export interface ConflictDetail {
+interface ConflictDetail {
   path: string;
   mode: ConflictMode;
   kind?: KindId;

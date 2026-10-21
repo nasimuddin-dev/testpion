@@ -22,7 +22,7 @@ import { stripFileText, type StagedSecret } from './staged-secrets.js';
  * in a file. A provider's typed key goes to its provider secret instead. A value `.testpion/secrets-allow.json` allows is
  * left alone. The files are copied aside first, so Undo restores them.
  */
-export interface StagedFixResult {
+interface StagedFixResult {
   fixed: Array<{ file: string; item: string; field: string; variable: string }>;
   /** Secret variables created in the environment. */
   variables: string[];

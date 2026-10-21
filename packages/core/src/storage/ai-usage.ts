@@ -39,9 +39,9 @@ export interface AiCallRecord {
 export const MAX_AI_CALLS = 20_000;
 
 /** The start of the local day of `now` (ISO), the window of the per-day caps. */
-export const startOfDay = (now = new Date()) => new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+const startOfDay = (now = new Date()) => new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-export interface AiUsageTotals {
+interface AiUsageTotals {
   calls: number;
   inputTokens: number;
   outputTokens: number;

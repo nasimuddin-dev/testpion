@@ -14,7 +14,7 @@ import { buildGraphQLOperation } from '../protocols/graphql/operation-builder.js
  */
 
 /** At most this many requests per operation type (a big schema has hundreds of fields). */
-export const GRAPHQL_FIELDS_PER_TYPE = 60;
+const GRAPHQL_FIELDS_PER_TYPE = 60;
 
 /** Is this text an introspection result? */
 export const isGraphqlIntrospection = (d: unknown): boolean => {

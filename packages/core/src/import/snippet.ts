@@ -8,7 +8,7 @@ import { isCurlCommand, parseCurl, parseCurlArgs, shellSplit } from './curl.js';
  * Invoke-RestMethod). fetch and PowerShell snippets are converted to curl arguments so they share
  * the cURL importer's URL, body, cookie and auth handling.
  */
-export type RequestSnippetFormat = 'curl' | 'fetch' | 'powershell' | 'httpie';
+type RequestSnippetFormat = 'curl' | 'fetch' | 'powershell' | 'httpie';
 
 const FETCH_RE = /(?:^|[\s;=(])(?:await\s+)?fetch\s*\(/;
 const PWSH_RE = /\b(Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\b/i;

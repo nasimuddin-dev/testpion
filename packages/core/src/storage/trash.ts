@@ -16,7 +16,7 @@ import { KIND_INFO, kindsWith, type KindId } from '@testpion/shared';
  * with it. An MCP server keeps its id and its place in the list; an API definition its path.
  */
 /** The kinds whose `trash` capability is true in the item-kind registry (each needs a KindDef below). */
-export type TrashKind = Extract<KindId, 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server'>;
+type TrashKind = Extract<KindId, 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server'>;
 export const TRASH_DAYS = 30;
 
 export interface TrashItem {

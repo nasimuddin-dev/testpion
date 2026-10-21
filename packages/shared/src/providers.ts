@@ -4,7 +4,7 @@
  */
 export type ProviderKind = 'openai-compatible' | 'azure-openai' | 'anthropic' | 'gemini' | 'bedrock' | 'ollama' | 'mock';
 
-export interface ProviderKindInfo {
+interface ProviderKindInfo {
   kind: ProviderKind;
   label: string;
   /** The base URL a new provider of this kind starts with. */
@@ -27,7 +27,7 @@ export const DEFAULT_BASE_URLS: Record<string, string> = Object.fromEntries(PROV
 export const providerKindLabel = (kind: string): string => PROVIDER_KINDS.find((k) => k.kind === kind)?.label ?? kind;
 
 /** What a provider must have for the "needs a key" rule and the local-server exception. */
-export interface ProviderLike {
+interface ProviderLike {
   kind: string;
   baseUrl?: string;
 }
@@ -52,7 +52,7 @@ export const staysOnThisComputer = (p: ProviderLike): boolean => {
 export const providerNeedsKey = (p: ProviderLike): boolean => p.kind !== 'mock' && p.kind !== 'ollama' && !isLocalProvider(p);
 
 /** A provider configuration as the presets make it (the fields every kind shares). */
-export interface ProviderPreset {
+interface ProviderPreset {
   id: string;
   name: string;
   kind: ProviderKind;

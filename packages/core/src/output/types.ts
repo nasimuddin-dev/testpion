@@ -49,7 +49,7 @@ export interface GridPage {
 }
 
 /** The Debugger session as HAR, as far as the builders read it. */
-export interface HarLike {
+interface HarLike {
   log: {
     entries: Array<{ startedDateTime: string; time: number; request: { method: string; url: string }; response: { status: number; content?: { size?: number; mimeType?: string } } }>;
   };

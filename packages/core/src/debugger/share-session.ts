@@ -15,9 +15,9 @@ import { CAPTURE_SESSIONS_DIR, captureSessionFileName } from './capture-history.
  * masking pass with the redaction every export uses (`redactOutputText`: secret values the workspace knows, sensitive
  * header and field names, credentials by their shape). The original stays where it was, unmasked beyond what capture masked.
  */
-export const SHARED_SESSIONS_DIR = `${CAPTURE_SESSIONS_DIR}/shared`;
+const SHARED_SESSIONS_DIR = `${CAPTURE_SESSIONS_DIR}/shared`;
 
-export interface SharedSession {
+interface SharedSession {
   name: string;
   /** Workspace path of the shared copy. */
   file: string;

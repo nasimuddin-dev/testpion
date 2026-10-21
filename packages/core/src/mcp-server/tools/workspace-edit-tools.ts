@@ -19,7 +19,7 @@ import { str, type Tool } from '../tool.js';
 
 type Flat = { node: CollectionNode; folder: string };
 
-export interface EditToolsDeps {
+interface EditToolsDeps {
   store: WorkspaceStore;
   redactor: Redactor;
   collections(): Collection[];

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { OUTPUT_PARAMS, listOutputSurfaces, type OutputParams } from '@testpion/core';
-import { CliError, EXIT, dim, green, printJson, withWorkspace } from '../shared.js';
+import { CliError, EXIT, dim, green, printJson, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { saveSurface, savedLine } from '../output-save.js';
 
@@ -16,7 +16,7 @@ export function registerOutputCommand(program: Command): void {
       'save an output of the app to a file, as the down arrow in the window does: run results, History, traces, a flow timeline, a data run or evaluation matrix, monitor runs, the runs list, the workspace changes or a saved response body (`output --list` shows them with their formats)',
     )
     .argument('[surface]', 'the output, e.g. run.results, history, traces (see --list)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-e, --environment <name>', "mask this environment's secret values as well")
     .option('--list', 'list the outputs this command can save, with their formats and parameters')
     .option('--format <format>', 'the format (default: from the --out extension, else the output’s default)')

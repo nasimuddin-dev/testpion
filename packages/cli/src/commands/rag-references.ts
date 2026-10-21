@@ -4,7 +4,7 @@
  * offers the drafts as a proposal; --apply replaces the ticked records in the dataset (one `testpion ai undo` puts it back).
  */
 import { Command } from 'commander';
-import { EXIT, CliError, bold, cliContext, dim, withWorkspace } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, withWorkspace, JSON_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -23,7 +23,7 @@ export function registerRagReferencesCommands(rag: Command): void {
     .option('-e, --environment <name>')
     .option('--provider <name>', 'the model that drafts (default: the AI settings’ large model)')
     .option('--model <name>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (dataset: string, o: { ids?: string[]; limit: string; judge?: string; apply?: boolean; estimate?: boolean; dryRun?: boolean; workspace?: string; environment?: string; provider?: string; model?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);

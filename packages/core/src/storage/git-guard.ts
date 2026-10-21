@@ -86,7 +86,7 @@ export function findCommittableSecrets(store: WorkspaceStore): SecretFinding[] {
   return out;
 }
 
-export interface SecretFixResult {
+interface SecretFixResult {
   fixed: SecretFinding[];
   /** Findings this cannot fix by itself (MCP servers, providers): the app opens them instead. */
   skipped: Array<{ finding: SecretFinding; reason: string }>;

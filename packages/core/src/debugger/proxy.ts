@@ -122,7 +122,7 @@ export interface BreakpointEdits {
   status?: number;
 }
 
-export interface DebuggerProxyOptions {
+interface DebuggerProxyOptions {
   port?: number;
   /** The session the captured exchanges go into (the app shares one across stop / start); a new one otherwise. */
   session?: DebuggerSession;

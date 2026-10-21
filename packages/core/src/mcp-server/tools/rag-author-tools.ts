@@ -3,9 +3,7 @@
  * model drafts a complete RAG evaluation for a target, TestPion builds it from the plan and dry-runs it without sending
  * anything. It only proposes: the person agrees, then `ai_apply_proposal` saves it as a saved evaluation.
  */
-import { createEngineContext } from '../../engine.js';
-import { aiRunDeps } from '../../ai/tasks/run.js';
-import { runAiTask } from '../../ai/tasks/run.js';
+import { runRagProposal } from './server-kit.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -35,33 +33,16 @@ export function ragAuthorTools({ store, secrets, settings }: { store: WorkspaceS
         },
         required: ['target'],
       },
-      run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, environment: a.environment ? String(a.environment) : undefined, aiSurface: 'mcp' });
-        try {
-          const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
-            task: 'rag-author-evaluation',
-            question: a.goal ? String(a.goal) : undefined,
-            context: { target: a.target, dataset: a.dataset, docs: a.docs, spec: a.spec, goal: a.goal, name: a.name, sliceFile: a.slice_file, judge: a.judge },
-            dryRun: a.dry_run === true,
-          });
-          if (r.dryRun) return { dryRun: true, preview: r.preview };
-          const p = r.proposal;
-          return {
-            model: `${r.provider}/${r.model}`,
-            usage: r.usage,
-            costUsd: r.costUsd,
-            problems: r.problems,
-            ...(p
-              ? {
-                  proposal: { id: p.id, title: p.title, summary: p.summary, assumptions: p.assumptions, notes: p.notes, items: p.items.map((i) => ({ id: i.id, kind: i.kind, title: i.title, selected: i.selected, verification: i.verification, after: i.after })) },
-                  next: `Show the person the evaluation and its badges; save it with ai_apply_proposal { id: "${p.id}" } after they agree. The gates are saved in the evaluation (its gates field): rag_run, a monitor of it and the CI step fail a run whose mean is under one.`,
-                }
-              : {}),
-          };
-        } finally {
-          await ctx.dispose();
-        }
-      },
+      run: (a) =>
+        runRagProposal(
+          { store, secrets, settings },
+          a,
+          { task: 'rag-author-evaluation', question: a.goal ? String(a.goal) : undefined, context: { target: a.target, dataset: a.dataset, docs: a.docs, spec: a.spec, goal: a.goal, name: a.name, sliceFile: a.slice_file, judge: a.judge } },
+          {
+            items: (p) => p.items.map((i) => ({ id: i.id, kind: i.kind, title: i.title, selected: i.selected, verification: i.verification, after: i.after })),
+            next: (p) => `Show the person the evaluation and its badges; save it with ai_apply_proposal { id: "${p.id}" } after they agree. The gates are saved in the evaluation (its gates field): rag_run, a monitor of it and the CI step fail a run whose mean is under one.`,
+          },
+        ),
     },
   ];
 }

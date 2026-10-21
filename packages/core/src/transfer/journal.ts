@@ -26,7 +26,7 @@ export interface JournalFile {
   afterSha?: string;
 }
 
-export interface JournalListItem {
+interface JournalListItem {
   kind: BundleKindId;
   id: string;
   file: 'mcp-servers' | 'providers' | 'library';
@@ -35,7 +35,7 @@ export interface JournalListItem {
   before?: unknown;
 }
 
-export interface ImportJournal {
+interface ImportJournal {
   importId: string;
   at: string;
   title: string;

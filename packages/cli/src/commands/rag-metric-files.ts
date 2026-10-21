@@ -29,7 +29,7 @@ import {
   writeMetricFile,
 } from '@testpion/core';
 import { CUSTOM_METRIC_KINDS, customMetricTemplate, type CustomMetricKind } from '@testpion/shared';
-import { EXIT, CliError, bold, cliContext, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -46,7 +46,7 @@ export function registerRagMetricFileCommands(rag: Command): void {
     .command('list')
     .description('the custom metrics of the workspace (metrics/*.yaml): id, kind, version, and what is wrong with a file')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -79,7 +79,7 @@ export function registerRagMetricFileCommands(rag: Command): void {
     .option('--model <name>')
     .option('--dry-run', 'with --from-description: show what would be sent, send nothing')
     .option('--no-ai', 'with --from-description: nothing to do without a model (a starting file is made instead)')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (id: string, o: { kind: CustomMetricKind; fromDescription?: string; apply?: boolean; force?: boolean; workspace?: string; environment?: string; provider?: string; model?: string; dryRun?: boolean; ai?: boolean; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -124,7 +124,7 @@ export function registerRagMetricFileCommands(rag: Command): void {
     .option('-e, --environment <name>')
     .option('--examples', 'run the examples too (a judge or checklist metric asks the judge)')
     .option('--judge <provider/model>', 'the judge of the examples')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (ids: string[], o: { workspace?: string; environment?: string; examples?: boolean; judge?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -216,7 +216,7 @@ export function registerRagMetricFileCommands(rag: Command): void {
     .option('--name <text>', 'a name for the example')
     .option('--labels <name>', 'the label set to read the verdict from (default: the run’s evaluation)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (id: string, o: { run: string; result: string; expect?: 'pass' | 'fail'; name?: string; labels?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -272,7 +272,7 @@ export function registerRagMetricFileCommands(rag: Command): void {
     .option('--list', 'list the allowed targets')
     .option('--forget', 'forget the target (or all of the workspace’s when none is given)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((target: string | undefined, o: { list?: boolean; forget?: boolean; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
         needWorkspace(ephemeral);

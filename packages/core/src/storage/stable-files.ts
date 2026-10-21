@@ -144,7 +144,7 @@ export function normalizeText(text: string): string {
 
 /* ------------------------------------------------------------------ per-kind shapes */
 
-export const COLLECTION_KEY_ORDER = ['schemaVersion', 'id', 'name', 'description', 'variables', 'auth', 'preRequestScript', 'testScript', 'items'];
+const COLLECTION_KEY_ORDER = ['schemaVersion', 'id', 'name', 'description', 'variables', 'auth', 'preRequestScript', 'testScript', 'items'];
 const ENVIRONMENT_KEY_ORDER = ['id', 'name', 'isProduction', 'color', 'order', 'variables'];
 const WORKSPACE_KEY_ORDER = ['schemaVersion', 'id', 'name', 'description', 'variables', 'createdAt', 'updatedAt'];
 const LIBRARY_KEY_ORDER = ['schemaVersion', 'folders', 'items'];

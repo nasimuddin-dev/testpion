@@ -1,6 +1,7 @@
 import { aiRunDeps, aiUsageSummary, applyProposal, draftFlowProposal, flowSourceRef, getProposal, isAiSetupError, listAiTasks, listProposals, runAiTask, undoProposal, type Proposal } from '../../ai/tasks/index.js';
 import { normalizeError } from '../../errors.js';
 import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
@@ -79,8 +80,7 @@ export function aiTools({
         required: ['task'],
       },
       run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, environment: a.environment ? String(a.environment) : undefined });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: a.environment ? String(a.environment) : undefined }, async (ctx) => {
           const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
             task: String(a.task),
             item: itemArg(a.item),
@@ -99,9 +99,7 @@ export function aiTools({
             ...(r.dryRun ? { preview } : { sent: { privacy: preview.privacy, contextTokens: preview.context.tokens, masked: preview.redactionCount, local: preview.local } }),
             ...(proposal ? { proposal: forAgent(proposal), next: `Show the user the items and their verification; apply with ai_apply_proposal { id: "${proposal.id}" } after they agree.` } : {}),
           };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {

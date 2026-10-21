@@ -11,7 +11,7 @@ import type { GridSourceId } from './grid-sources.js';
  * - `raw-notice`: the person's own data (a response body), saved as is, with a notice when it looks like it holds a secret.
  * - `none`: nothing secret in it (timings, a lint report).
  */
-export type OutputRedaction = 'redacted-default' | 'raw-notice' | 'none';
+type OutputRedaction = 'redacted-default' | 'raw-notice' | 'none';
 
 /** A surface's id: one of OUTPUT_SURFACES (the `data-output` marker, OutputSpec.id, the `surface` of output.save). */
 export type OutputSurfaceId = (typeof SURFACES)[number]['id'];

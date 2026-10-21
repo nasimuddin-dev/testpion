@@ -52,9 +52,6 @@ export class Findings {
   }
 }
 
-/** Codes of findings that need an action by the user before the imported collection works. */
-export const ACTION_CODES: ReadonlySet<string> = new Set(['VALUE_NEEDED', 'AUTH_UNSUPPORTED', 'TEMPLATE_TAG_UNSUPPORTED', 'SCRIPT_API']);
-
 /**
  * A note written as a line of text (the form every importer used before findings) as a finding: its code and severity
  * come from its wording, the item from its leading `"Name":`. The importers that know better (Postman, Insomnia,

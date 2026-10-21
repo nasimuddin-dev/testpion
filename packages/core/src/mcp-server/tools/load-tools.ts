@@ -1,4 +1,4 @@
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import { collectionLoadTarget } from '../../load/collection-load.js';
 import { loadHistory, loadRunRecord, recordLoadRun } from '../../load/history.js';
@@ -52,8 +52,7 @@ export function loadTools(d: ModuleToolDeps): Tool[] {
         if (!c && !a.url && !g && !a.test_file) throw new ApsError('ValidationError', 'Give a url, a collection, a test_file or grpc');
         const thresholds = Array.isArray(a.thresholds) ? (a.thresholds as unknown[]).map(String) : [];
         thresholds.forEach(parseThreshold); // a typo fails before the test runs
-        const ctx = createEngineContext({ store, secrets, settings, environment, collectionId: c?.id });
-        try {
+        return withEngine({ store, secrets, settings }, { environment, collectionId: c?.id }, async (ctx) => {
           let target: LoadTarget;
           let prep: { requests: string[]; unresolved: string[] } | undefined;
           if (c) {
@@ -92,9 +91,7 @@ export function loadTools(d: ModuleToolDeps): Tool[] {
             );
           }
           return { ...prep, environment: environment ?? null, ...summary, ...(checked ? { thresholds: checked, passed: checked.every((t) => t.passed) } : {}) };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
   ];

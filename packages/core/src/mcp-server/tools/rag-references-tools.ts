@@ -4,8 +4,7 @@
  * record retrieved, and every draft is checked against them. It only proposes: the person reads the drafts, then
  * `ai_apply_proposal` replaces the records in the dataset.
  */
-import { createEngineContext } from '../../engine.js';
-import { aiRunDeps, runAiTask } from '../../ai/tasks/run.js';
+import { runRagProposal } from './server-kit.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -35,42 +34,20 @@ export function ragReferencesTools({ store, secrets, settings }: { store: Worksp
         },
         required: ['dataset'],
       },
-      run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, environment: a.environment ? String(a.environment) : undefined, aiSurface: 'mcp' });
-        try {
-          const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
-            task: 'rag-draft-references',
-            context: { dataset: a.dataset, ids: a.ids, limit: a.limit, judge: a.judge },
-            dryRun: a.dry_run === true,
-          });
-          if (r.dryRun) return { dryRun: true, preview: r.preview };
-          const p = r.proposal;
-          return {
-            model: `${r.provider}/${r.model}`,
-            usage: r.usage,
-            costUsd: r.costUsd,
-            problems: r.problems,
-            ...(p
-              ? {
-                  proposal: {
-                    id: p.id,
-                    title: p.title,
-                    summary: p.summary,
-                    assumptions: p.assumptions,
-                    notes: p.notes,
-                    items: p.items.map((i) => {
-                      const rec = (i.data as { record: { id?: string; question: string; reference: string; reference_ids: string[]; answerable: boolean } }).record;
-                      return { id: i.id, record: rec.id, question: rec.question, reference: rec.reference, reference_ids: rec.reference_ids, answerable: rec.answerable, selected: i.selected, verification: i.verification.map((b) => ({ verifier: b.verifier, status: b.status, label: b.label })) };
-                    }),
-                  },
-                  next: `Show the person the drafts and their badges; replace the records with ai_apply_proposal { id: "${p.id}" } after they agree.`,
-                }
-              : {}),
-          };
-        } finally {
-          await ctx.dispose();
-        }
-      },
+      run: (a) =>
+        runRagProposal(
+          { store, secrets, settings },
+          a,
+          { task: 'rag-draft-references', context: { dataset: a.dataset, ids: a.ids, limit: a.limit, judge: a.judge } },
+          {
+            items: (p) =>
+              p.items.map((i) => {
+                const rec = (i.data as { record: { id?: string; question: string; reference: string; reference_ids: string[]; answerable: boolean } }).record;
+                return { id: i.id, record: rec.id, question: rec.question, reference: rec.reference, reference_ids: rec.reference_ids, answerable: rec.answerable, selected: i.selected, verification: i.verification.map((b) => ({ verifier: b.verifier, status: b.status, label: b.label })) };
+              }),
+            next: (p) => `Show the person the drafts and their badges; replace the records with ai_apply_proposal { id: "${p.id}" } after they agree.`,
+          },
+        ),
     },
   ];
 }

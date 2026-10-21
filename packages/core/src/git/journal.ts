@@ -15,7 +15,7 @@ export interface JournalFile {
   /** The file existed before the operation (its bytes are in the backup). */
   existed: boolean;
 }
-export interface JournalEntry {
+interface JournalEntry {
   id: string;
   op: string;
   /** In words: "Restore MCP server Weather from 3fa2c1d". */

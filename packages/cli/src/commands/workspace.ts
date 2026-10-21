@@ -18,14 +18,14 @@ import {
   exportWholeWorkspace,
   workspaceExportFileName,
 } from '@testpion/core';
-import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, withWorkspace, JSON_OPTION } from '../shared.js';
 import { registerGitCommands } from './git.js';
 import { checkStaged } from './git-items.js';
 
 export function registerWorkspaceCommands(program: Command): void {
   const ws = program.command('workspace').description('manage workspaces');
   ws.command('list')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) => {
       const list = new WorkspaceManager().list();
       if (o.json) printJson(list);
@@ -159,7 +159,7 @@ export function registerWorkspaceCommands(program: Command): void {
   trash
     .command('list')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const items = listTrash(store);

@@ -1,7 +1,7 @@
 /** What the prompts run in the app's AI Lab used, per provider and model: calls, tokens, cost and time. */
 import type { WorkspaceStore } from './workspace.js';
 
-export interface LlmUsage {
+interface LlmUsage {
   provider: string;
   model: string;
   calls: number;

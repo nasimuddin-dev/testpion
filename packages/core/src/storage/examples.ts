@@ -4,12 +4,12 @@ import { shortId } from '../util/ids.js';
 import type { Redactor } from '../util/redact.js';
 
 /** Bodies larger than this are not saved as examples (workspace files stay small and diffable). */
-export const MAX_EXAMPLE_BODY = 512 * 1024;
+const MAX_EXAMPLE_BODY = 512 * 1024;
 
 /** Headers that describe one particular transfer and make no sense in a saved example. */
 const TRANSIENT_HEADERS = /^(date|connection|keep-alive|transfer-encoding|content-length|content-encoding)$/i;
 
-export interface ResponseLike {
+interface ResponseLike {
   status: number;
   statusText?: string;
   headers: Array<[string, string]>;

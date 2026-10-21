@@ -7,7 +7,7 @@
  */
 import type { RagMapping, RagProtocol } from './rag.js';
 
-export interface RagTargetPreset {
+interface RagTargetPreset {
   id: string;
   name: string;
   protocol: RagProtocol;

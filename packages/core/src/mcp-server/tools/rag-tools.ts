@@ -9,7 +9,7 @@ import { basename, join } from 'node:path';
 import type { RagTarget } from '@testpion/shared';
 import { datasetFormatOfName } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { exportRagRecords, importRagRecords, parseRagDatasetText, RAG_DATASET_FORMATS, stringifyRagRecords, type RagDatasetFormat } from '../../eval/rag/dataset-formats.js';
 import { findRagTarget, listRagTargets } from '../../eval/rag/targets.js';
 import type { AppSettings } from '../../model/types.js';
@@ -58,13 +58,10 @@ export function ragTools({ store, secrets, settings, checkEnvironment }: { store
       run: async (a) => {
         const found = findRagTarget(store, String(a.target ?? ''));
         const { id: _id, name: _name, ...target } = found;
-        const ctx = createEngineContext({ store, secrets, settings, environment: checkEnvironment(a.environment), aiSurface: 'mcp' });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: checkEnvironment(a.environment), aiSurface: 'mcp' }, async (ctx) => {
           const p = await probeRagTarget(ctx, target as RagTarget, String(a.question ?? ''));
           return { target: found.name, ...p, response: { ...p.response, text: p.response.text.slice(0, 4000) } };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {

@@ -22,7 +22,7 @@ export const AI_TASK_IDS = [
 ] as const;
 export type AiTaskId = (typeof AI_TASK_IDS)[number];
 
-export interface AiActionDef {
+interface AiActionDef {
   /** The menu action id: what a view's `on` names. */
   id: string;
   /** The LABEL key of its text (apps/desktop/src/lib/vocabulary.ts). */

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { Command } from 'commander';
 import { generateWorkspaceDataset, } from '@testpion/core';
-import { EXIT, green, dim, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, dim, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** `testpion generate-data <name>`: realistic rows from a JSON schema or an operation's request body, into datasets/. */
 export function registerGenerateCommands(program: Command): void {
@@ -17,8 +17,8 @@ export function registerGenerateCommands(program: Command): void {
     .option('--operation <op>', 'with --spec: "POST /patients" or an operationId')
     .option('--format <format>', 'csv or json', 'csv')
     .option('--overwrite', 'replace a dataset of the same name')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action((name: string, o: { rows: string; schema?: string; spec?: string; operation?: string; format: string; overwrite?: boolean; workspace?: string; json?: boolean }) => {
       if (o.format !== 'csv' && o.format !== 'json') throw new CliError('--format must be csv or json', EXIT.CONFIG_ERROR);
       return withWorkspace(o.workspace, (store) => {

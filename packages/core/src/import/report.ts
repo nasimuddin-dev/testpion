@@ -8,7 +8,7 @@ import type { FindingSeverity, ImportDocument, ImportFinding } from './model.js'
  * opened again.
  */
 
-export interface ReportGroup {
+interface ReportGroup {
   code: string;
   title: string;
   severity: FindingSeverity;
@@ -52,7 +52,7 @@ const TITLES: Record<string, string> = {
   IDS_RENAMED: 'Ids renamed',
   NOTE: 'Other',
 };
-export const findingTitle = (code: string): string => TITLES[code] ?? code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, ' ');
+const findingTitle = (code: string): string => TITLES[code] ?? code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, ' ');
 
 const SEVERITY_ORDER: Record<FindingSeverity, number> = { 'not-imported': 0, changed: 1, info: 2 };
 const MAX_FINDINGS = 2000;

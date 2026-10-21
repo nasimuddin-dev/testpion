@@ -1,4 +1,4 @@
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { introspect } from '../../protocols/graphql/graphql.js';
 import { buildGraphQLOperation } from '../../protocols/graphql/operation-builder.js';
 import { collectSubscriptionEvents } from '../../protocols/graphql/subscription.js';
@@ -29,14 +29,11 @@ export function graphqlTools(d: ModuleToolDeps): Tool[] {
         required: ['endpoint', 'field'],
       },
       run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, environment: checkEnvironment(a.environment) });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: checkEnvironment(a.environment) }, async (ctx) => {
           const headers = ctx.vars.resolveDeep(Object.entries((a.headers as Record<string, string>) ?? {}).map(([key, value]) => ({ key, value })));
           const { schema } = await introspect({ endpoint: ctx.vars.resolve(String(a.endpoint)), headers }, { cookieJar: ctx.services.cookieJar });
           return buildGraphQLOperation(schema, String(a.field), { depth: a.depth === undefined ? undefined : Number(a.depth), includeOptionalArgs: a.requiredArgsOnly !== true });
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {
@@ -56,8 +53,7 @@ export function graphqlTools(d: ModuleToolDeps): Tool[] {
         required: ['endpoint', 'query'],
       },
       run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, environment: checkEnvironment(a.environment) });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: checkEnvironment(a.environment) }, async (ctx) => {
           const r = await collectSubscriptionEvents({
             url: ctx.vars.resolve(String(a.endpoint)),
             query: String(a.query),
@@ -67,9 +63,7 @@ export function graphqlTools(d: ModuleToolDeps): Tool[] {
             cookieJar: ctx.services.cookieJar,
           });
           return ctx.redactor.redact(r);
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
   ];

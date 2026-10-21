@@ -24,7 +24,7 @@ export function requireEnvironment(store: Pick<WorkspaceStore, 'listEnvironments
 }
 
 /** Using an environment whose file cannot be read: say so (sending without its variables would be silently wrong). */
-export function brokenEnvironmentError(env: Pick<Environment, 'name' | 'problem'>): ApsError {
+function brokenEnvironmentError(env: Pick<Environment, 'name' | 'problem'>): ApsError {
   return new ApsError('ConfigurationError', `Environment "${env.name}" is broken: ${env.problem}`, {
     why: 'Its file is not valid JSON, so none of its variables can be used.',
     suggestions: ['Fix the environment file by hand, or restore it from version control.', 'Or choose another environment.'],
@@ -66,7 +66,7 @@ export function requireCollection(store: Pick<WorkspaceStore, 'listCollections'>
 }
 
 /** A variable name: letters, digits, _ . $ - */
-export const VARIABLE_NAME = /^[\w.$-]+$/;
+const VARIABLE_NAME = /^[\w.$-]+$/;
 
 function applyEnvironmentVariables(store: WorkspaceStore, ref: string, values: Record<string, string>, opts: { create?: boolean; secrets?: SecretStore }): { env: Environment; secretValues: Array<[string, string]> } {
   let env = findEnvironment(store, ref);

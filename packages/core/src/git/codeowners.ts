@@ -25,7 +25,7 @@ export interface CodeownersPlan {
   lines: Array<{ pattern: string; what: string }>;
 }
 
-export const CODEOWNERS_PLACES = ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'];
+const CODEOWNERS_PLACES = ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'];
 
 /** What owners usually differ on, per kind folder or file: most specific wording first. */
 const SPECIAL: Array<{ path: string; what: string }> = [

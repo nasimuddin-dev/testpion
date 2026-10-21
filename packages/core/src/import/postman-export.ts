@@ -13,7 +13,7 @@ import { sha1Hex } from '../util/hash.js';
  * other than GraphQL. `postmanExportNotes` lists what was left out.
  */
 
-export const POSTMAN_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json';
+const POSTMAN_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json';
 
 /** Deterministic UUID-shaped id, so re-exporting the same collection gives the same ids. */
 export function stableUuid(seed: string): string {
@@ -188,7 +188,7 @@ function pmExample(ex: SavedExample, req: SavedHttpRequest): Record<string, unkn
 }
 
 /** Request settings as Postman's protocolProfileBehavior (the ones both tools have). */
-export function pmBehavior(s: HttpSettings | undefined): Record<string, unknown> | undefined {
+function pmBehavior(s: HttpSettings | undefined): Record<string, unknown> | undefined {
   if (!s) return undefined;
   const b: Record<string, unknown> = {
     ...(s.followRedirects === false ? { followRedirects: false } : {}),

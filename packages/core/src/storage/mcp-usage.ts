@@ -2,7 +2,7 @@
 import type { WorkspaceStore } from './workspace.js';
 import { percentile } from '../util/stats.js';
 
-export interface McpToolUsage {
+interface McpToolUsage {
   /** Server name (as when the call was made). */
   server: string;
   serverId?: string;

@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { environmentSecretRefs, externalSecrets, prefetchEnvironmentSecrets, secretRefCommand, type Environment } from '@testpion/core';
-import { EXIT, green, red, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, red, dim, bold, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** `testpion secrets <environment>`: the environment's secret manager references, and whether each one can be read here. */
 export function registerSecretsCommands(program: Command): void {
@@ -10,8 +10,8 @@ export function registerSecretsCommands(program: Command): void {
       "check an environment's secret manager references (op://, vault://, aws-sm://, azure-kv://, gcp-sm://): each is read with its tool, the value never printed; exit 1 when one cannot be read",
     )
     .argument('<environment>', 'environment name or id')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action(async (environment: string, o: { workspace?: string; json?: boolean }) => {
       const { env, root, failed } = await withWorkspace(o.workspace, async (store) => {
         const found: Environment | undefined = store.getEnvironment(environment);

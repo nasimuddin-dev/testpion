@@ -12,7 +12,7 @@ import type { ImportInput } from './inputs.js';
 export const POSTMAN_API = 'https://api.getpostman.com';
 const MAX_ITEMS = 200;
 
-export interface PostmanRef {
+interface PostmanRef {
   kind: 'collection' | 'environment' | 'workspace';
   id: string;
 }

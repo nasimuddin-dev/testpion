@@ -45,7 +45,7 @@ import {
   type TrySample,
 } from '@testpion/core';
 import { RAG_TARGET_PRESETS, findRagTargetPreset, type RagTarget } from '@testpion/shared';
-import { EXIT, CliError, bold, cliContext, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const collect = (v: string, prev: string[]) => [...prev, ...v.split(',').map((s) => s.trim()).filter(Boolean)];
 const money = (n: number) => `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
@@ -151,7 +151,7 @@ export function registerRagEvalCommands(rag: Command): void {
   rag
     .command('presets')
     .description('metric presets (RAG triad, Ragas core, Free …) and target presets (OpenAI-compatible, LangServe, LlamaIndex, Haystack, Dify, Flowise)')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { json?: boolean }) => {
       if (o.json) return printJson({ metricPresets: METRIC_PRESETS, targetPresets: RAG_TARGET_PRESETS.map(({ sample: _s, ...p }) => p) });
       console.log(bold('Metric presets') + dim('  (rag run --preset <id>)'));
@@ -164,7 +164,7 @@ export function registerRagEvalCommands(rag: Command): void {
   metric
     .command('show')
     .argument('<name>', 'a metric id, alias or Ragas name')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((name: string, o: { json?: boolean }) => {
       const r = resolveMetric(name);
       if (!r) throw new CliError(`No RAG metric called "${name}". \`testpion rag metrics --search ${name}\` looks for it.`, EXIT.CONFIG_ERROR);
@@ -197,7 +197,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--judge <provider/model>', 'the judge (default: the AI settings’ large model)')
     .option('--option <key=value...>', 'metric options, e.g. mode=chunks k=5', (v: string, p: string[] = []) => [...p, v])
     .option('--dry-run', 'show what will be sent, send nothing')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (name: string, o: Record<string, unknown> & { workspace?: string; environment?: string; dryRun?: boolean; json?: boolean; judge?: string; option?: string[] }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -297,7 +297,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--min <metric=value>', 'a gate on the new run', collect, [])
     .option('--junit <file>')
     .option('--html <file>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (runId: string, o: RescoreFlags) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -337,7 +337,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .requiredOption('-b, --baseline <run>', 'the run to compare with')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
     .option('--min-delta <n>', 'the change in a mean that counts (default 0.05)', '0.05')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((runId: string, o: { baseline: string; workspace?: string; minDelta: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -373,7 +373,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--concurrency <n>', 'most calls at once')
     .option('--rpm <n>', 'most requests per minute')
     .option('--retries <n>', 'retries of a failed call')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((from: string, o: { name: string; workspace?: string; var?: string[]; protocol: string; answer?: string; contexts?: string; text?: string; id?: string; score?: string; readOnly?: boolean; concurrency?: string; rpm?: string; retries?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -420,7 +420,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .command('clear')
     .description('empty the judge cache: the next run asks the judge again')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
         needWorkspace(ephemeral);

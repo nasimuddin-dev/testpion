@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { Command } from 'commander';
 import { formatUsd, itemRefUrl } from '@testpion/shared';
 import {
@@ -23,7 +23,7 @@ import {
   reviewResult,
   runReviewReport,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
 /** `testpion history …`: the response history of requests sent in the app, test and score history, comparing two responses. */
@@ -58,7 +58,7 @@ export function registerHistoryCommands(program: Command): void {
       .option('--kind <kind>', `only this kind: ${HISTORY_KINDS.join(', ')} (capture: Debugger capture sessions and what they became)`)
       .option('-q, --query <text>', 'only entries matching this text (name, URL, method, status)')
       .option('-n, --limit <n>', 'how many', '20')
-      .option('--json', 'print as JSON'),
+      .option(...JSON_OPTION),
     'history',
   ).action((o) => {
       if (o.out) {
@@ -85,7 +85,7 @@ export function registerHistoryCommands(program: Command): void {
     .requiredOption('--request <nameOrId>', 'saved request')
     .option('--collection <nameOrId>', 'collection of --request')
     .option('-n, --limit <n>', 'how many recent responses', '50')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const requestId = savedRequestId(store, o.request, o.collection);
@@ -104,7 +104,7 @@ export function registerHistoryCommands(program: Command): void {
     .description('workspace activity per day: requests sent, failed requests, median response time, test runs and failed tests')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-d, --days <n>', 'how many days, up to 90', '14')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const a = store.meta.activity({ days: Number(o.days) || 14, tzOffsetMin: new Date().getTimezoneOffset() });
@@ -131,7 +131,7 @@ export function registerHistoryCommands(program: Command): void {
     .option('--bad', 'rate it bad')
     .option('--clear', 'remove the rating and note')
     .option('--note <text>', 'why')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (runId: string, resultId: string | undefined, o: { workspace: string; good?: boolean; bad?: boolean; clear?: boolean; note?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
         if (resultId) {
@@ -152,7 +152,7 @@ export function registerHistoryCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-q, --query <text>', 'only runs whose name contains this')
     .option('-n, --limit <n>', 'how many runs', '20')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace: string; query?: string; limit: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const points = scoreTrend(store, { name: o.query, limit: Number(o.limit) || 20 });
@@ -173,7 +173,7 @@ export function registerHistoryCommands(program: Command): void {
     .description('tests whose result keeps changing across the latest runs, or that passed only after a retry (exit 1 when there are any)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-n, --runs <n>', 'how many of the latest runs', '30')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (o: { workspace: string; runs: string; json?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
         const rows = await flakyTests(store, { runs: Number(o.runs) || 30 });
@@ -194,7 +194,7 @@ export function registerHistoryCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--id', 'the argument is the test / request id')
     .option('-n, --limit <n>', 'how many runs', '20')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (name: string, o: { workspace: string; id?: boolean; limit: string; json?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
         const points = await testHistory(store, o.id ? { id: name } : { name }, { limit: Number(o.limit) || 20 });
@@ -223,7 +223,7 @@ export function registerHistoryCommands(program: Command): void {
     .description('MCP tool calls made in the app, per tool: calls, failures, median and p95 time, last used')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-s, --server <name>', 'only this MCP server')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace: string; server?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const rows = mcpToolUsage(store).filter((u) => !o.server || u.server.toLowerCase() === o.server.toLowerCase() || u.serverId === o.server);
@@ -240,7 +240,7 @@ export function registerHistoryCommands(program: Command): void {
     .command('llm')
     .description('prompts run in the AI Lab, per provider and model: prompts, input / output tokens, estimated cost, median time')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const rows = llmUsage(store);

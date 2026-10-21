@@ -35,7 +35,7 @@ import {
   type WorkspaceImportResult,
 } from '@testpion/core';
 import { isBundleFile, runBundleImport } from './bundle.js';
-import { EXIT, green, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, yellow, dim, bold, CliError, printJson, withWorkspace, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** clinic.http / api.rest → the collection's name; a GraphQL schema file's name too. */
 function httpFileName(file: string): string | undefined {
@@ -132,7 +132,7 @@ export function registerImportCommands(program: Command): void {
     .option('--update-decisions <file>', 'an update: a JSON file of "<item key>": "replace" | "new" | "skip" (the keys the preview prints) to override what the update would do')
     .option('--fetch-sources', 'for Arazzo: download OpenAPI source descriptions given as http(s) URLs (default: only files next to the Arazzo file or in the workspace, e.g. specs/)')
     .option('--postman-api-key <key>', 'a Postman API key for postman:… ids and links (or the POSTMAN_API_KEY variable); sent only to api.getpostman.com')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (inputsArg: string[], o) => {
       // a TestPion bundle (.testpion.zip / .testpion.json, a workspace export) merges with the user's choices (commands/bundle.ts)
       if (o.undo || o.list || (inputsArg.length === 1 && inputsArg[0] !== '-' && isBundleFile(inputsArg[0]!))) return runBundleImport(inputsArg[0], o);
@@ -304,7 +304,7 @@ export function registerImportCommands(program: Command): void {
     .argument('[id]', 'the import id (imp-…) printed after an import')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--markdown', 'print the report as Markdown')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((id: string | undefined, o) =>
       withWorkspace(o.workspace, (store) => {
         if (!id) {
@@ -330,7 +330,7 @@ export function registerImportCommands(program: Command): void {
     .argument('<id...>', 'import ids (imp-…) printed after an import, or listed by `testpion import-report`')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--force', 'undo even if the imported collections were edited since')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((ids: string[], o) =>
       withWorkspace(o.workspace, (store) => {
         const results = undoMany(store, ids, { force: !!o.force });

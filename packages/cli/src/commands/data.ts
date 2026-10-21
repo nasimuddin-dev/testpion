@@ -1,11 +1,11 @@
 /** Moving data in and out: import, export, docs, script conversion, response history and environments. */
 import { exportTextFormat } from './export-formats.js';
 import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, importRequestSnippet, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, isRequestSnippet, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, fetchImportText, readBrunoFolder, collectionToBru, type Environment, bundleWsdl, isWsdl, importIntoWorkspace, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, detectFormat, resolveArazzoSources, keepPmApplies } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
 import { runPackageExport } from './export-package.js';
@@ -15,7 +15,7 @@ export function registerDataCommands(program: Command): void {
     .command('lint')
     .description("review a collection's requests: secrets typed in instead of secret variables, secrets in query strings, plain http to other hosts, turned-off TLS checks, and {{variables}} nothing defines")
     .argument('<collection>', 'collection name or id, a file, or an http(s) link')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-e, --environment <name>', 'environment whose variables count as defined (for the variables check)')
     .addOption(new Option('--fail-on <severity>', 'exit 1 when a finding is at least this severe').choices(['high', 'medium', 'low']))
     .option('--json', 'print the findings as JSON')
@@ -52,7 +52,7 @@ export function registerDataCommands(program: Command): void {
     .description('list where a variable is used or defined (requests, scripts, environments, collection/folder/workspace variables, test files)')
     .argument('<name>', 'variable name, without {{ }}')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((name: string, o) => {
       return withWorkspace(o.workspace, (store) => {
         const uses = variableUsages(store, name);
@@ -65,7 +65,7 @@ export function registerDataCommands(program: Command): void {
     .command('unused')
     .description('variables of the environments and the workspace that nothing reads ({{name}} anywhere, script gets, test files)')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const rows = unusedVariables(store);
@@ -80,7 +80,7 @@ export function registerDataCommands(program: Command): void {
     .argument('<from>', 'current name')
     .argument('<to>', 'new name')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (from: string, to: string, o) => {
       return withWorkspace(o.workspace, async (store) => {
         const r = await renameVariable(store, from, to, { secrets: cliSecrets() });
@@ -97,7 +97,7 @@ export function registerDataCommands(program: Command): void {
     .argument('<new>', 'the new document: a file or an http(s) link')
     .option('--fail-on-breaking', 'exit 1 when there are breaking changes')
     .option('--breaking-only', 'leave out the non-breaking changes')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (oldRef: string, newRef: string, o: { failOnBreaking?: boolean; breakingOnly?: boolean; json?: boolean }) => {
       const read = (ref: string) => readDefinition(ref);
       let d: ReturnType<typeof diffOpenApi>;
@@ -131,7 +131,7 @@ export function registerDataCommands(program: Command): void {
     .option('--severity <level>', 'show only this level and worse: error, warning or info', 'info')
     .option('--fail-on <level>', 'exit 1 when a problem of this level or worse is found: error, warning, info or none', 'error')
     .option('--rules', 'list the rules and exit')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (refs: string[], o: { workspace?: string; disable?: string; severity: string; failOn: string; rules?: boolean; json?: boolean }) => {
       const levels = ['error', 'warning', 'info'];
       if (o.rules) {
@@ -185,7 +185,7 @@ export function registerDataCommands(program: Command): void {
         'Uses the latest run unless --run or --history is given. For CI: --min <percent> exits 1 below the threshold',
     )
     .argument('<spec>', 'OpenAPI / Swagger document: a file or an http(s) link')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--run <runId...>', 'use these runs (repeatable; default: the latest run)')
     .option('--history [n]', 'also use the request history (the last n entries, default 1000)')
     .option('--base-url <url>', 'only count requests under this URL (e.g. your staging server)')
@@ -238,8 +238,8 @@ export function registerDataCommands(program: Command): void {
   program
     .command('collections')
     .description('list the collections of a workspace: requests, gRPC calls and connections in each')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print as JSON')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const all = store.listCollections();
@@ -258,9 +258,9 @@ export function registerDataCommands(program: Command): void {
   program
     .command('storage')
     .description('what the workspace keeps on disk (runs, traces, response bodies, history) and, with --delete-runs-older-than, clean up old runs')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--delete-runs-older-than <days>', 'delete runs that started more than this many days ago (results and reports; baselines stay)')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; deleteRunsOlderThan?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         let deleted: { deleted: number; bytes: number } | undefined;
@@ -281,7 +281,7 @@ export function registerDataCommands(program: Command): void {
     .command('jwt')
     .description('decode a JSON Web Token (header, claims, expiry); the signature is not verified. Reads stdin when the token is -')
     .argument('<token>', 'the token (a "Bearer " prefix is fine), or - for stdin')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (token: string, o: { json?: boolean }) => {
       let t = token;
       if (t === '-') {
@@ -311,9 +311,9 @@ export function registerDataCommands(program: Command): void {
     .command('attention')
     .alias('problems')
     .description("the problems of the workspace, as the app's Problems panel lists them: files that can't be read, failing monitors, the latest failed run (failures and errors apart), failing requests, expiring certificates, flaky tests (exit 1 on a high-severity item); also: testpion problems")
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--cert-days <days>', 'warn about certificates that expire within this many days', '30')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .action(async (o: { workspace?: string; certDays: string; json?: boolean; markdown?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
@@ -328,10 +328,10 @@ export function registerDataCommands(program: Command): void {
   program
     .command('certificates')
     .description('TLS certificates of the HTTPS hosts the workspace has called (app, runs, monitors, agents), soonest to expire first; with --warn, exit 1 when one expires within that many days')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--warn <days>', 'exit 1 when a certificate expires within this many days (for cron or CI)')
     .option('--check <hosts...>', 'connect to these hosts (host, host:port or https URL) and check their certificates now, instead of listing the recorded ones')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (o: { workspace?: string; warn?: string; check?: string[]; json?: boolean }) => {
       if (o.check?.length) {
         // direct TLS handshakes; also recorded in the workspace when there is one
@@ -394,10 +394,10 @@ export function registerDataCommands(program: Command): void {
   program
     .command('load-history')
     .description('earlier load tests of the workspace (from the app, testpion load and agents), newest first: throughput, p50/p95/p99, error rate and pass rules')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-q, --query <text>', 'only load tests whose name or target contains this')
     .option('-n, --limit <n>', 'how many', '20')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; query?: string; limit: string; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const rows = loadHistory(store, { query: o.query, limit: Number(o.limit) || 20 });
@@ -413,8 +413,8 @@ export function registerDataCommands(program: Command): void {
     .command('variable-flow')
     .description('how variables flow through a collection run: which requests set each variable in scripts and which use it, in run order; flags used-before-set, never-set and unused')
     .argument('<collection>', 'collection name or id')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print as JSON')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_OPTION)
     .action((ref: string, o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const c = requireCollection(store, ref, { loadable: true });
@@ -432,7 +432,7 @@ export function registerDataCommands(program: Command): void {
   program
     .command('workspace-report')
     .description('the workspace at a glance as one HTML file to share: requests and tests per day, the health of each collection, monitors and the latest runs (names, counts and timings only)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-d, --days <n>', 'days of activity, up to 90', '14')
     .option('-o, --out <file>', 'write here (default: <workspace>-report.html)')
     .action(async (o: { workspace?: string; days: string; out?: string }) => {
@@ -445,8 +445,8 @@ export function registerDataCommands(program: Command): void {
   const datasets = program
     .command('datasets')
     .description('data files in the workspace datasets/ folder (for run-collection -d and test datasets), newest first; SQLite databases with their tables. `datasets show <name>` prints the rows of one')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print as JSON')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_OPTION)
     .option('--add <dataset>', 'add a record to this JSONL dataset (made when missing; ".jsonl" is added without an extension), e.g. an evaluation case')
     .option('--row <json>', 'the record for --add, as JSON: {"message": "Cancel my booking", "expected": "cancellation"}')
     .action(async (o: { workspace?: string; json?: boolean; add?: string; row?: string }) => {
@@ -471,7 +471,7 @@ export function registerDataCommands(program: Command): void {
     .command('show')
     .description('the first rows of a dataset with its columns (and the kind of value each holds) and how many records it has; a SQLite database needs --query')
     .argument('<name>', 'the file under datasets/, e.g. users.csv or intents.jsonl')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-n, --limit <n>', 'how many rows (default 20, up to 10000)', '20')
     .option('-q, --query <sql>', 'SQLite: the SELECT whose rows are the records')
     .option('--json', 'print as JSON: path, format, count, columns [{ name, type }], rows')
@@ -497,9 +497,9 @@ export function registerDataCommands(program: Command): void {
     .command('requests')
     .description("list what a collection holds: its HTTP and GraphQL requests, then its gRPC calls and WebSocket / Socket.IO / MQTT connections (run-collection runs them all)")
     .argument('<collection>', 'collection name or id')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--health', 'add how each HTTP and GraphQL request has been doing in the app: responses, failed, latest status, median time, whether it has checks')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((ref: string, o: { workspace?: string; json?: boolean; health?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const c = requireCollection(store, ref, { loadable: true });
@@ -536,7 +536,7 @@ export function registerDataCommands(program: Command): void {
     .command('export')
     .description('export a collection as a Postman v2.1 collection (default), TestPion JSON, an OpenAPI 3.1 document (--format openapi), a Bruno collection folder (--format bruno --out <folder>) or as OpenCollection YAML (--format opencollection --out <folder>, or --format opencollection-file), an Insomnia file (--format insomnia: v5 YAML, insomnia-v4: JSON), an .http file (--format http) or its connections as AsyncAPI 3.0 (--format asyncapi). What the target format cannot hold is listed on stderr (not exported: …)\n<collection> is a collection name or id in the workspace, or a collection file to convert\nA TestPion bundle (.testpion.zip / .testpion.json) holds any items: kind:id items (collection:<id> spec:specs/<path> dataset:<name> mcp-server:<id> ...), --section <kind>, or --all; --uses adds what they use (a collection: its environments, API definitions, datasets, MCP servers, mocks, protos, tests, flows). Secret values are never in it.')
     .argument('[refs...]', 'collection name or id, a file, or an http(s) link; for a bundle: the items as kind:id')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .addOption(new Option('-f, --format <format>', 'output format').choices(['postman', 'testpion', 'openapi', 'bruno', 'http', 'asyncapi', 'bundle', ...MORE_EXPORT_FORMATS]).default('postman'))
     .option('--json', 'with --format openapi: JSON instead of YAML')
     .option('-o, --out <file>', 'write to this file instead of stdout (a bundle: <title>.testpion.zip in the current folder; .zip or .json picks the form)')
@@ -605,7 +605,7 @@ export function registerDataCommands(program: Command): void {
     .command('export-environment')
     .description("export a workspace environment in Postman's environment format (secret values are never included)")
     .argument('<environment>', 'environment name or id')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-o, --out <file>', 'write to this file instead of stdout')
     .action((ref: string, o: { workspace?: string; out?: string }) => {
       return withWorkspace(o.workspace, (store, ephemeral) => {
@@ -620,7 +620,7 @@ export function registerDataCommands(program: Command): void {
     .command('docs')
     .description('write Markdown or HTML (--html) documentation for a collection (descriptions, requests, parameters, examples; secrets masked)\n<collection> is a collection name or id in the workspace, or a TestPion / Postman v2.1 collection or OpenAPI file or link')
     .argument('<collection>', 'collection name or id, a file, or an http(s) link')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-o, --out <file>', 'write to this file instead of stdout')
     .option('--no-examples', 'leave out saved examples')
     .option('--html', 'a self-contained HTML page (sidebar, search, copy buttons) to publish or share')
@@ -799,9 +799,9 @@ export function registerDataCommands(program: Command): void {
   envCmd
     .command('matrix')
     .description('every variable across every environment: set, empty, missing or off (never values); exit 1 when one is incomplete somewhere')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--all', 'also list variables that are set everywhere')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; all?: boolean; json?: boolean }) => {
       return withWorkspace(o.workspace, (store) => {
         const m = environmentMatrix(store, { secrets: cliSecrets() });
@@ -880,7 +880,7 @@ export function registerDataCommands(program: Command): void {
     .command('list')
     .description('list environments in display order, with variable names (never values)')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const all = store.listEnvironments();
@@ -913,7 +913,7 @@ export function registerDataCommands(program: Command): void {
     .option('--all', 'also list variables that are the same')
     .option('--request <nameOrId>', 'instead: send this saved request with both environments and diff the responses')
     .option('--collection <nameOrId>', 'collection of --request')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action(async (left: string, right: string, o) => {
       return withWorkspace(o.workspace, async (store) => {
         if (o.request) {

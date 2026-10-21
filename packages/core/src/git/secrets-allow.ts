@@ -27,7 +27,7 @@ import { sha256Hex } from '../util/hash.js';
  */
 export const SECRETS_ALLOW_FILE = '.testpion/secrets-allow.json';
 
-export interface SecretAllowEntry {
+interface SecretAllowEntry {
   file: string;
   /** The item in words, as the finding names it ("MCP server Weather"). */
   item: string;
@@ -112,7 +112,7 @@ export function readSecretsAllow(ws: string): { entries: SecretAllowEntry[]; pro
 export const isAllowed = (entries: readonly SecretAllowEntry[], f: { file: string; item: string; field: string; hash: string }): boolean =>
   entries.some((e) => e.hash === f.hash && e.file === f.file && e.item === f.item && e.field === f.field);
 
-export interface AllowResult {
+interface AllowResult {
   entry: SecretAllowEntry;
   /** Written (false: a dry run, or it was allowed already). */
   applied: boolean;

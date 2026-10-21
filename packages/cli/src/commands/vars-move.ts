@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { moveCollectionVariablesToEnvironments, } from '@testpion/core';
-import { EXIT, green, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection } from '../shared.js';
+import { EXIT, green, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** `testpion vars move <collection> --to <environments>`: collection variables into environments (each can set its own value). */
 export function registerVarsMoveCommand(program: Command): void {
@@ -14,8 +14,8 @@ export function registerVarsMoveCommand(program: Command): void {
     .requiredOption('--to <environments>', 'environment names or ids, comma separated')
     .option('--keys <keys>', 'variables to move, comma separated (default: all of the collection)')
     .option('--dry-run', 'only say what would happen')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
     .action(async (ref: string, o: { to: string; keys?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
         const c = requireCollection(store, ref);

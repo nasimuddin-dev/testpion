@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { kindOfPath, libraryOfPath, type ItemRef, type KindId } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { canonicalText, normalizeText, stableText } from '../storage/stable-files.js';
+import { toLf } from '../util/text.js';
 
 /**
  * Where an item lives in git (planning/git-everything.md §4c, release B): a file, and for the kinds that keep several
@@ -11,7 +12,7 @@ import { canonicalText, normalizeText, stableText } from '../storage/stable-file
  * address, so one code path serves collections' requests, library items, MCP servers, AI providers, and whole-file
  * kinds (environments, tests, flows, API definitions, datasets …).
  */
-export type ItemMode = 'nested' | 'list' | 'whole';
+type ItemMode = 'nested' | 'list' | 'whole';
 
 export interface ItemAddress {
   /** Workspace-relative path with `/`. */
@@ -260,7 +261,7 @@ function emptyDoc(a: ItemAddress): Rec {
 export function sameText(a: string | undefined, b: string | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
   if (a === b) return true;
-  const [x, y] = [a.replace(/\r\n?/g, '\n'), b.replace(/\r\n?/g, '\n')];
+  const [x, y] = [toLf(a), toLf(b)];
   if (x === y) return true;
   return false;
 }
@@ -268,7 +269,7 @@ export function sameText(a: string | undefined, b: string | undefined): boolean 
 /** The text in the line-ending style of the file it replaces (a CRLF working file stays CRLF, so git sees no whole-file change). */
 export function matchEol(current: string | undefined, next: string): string {
   const crlf = current !== undefined && /\r\n/.test(current) && !/(^|[^\r])\n/.test(current);
-  const lf = next.replace(/\r\n?/g, '\n');
+  const lf = toLf(next);
   return crlf ? lf.replace(/\n/g, '\r\n') : lf;
 }
 

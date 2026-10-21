@@ -11,7 +11,7 @@ import type { Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { str, type Tool } from '../tool.js';
 
-export const EXPORT_FORMATS = ['postman', 'insomnia', 'insomnia-v4', 'opencollection', 'opencollection-file', 'bruno', 'http', 'openapi'] as const;
+const EXPORT_FORMATS = ['postman', 'insomnia', 'insomnia-v4', 'opencollection', 'opencollection-file', 'bruno', 'http', 'openapi'] as const;
 
 /**
  * MCP tools for the way out and for scripts: `export_collection` (a collection as a file other tools import: Postman,

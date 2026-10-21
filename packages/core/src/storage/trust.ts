@@ -8,7 +8,7 @@ import type { WorkspaceStore } from './workspace.js';
  * comes from git, an import or a teammate: the first time one would run, the user sees the exact command line and
  * decides. Decisions live in `.local/trust.json`, which is per computer and never committed.
  */
-export interface TrustedCommand {
+interface TrustedCommand {
   command: string;
   args: string[];
   /** When the user allowed it. */

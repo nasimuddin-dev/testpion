@@ -14,7 +14,7 @@ import { deref } from '../util/json-ref.js';
  */
 type Json = Record<string, any>;
 
-export interface AsyncApiImport {
+interface AsyncApiImport {
   collection: Collection;
   environment?: Environment;
   savedItems?: { websocket: LibraryItem[] };

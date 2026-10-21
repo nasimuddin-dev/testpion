@@ -20,7 +20,7 @@ export function partPathFor(dest: string): string {
 }
 
 /** A file-system failure of a save as a message a person can act on (the folder, not a stack). */
-export function writeError(e: unknown, dest: string): unknown {
+function writeError(e: unknown, dest: string): unknown {
   const code = (e as { code?: string })?.code;
   const where = dirname(dest);
   const name = basename(dest);

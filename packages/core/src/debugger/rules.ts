@@ -10,7 +10,7 @@ import { globToRegex } from '../util/glob.js';
  * request or the response pauses for editing). Rules live in profiles (sets switched as one). Every rule the user
  * makes: there is no built-in list of programs to hide.
  */
-export type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
 
 /** A grid column a condition looks at. */
 export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'user' | 'type' | 'version' | 'ip' | 'duration' | 'size';
@@ -36,7 +36,7 @@ export interface HighlightStyle {
   row?: boolean;
 }
 
-export interface RuleMatch {
+interface RuleMatch {
   /** Glob on the host (with port): api.test, *.example.com, localhost:*. */
   host?: string;
   /** Glob on the whole URL, or a regular expression between slashes: /orders\/\d+/. */
@@ -137,7 +137,7 @@ function regexOf(pattern: string): RegExp | null {
 const MAX_TESTED = 4096;
 
 /** The value of a column for an exchange, as the grid shows it. */
-export function columnValue(e: DebuggerExchange, column: RuleColumn): string | number | undefined {
+function columnValue(e: DebuggerExchange, column: RuleColumn): string | number | undefined {
   switch (column) {
     case 'status':
       return e.status;
@@ -374,7 +374,7 @@ export function emptyRulesFile(): DebuggerRulesFile {
 }
 
 /** What the rules decide for a request before it is forwarded. */
-export interface RequestDecision {
+interface RequestDecision {
   ignore: boolean;
   highlight?: string;
   requestHeaders?: HeaderEdit[];

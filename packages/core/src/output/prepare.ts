@@ -33,7 +33,7 @@ export function storeOutputDeps(store: WorkspaceStore, redactor: Redactor): Outp
   };
 }
 
-export interface SourceCall {
+interface SourceCall {
   surface: string;
   format: string;
   source: OutputSource;

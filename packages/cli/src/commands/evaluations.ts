@@ -13,7 +13,7 @@ import {
   type RunEvent,
   type RunSummary,
 } from '@testpion/core';
-import { EXIT, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment } from '../shared.js';
+import { EXIT, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { cli } from '../output.js';
 import { finishRun, printResult } from '../run.js';
 import { registerEvalCompareCommands } from './eval-compare.js';
@@ -22,7 +22,7 @@ export function registerEvaluationCommands(program: Command): void {
   const ev = program.command('eval').description('evaluations saved in the app (dataset × prompt × model × evaluators): list them, run one by name, compare runs (matrix, compare with a baseline)');
   ev.command('list')
     .description('list the saved evaluations of a workspace')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print as JSON (for scripts and AI agents)')
     .action((o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
@@ -36,7 +36,7 @@ export function registerEvaluationCommands(program: Command): void {
   ev.command('run')
     .description('run a saved evaluation by name or id; exits 1 when a case fails (for CI)')
     .argument('<name>', 'saved evaluation name or id')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-e, --environment <name>', 'environment to use')
     .option('-c, --concurrency <n>', 'parallel cases (default: the saved setting)')
     .option('--retries <n>', 'retries per failing case (default: the saved setting)')

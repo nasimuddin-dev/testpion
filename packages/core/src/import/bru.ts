@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { ApsError } from '../errors.js';
 import { bruExample, bruRealtimeItem } from './bru-extra.js';
+import { toLf } from '../util/text.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -27,7 +28,7 @@ const TEXT_BLOCK = /^(body(:(json|text|xml|sparql|graphql|graphql:vars|grpc|ws))
 
 /** Parse a .bru file into its blocks. */
 export function parseBru(text: string): BruBlock[] {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const lines = toLf(text).split('\n');
   const blocks: BruBlock[] = [];
   for (let i = 0; i < lines.length; i++) {
     const open = /^([A-Za-z][\w:-]*)\s*([{[])\s*$/.exec(lines[i]!);

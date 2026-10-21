@@ -20,14 +20,14 @@ import { defaultAppDir, isInside, relativeInside } from '@testpion/core';
 /** The file system module as CommonJS sees it: its functions can be replaced (and syncBuiltinESMExports passes that on to every `import { … } from 'node:fs'`). */
 const fs = createRequire(import.meta.url)('node:fs') as typeof FS;
 
-export interface DryRunChange {
+interface DryRunChange {
   /** The real path the command would change. */
   path: string;
   change: 'added' | 'modified' | 'deleted';
   bytes?: number;
 }
 
-export interface DryRunReport {
+interface DryRunReport {
   changes: DryRunChange[];
   /** Nothing was written outside the sandbox. */
   applied: false;

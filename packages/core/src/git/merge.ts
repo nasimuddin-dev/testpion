@@ -19,7 +19,7 @@ export { mergeModeOfPath } from '@testpion/shared';
 type Obj = Record<string, unknown>;
 type Node = Obj & { id: string; kind?: string; items?: Node[] };
 
-export interface MergeResult {
+interface MergeResult {
   /** The merged collection file (valid JSON, in the git-friendly form). */
   text: string;
   /** What changed on both sides, in words ("API ▸ Login: changed on both sides"); empty when it merged cleanly. */

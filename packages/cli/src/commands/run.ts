@@ -23,7 +23,7 @@ import {
   type LoadTarget,
 } from '@testpion/core';
 import { hasTemplate } from '@testpion/shared';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad, openWorkspace } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad, openWorkspace, WORKSPACE_OPTION } from '../shared.js';
 import { addOutputOptions } from '../output-save.js';
 import { runWatching, watchTargets } from '../watch.js';
 import { executeScaleRun, isScaleRun, type ScaleCliOptions } from './flow-scale.js';
@@ -100,7 +100,7 @@ export function registerRunCommands(program: Command): void {
         '<collection> is a collection name or id in the workspace, or a TestPion / Postman v2.1 collection or OpenAPI file or link',
     )
     .argument('<collection>', 'collection name or id, a file, or an http(s) link')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-e, --environment <nameOrFile>', 'environment name, or a Postman environment file')
     .option('-d, --iteration-data <file>', 'CSV, JSON or JSONL data file, a SQLite database, or a PostgreSQL / MySQL database (postgres://…, mysql://…, or env:NAME for a variable holding the URL) with --iteration-query: one row per iteration (tp.iterationData, {{column}})')
     .option('--iteration-query <sql>', 'with a database as --iteration-data: the SELECT whose rows are the iterations (read-only)')
@@ -303,7 +303,7 @@ export function registerRunCommands(program: Command): void {
       .command('send')
       .description('send one request, like curl: a saved request by name ("Collection/Request" or just "Request", with its scripts, auth and checks) or a URL; {{variables}} resolve from the environment')
       .argument('<request>', 'saved request ("Collection/Folder/Request", "Request") or a URL (may use {{variables}})')
-      .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+      .option(...WORKSPACE_OPTION)
       .option('-e, --environment <name>', 'environment')
       .option('-X, --method <method>', 'HTTP method for a URL', 'GET')
       .option('-H, --header <header...>', 'headers "Name: value" for a URL')

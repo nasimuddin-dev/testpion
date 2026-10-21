@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
@@ -6,7 +6,7 @@ import { generateRows, operationBodySchema, rowsToCsv, type DatasetRow } from '.
 import type { WorkspaceStore } from './workspace.js';
 import { atomicWrite } from './fsutil.js';
 
-export interface GeneratedDataset {
+interface GeneratedDataset {
   /** Workspace-relative path, e.g. datasets/patients.csv. */
   path: string;
   rows: number;

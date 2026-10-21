@@ -21,7 +21,7 @@ export const strings = (v: unknown): string[] | undefined => (Array.isArray(v) ?
 
 export const PRIVACY = { type: 'string', enum: ['full', 'metadata', 'names'], description: 'full (redacted, default), metadata (shapes and names; no body values), names' };
 
-export interface ProposeCall {
+interface ProposeCall {
   task: string;
   item?: AiTaskRequest['item'];
   question?: string;

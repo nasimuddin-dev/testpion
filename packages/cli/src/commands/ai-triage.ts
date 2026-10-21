@@ -7,7 +7,7 @@
 import type { Command } from 'commander';
 import { formatUsd, plural } from '@testpion/shared';
 import { aiRunDeps, applyProposal, attemptFix, rerunCommand, triageMarkdown, triageRun, WorkspaceManager, type AiTaskResult } from '@testpion/core';
-import { bold, cliContext, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { bold, cliContext, dim, green, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { printPreview, printProposal } from './ai-print.js';
 
@@ -27,7 +27,7 @@ export function registerAiTriageCommands(ai: Command): void {
     .option('--dry-run', 'send nothing: the grouping, and what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'apply the fixes whose verification did not fail (else they stay a proposal)')
     .option('--items <ids>', 'with --apply: the items to apply, comma-separated (i1,i3)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { runId, groups, findings, proposal, applied } as JSON (for scripts and AI agents)')
     .action(
       (o: { run: string; privacy?: string; hint?: string; provider?: string; model?: string; ai?: boolean; dryRun?: boolean; apply?: boolean; items?: string; workspace?: string; json?: boolean }) =>
@@ -82,7 +82,7 @@ export function registerAiTriageCommands(ai: Command): void {
     .argument('<proposalId>', 'the analyze-flaky proposal')
     .option('--times <n>', 'how often to run the test (1–20, default 5)', (v) => Number(v))
     .option('--items <ids>', 'the items to apply, comma-separated (i1,i3)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { attempt, applied } as JSON (for scripts and AI agents)')
     .action((id: string, o: { times?: number; items?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store) => {

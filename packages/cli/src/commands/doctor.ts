@@ -2,7 +2,7 @@
 import { accessSync, constants, existsSync } from 'node:fs';
 import { Command } from 'commander';
 import { WorkspaceManager, workspaceStorage, ENGINE_VERSION } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 interface Check {
   name: string;
@@ -14,7 +14,7 @@ export function registerDoctorCommand(program: Command): void {
   program
     .command('doctor')
     .description('check that this machine and the workspace are ready: Node.js, SQLite, the app folder, secrets, proxy and certificates, and the workspace files (exit 1 on an error)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print the checks as JSON')
     .action(async (o: { workspace?: string; json?: boolean }) => {
       const checks: Check[] = [];

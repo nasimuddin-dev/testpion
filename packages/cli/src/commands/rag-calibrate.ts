@@ -8,7 +8,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
-import { EXIT, CliError, bold, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
@@ -51,7 +51,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
     .option('--labels <name>', 'the label set (default: the run’s evaluation)')
     .option('--by <name>', 'who labelled')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((run: string, o: { result: string; metric: string; pass?: boolean; fail?: boolean; note?: string; labels?: string; by?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -69,7 +69,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
     .description('the label sets of the workspace, or the labels of one')
     .argument('[name]', 'a label set')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((name: string | undefined, o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
         needWorkspace(ephemeral);
@@ -116,7 +116,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
     .addOption(new Option('--format <format>', 'with --out: the report as md or json').choices(['md', 'json']).default('md'))
     .option('-o, --out <file>', 'write the report to a file (Markdown by default) as well')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .action((labels: string | undefined, o: { run: string; metric?: string; byJudge?: boolean; tune?: boolean; apply?: boolean; evaluation?: string; minKappa?: number; reviews?: boolean; format?: 'md' | 'json'; out?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);

@@ -12,7 +12,7 @@ import { OUTPUT_FORMATS, isOutputFormatId, outputSurface, type OutputFormatId } 
 import { cliContext, CliError, EXIT } from './shared.js';
 import { noteWarning } from './output.js';
 
-export interface SavedOutput {
+interface SavedOutput {
   surface: string;
   format: OutputFormatId;
   /** The file written (absent when printed). */
@@ -23,7 +23,7 @@ export interface SavedOutput {
 }
 
 /** The format a file name asks for among a surface's: `.csv` → csv, `.har` → har, `.md` → md; else the surface's default. */
-export function formatForFile(surface: string, file: string | undefined, asked: string | undefined): OutputFormatId {
+function formatForFile(surface: string, file: string | undefined, asked: string | undefined): OutputFormatId {
   const info = outputSurface(surface);
   if (!info) throw new CliError(`Unknown output ${surface}. \`testpion output --list\` shows them.`, EXIT.CONFIG_ERROR);
   if (asked) {

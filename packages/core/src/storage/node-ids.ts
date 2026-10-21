@@ -9,7 +9,7 @@ import { shortId } from '../util/ids.js';
 export { collectNodeIds, duplicateNodeIds, type IdNode, type NewNodeId } from '@testpion/shared';
 
 /** A new node id (`fld-…` or `req-…`). */
-export const newNodeId: NewNodeId = (prefix) => shortId(prefix);
+const newNodeId: NewNodeId = (prefix) => shortId(prefix);
 
 /**
  * The collection with fresh ids for nodes whose id is already taken (by another collection, or earlier in this one).

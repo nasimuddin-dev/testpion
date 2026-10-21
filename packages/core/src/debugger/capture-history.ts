@@ -16,7 +16,7 @@ export function captureSessionFileName(name: string): string {
 }
 
 /** How an exchange came in: through the forward proxy, or the reverse proxy (it stands in front of one server). */
-export const exchangeSource = (e: Pick<DebuggerExchange, 'source'>): 'proxy' | 'reverse' => (e.source === 'reverse' ? 'reverse' : 'proxy');
+const exchangeSource = (e: Pick<DebuggerExchange, 'source'>): 'proxy' | 'reverse' => (e.source === 'reverse' ? 'reverse' : 'proxy');
 
 const RESULT_WORDS: Record<CaptureSessionInfo['result'], string> = { collection: 'Saved to collection', flow: 'Flow created', session: 'Session saved' };
 

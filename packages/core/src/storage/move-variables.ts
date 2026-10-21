@@ -11,7 +11,7 @@ import type { WorkspaceStore } from './workspace.js';
  * A secret variable's value goes to each environment's secret in the secret store; without a writable store (the CLI)
  * secret variables stay in the collection and are reported as not moved, so no value is lost.
  */
-export interface MoveVariablesResult {
+interface MoveVariablesResult {
   moved: string[];
   /** Secret variables left in the collection: there was no secret store to put their values in. */
   notMoved: string[];

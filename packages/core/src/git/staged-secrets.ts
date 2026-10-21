@@ -213,7 +213,7 @@ export function scanFileText(file: string, text: string, salt?: string): StagedS
 }
 
 /** The files in the index that a commit would take (added, copied, modified, renamed), workspace-relative. */
-export async function stagedFiles(ws: string): Promise<string[]> {
+async function stagedFiles(ws: string): Promise<string[]> {
   await requireRepo(ws);
   const out = await runGit(ws, ['diff', '--cached', '--relative', '--name-only', '-z', '--diff-filter=ACMR', '--', '.']);
   return out.split('\0').filter(Boolean);

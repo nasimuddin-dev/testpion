@@ -2,14 +2,14 @@
 import { Command } from 'commander';
 import { ApsError, applyFlowEdit, editFlowFile, flowOfFile, flowReport, flowRunResults, flowRuns, flowStepsOfText, testFileRef, type FlowEditOp, type FlowFileEdit } from '@testpion/core';
 import { flowChecks, flowGraph, stepDetail, toDot, untilLabel } from '@testpion/shared';
-import { bold, cliContext, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { bold, cliContext, dim, green, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION, groupOptions } from '../shared.js';
 
 export function registerFlowCommand(program: Command): void {
   const flow = program.command('flow');
   flow
     .description("a test file as a flow: its steps in columns (what runs first, what waits on dependsOn), what each extracts, and the latest run's result per step")
     .argument('<file>', 'a test file (inside tests/, e.g. rest/patient-lifecycle.yaml, or from the current folder)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print the steps, edges, layers, problems and the latest run as JSON (for scripts and AI agents)')
     .option('--dot', 'print the flow as Graphviz DOT (pipe into `dot -Tsvg`)')
     .option('-e, --environment <name>', "check the steps' {{variables}} against this environment: a variable nothing sets and the environment does not define is reported")
@@ -74,12 +74,11 @@ export function registerFlowCommand(program: Command): void {
     .argument('<file>', 'a test file (inside tests/, or from the current folder)')
     .option('--run <runId>', "one run's steps in file order: status, timing, input, output and variables")
     .option('-n, --limit <n>', 'how many runs (default 30)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print the runs (or the run) as JSON (for scripts and AI agents)')
     .action(async (file: string, o: { run?: string; limit?: string; workspace?: string; json?: boolean }) => {
-      const parent = flow.opts() as { workspace?: string; json?: boolean };
-      o.json ||= parent.json;
-      return withWorkspace(o.workspace ?? parent.workspace, async (store) => {
+      const workspace = groupOptions(flow, o);
+      return withWorkspace(workspace, async (store) => {
         const ref = testFileRef(store, file);
         if (o.run) {
           const r = await flowRunResults(store, ref, o.run);
@@ -130,13 +129,11 @@ export function registerFlowCommand(program: Command): void {
     .option('--finally <steps>', 'shorthand: make these steps (comma separated) finally steps: they run after every other step, whatever happened')
     .option('--steps <ids>', 'with --parallel: the steps, comma separated')
     .option('--dry-run', 'print the new text (or, with --json, the result) without writing the file')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { file, written, added, steps, edges, problems } as JSON (for scripts and AI agents)')
     .action(async (file: string, o: { op?: string; connect?: string; disconnect?: string; to?: string; when?: string; output?: string; remove?: string; webhook?: string | boolean; webhookSecret?: string; parallel?: string; finally?: string; steps?: string; dryRun?: boolean; workspace?: string; json?: boolean }) => {
-      // the parent command reads -w and --json wherever they are written: take them from it too
-      const parent = flow.opts() as { workspace?: string; json?: boolean };
-      o.json ||= parent.json;
-      return withWorkspace(o.workspace ?? parent.workspace, async (store) => {
+      const workspace = groupOptions(flow, o);
+      return withWorkspace(workspace, async (store) => {
         const ops: FlowEditOp[] = [];
         if (o.op) {
           let parsed: unknown;

@@ -52,7 +52,7 @@ const YAAK: Record<string, string> = {
   'random.integer()': '$randomInt',
 };
 
-export interface TemplateResult {
+interface TemplateResult {
   text: string;
   /** Templates the mapping did not know (they stay as written). */
   unknown: string[];

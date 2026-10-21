@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import { addRequestToCollection, externalizeSecrets } from '../../import/save-request.js';
 import type { HttpRequestSpec, TestResult } from '../../model/types.js';
@@ -63,8 +64,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
           return { ...summarizeResult(result), output: result.output && clip(result.output) };
         }
         if (!a.url && !a.snippet) throw new ApsError('ValidationError', 'Give collection + request for a saved request, or url (or snippet) for an ad-hoc one');
-        const ctx = createEngineContext({ store, secrets, settings, environment });
-        try {
+        return withEngine({ store, secrets, settings }, { environment }, async (ctx) => {
           const spec: HttpRequestSpec = ctx.vars.resolveDeep(requestFrom(a).request);
           assertProductionStep(ctx.services.production, { action: `${spec.method} ${spec.url}`, changesData: isDataChangingMethod(spec.method) });
           const { response, prepared } = await executeHttp({ ...spec, settings: { timeoutMs: settings.defaultTimeoutMs } }, { redactor: ctx.redactor, maxPreviewBytes: 1024 * 1024, cookieJar: ctx.services.cookieJar });
@@ -91,9 +91,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
               : {}),
             unresolvedVariables: ctx.vars.unresolved.size ? [...ctx.vars.unresolved] : undefined,
           };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {
@@ -115,8 +113,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
       run: async (a) => {
         const protoFiles = ((a.protos as string[]) ?? []).map((name) => ({ name, text: readFileSync(store.safePath(String(name)), 'utf8') }));
         const environment = checkEnvironment(a.environment);
-        const ctx = createEngineContext({ store, secrets, settings, environment });
-        try {
+        return withEngine({ store, secrets, settings }, { environment }, async (ctx) => {
           const r = ctx.vars.resolveDeep({ target: String(a.target ?? ''), message: a.message ?? {}, metadata: Object.entries((a.metadata as Record<string, string>) ?? {}).map(([key, value]) => ({ key, value })) });
           if (!protoFiles.length && !r.target) throw new ApsError('ValidationError', 'Give the server address (target), and protos unless the server offers reflection');
           // no proto files: the server describes itself (server reflection)
@@ -137,9 +134,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
             trailers: Object.fromEntries(out.trailers),
             unresolvedVariables: ctx.vars.unresolved.size ? [...ctx.vars.unresolved] : undefined,
           };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {
@@ -179,8 +174,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
       },
       run: async (a) => {
         const environment = checkEnvironment(a.environment);
-        const ctx = createEngineContext({ store, secrets, settings, environment });
-        try {
+        return withEngine({ store, secrets, settings }, { environment }, async (ctx) => {
           const r = ctx.vars.resolveDeep({
             url: String(a.url),
             send: a.send,
@@ -208,9 +202,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
             },
             { redactor: ctx.redactor, cookieJar: ctx.services.cookieJar },
           );
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {
@@ -236,8 +228,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
         required: ['endpoint'],
       },
       run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, environment: checkEnvironment(a.environment) });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: checkEnvironment(a.environment) }, async (ctx) => {
           const limit = Math.min(Math.max(Number(a.limit) || 50, 1), 1000);
           const ids = store.meta.listTraces({ kind: a.kind ? String(a.kind) : undefined, limit }).items.map((t) => t.id);
           const traces = ids.map((id) => store.loadTrace(id)).filter((t): t is NonNullable<typeof t> => !!t);
@@ -245,9 +236,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
           const headers = Object.fromEntries(Object.entries((a.headers as Record<string, string>) ?? {}).map(([k, v]) => [k, ctx.vars.resolve(String(v))]));
           const r = await exportOtlp(traces, { endpoint: ctx.vars.resolve(String(a.endpoint)), headers }, { redactor: ctx.redactor, resource: { 'testpion.workspace': store.workspace.name } });
           return { ...r, traces: traces.length };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
     {

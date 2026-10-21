@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import type { Command } from 'commander';
 import { parseItemRef } from '@testpion/core';
-import { bold, cliContext, CliError, dim, EXIT, green, withWorkspace } from '../shared.js';
+import { bold, cliContext, CliError, dim, EXIT, green, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -29,7 +29,7 @@ export function registerAiScriptCommand(ai: Command): void {
     .option('--dry-run', 'send nothing: print what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'with --request: put the script on the saved request (ai undo restores it)')
     .option('-e, --environment <name>', 'environment whose variable names (never values) the script may use')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { proposal, usage, applied } as JSON (for scripts and AI agents)')
     .action(
       async (o: {

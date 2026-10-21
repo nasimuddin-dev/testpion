@@ -33,7 +33,7 @@ export interface McpMockResponse {
 }
 
 /** The mock's answer to a tool call: content items, structured content and whether it is a tool error. */
-export interface McpMockResult {
+interface McpMockResult {
   content: unknown[];
   isError?: boolean;
   structuredContent?: unknown;
@@ -136,7 +136,7 @@ export async function mockToolResult(d: McpMockDefinition, name: string, args: R
 }
 
 /** One tool of a mock as a list shows it: its arguments (from the input schema) and how it answers. */
-export interface McpMockToolSummary {
+interface McpMockToolSummary {
   name: string;
   title?: string;
   description?: string;
@@ -213,7 +213,7 @@ export async function serveMcpMockStdio(d: McpMockDefinition): Promise<void> {
   await createMcpMockServer(d).connect(new (mcpServerStdio().StdioServerTransport)());
 }
 
-export interface McpMockHttpServer {
+interface McpMockHttpServer {
   url: string;
   close(): Promise<void>;
 }

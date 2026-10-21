@@ -98,7 +98,7 @@ export const joinScripts = (...parts: Array<string | undefined>): string | undef
 };
 
 /** Headers by name, the later list overriding the earlier. */
-export function mergeHeaderLists(...lists: Array<KeyValue[] | undefined>): KeyValue[] {
+function mergeHeaderLists(...lists: Array<KeyValue[] | undefined>): KeyValue[] {
   const out = new Map<string, KeyValue>();
   for (const l of lists) for (const h of l ?? []) out.set(h.key.toLowerCase(), h);
   return [...out.values()];

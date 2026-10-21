@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { readJson, writeJson, copyOwned } from './fsutil.js';
 import { collectNodeIds, ensureUniqueIds, type IdNode } from './node-ids.js';
@@ -15,7 +15,7 @@ import type { WorkspaceStore } from './workspace.js';
  * recursively, by folder), any other file is copied when the copy has none. Suites and other text files that
  * exist in both are left as they are.
  */
-export const OFFERED_FILE = '.template-offered.json';
+const OFFERED_FILE = '.template-offered.json';
 
 /** Folders of a workspace that hold the user's results, never template content. */
 const SKIP_TOP = new Set(['runs', 'traces', 'payloads', 'reports', 'baselines', 'trash', '.local']);
@@ -50,7 +50,7 @@ function mergeKind(rel: string): 'collection' | 'environment' | 'mcp' | 'provide
 }
 
 /** Keys of everything a template offers (for a fresh copy: all of it was offered). */
-export function templateKeys(templateDir: string): string[] {
+function templateKeys(templateDir: string): string[] {
   const keys: string[] = [];
   for (const rel of files(templateDir)) {
     keys.push(`file:${rel}`);

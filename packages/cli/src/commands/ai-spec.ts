@@ -6,7 +6,7 @@
  */
 import type { Command } from 'commander';
 import { analyseSpec, draftSpecTestsProposal, specGapMarkdown, SPEC_CATEGORIES, workspaceSpecGaps, type SpecCategory } from '@testpion/core';
-import { bold, cliContext, CliError, dim, EXIT, green, printJson, withWorkspace } from '../shared.js';
+import { bold, cliContext, CliError, dim, EXIT, green, printJson, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 import { machine } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
@@ -26,7 +26,7 @@ export function registerAiSpecCommands(program: Command): void {
     .command('gaps')
     .description('what the tests and collections of the workspace never prove about an API definition: operations never called, documented statuses never asserted, no negative, boundary or security test, no contract check, parameters never sent (deterministic: no AI, no key)')
     .requiredOption('--spec <file>', 'the API definition in the workspace, e.g. specs/clinic.yaml')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print the report as JSON (for scripts and AI agents)')
     .action((o: { spec: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
@@ -58,7 +58,7 @@ export function registerAiSpecCommands(program: Command): void {
     .option('--dry-run', 'send nothing: print what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'write the files whose verification did not fail (else they stay a proposal)')
     .option('-e, --environment <name>', 'environment whose variable names (never values) the model may know')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print { proposal, usage, applied } as JSON (for scripts and AI agents)')
     .action(
       async (o: {

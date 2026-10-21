@@ -19,7 +19,7 @@ export function workspaceSectionOf(store: WorkspaceStore, strip: SecretStripper)
   return { variables: clean.map((v) => ({ key: v.key, value: v.value, ...(typeof v.enabled === 'boolean' ? { enabled: v.enabled } : {}), ...(v.description ? { description: v.description } : {}), ...(v.secret ? { secret: true } : {}) })) };
 }
 
-export type VariableAction = 'new' | 'same' | 'differs';
+type VariableAction = 'new' | 'same' | 'differs';
 
 export interface WorkspaceVariablesPreview {
   total: number;

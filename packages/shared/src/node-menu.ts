@@ -164,7 +164,7 @@ const isSectionNode = (k: NodeKind) => k.startsWith('section:');
  * MCP servers, library items), or the folders of a tree of files that opens (test files; not protos, which open from
  * their gRPC call, and not a variant such as flows, stored as its base kind).
  */
-export const hasFolderNodes = (k: ItemKindInfo): boolean => typeof k.folders === 'object' || (k.folders === 'dirs' && !k.variantOf && k.opens !== 'none');
+const hasFolderNodes = (k: ItemKindInfo): boolean => typeof k.folders === 'object' || (k.folders === 'dirs' && !k.variantOf && k.opens !== 'none');
 
 /** The kinds with a folder node, and those with a section node (`listed` in the registry), live ones only. */
 export const folderNodeKinds = (): ItemKindInfo[] => liveKinds().filter(hasFolderNodes);
@@ -182,7 +182,7 @@ export const NODE_KINDS: readonly NodeKind[] = [
 /* ------------------------------------------------------------------ registry predicates (no kind names) */
 
 /** A gRPC call or a connection: a library item that belongs to a collection (Move to ▸ the collections). */
-export const movesBetweenCollections = (kind: NodeKind): boolean => {
+const movesBetweenCollections = (kind: NodeKind): boolean => {
   const i = kindInfoOf(kind);
   return !!i && i.parent === 'collection' && i.storage.layout === 'library';
 };
@@ -199,7 +199,7 @@ const isDocument = (kind: NodeKind): boolean => {
   return !!i && i.storage.layout === 'raw-document' && i.capabilities.open === true;
 };
 /** A container that exports in several ways (a collection: Export ▸ its formats). */
-export const exportsAsSubmenu = (kind: NodeKind): boolean => {
+const exportsAsSubmenu = (kind: NodeKind): boolean => {
   const i = kindInfoOf(kind);
   // (a folder or a request of a collection exports as a part of it, in one way: not a submenu)
   return !!i && !i.parent && i.capabilities.export === true && i.capabilities.container === true;
@@ -258,7 +258,7 @@ function computeCapabilities(kind: NodeKind): Capabilities {
  * keeps virtual folders (MCP servers, API definitions, datasets, library items). Those folders are one level deep, and a
  * test file's folder is made by its path (New test file here), so a list's folder has no New folder of its own.
  */
-export function hasFolders(kind: NodeKind): boolean {
+function hasFolders(kind: NodeKind): boolean {
   if (kind === 'category' || kind === 'favorites' || isFolderNode(kind)) return false;
   const f = KIND_INFO[baseKind(kind)].folders;
   return isSectionNode(kind) ? typeof f === 'object' : f === 'nodes';
@@ -268,7 +268,7 @@ export function hasFolders(kind: NodeKind): boolean {
  * Whether a node offers New … items: a section, or a container — not Favorites, and not a folder of gRPC calls or
  * connections (those are made in their editor, in a collection).
  */
-export const createsHere = (kind: NodeKind): boolean =>
+const createsHere = (kind: NodeKind): boolean =>
   isSectionNode(kind) || (nodeCapabilities(kind).container === true && kind !== 'favorites' && !(isFolderNode(kind) && KIND_INFO[baseKind(kind)].parent === 'collection'));
 
 /* ------------------------------------------------------------------ the actions */
@@ -380,7 +380,7 @@ export const KIND_ACTIONS = [...COLLECTION_ACTIONS, ...EXPLORER_ACTIONS, ...LIST
  * Every AI item of every menu, made from the one table (ai-actions.ts): the label, icon, group and the kinds are its. A
  * kind's `ai` capability and the unit test that lists the window's views keep the table and the menus honest.
  */
-export const AI_MENU_ACTIONS: readonly ActionDef[] = AI_ACTIONS.map(
+const AI_MENU_ACTIONS: readonly ActionDef[] = AI_ACTIONS.map(
   (a): ActionDef => ({ id: a.id, group: a.group, label: a.label, icon: a.icon, ai: true, ...('cap' in a ? { cap: a.cap } : {}), ...('kinds' in a ? { kinds: a.kinds } : {}) }),
 );
 
@@ -390,7 +390,7 @@ export type ActionId = (typeof STANDARD_ACTIONS)[number]['id'] | (typeof KIND_AC
 const ACTIONS = new Map<NodeKind, readonly ActionDef[]>();
 
 /** The actions of a node kind: the shared ones, then the kind's own ones (the AI ones among them), each group in this order. */
-export function actionsOf(kind: NodeKind): readonly ActionDef[] {
+function actionsOf(kind: NodeKind): readonly ActionDef[] {
   const hit = ACTIONS.get(kind);
   if (hit) return hit;
   const own = KIND_ACTIONS.filter((a) => (a.kinds as readonly NodeKind[]).includes(kind));
@@ -405,7 +405,7 @@ export function actionsOf(kind: NodeKind): readonly ActionDef[] {
 /* ------------------------------------------------------------------ the entries of a menu */
 
 /** One item of a node's menu before the host renders it: the action, its label key, its key, why it is disabled. */
-export interface NodeMenuEntry {
+interface NodeMenuEntry {
   def: ActionDef;
   label: MenuLabelKey;
   shortcut?: string;
@@ -458,7 +458,7 @@ export function fullMenuContext(kind: NodeKind): NodeMenuContext & { creates: bo
 }
 
 /** One action of a menu shape: its id, label key and key; an AI one is marked, and a node's AI actions are the `items` of one `ai` submenu. */
-export interface NodeMenuShapeAction {
+interface NodeMenuShapeAction {
   id: string;
   label: MenuLabelKey;
   shortcut?: string;

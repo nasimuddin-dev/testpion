@@ -9,7 +9,7 @@ import { Redactor } from '../util/redact.js';
  * broken on Production"): a key missing on one side, a different value, a disabled variable, a secret
  * that is set on one side only. Secret values are never read into the result, only whether they are set.
  */
-export type EnvDiffStatus = 'same' | 'different' | 'only-left' | 'only-right';
+type EnvDiffStatus = 'same' | 'different' | 'only-left' | 'only-right';
 
 export interface EnvDiffRow {
   key: string;
@@ -36,7 +36,7 @@ export interface EnvDiff {
   summary: { same: number; different: number; onlyLeft: number; onlyRight: number };
 }
 
-export interface EnvDiffOptions {
+interface EnvDiffOptions {
   /** Include values (masked when secret or sensitive). Default false: statuses only (for agents). */
   values?: boolean;
   /** To tell whether secret variables have a value stored. */
@@ -93,12 +93,12 @@ export function compareEnvironments(left: Environment, right: Environment, opts:
 }
 
 /** One variable in one environment of the matrix: set, set but empty, missing, or disabled. */
-export interface EnvMatrixCell {
+interface EnvMatrixCell {
   state: 'set' | 'empty' | 'missing' | 'disabled';
   secret?: boolean;
 }
 
-export interface EnvMatrixRow {
+interface EnvMatrixRow {
   key: string;
   /** One cell per environment, in the order of `environments`. */
   cells: EnvMatrixCell[];

@@ -10,9 +10,9 @@ import { ApsError } from '../errors.js';
 import { atomicWrite, removeOwned } from './fsutil.js';
 import type { WorkspaceStore } from './workspace.js';
 
-export const METRICS_DIR = 'metrics';
+const METRICS_DIR = 'metrics';
 
-export interface MetricFileInfo {
+interface MetricFileInfo {
   id: string;
   /** Relative to the workspace: `metrics/<id>.yaml`. */
   path: string;

@@ -85,7 +85,7 @@ export function looksLikeBundle(bytes: Buffer): boolean {
   return /"format"\s*:\s*"(testpion-bundle|testpion-workspace|fluxpion-workspace|protopion-workspace|protolens-workspace)"/.test(head);
 }
 
-export interface ReadOptions {
+interface ReadOptions {
   limits?: TransferLimits;
   zip?: ZipLimits;
 }

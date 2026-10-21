@@ -12,7 +12,7 @@ import type { WorkspaceStore } from '../../storage/workspace.js';
  * `exports/` or `.local/exports/` (the folder the app and git already treat as output), never in a folder whose name
  * starts with a dot below that, never a program or launcher file, never over a file that is there.
  */
-export const EXPORT_FOLDERS = ['exports', '.local/exports'] as const;
+const EXPORT_FOLDERS = ['exports', '.local/exports'] as const;
 
 /** The absolute path of a new file under `exports/` or `.local/exports/`, or why `requested` is not allowed. */
 export function exportTarget(store: WorkspaceStore, requested: string, opts: { what: string; arg: string }): string {

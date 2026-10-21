@@ -27,7 +27,7 @@ import {
   type GitFixResult,
   type LargeResult,
 } from '@testpion/core';
-import { EXIT, CliError, bold, cliSelf, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { EXIT, CliError, bold, cliSelf, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const out = (json: boolean, value: unknown, text: () => void) => (json ? printJson(value) : text());
 const mb = (n: number) => `${(n / 1048576).toFixed(n >= 10485760 ? 0 : 1)} MB`;
@@ -54,7 +54,7 @@ function printLarge(r: LargeResult) {
 }
 
 export function registerGitSetupCommands(git: Command): void {
-  const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option('--json', 'print as JSON');
+  const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option(...JSON_OPTION);
   const dry = (c: Command) => c.option('--dry-run', 'change nothing: print what would change');
 
   dry(

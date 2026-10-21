@@ -16,7 +16,7 @@ import { isRecord } from '@testpion/shared';
  * keys and listed in `notes`.
  */
 
-export interface ArazzoExportOptions {
+interface ArazzoExportOptions {
   /** The flow file's name (for the workflow id when the file has no arazzo-workflow comment). */
   file?: string;
   /** OpenAPI sources to match requests against; default: the arazzo-source comments of the file. */
@@ -26,7 +26,7 @@ export interface ArazzoExportOptions {
   version?: string;
 }
 
-export interface ArazzoExportResult {
+interface ArazzoExportResult {
   document: ArazzoJson;
   /** The document as YAML. */
   text: string;
@@ -36,7 +36,7 @@ export interface ArazzoExportResult {
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
 
 /** `# arazzo-workflow: x` and `# arazzo-source: name type url` comments an Arazzo import leaves at the top. */
-export function arazzoMarks(text: string): { workflowId?: string; sources: ArazzoSource[] } {
+function arazzoMarks(text: string): { workflowId?: string; sources: ArazzoSource[] } {
   const sources: ArazzoSource[] = [];
   let workflowId: string | undefined;
   for (const line of text.split(/\r?\n/)) {
@@ -74,7 +74,7 @@ function bodyExpr(path: unknown): string | undefined {
 }
 
 /** Checks → success criteria; the checks with no Arazzo form come back in `rest`. */
-export function checksToCriteria(checks: ArazzoJson[]): { criteria: ArazzoJson[]; rest: ArazzoJson[] } {
+function checksToCriteria(checks: ArazzoJson[]): { criteria: ArazzoJson[]; rest: ArazzoJson[] } {
   const criteria: ArazzoJson[] = [];
   const rest: ArazzoJson[] = [];
   for (const c of checks) {

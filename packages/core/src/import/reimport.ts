@@ -119,7 +119,7 @@ const hashOf = (v: unknown) => sha1Hex(JSON.stringify(stable(v))).slice(0, 16);
 const rootOf = (c: Collection) => ({ description: c.description, variables: c.variables, auth: c.auth, headers: c.headers, settings: c.settings, preRequestScript: c.preRequestScript, testScript: c.testScript });
 
 /** The keys of an imported collection's nodes by node id (the source's own id, else the path of names; repeats get #2, #3 …). */
-export function nodeKeys(doc: ImportDocument, c: Collection): Map<string, { key: string; path: string[]; node: CollectionNode }> {
+function nodeKeys(doc: ImportDocument, c: Collection): Map<string, { key: string; path: string[]; node: CollectionNode }> {
   const out = new Map<string, { key: string; path: string[]; node: CollectionNode }>();
   const seen = new Map<string, number>();
   const walk = (nodes: CollectionNode[], path: string[]) => {
@@ -152,7 +152,7 @@ function locate(nodes: CollectionNode[], id: string): { node: CollectionNode; li
 }
 
 /** The workspace collection an import of `doc`'s collection `c` would update, with its record, or undefined. */
-export function findUpdateTarget(store: WorkspaceStore, doc: ImportDocument, c: Collection): { collection: Collection; record: CollectionRecord } | undefined {
+function findUpdateTarget(store: WorkspaceStore, doc: ImportDocument, c: Collection): { collection: Collection; record: CollectionRecord } | undefined {
   const s = read(store);
   const key = collectionKey(doc, c);
   const live = new Map(store.listCollections().filter((x) => !x.problem).map((x) => [x.id, x]));
@@ -242,7 +242,7 @@ function replaceNode(ex: CollectionNode, imported: CollectionNode): CollectionNo
   return { ...imported, id: ex.id } as CollectionNode;
 }
 
-export interface ReimportResult {
+interface ReimportResult {
   collection: Collection;
   before: Collection;
   applied: { replaced: number; added: number; skipped: number };

@@ -5,6 +5,7 @@ import { diffOpenApi } from '../openapi/diff.js';
 import { sameValue } from '../storage/stable-files.js';
 import { csvTable } from './csv-rows.js';
 import type { SemanticChange } from './semantic.js';
+import { toLf } from '../util/text.js';
 
 /**
  * What a change means for the kinds that are not a collection, an environment or a library file (planning/git-everything.md
@@ -171,13 +172,13 @@ function rulesChanges(file: string, before: string | undefined, after: string | 
 }
 
 /** Lines of a text added and removed (as multisets: moving a line is no change). */
-export function lineStats(before: string | undefined, after: string | undefined): { added: number; removed: number } {
-  const lines = (t: string | undefined) => (t === undefined || t === '' ? [] : t.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n'));
+function lineStats(before: string | undefined, after: string | undefined): { added: number; removed: number } {
+  const lines = (t: string | undefined) => (t === undefined || t === '' ? [] : toLf(t).replace(/\n$/, '').split('\n'));
   return multisetDiff(lines(before), lines(after));
 }
 
 /** Entries of `after` that `before` lacks, and the other way round (as multisets: moving one is no change). */
-export function multisetDiff(before: readonly string[], after: readonly string[]): { added: number; removed: number } {
+function multisetDiff(before: readonly string[], after: readonly string[]): { added: number; removed: number } {
   const count = new Map<string, number>();
   for (const l of before) count.set(l, (count.get(l) ?? 0) + 1);
   let added = 0;

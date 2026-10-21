@@ -104,7 +104,7 @@ function parseFlow(file: string, text: string | undefined): Flow | undefined {
 const stepTitle = (s: { id: string; raw: Rec }) => (typeof s.raw.name === 'string' ? s.raw.name : s.id);
 
 /** Which parts of a step differ, in words ("request line", "headers", "checks (1 → 2)" …); dependsOn is left to the connections. */
-export function stepDetails(a: Rec, b: Rec): string[] {
+function stepDetails(a: Rec, b: Rec): string[] {
   const pa = stepParts(a);
   const pb = stepParts(b);
   const out: string[] = [];

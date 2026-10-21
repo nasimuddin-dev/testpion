@@ -7,7 +7,7 @@ import { toCsv, rowsFromObjects } from './csv-write.js';
 export type OutputFormatId =
   'json' | 'json-min' | 'jsonl' | 'raw' | 'text' | 'csv' | 'csv-excel' | 'tsv' | 'html' | 'md' | 'xml' | 'har' | 'curl' | 'diff' | 'junit' | 'png' | 'svg' | 'zip' | 'cookies-txt';
 
-export interface OutputFormatInfo {
+interface OutputFormatInfo {
   id: OutputFormatId;
   /** "JSON (pretty)", "CSV" … */
   label: string;

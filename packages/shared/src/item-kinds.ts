@@ -89,7 +89,7 @@ export type Capability = (typeof CAPABILITIES)[number];
 export type CapabilityState = true | { na: string } | { planned: `0.${number}` };
 export type Capabilities = Readonly<Record<Capability, CapabilityState>>;
 
-export type KindStorage =
+type KindStorage =
   | { layout: 'file-per-item'; dir: string; ext: readonly string[] }
   | { layout: 'nested'; in: KindId }
   | { layout: 'items-in-file'; file: string; key: string }

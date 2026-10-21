@@ -6,7 +6,7 @@
  */
 import type { Command } from 'commander';
 import { compareEvalRuns, evalMatrixPage, type EvalCompareItem, type EvalMatrixQuery } from '@testpion/core';
-import { EXIT, bold, CliError, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { EXIT, bold, CliError, dim, green, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
 const number = (v: string | undefined, what: string, o: { int?: boolean; min?: number; max?: number } = {}): number | undefined => {
@@ -36,7 +36,7 @@ export function registerEvalCompareCommands(ev: Command): void {
     )
     .argument('<run>', 'the run to check: its id, "last" (the newest finished evaluation run), or a name (the newest run of that name, e.g. a saved evaluation)')
     .requiredOption('-b, --baseline <run>', 'the run to compare with (id or name)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-t, --threshold <score>', 'a score change counts beyond this, 0 to 1 (a drop of exactly the threshold is not a regression)', '0.05')
     .option('--max-regressions <n>', 'regressions allowed before the exit code is 1', '0')
     .option('--fail-on-missing', 'exit 1 too when a baseline case is missing from the run')
@@ -93,7 +93,7 @@ export function registerEvalCompareCommands(ev: Command): void {
       .command('matrix')
       .description('evaluation runs side by side: cases × variants (a column per run, or per model of a run) with status and score, against a baseline run when given; prints a page, or --out saves every row as CSV, JSON, Markdown or HTML')
       .argument('<runs...>', 'runs in column order: ids, "last" or names')
-      .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+      .option(...WORKSPACE_OPTION)
       .option('-b, --baseline <run>', 'compare every column with this run')
       .option('-t, --threshold <score>', 'a score change counts beyond this, 0 to 1', '0.05')
       .option('--filter <which>', 'all, failed, regressed, improved, changed, missing', 'all')

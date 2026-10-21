@@ -106,8 +106,8 @@ export interface FlowGroup {
 }
 
 /** The room a frame leaves around its steps, and above them for its label. */
-export const GROUP_PAD = 12;
-export const GROUP_HEAD = 20;
+const GROUP_PAD = 12;
+const GROUP_HEAD = 20;
 
 /** The frames of the laid-out nodes: one per parallel group, one for the finally steps. */
 export function flowGroups(nodes: FlowNode[]): FlowGroup[] {
@@ -128,7 +128,7 @@ export function flowGroups(nodes: FlowNode[]): FlowGroup[] {
 }
 
 /** Something the layout could not honour: a dependency nobody defines, a cycle. The diagram still draws. */
-export interface FlowProblem {
+interface FlowProblem {
   step: string;
   message: string;
 }
@@ -143,7 +143,7 @@ export interface FlowGraph {
   height: number;
 }
 
-export interface FlowLayoutOptions {
+interface FlowLayoutOptions {
   nodeWidth?: number;
   nodeHeight?: number;
   gapX?: number;
@@ -343,7 +343,6 @@ export function stepLine(text: string, name: string): number | undefined {
 
 /** The colours a sticky note or a frame can have (names, so the file reads well and the theme picks the shade). */
 export const FLOW_COLORS = ['yellow', 'blue', 'green', 'pink', 'purple', 'gray'] as const;
-export type FlowColor = (typeof FLOW_COLORS)[number];
 
 /** A sticky note on the canvas (the file's `layout.notes`): Markdown text in a box. The runner ignores it. */
 export interface FlowNote {
@@ -373,8 +372,8 @@ export interface FlowFrameBox extends FlowFrameDef {
 }
 
 /** A frame's room around its steps: more than a parallel group's, so a frame drawn around one holds it whole. */
-export const FRAME_PAD = 22;
-export const FRAME_HEAD = 26;
+const FRAME_PAD = 22;
+const FRAME_HEAD = 26;
 
 /** The frames around the laid-out nodes (a frame whose steps are all gone is left out). */
 export function frameBoxes(nodes: Array<Pick<FlowNode, 'id' | 'x' | 'y' | 'w' | 'h'> & { step?: { finally?: boolean; parallel?: string } }>, frames: FlowFrameDef[] | undefined): FlowFrameBox[] {
@@ -424,7 +423,7 @@ export function layoutExtras(layout: unknown): { notes: FlowNote[]; frames: Flow
 
 /* ------------------------------------------------------------------ checks as you edit */
 
-export type FlowCheckKind = 'unset-variable' | 'missing-step' | 'unreachable' | 'cycle' | 'when-without-condition' | 'waits-for-finally';
+type FlowCheckKind = 'unset-variable' | 'missing-step' | 'unreachable' | 'cycle' | 'when-without-condition' | 'waits-for-finally';
 
 /** Something likely wrong in a flow, on a step (and an edge): the designer's problems strip, `testpion flow`, lint. */
 export interface FlowCheck {

@@ -7,9 +7,9 @@ import { escapeRegex } from '../util/redact.js';
  * empty folders, and collection variables nothing uses. Each finding says how to fix it; removeDuplicates and
  * removeEmptyFolders do the safe ones.
  */
-export type TidyKind = 'duplicate' | 'hard-coded-host' | 'empty-folder' | 'unused-variable' | 'repeated-auth-header';
+type TidyKind = 'duplicate' | 'hard-coded-host' | 'empty-folder' | 'unused-variable' | 'repeated-auth-header';
 
-export interface TidyFinding {
+interface TidyFinding {
   kind: TidyKind;
   message: string;
   /** Requests or folders it is about (ids), the first one the one to keep for duplicates. */

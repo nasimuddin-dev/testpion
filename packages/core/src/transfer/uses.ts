@@ -14,7 +14,7 @@ import type { Listed } from './items.js';
 import { collectionIdOfRef } from './parts.js';
 import type { BundleRef } from './types.js';
 
-export interface UsesResult {
+interface UsesResult {
   refs: BundleRef[];
   edges: BundleEdge[];
   missing: BundleManifest['missing'];

@@ -6,7 +6,6 @@ import {
   describeRevChanges,
   gitChangesByItem,
   gitBranches,
-  gitCommit,
   gitDiff,
   gitLog,
   gitPull,
@@ -22,7 +21,7 @@ import {
   gitRenameBranch,
   type MergeResolutions,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { commitScanned, registerGitItemCommands, splitKeyValue } from './git-items.js';
 import { registerGitSetupCommands } from './git-setup.js';
@@ -34,7 +33,7 @@ const out = (json: boolean, value: unknown, text: () => void) => (json ? printJs
 export function registerGitCommands(git: Command, program: Command): void {
   registerGitItemCommands(git);
   registerGitSetupCommands(git);
-  const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option('--json', 'print as JSON');
+  const wsOpt = (c: Command) => c.option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)').option(...JSON_OPTION);
 
   wsOpt(
     git
@@ -288,7 +287,7 @@ export function registerGitCommands(git: Command, program: Command): void {
     .argument('<from>', 'commit, branch or tag, e.g. origin/main')
     .argument('[to]', 'commit, branch or tag (default: the working folder)')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
-    .option('--json', 'print as JSON')
+    .option(...JSON_OPTION)
     .option('--markdown', 'print a Markdown list (for a pull-request comment)')
     .action((from: string, to: string | undefined, o) =>
       withWorkspace(o.workspace, async (s) => {

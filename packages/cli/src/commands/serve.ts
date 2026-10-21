@@ -1,6 +1,5 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { Command, Option } from 'commander';
 import {
   collectionFromExchanges,
@@ -35,7 +34,7 @@ import {
   type FeedbackKind,
   startFlowWebhookServer,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, withWorkspace, cliSecrets, cliContext } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, withWorkspace, cliSecrets, cliContext, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { emitEvent, machine } from '../output.js';
 import { executeMock } from '../run.js';
 
@@ -51,7 +50,7 @@ export function registerServeCommands(program: Command): void {
     .option('-e, --environment <name>', 'environment every run uses')
     .option('--max-concurrent <n>', 'runs at once before callers get 429', '4')
     .option('--timeout <sec>', 'a run longer than this is cancelled (504)', '120')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'JSON lines (the same as --jsonl): { type: "listening", data: { url, port, hooks } }, then { type: "call", data } per call, and the envelope when it stops')
     .action(async (o: { port: string; host: string; environment?: string; maxConcurrent: string; timeout: string; workspace?: string; json?: boolean }) => {
       const port = Number(o.port);
@@ -100,7 +99,7 @@ export function registerServeCommands(program: Command): void {
   program
     .command('mcp-server')
     .description('serve a workspace to AI agents over MCP (stdio): list and read collections, send requests, run collections')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--read-only', 'only the browsing tools: no requests are sent')
     .option('--profile <name>', "which tools are listed: full (every tool; the default) or minimal (the common jobs, for agents that load every listed tool; search_tools finds the rest)", 'full')
     .option('--allow-production', 'allow sending to environments marked as production')
@@ -216,7 +215,7 @@ ${cyan(r.url)}`);
     .command('mock')
     .description("serve a collection's saved examples on localhost (like a Postman mock server) until Ctrl+C\n<collection> is a collection name or id in the workspace, or a TestPion / Postman v2.1 collection or OpenAPI file or link")
     .argument('<collection>', 'collection name or id, a file, or an http(s) link')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-p, --port <port>', 'port to listen on (default: any free port)')
     .option('--delay <ms>', 'delay every response by this many ms')
     .option('--fallback <url>', 'forward requests that match no example to this API (partial mocking)')
@@ -474,7 +473,7 @@ ${cyan(r.url)}`);
     .option('-H, --header <key:value...>', 'handshake headers')
     .option('--auth <json>', 'Socket.IO handshake auth payload')
     .option('-w, --wait <ms>', 'how long to listen after sending', '1500')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (url: string, o) => {
       const headers = ((o.header as string[] | undefined) ?? []).map((kv) => {
         const i = kv.indexOf(':');
@@ -526,7 +525,7 @@ ${cyan(r.url)}`);
     .option('--password-env <name>', 'environment variable holding the password (never type it on the command line)', 'MQTT_PASSWORD')
     .option('--mqtt5', 'use MQTT 5 (default 3.1.1)')
     .option('-w, --wait <ms>', 'how long to listen after publishing', '1500')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (url: string, o) => {
       const qos = Number(o.qos);
       if (![0, 1, 2].includes(qos)) throw new CliError('--qos must be 0, 1 or 2', EXIT.CONFIG_ERROR);
@@ -574,7 +573,7 @@ ${cyan(r.url)}`);
     .option('--mechanism <name>', 'SASL mechanism: plain, scram-sha-256 or scram-sha-512', 'plain')
     .option('--password-env <name>', 'environment variable holding the password (never type it on the command line)', 'KAFKA_PASSWORD')
     .option('-w, --wait <ms>', 'how long to listen after producing', '3000')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (brokers: string, o) => {
       const headers = Object.fromEntries(
         ((o.header as string[] | undefined) ?? []).map((h) => {
@@ -628,7 +627,7 @@ ${cyan(r.url)}`);
     .option('-H, --metadata <key:value...>', 'metadata entries')
     .option('--tls', 'use TLS')
     .option('--timeout <ms>', 'deadline in ms', '30000')
-    .option('--json', 'print the result as JSON (for scripts and AI agents)')
+    .option(...JSON_RESULT_OPTION)
     .action(async (target: string, method: string | undefined, o) => {
       const protoFiles = ((o.proto as string[] | undefined) ?? []).map((f) => ({ name: f.replace(/\\/g, '/'), text: readFileSync(f, 'utf8') }));
       const metadata = ((o.metadata as string[] | undefined) ?? []).map((kv) => {

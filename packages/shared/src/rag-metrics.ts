@@ -7,7 +7,7 @@
 export type CustomMetricKind = 'judge' | 'checklist' | 'rule' | 'formula' | 'embedding-set' | 'script' | 'dag';
 
 /** What a custom metric may see of the sample. */
-export type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
+type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
 
 export interface CustomMetricExampleSample {
   question?: string;
@@ -22,27 +22,27 @@ export interface CustomMetricExampleSample {
 }
 
 /** A sample with the verdict the metric must give it: the examples are the metric's regression tests. */
-export interface CustomMetricExample {
+interface CustomMetricExample {
   name?: string;
   sample: CustomMetricExampleSample;
   expect: 'pass' | 'fail';
 }
 
-export interface CustomMetricRule {
+interface CustomMetricRule {
   /** A deterministic check type (regex, contains, not-contains, length, json-schema, exists, equals …) and its options. */
   type: string;
   [option: string]: unknown;
 }
 
 /** The branch of a decision-tree node: the id of the next node, or a leaf with the score (0 to 10) and why. */
-export type CustomDagBranch = string | { score: number; reason?: string };
+type CustomDagBranch = string | { score: number; reason?: string };
 /** A node of a `dag` metric: a yes/no question, a choice among labelled options, a task that writes something down for later nodes, or a deterministic rule. */
-export type CustomDagNode =
+type CustomDagNode =
   | { type: 'binary'; question: string; yes: CustomDagBranch; no: CustomDagBranch }
   | { type: 'choice'; question: string; options: Record<string, CustomDagBranch> }
   | { type: 'task'; instruction: string; next: CustomDagBranch }
   | { type: 'rule'; check: { type: string; [option: string]: unknown }; yes: CustomDagBranch; no: CustomDagBranch };
-export interface CustomDagTree {
+interface CustomDagTree {
   root: string;
   nodes: Record<string, CustomDagNode>;
 }

@@ -1,14 +1,14 @@
 /** `testpion flows`: the flows (test files and suites with an expose: block) the MCP server offers to agents as tools. */
 import { Command } from 'commander';
 import { exposedFlows, inputRequired } from '@testpion/core';
-import { bold, dim, printJson, red, withWorkspace, yellow } from '../shared.js';
+import { bold, dim, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION, JSON_OPTION } from '../shared.js';
 
 export function registerFlowsCommand(program: Command): void {
   program
     .command('flows')
     .description('list the flows exposed as MCP tools (test files and suites with an expose: block): tool name, file and inputs')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
-    .option('--json', 'print as JSON')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_OPTION)
     .action((o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const flows = exposedFlows(store);

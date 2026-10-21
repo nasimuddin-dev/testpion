@@ -1,5 +1,3 @@
-import { convertCollectionScripts } from '../scripts/aliases.js';
-
 /**
  * How an import treats scripts written for Postman (`pm.*`) or Insomnia (`insomnia.*`): `'tp'` (the
  * default) rewrites them to TestPion's `tp.*`; `'keep'` leaves `pm.*` (for collections still used in
@@ -29,40 +27,3 @@ export interface ImportScriptsSummary {
   warnings?: Array<{ where: string; api: string }>;
 }
 
-type ScriptHolder = { name?: string; preRequestScript?: string; testScript?: string; items?: ScriptHolder[]; kind?: string };
-
-/** Rewrite an imported collection's `pm.*` scripts (collection, folders and requests) to `tp.*`, unless `mode` is `'keep'`. */
-export function importScriptsToTp<C extends ScriptHolder>(collection: C, mode: ImportScriptsMode = 'tp'): { collection: C; scripts: ImportScriptsSummary } {
-  if (mode === 'keep') return { collection, scripts: { converted: 0, unchanged: [] } };
-  const r = convertCollectionScripts(collection, 'pm', 'tp');
-  return { collection: r.collection, scripts: { converted: r.changed, unchanged: r.skipped } };
-}
-
-/**
- * Rewrite another tool's script API (Bruno's `bru.*` …) in every script of a collection with `convert`, then the
- * `pm.*` → `tp.*` pass. One summary: scripts converted, scripts left on `pm.*`, and calls with no TestPion equivalent.
- */
-export function importForeignScriptsToTp<C extends ScriptHolder>(
-  collection: C,
-  convert: (code: string) => { code: string; changed: number; warnings: string[] },
-  mode: ImportScriptsMode = 'tp',
-): { collection: C; scripts: ImportScriptsSummary } {
-  let converted = 0;
-  const warnings: Array<{ where: string; api: string }> = [];
-  const fix = (code: string | undefined, where: string): string | undefined => {
-    if (!code) return code;
-    const r = convert(code);
-    if (r.changed) converted++;
-    for (const api of r.warnings) warnings.push({ where, api });
-    return r.code;
-  };
-  const walk = <T extends ScriptHolder>(n: T, path: string): T => {
-    const out: T = { ...n };
-    if (n.preRequestScript !== undefined) out.preRequestScript = fix(n.preRequestScript, `${path} (pre-request)`);
-    if (n.testScript !== undefined) out.testScript = fix(n.testScript, `${path} (post-response)`);
-    if (n.items) out.items = n.items.map((c) => walk(c, `${path} / ${c.name ?? '?'}`));
-    return out;
-  };
-  const tp = importScriptsToTp(walk(collection, collection.name ?? 'collection'), mode);
-  return { collection: tp.collection, scripts: { converted: Math.max(converted, tp.scripts.converted), unchanged: tp.scripts.unchanged, ...(warnings.length ? { warnings } : {}) } };
-}

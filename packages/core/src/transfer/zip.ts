@@ -156,7 +156,7 @@ export function findEndOfDirectory(buf: Buffer): number {
 }
 
 /** One record of the central directory, as the archive declares it (nothing here is trusted yet). */
-export interface ZipRecord {
+interface ZipRecord {
   madeBy: number;
   flags: number;
   method: number;
@@ -196,7 +196,7 @@ export function readRecord(buf: Buffer, pos: number): ZipRecord | undefined {
 }
 
 /** Where a record's data starts (after its local header), or -1 when the local header is not there. */
-export function dataStart(buf: Buffer, rec: Pick<ZipRecord, 'local'>): number {
+function dataStart(buf: Buffer, rec: Pick<ZipRecord, 'local'>): number {
   const { local } = rec;
   if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) return -1;
   return local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);

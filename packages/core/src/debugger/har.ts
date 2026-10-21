@@ -7,11 +7,11 @@ import type { DebuggerSseEvent, WebSocketFrame } from './frames.js';
  * The HTTP Debugger's sessions on disk are HAR 1.2 (every HTTP tool opens it) with TestPion's extras in `_testpion`
  * (the program, the tunnel kind, bookmarks). Values pass the redactor on the way out: a session file may be shared.
  */
-export interface HarLog {
+interface HarLog {
   log: { version: string; creator: { name: string; version: string }; entries: HarEntry[] };
 }
 
-export interface HarEntry {
+interface HarEntry {
   startedDateTime: string;
   time: number;
   request: {

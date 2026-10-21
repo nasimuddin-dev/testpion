@@ -30,7 +30,7 @@ import { registerRagEvalCommands } from './rag-eval.js';
 import { registerRagMetricFileCommands } from './rag-metric-files.js';
 import { registerRagR4Commands } from './rag-r4.js';
 import { registerRagProbeCommands } from './rag-probes.js';
-import { EXIT, CliError, bold, cliContext, dim, green, printJson, readResults, red, yellow, withWorkspace } from '../shared.js';
+import { EXIT, CliError, bold, cliContext, dim, green, printJson, readResults, red, yellow, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 const FORMATS = RAG_DATASET_FORMATS.join(', ');
 
@@ -53,7 +53,7 @@ export function registerRagCommands(program: Command): void {
   rag
     .command('targets')
     .description('list the RAG targets of a workspace (a request of any protocol and the mapping of its response)')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('--json', 'print as JSON (for scripts and AI agents)')
     .action((o: { workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, (store, ephemeral) => {
@@ -74,7 +74,7 @@ export function registerRagCommands(program: Command): void {
     .argument('[target]', 'target name or id (or use --file)')
     .argument('[question]', 'the question to ask', 'What does this system know?')
     .option('--file <file>', 'a target written in a YAML or JSON file instead of a saved one')
-    .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest workspace.json)')
+    .option(...WORKSPACE_OPTION)
     .option('-e, --environment <name>', 'environment to use ({{variables}} of the request)')
     .option('--raw', 'also print the response the mapping reads')
     .option('--json', 'print { question, status, latencyMs, sample, response } as JSON')

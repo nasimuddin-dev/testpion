@@ -56,7 +56,7 @@ export function sanitizeFileName(name: string, fallback = 'output'): string {
 }
 
 /** Local time as `yyyy-mm-dd-HHMM` (sortable, no seconds). */
-export function fileStamp(when: Date = new Date()): string {
+function fileStamp(when: Date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${when.getFullYear()}-${p(when.getMonth() + 1)}-${p(when.getDate())}-${p(when.getHours())}${p(when.getMinutes())}`;
 }

@@ -4,7 +4,7 @@
  * and the result is ONE proposal. It only proposes: the rows are added to a dataset by `ai_apply_proposal`, after the person
  * has seen them. Paths are workspace-relative; URLs are public https pages only.
  */
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { aiRunDeps } from '../../ai/tasks/run.js';
 import { estimateGeneration, generateTestset, type GenerateOptions } from '../../runner/rag-testset-generate.js';
 import { DEDUPE_MODES, TESTSET_STYLES, TESTSET_TYPES } from '../../eval/rag/testset/types.js';
@@ -61,8 +61,7 @@ export function ragTestsetTools({ store, secrets, settings }: { store: Workspace
           judge: a.judge ? String(a.judge) : undefined,
           noJudge: a.no_judge_check === true,
         };
-        const ctx = createEngineContext({ store, secrets, settings, environment: a.environment ? String(a.environment) : undefined, aiSurface: 'mcp' });
-        try {
+        return withEngine({ store, secrets, settings }, { environment: a.environment ? String(a.environment) : undefined, aiSurface: 'mcp' }, async (ctx) => {
           if (a.dry_run === true) return { dryRun: true, estimate: await estimateGeneration(store, ctx.services.ragJudge!, opts) };
           const r = await generateTestset(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), store, opts);
           const p = r.proposal;
@@ -84,9 +83,7 @@ export function ragTestsetTools({ store, secrets, settings }: { store: Workspace
             costUsd: r.costUsd,
             next: `Show the person the questions and their badges; add the ticked ones to ${(p.items[0]!.data as { dataset: string }).dataset} with ai_apply_proposal { id: "${p.id}" } after they agree.`,
           };
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
   ];

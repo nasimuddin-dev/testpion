@@ -49,7 +49,7 @@ import { registerOutputCommand } from './commands/output.js';
 import { registerBundleCommands } from './commands/bundle.js';
 
 /** The commands that send to APIs with an environment (by their path): they take --allow-production. */
-export const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix', 'rag probe', 'security generate', 'security run']);
+const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix', 'rag probe', 'security generate', 'security run']);
 
 /** The testpion command line: one module per area of commands (commands/*.ts). */
 export function buildProgram(): Command {

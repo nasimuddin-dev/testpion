@@ -8,7 +8,7 @@ import { aiRunDeps, applyProposal, isAiSetupError, normalizeError, runAiTask, Wo
 import { dim, green, printJson, yellow } from '../shared.js';
 import { printPreview, printProposal } from './ai-print.js';
 
-export interface ProposeOptions {
+interface ProposeOptions {
   store: WorkspaceStore;
   ctx: EngineContext;
   json: boolean;

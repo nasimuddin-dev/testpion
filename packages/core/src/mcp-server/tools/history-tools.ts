@@ -14,7 +14,7 @@ import { str, type Tool } from '../tool.js';
  * latest failures, test history and flaky tests, score trends of evaluations, activity per day, and what needs
  * attention first.
  */
-export interface HistoryToolsDeps {
+interface HistoryToolsDeps {
   store: WorkspaceStore;
   redactor: Redactor;
   findCollection(ref: unknown): Collection;

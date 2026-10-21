@@ -43,7 +43,7 @@ export type BrowserName = 'chrome' | 'edge' | 'chromium' | 'firefox' | 'brave' |
  * proxy), so opening it through TestPion means pointing the system proxy here first, and every program that honours
  * the system proxy is captured with it until capturing stops.
  */
-export interface InstalledBrowser {
+interface InstalledBrowser {
   name: BrowserName;
   label: string;
   path: string;

@@ -2,7 +2,7 @@
  * MCP tool of the capture of a RAG dataset from real traffic (`rag_capture_dataset`, the same engine function as
  * `testpion rag capture`). Nothing is sent to a model; secrets and personal data are masked before a dataset is written.
  */
-import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { captureDataset, type CaptureSourceSpec } from '../../eval/rag/capture/index.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
@@ -70,8 +70,7 @@ export function ragCaptureTools({ store, secrets, settings }: { store: Workspace
         },
       },
       run: async (a) => {
-        const ctx = createEngineContext({ store, secrets, settings, aiSurface: 'mcp' });
-        try {
+        return withEngine({ store, secrets, settings }, { aiSurface: 'mcp' }, async (ctx) => {
           return await captureDataset(
             store,
             {
@@ -93,9 +92,7 @@ export function ragCaptureTools({ store, secrets, settings }: { store: Workspace
             },
             { redactor: ctx.redactor },
           );
-        } finally {
-          await ctx.dispose();
-        }
+        });
       },
     },
   ];

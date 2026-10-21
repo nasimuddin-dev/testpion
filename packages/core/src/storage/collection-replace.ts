@@ -11,7 +11,7 @@ import { escapeRegex } from '../util/redact.js';
 export type ReplaceField = 'url' | 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'name';
 export const REPLACE_FIELDS: ReplaceField[] = ['url', 'params', 'headers', 'body', 'auth', 'scripts', 'name'];
 
-export interface ReplaceMatch {
+interface ReplaceMatch {
   requestId: string;
   /** Folder path and request name: `Admin / Banners / Get banner`. */
   request: string;
@@ -22,7 +22,7 @@ export interface ReplaceMatch {
   after: string;
 }
 
-export interface ReplaceOptions {
+interface ReplaceOptions {
   find: string;
   replace: string;
   regex?: boolean;

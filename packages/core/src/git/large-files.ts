@@ -21,13 +21,13 @@ import { requireRepo } from './item-ops.js';
  *    checksum is committed, the data file is git-ignored and each person gets it where the team keeps it).
  *  - `refuse` (100 MB): a commit that would take the file is refused (GitHub would reject the push), until one of the above.
  */
-export type LargeLevel = 'warn' | 'lfs' | 'refuse';
+type LargeLevel = 'warn' | 'lfs' | 'refuse';
 
 const MB = 1024 * 1024;
 const POLICY = KIND_INFO.dataset.size ?? {};
-export const LARGE_WARN_BYTES = POLICY.gitWarnBytes ?? 5 * MB;
-export const LARGE_LFS_BYTES = POLICY.gitLfsBytes ?? 50 * MB;
-export const LARGE_REFUSE_BYTES = POLICY.gitRefuseBytes ?? 100 * MB;
+const LARGE_WARN_BYTES = POLICY.gitWarnBytes ?? 5 * MB;
+const LARGE_LFS_BYTES = POLICY.gitLfsBytes ?? 50 * MB;
+const LARGE_REFUSE_BYTES = POLICY.gitRefuseBytes ?? 100 * MB;
 
 export const largeLevel = (bytes: number): LargeLevel | undefined => (bytes >= LARGE_REFUSE_BYTES ? 'refuse' : bytes >= LARGE_LFS_BYTES ? 'lfs' : bytes >= LARGE_WARN_BYTES ? 'warn' : undefined);
 
@@ -100,7 +100,7 @@ async function lfsCovered(ws: string, files: string[]): Promise<Set<string>> {
 }
 
 /** Whether Git LFS is installed (`git lfs version`). */
-export async function lfsAvailable(ws: string): Promise<boolean> {
+async function lfsAvailable(ws: string): Promise<boolean> {
   return runGit(ws, ['lfs', 'version']).then(
     () => true,
     () => false,
@@ -109,7 +109,7 @@ export async function lfsAvailable(ws: string): Promise<boolean> {
 
 /* ------------------------------------------------------------------ the two ways out */
 
-export interface LargePlan {
+interface LargePlan {
   file: string;
   mode: 'lfs' | 'reference';
   bytes: number;
@@ -176,7 +176,7 @@ export async function trackWithLfs(ws: string, file: string, o: { dryRun?: boole
   return { ...plan, applied: true, undoId: undo.id };
 }
 
-export interface DatasetReference {
+interface DatasetReference {
   schemaVersion: string;
   /** The data file's name (inside its folder). */
   name: string;
@@ -189,7 +189,7 @@ export interface DatasetReference {
 }
 
 /** The checksum of a file, read in chunks (a 2 GB file does not fill the memory). */
-export function sha256File(path: string): Promise<{ sha256: string; bytes: number; lines: number }> {
+function sha256File(path: string): Promise<{ sha256: string; bytes: number; lines: number }> {
   return new Promise((done, fail) => {
     const h = createHash('sha256');
     let bytes = 0;
@@ -243,7 +243,7 @@ export async function trackByReference(ws: string, file: string, o: { source?: s
   return { ...plan, applied: true, undoId: undo.id, reference: ref };
 }
 
-export interface ReferenceCheck {
+interface ReferenceCheck {
   /** The reference file. */
   ref: string;
   /** The data file it stands for. */

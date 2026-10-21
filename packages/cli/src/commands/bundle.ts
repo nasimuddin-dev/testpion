@@ -35,7 +35,7 @@ import { EXIT, CliError, bold, dim, green, printJson, withWorkspace, yellow } fr
 const CHOICES: ImportChoice[] = ['keep-both', 'replace', 'skip'];
 const mb = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export interface BundleExportOptions {
+interface BundleExportOptions {
   workspace?: string;
   out?: string;
   section?: string;
@@ -122,7 +122,7 @@ export function isBundleFile(file: string): boolean {
   }
 }
 
-export interface BundleImportOptions {
+interface BundleImportOptions {
   workspace: string;
   preview?: boolean;
   onConflict?: string;

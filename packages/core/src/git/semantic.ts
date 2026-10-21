@@ -495,23 +495,6 @@ function listedItems(file: string, before: string | undefined, after: string | u
   return { title: file, before: before === undefined ? undefined : flat(x), after: after === undefined ? undefined : flat(y) };
 }
 
-/** One item (request or folder) of a collection by id, anywhere in its folders. */
-export function findCollectionItem(c: Pick<Collection, 'items'>, id: string): CollectionNode | undefined {
-  return index(c.items as Node[]).get(id)?.node;
-}
-
-/** The collection with one item replaced (GIT-209: restore a request as it was in a commit); undefined when it is not there. */
-export function replaceCollectionItem<C extends Pick<Collection, 'items'>>(c: C, id: string, node: CollectionNode): C | undefined {
-  let found = false;
-  const walk = (nodes: Node[]): Node[] =>
-    nodes.map((n) => {
-      if (n.id === id) return (found = true), (node as Node);
-      return n.kind === 'folder' ? ({ ...n, items: walk((n.items ?? []) as Node[]) } as Node) : n;
-    });
-  const items = walk(c.items as Node[]);
-  return found ? { ...c, items: items as C['items'] } : undefined;
-}
-
 /**
  * The meaning of the changes between two commits (GIT-401 `testpion diff`, the CI pull-request comment): `to`
  * defaults to the working folder when omitted.
@@ -572,14 +555,6 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
   return withRefs(result);
 }
 
-function readOrUndefined(p: string): string | undefined {
-  try {
-    return readFileSync(p, 'utf8');
-  } catch {
-    return undefined;
-  }
-}
-
 /** The changes as Markdown (a pull-request description or CI comment). */
 export function changesMarkdown(changes: SemanticChange[]): string {
   if (!changes.length) return '_No changes to the TestPion workspace._';
@@ -624,7 +599,7 @@ export async function describeItemDiff(ws: string, file: string, itemId?: string
 }
 
 /** Before / after of two parts lists as rows. */
-export function partRows(b: Record<string, string> | undefined, a: Record<string, string> | undefined): PartChange[] {
+function partRows(b: Record<string, string> | undefined, a: Record<string, string> | undefined): PartChange[] {
   return [...new Set([...Object.keys(b ?? {}), ...Object.keys(a ?? {})])].map((part) => {
     const x = b ? (b[part] ?? '') : undefined;
     const y = a ? (a[part] ?? '') : undefined;

@@ -6,7 +6,7 @@
  */
 import type { Collection, CollectionFolder, CollectionNode, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 
-export interface TreeFolder {
+interface TreeFolder {
   kind: 'folder';
   id: string;
   name: string;
@@ -15,7 +15,7 @@ export interface TreeFolder {
   logic?: true;
 }
 
-export interface TreeHttpRequest {
+interface TreeHttpRequest {
   kind: 'http';
   id: string;
   name: string;
@@ -29,7 +29,7 @@ export interface TreeHttpRequest {
   examples?: Array<{ id: string; name: string; status: number }>;
 }
 
-export interface TreeGraphQLRequest {
+interface TreeGraphQLRequest {
   kind: 'graphql';
   id: string;
   name: string;
@@ -59,7 +59,7 @@ const isSoap = (r: SavedHttpRequest['request']): boolean => {
   return !!header || body;
 };
 
-export function treeNode(n: CollectionNode): TreeNode {
+function treeNode(n: CollectionNode): TreeNode {
   if (n.kind === 'folder') {
     const f = n as CollectionFolder;
     const out: TreeFolder = { kind: 'folder', id: f.id, name: f.name, items: (f.items ?? []).map(treeNode) };

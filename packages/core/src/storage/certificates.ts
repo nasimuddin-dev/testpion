@@ -8,7 +8,7 @@ import { dirname } from 'node:path';
 import type { WorkspaceStore } from './workspace.js';
 import { readJson } from './fsutil.js';
 
-export interface SeenCertificate {
+interface SeenCertificate {
   /** host[:port] */
   host: string;
   subject?: string;
