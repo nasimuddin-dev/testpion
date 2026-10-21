@@ -183,7 +183,11 @@ describe('documents', () => {
     const r = importDocument(postman({}, [nest(50)]));
     expect(r.report.counts.folders).toBe(50);
     // thousands of levels: a clean error, not a stack overflow that takes the process down
-    const text = postman({}, [nest(3000)]);
+    // built as text: stringifying 3,000 nested objects is itself a recursion that Node 24's smaller stack cannot do
+    const leaf = JSON.stringify({ name: 'leaf', request: { method: 'GET', url: 'https://a.test' } });
+    let inner = leaf;
+    for (let i = 3000; i > 0; i--) inner = `{"name":"f${i}","item":[${inner}]}`;
+    const text = postman({}, ['__NEST__']).replace('"__NEST__"', () => inner);
     let threw: unknown;
     try {
       importDocument(text);

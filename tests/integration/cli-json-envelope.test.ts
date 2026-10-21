@@ -59,13 +59,19 @@ describe('every --json command answers one envelope', () => {
 
   it('with made-up arguments: an envelope whose status follows the exit code', async () => {
     const bad: string[] = [];
-    const results = await Promise.all(
-      targets.map(async ({ c, path }) => {
+    // a dozen at a time: all of them at once starved the macOS runner (one answer was cut off by the process timeout)
+    const results: Array<{ path: string; r: Awaited<ReturnType<typeof runCli>> }> = [];
+    for (let from = 0; from < targets.length; from += 12) {
+      results.push(
+        ...(await Promise.all(
+          targets.slice(from, from + 12).map(async ({ c, path }) => {
         // each required argument is something that is not there; the workspace is a copy of the example
         const args = [...path.split(' '), ...c.registeredArguments.filter((a) => a.required).map(() => 'nope-not-there'), ...(has(c, '--workspace') ? ['-w', ws] : []), '--json', '--non-interactive'];
         return { path, r: await runCli(args, { cwd: tmp.dir, home: home(), env: { CI: '1' } }) };
-      }),
-    );
+          }),
+        )),
+      );
+    }
     for (const { path, r } of results) {
       let e: { schema_version?: unknown; command?: unknown; status?: unknown; data?: unknown; errors?: unknown[]; warnings?: unknown; metrics?: { exit_code?: number } };
       try {
