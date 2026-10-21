@@ -3,7 +3,7 @@
 // the pause reaches step 3's request after Continue; Run from here on step 3 runs only it; step 1's response is pinned
 // and the next run answers it from the pin; a run made to fail is replayed on its own data after the fix.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/debug-flow.yaml';
 const TEXT = [
@@ -34,7 +34,7 @@ const H = `
   };
   const select = async (id) => { const n = byId(id); if (!n) return null; n.dispatchEvent(new MouseEvent('click', { bubbles: true })); await __t.sleep(300); return true; };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

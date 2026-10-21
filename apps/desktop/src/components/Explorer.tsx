@@ -2,7 +2,7 @@ import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderPlus, L
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
 import { touchesFiles, type DataChangedEvent, type FileKind } from '../lib/data-changed';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
@@ -10,12 +10,11 @@ import { addToFolder, CollectionTree, duplicateNode, mapNodes, type ExtraGroup }
 import { openRef, revealInSidebar } from '../lib/open-ref';
 import { scopedNodeId } from '../lib/tree-rows';
 import type { RequestCategory } from '../lib/collection-filter';
-import { closeTabsFor, newRequestItems, useEditorTabsStore } from './EditorTabs';
+import { closeTabsFor, newRequestItems } from './EditorTabs';
 import { ExportDialog } from './ExportDialog';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
-import { isDocView, useDocs } from '../lib/docs';
 import { IconButton, Input, Menu } from './ui';
 import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
@@ -193,17 +192,6 @@ export function Explorer() {
   const [mcpFolders, setMcpFolders] = useState<string[]>([]);
   const [specFolders, setSpecFolders] = useState<Library<unknown>>({ folders: [], items: [] });
   const [datasetFolders, setDatasetFolders] = useState<Library<unknown>>({ folders: [], items: [] });
-  // the request that's open (as recorded for Back / Forward) is highlighted in the tree
-  // (or, for a tab restored at start-up, the item its active tab shows)
-  const navItem = useApp((s) => (s.nav.current.payload?.requestId ?? s.nav.current.payload?.savedId) as string | undefined);
-  const view = useApp((s) => s.view);
-  const activeDoc = useDocs((s) => s.active[view]);
-  const tabItem = useEditorTabsStore((s) => {
-    const group = isDocView(view) ? `${view}:${activeDoc ?? 'main'}` : view;
-    const tabs = s.byView[group] ?? [];
-    return (tabs.find((t) => t.key === s.activeByView[group]) ?? (tabs.length === 1 ? tabs[0] : undefined))?.item;
-  });
-  const openRequestId = tabItem ?? navItem;
 
   /**
    * The explorer's own lists, or the part of them that changed (`what`: the saved gRPC calls and connections and
@@ -272,20 +260,16 @@ export function Explorer() {
 
   const intent = useApp.getState().openIntent;
   const saveCollection = async (c: Collection) => {
-    try {
+    await attempt(async () => {
       await call('col.save', c);
       // the saved collection is read back by the shared list (its data.changed); the explorer's other lists did not change
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Change a collection the tree shows (an outline): the change applies to the whole collection. */
   const editCollection = async (c: Collection, f: (whole: Collection) => Collection) => {
-    try {
+    await attempt(async () => {
       await saveCollection(f(await fullCollection(c)));
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const newCollection = async () => {
     const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
@@ -325,12 +309,10 @@ export function Explorer() {
   /** The datasets: a new empty one, generated test data, and a row's rename, duplicate and delete (the file goes to Recently deleted). */
   const [generatingData, setGeneratingData] = useState(false);
   const datasetAction = async (fn: () => Promise<unknown>) => {
-    try {
+    await attempt(async () => {
       await fn();
       await load(false, DATASETS);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const newDataset = async (format: 'csv' | 'jsonl') => {
     const name = await promptText(`New ${format.toUpperCase()} dataset`, { message: 'File name in the datasets folder', placeholder: format === 'csv' ? 'users' : 'cases', okLabel: 'Create' });
@@ -363,13 +345,11 @@ export function Explorer() {
   });
   /** Change a saved gRPC call / connection list (move, rename, duplicate, delete): the one place that loads, edits and saves it. */
   const editLibrary = async (kind: 'grpc' | 'websocket', fn: (items: Array<LibraryItem<unknown>>) => Array<LibraryItem<unknown>>) => {
-    try {
+    await attempt(async () => {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: { folders: lib.folders, items: fn(lib.items) } });
       await load(false, LIBRARY);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Move a saved gRPC call / connection to another collection. */
   const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
@@ -447,22 +427,18 @@ export function Explorer() {
   };
   /** Change the MCP server list (rename, duplicate, move to a folder). */
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
-    try {
+    await attempt(async () => {
       await call('mcp.saveServers', { servers: fn(servers.map(({ connected: _c, ...s }) => s as McpServerConfig)) });
       await load(false, MCP);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Change a folders library (the folder names, and which folder each item is in), read fresh so steps in a row see each other. */
   const editFolderLib = async (kind: 'mcp-folders' | 'spec-folders' | 'dataset-folders', fn: (lib: Library<unknown>) => Pick<Library<unknown>, 'folders' | 'items'>) => {
-    try {
+    await attempt(async () => {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: fn(lib) });
       await load(false, LIBRARY);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const specFolderOf = new Map(specFolders.items.map((i) => [i.id, i.folder]));
   const datasetFolderOf = new Map(datasetFolders.items.map((i) => [i.id, i.folder]));
@@ -739,7 +715,7 @@ export function Explorer() {
                 icon={<TreeBadge label={n.kind === 'http' ? n.request.method : 'GQL'} className={n.kind === 'http' ? `method-${n.request.method}` : KIND_COLOR.graphql} />}
                 label={n.name}
                 sub={c.name}
-                active={openRequestId === n.id}
+                activeId={n.id}
                 onClick={() => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, { noReveal: true })}
                 git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
                 ctx={() => favoriteMenu(c, n)}
@@ -760,7 +736,6 @@ export function Explorer() {
               expandAll={expandAll}
               revealKey={revealKey}
               revealId={revealId}
-              activeRequestId={openRequestId}
               {...treeCallbacks}
             />
           </div>
@@ -803,7 +778,7 @@ export function Explorer() {
                   icon={<TreeBadge label="MCP" className={s.connected ? 'text-ok' : KIND_COLOR.mcp} />}
                   label={s.name}
                   sub={s.connected ? 'connected' : s.transport === 'streamable-http' ? 'http' : s.transport}
-                  active={openRequestId === s.id}
+                  activeId={s.id}
                   onClick={() => void openRef({ kind: 'mcp-server', serverId: s.id })}
                   ctx={() => serverMenu(s)}
                   rename={renamer(s.id, `mcp:${s.id}`, (name) => editServers((list) => list.map((x) => (x.id === s.id ? { ...x, name } : x))))}
@@ -848,7 +823,7 @@ export function Explorer() {
                   indent={inFolder}
                   icon={<TreeBadge label="API" className={KIND_COLOR.api} />}
                   label={s.replace(/^specs\//, '')}
-                  active={openRequestId === s}
+                  activeId={s}
                   onClick={() => void openRef({ kind: 'spec', path: s })}
                   ctx={() => specMenu(s, folder)}
                   rename={renamer(s, `specs:${s}`, (to) =>
@@ -902,7 +877,7 @@ export function Explorer() {
                   icon={<TreeBadge label={datasetBadge(d.format).text} className={datasetBadge(d.format).cls} />}
                   label={d.name}
                   sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
-                  active={openRequestId === d.name}
+                  activeId={d.name}
                   onClick={() => void openRef({ kind: 'dataset', name: d.name })}
                   ctx={() => datasetMenu(d, d.folder)}
                   rename={renamer(d.name, `datasets:${d.name}`, (to) => datasetAction(() => call('datasets.rename', { name: d.name, to })))}

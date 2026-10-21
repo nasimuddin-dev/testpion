@@ -29,7 +29,7 @@ import { openReverseProxyCapture } from '../lib/capture';
 import { Database, Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, persisted, promptText, toastError, useApp } from '../store';
+import { confirmAction, persisted, promptText, toastError, useApp, attempt } from '../store';
 import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
 import { formatBytes, formatMs, outputFileName } from '@testpion/shared';
 import { pickBinaryFile, pickTextFile } from '../lib/files';
@@ -187,13 +187,11 @@ export function DebuggerView() {
   // every exchange since
   const startRecording = () =>
     startThen(async () => {
-      try {
+      await attempt(async () => {
         const r = await call<{ since: string }>('debug.record', { on: true });
         setRecording({ since: r.since, count: 0 });
         toast('Recording a flow: use your program through the proxy, then Stop recording');
-      } catch (e) {
-        toastError(e);
-      }
+      });
     });
   const stopRecording = async () => {
     try {
@@ -263,57 +261,47 @@ export function DebuggerView() {
       okLabel: 'Save',
     });
     if (!name) return;
-    try {
+    await attempt(async () => {
       const r = await call<{ name: string; exchanges: number }>('debug.saveSession', { name });
       toast(`Saved ${r.exchanges} exchanges as ${r.name}`);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** A saved session opens in its own tab (WF-19); the live capture goes on in its tab. `preview`: a single click. */
   const openSession = (s: Pick<Session, 'name'>, o: { preview?: boolean } = {}) => sessionTabs.open(s.name, null, o);
   /** The saved session on screen joins the live capture (its exchanges are added to it), which is then shown. */
   const addToLive = async (name: string) => {
-    try {
+    await attempt(async () => {
       const r = await call<Status & { loaded: number }>('debug.openSession', { name, append: true });
       sessionTabs.select(sessionTabs.tabs.find((t) => !t.savedId)?.id ?? 'main');
       setStatus(r);
       toast(`Added ${plural(r.loaded, 'exchange')} to the live capture`);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const importHar = async () => {
     const f = await pickTextFile('.har,.json');
     if (!f) return;
-    try {
+    await attempt(async () => {
       const r = await call<Status & { loaded: number }>('debug.openSession', { text: f.text, append: rows.length > 0 });
       setStatus(r);
       toast(`Imported ${r.loaded} exchanges from ${f.name}`);
       void load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const importSaz = async () => {
     const f = await pickBinaryFile('.saz');
     if (!f) return;
-    try {
+    await attempt(async () => {
       const r = await call<Status & { loaded: number }>('debug.openSession', { base64: f.base64, append: rows.length > 0 });
       setStatus(r);
       toast(`Imported ${r.loaded} exchanges from ${f.name}`);
       void load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const systemProxy = async (onOff: boolean) => {
-    try {
+    await attempt(async () => {
       setStatus(await call<Status>('debug.systemProxy', { on: onOff }));
       toast(onOff ? 'System proxy set: programs that honour it send through TestPion' : 'System proxy restored');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   // keyboard: ↑ ↓ select, Enter opens, Delete removes, Ctrl+F finds, Ctrl+E clears
@@ -867,13 +855,11 @@ export function DebuggerView() {
           rule={ruleDraft}
           onClose={() => setRuleDraft(undefined)}
           onSave={async (r) => {
-            try {
+            await attempt(async () => {
               setRules(await call<RulesState>('debug.saveRule', { rule: r }));
               setRuleDraft(undefined);
               toast('Rule saved');
-            } catch (e) {
-              toastError(e);
-            }
+            });
           }}
         />
       )}
@@ -881,11 +867,9 @@ export function DebuggerView() {
         <LanDialog
           onClose={() => setDialog(undefined)}
           onRestartOnLan={async () => {
-            try {
+            await attempt(async () => {
               setStatus(await call<Status>('debug.start', { port: status?.port, lan: true }));
-            } catch (e) {
-              toastError(e);
-            }
+            });
           }}
         />
       )}

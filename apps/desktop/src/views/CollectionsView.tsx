@@ -30,7 +30,7 @@ import { deliverSave, generateFlows, type SaveResult } from '../lib/files';
 import { exportWorkspace } from '../lib/workspace-export';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
 import { openRef } from '../lib/open-ref';
@@ -133,13 +133,11 @@ export function CollectionsView() {
   const renameCollection = async (name: string) => {
     setRenamingName(false);
     if (!draft || name === draft.name) return;
-    try {
+    await attempt(async () => {
       await call('col.save', { ...(stored?.id === draft.id ? stored : draft), name });
       setDraft({ ...draft, name });
       await load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const save = async (c: Collection) => {
     await call('col.save', c);

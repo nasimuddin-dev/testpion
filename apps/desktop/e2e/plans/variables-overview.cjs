@@ -2,7 +2,7 @@
 // and the quick look (eye) lists every variable the request on screen can use: collection, environment, workspace,
 // globals, with a filter.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const pop = () => document.querySelector('[role=dialog][aria-label^="Variable "]');
@@ -12,7 +12,7 @@ const H = `
   const quick = () => document.querySelector('[aria-label="Variables quick look"][role=dialog], [role=dialog][aria-label="Variables quick look"]') ?? [...document.querySelectorAll('[data-radix-popper-content-wrapper] [aria-label="Variables quick look"]')][0];
   const sections = () => [...(quick()?.querySelectorAll('section') ?? [])].map((s) => s.querySelector('h3')?.textContent.trim() + ' ' + (s.querySelector('h3 + span, h3 ~ span')?.textContent.trim() ?? '') + ' [' + [...s.querySelectorAll('tbody tr')].map((r) => r.dataset.variable).join(',') + ']').join(' / ');
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

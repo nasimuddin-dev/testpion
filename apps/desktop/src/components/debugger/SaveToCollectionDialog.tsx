@@ -4,7 +4,7 @@ import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { useCollectionTree } from '../../lib/collections-store';
 import { plural } from '../../lib/format';
-import { Button, Field, Input, Modal, Segmented, Select } from '../ui';
+import { Button, Field, Input, Modal, Segmented, Select, NamedOptions } from '../ui';
 
 interface Saved {
   collectionId: string;
@@ -84,11 +84,7 @@ export function SaveToCollectionDialog({ ids, since, onClose }: { ids?: string[]
         <Field label="Collection">
           <Select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Collection to save to">
             <option value={NEW}>New collection</option>
-            {collections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            <NamedOptions items={collections} />
           </Select>
         </Field>
         <Field label={target ? 'Folder' : 'Name'} hint={target ? 'The requests go in this folder (empty: at the top of the collection).' : undefined}>

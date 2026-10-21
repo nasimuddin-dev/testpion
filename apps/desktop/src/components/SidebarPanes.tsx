@@ -1,3 +1,4 @@
+import { envColor } from './EnvSelect';
 import { Check, History, KeyRound, Plus } from 'lucide-react';
 import { NodeMenu, TreeBadge } from './TreeParts';
 import { saveAsTest } from '../lib/save-test';
@@ -50,7 +51,7 @@ export function EnvironmentsPane() {
               onClick={() => useApp.getState().setEnvironment(e.name)}
               title={e.problem ? `This environment's file cannot be read: ${e.problem}` : 'Make this the active environment'}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
               <span className="truncate">{e.name}</span>
               {e.isProduction && <Badge tone="bad">prod</Badge>}
               {e.name === env && <Check size={13} className="ml-auto shrink-0" />}

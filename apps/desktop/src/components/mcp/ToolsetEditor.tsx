@@ -3,7 +3,7 @@ import { startAi } from '../ai/AiAction';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { McpMockDefinition, McpMockResponse } from '@testpion/core';
 import { asError, call } from '../../api';
-import { promptText, toastError, useApp } from '../../store';
+import { promptText, toastError, useApp, attempt } from '../../store';
 import { copyText } from '../../lib/clipboard';
 import { RunInTerminalButton } from '../RunInTerminal';
 import { stringifyYaml } from '../../lib/yaml';
@@ -97,13 +97,11 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
       setText(stringifyYaml({ schemaVersion: '1.0', ...def }));
       return setMode('yaml');
     }
-    try {
+    await attempt(async () => {
       setDef(await call<McpMockDefinition>('mcp.mock.parse', { text }));
       setSel(0);
       setMode('form');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const save = async () => {
     if (!loaded) return;

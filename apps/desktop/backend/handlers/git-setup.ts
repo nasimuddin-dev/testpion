@@ -5,9 +5,7 @@ import {
   disallowSecret,
   findLargeFiles,
   fixGitSetup,
-  listSharedSessions,
   planCodeowners,
-  readSecretsAllow,
   shareSession,
   trackByReference,
   trackWithLfs,
@@ -16,20 +14,10 @@ import {
   ApsError,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { gitHelpers } from './git-undoable.js';
 
 export function gitSetupHandlers(be: Backend): Handlers {
-  const ws = () => be.ws.root;
-  /** After an operation wrote workspace files: reload and tell the views, without the "changed outside TestPion" notice. */
-  const rewritten = async <T>(op: () => Promise<T> | T): Promise<T> => {
-    try {
-      return await op();
-    } finally {
-      be.adoptDiskState();
-      be.ws.reloadWorkspaceFile();
-      be.host.emit('data.changed', { method: 'git' });
-      be.host.emit('git.changed', {});
-    }
-  };
+  const { ws, rewritten } = gitHelpers(be);
   /** This app is the merge driver (`--merge-driver`) and the readable-diff driver (`--textconv`) of the repositories it sets up; else the CLI. */
   const drivers = () => {
     const self = be.host.mcpCommand;
@@ -72,7 +60,6 @@ export function gitSetupHandlers(be: Backend): Handlers {
       be.host.emit('data.changed', { method: 'git' });
       return r;
     },
-    'git.sharedSessions': () => listSharedSessions(be.ws),
     /** A starter CODEOWNERS (the text, and whether it can be written here); `git.codeownersWrite` writes it, never over one that exists. */
     'git.codeownersPlan': ({ owner }: { owner?: string }) => planCodeowners(ws(), { owner }),
     'git.codeownersWrite': async ({ owner }: { owner?: string }) => {
@@ -91,6 +78,5 @@ export function gitSetupHandlers(be: Backend): Handlers {
       be.host.emit('git.changed', {});
       return r;
     },
-    'git.allowedSecrets': () => readSecretsAllow(ws()),
   };
 }

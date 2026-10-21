@@ -6,7 +6,7 @@ import { TreeRowShell } from '../../components/TreeRowShell';
 import { buildNodeMenu, type NodeMenuCtx } from '../../lib/node-menu';
 import { deleteWithUndo } from '../../lib/undo-delete';
 import { asError, call } from '../../api';
-import { toastError, useApp } from '../../store';
+import { useApp, attempt } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { uid } from '../../lib/format';
 import { Badge, Button, Empty, Field, Input, PageHeader, Select, Split } from '../../components/ui';
@@ -35,14 +35,12 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
   }, [focus, p?.id]);
   const upd = (patch: Partial<ProviderConfig>) => setList(list.map((x) => (x.id === sel ? { ...x, ...patch } : x)));
   const save = async (next = list) => {
-    try {
+    await attempt(async () => {
       await call('ai.saveProviders', { providers: next.map(({ hasKey: _h, ...x }) => x), keys });
       setKeys({});
       onSaved();
       useApp.getState().toast('Providers saved. API keys are stored in the OS credential store.', 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const addProvider = () => {
     const id = uid('prov-');

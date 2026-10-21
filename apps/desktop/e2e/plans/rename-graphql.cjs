@@ -1,6 +1,6 @@
 // Rename a GraphQL request in place (menu, F2, tab): never the old dialog.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.offsetParent);
@@ -9,7 +9,7 @@ const H = `
   const dialog = () => !!document.querySelector('[role=dialog]');
   const editing = () => document.activeElement?.tagName === 'INPUT' && /name/i.test(document.activeElement.getAttribute('aria-label') ?? '') ? document.activeElement : null;
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   step('setup', `await __t.requests(); await __t.sleep(600); for (const t of ['GraphQL (public', 'GraphQL12', 'Countries3']) { await __t.expand(t); await __t.sleep(250); } return vis('aside button[data-tree-row]').filter((b) => /Country/.test(b.textContent)).map((b) => b.textContent.trim()).join(' / ');`),
   step('menu-rename', `row('Country by code').parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 })); await __t.sleep(600); [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim() === 'Rename').click(); await __t.sleep(700); const i = editing(); const r = 'dialog: ' + dialog() + ' | inline: ' + !!i; if (!i) return r; setVal(i, 'Country by code X'); key(i, 'Enter'); await __t.sleep(900); return r + ' | ' + (row('Country by code X')?.textContent.trim() ?? 'NOT RENAMED');`),

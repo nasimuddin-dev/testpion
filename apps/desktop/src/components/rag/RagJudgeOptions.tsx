@@ -1,7 +1,7 @@
 import { Plus, X } from 'lucide-react';
 import type { RagJudgeSetup } from '@testpion/shared';
 import type { ProviderConfig } from '../../types';
-import { Field, IconButton, Input, Select, Toggle } from '../ui';
+import { Field, IconButton, Input, Select, Toggle, NamedOptions } from '../ui';
 
 /** The judge panel of an evaluation: a jury, both document orders, repeats, short-circuit, shared claims, and the limits of the run. */
 export function RagJudgeOptions({
@@ -32,11 +32,7 @@ export function RagJudgeOptions({
             <div key={i} className="flex items-center gap-1 mb-1">
               <Select className="h-6 min-h-6 py-0 text-xs flex-1" aria-label={`Jury judge ${i + 1} provider`} value={j.provider ?? ''} onChange={(e) => set({ judges: judges.map((x, k) => (k === i ? { provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } : x)) })}>
                 <option value="">Choose a provider</option>
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <NamedOptions items={providers} />
               </Select>
               <Input className="h-6 min-h-6 text-xs mono flex-1" value={j.model ?? ''} placeholder="model" aria-label={`Jury judge ${i + 1} model`} onChange={(e) => set({ judges: judges.map((x, k) => (k === i ? { ...x, model: e.target.value || undefined } : x)) })} />
               <IconButton label="Remove this judge" onClick={() => set({ judges: judges.filter((_, k) => k !== i) })}>

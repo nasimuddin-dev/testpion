@@ -165,6 +165,19 @@ export function Select({ className, children, ...p }: SelectHTMLAttributes<HTMLS
   );
 }
 
+/** The options of a `Select` for things that have an id and a name (collections, providers, environments …). */
+export function NamedOptions({ items }: { items?: ReadonlyArray<{ id: string; name: string }> }) {
+  return (
+    <>
+      {items?.map((x) => (
+        <option key={x.id} value={x.id}>
+          {x.name}
+        </option>
+      ))}
+    </>
+  );
+}
+
 export function Field({ label, hint, children, className }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <label className={cx('flex flex-col gap-1.5 text-xs', className)}>

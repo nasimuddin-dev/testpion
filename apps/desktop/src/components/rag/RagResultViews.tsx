@@ -4,7 +4,7 @@ import type { MetricChange, MetricComparison, MetricMatrix, MetricPivot, RunEsti
 import type { RagJudgeSetup } from '@testpion/shared';
 import { asError, call } from '../../api';
 import { toastError } from '../../store';
-import { useDebounced } from '../ui';
+import { useDebounced, NamedOptions } from '../ui';
 import type { CheckConfig, ProviderConfig } from '../../types';
 import { ChartCard } from '../charts';
 import { Badge, Button, Callout, Empty, Field, Input, Modal, Select, Spinner, cx } from '../ui';
@@ -322,11 +322,7 @@ export function RagRescoreDialog({ runId, evaluators, evaluation, judge, provide
           <Field label="Judge">
             <Select value={j.provider ?? ''} onChange={(e) => setJ({ ...j, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })} aria-label="Judge provider">
               <option value="">The AI settings’ large model</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+              <NamedOptions items={providers} />
             </Select>
           </Field>
           <Field label="Model">

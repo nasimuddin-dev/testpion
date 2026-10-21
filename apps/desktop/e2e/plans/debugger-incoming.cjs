@@ -1,13 +1,13 @@
 // The Debugger's Incoming tab: a request a program sends to one of TestPion's mock servers is listed with the example
 // that answered, and opens in Request Details / Response Details (secrets masked), with Open and Ask AI only.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
   const tab = (name) => vis('main [role=tab]').find((t) => t.textContent.trim().startsWith(name));
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

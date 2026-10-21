@@ -1,6 +1,6 @@
 import type { AppSettings, ProviderConfig } from '../../types';
 import { useApp } from '../../store';
-import { Field, Input, LinkButton, Segmented, Select, Toggle } from '../ui';
+import { Field, Input, LinkButton, Segmented, Select, Toggle, NamedOptions } from '../ui';
 import { PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
 
 type AiSettings = NonNullable<AppSettings['ai']>;
@@ -25,11 +25,7 @@ export function AiSettingsPanel({ s, set, providers }: { s: AppSettings; set(p: 
             aria-label={`${label}: provider`}
           >
             <option value="">Same as the assistant</option>
-            {providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            <NamedOptions items={providers} />
           </Select>
           {t?.provider && (
             <Input

@@ -8,11 +8,9 @@
 // server only; no key is used.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readFileSync, writeFileSync } = require('node:fs');
-const { join, resolve } = require('node:path');
-const { pathToFileURL } = require('node:url');
-const { withExpect, step } = require('../lib.cjs');
+const { join } = require('node:path');
+const { withExpect, step, EDITOR_IN, setSelect, ensureRagServer } = require('../lib.cjs');
 
-const SERVER = resolve(__dirname, '..', '..', '..', '..', 'examples', 'servers', 'rag-server.mjs');
 const HTTP = 'http://127.0.0.1:4020';
 
 /** The mock judge's verdicts (what a model would answer), in the workspace's providers; the local RAG system on 4020/4021. */
@@ -26,13 +24,7 @@ async function prepare(ws) {
   doc.providers.push({ id: 'rag-mock-judge', name: 'RAG mock judge', kind: 'mock', baseUrl: 'mock://local', defaultModel: 'mock-model', headers: [{ key: 'x-mock-rules', value: JSON.stringify(rules) }] });
   writeFileSync(file, JSON.stringify(doc, null, 2));
   // started once per runner (the retry of a plan finds it up); one already up on the port is another runner's
-  if (globalThis.__e2eRagServer) return;
-  try {
-    const m = await import(pathToFileURL(SERVER).href);
-    globalThis.__e2eRagServer = await m.startRagServer({ port: 4020, grpcPort: 4021 });
-  } catch (e) {
-    if (e.code !== 'EADDRINUSE') throw e;
-  }
+  await ensureRagServer('__e2eRagServer', 4020, 4021);
 }
 
 const REQUEST = `type: http
@@ -43,7 +35,6 @@ headers:
 json:
   question: "{{question}}"
 `;
-const EDITOR_IN = (sel) => `(window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.closest(${JSON.stringify(sel)}))`;
 const key = (name) => `[...document.querySelectorAll('[data-rag-response] .syn-key')].find((b) => b.textContent.trim() === '"${name}"')`;
 const slot = (s) => `document.querySelector('[data-rag-slot="${s}"]')?.value`;
 /** Real clicks a key of the response tree, then the menu item that says what it is. */
@@ -52,7 +43,6 @@ const pick = (name, label) => `
   await __t.real.click(k);
   const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === '${label}'), 3000); if (!item) return 'NO MENU ITEM ${label}';
   await __t.real.click(item); await __t.sleep(500);`;
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 
 const steps = [
   step(

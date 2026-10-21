@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { FileCheck2 } from 'lucide-react';
 import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
-import { promptText, toastError, useApp } from '../store';
+import { promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig } from '../types';
 import type { MenuItem } from '../components/ui';
 import { openRef, refLabel } from './open-ref';
@@ -27,12 +27,10 @@ export function saveAsTestLabel(t: Pick<SaveTestTarget, never> & { ref?: ItemRef
 
 /** Run a saved test file now (the active environment; production asks first) and show the run. */
 export async function runTestFileNow(path: string): Promise<void> {
-  try {
+  await attempt(async () => {
     const r = await call<{ runId: string }>('tests.run', { paths: [path], environment: useApp.getState().environment, name: path });
     void openRef({ kind: 'run', runId: r.runId });
-  } catch (e) {
-    toastError(e);
-  }
+  });
 }
 
 /** Ask for the test's name, save it under tests/ and say where, with Run now and Open test file. Resolves to its path. */
@@ -56,21 +54,6 @@ export async function saveAsTest(target: SaveTestTarget): Promise<string | undef
     toastError(e);
     return undefined;
   }
-}
-
-/** The menu item, the same in every menu (its place: the test group, after run). `target` is read when it is chosen. */
-export function saveAsTestItem(target: SaveTestTarget | (() => SaveTestTarget | undefined), opts: { disabled?: boolean; separator?: boolean } = {}): MenuItem {
-  const peek = typeof target === 'function' ? undefined : target;
-  return {
-    label: saveAsTestLabel({ ref: peek && 'ref' in peek ? peek.ref : undefined }),
-    icon: createElement(FileCheck2, { size: 14 }),
-    disabled: opts.disabled,
-    separator: opts.separator,
-    onSelect: () => {
-      const t = typeof target === 'function' ? target() : target;
-      if (t) void saveAsTest(t);
-    },
-  };
 }
 
 /** The same item for an editor that saves what it holds itself (its tab menu, its breadcrumb ⋯). */

@@ -11,6 +11,8 @@
 - **Long lists come in pages** (`limit`, `cursor`, `truncated`, `total`): a run's results (`runs.results`: at most 1,000 a page), the flaky tests (new `flakyTestsPage`), and a search (`offset` in the query, `truncated` and `nextOffset` in the answer).
 - **A collection of more than 1,000 requests runs to the end** (the guard against a `setNextRequest` loop counted requests per iteration with a fixed limit of 1,000; it is now four times the collection's size, at least 1,000).
 - **Scans remember files.** The exposed flows (MCP tools list), the webhook flows and the spec gap analysis read a test file again only when its size or time changed; connection pools, OAuth tokens and test-set verifier state are bounded.
+### A lighter window
+- **Switching tabs redraws about half as much.** The highlight of the open item is read by the rows that show it, not by the whole Explorer, so a switch redraws the two rows whose highlight changes (20 switches over a 500-request workspace: 11,700 component renders before, 6,200 now). The Import dialog loads when you import, not at start (24 KB less on the start path).
 
 ### RAG follow-ups: judges, test sets, capture, calibration, authoring
 

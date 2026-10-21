@@ -8,7 +8,7 @@ import { LABEL } from '../lib/vocabulary';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
 import { asError, call } from '../api';
-import { persisted, toastError, useApp } from '../store';
+import { persisted, useApp, attempt } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { useDoc } from '../lib/docs';
 import { useSticky } from '../lib/sticky';
@@ -80,13 +80,11 @@ export function ApiDefinitionView() {
   const dirty = text !== saved;
   const save = async () => {
     if (!spec || !dirty) return;
-    try {
+    await attempt(async () => {
       await call('openapi.spec.save', { path: spec, text });
       setSaved(text);
       useApp.getState().toast(`Saved ${spec}`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   useSaveShortcut('apidef', () => void save());
 

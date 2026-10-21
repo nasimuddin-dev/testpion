@@ -1,6 +1,6 @@
 // Rename in place in the explorer: requests, folders and collections (F2, menu, Enter, Esc, click away, blank).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const row = (txt) => [...document.querySelectorAll('button[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().includes(txt));
@@ -8,7 +8,7 @@ const H = `
   const input = () => document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.closest('aside') ? document.activeElement : null;
   const names = (re) => [...document.querySelectorAll('button[data-tree-row]')].filter((b) => b.offsetParent && re.test(b.textContent)).map((b) => b.textContent.trim().replace(/^(GET|POST)/, '')).join(' / ');
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   step('setup', `await __t.requests(); await __t.sleep(500); for (const t of ['HTTP basics', 'REST17', 'Requests & responses10']) { await __t.expand(t); await __t.sleep(300); } return names(/Custom headers|Requests & responses|HTTP basics/);`),
   step('f2-request', `const r = row('Custom headers'); r.focus(); key(r, 'F2'); await __t.sleep(400); const i = input(); if (!i) return 'NO INPUT'; return 'input=' + JSON.stringify(i.value) + ' selected=' + (i.selectionStart === 0 && i.selectionEnd === i.value.length) + ' label=' + i.getAttribute('aria-label');`),

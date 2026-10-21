@@ -3,7 +3,7 @@
 // first (it then waits for it), a Delay block from the palette onto the connection between them (inserted), a folder
 // (its requests chained in order), one Undo for the whole folder; then the CLI runs the drag-built file as CI would.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
@@ -46,7 +46,7 @@ const H = `
   /** The middle of a connection, on screen. */
   const edgeMid = (key) => { const p = document.querySelector('[data-flow-designer] [data-flow-edge-hit="' + key + '"]'); if (!p) return null; const m = p.getPointAtLength(p.getTotalLength() / 2); const pt = new DOMPoint(m.x, m.y).matrixTransform(p.getScreenCTM()); return { x: pt.x, y: pt.y }; };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

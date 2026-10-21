@@ -1,7 +1,7 @@
 // One tab bar everywhere: a test file tab and a monitor tab have the same right-click menu as a request tab
 // (Rename, Close tab, Close other tabs, Close tabs to the right, Close all tabs), and the items do what they say. Every strip also has Reopen closed tab (WF-10).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -25,7 +25,7 @@ const H = `
     return 'density ' + document.documentElement.dataset.density + ' | tabs ' + all.length + ' | shown ' + shown.length + ' | hidden ' + hidden.length + ' | cut: ' + (cut.join(',') || 'none') + ' | drawn though hidden: ' + (drawn.join(',') || 'none') + ' | button: ' + (more ? more.getAttribute('aria-label') + ' = ' + more.textContent.trim() : 'none');
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

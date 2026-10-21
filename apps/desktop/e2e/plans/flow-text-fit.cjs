@@ -3,7 +3,7 @@
 // zooms out notch by notch to the farthest zoom and back in; at each level (mid-gesture, then settled) every text of every
 // step, frame title, lane label and the Start node lies inside its box (1 px tolerance), and nothing is drawn wider.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/text-fit.yaml';
 const LONG = 'https://api.example.com/v2/organisations/{{orgId}}/projects/{{projectId}}/environments/production/deployments?include=all';
@@ -52,7 +52,7 @@ const H = `
     return bad;
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

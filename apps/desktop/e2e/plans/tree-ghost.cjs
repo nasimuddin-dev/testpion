@@ -6,7 +6,7 @@
 // all of them for a small tree), no two rows share a place, and no row keeps a drop ring. Then the examples case: a
 // second copy of "Live streams (SSE)" (an older version's leftover) shows each of its requests once.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 const { copyFileSync, existsSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 
@@ -87,7 +87,7 @@ const H = `
     return n;
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

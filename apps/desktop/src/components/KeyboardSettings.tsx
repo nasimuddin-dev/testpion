@@ -5,7 +5,7 @@ import { downloadContent, pickTextFile } from '../lib/files';
 import { KEY_NAMES, saveBindings, useBindings } from '../lib/keybindings';
 import { bindingProblem, COMMANDS, comboKeys, comboLabel, comboOf, effectiveBindings, exportBindings, importBindings, shortcutGroups, type Combo } from '../lib/shortcuts';
 import { railItem, useRail } from '../lib/use-rail';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import { Button, cx, IconButton, Input, Kbd } from './ui';
 
 const DEFAULTS = effectiveBindings();
@@ -92,13 +92,11 @@ export function KeyboardSettings() {
           onClick={async () => {
             const f = await pickTextFile('.json,application/json');
             if (!f) return;
-            try {
+            await attempt(async () => {
               const r = importBindings(f.text, isMac);
               await saveBindings(effectiveBindings(r.bindings));
               useApp.getState().toast(`Key bindings imported${r.skipped.length ? `; skipped ${r.skipped.join('; ')}` : ''}`, r.skipped.length ? 'warning' : 'success');
-            } catch (e) {
-              toastError(e);
-            }
+            });
           }}
         >
           Import…

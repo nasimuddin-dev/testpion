@@ -8,7 +8,7 @@ import type { CheckConfig, ProviderConfig } from '../../types';
 import { AiEstimateLine, estimateText } from '../ai/AiEstimateLine';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { EvidenceList } from '../Results';
-import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, NamedOptions } from '../ui';
 
 type Source = 'probe' | 'type';
 
@@ -170,11 +170,7 @@ export function RagTryDialog({
                 <span className="text-xs text-muted">Judge</span>
                 <Select className="h-7 min-h-7 py-0 text-xs max-w-44" aria-label="Judge for this try" value={j.provider ?? ''} onChange={(e) => setJ({ provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })}>
                   <option value="">{judge?.provider ? 'The evaluation’s judge' : 'The AI settings’ large model'}</option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={providers} />
                 </Select>
               </>
             )}

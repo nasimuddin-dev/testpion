@@ -36,7 +36,7 @@ import {
   type OutputDeps,
   type Redactor,
 } from '@testpion/core';
-import { COPY_LIMIT, LAUNCHER_EXTENSIONS, OUTPUT_FORMATS, fileExtension, sanitizeFileName, type OutputFormatId, type OutputSource } from '@testpion/shared';
+import { COPY_LIMIT, LAUNCHER_EXTENSIONS, fileExtension, sanitizeFileName, type OutputFormatId, type OutputSource } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
 import { scaleRowsPage } from './flow-scale.js';
 
@@ -157,8 +157,6 @@ export function outputHandlers(be: Backend): Handlers {
   let seq = 0;
 
   return {
-    /** Formats and policies of every surface (for the CLI, MCP and the docs). */
-    'output.formats': () => ({ formats: OUTPUT_FORMATS }),
 
     'output.save': async (p: SaveParams) => {
       const { info, format, fmt } = checkOutput(p);

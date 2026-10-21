@@ -321,7 +321,6 @@ export function workspaceHandlers(be: Backend): Handlers {
     'trash.restore': ({ id }: { id: string }) => restoreFromTrash(be.ws, id),
     'trash.purge': ({ id }: { id?: string }) => purgeTrash(be.ws, id),
     'env.reorder': ({ ids }: { ids: string[] }) => be.ws.reorderEnvironments(ids),
-    'currentValues.summary': () => be.currentValues?.summary(),
     'currentValues.get': ({ scope, owner }: { scope: 'environment' | 'globals' | 'collectionVariables'; owner?: string }) => {
       const values = be.currentValues?.get(scope, owner ?? '') ?? {};
       // never send secret values to the UI: mask sensitive keys

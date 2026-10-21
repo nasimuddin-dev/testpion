@@ -10,7 +10,7 @@ import { toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
-import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea } from '../components/ui';
+import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
 import { OutputActions } from '../components/output/OutputFrame';
 import { diagnosticsOutputSpec } from '../components/output/diagnostics-specs';
 
@@ -524,11 +524,7 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
             <div className="grid grid-cols-2 gap-3 pl-6">
               <Field label="Provider">
                 <Select value={s.assistantProvider ?? ''} onChange={(e) => set({ assistantProvider: e.target.value, assistantModel: workspaceProviders.find((p) => p.id === e.target.value)?.defaultModel })}>
-                  {workspaceProviders.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={workspaceProviders} />
                 </Select>
               </Field>
               <Field label="Model">

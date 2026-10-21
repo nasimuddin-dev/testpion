@@ -4,7 +4,7 @@
 // the Editor tab shows the YAML the canvas wrote, Undo takes the last change back, and a Delay of 300 ms put between
 // the two steps runs and passes.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/designed-flow.yaml';
 const H = `
@@ -25,7 +25,7 @@ const H = `
   const selectId = async (id) => { const n = byId(id); if (!n) return null; n.dispatchEvent(new MouseEvent('click', { bubbles: true })); return __t.waitFor(() => document.querySelector('[data-step-inspector="' + id + '"]'), 3000); };
   const setUrl = async (url) => { const u = vis('[data-flow-inspector] input[aria-label="URL"]')[0]; if (!u) return false; u.focus(); setInput(u, url); u.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

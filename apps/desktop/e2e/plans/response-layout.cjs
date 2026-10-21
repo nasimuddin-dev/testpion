@@ -1,6 +1,6 @@
 // Response layout: Auto / Below / Side by side for every editor; switching keeps what you typed; tabs that do not fit stay reachable.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.offsetParent);
   // the request/response separator of the editor on screen: vertical separator = side by side
@@ -10,7 +10,7 @@ const H = `
   const urlText = () => url()?.value ?? '';
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   step('auto-default', `await __t.requests(); await __t.sleep(600); for (const t of ['HTTP basics', 'REST17', 'Requests & responses10']) { await __t.expand(t); await __t.sleep(200); } const r = vis('aside button[data-tree-row]').find((b) => b.textContent.includes('Custom headers')); r.click(); await __t.sleep(1500); const w = Math.round(document.querySelector('main').getBoundingClientRect().width); return 'button: ' + document.querySelector('[aria-label^="Response layout"]')?.getAttribute('aria-label') + ' | editor width ' + w + ' | REST separators: ' + layout();`),
   step('type-then-below', `setVal(url(), 'http://127.0.0.1:4010/health?keep=1'); await __t.sleep(400); await pick('Response below'); return 'REST: ' + layout() + ' | url kept: ' + urlText();`),

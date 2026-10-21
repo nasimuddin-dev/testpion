@@ -1,14 +1,14 @@
-import { Eye, Sparkles, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AiTaskResult, DriftReport, DriftSource, Proposal, ProposalFinding, ProposalItem } from '@testpion/core';
 import { asError, call } from '../../api';
-import { aiSetupAction } from '../../lib/ai-errors';
-import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
-import { toastError, useApp, type AiAnalysisRequest, type AssistantRequest } from '../../store';
+import { plural } from '../../lib/format';
+import { AiEstimateLine } from './AiEstimateLine';
+import { useApp, type AiAnalysisRequest, type AssistantRequest } from '../../store';
 import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, useDebounced } from '../ui';
-import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
+import { AiPreviewDialog, type AiPrivacy } from './AiPreviewDialog';
 import { Findings } from './Findings';
 import { ProposalReview } from './ProposalReview';
+import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiPrivacyRow, AiRunFooter, AiTitle, applyProposalItems, initialPrivacy, proposalReviewProps, skippedNote, useAiEstimate, useAiRun } from './ai-run';
 
 type Report = DriftReport & { spec: string; patchable: number };
 type Kind = 'history' | 'har' | 'run';
@@ -40,16 +40,13 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
   const [host, setHost] = useState('');
   const [har, setHar] = useState('');
   const [runId, setRunId] = useState('last');
-  const [privacy, setPrivacy] = useState<AiPrivacy>(useApp.getState().settings?.ai?.privacy ?? 'full');
+  const [privacy, setPrivacy] = useState<AiPrivacy>(initialPrivacy());
   const [hint, setHint] = useState('');
   const [report, setReport] = useState<Report>();
   const [reportError, setReportError] = useState<string>();
-  const [estimate, setEstimate] = useState<EstimateState>();
-  const [busy, setBusy] = useState<string>();
-  const [error, setError] = useState<ReturnType<typeof asError>>();
+  const { busy, error, run, stop } = useAiRun('dr');
   const [proposal, setProposal] = useState<Proposal>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
-  const runIdRef = useRef<string>(undefined);
 
   useEffect(() => {
     void call<string[]>('openapi.specs', {}).then((l) => {
@@ -81,114 +78,59 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
 
   const params = (extra: Record<string, unknown> = {}) => ({ spec, source, privacy, ...(hint.trim() ? { hint: hint.trim() } : {}), environment: env, ...extra });
   // the estimate before anything is sent (a dry run)
-  useEffect(() => {
-    setEstimate(undefined);
-    if (!report?.findings.length) return;
-    let live = true;
-    call<AiTaskResult>('ai.driftExplain', params({ dryRun: true })).then(
-      ({ preview: p }) =>
-        live &&
-        setEstimate(estimateOf(p)),
-      (e) => live && setEstimate({ ok: false, text: asError(e).message }),
-    );
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [report, privacy]);
+  const estimate = useAiEstimate(report?.findings.length ? () => call<AiTaskResult>('ai.driftExplain', params({ dryRun: true })) : undefined, [report, privacy], true);
 
-  const analyse = async (extra: { noAi?: boolean; hint?: string; privacy?: AiPrivacy } = {}) => {
-    if (busy || !report) return;
-    const id = `dr-${Date.now().toString(36)}`;
-    runIdRef.current = id;
-    setBusy(id);
-    setError(undefined);
-    try {
-      const r = await call<{ proposal?: Proposal; problems?: string[] }>('ai.driftExplain', params({ ...extra, requestId: id }));
-      if (runIdRef.current !== id) return;
-      if (!r.proposal) throw new Error(`The model proposed nothing usable${r.problems?.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint.`);
-      setProposal(r.proposal);
-    } catch (e) {
-      if (runIdRef.current !== id) return;
-      const err = asError(e);
-      if (!(err.kind === 'CancelledError' || /abort|cancel/i.test(err.message))) setError(err);
-    } finally {
-      if (runIdRef.current === id) setBusy(undefined);
-    }
-  };
-  const stop = () => {
-    if (busy) void call('ai.cancel', { id: busy }).catch(() => undefined);
-    runIdRef.current = undefined;
-    setBusy(undefined);
-  };
+  const analyse = (extra: { noAi?: boolean; hint?: string; privacy?: AiPrivacy } = {}) =>
+    report &&
+    run(
+      (id) => call<{ proposal?: Proposal; problems?: string[] }>('ai.driftExplain', params({ ...extra, requestId: id })),
+      (r) => {
+        if (!r.proposal) throw new Error(`The model proposed nothing usable${r.problems?.length ? `: ${r.problems.join('; ')}` : ''}. Try again with a hint.`);
+        setProposal(r.proposal);
+      },
+    );
 
   /** Accept: the ticked patches and checks through the workspace's writers (one Undo). */
   const accept = async (items: ProposalItem[]) => {
     if (!proposal) return;
-    try {
-      const r = await call<{ applied: unknown[]; skipped: Array<{ reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
-      await useApp.getState().refreshWorkspace();
-      useApp
-        .getState()
-        .toast(`Applied ${r.applied.length} ${r.applied.length === 1 ? 'change' : 'changes'}${r.skipped.length ? `; ${r.skipped.length} skipped: ${r.skipped[0]!.reason}` : ''}`, r.skipped.length ? 'info' : 'success', undefined, {
-          undo: () => call('ai.undoProposal', { id: proposal.id }).then(() => useApp.getState().refreshWorkspace()),
-        });
-      onClose();
-    } catch (e) {
-      toastError(e);
-    }
+    const r = await applyProposalItems<{ applied: unknown[]; skipped: Array<{ reason: string }> }>(proposal, items, (r) => `Applied ${plural(r.applied.length, 'change')}${skippedNote(r)}`);
+    if (r) onClose();
   };
 
   if (proposal)
     return (
       <ProposalReview
-        proposal={proposal}
+        {...proposalReviewProps(proposal, {
+          onClose,
+          reset: () => setProposal(undefined),
+          regenerate: (h) => {
+            setHint(h);
+            void analyse({ hint: h });
+          },
+        })}
         acceptLabel="Apply selected changes"
         onAccept={accept}
-        onRegenerate={(h) => {
-          void call('ai.discardProposal', { id: proposal.id }).catch(() => undefined);
-          setProposal(undefined);
-          setHint(h);
-          void analyse({ hint: h });
-        }}
-        onDiscard={() => void call('ai.discardProposal', { id: proposal.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError)}
-        onClose={onClose}
       />
     );
 
-  const setup = error ? aiSetupAction(error) : undefined;
+  const cancel = () => (stop(), onClose());
   return (
     <Modal
-      title={
-        <span className="flex items-center gap-2">
-          <Sparkles size={16} /> Check traffic against a spec with AI
-        </span>
-      }
-      onClose={() => (stop(), onClose())}
+      title={<AiTitle>Check traffic against a spec with AI</AiTitle>}
+      onClose={cancel}
       width={760}
       footer={
-        <>
-          <Button
-            variant="ghost"
-            icon={<Eye size={13} />}
-            className="mr-auto"
-            disabled={!!busy || !report?.findings.length}
-            onClick={() => setPreviewing({ task: 'contract-drift', title: 'Contract drift explained', context: { options: { source } }, item: { kind: 'spec', path: spec }, privacy })}
-            data-ai-preview-open
-          >
-            What will be sent…
-          </Button>
-          <Button onClick={() => (stop(), onClose())}>Cancel</Button>
-          {busy ? (
-            <Button icon={<Square size={12} />} onClick={stop}>
-              Stop
-            </Button>
-          ) : (
-            <Button variant="primary" icon={<Sparkles size={13} />} disabled={!report?.findings.length} onClick={() => void analyse()} data-ai-analyse>
-              Explain and fix
-            </Button>
-          )}
-        </>
+        <AiRunFooter
+          busy={!!busy}
+          previewDisabled={!report?.findings.length}
+          onPreview={() => setPreviewing({ task: 'contract-drift', title: 'Contract drift explained', context: { options: { source } }, item: { kind: 'spec', path: spec }, privacy })}
+          onCancel={cancel}
+          onStop={stop}
+        >
+          <AiPrimaryButton disabled={!report?.findings.length} onClick={() => void analyse()} data-ai-analyse="">
+            Explain and fix
+          </AiPrimaryButton>
+        </AiRunFooter>
       }
     >
       <div className="grid gap-3 text-sm" data-ai-analysis="drift">
@@ -256,37 +198,20 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
             </>
           )}
         </div>
-        <Field label="Hint (optional)">
-          <Input value={hint} onChange={(e) => setHint(e.target.value)} placeholder="e.g. the nickname field is new in v2" aria-label="Hint for the analysis" />
-        </Field>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-muted">Sent</span>
-          <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
-        </div>
+        <AiHintField value={hint} onChange={setHint} placeholder="e.g. the nickname field is new in v2" label="Hint for the analysis" />
+        <AiPrivacyRow value={privacy} onChange={setPrivacy} />
         <AiEstimateLine estimate={report?.findings.length ? estimate : undefined} waiting={!!report?.findings.length} data-ai-analysis-estimate="" />
         <p className="text-xs text-muted">
           The comparison above is TestPion’s own: nothing is sent for it. The model sees the findings (kind, operation, place, what the document says, what was seen, how often) and the schemas involved — not the traffic; example values only at the Full
           level, masked. Every patch is made by TestPion from what was observed and checked against the same traffic: the drift must be gone and no other may appear. Nothing changes before you accept it.
         </p>
-        {busy && (
-          <div className="flex items-center gap-2 text-muted" role="status">
-            <Spinner /> Explaining the drift and checking the fixes…
-          </div>
-        )}
+        {busy && <AiBusyLine>Explaining the drift and checking the fixes…</AiBusyLine>}
         {error && (
-          <Callout tone="bad" block role="alert" data-ai-analysis-error>
-            <span>{error.message}</span>
-            <div className="flex gap-2 flex-wrap">
-              {setup && (
-                <Button size="sm" variant="primary" onClick={() => (onClose(), setup.onClick())} data-ai-setup>
-                  {setup.label}
-                </Button>
-              )}
-              <Button size="sm" onClick={() => void analyse({ noAi: true })} data-drift-draft>
-                Use the patches TestPion makes without AI
-              </Button>
-            </div>
-          </Callout>
+          <AiErrorPanel error={error} onClose={onClose} data-ai-analysis-error="">
+            <Button size="sm" onClick={() => void analyse({ noAi: true })} data-drift-draft>
+              Use the patches TestPion makes without AI
+            </Button>
+          </AiErrorPanel>
         )}
       </div>
       {previewing && (

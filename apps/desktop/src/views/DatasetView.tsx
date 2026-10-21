@@ -3,7 +3,7 @@ import { refMenu } from '../components/RefLink';
 import { Copy, Database, Play, Save } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
-import { persisted, toastError, useApp } from '../store';
+import { persisted, useApp, attempt } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { useDoc } from '../lib/docs';
 import { useSticky } from '../lib/sticky';
@@ -104,14 +104,12 @@ export function DatasetView() {
 
   const save = async () => {
     if (!name || !dirty) return;
-    try {
+    await attempt(async () => {
       await call('datasets.write', { name, text });
       setSaved(text);
       useApp.getState().toast(`Saved datasets/${name}`, 'success');
       await loadPreview(name, query);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   useSaveShortcut('dataset', () => void save());
 

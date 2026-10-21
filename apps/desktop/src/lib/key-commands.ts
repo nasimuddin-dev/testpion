@@ -58,12 +58,6 @@ const RUN: Record<string, () => void | false> = {
   shortcuts: () => useApp.getState().set({ shortcutsOpen: true }),
 };
 
-/** Run a command by id (the palette, a menu); false when it did nothing. */
-export function runKeyCommand(id: string): boolean {
-  const run = RUN[id];
-  return !!run && run() !== false;
-}
-
 /** Keys typed into a field are text, not shortcuts. */
 export const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.closest('.monaco-editor'));
 

@@ -2,7 +2,7 @@ import { ExternalLink, KeyRound, ShieldAlert, ShieldCheck, X } from 'lucide-reac
 import { useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { openRef } from '../lib/open-ref';
 import { plural } from '../lib/format';
 import { Button, Callout } from './ui';
@@ -58,15 +58,13 @@ export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findin
       okLabel: 'Allow',
     });
     if (!reason?.trim()) return;
-    try {
+    await attempt(async () => {
       await call('git.allowSecret', { finding: { file: f.file, item: f.item, field: f.field, hash: f.hash }, reason: reason.trim() });
       const scan = await call<{ blocking: StagedSecret[]; confirm: StagedSecret[] }>('git.stagedScan');
       const left = [...scan.blocking, ...scan.confirm];
       onChange(left.length ? left : undefined);
       useApp.getState().toast('Allowed: commit .testpion/secrets-allow.json with your changes so the team sees why', 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const anyway = async () => {
     if (await confirmAction({ title: 'Commit probable secrets', message: `${plural(findings.length, 'value')} look like secrets. Commit anyway?`, detail: findings.map((f) => `${f.item}: ${f.field}`).join('\n'), confirmLabel: 'Commit anyway', danger: true })) onCommitAnyway();

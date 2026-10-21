@@ -1,6 +1,6 @@
 // The ✕ on a tab closes it, in every view that has tabs (a real mouse click, not a middle click or the menu).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const strip = (label) => [...document.querySelectorAll('[role=tablist][aria-label="' + label + '"] [role=tab]')];
@@ -28,7 +28,7 @@ const H = `
     return 'tabs ' + before + ' → ' + afterOne + ', one left: ' + n1 + ' → ' + strip(label).length + ' | ' + (document.body.innerText.match(/No open [a-z ]+/)?.[0] ?? 'no empty state');
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step('evaluations', `await __t.view('Evaluations'); await __t.sleep(900); return await twoThenNone('Open evaluations', 'New evaluation');`),

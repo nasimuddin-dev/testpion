@@ -5,7 +5,7 @@
 // (answered by E2E_STUB_SAVE) received: each file is checked for its format and for what must not be in it.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { join } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const DEMO = 'http://127.0.0.1:4010';
 const LEAK = 'sk-e2e-leak-0123456789abcdef';
@@ -47,7 +47,7 @@ const H = `
     return items ?? [];
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 /** A step in the main process: the file the stubbed Save-as dialog got. */
 const file = (name, check) => [
   name,

@@ -3,7 +3,7 @@
 // its frames (no long task, no frame over 50 ms while the progress toast updates) and its heap does not grow by the body.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { join } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -11,7 +11,7 @@ const H = `
   const dl = () => vis('[data-output-download="response.body"]')[0];
   const toasts = () => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim());
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

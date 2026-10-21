@@ -44,6 +44,8 @@ const DOM = dom();
 const step = (name, body, shot, { extra = '', ...opts } = {}) => [name, `(async () => { ${dom(opts)} ${extra} ${body} })()`, shot];
 /** `step` with fixed options, for a plan that wants its own helpers or a different `short` length in every step. */
 const stepWith = (opts) => (name, body, shot) => step(name, body, shot, opts);
+/** A step builder for a plan that keeps its helpers in one string `H`: `const step = stepOf(H);` (the helpers are defined in the page before the body). */
+const stepOf = (H) => (name, body) => [name, `(async () => { ${H} ${body} })()`];
 
 /** The Debugger's captured exchanges, oldest first (the list call answers an array). */
 // every exchange of the session (the RPC pages to the newest 200 by default)
@@ -84,4 +86,27 @@ const OPEN_RECENTLY_DELETED = `
   };
 `;
 
-module.exports = { withExpect, allUnder, DOM, step, stepWith, EXCHANGES, waitRunning, run, curl, powershell, closeByCommandLine, mainMemory, OPEN_RECENTLY_DELETED };
+/* ------------------------------------------------------------------ RAG plans */
+
+/** The Monaco editor inside the element `sel` matches (page code, an expression). */
+const EDITOR_IN = (sel) => `(window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.closest(${JSON.stringify(sel)}))`;
+/** Chooses the option of a <select> (the expression `el`) whose text starts with `text` (page code, for a step body). */
+const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
+
+/**
+ * Starts the example RAG server (examples/servers/rag-server.mjs) once per runner under `key` (the retry of a plan finds it
+ * up); one already up on the port belongs to another runner.
+ */
+async function ensureRagServer(key, port, grpcPort) {
+  if (globalThis[key]) return;
+  try {
+    const { resolve } = require('node:path');
+    const { pathToFileURL } = require('node:url');
+    const m = await import(pathToFileURL(resolve(__dirname, '..', '..', '..', 'examples', 'servers', 'rag-server.mjs')).href);
+    globalThis[key] = await m.startRagServer({ port, grpcPort });
+  } catch (e) {
+    if (e.code !== 'EADDRINUSE') throw e;
+  }
+}
+
+module.exports = { withExpect, allUnder, DOM, step, stepWith, stepOf, EXCHANGES, waitRunning, run, curl, powershell, closeByCommandLine, mainMemory, OPEN_RECENTLY_DELETED, EDITOR_IN, setSelect, ensureRagServer };

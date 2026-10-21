@@ -2,7 +2,7 @@ import { CodeBlock } from './CodeBlock';
 import { Check, Copy, Download, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { selectEnvironments, toastError, useApp } from '../store';
+import { selectEnvironments, useApp, attempt } from '../store';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
 import { useCollectionTree } from '../lib/collections-store';
@@ -126,11 +126,9 @@ export function CiDialog() {
 
   const copy = () => (cfg ? copyToClipboard(cfg.content) : undefined);
   const save = async () => {
-    try {
+    await attempt(async () => {
       finishSave(await call<SaveResult>('ci.save', options()), 'Pipeline');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   return (

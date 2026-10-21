@@ -2,7 +2,7 @@ import { Check, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { RagLabel } from '@testpion/core';
 import { call } from '../../api';
-import { toastError } from '../../store';
+import { attempt } from '../../store';
 import { cx } from '../ui';
 
 /**
@@ -20,14 +20,12 @@ export function RagLabelControl({ runId, resultId, metric, onChanged }: { runId:
   }, [runId, resultId, metric]);
   useEffect(load, [load]);
   const set = async (label: 'pass' | 'fail') => {
-    try {
+    await attempt(async () => {
       if (mine === label) await call('rag.label.clear', { run: runId, result: resultId, metric });
       else await call('rag.label.set', { run: runId, result: resultId, metric, label });
       setMine(mine === label ? undefined : label);
       onChanged?.();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const btn = (label: 'pass' | 'fail') => (
     <button

@@ -1,6 +1,6 @@
 // Rename saved examples in place; F2 on a test file opens its path dialog.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const { readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 /** Two saved examples on "Custom headers" (the examples workspace has none). */
@@ -16,7 +16,7 @@ const H = `
   const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.offsetParent);
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   // F2 on a test file renames it in place (its name, in its folder); the tab's Rename takes a path in a dialog
   step('tests-f2-in-place', `await __t.view('Tests'); await __t.sleep(800); const r = vis('[data-tree-row]').find((b) => b.textContent.trim().endsWith('httpbin.yaml')); r.focus(); key(r, 'F2'); await __t.sleep(700); const i = document.activeElement; const field = i?.tagName === 'INPUT' && i.getAttribute('aria-label') === 'File name'; const v = i?.value; const dialog = !!document.querySelector('[role=dialog]'); key(i, 'Escape'); await __t.sleep(500); return 'in place: ' + field + ' value=' + v + ' | dialog: ' + dialog + ' | still there: ' + vis('[data-tree-row]').some((b) => b.textContent.trim().endsWith('httpbin.yaml'));`),

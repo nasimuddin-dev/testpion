@@ -1,7 +1,7 @@
 // A flow as an MCP tool: Tests ▸ file menu ▸ Expose as MCP tool… writes the expose: block (name, description, inputs)
 // into the YAML, Settings ▸ AI agents lists the flow, and Stop exposing removes the block again.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -15,7 +15,7 @@ const H = `
   const dlgButton = (label) => [...document.querySelectorAll('[role=dialog] button')].filter((b) => b.textContent.trim() === label).pop();
   const openExposeDialog = async (name) => { if (!(await openMenu(name))) return false; menuItem('Expose as MCP tool…')?.click(); return !!(await __t.waitFor(() => dlgInput('Tool name'), 3000)); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { HardDrive, Trash2 } from 'lucide-react';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, toastError, useApp, attempt } from '../store';
 import { formatBytes, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, StatTile } from './charts';
 import { Button, Input } from './ui';
@@ -26,13 +26,11 @@ export function StoragePanel() {
   const deleteOld = async () => {
     const n = Math.max(1, Number(days) || 30);
     if (!(await confirmAction({ title: 'Delete older runs', message: `Delete runs that started more than ${plural(n, 'day')} ago?`, detail: 'Their results and reports are removed; baselines and monitor history stay.', confirmLabel: 'Delete runs', danger: true }))) return;
-    try {
+    await attempt(async () => {
       const r = await call<{ deleted: number; bytes: number }>('storage.deleteRunsBefore', { days: n });
       useApp.getState().toast(r.deleted ? `Deleted ${plural(r.deleted, 'run')} (${formatBytes(r.bytes)})` : 'No runs that old', 'success');
       load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const clearHistory = async () => {
     if (!(await confirmAction({ title: 'Clear history', message: 'Delete the whole request history of this workspace?', detail: 'Saved response bodies go too. Collections, tests and runs are kept.', confirmLabel: 'Clear history', danger: true }))) return;

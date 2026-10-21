@@ -56,6 +56,12 @@ module.exports = async function run(win) {
     await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined);
     // real mouse and keys for steps (__t.real, see real-input.cjs): events that go through hit-testing like a user's
     await require('./real-input.cjs').install(win).catch(() => undefined);
+    // E2E_RENDER_COUNT=1: window.__renders counts component renders (see render-count.cjs); the hook must exist before React loads, so the page loads again
+    if (process.env.E2E_RENDER_COUNT) {
+      await win.webContents.debugger.sendCommand('Page.enable');
+      await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: require('./render-count.cjs').HOOK });
+      win.webContents.reloadIgnoringCache();
+    }
   } catch {
     // another debugger is attached (DevTools): console errors still count
   }

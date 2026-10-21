@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FlowStep } from '@testpion/shared';
 import { call, on } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import type { TestResult } from '../types';
 import type { FlowMark } from './FlowDiagram';
 import type { FlowPause, FlowRunRow } from './FlowDebugParts';
@@ -139,28 +139,22 @@ export function useDesignerRun(file: string, steps: FlowStep[], runId: string | 
   };
   const toggleBreakpoint = (id: string) => setBreakpoints(state.breakpoints.includes(id) ? state.breakpoints.filter((x) => x !== id) : [...state.breakpoints, id]);
   const pin = async (s: FlowStep) => {
-    try {
+    await attempt(async () => {
       setState(await call<DesignerState>('tests.flowPin', { file, stepId: s.id }));
       useApp.getState().toast(`"${s.name}" is pinned: runs from the designer use its response instead of calling the API`, 'info', { ref: { kind: 'flow', path: file, step: s.id }, label: 'Show the step' });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const unpin = async (s: FlowStep) => {
-    try {
+    await attempt(async () => {
       setState(await call<DesignerState>('tests.flowUnpin', { file, stepId: s.id }));
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const resume = async (action: 'continue' | 'step' | 'stop', vars: Record<string, unknown>) => {
     if (!pause) return;
-    try {
+    await attempt(async () => {
       await call('runs.resume', { runId: pause.runId, action, vars });
       setPause(undefined);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   return { liveRun, state, historyOpen, setHistoryOpen, runs, viewRun, setViewRun, showRun, pause, viewed, shownSteps, marks, begin, resultOf, toggleBreakpoint, pin, unpin, resume };
 }

@@ -2,7 +2,7 @@
 // turns its values into Filter Out / Capture Only rules (with hits); the Highlight Rule editor colours by a condition;
 // Timeline, Summary and Structure read the selection; Convert decodes; the grid has the dense columns and totals.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -14,7 +14,7 @@ const H = `
   const menuItem = (re) => vis('[role=menuitem]').find((m) => re.test(m.textContent.trim()));
   const hover = (el) => { el?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' })); el?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true, pointerType: 'mouse' })); el?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

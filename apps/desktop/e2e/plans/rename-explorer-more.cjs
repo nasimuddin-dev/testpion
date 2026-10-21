@@ -1,6 +1,6 @@
 // Rename in place: MCP servers, their folders and saved gRPC calls in a collection.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const row = (txt) => [...document.querySelectorAll('button[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().includes(txt));
@@ -11,7 +11,7 @@ const H = `
   const menuRename = async (txt, label) => { const r = row(txt); r.parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 })); await __t.sleep(600); [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim() === label)?.click(); await __t.sleep(700); return input(); };
   const type = async (i, v, k = 'Enter') => { setVal(i, v); key(i, k); await __t.sleep(800); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   step('setup', `await __t.requests(); await __t.sleep(500); await __t.expand('MCP servers'); await __t.expand('gRPC (grpcb.in)'); await __t.sleep(300); await __t.expand('gRPC3'); await __t.sleep(300); await __t.expand('grpcb.in3'); await __t.sleep(400); return names(/DeepWiki|Public servers|Add two numbers|Petstore MCP/);`),
   step('server-f2', `const i = await f2('DeepWiki'); if (!i) return 'NO INPUT'; const sel = i.selectionStart === 0 && i.selectionEnd === i.value.length; await type(i, 'DeepWiki 2'); return 'selected=' + sel + ' | ' + names(/DeepWiki/) + ' | focus: ' + document.activeElement?.textContent?.trim().slice(0, 20);`),

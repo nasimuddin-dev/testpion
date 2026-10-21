@@ -1,9 +1,11 @@
 import { Eye, FileText, Sparkles, Square } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Proposal, ProposalItem, RunEstimate, TestsetType } from '@testpion/core';
 import { asError, call, on } from '../../api';
 import { aiSetupAction } from '../../lib/ai-errors';
-import { toastError, useApp, type AssistantRequest } from '../../store';
+import { plural } from '../../lib/format';
+import { applyProposalItems, discardProposal, skippedNote, useAiRun } from '../ai/ai-run';
+import { useApp, type AssistantRequest } from '../../store';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { ProposalReview } from '../ai/ProposalReview';
 import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, Textarea, cx, useDebounced } from '../ui';
@@ -41,12 +43,10 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
   const [embedder, setEmbedder] = useState('');
   const [estimate, setEstimate] = useState<RunEstimate & { corpus?: { documents: number; passages: number; skipped: string[] } }>();
   const [estimateError, setEstimateError] = useState<string>();
-  const [busy, setBusy] = useState<string>();
+  const { busy, error, run, stop, current: runRef } = useAiRun('ts');
   const [progress, setProgress] = useState<string>();
-  const [error, setError] = useState<ReturnType<typeof asError>>();
   const [proposal, setProposal] = useState<Proposal>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
-  const runRef = useRef<string>(undefined);
 
   useEffect(() => {
     void call<Sources>('rag.testset.sources').then(setSrc, () => setSrc({ files: [], folders: [], types: [] }));
@@ -90,58 +90,23 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
   const toggleType = (t: TestsetType) => setTypes((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
   const toggleStyle = (t: string) => setStyles((s) => (s.includes(t) ? s.filter((x) => x !== t) : [...s, t]));
 
-  const generate = async () => {
+  const generate = () => {
     if (busy || !ready) return;
-    const id = `ts-${Date.now().toString(36)}`;
-    runRef.current = id;
-    setBusy(id);
-    setError(undefined);
     setProgress('Reading the documents …');
-    try {
-      const r = await call<{ proposal: Proposal }>('rag.testset.generate', { ...params, requestId: id, environment: env });
-      if (runRef.current !== id) return;
-      setProposal(r.proposal);
-    } catch (e) {
-      if (runRef.current !== id) return;
-      const err = asError(e);
-      if (!(err.kind === 'CancelledError' || /abort|cancel/i.test(err.message))) setError(err);
-    } finally {
-      if (runRef.current === id) setBusy(undefined);
-    }
-  };
-  const stop = () => {
-    if (busy) void call('ai.cancel', { id: busy }).catch(() => undefined);
-    runRef.current = undefined;
-    setBusy(undefined);
+    void run((id) => call<{ proposal: Proposal }>('rag.testset.generate', { ...params, requestId: id, environment: env }), (r) => setProposal(r.proposal));
   };
 
   /** Add to dataset: the ticked rows are appended to the dataset file through the workspace's writers (one Undo). */
   const accept = async (items: ProposalItem[]) => {
     if (!proposal) return;
-    try {
-      const r = await call<{ applied: unknown[]; skipped: Array<{ reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
-      await useApp.getState().refreshWorkspace();
-      const dataset = (proposal.items[0]?.data as { dataset?: string } | undefined)?.dataset ?? 'the dataset';
-      useApp.getState().toast(`Added ${r.applied.length} ${r.applied.length === 1 ? 'question' : 'questions'} to ${dataset}${r.skipped.length ? `; ${r.skipped.length} skipped: ${r.skipped[0]!.reason}` : ''}`, r.skipped.length ? 'info' : 'success', undefined, {
-        undo: () => call('ai.undoProposal', { id: proposal.id }).then(() => useApp.getState().refreshWorkspace()),
-      });
-      onDone?.(dataset);
-      onClose();
-    } catch (e) {
-      toastError(e);
-    }
+    const dataset = (proposal.items[0]?.data as { dataset?: string } | undefined)?.dataset ?? 'the dataset';
+    const r = await applyProposalItems<{ applied: unknown[]; skipped: Array<{ reason: string }> }>(proposal, items, (r) => `Added ${plural(r.applied.length, 'question')} to ${dataset}${skippedNote(r)}`);
+    if (!r) return;
+    onDone?.(dataset);
+    onClose();
   };
 
-  if (proposal)
-    return (
-      <ProposalReview
-        proposal={proposal}
-        acceptLabel="Add to dataset"
-        onAccept={accept}
-        onDiscard={() => void call('ai.discardProposal', { id: proposal.id }).then(() => (useApp.getState().toast('Proposal discarded', 'info'), onClose()), toastError)}
-        onClose={onClose}
-      />
-    );
+  if (proposal) return <ProposalReview proposal={proposal} acceptLabel="Add to dataset" onAccept={accept} onDiscard={() => discardProposal(proposal.id, onClose)} onClose={onClose} />;
 
   const setup = error ? aiSetupAction(error) : undefined;
   const over = (estimate?.caps.exceeds.length ?? 0) > 0;

@@ -5,11 +5,9 @@
 // Offline: the mock provider and a local server only; no key is used.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readFileSync, writeFileSync, mkdirSync, existsSync } = require('node:fs');
-const { join, resolve } = require('node:path');
-const { pathToFileURL } = require('node:url');
-const { withExpect, step } = require('../lib.cjs');
+const { join } = require('node:path');
+const { withExpect, step, EDITOR_IN, setSelect, ensureRagServer } = require('../lib.cjs');
 
-const SERVER = resolve(__dirname, '..', '..', '..', '..', 'examples', 'servers', 'rag-server.mjs');
 const HTTP = 'http://127.0.0.1:4022';
 let WS = '';
 
@@ -29,17 +27,9 @@ async function prepare(ws) {
     join(ws, 'library', 'rag-targets.json'),
     JSON.stringify({ schemaVersion: '1.0', folders: [], items: [{ id: 'rag-clinic', name: 'Clinic bot', data: { protocol: 'http', step: { type: 'http', method: 'POST', url: `${HTTP}/query`, headers: { 'Content-Type': 'application/json' }, json: { question: '{{question}}' } }, mapping: { answer: '$.answer', contexts: '$.sources[*]', context: { text: '$.text', id: '$.id', score: '$.score' } } } }] }, null, 2),
   );
-  if (globalThis.__e2eRagServer2) return;
-  try {
-    const m = await import(pathToFileURL(SERVER).href);
-    globalThis.__e2eRagServer2 = await m.startRagServer({ port: 4022, grpcPort: 4023 });
-  } catch (e) {
-    if (e.code !== 'EADDRINUSE') throw e;
-  }
+  await ensureRagServer('__e2eRagServer2', 4022, 4023);
 }
 
-const EDITOR_IN = (sel) => `(window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.closest(${JSON.stringify(sel)}))`;
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 const runButton = `vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim()))`;
 const label = (metric, v) => `document.querySelector('[data-rag-label="${metric}|${v}"]')`;
 const close = `const cl = vis('[role=dialog] button').filter((x) => x.textContent.trim() === 'Close'); for (const b of cl.reverse()) { await __t.real.click(b); await __t.sleep(300); }`;

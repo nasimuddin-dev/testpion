@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CalibrationReport, MetricCalibration } from '@testpion/core';
 import { outputFileName } from '@testpion/shared';
 import { call } from '../../api';
-import { toastError, useApp } from '../../store';
+import { useApp, attempt } from '../../store';
 import { Badge, Button, Callout, Modal, Spinner } from '../ui';
 import type { OutputSpec } from '../output/output-core';
 import { OutputActions } from '../output/OutputFrame';
@@ -49,17 +49,15 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
   const [made, setMade] = useState<string[]>([]);
   /** "Make an example of this": the sample you labelled becomes an example of the metric's file, with your verdict as what the metric must say. */
   const makeExample = async (resultId: string, expect: 'pass' | 'fail') => {
-    try {
+    await attempt(async () => {
       const r = await call<{ file: string; examples: number }>('rag.calibrate.example', { metric: m.metric, run, result: resultId, expect });
       setMade((x) => [...x, resultId]);
       useApp.getState().toast(`Added to ${r.file} (${r.examples} example${r.examples === 1 ? '' : 's'})`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const canApply = !!tuned && m.metric !== 'overall' && (custom || !!evaluation);
   const apply = async () => {
-    try {
+    await attempt(async () => {
       const r = await call<{ changed: string; threshold: number }>('rag.calibrate.apply', {
         metric: m.metric,
         threshold: tuned!.threshold,
@@ -68,9 +66,7 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
       });
       useApp.getState().toast(`Pass mark ${r.threshold} saved in ${r.changed}`, 'success');
       onApplied();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   return (
     <section className="border border-line rounded-lg p-3 grid gap-2" data-rag-calibration-metric={m.metric}>

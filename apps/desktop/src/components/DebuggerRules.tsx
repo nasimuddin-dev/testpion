@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Play, Scale, Trash2, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { confirmAction, promptText, toastError } from '../store';
+import { confirmAction, promptText, toastError, attempt } from '../store';
 import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
 
@@ -88,11 +88,9 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
     void call<typeof presets>('debug.rulePresets', { host }).then(setPresets, () => undefined);
   }, [host]);
   const act = async (method: string, params: unknown) => {
-    try {
+    await attempt(async () => {
       onChange(await call<RulesState>(method, params));
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const profileItems: MenuItem[] = [
     {

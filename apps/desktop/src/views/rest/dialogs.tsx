@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
-import { Button, Field, Input, Modal, Select } from '../../components/ui';
+import { Button, Field, Input, Modal, Select, NamedOptions } from '../../components/ui';
 
 /**
  * The one "save into a collection" dialog: name, collection (or a new one) and folder. Every saved request
@@ -84,11 +84,7 @@ export function SaveModal({
               <Input className="flex-1" value={newCollection} placeholder="Collection name" onChange={(e) => setNewCollection(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
             ) : (
               <Select className="flex-1" value={cid} onChange={(e) => (setCid(e.target.value), setFolder(''))}>
-                {collections.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
+                <NamedOptions items={collections} />
               </Select>
             )}
             {creating ? (
@@ -102,11 +98,7 @@ export function SaveModal({
           <Field label="Folder">
             <Select value={folder} onChange={(e) => setFolder(e.target.value)}>
               <option value="">(collection root)</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
+              <NamedOptions items={folders} />
             </Select>
           </Field>
         )}

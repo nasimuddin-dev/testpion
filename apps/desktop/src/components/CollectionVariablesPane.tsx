@@ -2,7 +2,7 @@ import { Copy, ExternalLink, Save } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree, type CollectionOutline } from '../lib/collections-store';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, toastError, useApp, attempt } from '../store';
 import { openRef } from '../lib/open-ref';
 import type { Collection, KeyValue } from '../types';
 import { KeyValueEditor } from './KeyValueEditor';
@@ -62,13 +62,11 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
   };
   const save = async () => {
     if (!current) return;
-    try {
+    await attempt(async () => {
       await call('col.save', { ...current, variables: rows });
       setSaved(JSON.stringify(rows));
       useApp.getState().toast(`Saved the variables of "${current.name}"`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   /** Collection variables apply only to its requests: copy them into the active environment to use them anywhere. */
@@ -89,13 +87,11 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
       tone: 'question',
     });
     if (!ok) return;
-    try {
+    await attempt(async () => {
       await call('env.save', { env: { ...env, variables: [...env.variables, ...add.map((r) => ({ key: r.key, value: r.value, enabled: r.enabled !== false }))] } });
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast(`Copied ${plural(add.length, 'variable')} to "${name}"`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   if (!cols.length)

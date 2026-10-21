@@ -1,7 +1,7 @@
 // Favorites: ⋯ ▸ Add to favorites stars the request (saved in its collection) and lists it in the explorer's Favorites
 // section, from where it opens; Remove from favorites takes it out again.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const rows = () => [...document.querySelectorAll('aside [data-tree-row]')].filter((b) => b.offsetParent);
@@ -10,7 +10,7 @@ const H = `
   const favRows = () => rows().filter((b) => (b.getAttribute('data-rename-id') ?? '').includes('fav-'));
   const menuOf = async (row) => { row.parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 300 })); return await __t.waitFor(() => { const m = [...document.querySelectorAll('[role=menuitem]')]; return m.length ? m : undefined; }, 2000); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

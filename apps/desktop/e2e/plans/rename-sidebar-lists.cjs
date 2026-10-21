@@ -1,6 +1,6 @@
 // Rename in place in the sidebar lists (Monitors, AI Lab prompts and their folders); Enter opens a row.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const visible = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.offsetParent);
@@ -11,7 +11,7 @@ const H = `
   const f2 = async (txt) => { const r = row(txt); if (!r) return null; r.focus(); key(r, 'F2'); await __t.sleep(400); return input(); };
   const type = async (i, v, k = 'Enter') => { setVal(i, v); key(i, k); await __t.sleep(900); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   step('monitors', `await __t.view('Monitors'); await __t.sleep(800); return names(/./);`),
   step('monitor-f2', `const i = await f2('Public APIs health'); if (!i) return 'NO INPUT'; await type(i, 'API health X'); return names(/health/) + ' | focus on: ' + (document.activeElement?.getAttribute('data-row-name') ?? '');`),

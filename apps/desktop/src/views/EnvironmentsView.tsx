@@ -1,10 +1,11 @@
+import { envColor } from '../components/EnvSelect';
 import { Plus, ArrowLeftRight, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGitRepo } from '../lib/git';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
-import { persisted, promptText, toastError, useApp } from '../store';
+import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import { useLibraryTabs } from '../lib/library-tabs';
 import { LibraryTabStrip } from '../components/LibraryTabStrip';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
@@ -44,12 +45,10 @@ export function EnvironmentsView() {
   /** Export the selected environment (secret values are never exported). */
   const exportEnv = async (format: 'postman' | 'dotenv') => {
     if (!draft) return;
-    try {
+    await attempt(async () => {
       const r = await call<SaveResult & { name: string }>('env.export', { id: draft.id, format });
       if (deliverSave(r) && r.path) useApp.getState().toast(`Exported to ${r.path} (secret values are left out)`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const tabs = useLibraryTabs<Environment | null>('environments', envDrafts, { canBeEmpty: true });
   const sel = tabs.active.savedId;
@@ -215,7 +214,7 @@ export function EnvironmentsView() {
   const rows: KeyValue[] = (draft?.variables ?? []).map((v) => ({ ...v, value: v.secret ? secretValues[v.key] ?? '' : v.value }));
   const save = async () => {
     if (!draft) return;
-    try {
+    await attempt(async () => {
       // secret values go to the OS credential store; only the key is written to the workspace file
       const variables = rows.map((r) => ({ key: r.key, value: r.secret ? '' : r.value, secret: r.secret, enabled: r.enabled }));
       const secrets = Object.fromEntries(rows.filter((r) => r.secret && r.value).map((r) => [r.key, r.value]));
@@ -234,9 +233,7 @@ export function EnvironmentsView() {
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast('Environment saved', 'success');
       if (missingElsewhere.length && envs.some((e) => e.id !== draft.id)) setAlsoFor({ from: draft.id, keys: missingElsewhere });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   return (
     <div className="h-full flex flex-col">
@@ -316,7 +313,7 @@ export function EnvironmentsView() {
                     }}
                     className={cx('pl-3 cursor-grab active:cursor-grabbing', dragId === e.id && 'opacity-50')}
                   >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
                     <span className="truncate">{String(e.name)}</span>
                     {e.isProduction && <Badge tone="bad">prod</Badge>}
                     {e.problem ? (

@@ -4,7 +4,7 @@
 // Sub-flow running another file with an input, and the flow's Output. Run flow: the taken branch passes, the other is
 // skipped, the loop shows × 3; the Editor tab shows the YAML the canvas wrote.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/blocks-flow.yaml';
 const CHILD = 'rest/child-flow.yaml';
@@ -30,7 +30,7 @@ const H = `
   };
   const setUrl = async (url) => { const u = vis('[data-flow-inspector] input[aria-label="URL"]')[0]; if (!u) return false; u.focus(); setInput(u, url); u.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

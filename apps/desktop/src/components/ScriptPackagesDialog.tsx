@@ -1,7 +1,7 @@
 import { Package, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, useApp, attempt } from '../store';
 import { CodeEditor } from './CodeEditor';
 import { Button, cx, Empty, Modal } from './ui';
 
@@ -36,14 +36,12 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
   const dirty = !!sel && code !== saved;
   const save = async () => {
     if (!sel) return;
-    try {
+    await attempt(async () => {
       await call('packages.save', { name: sel, code });
       setSaved(code);
       await reload();
       useApp.getState().toast(`Saved package ${sel}`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const create = async () => {
     const name = (await promptText('New script package', { message: 'Name, e.g. utils or @team/auth', okLabel: 'Create' }))?.trim();

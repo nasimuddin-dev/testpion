@@ -1,7 +1,7 @@
 // With more tabs than fit, the active tab is always fully in view: after "Open" from a row's menu, and after
 // choosing another tab (the strip scrolls only as far as needed).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const strip = () => document.querySelector('[role=tablist][aria-label="Open requests"]');
@@ -14,7 +14,7 @@ const H = `
   };
   const filter = async (v) => { const f = document.querySelector('aside input[placeholder^="Filter"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(700); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

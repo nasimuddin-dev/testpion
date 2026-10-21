@@ -6,7 +6,7 @@
 // the JSON tree toolbar never scrolled sideways (the clipped "Expand all").
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { join } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const DEMO = 'http://127.0.0.1:4010';
 const TEST_FILE = 'e2e-output.yaml';
@@ -84,7 +84,7 @@ const H = `
     return (await __t.waitFor(() => { const b = dl('response.body'); return b && !b.disabled && b.closest('[data-output-actions]') !== old ? true : null; }, 15000)) ? 'ok' : 'NO RESPONSE';
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 /** A step in the main process: the file the stubbed Save-as dialog got. */
 const file = (name, check) => [
   name,

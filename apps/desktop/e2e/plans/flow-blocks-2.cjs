@@ -4,7 +4,7 @@
 // (drawn in the Finally lane). Run flow: every step passes, the poll shows its tries, and the Editor tab shows the YAML
 // the canvas wrote.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/blocks2-flow.yaml';
 const START = [
@@ -49,7 +49,7 @@ const H = `
     return !!(await until(async () => (await fileText()).includes(url), 5000));
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

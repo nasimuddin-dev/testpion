@@ -8,7 +8,7 @@
 const { spawn } = require('node:child_process');
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { dirname, join, resolve } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const N = 5000;
 const V = 10;
@@ -76,7 +76,7 @@ const H = `
   const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   const R = __t.real;
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

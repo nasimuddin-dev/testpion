@@ -8,6 +8,28 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beginJournal, listJournal, runGit } from '@testpion/core';
+import type { Backend } from '../backend.js';
+
+/**
+ * What every git handler group shares: the workspace folder, `rewritten` (after git or an item operation rewrote workspace
+ * files: reload and tell the views, without the "changed outside TestPion" notice, since the user asked for it) and `changed`
+ * (the answer of an operation that only changed git's state).
+ */
+export function gitHelpers(be: Backend) {
+  const ws = () => be.ws.root;
+  const rewritten = async <T>(op: () => Promise<T> | T): Promise<T> => {
+    try {
+      return await op();
+    } finally {
+      be.adoptDiskState(); // the files were written for the app: they are its own changes, not outside ones
+      be.ws.reloadWorkspaceFile();
+      be.host.emit('data.changed', { method: 'git' });
+      be.host.emit('git.changed', {});
+    }
+  };
+  const changed = <T>(r: T): T => (be.host.emit('git.changed', {}), r);
+  return { ws, rewritten, changed };
+}
 
 const STAGES = 'index-stages';
 const isFile = (ws: string, rel: string) => {

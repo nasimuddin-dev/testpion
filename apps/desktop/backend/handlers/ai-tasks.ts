@@ -2,7 +2,7 @@
  * RPC handlers of the AI task runner (packages/core/src/ai/tasks): the window's AI actions call these, the same
  * runner the CLI (`testpion ai …`) and the MCP server (`ai_*` tools) use. The window never builds prompts itself.
  */
-import { aiUsageSummary, applyProposal, askSearch, OP_LABEL, runQuerySpec, SEARCH_FIELDS, SEARCH_SOURCES, SOURCE_LABEL, discardProposal, draftFlowProposal, getProposal, listAiTasks, listProposals, reverifyProposal, undoProposal, AI_PRIVACY_LEVELS, type ItemRef, type Proposal, type ReverifyOptions } from '@testpion/core';
+import { aiUsageSummary, applyProposal, askSearch, OP_LABEL, runQuerySpec, SEARCH_FIELDS, SEARCH_SOURCES, SOURCE_LABEL, discardProposal, draftFlowProposal, getProposal, listProposals, reverifyProposal, undoProposal, type ItemRef, type Proposal, type ReverifyOptions } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 /**
@@ -20,8 +20,6 @@ function announceLibraryItems(be: Backend, id: string): void {
 
 export function aiTaskHandlers(be: Backend): Handlers {
   return {
-    /** The tasks (id, title, tier, output, whether they propose changes). */
-    'ai.tasks': () => ({ tasks: listAiTasks(), privacyLevels: AI_PRIVACY_LEVELS }),
     /** Run a task: an answer and, for generating tasks, a verified proposal (nothing is applied). */
     'ai.runTask': (p: Parameters<Backend['assistant']>[0]) => be.assistant({ ...p, dryRun: false }),
     /** "What will be sent": the messages, sections, token and cost estimate and the masks, without sending. */

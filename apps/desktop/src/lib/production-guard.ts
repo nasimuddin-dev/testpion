@@ -67,11 +67,6 @@ function declined(a: ProductionAsk): Error {
   });
 }
 
-/** Forget the session's "don't ask again" answers (tests; a workspace switch keeps them per workspace anyway). */
-export function resetProductionAnswers(): void {
-  allowedThisSession.clear();
-}
-
 setCallRecovery(async (e, _method, params) => {
   const a = productionAskOf(e);
   // a call that already carried consent and was refused again is not asked about twice

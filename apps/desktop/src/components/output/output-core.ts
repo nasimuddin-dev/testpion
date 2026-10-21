@@ -1,7 +1,7 @@
 import { toast as sonner } from 'sonner';
 import { OUTPUT_FORMATS, CLIENT_OUTPUT_LIMIT, COPY_LIMIT, PROGRESS_THRESHOLD, bytesToBase64, formatBytes, outputSurface, type OutputFormatId, type OutputSource, type OutputSurfaceId } from '@testpion/shared';
 import { call, on } from '../../api';
-import { confirmAction, toastError, useApp } from '../../store';
+import { confirmAction, toastError, useApp, attempt } from '../../store';
 import { downloadContent } from '../../lib/files';
 
 /**
@@ -155,7 +155,7 @@ export async function saveWithSecrets(spec: OutputSpec, f: OutputFormatSpec, key
 
 /** Copy a format's text (built and redacted like a save): what the Copy beside the down arrow does. */
 export async function copyOutput(spec: OutputSpec, f: OutputFormatSpec): Promise<void> {
-  try {
+  await attempt(async () => {
     const info = outputSurface(spec.id);
     let text: string;
     let redacted = false;
@@ -172,9 +172,7 @@ export async function copyOutput(spec: OutputSpec, f: OutputFormatSpec): Promise
     if (text.length > COPY_LIMIT) throw new Error(`Too large to copy (${formatBytes(text.length)}): download it instead`);
     await navigator.clipboard.writeText(text);
     useApp.getState().toast(`Copied the ${spec.what} as ${formatLabel(f)}${redacted ? ' (secrets masked)' : ''}`, 'success');
-  } catch (e) {
-    toastError(e);
-  }
+  });
 }
 
 /* ------------------------------------------------------------------ Ctrl+Shift+S: the output where you are */

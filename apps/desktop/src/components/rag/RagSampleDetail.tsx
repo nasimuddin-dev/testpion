@@ -2,7 +2,7 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { TrySample, Trace } from '@testpion/core';
 import { call } from '../../api';
-import { toastError } from '../../store';
+import { attempt } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
 import type { CheckResult, TestResult } from '../../types';
 import { CheckList } from '../Results';
@@ -56,12 +56,10 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
   // the claims the focused metric judged, each with the document its evidence names
   const claims = itemsOf(focused).filter((i) => !(sample?.contexts ?? []).some((c) => c.id === i.text));
   const review = async (rating: 'good' | 'bad') => {
-    try {
+    await attempt(async () => {
       await call('runs.review', { runId, resultId, rating });
       setMark(rating);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   return (
     <>

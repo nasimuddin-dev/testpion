@@ -6,11 +6,9 @@
 // a sample and a regression gate. Offline: the mock provider and a local server only; no key is used.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs');
-const { join, resolve } = require('node:path');
-const { pathToFileURL } = require('node:url');
-const { withExpect, step } = require('../lib.cjs');
+const { join } = require('node:path');
+const { withExpect, step, EDITOR_IN, setSelect, ensureRagServer } = require('../lib.cjs');
 
-const SERVER = resolve(__dirname, '..', '..', '..', '..', 'examples', 'servers', 'rag-server.mjs');
 const HTTP = 'http://127.0.0.1:4024';
 
 async function prepare(ws) {
@@ -34,17 +32,9 @@ async function prepare(ws) {
     join(ws, 'library', 'evaluations.json'),
     JSON.stringify({ schemaVersion: '1.0', folders: [], items: [{ id: 'ev-nightly', name: 'Clinic nightly', data: { name: 'Clinic nightly', type: 'rag', provider: '', model: '', prompt: '', format: 'text', datasetFormat: 'jsonl', dataset, expectedField: 'expected', evaluators: [{ type: 'token-f1', threshold: 0.3 }], concurrency: 2, retries: 0, target: 'Clinic bot' } }] }, null, 2),
   );
-  if (globalThis.__e2eRagServer3) return;
-  try {
-    const m = await import(pathToFileURL(SERVER).href);
-    globalThis.__e2eRagServer3 = await m.startRagServer({ port: 4024, grpcPort: 4025 });
-  } catch (e) {
-    if (e.code !== 'EADDRINUSE') throw e;
-  }
+  await ensureRagServer('__e2eRagServer3', 4024, 4025);
 }
 
-const EDITOR_IN = (sel) => `(window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.closest(${JSON.stringify(sel)}))`;
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 const runButton = `vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim()))`;
 const runOnce = (n) => `await __t.real.click(${runButton});
      const d = await __t.waitFor(() => document.querySelector('[data-rag-estimate-run]'), 10000); if (!d) return 'NO DIALOG';

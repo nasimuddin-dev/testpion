@@ -6,9 +6,8 @@
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
-const { withExpect, step } = require('../lib.cjs');
+const { withExpect, step, setSelect } = require('../lib.cjs');
 
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 
 const DOC = [
   'Happy Paws is a veterinary clinic. The clinic opens at 8am on weekdays and closes at 6pm. On Saturdays it opens at 9am and closes at noon.',

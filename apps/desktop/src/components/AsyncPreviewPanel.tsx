@@ -1,9 +1,8 @@
 import { CodeBlock } from './CodeBlock';
 import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
 import { useState } from 'react';
-import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
 import { Badge, Button, Empty } from './ui';
+import { generateTestsFromDefinition } from '../lib/spec-tests';
 
 import { refOfWorkspacePath } from '@testpion/shared';
 interface Message {
@@ -89,28 +88,12 @@ function ChannelRow({ c }: { c: Channel }) {
 export function AsyncPreviewPanel({ outline, error, spec }: { outline?: AsyncOutline; error?: string; spec: string }) {
   if (error) return <Empty title="Couldn't read the document">{error}</Empty>;
   if (!outline) return <Empty title="Reading the document…" />;
-  const generate = async () => {
-    const ok = await confirmAction({
-      title: 'Generate tests from this definition?',
-      message:
-        'A realtime test per channel: its example message sent through the broker or server and read back, checked against this document. The suite runs with the servers environment its import made. Test files that exist are kept.',
-      confirmLabel: 'Generate tests',
+  const generate = () =>
+    generateTestsFromDefinition(spec, {
+      message: 'A realtime test per channel: its example message sent through the broker or server and read back, checked against this document. The suite runs with the servers environment its import made. Test files that exist are kept.',
+      summary: (r, n) => `${r.written.length} files, ${n} tests: review the example messages, then run the suite`,
+      onWritten: (r) => ({ ref: refOfWorkspacePath(r.written[0]!.path) ?? { kind: 'test', path: r.written[0]!.path } }),
     });
-    if (!ok) return;
-    try {
-      const r = await call<{ written: Array<{ path: string; tests: number }>; skipped: string[] }>('openapi.generateTests', { path: spec });
-      const n = r.written.reduce((k, f) => k + f.tests, 0);
-      useApp
-        .getState()
-        .toast(
-          r.written.length ? `${r.written.length} files, ${n} tests: review the example messages, then run the suite` : `Every file exists already: ${r.skipped.join(', ')}`,
-          r.written.length ? 'success' : 'warning',
-          r.written.length ? { ref: refOfWorkspacePath(r.written[0]!.path) ?? { kind: 'test', path: r.written[0]!.path } } : undefined,
-        );
-    } catch (e) {
-      toastError(e);
-    }
-  };
   return (
     <div className="h-full overflow-auto" data-async-preview>
       <div className="px-3 py-3 border-b border-line grid gap-1">

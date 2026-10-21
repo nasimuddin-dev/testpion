@@ -1,10 +1,10 @@
 import { CodeBlock } from './CodeBlock';
 import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, Workflow } from 'lucide-react';
 import { useState } from 'react';
-import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
 import { Badge, Button, Empty, Menu } from './ui';
+import { generateTestsFromDefinition } from '../lib/spec-tests';
 import { generateFlows } from '../lib/files';
 
 interface OutlineOperation {
@@ -119,29 +119,12 @@ function Operation({ op }: { op: OutlineOperation }) {
 
 /** An API definition as its readers see it: the operations by tag, each with its parameters, body and responses, and Open as request. */
 /** Write the first test suite from the definition: a file per tag, each operation's example and one invalid request. */
-export async function generateSpecTests(spec: string) {
-  const ok = await confirmAction({
-    title: 'Generate tests from this definition?',
+export const generateSpecTests = (spec: string) =>
+  generateTestsFromDefinition(spec, {
     message: `A test file per tag under tests/, with each operation's example (its documented status, the OpenAPI contract, latency) and one invalid request that must get a 4xx, and a suite that runs them. Test files that exist are kept.`,
-    confirmLabel: 'Generate tests',
+    summary: (r, n) => `${r.written.length} files, ${n} tests${r.skipped.length ? ` (${r.skipped.length} kept as they were)` : ''}: review the example values, then run the suite`,
+    onWritten: () => ({ label: 'Open Tests', onClick: () => useApp.getState().setView('tests') }),
   });
-  if (!ok) return;
-  try {
-    const r = await call<{ written: Array<{ path: string; tests: number }>; skipped: string[] }>('openapi.generateTests', { path: spec });
-    const n = r.written.reduce((k, f) => k + f.tests, 0);
-    useApp
-      .getState()
-      .toast(
-        r.written.length
-          ? `${r.written.length} files, ${n} tests${r.skipped.length ? ` (${r.skipped.length} kept as they were)` : ''}: review the example values, then run the suite`
-          : `Every file exists already: ${r.skipped.join(', ')}`,
-        r.written.length ? 'success' : 'warning',
-        r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
-      );
-  } catch (e) {
-    toastError(e);
-  }
-}
 
 export function ApiPreviewPanel({ outline, error, spec }: { outline?: ApiOutline; error?: string; spec?: string }) {
   if (error) return <Empty title="Couldn't read the document">{error}</Empty>;

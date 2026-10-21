@@ -1,7 +1,7 @@
 // Environments ▸ every variable scope: Collection variables (every collection's, editable here), Workspace and Global
 // variables, each explaining itself, and an empty one pointing to where imported variables are.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   // the scope tabs (not the open environments' tab strip below them)
@@ -9,7 +9,7 @@ const H = `
   const tab = async (label) => { const t = tabs().find((x) => x.textContent.trim().startsWith(label)); if (!t) return false; t.click(); await __t.sleep(800); return true; };
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step('tabs', `await __t.view('Environments'); await __t.sleep(1000); return tabs().map((t) => t.textContent.trim()).join(' / ');`),

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePublishRequest } from '../lib/request-variables';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
 import { openRef, reportIfGone } from '../lib/open-ref';
 import type { CheckConfig, Collection, CollectionNode, HttpRequestSpec, KeyValue, SavedExample, SavedHttpRequest, SseEvent } from '../types';
@@ -421,7 +421,7 @@ export function RestView() {
     }
     const name = await promptText('Save as example', { value: `${res.status} ${res.statusText}`.trim(), okLabel: 'Save', message: 'Sensitive headers and values are masked before the example is saved to the collection.' });
     if (!name?.trim()) return;
-    try {
+    await attempt(async () => {
       const body = tab.request.body && 'content' in tab.request.body ? tab.request.body.content : undefined;
       const ex = await call<SavedExample>('col.addExample', {
         collectionId: tab.collectionId,
@@ -433,9 +433,7 @@ export function RestView() {
       });
       setExamples([...(tab.examples ?? []), ex]);
       useApp.getState().toast(`Saved example "${ex.name}"`, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   /** Natural language → a proposed request, reviewed, then opened as a new unsaved tab (nothing is sent until Send). */

@@ -1,7 +1,7 @@
 // A saved request always belongs to a collection: the sidebar has no "Not in a collection"; a new WebSocket tab's
 // Save opens the same collection dialog as a REST request, and saving puts the connection under that collection.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -9,7 +9,7 @@ const H = `
   const dialog = () => document.querySelector('[role=dialog]');
   const aside = () => document.querySelector('aside[aria-label="Collections explorer"]');
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step('no-loose-section', `await __t.requests(); await __t.sleep(400); return 'not in a collection: ' + (aside()?.innerText ?? '').includes('Not in a collection');`),

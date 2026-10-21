@@ -3,10 +3,8 @@
 // metrics/<id>.yaml, and the metric is in the picker of a RAG evaluation like any other. The matrix views of a run (By tag, Charts,
 // Compare, Runs × metrics, the export arrow) and "Score again…" are in the rag-evaluation plans. Offline: a rule metric needs no model.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, step } = require('../lib.cjs');
+const { withExpect, step, EDITOR_IN, setSelect } = require('../lib.cjs');
 
-const EDITOR_IN = (sel) => `(window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.closest(${JSON.stringify(sel)}))`;
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 
 const FILE = [
   'id: no-guarantee',
