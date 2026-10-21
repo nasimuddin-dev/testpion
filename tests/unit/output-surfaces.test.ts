@@ -33,14 +33,8 @@ const shared = (f: string) => f.startsWith('components/output/') || f === 'lib/f
  * private save of an output is not allowed here.)
  */
 const ALLOWED: Record<string, string> = {
-  'components/ExportDialogBody.tsx': 'definition: collection / environment / workspace export dialog',
   // B-22: Export… of any item or section as a TestPion bundle (the backend's saveOrDownload, then finishSave)
   'components/ExportBundleDialog.tsx': 'definition: export of items as a bundle',
-  // 0.50: every Export workspace entry (workspace menu, app menu, Collections, Export dialog) goes through this helper
-  'lib/workspace-export.ts': 'definition: the shared workspace export (.testpion.json bundle)',
-  'menu-commands.ts': 'definition: File ▸ Export (environment, workspace)',
-  'views/CollectionsView.tsx': 'definition: collection / workspace export',
-  'views/EnvironmentsView.tsx': 'definition: environment export',
   'components/KeyboardSettings.tsx': 'definition: key bindings export',
   'components/CiDialog.tsx': 'definition: a CI pipeline file',
   'components/FeedbackDialog.tsx': 'definition: a feedback report',
