@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
-import { KIND_INFO, baseKind, gitFolderKey, gitMarksOf, gitRefKey, gitSectionKey, itemRefKey, liveKinds, type KindId } from '@testpion/shared';
+import { COLLECTION_CALL_LIBRARIES, KIND_INFO, baseKind, collectionCallKind, gitFolderKey, gitMarksOf, gitRefKey, gitSectionKey, itemRefKey, liveKinds, type KindId } from '@testpion/shared';
 import { KIND_ICONS } from '../../apps/desktop/src/components/KindIcon';
 
 /**
@@ -144,6 +144,8 @@ describe('every row of a versioned kind says what it is for git', () => {
         drawn.add(base);
         if (base === 'test') drawn.add('flow');
       }
+    // the saved calls and connections under a collection are drawn by one row component from the group's `kind` (a computed kind)
+    if (/git=\{\{ folder: r\.g\.kind/.test(readFileSync(join(src, 'components/CollectionTreeRows.tsx'), 'utf8'))) for (const lib of COLLECTION_CALL_LIBRARIES) drawn.add(collectionCallKind(lib));
     // kinds the window lists as no row of their own: a proto is opened from its gRPC call, a mock from its MCP server, the Debugger rules
     // are a panel, the workspace file is Environments ▸ Workspace variables, a package is edited in Settings. Their change is a row of
     // the Git view (kind icon, name, Compare, History, Restore, Discard, Stage), which the gap-matrix test (git-kind-matrix) checks.

@@ -6,8 +6,9 @@
  */
 import { SecretStripper } from '../storage/bundle-secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { itemKey, type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
+import { type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
 import { fingerprint, type Listed, type Target } from './items.js';
+import { cachedReads } from './read-cache.js';
 import { adapter } from './registry.js';
 
 export type ImportChoice = 'keep-both' | 'replace' | 'skip';
@@ -49,7 +50,9 @@ export interface ImportPreview {
 /** The id and name of the counterpart, for display. */
 const asTarget = (l: Listed): Target => ({ id: l.id, name: l.name });
 
-export function previewImport(store: WorkspaceStore, bundle: ParsedBundle): ImportPreview {
+export function previewImport(realStore: WorkspaceStore, bundle: ParsedBundle): ImportPreview {
+  // a preview only reads: each library, environment list and collection is read once for all the items that ask for it
+  const store = cachedReads(realStore);
   const lists = new Map<BundleKindId, Listed[]>();
   const listOf = (k: BundleKindId): Listed[] => {
     let l = lists.get(k);
@@ -119,6 +122,3 @@ export function previewImport(store: WorkspaceStore, bundle: ParsedBundle): Impo
     missing: m.missing,
   };
 }
-
-/** The key a decision is given under: `kind:id`. */
-export const previewKey = (i: Pick<PreviewItem, 'kind' | 'id'>): string => itemKey(i.kind, i.id);

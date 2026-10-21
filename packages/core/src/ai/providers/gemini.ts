@@ -3,7 +3,7 @@ import type { ChatMessage, ChatRequest, ChatResponse, LlmProvider, ToolCall } fr
 import { configuredHeaders, doFetch, postJson, sseEvents, StreamTimer } from '../http.js';
 import type { Redactor } from '../../util/redact.js';
 
-type GeminiPart = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: { name: string; response: unknown } };
+type GeminiPart = { text?: string; inlineData?: { mimeType: string; data: string }; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: { name: string; response: unknown } };
 type GeminiResponse = {
   candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
@@ -50,7 +50,7 @@ export class GeminiProvider implements LlmProvider {
         if (m.content) parts.push({ text: m.content });
         for (const t of m.toolCalls ?? []) parts.push({ functionCall: { name: t.name, args: t.arguments } });
         contents.push({ role: 'model', parts });
-      } else contents.push({ role: 'user', parts: [{ text: m.content }] });
+      } else contents.push({ role: 'user', parts: [{ text: m.content }, ...(m.images ?? []).map((i) => ({ inlineData: { mimeType: i.mime, data: i.data } }))] });
     }
     return { system, contents };
   }

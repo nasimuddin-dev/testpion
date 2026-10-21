@@ -37,7 +37,29 @@ const INPUT_NAME: Record<string, string> = {
   latency: 'the latency',
   scores: 'retrieval scores',
   relevance: 'a "relevance" column',
+  images: 'pictures (an image chunk, or an "images" column)',
+  turns: 'a conversation (a "turns" column)',
+  referenceTopics: 'a "reference_topics" column',
+  expectedOutcome: 'an "expected_outcome" column',
+  shouldRefuse: 'a "should_refuse" column',
+  otherAnswer: 'a "baseline_answer" column',
 };
+
+/** The decision-tree control of a metric: always, only when, or only unless another metric of the sample has a result like this ("faithfulness < 0.8"). */
+function RouteControl({ check, onChange }: { check: CheckConfig; onChange(p: Record<string, unknown>): void }) {
+  const mode = check.when !== undefined ? 'when' : check.unless !== undefined ? 'unless' : 'always';
+  const text = String(check.when ?? check.unless ?? '');
+  return (
+    <label className="flex items-center gap-1" title="A decision tree: run this metric only when (or only unless) another metric of the same sample gave a result like “faithfulness < 0.8”. A metric that is not run costs nothing and is n/a in the matrix." data-rag-route>
+      <Select className="h-6 min-h-6 py-0 text-xs" value={mode} aria-label="When to run this metric" onChange={(ev) => onChange(ev.target.value === 'always' ? { when: undefined, unless: undefined } : ev.target.value === 'when' ? { when: text || 'faithfulness < 0.8', unless: undefined } : { unless: text || 'faithfulness < 0.8', when: undefined })}>
+        <option value="always">always run</option>
+        <option value="when">run only when</option>
+        <option value="unless">run only unless</option>
+      </Select>
+      {mode !== 'always' && <Input className="h-6 min-h-6 w-44 text-xs mono" value={text} placeholder="faithfulness < 0.8" aria-label="Condition on another metric" onChange={(ev) => onChange({ [mode]: ev.target.value })} data-rag-route-condition />}
+    </label>
+  );
+}
 
 /** A second instance of a metric with options: the next k (5 more), or the next mode not used yet, named so its column is its own. */
 function variantOf(r: Row, used: CheckConfig[]): Record<string, unknown> {
@@ -53,6 +75,20 @@ function variantOf(r: Row, used: CheckConfig[]): Record<string, unknown> {
     return { mode: next, name: next === mode.default ? undefined : `${r.id} (${next})` };
   }
   return {};
+}
+
+/** An option typed as text: valid JSON ([…] or {…}) is kept as the value it describes (a rubric, a tree, a list), anything else as text (a list is “a; b”). */
+function textOption(text: string): unknown {
+  if (text === '') return undefined;
+  const t = text.trim();
+  if (/^[[{]/.test(t) && /[\]}]$/.test(t)) {
+    try {
+      return JSON.parse(t);
+    } catch {
+      /* still being typed */
+    }
+  }
+  return text;
 }
 
 const optionValue = (e: CheckConfig, key: string, dflt: unknown) => (e[key] === undefined ? dflt : e[key]);
@@ -234,8 +270,15 @@ export function MetricPicker({
                                 </label>
                               ) : o.type === 'boolean' ? (
                                 <Toggle key={key} checked={optionValue(e, key, o.default) === true} onChange={(v) => patch(i, { [key]: v })} title={o.description} label={key} />
-                              ) : null,
+                              ) : (
+                                <label key={key} className="flex items-center gap-1" title={o.description} data-rag-option={key}>
+                                  {key}
+                                  {o.required && <span className="text-bad" aria-hidden="true">*</span>}
+                                  <Input className={cx('h-6 min-h-6 w-48 text-xs', o.required && !String(e[key] ?? '').trim() && 'border-warn')} value={e[key] === undefined ? '' : typeof e[key] === 'string' ? (e[key] as string) : JSON.stringify(e[key])} placeholder={o.description.length > 60 ? `${o.description.slice(0, 58)}…` : o.description} onChange={(ev) => patch(i, { [key]: textOption(ev.target.value) })} aria-label={`${r.name} ${key}${o.required ? ' (required)' : ''}`} />
+                                </label>
+                              ),
                             )}
+                            <RouteControl check={e} onChange={(p) => patch(i, p)} />
                             {r.options && (
                               <IconButton label={`Add another ${r.name}`} onClick={() => add(r, variantOf(r, evaluators.filter((_, k) => idx.includes(k))))}>
                                 <Plus size={12} />

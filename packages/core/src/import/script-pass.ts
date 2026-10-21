@@ -1,9 +1,28 @@
 import type { CollectionNode, HttpSettings } from '../model/types.js';
-import { convertScript, type ScriptTool } from '../scripts/convert/index.js';
+import { convertScript, type ScriptResult, type ScriptTool } from '../scripts/convert/index.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
 import type { ImportDocument, ImportFinding } from './model.js';
 
 type Holder = { name?: string; preRequestScript?: string; testScript?: string; items?: CollectionNode[]; kind?: string; settings?: HttpSettings; request?: { settings?: HttpSettings } };
+
+/**
+ * Conversions already made, by tool, alias and code. A conversion depends on nothing else, and a big collection repeats the
+ * same snippets thousands of times (the same status check in every request), so each distinct script is parsed once. The
+ * results are read-only. Bounded by the size of the code held: past the budget the memory is dropped and starts again.
+ */
+const converted = new Map<string, ScriptResult>();
+let convertedChars = 0;
+const CONVERTED_CHARS = 8_000_000;
+function convertOnce(code: string, tool: ScriptTool, alias: 'tp' | 'pm'): ScriptResult {
+  const key = `${tool}\0${alias}\0${code}`;
+  const known = converted.get(key);
+  if (known) return known;
+  const r = convertScript(code, tool, { alias });
+  if (convertedChars + key.length > CONVERTED_CHARS) (converted.clear(), (convertedChars = 0));
+  converted.set(key, r);
+  convertedChars += key.length;
+  return r;
+}
 
 const INSOMNIA_HEADER = (alias: string) => `// Insomnia script: insomnia.* runs as ${alias}.* (the same API)\n`;
 
@@ -27,7 +46,7 @@ export function convertDocumentScripts(doc: ImportDocument, mode: ImportScriptsM
     // Postman's scripts stay on pm.* with --keep-pm; Insomnia's become pm.* then; Bruno's always become tp.*
     if (tool === 'postman' && mode === 'keep') return code;
     const alias = tool === 'insomnia' && mode === 'keep' ? 'pm' : 'tp';
-    const r = convertScript(code, tool, { alias });
+    const r = convertOnce(code, tool, alias);
     // constants the script set on the request (req.setTimeout) are the request's settings now
     if (r.lifts && holder) {
       if (holder.kind === 'http' && holder.request) holder.request.settings = { ...holder.request.settings, ...r.lifts };

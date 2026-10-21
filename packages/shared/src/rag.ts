@@ -10,6 +10,8 @@ export interface RagFieldPaths {
   id?: string;
   score?: string;
   source?: string;
+  /** Where an image of the context is (a URL, a data URI or a file path): planning §4j. */
+  image?: string;
 }
 
 /**
@@ -27,6 +29,12 @@ export interface RagMapping {
   usage?: { input?: string; output?: string; total?: string };
   /** A latency in milliseconds the system reports; without it TestPion's own timing is used. */
   latencyMs?: string;
+  /** Where the tool calls the system made are (a list: `$.tool_calls[*]` or `$.steps[*].action`); an MCP or agent target returns its trace here. */
+  toolCalls?: string;
+  /** Where each tool call's name and arguments are, relative to the item (defaults: name / function.name / tool, arguments / function.arguments / args / input). */
+  toolCall?: { name?: string; arguments?: string };
+  /** Where the id of a server-side conversation is (carried to the next turn as {{conversationId}}). */
+  conversationId?: string;
 }
 
 /**
@@ -64,6 +72,8 @@ export interface RagJudgeSetup {
    * Default: only when three or more metrics read the claims, because with two the extra call costs more than it saves.
    */
   shareClaims?: boolean;
+  /** Images in the question or the contexts may be sent to the judge, as data. Off: a multimodal metric is n/a. Images cannot be redacted, so this is opt-in (planning §4j). */
+  allowImages?: boolean;
   /** A monitor judges only this share (0 to 1) of its samples, chosen by the sample itself; the free metrics always run. */
   sampleShare?: number;
 }
@@ -94,6 +104,12 @@ export interface RagTarget {
   timeoutMs?: number;
   /** Concurrency, rate and retries of the calls an evaluation makes to it. */
   limits?: RagLimits;
+  /**
+   * How the system keeps a conversation (a dataset record with `turns` is replayed turn by turn): `stateless-history`
+   * sends the earlier messages with every request (`{{history}}`, `{{messages}}`, `{{historyText}}`), `server-session`
+   * carries the id the system returns (map `conversationId`; the request uses `{{conversationId}}`). Default: stateless-history.
+   */
+  conversation?: { mode: 'stateless-history' | 'server-session' };
 }
 
 /** One retrieved context as the metrics read it. */
@@ -102,6 +118,14 @@ export interface RagDoc {
   text: string;
   score?: number;
   source?: string;
+  /** An image this chunk holds (URL, data URI or workspace path). */
+  image?: string;
+}
+
+/** A tool the system called. */
+export interface RagToolCallRef {
+  name: string;
+  arguments: Record<string, unknown>;
 }
 
 /** What a target's response was read as. */
@@ -110,12 +134,16 @@ export interface RagSample {
   contexts: RagDoc[];
   usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
   latencyMs?: number;
+  /** The tool calls the system made (its trace), when the mapping reads them. */
+  toolCalls?: RagToolCallRef[];
+  /** The server-side conversation id the response carries. */
+  conversationId?: string;
   /** What the mapping could not find (a path that matched nothing): shown with the sample. */
   warnings: string[];
 }
 
 /** The place in the mapping a clicked value is assigned to (the window's click-to-map menu). */
-export type RagMapSlot = 'answer' | 'answer.pieces' | 'contexts' | 'context.text' | 'context.id' | 'context.score' | 'context.source' | 'usage.input' | 'usage.output' | 'usage.total' | 'latencyMs';
+export type RagMapSlot = 'answer' | 'answer.pieces' | 'contexts' | 'context.text' | 'context.id' | 'context.score' | 'context.source' | 'context.image' | 'toolCalls' | 'toolCall.name' | 'toolCall.arguments' | 'conversationId' | 'usage.input' | 'usage.output' | 'usage.total' | 'latencyMs';
 
 export const RAG_MAP_SLOTS: ReadonlyArray<{ slot: RagMapSlot; label: string; item?: true }> = [
   { slot: 'answer', label: 'The answer' },
@@ -125,6 +153,11 @@ export const RAG_MAP_SLOTS: ReadonlyArray<{ slot: RagMapSlot; label: string; ite
   { slot: 'context.id', label: 'Context id', item: true },
   { slot: 'context.score', label: 'Context score', item: true },
   { slot: 'context.source', label: 'Context source', item: true },
+  { slot: 'context.image', label: 'Context image (URL, data or path)', item: true },
+  { slot: 'toolCalls', label: 'The list of tool calls the system made' },
+  { slot: 'toolCall.name', label: 'Tool call name', item: true },
+  { slot: 'toolCall.arguments', label: 'Tool call arguments', item: true },
+  { slot: 'conversationId', label: 'Conversation id (carried to the next turn)' },
   { slot: 'usage.input', label: 'Input tokens' },
   { slot: 'usage.output', label: 'Output tokens' },
   { slot: 'usage.total', label: 'Total tokens' },
@@ -144,7 +177,11 @@ const listBase = (listPath: string) => wildcardPath(listPath).replace(/\[\*\]$/,
 export function relativeToList(listPath: string, clicked: string): string | undefined {
   const base = listBase(listPath);
   const c = wildcardPath(clicked);
-  if (!c.startsWith(`${base}[*]`)) return undefined;
+  if (!c.startsWith(`${base}[*]`)) {
+    // a list whose path ends in a field (`$.steps[*].action`): the items are the matches themselves, and a field is `$.field`
+    const own = wildcardPath(listPath);
+    return !own.endsWith('[*]') && c.startsWith(`${own}.`) ? `$${c.slice(own.length)}` : undefined;
+  }
   const rest = c.slice(base.length + 3);
   return rest ? `$${rest}` : '$';
 }
@@ -159,6 +196,18 @@ export function assignSlot(m: RagMapping, slot: RagMapSlot, clicked: string): { 
     return { mapping: { ...m, contexts: list.endsWith('[*]') ? list : `${list}[*]` } };
   }
   if (slot === 'latencyMs') return { mapping: { ...m, latencyMs: path } };
+  if (slot === 'conversationId') return { mapping: { ...m, conversationId: path } };
+  if (slot === 'toolCalls') {
+    // the array itself (`$.tool_calls`) becomes its items; a field of items of another list (`$.steps[*].action`) already is the list
+    const list = wildcardPath(path);
+    return { mapping: { ...m, toolCalls: list.includes('[*]') ? list : `${list}[*]` } };
+  }
+  if (slot === 'toolCall.name' || slot === 'toolCall.arguments') {
+    if (!m.toolCalls) return { problem: 'Choose the list of tool calls first (click the list, then "The list of tool calls"), then click the name or the arguments inside one item.' };
+    const rel = relativeToList(m.toolCalls, path);
+    if (rel === undefined) return { problem: `That value is not inside the list ${m.toolCalls}. Click a field of one of the list's items.` };
+    return { mapping: { ...m, toolCall: { ...m.toolCall, [slot.slice(9)]: rel } } };
+  }
   if (slot.startsWith('usage.')) return { mapping: { ...m, usage: { ...m.usage, [slot.slice(6)]: path } } };
   if (!m.contexts) return { problem: 'Choose the list of retrieved contexts first (click the list, then "The list of retrieved contexts"), then click a field inside one item.' };
   const rel = relativeToList(m.contexts, path);

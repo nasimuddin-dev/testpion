@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, EyeOff, Eye, MoreHorizontal, RotateCcw, Rows3, Settings } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { modKey } from '../api';
-import { useGit } from '../lib/git';
+import { useGitBehind } from '../lib/git';
 import { keyLabel, useBindings } from '../lib/keybindings';
 import { railShortcut, type RailId } from '../lib/rail';
 import { changeRail, goToRail, railIdOf, railItem, resetRail, useRail } from '../lib/use-rail';
@@ -78,7 +78,7 @@ export function Sidebar() {
   const bindings = useBindings();
   const [menuFor, setMenuFor] = useState<RailId>();
   // the team pushed commits this branch does not have yet (the backend fetches in the background): a count on Git
-  const behind = useGit().status?.behind ?? 0;
+  const behind = useGitBehind();
   const counts: Partial<Record<RailId, { n: number; title: string }>> = behind > 0 ? { git: { n: behind, title: `${behind} new commit${behind === 1 ? '' : 's'} on the remote to pull` } } : {};
   const here = railIdOf(view);
   const inRequests = isRequestView(view);

@@ -114,7 +114,7 @@ async function sampleFromOptions(store: Parameters<Parameters<typeof withWorkspa
       await ctx.dispose();
     }
   }
-  return { question: o.question as string | undefined, answer: o.answer as string | undefined, contexts: (o.context as string[] | undefined)?.map((text) => ({ text })), reference: o.reference as string | undefined, referenceIds: (o.referenceId as string[] | undefined)?.length ? (o.referenceId as string[]) : undefined };
+  return { question: o.question as string | undefined, answer: o.answer as string | undefined, contexts: [...((o.context as string[] | undefined) ?? []).map((text) => ({ text })), ...((o.image as string[] | undefined) ?? []).map((image) => ({ text: '', image }))], reference: o.reference as string | undefined, referenceIds: (o.referenceId as string[] | undefined)?.length ? (o.referenceId as string[]) : undefined };
 }
 
 const judgeRef = (j: string | undefined) => (j ? { provider: j.split('/')[0], ...(j.includes('/') ? { model: j.split('/').slice(1).join('/') } : {}) } : undefined);
@@ -191,6 +191,8 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--context <text>', 'a retrieved context (repeat for several)', (v: string, p: string[] = []) => [...p, v])
     .option('--reference <text>')
     .option('--reference-id <id>', 'a gold chunk id (repeat)', (v: string, p: string[] = []) => [...p, v])
+    .option('--image <ref>', 'a picture the retrieved context holds: a file of the workspace, an http(s) URL or a data: URI (repeat); needs --allow-images and a vision judge', (v: string, p: string[] = []) => [...p, v])
+    .option('--allow-images', 'let the pictures go to the judge as data (they cannot be redacted)')
     .option('--judge <provider/model>', 'the judge (default: the AI settings’ large model)')
     .option('--option <key=value...>', 'metric options, e.g. mode=chunks k=5', (v: string, p: string[] = []) => [...p, v])
     .option('--dry-run', 'show what will be sent, send nothing')
@@ -202,7 +204,7 @@ export function registerRagEvalCommands(rag: Command): void {
         const ctx = cliContext(store, o.environment);
         try {
           const options = Object.fromEntries((o.option ?? []).map((kv) => [kv.split('=')[0]!, (() => { const v = kv.slice(kv.indexOf('=') + 1); return /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v === 'true' ? true : v === 'false' ? false : v; })()]));
-          const r = await config(() => tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge! }, { metric: { type: name, ...options }, sample, judge: judgeRef(o.judge), dryRun: o.dryRun }));
+          const r = await config(() => tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: store.root }, { metric: { type: name, ...options }, sample, judge: { ...(judgeRef(o.judge) ?? {}), ...(o.allowImages ? { allowImages: true } : {}) }, dryRun: o.dryRun }));
           if (o.json) return printJson(r);
           console.log(`${bold(r.metric.name)} ${dim(`(${r.metric.id})`)}`);
           for (const m of r.missing) console.log(yellow(`missing: ${m.message}`));
@@ -211,6 +213,7 @@ export function registerRagEvalCommands(rag: Command): void {
             for (const c of r.willSend) {
               console.log(`\n${bold('Would send')} ${c.metric} (${c.version}) to ${c.preview.providerName} / ${c.preview.model}${c.preview.local ? dim(' · stays on this computer') : ''}${c.cached ? green(' · the verdict is already cached: no call') : ''}`);
               console.log(dim(`≈ ${c.preview.estimate.inputTokens} tokens in, up to ${c.preview.estimate.maxOutputTokens} out${c.preview.estimate.priceKnown ? `, up to ${money(c.preview.estimate.maxCostUsd ?? 0)}` : ', no price set'} · masked: ${c.preview.redactionCount}`));
+              if (c.preview.images?.length) console.log(yellow(`${c.preview.images.length} image(s) (${Math.round(c.preview.images.reduce((a, i) => a + i.bytes, 0) / 1024)} KB) will be sent to ${c.preview.providerName} as data: ${c.preview.images.map((i) => `${i.mime} sha256:${i.sha256.slice(0, 10)}`).join(', ')}`));
               for (const msg of c.preview.messages) console.log(`\n--- ${msg.role} ---\n${msg.content}`);
             }
             return;
@@ -244,6 +247,9 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--repeat <n>', 'judge n times (the cache is bypassed after the first) and report the flip rate')
     .option('--short-circuit', 'skip the judged answer metrics of a sample whose free retrieval metrics already failed')
     .option('--share-claims', 'split the answer into claims once and share them between faithfulness and answer-relevance')
+    .option('--allow-images', 'let pictures of the sample (a retrieved chunk that is an image, a question image) go to the judge as data; they cannot be redacted, so this is off unless you say so')
+    .option('--when <metric=condition...>', 'a decision tree: run the metric only when a condition on another metric holds, e.g. "context-recall=faithfulness < 0.8" (repeat)', collect, [])
+    .option('--unless <metric=condition...>', 'the opposite of --when: run the metric only when the condition does NOT hold', collect, [])
     .addOption(new Option('--compat <tool>', 'give every metric the options of its Ragas name (reverse-question answer relevance, per-chunk context precision, entity recall by model)').choices(['ragas']))
     .option('--repeat-target <n>', 'call the RAG system n times per question (2 to 10) and score the mean of the calls, with the spread (the system’s own noise)')
     .option('--two-phase', 'collect the answers with the free metrics first, then judge them (a run followed by a rescore)')
@@ -284,6 +290,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--repeat <n>')
     .option('--short-circuit')
     .option('--share-claims')
+    .option('--allow-images', 'let pictures of the stored samples go to the judge as data (only pictures given by URL or path are stored: an inline picture is kept as its hash)')
     .option('--max-cost <usd>')
     .option('--estimate', 'print the exact number of judge calls (and the cache hits) and exit')
     .option('--min <metric=value>', 'a gate on the new run', collect, [])
@@ -293,7 +300,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .action(async (runId: string, o: RescoreFlags) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
-        const choices: RagRunChoices = { metrics: o.metrics, preset: o.preset, judge: o.judge, judges: o.judges, aggregate: o.aggregate, swap: o.swap, repeat: o.repeat ? Number(o.repeat) : undefined, shortCircuit: o.shortCircuit, shareClaims: o.shareClaims, maxJudgeCostUsd: o.maxCost ? Number(o.maxCost) : undefined };
+        const choices: RagRunChoices = { metrics: o.metrics, preset: o.preset, judge: o.judge, judges: o.judges, aggregate: o.aggregate, swap: o.swap, repeat: o.repeat ? Number(o.repeat) : undefined, shortCircuit: o.shortCircuit, shareClaims: o.shareClaims, allowImages: o.allowImages || undefined, maxJudgeCostUsd: o.maxCost ? Number(o.maxCost) : undefined };
         const evaluators = o.metrics.length || o.preset ? await config(() => chooseRagRun({ evaluators: [] } as never, choices).evaluators) : undefined;
         const judge = judgeSetupOf(await config(() => chooseRagRun({ evaluators: [], judge: {} } as never, choices)));
         const ctx = cliContext(store);
@@ -436,6 +443,9 @@ interface RunFlags {
   repeat?: string;
   shortCircuit?: boolean;
   shareClaims?: boolean;
+  allowImages?: boolean;
+  when: string[];
+  unless: string[];
   compat?: 'ragas';
   repeatTarget?: string;
   twoPhase?: boolean;
@@ -459,7 +469,19 @@ interface RunFlags {
   quiet?: boolean;
   json?: boolean;
 }
-type RescoreFlags = Pick<RunFlags, 'workspace' | 'metrics' | 'preset' | 'judge' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit' | 'shareClaims' | 'maxCost' | 'estimate' | 'min' | 'junit' | 'html' | 'json'>;
+type RescoreFlags = Pick<RunFlags, 'workspace' | 'metrics' | 'preset' | 'judge' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit' | 'shareClaims' | 'allowImages' | 'maxCost' | 'estimate' | 'min' | 'junit' | 'html' | 'json'>;
+
+/** `--when "context-recall=faithfulness < 0.8"` → { 'context-recall': 'faithfulness < 0.8' } */
+function branchesOf(list: string[], flag: string): Record<string, string> | undefined {
+  if (!list.length) return undefined;
+  const out: Record<string, string> = {};
+  for (const item of list) {
+    const i = item.indexOf('=');
+    if (i < 1 || !item.slice(i + 1).trim()) throw new CliError(`${flag} is metric=condition, e.g. ${flag} "context-recall=faithfulness < 0.8", not "${item}"`, EXIT.CONFIG_ERROR);
+    out[item.slice(0, i).trim()] = item.slice(i + 1).trim();
+  }
+  return out;
+}
 
 async function runCommand(ref: string, o: RunFlags): Promise<number> {
   return withWorkspace(o.workspace, async (store, ephemeral) => {
@@ -483,6 +505,9 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         maxJudgeCostUsd: o.maxCost ? Number(o.maxCost) : undefined,
         maxJudgeCalls: o.maxCalls ? Number(o.maxCalls) : undefined,
         limit: o.limit ? Number(o.limit) : undefined,
+        allowImages: o.allowImages || undefined,
+        when: branchesOf(o.when, '--when'),
+        unless: branchesOf(o.unless, '--unless'),
       }),
     );
     if (o.rotate && !o.limit) throw new CliError('--rotate needs --limit <n>: the number of records to score each day', EXIT.CONFIG_ERROR);

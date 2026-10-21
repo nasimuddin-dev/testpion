@@ -11,7 +11,6 @@ import type { ItemRef } from '@testpion/shared';
 export type QuickMode = 'items' | 'commands' | 'here' | 'environments' | 'ask' | 'help';
 
 export const MODE_OF_PREFIX: Readonly<Record<string, QuickMode>> = { '>': 'commands', '@': 'here', '#': 'environments', '~': 'ask', '?': 'help' };
-export const PREFIX_OF_MODE: Readonly<Record<QuickMode, string>> = { items: '', commands: '>', here: '@', environments: '#', ask: '~', help: '?' };
 
 /** The mode a query is in (a prefix typed first, else the mode it opened in), and the text after the prefix. */
 export function parseQuickQuery(q: string, base: QuickMode = 'items'): { mode: QuickMode; text: string } {

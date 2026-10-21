@@ -44,6 +44,8 @@ export class OpenAICompatibleProvider implements LlmProvider {
         content: m.content || null,
         tool_calls: m.toolCalls.map((t) => ({ id: t.id, type: 'function', function: { name: t.name, arguments: t.rawArguments ?? JSON.stringify(t.arguments) } })),
       };
+    // images go as data URIs, so the provider never fetches a URL of ours
+    if (m.images?.length) return { role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] };
     return { role: m.role, content: m.content };
   }
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { aiActionOf, type AiActionId } from '@testpion/shared';
 import type { MenuItem } from '../components/ui';
 import { aiHidden } from './ai-visible';
@@ -14,4 +15,14 @@ export function aiMenuItems(id: AiActionId, onSelect: () => void, opts: { separa
   const a = aiActionOf(id);
   if (!a) throw new Error(`No AI action "${id}" in the AI table`);
   return [{ label: LABEL[a.label], icon: icon(a.icon), separator: opts.separator, onSelect }];
+}
+
+/**
+ * The label and icon of an AI button that is not a menu item (an empty state's "Describe with AI"), from the same table; none
+ * while "Hide all AI actions" is on (the buttons already check `useAiEnabled`).
+ */
+export function aiButton(id: AiActionId): { label: string; icon: ReactNode } {
+  const a = aiActionOf(id);
+  if (!a) throw new Error(`No AI action "${id}" in the AI table`);
+  return { label: LABEL[a.label], icon: icon(a.icon) };
 }

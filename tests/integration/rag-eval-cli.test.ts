@@ -61,10 +61,10 @@ afterAll(async () => {
 describe('rag metrics, presets, metric', () => {
   it('metrics prints the catalogue as JSON and as groups for people; a Ragas name finds its metric', async () => {
     const all = cliData<{ count: number; metrics: Array<{ id: string; kind: string }> }>((await cli(['rag', 'metrics', '--json'])).out);
-    expect(all.count).toBe(84);
+    expect(all.count).toBe(134);
     expect(all.metrics.find((m) => m.id === 'faithfulness')).toMatchObject({ kind: 'judged' });
     const free = cliData<{ count: number }>((await cli(['rag', 'metrics', '--kind', 'deterministic', '--json'])).out);
-    expect(free.count).toBe(39);
+    expect(free.count).toBe(51);
     const ragas = cliData<{ metrics: Array<{ id: string }> }>((await cli(['rag', 'metrics', '--search', 'LLMContextRecall', '--json'])).out);
     expect(ragas.metrics.map((m) => m.id)[0]).toBe('context-recall');
     const text = await cli(['rag', 'metrics', '--group', 'retrieval-ir']);

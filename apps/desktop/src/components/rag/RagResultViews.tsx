@@ -1,5 +1,5 @@
 import { Play } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MetricChange, MetricComparison, MetricMatrix, MetricPivot, RunEstimate } from '@testpion/core';
 import type { RagJudgeSetup } from '@testpion/shared';
 import { asError, call } from '../../api';
@@ -340,9 +340,4 @@ export function RagRescoreDialog({ runId, evaluators, judge, providers, onDone, 
       </div>
     </Modal>
   );
-}
-
-/** The pieces a metric view needs to name its runs (the evaluation's runs, newest first). */
-export function useRunChoices(runs: Array<{ id: string; name: string; startedAt: string }>): RunChoice[] {
-  return useMemo(() => runs.map((r) => ({ id: r.id, name: r.name, startedAt: r.startedAt })), [runs]);
 }

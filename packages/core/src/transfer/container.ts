@@ -2,74 +2,26 @@
  * Putting a bundle together and taking it apart: the manifest and the entries as a zip or as the JSON form, with every
  * check a reader owes a file from outside (size limits, checksums, entry names, the manifest's shape).
  */
+import { isUtf8 } from 'node:buffer';
 import { ApsError } from '../errors.js';
-import { WORKSPACE_FORMATS } from '../storage/workspace-bundle.js';
-import { writeZip, readZip, looksLikeZip, badEntryName, type ZipLimits, ZIP_LIMITS } from './zip.js';
+import { WORKSPACE_FORMATS } from '../storage/workspace-formats.js';
+import { writeZip, writeZipAsync, readZip, looksLikeZip, badEntryName, type ZipLimits, ZIP_LIMITS } from './zip.js';
 import {
-  BUNDLE_FORMAT,
-  BUNDLE_VERSION,
-  LIBRARY_OF,
-  RAW_ROOT,
   TRANSFER_LIMITS,
   checkManifest,
   parseJsonSafe,
   sha256,
-  type BundleItem,
-  type BundleKindId,
   type BundleManifest,
   type ParsedBundle,
   type TransferLimits,
 } from './format.js';
 import { legacyToBundle } from './legacy.js';
 
+export { assemble, entryNameFor, type BundlePart, type ManifestMeta, type PartMeta } from './assemble.js';
+
 const refuse = (why: string): never => {
   throw new ApsError('ValidationError', `Not a valid TestPion bundle: ${why}`, { suggestions: ['Export the items again', '`testpion bundle inspect <file>` says what is wrong'] });
 };
-
-const JSON_DIR: Partial<Record<BundleKindId, string>> = { collection: 'collections', environment: 'environments', 'mcp-server': 'mcp-servers', provider: 'providers' };
-
-/** The entry name of an item: `files/<path>` for a file kind, `<folder>/<id>.json` for the rest (made unique without case). */
-export function entryNameFor(kind: BundleKindId, id: string, taken: Set<string>): string {
-  if (RAW_ROOT[kind]) {
-    const n = `files/${id}`;
-    taken.add(n.toLowerCase());
-    return n;
-  }
-  const dir = JSON_DIR[kind] ?? `library/${LIBRARY_OF[kind] ?? kind}`;
-  const base =
-    id
-      .replace(/[^A-Za-z0-9._-]+/g, '_')
-      .replace(/^\.+/, '')
-      .slice(0, 100) || 'item';
-  let name = `${dir}/${base}.json`;
-  for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${dir}/${base}-${i}.json`;
-  taken.add(name.toLowerCase());
-  return name;
-}
-
-export type PartMeta = Omit<BundleItem, 'entry' | 'sha256' | 'size' | 'mode'>;
-export interface BundlePart {
-  item: PartMeta;
-  /** Absent: the item travels by reference (a dataset over the embed limit). */
-  data?: Buffer;
-}
-
-/** The manifest fields the exporter fills (everything but the item list, which `assemble` makes from the parts). */
-export type ManifestMeta = Pick<BundleManifest, 'title' | 'root' | 'edges' | 'missing' | 'requires' | 'flags' | 'notes'> & { createdBy: BundleManifest['createdBy']; createdAt?: string };
-
-/** Parts → a bundle: entry names, checksums and sizes are made here, so no caller can write them wrong. */
-export function assemble(meta: ManifestMeta, parts: BundlePart[], source: ParsedBundle['source'] = 'zip', warnings: string[] = []): ParsedBundle {
-  const taken = new Set<string>(['manifest.json', 'readme.md']);
-  const entries = new Map<string, Buffer>();
-  const items: BundleItem[] = parts.map((p) => {
-    if (!p.data) return { ...p.item, mode: 'reference' };
-    const entry = entryNameFor(p.item.kind, p.item.id, taken);
-    entries.set(entry, p.data);
-    return { ...p.item, entry, sha256: sha256(p.data), size: p.data.length, mode: 'embed' };
-  });
-  const manifest: BundleManifest = { format: BUNDLE_FORMAT, formatVersion: BUNDLE_VERSION, createdAt: new Date().toISOString(), ...meta, items };
-  return { manifest, entries, source, warnings };
-}
 
 /** A short README for a person who opens the zip: never read on import. */
 function readme(m: BundleManifest): string {
@@ -89,31 +41,41 @@ function readme(m: BundleManifest): string {
   return lines.join('\n') + '\n';
 }
 
+/** Text that survives a trip through a JSON string: no NUL and valid UTF-8 (checked on the bytes, not by decoding and encoding a copy). */
+const isTextBytes = (d: Buffer): boolean => !d.includes(0) && isUtf8(d);
+
 /** Whether a bundle should be a zip: binary entries, many entries or a large total do not belong in a JSON file. */
 export function wantsZip(b: ParsedBundle): boolean {
   let total = 0;
   for (const d of b.entries.values()) {
     total += d.length;
-    if (d.includes(0) || !Buffer.from(d.toString('utf8'), 'utf8').equals(d)) return true;
+    if (!isTextBytes(d)) return true;
   }
   return total > 5 * 1024 * 1024 || b.entries.size > 200;
 }
 
+/** The files of a zip form: manifest.json, README.md and the entries. */
+const zipFiles = (b: ParsedBundle) => [
+  { name: 'manifest.json', data: Buffer.from(JSON.stringify(b.manifest, null, 2) + '\n', 'utf8') },
+  { name: 'README.md', data: Buffer.from(readme(b.manifest), 'utf8') },
+  ...[...b.entries].map(([name, data]) => ({ name, data })),
+];
+
+/** The JSON form: the manifest's fields and `entries` (text as it is, anything else as base64). */
+function jsonForm(b: ParsedBundle): Buffer {
+  const entries: Record<string, { encoding: 'utf8' | 'base64'; content: string }> = {};
+  for (const [name, data] of b.entries) entries[name] = isTextBytes(data) ? { encoding: 'utf8', content: data.toString('utf8') } : { encoding: 'base64', content: data.toString('base64') };
+  return Buffer.from(JSON.stringify({ ...b.manifest, entries }, null, 2) + '\n', 'utf8');
+}
+
 /** The file's bytes: a zip (manifest.json, README.md and the entries), or the JSON form (the manifest's fields and `entries`). */
 export function serialize(b: ParsedBundle, format: 'zip' | 'json'): Buffer {
-  if (format === 'zip') {
-    return writeZip([
-      { name: 'manifest.json', data: Buffer.from(JSON.stringify(b.manifest, null, 2) + '\n', 'utf8') },
-      { name: 'README.md', data: Buffer.from(readme(b.manifest), 'utf8') },
-      ...[...b.entries].map(([name, data]) => ({ name, data })),
-    ]);
-  }
-  const entries: Record<string, { encoding: 'utf8' | 'base64'; content: string }> = {};
-  for (const [name, data] of b.entries) {
-    const text = data.toString('utf8');
-    entries[name] = !data.includes(0) && Buffer.from(text, 'utf8').equals(data) ? { encoding: 'utf8', content: text } : { encoding: 'base64', content: data.toString('base64') };
-  }
-  return Buffer.from(JSON.stringify({ ...b.manifest, entries }, null, 2) + '\n', 'utf8');
+  return format === 'zip' ? writeZip(zipFiles(b)) : jsonForm(b);
+}
+
+/** The same bytes as `serialize`, with the compression done on the thread pool: the caller's thread keeps serving while a big bundle is packed. */
+export async function serializeAsync(b: ParsedBundle, format: 'zip' | 'json'): Promise<Buffer> {
+  return format === 'zip' ? writeZipAsync(zipFiles(b)) : jsonForm(b);
 }
 
 /** Whether bytes could be a bundle of any form (a zip, the JSON form, or a workspace export of earlier versions). */

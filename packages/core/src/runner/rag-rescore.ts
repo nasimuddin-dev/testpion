@@ -22,9 +22,9 @@ import { runResults } from './run-results.js';
 
 /** What a result captured: the sample its metrics were computed from. */
 export function storedSample(r: TestResult): (TrySample & { warnings?: string[] }) | undefined {
-  const rag = r.metadata?.rag as { query?: string; reference?: string; referenceIds?: string[]; referenceContexts?: string[]; record?: TrySample['record']; sample?: { answer?: string; contexts?: Array<{ id: string; text: string; score?: number }> }; warnings?: string[] } | undefined;
+  const rag = r.metadata?.rag as { query?: string; reference?: string; referenceIds?: string[]; referenceContexts?: string[]; record?: TrySample['record']; sample?: { answer?: string; contexts?: Array<{ id: string; text: string; score?: number; image?: string }>; toolCalls?: TrySample['toolCalls'] }; warnings?: string[] } | undefined;
   if (!rag?.sample || typeof rag.sample.answer !== 'string') return undefined;
-  return { question: rag.query, answer: rag.sample.answer, contexts: rag.sample.contexts, reference: rag.reference, referenceIds: rag.referenceIds, referenceContexts: rag.referenceContexts, record: rag.record, latencyMs: r.latencyMs, warnings: rag.warnings };
+  return { question: rag.query, answer: rag.sample.answer, contexts: rag.sample.contexts, reference: rag.reference, referenceIds: rag.referenceIds, referenceContexts: rag.referenceContexts, record: rag.record, ...(rag.sample.toolCalls ? { toolCalls: rag.sample.toolCalls } : {}), latencyMs: r.latencyMs, warnings: rag.warnings };
 }
 
 /** The metrics a run was scored with, as checks (the distinct check names of its results, with their defaults). */
@@ -81,7 +81,7 @@ export async function rescoreRun(store: WorkspaceStore, o: RescoreOptions): Prom
         skipped++;
         out[i] = r;
       } else {
-        const ctx = contextOfSample(sample, { judge: o.judge, providers: o.providers, ragJudge: o.ragJudge, signal: o.signal });
+        const ctx = contextOfSample(sample, { judge: o.judge, providers: o.providers, ragJudge: o.ragJudge, signal: o.signal, workspaceRoot: store.root });
         ctx.tokens = r.tokens;
         ctx.costUsd = r.costUsd;
         const { checks, failure } = await scoreRagSample(evaluators, ctx, { warnings: sample.warnings });

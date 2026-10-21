@@ -4,7 +4,7 @@
  * see: the parsed JSON body; for a server-sent event stream `{ events: [{ event, id, data }] }` with each event's data
  * parsed as JSON when it is JSON; for a WebSocket `{ connected, received, messages }`; the response text otherwise.
  */
-import type { RagDoc, RagMapping, RagSample } from '@testpion/shared';
+import type { RagDoc, RagMapping, RagSample, RagToolCallRef } from '@testpion/shared';
 import { queryAll } from '../../util/jsonpath.js';
 import { SseParser } from '../../protocols/http/sse.js';
 
@@ -67,7 +67,50 @@ const GUESS = {
   id: ['id', 'doc_id', 'docId', 'document_id', 'documentId', '_id', 'source_id'],
   score: ['score', 'relevance', 'similarity'],
   source: ['source', 'url', 'file', 'filename', 'title'],
+  image: ['image', 'image_url', 'imageUrl', 'image_data', 'image_base64', 'img'],
 } as const;
+
+/** The names a tool call's fields are looked up under when the mapping names no path (OpenAI, Anthropic, LangChain and MCP spellings). */
+const TOOL_GUESS = { name: ['name', 'tool', 'tool_name', 'toolName', 'function.name', 'action'], arguments: ['arguments', 'args', 'input', 'tool_input', 'toolInput', 'function.arguments', 'parameters'] } as const;
+
+const dotted = (o: unknown, path: string): unknown => path.split('.').reduce<unknown>((a, k) => (a && typeof a === 'object' ? (a as Record<string, unknown>)[k] : undefined), o);
+
+/** The tool calls the mapping points at; an argument string holding JSON (OpenAI) is parsed. */
+function toolCallsOf(r: RagResponse, m: RagMapping, warnings: string[]): RagToolCallRef[] | undefined {
+  if (!m.toolCalls) return undefined;
+  let items = select(r, m.toolCalls);
+  if (items.length === 1 && Array.isArray(items[0])) items = items[0] as unknown[];
+  if (!items.length) {
+    warnings.push(`The tool calls path ${m.toolCalls} matched nothing (the system made no tool calls in this response).`);
+    return [];
+  }
+  const out: RagToolCallRef[] = [];
+  for (const item of items.slice(0, 100)) {
+    const pick = (p: string | undefined, guess: readonly string[]): unknown => {
+      if (p !== undefined && p.trim() !== '') return p.trim() === '$' ? item : firstOf(queryAll(item, p));
+      for (const g of guess) {
+        const v = dotted(item, g);
+        if (v !== undefined && v !== null) return v;
+      }
+      return undefined;
+    };
+    const name = pick(m.toolCall?.name, TOOL_GUESS.name);
+    if (typeof name !== 'string' || !name) {
+      warnings.push('A tool call has no name (map the name of a tool call).');
+      continue;
+    }
+    let args = pick(m.toolCall?.arguments, TOOL_GUESS.arguments);
+    if (typeof args === 'string') {
+      try {
+        args = JSON.parse(args);
+      } catch {
+        args = undefined;
+      }
+    }
+    out.push({ name, arguments: args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {} });
+  }
+  return out;
+}
 
 function field(item: unknown, path: string | undefined, guess: readonly string[]): unknown {
   if (path !== undefined && path.trim() !== '') return path.trim() === '$' ? item : firstOf(queryAll(item, path));
@@ -84,7 +127,7 @@ export function mappingProblems(m: RagMapping | undefined): string[] {
   if (!m || typeof m !== 'object') return ['The target has no mapping.'];
   const out: string[] = [];
   if (typeof m.answer !== 'string' || !m.answer.trim()) out.push('The mapping has no answer path: click the answer in the sample response and choose "The answer".');
-  for (const [k, v] of Object.entries({ contexts: m.contexts, latencyMs: m.latencyMs, 'usage.input': m.usage?.input, 'usage.output': m.usage?.output, 'usage.total': m.usage?.total }))
+  for (const [k, v] of Object.entries({ contexts: m.contexts, latencyMs: m.latencyMs, toolCalls: m.toolCalls, conversationId: m.conversationId, 'usage.input': m.usage?.input, 'usage.output': m.usage?.output, 'usage.total': m.usage?.total }))
     if (v !== undefined && (typeof v !== 'string' || !v.trim().startsWith('$'))) out.push(`${k} must be a JSONPath starting with $ (got ${JSON.stringify(v)}).`);
   return out;
 }
@@ -108,13 +151,14 @@ export function applyMapping(r: RagResponse, m: RagMapping): RagSample {
     if (items.length > MAX_DOCS) warnings.push(`${items.length} contexts came back; the first ${MAX_DOCS} are scored.`);
     items.slice(0, MAX_DOCS).forEach((item, i) => {
       const text = textOf(field(item, m.context?.text, GUESS.text)) ?? '';
-      if (!text) warnings.push(`Context ${i + 1} has no text${m.context?.text ? ` at ${m.context.text}` : ' (map the text of a context)'}.`);
+      const image = textOf(field(item, m.context?.image, m.context?.image ? [] : GUESS.image));
+      if (!text && !image) warnings.push(`Context ${i + 1} has no text${m.context?.text ? ` at ${m.context.text}` : ' (map the text of a context)'}.`);
       const id = textOf(field(item, m.context?.id, GUESS.id)) ?? `doc-${i + 1}`;
       const score = numberOf(field(item, m.context?.score, GUESS.score));
       const source = textOf(field(item, m.context?.source, GUESS.source));
       const clipped = text.length > MAX_DOC_CHARS;
       if (clipped) warnings.push(`Context ${id} is ${text.length} characters; the first ${MAX_DOC_CHARS} are scored.`);
-      contexts.push({ id, text: clipped ? text.slice(0, MAX_DOC_CHARS) : text, ...(score !== undefined ? { score } : {}), ...(source ? { source } : {}) });
+      contexts.push({ id, text: clipped ? text.slice(0, MAX_DOC_CHARS) : text, ...(score !== undefined ? { score } : {}), ...(source ? { source } : {}), ...(image ? { image } : {}) });
     });
   }
 
@@ -124,5 +168,7 @@ export function applyMapping(r: RagResponse, m: RagMapping): RagSample {
   const total = num(m.usage?.total) ?? (input !== undefined || output !== undefined ? (input ?? 0) + (output ?? 0) : undefined);
   const usage = input !== undefined || output !== undefined || total !== undefined ? { inputTokens: input, outputTokens: output, totalTokens: total } : undefined;
   const latencyMs = num(m.latencyMs);
-  return { answer, contexts, ...(usage ? { usage } : {}), ...(latencyMs !== undefined ? { latencyMs } : {}), warnings };
+  const toolCalls = toolCallsOf(r, m, warnings);
+  const conversationId = m.conversationId ? textOf(firstOf(select(r, m.conversationId))) : undefined;
+  return { answer, contexts, ...(usage ? { usage } : {}), ...(latencyMs !== undefined ? { latencyMs } : {}), ...(toolCalls ? { toolCalls } : {}), ...(conversationId ? { conversationId } : {}), warnings };
 }

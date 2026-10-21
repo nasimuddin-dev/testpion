@@ -29,6 +29,7 @@ import { datasetFormatOfName } from '@testpion/shared';
 import { registerRagEvalCommands } from './rag-eval.js';
 import { registerRagMetricFileCommands } from './rag-metric-files.js';
 import { registerRagR4Commands } from './rag-r4.js';
+import { registerRagProbeCommands } from './rag-probes.js';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, readResults, red, yellow, withWorkspace } from '../shared.js';
 
 const FORMATS = RAG_DATASET_FORMATS.join(', ');
@@ -47,6 +48,7 @@ export function registerRagCommands(program: Command): void {
   registerRagEvalCommands(rag);
   registerRagMetricFileCommands(rag);
   registerRagR4Commands(rag);
+  registerRagProbeCommands(rag);
 
   rag
     .command('targets')

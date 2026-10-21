@@ -38,10 +38,35 @@ describe('Ragas dataset import', () => {
       tags: ['persona:Sports fan', 'query-style:PERFECT_GRAMMAR', 'query-length:SHORT'],
     });
   });
-  it('a multi-turn sample is left out, and the notes say so', () => {
-    const r = importRagRecords([{ user_input: [{ content: 'hi', type: 'human' }] }, { user_input: 'q', reference: 'a' }], 'ragas');
-    expect(r.records).toHaveLength(1);
-    expect(r.notes[0]).toMatch(/multi-turn/);
+  it('a multi-turn sample becomes a conversation record (its goal, expected tool calls and topics kept) and exports back to the Ragas shape', () => {
+    const sample = {
+      user_input: [
+        { content: 'Book me a flight to Paris', type: 'human' },
+        { content: '', type: 'ai', tool_calls: [{ name: 'search_flights', args: { to: 'Paris' } }] },
+        { content: 'found 3 flights', type: 'tool' },
+        { content: 'Booked the 9am.', type: 'ai' },
+      ],
+      reference: 'A flight to Paris is booked.',
+      reference_tool_calls: [{ name: 'search_flights', args: { to: 'Paris' } }],
+      reference_topics: ['travel'],
+    };
+    const r = importRagRecords([sample, { user_input: [{ content: '', type: 'ai' }] }, { user_input: 'q', reference: 'a' }], 'ragas');
+    expect(r.records).toHaveLength(2);
+    expect(r.notes[0]).toMatch(/no user message/);
+    expect(r.records[0]).toMatchObject({ question: 'Book me a flight to Paris', expected_outcome: 'A flight to Paris is booked.', reference_topics: ['travel'], reference_tool_calls: sample.reference_tool_calls });
+    expect((r.records[0]!.turns as Array<{ role: string }>).map((t) => t.role)).toEqual(['user', 'assistant', 'tool', 'assistant']);
+    // and back: the messages as human / ai / tool, the goal as `reference`
+    expect(exportRagRecords([r.records[0]!], 'ragas')[0]).toEqual({
+      user_input: [
+        { content: 'Book me a flight to Paris', type: 'human' },
+        { content: '', type: 'ai', tool_calls: [{ name: 'search_flights', args: { to: 'Paris' } }] },
+        { content: 'found 3 flights', type: 'tool' },
+        { content: 'Booked the 9am.', type: 'ai' },
+      ],
+      reference: 'A flight to Paris is booked.',
+      reference_tool_calls: [{ name: 'search_flights', args: { to: 'Paris' } }],
+      reference_topics: ['travel'],
+    });
   });
   it('the older column names (question, answer, contexts, ground_truth) are read too', () => {
     const r = importRagRecords([{ question: 'q?', answer: 'a', contexts: ['c1'], ground_truth: 'g' }], 'ragas');

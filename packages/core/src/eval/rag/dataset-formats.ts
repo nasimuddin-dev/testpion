@@ -13,6 +13,7 @@ import { datasetFormatOf, previewDatasetRecords, type DatasetTextFormat } from '
 import { ApsError } from '../../errors.js';
 import { importNvidia, importPromptfoo } from './dataset-imports.js';
 import { listOf } from './lists.js';
+import { turnsOf } from './record.js';
 
 export type RagDatasetFormat = 'testpion' | 'ragas' | 'deepeval' | 'nvidia' | 'promptfoo' | 'beir';
 /** The formats a dataset can be imported from (BEIR needs its queries, qrels and corpus files: see importBeir). */
@@ -86,7 +87,27 @@ export function importRagRecords(records: Rec[], from?: RagDatasetFormat): Impor
     if (fmt === 'ragas') {
       const turns = r.user_input;
       if (Array.isArray(turns)) {
-        notes.push(`Record ${i + 1} is a multi-turn sample (a list of messages); conversations are not imported yet.`);
+        // a Ragas MultiTurnSample: the messages are the conversation; `reference` is what the user wanted (goal accuracy), with the expected tool calls and topics
+        const convo = turnsOf(turns);
+        const first = convo?.find((t) => t.role === 'user')?.content;
+        if (!convo || !first) {
+          notes.push(`Record ${i + 1} is a multi-turn sample with no user message and is skipped.`);
+          return;
+        }
+        const goal = str(pick(r, 'reference'));
+        const rtc = r.reference_tool_calls;
+        const topics = listOf(r.reference_topics);
+        const rec2: Rec = {
+          ...(has(r, 'id') ? { id: r.id } : {}),
+          question: first,
+          turns: convo,
+          ...(goal ? { expected_outcome: goal } : {}),
+          ...(Array.isArray(rtc) ? { reference_tool_calls: rtc } : {}),
+          ...(topics ? { reference_topics: topics } : {}),
+        };
+        const own2 = listOf(r.tags);
+        if (own2) rec2.tags = own2;
+        out.push(rec2);
         return;
       }
       const retrieved = listOf(pick(r, 'retrieved_contexts', 'contexts'));
@@ -133,6 +154,16 @@ export function exportRagRecords(records: Rec[], to: RagDatasetFormat): Rec[] {
   if (to === 'testpion') return records;
   if (to !== 'ragas' && to !== 'deepeval') throw new ApsError('ValidationError', `Datasets are exported to ${RAG_EXPORT_FORMATS.join(' or ')}, not ${to}`);
   return records.map((r) => {
+    // a conversation: Ragas' MultiTurnSample (human / ai / tool messages, the goal as `reference`), DeepEval's turns
+    const convo = turnsOf(r.turns);
+    if (convo && to === 'ragas')
+      return {
+        user_input: convo.map((t) => ({ content: t.content, type: t.role === 'user' ? 'human' : t.role === 'tool' ? 'tool' : 'ai', ...(t.toolCalls?.length ? { tool_calls: t.toolCalls.map((c) => ({ name: c.name, args: c.arguments })) } : {}) })),
+        ...(str(r.expected_outcome) ? { reference: str(r.expected_outcome) } : {}),
+        ...(Array.isArray(r.reference_tool_calls) ? { reference_tool_calls: (r.reference_tool_calls as Array<{ name: string; arguments?: unknown; args?: unknown }>).map((c) => ({ name: c.name, args: c.args ?? c.arguments ?? {} })) } : {}),
+        ...(listOf(r.reference_topics) ? { reference_topics: listOf(r.reference_topics) } : {}),
+      };
+    if (convo && to === 'deepeval') return { turns: convo.map((t) => ({ role: t.role === 'tool' ? 'tool' : t.role, content: t.content, ...(t.toolCalls?.length ? { tools_called: t.toolCalls.map((c) => ({ name: c.name, input_parameters: c.arguments })) } : {}) })), ...(str(r.expected_outcome) ? { expected_outcome: str(r.expected_outcome) } : {}) };
     const q = str(pick(r, 'question', 'query', 'input', 'user_input')) ?? '';
     const ref = str(pick(r, 'reference', 'expected', 'ground_truth', 'expected_output'));
     const gold = listOf(r.reference_contexts);

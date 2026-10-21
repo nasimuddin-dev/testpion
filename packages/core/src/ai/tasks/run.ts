@@ -20,7 +20,9 @@ import { buildAiContext, type AiContextSection } from '../context.js';
 import { estimateCost, type ProviderRegistry } from '../index.js';
 import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from '../proposal.js';
 import { chatStructured, chatText } from '../structured.js';
-import { estimateTokens, type ChatMessage } from '../types.js';
+import { estimateTokens, type ChatImage, type ChatMessage } from '../types.js';
+import { visionCapable } from '../vision.js';
+import { imageTokens } from '../../util/image-info.js';
 import { verificationProblems, verifyItems, type StoredResponse } from '../verify.js';
 import { aiTask, listAiTasks, type AiTaskDef, type AiTaskInput } from './registry.js';
 import { contextOfItem } from '../item-context.js';
@@ -103,6 +105,22 @@ export interface AiTaskRequest {
   maxTokens?: number;
   /** Prefer stable checks (types, formats, presence over literal ids, times, tokens); unset: the AI setting. */
   preferStable?: boolean;
+  /**
+   * Images sent beside the text, as data (a RAG judge reading a picture). They cannot be redacted, so they go only when
+   * `allowImages` is true, the privacy level is Full, and the model takes images; otherwise the call is refused before
+   * anything is built. Never logged: the usage ledger counts tokens only.
+   */
+  images?: ChatImage[];
+  allowImages?: boolean;
+}
+
+/** An image of a preview: what it is, not the bytes (a small one carries a data URI to show a thumbnail). */
+export interface AiPreviewImage {
+  sha256: string;
+  mime: string;
+  bytes: number;
+  /** The image itself when it is small enough to show (at most 256 KB); larger ones show their hash and size. */
+  thumb?: string;
 }
 
 /** "What will be sent": the exact messages, the context's sections, the estimate and the redactions. */
@@ -122,6 +140,8 @@ export interface AiPreview {
   redactions: Redaction[];
   redactionCount: number;
   estimate: { inputTokens: number; maxOutputTokens: number; costUsd?: number; maxCostUsd?: number; priceKnown: boolean };
+  /** The images that will be sent with the text, and the model that will see them. */
+  images?: AiPreviewImage[];
 }
 
 export interface AiTaskResult {
@@ -221,8 +241,16 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
   const safe = (s: string) => maskSensitiveText(deps.redactor.redactString(s), { pii });
   const preferStable = !!def.stable && aiPrefersStable(deps.settings, req.preferStable);
   const messages = composeMessages(def, ctx.text, req, safe, preferStable);
+  if (req.images?.length) {
+    // pictures cannot be redacted: they leave only when the evaluation allowed it, at the level that sends the content, to a model that can see
+    if (!req.allowImages) throw new ApsError('ConfigurationError', `${req.images.length} image(s) would be sent to the judge, but this evaluation does not allow images`, { why: 'An image cannot be redacted, so images are sent only when the evaluation says so (allowImages).', suggestions: ['Turn on "Send images to the judge" in the evaluation (CLI: --allow-images).', 'Or use the metrics that read text only.'] });
+    if (privacy !== 'full') throw new ApsError('ConfigurationError', `Images are not sent at the AI privacy level "${privacy}"`, { suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted), or use a local vision model.'] });
+    if (!visionCapable(provider.config, model)) throw new ApsError('ConfigurationError', `The judge ${provider.config.name}/${model} cannot see images`, { why: 'A text-only model would score a prompt that silently lost its pictures.', suggestions: ['Choose a vision-capable judge for this evaluation (a local one such as an Ollama vision model works), or list the model in the provider’s visionModels.'] });
+    const last = messages[messages.length - 1]!;
+    messages[messages.length - 1] = { ...last, images: req.images };
+  }
   const maxOutputTokens = Math.max(64, Math.min(req.maxTokens ?? def.maxTokens ?? (def.tier === 'large' ? 4000 : 2000), 32_000));
-  const inputTokens = estimateTokens(messages.map((m) => m.content).join('\n'));
+  const inputTokens = estimateTokens(messages.map((m) => m.content).join('\n')) + (req.images ?? []).reduce((a) => a + imageTokens(provider.config.kind), 0);
   const pricing = deps.settings.pricing ?? [];
   const inCost = estimateCost(pricing, provider.config, model, { inputTokens, outputTokens: 0, totalTokens: inputTokens });
   const maxCost = estimateCost(pricing, provider.config, model, { inputTokens, outputTokens: maxOutputTokens, totalTokens: inputTokens + maxOutputTokens });
@@ -248,6 +276,7 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
     redactions: ctx.redactions,
     redactionCount: ctx.redactionCount,
     estimate: { inputTokens, maxOutputTokens, costUsd: inCost.cost, maxCostUsd: maxCost.cost, priceKnown: maxCost.cost !== undefined },
+    ...(req.images?.length ? { images: req.images.map((i) => ({ sha256: i.sha256, mime: i.mime, bytes: Math.floor((i.data.length * 3) / 4), ...(i.data.length <= 350_000 ? { thumb: `data:${i.mime};base64,${i.data}` } : {}) })) } : {}),
   };
   return { def, provider, model, preview, maxOutputTokens, preferStable };
 }
@@ -290,7 +319,8 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   const { def, provider, model, preview, maxOutputTokens, preferStable } = prepareAiTask(deps, req, itemContext);
   const { messages, ...summary } = preview;
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
-  if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, ms: 0, preview, dryRun: true };
+  // a dry run's messages go to the window: the pictures are in `preview.images` (thumbnails), not twice in the messages
+  if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, ms: 0, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, dryRun: true };
   checkAiCaps(deps.store, deps.settings.ai, { tokens: preview.estimate.inputTokens + maxOutputTokens, costUsd: preview.estimate.maxCostUsd });
 
   const started = Date.now();
@@ -312,6 +342,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     signal: deps.signal,
     store: deps.store,
     runDeps: deps,
+    tasks: { prepare: prepareAiTask, run: runAiTask },
   };
   /** The answer as proposal items, verified; cached per answer so the repair check and the result share the work. */
   let proposeNotes: string[] = [];

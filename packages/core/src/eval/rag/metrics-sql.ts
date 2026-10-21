@@ -9,6 +9,7 @@ import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { registerCheck, type CheckContext } from '../checks.js';
 import { isInside } from '../../storage/fsutil.js';
 import { ApsError } from '../../errors.js';
+import { productionAllowed, productionRefusal } from '../../net/production-guard.js';
 import type { SqlSource } from '../../runner/sql-exec.js';
 import { sqlHost } from './sql-host.js';
 import { judgedCheck, referenceText, round3 } from './judged-kit.js';
@@ -16,8 +17,14 @@ import { SQL_EQUIVALENCE } from './prompts-r2.js';
 import { num, result } from './metric-util.js';
 import { compareResults, parseResultText, sqlOf, type ResultSet } from './sql.js';
 
+/** The production guard for a database marked `production: true`: the same question, and the same consent, as for a request. */
+export function assertSqlProduction(db: SqlSource, what: string): void {
+  if (db.production === true && !productionAllowed()) throw productionRefusal({ environment: db.path ?? (db.connectionEnv ? `$${db.connectionEnv}` : 'the database'), action: what, changesData: false, run: true });
+}
+
 function sourceOf(cfg: CheckConfig, ctx: CheckContext) {
   const db = (cfg.database ?? {}) as SqlSource;
+  assertSqlProduction(db, 'Run the generated SQL');
   const base = ctx.workspaceRoot ?? process.cwd();
   const src = sqlHost().resolveSqlSource(db, { base });
   // a SQLite file named in a pull request's evaluation must not be one elsewhere on the machine

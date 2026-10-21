@@ -371,7 +371,7 @@ Rules for new features:
 
 ### TestPion's own AI features
 
-The AI features (explain, suggest checks, write tp tests or a flow, fix lint problems …) are one engine module, `packages/core/src/ai/`, used the same way by every host: the desktop backend (`apps/desktop/backend/handlers/ai-tasks.ts`, a thin RPC adapter), the CLI (`testpion ai …`, `testpion flow generate`), the MCP server (`packages/core/src/mcp-server/ai-tools.ts`) and, later, a cloud host. The window never talks to a model: it calls `ai.preview`, `ai.runTask`, `ai.reverifyProposal` and `ai.applyProposal` over RPC.
+The AI features (explain, suggest checks, write tp tests or a flow, fix lint problems …) are one engine module, `packages/core/src/ai/`, used the same way by every host: the desktop backend (`apps/desktop/backend/handlers/ai-tasks.ts`, a thin RPC adapter), the CLI (`testpion ai …`, `testpion flow generate`), the MCP server (`packages/core/src/mcp-server/tools/ai-tools.ts`) and, later, a cloud host. The window never talks to a model: it calls `ai.preview`, `ai.runTask`, `ai.reverifyProposal` and `ai.applyProposal` over RPC.
 
 | Part | Where | What it does |
 |---|---|---|

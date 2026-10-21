@@ -15,7 +15,8 @@ import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
 import { productionAllowed } from './net/production-guard.js';
 import { syncCustomMetrics } from './eval/rag/custom/compile.js';
-import { createRagJudgeHost } from './eval/rag/judge.js';
+import { buildRagJudgeHost, type RagJudgeHost } from './eval/rag/judge.js';
+import { prepareAiTask, runAiTask } from './ai/tasks/run.js';
 import type { AiSurface } from './storage/ai-usage.js';
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
 
@@ -74,6 +75,11 @@ function environmentVariables(env: Environment | undefined, secrets: SecretStore
     if (isSecretRef(v.value)) return { ...v, value: externalSecrets.get(v.value, scope) ?? '', secret: true };
     return v.secret ? { ...v, value: secrets.get(secretKeys.envVar(env.id, v.key)) ?? '' } : v;
   });
+}
+
+/** The judge host of an engine context: the RAG metrics ask the AI task service through it (they import none of ai/tasks). */
+export function createRagJudgeHost(o: Omit<Parameters<typeof buildRagJudgeHost>[0], 'tasks'>): RagJudgeHost {
+  return buildRagJudgeHost({ ...o, tasks: { prepare: prepareAiTask, run: runAiTask } });
 }
 
 /**

@@ -14,12 +14,13 @@ import { dryHost, type DryJudgeCall, type RagJudgeHost } from './judge.js';
 import { INPUT_LABELS, metricToCheck, resolveMetric, type MetricDef, type MetricInput } from './metric-registry.js';
 import type { RagRecord, RagToolCall } from './record.js';
 import { scoreRagSample } from './score.js';
+import { imageRefOf } from './images.js';
 
 /** A sample written by hand, taken from a stored result or probed from a target. */
 export interface TrySample {
   question?: string;
   answer?: string;
-  contexts?: Array<{ id?: string; text: string; score?: number }>;
+  contexts?: Array<{ id?: string; text: string; score?: number; image?: string }>;
   reference?: string;
   referenceIds?: string[];
   referenceContexts?: string[];
@@ -42,6 +43,12 @@ export function sampleInputs(s: TrySample): Partial<Record<MetricInput, boolean>
     latency: s.latencyMs !== undefined,
     scores: !!s.contexts?.some((d) => typeof d.score === 'number'),
     relevance: !!s.record?.relevance,
+    images: !!(s.record?.images?.length || s.contexts?.some((d) => imageRefOf({ text: d.text, image: d.image }))),
+    turns: !!s.record?.turns?.length,
+    referenceTopics: !!s.record?.referenceTopics?.length,
+    expectedOutcome: !!s.record?.expectedOutcome?.trim(),
+    shouldRefuse: s.record?.shouldRefuse !== undefined,
+    otherAnswer: !!s.record?.otherAnswer?.trim(),
   };
 }
 
@@ -51,7 +58,7 @@ export function missingFor(def: MetricDef, s: TrySample): Array<{ input: MetricI
 }
 
 /** The check context of a sample (the same shape a run's target call gives). */
-export function contextOfSample(s: TrySample, o: { judge?: RagJudgeSetup; providers?: ProviderRegistry; ragJudge?: RagJudgeHost; signal?: AbortSignal } = {}): CheckContext {
+export function contextOfSample(s: TrySample, o: { judge?: RagJudgeSetup; providers?: ProviderRegistry; ragJudge?: RagJudgeHost; signal?: AbortSignal; workspaceRoot?: string } = {}): CheckContext {
   const text = s.answer ?? '';
   return {
     testType: 'rag',
@@ -59,13 +66,14 @@ export function contextOfSample(s: TrySample, o: { judge?: RagJudgeSetup; provid
     text,
     question: s.question,
     expected: s.reference,
-    contexts: (s.contexts ?? []).map((d, i) => ({ id: d.id ?? `doc-${i + 1}`, text: d.text, ...(d.score !== undefined ? { score: d.score } : {}) })),
+    contexts: (s.contexts ?? []).map((d, i) => ({ id: d.id ?? `doc-${i + 1}`, text: d.text, ...(d.score !== undefined ? { score: d.score } : {}), ...(d.image ? { image: d.image } : {}) })),
     referenceIds: s.referenceIds,
     referenceContexts: s.referenceContexts,
     record: s.record,
     toolCalls: s.toolCalls ?? s.record?.toolCalls,
     latencyMs: s.latencyMs,
     judge: o.judge,
+    ...(o.workspaceRoot ? { workspaceRoot: o.workspaceRoot } : {}),
     services: { providers: o.providers, ragJudge: o.ragJudge, signal: o.signal },
   };
 }
@@ -83,7 +91,7 @@ export interface TryResult {
 }
 
 export async function tryMetric(
-  o: { providers?: ProviderRegistry; ragJudge: RagJudgeHost },
+  o: { providers?: ProviderRegistry; ragJudge: RagJudgeHost; /** The workspace folder: a picture given by path is read from inside it. */ workspaceRoot?: string },
   req: { metric: string | CheckConfig; sample: TrySample; judge?: RagJudgeSetup; dryRun?: boolean; signal?: AbortSignal },
 ): Promise<TryResult> {
   const name = typeof req.metric === 'string' ? req.metric : req.metric.type;
@@ -96,10 +104,10 @@ export async function tryMetric(
   if (req.dryRun) {
     if (def.kind === 'deterministic' || def.kind === 'sql') return { ...head, willSend: [] };
     const dry = dryHost(o.ragJudge);
-    await scoreRagSample([cfg], contextOfSample(req.sample, { judge: req.judge, providers: o.providers, ragJudge: dry, signal: req.signal }));
+    await scoreRagSample([cfg], contextOfSample(req.sample, { judge: req.judge, providers: o.providers, ragJudge: dry, signal: req.signal, workspaceRoot: o.workspaceRoot }));
     return { ...head, willSend: dry.dry.map((c) => ({ metric: c.metric, version: c.version, cached: c.cached, preview: c.preview })) };
   }
-  const { checks } = await scoreRagSample([cfg], contextOfSample(req.sample, { judge: req.judge, providers: o.providers, ragJudge: o.ragJudge, signal: req.signal }));
+  const { checks } = await scoreRagSample([cfg], contextOfSample(req.sample, { judge: req.judge, providers: o.providers, ragJudge: o.ragJudge, signal: req.signal, workspaceRoot: o.workspaceRoot }));
   const result = checks[0]!;
   const usage = (result.metadata as { judgeUsage?: TryResult['usage'] } | undefined)?.judgeUsage;
   return { ...head, result, ...(usage ? { usage } : {}) };

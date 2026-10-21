@@ -1,35 +1,33 @@
-import type { AppSettings, Collection } from '../../model/types.js';
-import type { SecretStore } from '../../storage/secrets.js';
-import type { WorkspaceStore } from '../../storage/workspace.js';
-import type { DebuggerExchange } from '../../debugger/proxy.js';
-import type { Redactor } from '../../util/redact.js';
 import { ApsError } from '../../errors.js';
 import { createEngineContext } from '../../engine.js';
 import { McpSession } from '../../protocols/mcp/client.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
-import { aiTools } from '../ai-tools.js';
-import { arazzoTools } from '../arazzo-tools.js';
-import { importTools } from '../import-tools.js';
-import { exportConvertTools } from '../export-convert-tools.js';
-import { datasetTools } from '../dataset-tools.js';
-import { debuggerTools } from '../debugger-tools.js';
-import { deployTools } from '../deploy-tools.js';
-import { evalAgentTools } from '../eval-agent-tools.js';
-import { flowGraphTools } from '../flow-graph-tools.js';
-import { gitTools } from '../git-tools.js';
-import { historyTools, type HistoryToolsDeps } from '../history-tools.js';
-import { kindTools } from '../kind-tools.js';
-import { mockTools } from '../mock-tools.js';
-import { openApiTools } from '../openapi-tools.js';
-import { ragTools } from '../rag-tools.js';
-import { ragEvalTools } from '../rag-eval-tools.js';
-import { ragMetricTools } from '../rag-metric-tools.js';
-import { ragR4Tools } from '../rag-r4-tools.js';
-import { recordingTools } from '../recording-tools.js';
-import { refTools } from '../ref-tools.js';
-import { scaleTools } from '../scale-tools.js';
+import { aiTools } from './ai-tools.js';
+import { arazzoTools } from './arazzo-tools.js';
+import { importTools } from './import-tools.js';
+import { exportConvertTools } from './export-convert-tools.js';
+import { datasetTools } from './dataset-tools.js';
+import { debuggerTools } from './debugger-tools.js';
+import { deployTools } from './deploy-tools.js';
+import { evalAgentTools } from './eval-agent-tools.js';
+import { flowGraphTools } from './flow-graph-tools.js';
+import { gitTools } from './git-tools.js';
+import { historyTools } from './history-tools.js';
+import { kindTools } from './kind-tools.js';
+import { mockTools } from './mock-tools.js';
+import { openApiTools } from './openapi-tools.js';
+import { ragTools } from './rag-tools.js';
+import { ragEvalTools } from './rag-eval-tools.js';
+import { ragMetricTools } from './rag-metric-tools.js';
+import { ragProbeTools } from './rag-probe-tools.js';
+import { ragR4Tools } from './rag-r4-tools.js';
+import { recordingTools } from './recording-tools.js';
+import { refTools } from './ref-tools.js';
+import { scaleTools } from './scale-tools.js';
 import type { Tool } from '../tool.js';
-import { workspaceEditTools, type EditToolsDeps } from '../workspace-edit-tools.js';
+import { workspaceEditTools } from './workspace-edit-tools.js';
+import type { ModuleToolDeps } from './deps.js';
+export type { ModuleToolDeps } from './deps.js';
 import { bundleTools } from './bundle-tools.js';
 import { itemTools } from './item-tools.js';
 import { outputTools } from './output-tools.js';
@@ -37,23 +35,6 @@ import { gitItemTools } from './git-item-tools.js';
 import { gitOpsTools } from './git-ops-tools.js';
 import { gitSetupTools } from './git-setup-tools.js';
 import { searchAskTools } from './search-ask-tools.js';
-
-/** What the tool modules need from the server: the workspace, its secrets and settings, and the lookups the server shares. */
-export interface ModuleToolDeps {
-  store: WorkspaceStore;
-  secrets: SecretStore;
-  settings: AppSettings;
-  redactor: Redactor;
-  collections(): Collection[];
-  findCollection(ref: unknown): Collection;
-  findRequest: EditToolsDeps['findRequest'] & HistoryToolsDeps['findRequest'];
-  /** An OpenAPI document given as an http(s) link, a path inside the workspace or the text itself. */
-  readSpec(ref: string): Promise<string>;
-  /** What debugger_capture captured in this server; flow_from_exchanges reads it too. */
-  captured: DebuggerExchange[];
-  /** The environment's name when it exists and may be sent to (the server's rule), undefined for none. */
-  checkEnvironment(name: unknown): string | undefined;
-}
 
 /**
  * The tools of every module, in the server's order (testpion-mcp.ts adds its own inline tools before them, then the
@@ -89,6 +70,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...ragTools({ store, secrets, settings, checkEnvironment }),
     ...ragEvalTools({ store, secrets, settings, checkEnvironment }),
     ...ragMetricTools({ store, secrets, settings, checkEnvironment }),
+    ...ragProbeTools({ store }),
     ...ragR4Tools({ store, secrets, settings, checkEnvironment }),
     ...aiTools({ store, secrets, settings, checkEnvironment }),
     ...workspaceEditTools({

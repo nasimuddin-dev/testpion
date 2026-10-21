@@ -10,7 +10,7 @@ interface CheckDef {
   hint?: string;
 }
 
-export const CHECK_DEFS: CheckDef[] = [
+const CHECK_DEFS: CheckDef[] = [
   { type: 'status', label: 'Status code', group: 'Response', fields: ['expected'], hint: '200, 2xx, [200,201], success, error' },
   { type: 'latency', label: 'Latency ≤ (ms)', group: 'Response', fields: ['max'] },
   { type: 'header', label: 'Header', group: 'Response', fields: ['header', 'expected'] },

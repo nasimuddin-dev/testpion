@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { liveKinds } from '@testpion/shared';
 import { WorkspaceStore, describeKinds } from '../../packages/core/src/index.js';
 import { itemTools } from '../../packages/core/src/mcp-server/tools/item-tools.js';
-import { kindTools } from '../../packages/core/src/mcp-server/kind-tools.js';
+import { kindTools } from '../../packages/core/src/mcp-server/tools/kind-tools.js';
 import { withToolContract } from '../../packages/core/src/mcp-server/tool-contract.js';
 import { TOOL_DOCS } from '../../packages/core/src/mcp-server/tool-docs.js';
 import { runCliSync, tempDir } from '../helpers';

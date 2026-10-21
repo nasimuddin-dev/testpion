@@ -6,7 +6,7 @@
  * In a RAG target run they are strict (no judge, no score); `answer-correctness` outside one keeps its older heuristic.
  */
 import type { CheckConfig, CheckResult } from '../../model/types.js';
-import { checkFn, registerCheck, type CheckContext } from '../checks.js';
+import { checkFn, overrideCheck, registerCheck, type CheckContext } from '../checks.js';
 import { sentences } from '../text.js';
 import { answerClaims, answerVsReference, envOf, referenceClaims, referenceVsAnswer, type PassEnv } from './claim-passes.js';
 import { embedTexts, cosine } from './embed-util.js';
@@ -354,7 +354,7 @@ const ragasScore = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> =
 
 const legacyCorrectness = checkFn('answer-correctness');
 registerCheck('factual-correctness', strictOver(factualCorrectness, legacyCorrectness));
-registerCheck('answer-correctness', strictOver(answerCorrectness, legacyCorrectness));
+overrideCheck('answer-correctness', strictOver(answerCorrectness, legacyCorrectness));
 registerCheck('response-groundedness', responseGroundedness);
 registerCheck('answer-accuracy', answerAccuracy);
 registerCheck('hallucination', hallucination);

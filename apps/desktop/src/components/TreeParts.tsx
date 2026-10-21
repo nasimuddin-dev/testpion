@@ -15,7 +15,7 @@ import { gitActions } from '../lib/git-items';
  */
 
 // the icons every row draws, made once: a tree of thousands of rows re-renders the same elements, which React skips
-export const MORE_ICON = <MoreHorizontal size={14} />;
+const MORE_ICON = <MoreHorizontal size={14} />;
 export const OPEN_ICON = <ChevronDown size={13} className="text-muted shrink-0" />;
 export const CLOSED_ICON = <ChevronRight size={13} className="text-muted shrink-0" />;
 export const FOLDER_ICON = <Folder size={13} className="text-muted shrink-0" />;

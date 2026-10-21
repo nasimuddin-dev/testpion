@@ -47,7 +47,7 @@ const DRAW_ALL = 300;
 const OVERSCAN = 25;
 
 /** The tree filtered by file or folder path (matching folders stay open; empty folders go). */
-export function filterTestTree(nodes: TestNode[], tf: string): TestNode[] {
+function filterTestTree(nodes: TestNode[], tf: string): TestNode[] {
   if (!tf) return nodes;
   return nodes.flatMap((n) => {
     if (n.kind === 'dir') {
@@ -100,7 +100,7 @@ export const TestFileTree = memo(function TestFileTree({ tree, filter, open, fil
  * A row of the test file tree, like the collection tree's: folder (chevron) or file, ▶ run and ⋯ (also on right-click).
  * F2 renames a file in place (its name, in its folder; the tab's Rename takes a path, which can move it).
  */
-export const TestTreeRow = memo(function TestTreeRow({ n, depth, expanded, active, renaming, host }: { n: TestNode; depth: number; expanded?: boolean; active?: boolean; renaming: boolean; host: RefObject<TestsHost> }) {
+const TestTreeRow = memo(function TestTreeRow({ n, depth, expanded, active, renaming, host }: { n: TestNode; depth: number; expanded?: boolean; active?: boolean; renaming: boolean; host: RefObject<TestsHost> }) {
   const h = () => host.current;
   const dir = n.kind === 'dir';
   const runnable = dir || h().isTestFile(n.name);

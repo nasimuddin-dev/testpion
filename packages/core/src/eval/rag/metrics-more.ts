@@ -14,6 +14,8 @@ import { bleu, chrf, firstNumber, jsonSimilarity, labelPrf, numericCompare, nume
 import { round3 } from './measures.js';
 import { needsReference, num, referenceOf, result, short, text } from './metric-util.js';
 import type { RagToolCall } from './record.js';
+import { judgeArguments } from './agent-args.js';
+import { listOf } from './lists.js';
 
 const reg = registerCheck;
 
@@ -205,7 +207,7 @@ reg('retrieval-score-stats', (cfg, ctx) => {
 /* ------------------------------------------------------------------ safety by canary */
 
 reg('prompt-injection-resistance', (cfg, ctx) => {
-  const given = Array.isArray(cfg.canaries) ? cfg.canaries.map(String) : typeof cfg.canary === 'string' ? [cfg.canary] : (ctx.record?.canaries ?? []);
+  const given = listOf(cfg.canaries)?.map(String) ?? (typeof cfg.canary === 'string' ? [cfg.canary] : (ctx.record?.canaries ?? []));
   if (!given.length) return result(cfg, false, 'prompt-injection-resistance needs the canaries: the words an obedient answer would contain. Add a "canaries" (or "injection") column to the dataset, or set "canaries" on the check.', { explanation: 'No canaries.' });
   const answer = ctx.text.toLowerCase();
   const hit = given.filter((c) => answer.includes(c.toLowerCase()));
@@ -224,8 +226,8 @@ function toolInputs(cfg: CheckConfig, ctx: CheckContext): { pred: RagToolCall[];
 }
 
 /** JSON with sorted keys: two values are equal when this text is (a number and the same number as text are not). */
-const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as object).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
-const frozen = (c: RagToolCall) => `${c.name}(${canon(c.arguments)})`;
+export const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x as object).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
+export const frozen = (c: RagToolCall) => `${c.name}(${canon(c.arguments)})`;
 
 reg('tool-call-f1', (cfg, ctx) => {
   const io = toolInputs(cfg, ctx);
@@ -247,7 +249,7 @@ reg('tool-call-f1', (cfg, ctx) => {
   });
 });
 
-reg('tool-call-accuracy', (cfg, ctx) => {
+reg('tool-call-accuracy', async (cfg, ctx) => {
   const io = toolInputs(cfg, ctx);
   if ('type' in io) return io;
   const { pred, ref } = io;
@@ -271,14 +273,15 @@ reg('tool-call-accuracy', (cfg, ctx) => {
       return true;
     });
   }
+  const sameArg = (p: RagToolCall, r: RagToolCall, k: string) => k in p.arguments && (exact ? canon(p.arguments[k]) === canon(r.arguments[k]) : String(p.arguments[k]) === String(r.arguments[k]));
   const argShare = (p: RagToolCall, r: RagToolCall): number => {
     const keys = Object.keys(r.arguments);
     // a reference without arguments is met by a call without arguments
     if (!keys.length) return Object.keys(p.arguments).length ? 0 : 1;
-    return keys.filter((k) => k in p.arguments && (exact ? canon(p.arguments[k]) === canon(r.arguments[k]) : String(p.arguments[k]) === String(r.arguments[k]))).length / keys.length;
+    return keys.filter((k) => sameArg(p, r, k)).length / keys.length;
   };
   const used = new Set<number>();
-  const per = ref.map((r) => {
+  const matched = ref.map((r) => {
     let best = -1;
     let bestScore = 0;
     pred.forEach((p, i) => {
@@ -290,7 +293,25 @@ reg('tool-call-accuracy', (cfg, ctx) => {
       }
     });
     if (best >= 0) used.add(best);
-    return { name: r.name, score: best >= 0 ? bestScore : 0 };
+    return { r, best, share: best >= 0 ? bestScore : 0 };
+  });
+  // `args: judge`: an argument that is not equal as text may still mean the same ("2026-10-20" and "20 October 2026"): one judge call decides them
+  const judged = new Map<string, boolean>();
+  let judgeMeta: Record<string, unknown> | undefined;
+  if (cfg.args === 'judge' && aligned) {
+    const pending = matched.flatMap(({ r, best }, mi) => (best < 0 ? [] : Object.keys(r.arguments).filter((k) => !sameArg(pred[best]!, r, k) && k in pred[best]!.arguments).map((k) => ({ id: `${mi}:${k}`, tool: r.name, argument: k, expected: r.arguments[k], actual: pred[best]!.arguments[k] }))));
+    if (pending.length) {
+      const j = await judgeArguments(cfg, ctx, pending);
+      if ('type' in j) return j;
+      for (const v of j.verdicts) judged.set(v.id, v.same);
+      judgeMeta = { judgeUsage: j.usage, judge: j.judge, promptVersion: j.version };
+    }
+  }
+  const per = matched.map(({ r, best, share }, mi) => {
+    if (best < 0) return { name: r.name, score: 0 };
+    const keys = Object.keys(r.arguments);
+    if (!keys.length || !judged.size) return { name: r.name, score: share };
+    return { name: r.name, score: keys.filter((k) => sameArg(pred[best]!, r, k) || judged.get(`${mi}:${k}`) === true).length / keys.length };
   });
   const sum = per.reduce((a, x) => a + x.score, 0) / Math.max(1, ref.length);
   const score = round3(aligned ? sum : 0);
@@ -299,7 +320,7 @@ reg('tool-call-accuracy', (cfg, ctx) => {
     score,
     expected: ref.map(frozen),
     actual: pred.map(frozen),
-    metadata: { aligned, strictOrder: strict, items: per.map((x) => ({ text: x.name, ok: x.score === 1, evidence: `arguments ${Math.round(x.score * 100)}% equal` })), itemLabels: ['exact', 'partly or not'], threshold: t },
+    metadata: { ...(judgeMeta ?? {}), aligned, strictOrder: strict, ...(judged.size ? { argumentsJudged: judged.size } : {}), items: per.map((x) => ({ text: x.name, ok: x.score === 1, evidence: `arguments ${Math.round(x.score * 100)}% equal` })), itemLabels: ['exact', 'partly or not'], threshold: t },
   });
 });
 

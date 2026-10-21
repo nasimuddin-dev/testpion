@@ -30,7 +30,6 @@ import {
   Plus,
   Redo2,
   Search,
-  Sparkles,
   StepForward,
   StickyNote,
   Trash2,
@@ -60,7 +59,9 @@ import { FLOW_START, FlowDiagram, type FlowDiagramApi, type FlowMark, type FlowS
 import { FlowHistoryList, PausePanel, VariablesTimeline, type FlowPause, type FlowRunRow } from './FlowDebugParts';
 import { API_EXAMPLE, BlockPalette, blockPickerCommands, CollectionPicker, PALETTE, StepInspector, StepPreview } from './FlowDesignerParts';
 import { ResultDetail } from './RunPanel';
-import { Button, LinkButton, Menu, OverflowActions, PinnablePanel, SectionTitle, Segmented, Split, type MenuItem, type OverflowAction } from './ui';
+import { Button, LinkButton, Menu, OverflowActions, SectionTitle, Segmented, Split, type MenuItem, type OverflowAction } from './ui';
+import { PinnablePanel } from './PinnablePanel';
+import { aiButton } from '../lib/ai-menu';
 
 /** A test file as a flow, as the tests.flow RPC reads it for the designer (with each step as written). */
 export interface DesignerFlow {
@@ -755,7 +756,7 @@ export function FlowDesigner({
           { id: 'example', label: 'API example', icon: <Globe size={14} />, tone: 'var(--ok)', title: 'A ready request to a public API with an extract and a check: Run flow works at once', onClick: () => addStep(API_EXAMPLE) },
           { id: 'collection', label: 'Create from collection', icon: <FolderInput size={14} />, tone: 'var(--warn)', title: 'Saved requests (or a folder, chained)', onClick: () => setPicking(true) },
           { id: 'record', label: 'Record from the Debugger', icon: <Bug size={14} />, tone: 'var(--bad)', title: 'Use your app; the exchanges become steps', onClick: () => useApp.getState().openIntent('debugger', { record: true }) },
-          ...(aiOn ? [{ id: 'ai', label: 'Generate with AI', icon: <Sparkles size={14} />, tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate }] : []),
+          ...(aiOn ? [{ id: 'ai', ...aiButton('designFlow'), tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate }] : []),
         ],
   };
   // the toolbar's less used actions: buttons on a wide canvas, the ⋯ menu on a narrow one

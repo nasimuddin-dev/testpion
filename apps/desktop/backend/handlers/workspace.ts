@@ -1,6 +1,6 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
 import { describeVariables } from '../var-descriptions.js';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import {
   ApsError,
@@ -45,6 +45,7 @@ import {
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { takeOpenLinks } from '../open-links.js';
+import { saveText } from './save-text.js';
 
 export function workspaceHandlers(be: Backend): Handlers {
   return {
@@ -162,12 +163,10 @@ export function workspaceHandlers(be: Backend): Handlers {
         // what is in it, what was replaced by {{variables}} and what was left out (the toast says it, as the CLI does)
         const summary = exportSummary(bundle);
         const fileName = workspaceExportFileName(store.workspace.name);
-        // no save dialog (browser / cloud): the caller downloads the bundle
-        if (!be.host.saveDialog) return { bundle, name: store.workspace.name, fileName, ...summary };
-        const dest = await be.host.saveDialog({ defaultPath: fileName, filters: [{ name: 'Workspace', extensions: ['json'] }] });
-        if (!dest) return { cancelled: true };
-        writeFileSync(dest, JSON.stringify(bundle, null, 2));
-        return { path: dest, name: store.workspace.name, fileName, ...summary };
+        // saved where the user chooses (desktop), or returned for the window to download (browser / cloud); a cancelled dialog is `cancelled`
+        const saved = await saveText(be, fileName, [{ name: 'Workspace', extensions: ['json'] }], JSON.stringify(bundle, null, 2), 'application/json');
+        if (!saved.path && !saved.download) return { cancelled: true };
+        return { ...saved, name: store.workspace.name, fileName, ...summary };
       } finally {
         other?.close();
       }
@@ -367,15 +366,10 @@ export function workspaceHandlers(be: Backend): Handlers {
       if (format === 'dotenv') {
         const text = environmentToDotenv(env);
         const name = `.env.${env.name.replace(/[^\w.-]+/g, '-').toLowerCase()}`;
-        const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: '.env file', extensions: ['env', '*'] }] });
-        if (dest) writeFileSync(dest, text);
-        return { path: dest, text: dest ? undefined : text, name };
+        return { ...(await saveText(be, name, [{ name: '.env file', extensions: ['env', '*'] }], text, 'text/plain')), name };
       }
-      const out = exportPostmanEnvironment(env);
       const name = `${env.name}.postman_environment.json`;
-      const dest = await be.host.saveDialog?.({ defaultPath: name, filters: [{ name: 'Environment', extensions: ['json'] }] });
-      if (dest) writeFileSync(dest, JSON.stringify(out, null, 2));
-      return { path: dest, environment: dest ? undefined : out, name };
+      return { ...(await saveText(be, name, [{ name: 'Environment', extensions: ['json'] }], JSON.stringify(exportPostmanEnvironment(env), null, 2), 'application/json')), name };
     },
   };
 }

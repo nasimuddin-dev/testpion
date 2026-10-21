@@ -20,7 +20,7 @@ export interface MetricProblem {
 
 export const MAX_FILE_BYTES = 128 * 1024;
 const KNOWN_KEYS = new Set(['id', 'version', 'name', 'description', 'kind', 'inputs', 'scale', 'criteria', 'anchors', 'reference', 'votes', 'items', 'rules', 'combine', 'expression', 'good', 'negatives', 'aggregate', 'negativeMax', 'embedder', 'script', 'threshold', 'direction', 'judge', 'examples', 'calibration', 'extends']);
-const INPUTS = ['question', 'answer', 'reference', 'contexts'];
+const INPUTS = ['question', 'answer', 'reference', 'contexts', 'conversation'];
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;

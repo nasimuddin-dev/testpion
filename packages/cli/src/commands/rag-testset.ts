@@ -10,7 +10,7 @@ import { formatUsd } from '@testpion/shared';
 import { ApsError, aiRunDeps, applyProposal, estimateGeneration, generateTestset, TESTSET_TYPES, WorkspaceManager, type GenerateOptions } from '@testpion/core';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
 import { machine } from '../output.js';
-import { printProposal } from './ai.js';
+import { printProposal } from './ai-print.js';
 import { printEstimate } from './rag-eval.js';
 
 const collect = (v: string, prev: string[] = []) => [...prev, v];

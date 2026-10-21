@@ -19,6 +19,8 @@ export function metricResolver(rows: MetricRow[]) {
   for (const r of rows) (r.ragas?.names ?? []).forEach((a) => put(a, r));
   return (type: string): MetricRow | undefined => {
     const t = type.replace(/^ragas:/i, '');
+    // per-turn:<metric> is the per-turn metric with that metric as its option
+    if (/^per-turn:.+/i.test(t)) return index.get('per-turn');
     const at = /^(.+)@\d+$/.exec(t);
     const key = normalizeMetricName(at ? `${at[1]}@k` : t);
     return index.get(key) ?? index.get(key.replace(/-score$/, ''));

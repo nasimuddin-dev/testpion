@@ -13,6 +13,7 @@
 import { createHash } from 'node:crypto';
 import type { ItemRef } from '@testpion/shared';
 import { findOperation, type OpenApiDoc } from './contract.js';
+import { isRecord } from '@testpion/shared';
 
 type Json = Record<string, unknown>;
 
@@ -91,13 +92,12 @@ export interface DriftReport {
 /* ------------------------------------------------------------------ schemas */
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** A local `$ref` (#/components/…, #/definitions/…) followed to what it points at, and the path it was found at. */
 export function resolveRef(doc: OpenApiDoc, schema: unknown): { schema: Json; path?: string[] } | undefined {
   let s = schema;
   let path: string[] | undefined;
-  for (let i = 0; i < 12 && isObj(s) && typeof s.$ref === 'string'; i++) {
+  for (let i = 0; i < 12 && isRecord(s) && typeof s.$ref === 'string'; i++) {
     const ref = s.$ref;
     if (!ref.startsWith('#/')) return undefined;
     const parts = ref
@@ -105,11 +105,11 @@ export function resolveRef(doc: OpenApiDoc, schema: unknown): { schema: Json; pa
       .split('/')
       .map((p) => decodeURIComponent(p.replace(/~1/g, '/').replace(/~0/g, '~')));
     let at: unknown = doc;
-    for (const p of parts) at = isObj(at) || Array.isArray(at) ? (at as Json)[p] : undefined;
+    for (const p of parts) at = isRecord(at) || Array.isArray(at) ? (at as Json)[p] : undefined;
     path = parts;
     s = at;
   }
-  return isObj(s) ? { schema: s, path } : undefined;
+  return isRecord(s) ? { schema: s, path } : undefined;
 }
 
 /** The type names a schema allows (`type` as a string or a list; OpenAPI 3.0 `nullable`); empty: any. */
@@ -142,7 +142,7 @@ interface Seen {
   raw?: unknown;
 }
 
-const short = (v: unknown): unknown => (typeof v === 'string' ? (v.length > 60 ? `${v.slice(0, 57)}…` : v) : Array.isArray(v) || isObj(v) ? JSON.stringify(v).slice(0, 60) : v);
+const short = (v: unknown): unknown => (typeof v === 'string' ? (v.length > 60 ? `${v.slice(0, 57)}…` : v) : Array.isArray(v) || isRecord(v) ? JSON.stringify(v).slice(0, 60) : v);
 
 /** The schema's own properties, required list and the parts of an allOf merged. */
 function shapeOf(doc: OpenApiDoc, schema: Json, depth = 0): { props: Record<string, unknown>; required: string[]; types: string[]; nullable: boolean; enumValues?: unknown[]; extra: unknown; hasProps: boolean; any: boolean } {
@@ -152,14 +152,14 @@ function shapeOf(doc: OpenApiDoc, schema: Json, depth = 0): { props: Record<stri
     const t = typesOf(r);
     if (t.types.length) out.types = [...new Set([...out.types, ...t.types])];
     if (t.nullable) out.nullable = true;
-    if (isObj(r.properties)) {
+    if (isRecord(r.properties)) {
       out.hasProps = true;
       Object.assign(out.props, r.properties);
     }
     if (Array.isArray(r.required)) out.required.push(...r.required.map(String));
     if (Array.isArray(r.enum)) out.enumValues = r.enum;
     if (r.additionalProperties !== undefined) out.extra = r.additionalProperties;
-    if (depth < 6 && Array.isArray(r.allOf)) for (const p of r.allOf) if (isObj(p)) Object.assign(out, mergeInto(out, shapeOf(doc, p, depth + 1)));
+    if (depth < 6 && Array.isArray(r.allOf)) for (const p of r.allOf) if (isRecord(p)) Object.assign(out, mergeInto(out, shapeOf(doc, p, depth + 1)));
     if (r.items !== undefined && !out.types.length) out.types = ['array'];
     if (!r.type && !r.properties && !r.items && !r.allOf && !r.oneOf && !r.anyOf && !r.enum && !r.$ref) out.any = true;
   };
@@ -182,12 +182,12 @@ function mergeInto(a: ReturnType<typeof shapeOf>, b: ReturnType<typeof shapeOf>)
 
 /** Walk a body against a schema, collecting what differs (see the module comment). Bounded: depth 8, 20 array elements, 200 findings. */
 export function walkBody(doc: OpenApiDoc, schema: unknown, value: unknown, pointer = '$', seen: Seen[] = [], depth = 0, onValue?: (pointer: string, type: string) => void): Seen[] {
-  if (seen.length >= 200 || depth > 8 || !isObj(schema)) return seen;
+  if (seen.length >= 200 || depth > 8 || !isRecord(schema)) return seen;
   const resolved = resolveRef(doc, schema);
   if (!resolved) return seen;
   const s = resolved.schema;
   // a choice: the variant that fits best (fewest differences) is the one compared
-  const variants = (Array.isArray(s.oneOf) ? s.oneOf : Array.isArray(s.anyOf) ? s.anyOf : undefined)?.filter(isObj);
+  const variants = (Array.isArray(s.oneOf) ? s.oneOf : Array.isArray(s.anyOf) ? s.anyOf : undefined)?.filter(isRecord);
   if (variants?.length) {
     let best: Seen[] | undefined;
     for (const v of variants) {
@@ -213,17 +213,17 @@ export function walkBody(doc: OpenApiDoc, schema: unknown, value: unknown, point
     seen.push({ kind: 'enum-value', pointer, expected: shape.enumValues.map((e) => JSON.stringify(e)).join(', '), observed: String(value), value: short(value), raw: value });
   }
   if (Array.isArray(value)) {
-    const items = isObj(s.items) ? s.items : shape.hasProps ? undefined : undefined;
+    const items = isRecord(s.items) ? s.items : shape.hasProps ? undefined : undefined;
     if (items) for (const el of value.slice(0, 20)) walkBody(doc, items, el, `${pointer}[]`, seen, depth + 1, onValue);
     return seen;
   }
-  if (isObj(value)) {
+  if (isRecord(value)) {
     const obj = value;
-    if (shape.hasProps || isObj(shape.extra) || shape.extra === false) {
+    if (shape.hasProps || isRecord(shape.extra) || shape.extra === false) {
       for (const k of shape.required) if (!(k in obj)) seen.push({ kind: 'missing-required', pointer: `${pointer}.${k}`, expected: 'present', observed: 'absent' });
       for (const [k, v] of Object.entries(obj)) {
         if (k in shape.props) walkBody(doc, shape.props[k], v, `${pointer}.${k}`, seen, depth + 1, onValue);
-        else if (isObj(shape.extra)) walkBody(doc, shape.extra, v, `${pointer}.${k}`, seen, depth + 1, onValue);
+        else if (isRecord(shape.extra)) walkBody(doc, shape.extra, v, `${pointer}.${k}`, seen, depth + 1, onValue);
         else if (shape.hasProps) seen.push({ kind: 'undocumented-field', pointer: `${pointer}.${k}`, observed: jsonType(v), value: short(v), raw: v });
       }
     }
@@ -234,9 +234,9 @@ export function walkBody(doc: OpenApiDoc, schema: unknown, value: unknown, point
 /* ------------------------------------------------------------------ analysis */
 
 const responseFor = (op: Json, status: number): { key: string; response: Json } | undefined => {
-  const responses = (isObj(op.responses) ? op.responses : {}) as Record<string, Json>;
+  const responses = (isRecord(op.responses) ? op.responses : {}) as Record<string, Json>;
   const code = String(status);
-  for (const k of [code, `${code[0]}XX`, `${code[0]}xx`, 'default']) if (isObj(responses[k])) return { key: k, response: responses[k] };
+  for (const k of [code, `${code[0]}XX`, `${code[0]}xx`, 'default']) if (isRecord(responses[k])) return { key: k, response: responses[k] };
   return undefined;
 };
 
@@ -244,7 +244,7 @@ const responseFor = (op: Json, status: number): { key: string; response: Json } 
 export function schemaFor(doc: OpenApiDoc, response: Json, contentType: string | undefined): { schema?: unknown; media?: string; contentKnown: boolean } {
   const ct = (contentType ?? '').split(';')[0]!.trim().toLowerCase();
   const content = response.content;
-  if (isObj(content) && Object.keys(content).length) {
+  if (isRecord(content) && Object.keys(content).length) {
     const type = ct.split('/')[0];
     const media = content[ct] !== undefined ? ct : content[`${type}/*`] !== undefined ? `${type}/*` : content['*/*'] !== undefined ? '*/*' : /[+/]json$/.test(ct) ? Object.keys(content).find((k) => /json/.test(k)) : undefined;
     if (!media) return { contentKnown: false };
@@ -313,7 +313,7 @@ export function analyseDrift(doc: OpenApiDoc, exchanges: DriftExchange[], o: { m
     perOp.set(name, po);
     const found = responseFor(op.operation, e.status);
     if (!found) {
-      const documented = Object.keys((isObj(op.operation.responses) ? op.operation.responses : {}) as object);
+      const documented = Object.keys((isRecord(op.operation.responses) ? op.operation.responses : {}) as object);
       note({ kind: 'undocumented-status', operation: name, status: String(e.status), expected: documented.join(', ') || 'none', of: 0 }, e, String(e.status), e.body === undefined ? undefined : short(e.body), e.body);
       continue;
     }

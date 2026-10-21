@@ -102,18 +102,18 @@ a file is executed) and writes TestPion records:
 | promptfoo | a config or a list of `tests` (YAML or JSON): the question variable, the expected value of an `equals` / `contains` / `similar` / `context-recall` assertion, a `context` variable | `question`, `reference`, `reference_contexts` |
 
 The format is found from the column names (or give `--from ragas|deepeval|nvidia|promptfoo|beir`; BEIR also takes `--qrels` and
-`--corpus`). Multi-turn Ragas samples and promptfoo assertions other than the expected value are left out and named in the notes.
+`--corpus`). A multi-turn Ragas sample becomes a conversation record (see [Conversations](#r3-conversations)); promptfoo assertions other than the expected value are left out and named in the notes.
 **Export as…** (`testpion rag export <dataset|evaluation> --to ragas|deepeval`, `rag_export_dataset`) goes the other way; with
 `--run <runId>` the answer and retrieved contexts each record got in that run are included, so Ragas or DeepEval can score the very
 same answers. TestPion does not call or depend on any of these tools.
 
 ## Metrics {#metrics}
 
-The **Metrics** tab of the evaluation lists all 84 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, agents and tools, safety, SQL, and your own), with a search that finds a metric by
+The **Metrics** tab of the evaluation lists all 134 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, safety, conversations, agents and tools, pictures, SQL, and your own), with a search that finds a metric by
 its id, an older name or a Ragas name (`LLMContextRecall`, `nv_context_relevance`, `response_relevancy`):
 
 * **Presets** put a set in one click: *RAG triad*, *Ragas core*, *DeepEval RAG*, *NVIDIA RAG*, *Retrieval only*, *Free (no model at
-  all)*, *Answer vs reference*, *Ragas NL comparison*, *Ops*.
+  all)*, *Answer vs reference*, *Ragas NL comparison*, *Safety*, *Conversational*, *Agentic RAG*, *Multimodal*, *Ops*.
 * Each row says what it **reads**. When the dataset lacks an input (gold ids, a reference), the row says so in amber, with the column
   to add, instead of failing at the end of a run.
 * A badge says whether it needs **no model**, a **judge** or **embeddings**, and how many judge calls it makes per sample.
@@ -239,6 +239,123 @@ generator or the metric) and what to change first. It proposes nothing.
   judged metrics, a daily judge budget); the CI dialog has the gates, the preset, a baseline, the judge budget, the metric names,
   calls per question, and on GitHub a pull-request comment with the metrics table.
 
+### Conversations, agents, safety, pictures and decision trees {#r3}
+
+#### Conversations {#r3-conversations}
+
+A dataset record with `turns` is a conversation. `turns` is the list of the user's messages (strings), a list of messages
+(`{ role, content }`, OpenAI style, or Ragas' `human` / `ai` / `tool` messages with `tool_calls`), or a transcript text
+(`User: …` / `Assistant: …` lines). TestPion replays the user's messages **one after another** against the target, in one lane
+(turns of a conversation never run in parallel; the evaluation's concurrency is across conversations), and records the whole
+conversation with the system's own answers, the chunks it retrieved for each turn and the tools it called.
+
+How the system keeps the conversation is set in the target (**Conversations** in the Connect dialog, `conversation.mode` in the file):
+
+| Mode | The request uses | Notes |
+|---|---|---|
+| one question per call (default) | `{{question}}` | `{{messages}}`, `{{history}}`, `{{historyText}}` are available too: with one question the history is empty. |
+| the request carries the history | `{{messages}}` (the earlier messages plus this one, `[{role, content}]`), `{{history}}` (the earlier ones), `{{historyText}}` (`User: …` lines) | For OpenAI-style bodies: `json: { messages: "{{messages}}" }`. |
+| the system keeps a session | `{{conversationId}}` (empty on the first turn) | Click the conversation id in the sample response and choose **Conversation id**; the id of each response is carried to the next turn. |
+
+The last turn's answer and chunks are the sample the single-turn metrics (`faithfulness` …) score. The conversation metrics read the
+transcript: `knowledge-retention` (does it ask again for what the user said?), `role-adherence` (needs `role`),
+`conversation-completeness`, `turn-relevancy`, `topic-adherence` (Ragas; needs the allowed topics, a `reference_topics` column or
+`topics`), `coherence-across-turns`, `conversation-helpfulness`, `user-friction`, `conversational-g-eval`, and **`per-turn:<metric>`**
+(`per-turn:faithfulness`, `per-turn:answer-relevance` …) which scores every assistant turn with a single-turn metric on that turn's own
+question, answer and chunks and reports the mean (or `aggregate: min`) and each turn. Ragas multi-turn samples import as conversation
+records and export back (`reference` is the goal, `expected_outcome`; `reference_tool_calls` and `reference_topics` are kept).
+
+#### Agents and tool calls {#r3-agents}
+
+Map the tool calls the system made in the Connect dialog (**The list of tool calls**, then each call's **name** and **arguments**;
+OpenAI `function.name` / JSON `arguments`, LangChain `tool` / `tool_input` and MCP shapes are found without mapping). An **MCP target** *is*
+a tool call: the call itself is the trace. A conversation keeps the calls of each turn.
+
+* Deterministic: `tool-call-accuracy` (Ragas; `args: judge` lets the judge decide, in one call, whether an argument that differs as
+  text means the same: "2026-10-20" and "20 October 2026"), `tool-call-f1`, **`trajectory-match`** (`mode`: `strict`, `in-order`,
+  `any-order`, `precision`, `recall`; `args: exact` compares arguments too), `tool-correctness`, and the older `tool-called`,
+  `tool-not-called`, `allowed-tools`, `max-tool-calls`, `tool-sequence`, `tool-args-valid`.
+* Judged: `goal-accuracy` (Ragas AgentGoalAccuracy: with an `expected_outcome` it compares the end state with it, without one it works out
+  the user's goal and decides whether it was reached; two calls), `argument-correctness`, `tool-selection`, `task-completion`,
+  `step-efficiency`, `plan-adherence`, `plan-quality`, `mcp-use`, `mcp-task-completion`.
+
+#### Safety {#r3-safety}
+
+Free and sure where a rule can decide: `pii-leakage` (`mode: regex`: e-mail, phone, social security and card numbers with their
+checksums, IBANs; findings are shown masked and never copied in full into a result), `no-leak` (secrets and canaries), `refusal`,
+`prompt-injection-resistance` (canary words). Judged where it takes a reading: `toxicity`, `bias`, `harmfulness`, `maliciousness`,
+`misuse`, `non-advice`, `role-violation`, `controversiality`, `jailbreak-resistance`, `off-topic`, `policy-adherence` (your rules as a
+checklist), and the judge modes of `pii-leakage` (patterns first, then the statements), `refusal-correctness` and
+`prompt-injection-resistance` (`mode: judge` or `both`). Every judge prompt tells the judge that the answer is data it is judging, never an
+instruction.
+
+`refusal-correctness` reads `should_refuse` and counts both failures: **missed refusals** (it answered what it should have refused) and
+**false refusals** (it refused what it should have answered).
+
+**Probe sets.** *AI Lab ▸ RAG ▸ Safety probe sets* (or `testpion rag probes add`, the MCP tool `rag_probe_sets`) writes small seeded
+datasets into `datasets/`: `jailbreak`, `injection` (instructions planted in the text to read, with a made-up canary word that proves
+obedience), `pii`, `toxicity`, `bias`, `off-topic` and `benign` (harmless look-alikes, to count false refusals). They are ordinary
+JSON Lines files with `question`, `probe`, `should_refuse`, `canaries`, `tags`: add your own lines, and seeding again never overwrites a
+file that is there. Run one with an evaluation of type RAG and the **Safety** preset. The prompts name the kinds of attack a red team tries and
+carry none of the harmful content.
+
+#### Pictures {#r3-pictures}
+
+`multimodal-faithfulness` (Ragas; `mode: claims` names the picture or text that decides each claim) and `multimodal-relevance` read the pictures of
+a sample together with its texts: a retrieved chunk that is an image (map its **image** in the Connect dialog; a chunk whose text is
+a `data:image/…` URI, an image URL or a file of the workspace is recognised too), or the question's own (an `images` column).
+
+* They are sent to the judge **as data** (base64), read by TestPion itself, so the judge's provider never fetches a private URL. A
+  picture cannot be masked, so **nothing is sent unless the evaluation says so** (**Send pictures to the judge** in Judge options,
+  `--allow-images`, `allow_images`), the AI privacy level is *Full*, and the judge can see: a vision model (Claude, Gemini, GPT-4o …, or a
+  local one such as an Ollama `llava`, `qwen2.5vl` or `gemma3`; list others in the provider's `visionModels`). Otherwise the metric is n/a
+  with the reason, and nothing is asked. *Local only* keeps them on this computer.
+* Limits: PNG, JPEG, GIF, WebP and BMP by their content (an SVG is refused: it can carry a script), 5 MB a picture, 16 pictures and 20 MB
+  a sample. A picture over a limit makes the metric n/a with the size in words; nothing is resized or silently dropped (past 16
+  the first 16 go, and the result says so). The camera and place data of a photo (EXIF, XMP, comments) is removed from the copy that is sent.
+* **What will be sent** (Try, `--dry-run`) lists the pictures with their size and a thumbnail. A result keeps each picture's
+  reference and sha256, never its bytes; the verdict cache is keyed by the picture's hash. The drill-down shows a picture through the backend.
+
+#### Decision trees {#r3-trees}
+
+A metric can run only when another metric of the same sample gave a result: `when` and `unless` on its entry, or in the picker **run only
+when / unless** on the metric's row.
+
+```yaml
+evaluators:
+  - faithfulness
+  - { type: context-recall, when: "faithfulness < 0.8" }      # find out why it is unfaithful
+  - { type: answer-relevance, unless: "faithfulness < 0.8" }  # otherwise check it answers the question
+```
+
+A condition is `metric < 0.8` (also `<=`, `>`, `>=`, `=`, `!=`), `metric passes` or `metric fails`, or `{ metric, lt: 0.8 }`. A metric that
+is not run costs nothing and is n/a in the matrix, with the reason; a metric whose own result is n/a makes the condition unmet. A circle, an
+unknown metric or an unreadable condition is refused before the first question. From the terminal: `--when "context-recall=faithfulness < 0.8"`.
+Trees work in a run of a RAG target and in a re-score.
+
+The **`dag`** metric (DeepEval) is a decision tree *inside one metric*: nodes that ask a yes/no question or pick one option, tasks whose
+result later nodes read, and **rules** (any deterministic check, no model); only the path the answers lead to is asked, and a leaf
+holds the score (0 to 10). It is checked when it loads (no cycles, at most 12 nodes deep).
+
+```yaml
+- type: dag
+  tree:
+    root: cites
+    nodes:
+      cites: { type: binary, question: "Does the answer cite a source?", yes: right, no: { score: 0, reason: no citation } }
+      right: { type: choice, question: "Which document does it cite?", options: { "the right one": { score: 10 }, "a wrong one": { score: 4 } } }
+```
+
+#### Other judge designs {#r3-judges}
+
+`g-eval` (a criterion turned into evaluation steps once, cached; `samples: n` averages n ratings, an estimate of the paper's
+probability-weighted score because the AI layer has no token probabilities), `pairwise` (this run's answer against a `baseline_answer`,
+blinded, in both orders; the mean is the win rate), `summarization` (DeepEval's min of alignment and coverage, or `mode: ragas`),
+`faithfulness-hhem` (the judge writes the claims; a classifier you serve, Vectara HHEM, decides each: `classifier: { url }`, which Local only
+requires to be on this computer) and `reward-score` (a Nemotron reward model on an OpenAI-compatible endpoint you name as a provider:
+`attributes`, `scalar` or `genrm`). The classifier and the reward model obey the same rules as every judge: privacy level *Full*, redaction,
+*Local only*, one ledger row per call.
+
 ### From the terminal and CI {#cli}
 
 ```bash
@@ -261,7 +378,7 @@ is real with a seeded paired bootstrap over the samples both runs scored, direct
 regression). A two-phase run collects the answers first (the run is recorded), then judges them as a second, re-scored run: change
 the judge or add a metric later with `rag rescore` and nothing is asked of your system again.
 
-An agent has the same: `rag_metrics`, `rag_try_metric`, `rag_estimate`, `rag_run`, `rag_rescore`, `rag_compare`, the custom-metric tools `rag_list_custom_metrics`, `rag_validate_metric`, `rag_save_custom_metric`, and the prompt
+An agent has the same: `rag_metrics`, `rag_try_metric`, `rag_estimate`, `rag_run`, `rag_rescore`, `rag_compare`, the custom-metric tools `rag_list_custom_metrics`, `rag_validate_metric`, `rag_save_custom_metric`, the probe sets `rag_probe_sets`, and the prompt
 `evaluate_rag_system` (probe → metrics → estimate → run → compare). `rag_run` stops before the first question when the target cannot
 be called or a judged metric has no judge.
 

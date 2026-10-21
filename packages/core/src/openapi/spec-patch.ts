@@ -11,9 +11,9 @@
 import { isSeq, parseDocument } from '../util/lazy-yaml.js';
 import type { OpenApiDoc } from './contract.js';
 import { jsonType, resolveRef, type DriftFinding } from './drift.js';
+import { isRecord } from '@testpion/shared';
 
 type Json = Record<string, unknown>;
-const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
 
 export type PatchOp =
   | { op: 'add-property'; at: Array<string | number>; name: string; schema: Json }
@@ -43,7 +43,7 @@ export function inferSchemaOf(v: unknown, depth = 0): Json {
   if (t === 'integer' || t === 'number' || t === 'boolean') return { type: t };
   if (t === 'null') return { nullable: true };
   if (t === 'array') return depth < 3 && (v as unknown[]).length ? { type: 'array', items: inferSchemaOf((v as unknown[])[0], depth + 1) } : { type: 'array', items: {} };
-  if (isObj(v)) {
+  if (isRecord(v)) {
     if (depth >= 3) return { type: 'object' };
     return { type: 'object', properties: Object.fromEntries(Object.entries(v).slice(0, 30).map(([k, x]) => [k, inferSchemaOf(x, depth + 1)])) };
   }
@@ -73,7 +73,7 @@ function follow(doc: OpenApiDoc, path: Array<string | number>): { path: Array<st
   let p = path;
   for (let i = 0; i < 12; i++) {
     const s = at(doc, p);
-    if (!isObj(s)) return undefined;
+    if (!isRecord(s)) return undefined;
     if (typeof s.$ref !== 'string') return { path: p, schema: s };
     const r = resolveRef(doc, s);
     if (!r?.path) return undefined;
@@ -89,12 +89,12 @@ function locate(doc: OpenApiDoc, start: Array<string | number>, segments: Array<
     if (!cur) return undefined;
     if ('items' in seg) {
       const items = cur.schema.items;
-      if (!isObj(items)) return undefined;
+      if (!isRecord(items)) return undefined;
       cur = follow(doc, [...cur.path, 'items']);
       continue;
     }
     // the property may be declared by the schema or by one of its allOf parts
-    const direct = isObj(cur.schema.properties) && seg.prop in cur.schema.properties;
+    const direct = isRecord(cur.schema.properties) && seg.prop in cur.schema.properties;
     if (direct) {
       cur = follow(doc, [...cur.path, 'properties', seg.prop]);
       continue;
@@ -103,7 +103,7 @@ function locate(doc: OpenApiDoc, start: Array<string | number>, segments: Array<
     let next: ReturnType<typeof follow>;
     for (let i = 0; i < parts.length && !next; i++) {
       const part = follow(doc, [...cur.path, 'allOf', i]);
-      if (part && isObj(part.schema.properties) && seg.prop in part.schema.properties) next = follow(doc, [...part.path, 'properties', seg.prop]);
+      if (part && isRecord(part.schema.properties) && seg.prop in part.schema.properties) next = follow(doc, [...part.path, 'properties', seg.prop]);
     }
     cur = next;
   }
@@ -112,12 +112,12 @@ function locate(doc: OpenApiDoc, start: Array<string | number>, segments: Array<
 
 /** Where a response's schema starts: the media type's schema (OpenAPI 3) or the response's (Swagger 2). */
 function responseSchemaPath(doc: OpenApiDoc, op: { path: string; method: string; operation: Json }, status: string): Array<string | number> | undefined {
-  const responses = isObj(op.operation.responses) ? op.operation.responses : {};
-  const key = [status, `${status[0]}XX`, `${status[0]}xx`, 'default'].find((k) => isObj(responses[k]));
+  const responses = isRecord(op.operation.responses) ? op.operation.responses : {};
+  const key = [status, `${status[0]}XX`, `${status[0]}xx`, 'default'].find((k) => isRecord(responses[k]));
   if (!key) return undefined;
   const base: Array<string | number> = ['paths', op.path, op.method, 'responses', key];
   const resp = responses[key] as Json;
-  if (isObj(resp.content)) {
+  if (isRecord(resp.content)) {
     const media = Object.keys(resp.content).find((k) => /json/.test(k)) ?? Object.keys(resp.content)[0];
     return media ? [...base, 'content', media, 'schema'] : undefined;
   }
@@ -129,7 +129,7 @@ const operationOf = (doc: OpenApiDoc, name: string): { path: string; method: str
   if (!m) return undefined;
   const item = (doc.paths ?? {})[m[2]!];
   const operation = item?.[m[1]!.toLowerCase()];
-  return isObj(operation) ? { path: m[2]!, method: m[1]!.toLowerCase(), operation } : undefined;
+  return isRecord(operation) ? { path: m[2]!, method: m[1]!.toLowerCase(), operation } : undefined;
 };
 
 /* ------------------------------------------------------------------ planning */
@@ -147,7 +147,7 @@ export function planPatch(doc: OpenApiDoc, f: Pick<DriftFinding, 'kind' | 'opera
   if (f.kind === 'undocumented-status') {
     const status = f.status ?? '';
     const path: Array<string | number> = ['paths', op.path, op.method, 'responses'];
-    const json = isObj(sample) || Array.isArray(sample);
+    const json = isRecord(sample) || Array.isArray(sample);
     return {
       ops: [{ op: 'add-response', at: path, status, description: 'Observed in traffic', ...(json ? { media: 'application/json', schema: inferSchemaOf(sample) } : {}) }],
       summary: `document the ${status} response of ${f.operation}${json ? ' with the shape that was observed' : ''}`,

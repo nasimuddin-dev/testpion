@@ -47,9 +47,3 @@ export function commented(tool: string, script: unknown): string | undefined {
   if (!s) return undefined;
   return [`// ${tool} script (not converted: it uses ${tool}'s own script API). Rewrite it with pm.* / tp.* to run it.`, ...s.split('\n').map((l) => `// ${l}`)].join('\n');
 }
-
-/** Headers of a request with a folder's / collection's headers added after its own (the request's win): used where a tool has no folder headers. */
-export function mergeHeaders(own: KeyValue[], inherited: KeyValue[]): KeyValue[] {
-  const names = new Set(own.map((h) => h.key.toLowerCase()));
-  return [...own, ...inherited.filter((h) => !names.has(h.key.toLowerCase()))];
-}

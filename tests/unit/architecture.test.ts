@@ -65,6 +65,10 @@ describe('architecture', () => {
     expect(offenders('packages/core/src/eval/rag', (i) => /(^|\/)runner\//.test(i.spec) && !i.typeOnly)).toEqual([]);
   });
 
+  it('the RAG metric engine takes only types from the AI task service: the engine lends it prepare/run (no 60-file import cycle)', () => {
+    expect(offenders('packages/core/src/eval/rag', (i) => /(^|\/)ai\/tasks\//.test(i.spec) && !i.typeOnly)).toEqual([]);
+  });
+
   it('the CLI is core plus commands', () => {
     expect(offenders('packages/cli/src', (i) => /^(electron|react|react-dom)(\/|$)/.test(i.spec) || i.spec.includes('apps/desktop'))).toEqual([]);
   });
@@ -87,11 +91,23 @@ describe('architecture', () => {
     ).toEqual([]);
   });
 
+  it('a handler saves a file for the user through Backend.saveOrDownload (or saveText): a cancelled dialog must never fall back to a download', () => {
+    const asks: string[] = [];
+    for (const f of files('apps/desktop/backend/handlers')) if (/saveDialog/.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')) && !/handlers\/app\.ts$/.test(rel(f))) asks.push(rel(f));
+    expect(asks).toEqual([]);
+  });
+
+  it('MCP tools live in mcp-server/tools (one home, composed by tools/index.ts); the server file holds none of its own', () => {
+    const root = join(__dirname, '..', '..', 'packages/core/src/mcp-server');
+    expect(readdirSync(root).filter((f) => /-tools\.ts$/.test(f))).toEqual([]);
+    expect(readFileSync(join(root, 'testpion-mcp.ts'), 'utf8')).not.toMatch(/^ {6}name: '/m);
+  });
+
   it('the big files do not grow: new tools, handlers and commands get their own module', () => {
     // the ceiling is a little above each file's size when this test was written; shrinking it is always welcome
     const ceilings: Record<string, number> = {
-      'packages/core/src/mcp-server/testpion-mcp.ts': 1500,
-      'apps/desktop/backend/backend.ts': 1450,
+      'packages/core/src/mcp-server/testpion-mcp.ts': 250,
+      'apps/desktop/backend/backend.ts': 950,
       'packages/cli/src/commands/data.ts': 1300,
       'packages/core/src/storage/workspace.ts': 900,
       'packages/core/src/model/types.ts': 900,

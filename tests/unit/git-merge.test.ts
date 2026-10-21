@@ -183,7 +183,7 @@ describe('git with the merge driver', () => {
     expect((await gitStatus(ws)).conflicted).toBe(true);
     // the side-by-side view: A, part by part; only the request line differs
     const detail = await gitConflictDetail(ws, 'collections/api.json');
-    expect(detail.collection).toBe(true);
+    expect(detail.mode).toBe('items');
     expect(detail.items.map((i) => [i.key, i.kind, i.where])).toEqual([['item:a', 'changed-both', 'API ▸ A']]);
     expect(detail.items[0]!.parts.filter((p) => p.differs)).toEqual([{ part: 'Request', base: 'GET https://x/a-ours', ours: 'GET https://x/a-2-ours', theirs: 'GET https://x/a-2-theirs', differs: true }]);
     await gitResolve(ws, 'collections/api.json', 'ours', { 'item:a': 'theirs' });

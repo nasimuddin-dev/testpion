@@ -7,9 +7,23 @@ export interface ToolCall {
   rawArguments?: string;
 }
 
+/**
+ * An image sent to a vision model AS DATA (base64), never as a URL the provider would fetch. Only a user message carries
+ * them; the provider maps them to its own image part. `sha256` identifies the bytes in the cache key and the ledger: the
+ * bytes themselves are never logged or stored in a result.
+ */
+export interface ChatImage {
+  mime: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp';
+  /** Base64 of the bytes (without the `data:` prefix). */
+  data: string;
+  sha256: string;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  /** Images beside the text of a user message (vision models only; see ai/vision.ts). */
+  images?: ChatImage[];
   toolCalls?: ToolCall[];
   toolCallId?: string;
   toolName?: string;

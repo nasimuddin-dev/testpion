@@ -119,7 +119,7 @@ describe('capture sessions in History', () => {
     const before = ((await be.invoke('history.list', { kind: 'capture' })) as { items: Row[] }).items.length;
     await be.invoke('debug.createFlow', { since: '2026-01-01T00:00:00Z', name: 'Preview only', dryRun: true });
     expect(((await be.invoke('history.list', { kind: 'capture' })) as { items: Row[] }).items.length).toBe(before);
-    const { historyTools } = await import('../../packages/core/src/mcp-server/history-tools.js');
+    const { historyTools } = await import('../../packages/core/src/mcp-server/tools/history-tools.js');
     const tool = historyTools({ store: be.ws, redactor: be.logger.redactor, findCollection: () => undefined as never, findRequest: () => undefined as never }).find((t) => t.name === 'history_list')!;
     const rows = (await tool.run({ kind: 'capture', limit: 10 })) as Row[];
     expect(rows.length).toBe(before);

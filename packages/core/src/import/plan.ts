@@ -9,6 +9,7 @@ import type { ImportReport } from './report.js';
 import type { ImportScriptsMode } from './import-scripts.js';
 import { plannedSpecs, importIntoWorkspace, type ImportSinks, type SpecConflict, type WorkspaceImportResult } from './workspace-import.js';
 import { planReimport, type ReimportAction, type ReimportPlan } from './reimport.js';
+import { withCollectionListing } from './listing-cache.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { undoImportReceipt, type UndoResult } from './import-receipt.js';
 import type { ImportInput, SkippedFile } from './inputs.js';
@@ -72,7 +73,9 @@ function treeOf(nodes: CollectionNode[], path: string[], changed: Set<string>, b
 }
 
 /** What importing this text into the workspace would do. Nothing is written. */
-export function planImport(store: WorkspaceStore, text: string, opts: { name?: string; scripts?: ImportScriptsMode; liftTests?: boolean } = {}): ImportPlan {
+export function planImport(realStore: WorkspaceStore, text: string, opts: { name?: string; scripts?: ImportScriptsMode; liftTests?: boolean } = {}): ImportPlan {
+  // the collections of the workspace are read once for everything below (their ids, their names, the one an update would change)
+  const store = withCollectionListing(realStore);
   const { document, report } = importDocument(text, { name: opts.name, scripts: opts.scripts, takenIds: workspaceNodeIds(store.listCollections()), liftTests: opts.liftTests });
   const reimport = document.collections.flatMap((c) => planReimport(store, document, c) ?? []);
   const changed = new Set(document.findings.filter((f) => f.severity !== 'info').map((f) => f.where.join(' / ')));
@@ -131,7 +134,9 @@ export interface ImportManyPlan {
 }
 
 /** The plans of several inputs (a failing one is reported, the others still plan). */
-export function planInputs(store: WorkspaceStore, inputs: ImportInput[], skipped: SkippedFile[] = [], opts: { scripts?: ImportScriptsMode; liftTests?: boolean } = {}): ImportManyPlan {
+export function planInputs(realStore: WorkspaceStore, inputs: ImportInput[], skipped: SkippedFile[] = [], opts: { scripts?: ImportScriptsMode; liftTests?: boolean } = {}): ImportManyPlan {
+  // nothing is written while planning: the workspace's collections are read once for all the inputs
+  const store = withCollectionListing(realStore);
   const planned: PlannedInput[] = inputs.map((input) => {
     const id = { name: input.name, source: input.source, fileCount: input.fileCount };
     try {
@@ -164,10 +169,12 @@ export interface ImportedInput {
 
 /** Import several inputs in order; one that fails does not stop the others. `receipts` are what `undoMany` takes. */
 export function importInputs(
-  store: WorkspaceStore,
+  realStore: WorkspaceStore,
   inputs: ImportInput[],
   opts: { contractChecks?: boolean; secrets?: SecretStore; scripts?: ImportScriptsMode; liftTests?: boolean; update?: boolean | { decisions?: Record<string, ReimportAction> }; sinks?: ImportSinks; specs?: SpecConflict; envName?: (input: ImportInput) => string | undefined; arazzo?: (input: ImportInput) => { baseDir?: string; sources?: Record<string, string> } | undefined } = {},
 ): { imported: ImportedInput[]; receipts: string[] } {
+  // the workspace's collections are read once for the whole run; each collection the run saves is read in as it is saved
+  const store = withCollectionListing(realStore);
   const imported: ImportedInput[] = [];
   const receipts: string[] = [];
   for (const input of inputs) {

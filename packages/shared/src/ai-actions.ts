@@ -11,6 +11,17 @@
 import type { Capability } from './item-kinds.js';
 import type { MenuGroup, MenuLabelKey, NodeKind } from './node-menu.js';
 
+/** Every AI task by id (packages/core/src/ai/tasks/registry.ts holds the definitions): a task is named by this union everywhere, so a typo is a compile error. */
+export const AI_TASK_IDS = [
+  'explain-error', 'explain-response', 'explain-exchange', 'explain-timing', 'explain-test-failure', 'explain-test-history', 'explain-monitor',
+  'explain-fuzz', 'explain-api-changes', 'fix-security', 'fix-openapi-lint', 'analyze', 'analyze-load', 'triage-attention', 'write-commit-message',
+  'generate-assertions', 'generate-pm-tests', 'generate-test', 'design-flow', 'flow-from-collection', 'tests-from-spec', 'security-tests',
+  'contract-drift', 'write-script', 'explain-script', 'tidy-import', 'import-leftovers', 'triage-run', 'analyze-flaky', 'suggest-coverage-tests',
+  'generate-request', 'generate-query', 'generate-args', 'generate-mock-data', 'design-toolset', 'rag-judge', 'rag-suggest-mapping',
+  'rag-explain-sample', 'rag-draft-metric', 'rag-generate-testset', 'rag-author-evaluation', 'nl-search', 'free',
+] as const;
+export type AiTaskId = (typeof AI_TASK_IDS)[number];
+
 export interface AiActionDef {
   /** The menu action id: what a view's `on` names. */
   id: string;
@@ -20,7 +31,7 @@ export interface AiActionDef {
   icon: string;
   group: MenuGroup;
   /** The AI task it runs (packages/core/src/ai/tasks/registry.ts). */
-  task: string;
+  task: AiTaskId;
   /** Every item kind with this capability has it (flow: collections and folders) … */
   cap?: Capability;
   /** … or only these node kinds. */
@@ -152,6 +163,37 @@ export const AI_ACTIONS = [
     mcp: 'ai_run_task',
     text: 'What the script does step by step, which variables it reads and sets, and what would go wrong.',
   },
+  // not a tree node's menu: the empty states' buttons (the window takes their label and icon with aiButton)
+  {
+    id: 'describeRequest',
+    label: 'describeWithAi',
+    icon: 'sparkles',
+    group: 'tools',
+    task: 'generate-request',
+    cli: 'testpion ai run generate-request',
+    mcp: 'ai_run_task',
+    text: 'A request drafted from a description in plain words (method, URL, headers, body, checks), shown for review before it is sent.',
+  },
+  {
+    id: 'designFlow',
+    label: 'generateWithAi',
+    icon: 'sparkles',
+    group: 'tools',
+    task: 'design-flow',
+    cli: 'testpion flow generate',
+    mcp: 'flow_generate',
+    text: 'A flow described in words, or drawn from a collection or folder, written by the assistant and reviewed before it is saved.',
+  },
+  {
+    id: 'designToolset',
+    label: 'generateWithAi',
+    icon: 'sparkles',
+    group: 'tools',
+    task: 'design-toolset',
+    cli: 'testpion ai run design-toolset',
+    mcp: 'ai_run_task',
+    text: 'A toolset for an MCP mock (names, descriptions, input schemas and the answers the mock gives) designed from a description.',
+  },
   // not a tree node's menu: the ⋯ menu of a row of the Problems list (the window builds it with aiMenuItems)
   {
     id: 'askProblem',
@@ -171,6 +213,3 @@ const BY_ID = new Map<string, AiActionDef>(AI_ACTIONS.map((a) => [a.id, a]));
 
 /** An AI action by its menu action id. */
 export const aiActionOf = (id: string): AiActionDef | undefined => BY_ID.get(id);
-
-/** Whether a menu action id is one of the AI table's (a view cannot make up an AI item). */
-export const isAiAction = (id: string): boolean => BY_ID.has(id);

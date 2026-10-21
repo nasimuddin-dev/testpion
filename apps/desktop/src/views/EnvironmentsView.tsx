@@ -1,6 +1,6 @@
 import { Plus, ArrowLeftRight, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
-import { useGit } from '../lib/git';
+import { useGitRepo } from '../lib/git';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
@@ -22,7 +22,7 @@ import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/Tr
 import { buildNodeMenu } from '../lib/node-menu';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
-import { downloadContent } from '../lib/files';
+import { deliverSave, type SaveResult } from '../lib/files';
 import { AlsoAddDialog } from '../components/AlsoAddTo';
 
 /**
@@ -33,7 +33,7 @@ import { AlsoAddDialog } from '../components/AlsoAddTo';
 const envDrafts = persisted<Environment | null>('env-edit', null);
 
 export function EnvironmentsView() {
-  const git = useGit();
+  const inGit = useGitRepo();
   const ws = useApp((s) => s.workspace);
   const settings = useApp((s) => s.settings);
   const activeEnv = useApp((s) => s.environment);
@@ -45,10 +45,8 @@ export function EnvironmentsView() {
   const exportEnv = async (format: 'postman' | 'dotenv') => {
     if (!draft) return;
     try {
-      const r = await call<{ path?: string; environment?: unknown; text?: string; name: string }>('env.export', { id: draft.id, format });
-      if (r.environment) downloadContent(r.name, JSON.stringify(r.environment, null, 2), { type: 'application/json' });
-      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: 'text/plain' });
-      else if (r.path) useApp.getState().toast(`Exported to ${r.path} (secret values are left out)`, 'success');
+      const r = await call<SaveResult & { name: string }>('env.export', { id: draft.id, format });
+      if (deliverSave(r) && r.path) useApp.getState().toast(`Exported to ${r.path} (secret values are left out)`, 'success');
     } catch (e) {
       toastError(e);
     }
@@ -202,7 +200,7 @@ export function EnvironmentsView() {
   const envMenu = (e: Environment): NodeMenuCtx => ({
     ref: { kind: 'environment', environmentId: e.id },
     name: e.name,
-    repo: !!git.status?.repository,
+    repo: inGit,
     on: {
       open: () => setSel(e.id),
       makeActive: () => void useApp.getState().setEnvironment(e.name),
@@ -402,7 +400,7 @@ export function EnvironmentsView() {
                         'environment',
                         withRefDefaults({
                           ref: { kind: 'environment', environmentId: draft.id },
-                          repo: !!git.status?.repository,
+                          repo: inGit,
                           on: { duplicate: () => void duplicateEnv(draft), delete: () => void deleteEnv(draft) },
                         }, 'environment'),
                       )}

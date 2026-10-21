@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultSettings, MemorySecretStore, WorkspaceStore, type MockRule, type SavedEvaluation } from '../../packages/core/src/index.js';
-import { ragAuthorTools } from '../../packages/core/src/mcp-server/rag-author-tools.js';
+import { ragAuthorTools } from '../../packages/core/src/mcp-server/tools/rag-author-tools.js';
 import { withToolContract } from '../../packages/core/src/mcp-server/tool-contract.js';
 import { TOOL_DOCS } from '../../packages/core/src/mcp-server/tool-docs.js';
 import { cliData, runCli, tempDir } from '../helpers.js';

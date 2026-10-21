@@ -130,6 +130,7 @@ describe('the shape of every tool', () => {
         'restore_item',
         // the person's own pass/fail label of a result, in labels/*.json (the editor of the matrix does the same)
         'rag_label',
+        'rag_probe_sets',
       ].map((n) => [n, EDITS]),
     ),
     ...Object.fromEntries(['rag_probe', 'rag_import_dataset', 'rag_try_metric', 'rag_run', 'rag_rescore', 'rag_validate_metric'].map((n) => [n, RAG])),

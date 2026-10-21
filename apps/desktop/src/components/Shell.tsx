@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, on } from '../api';
-import { useGit } from '../lib/git';
+import { useGitBar } from '../lib/git';
 import wordmarkUrl from '../../build/wordmark-nav.png';
 import wordmarkLightUrl from '../../build/wordmark-nav-light.png';
 import markUrl from '../../build/icons/64x64.png';
@@ -252,9 +252,9 @@ export function StatusBar() {
 
 /** The branch, commits to push / pull and the number of changes (GIT-204); opens the Git view. Hidden outside git. */
 function GitSegment() {
-  const { status } = useGit();
-  if (!status?.repository) return null;
-  const n = status.files.length;
+  const status = useGitBar();
+  if (!status) return null;
+  const n = status.changedFiles;
   return (
     <button
       className="flex items-center gap-1 hover:text-fg"

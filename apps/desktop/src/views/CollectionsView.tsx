@@ -26,7 +26,7 @@ import {
   FolderOpen,
   Workflow,
 } from 'lucide-react';
-import { downloadContent, generateFlows } from '../lib/files';
+import { deliverSave, generateFlows, type SaveResult } from '../lib/files';
 import { exportWorkspace } from '../lib/workspace-export';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
@@ -148,10 +148,8 @@ export function CollectionsView() {
   };
   const exportAs = async (id: string, format: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi') => {
     try {
-      const r = await call<{ path?: string; collection?: unknown; text?: string; name: string; notes: string[] }>('col.export', { id, format });
-      if (r.collection) downloadContent(r.name, JSON.stringify(r.collection, null, 2), { type: 'application/json' });
-      else if (r.text !== undefined) downloadContent(r.name, r.text, { type: 'application/json' });
-      else if (!r.path) return;
+      const r = await call<SaveResult & { name: string; notes: string[] }>('col.export', { id, format });
+      if (!deliverSave(r)) return; // the save dialog was cancelled
       const extra = r.notes.length ? ` Not exported (no Postman equivalent): ${r.notes.join('; ')}.` : '';
       useApp.getState().toast(`${r.path ? `Exported to ${r.path}.` : 'Exported.'}${extra}`, r.notes.length ? 'info' : 'success');
     } catch (e) {

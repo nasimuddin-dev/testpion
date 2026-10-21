@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
-import { refTools } from '../../packages/core/src/mcp-server/ref-tools.js';
+import { refTools } from '../../packages/core/src/mcp-server/tools/ref-tools.js';
 import { itemInfo, readRunSummary } from '../../packages/core/src/index.js';
 import { tempDir, waitFor } from '../helpers.js';
 

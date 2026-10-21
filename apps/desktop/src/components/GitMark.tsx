@@ -8,7 +8,7 @@ import { ChangeMark } from './ChangeMark';
  */
 export type GitTarget = ItemRef | { folder: KindId; name: string } | { section: KindId };
 
-export const gitKeyOfTarget = (t: GitTarget): string => ('section' in t ? gitSectionKey(t.section) : 'folder' in t ? gitFolderKey(t.folder, t.name) : gitRefKey(t));
+const gitKeyOfTarget = (t: GitTarget): string => ('section' in t ? gitSectionKey(t.section) : 'folder' in t ? gitFolderKey(t.folder, t.name) : gitRefKey(t));
 
 /** The change mark of a row: A / M / D / R for an item, the number of changes inside for a folder or a section; nothing when unchanged. */
 export function GitMark({ to }: { to: GitTarget }) {

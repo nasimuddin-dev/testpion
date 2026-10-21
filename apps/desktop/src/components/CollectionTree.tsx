@@ -14,14 +14,14 @@ import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
 import { plural, uid } from '../lib/format';
 import { FolderEditor } from './FolderEditor';
-import { useGit } from '../lib/git';
+import { useGitRepo } from '../lib/git';
 import { fullCollection } from '../lib/collections-store';
 import { matchIndex, requestCategory, type RequestCategory } from '../lib/collection-filter';
 
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
 import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
-import { setSubtree as setTreeSubtree, useTreeOpen } from '../lib/tree-state';
+import { setSubtree as setTreeSubtree, useTreeOpen, treeKey } from '../lib/tree-state';
 import { requestCopyItems } from '../lib/request-copy';
 import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
@@ -36,7 +36,7 @@ export { CATEGORY_META } from './CollectionTreeRows';
 export type { ExtraGroup } from '../lib/tree-rows';
 
 /** The one name of "new request of this kind" in every menu and button: New HTTP request, New GraphQL request … */
-export const newRequestOf = (cat: RequestCategory) => (cat === 'rest' ? 'New HTTP request' : `New ${CATEGORY_META[cat].label} request`);
+const newRequestOf = (cat: RequestCategory) => (cat === 'rest' ? 'New HTTP request' : `New ${CATEGORY_META[cat].label} request`);
 
 /** Per collection: sent requests and how many are failing now; refreshed after requests and runs (debounced). */
 function useCollectionsHealth(): Record<string, { sent: number; failing: number }> {
@@ -159,7 +159,7 @@ export const CollectionTree = memo(function CollectionTree({
   };
   const health = useCollectionsHealth();
   const [moving, setMoving] = useState<{ c: Collection; n: CollectionNode }>();
-  const git = useGit();
+  const inGit = useGitRepo();
   /** A copy of the collection with everything it holds (its gRPC calls and connections too). */
   const duplicateCollection = async (c: Collection) => {
     try {
@@ -359,7 +359,7 @@ export const CollectionTree = memo(function CollectionTree({
     if (folder) return [folderOpenKey(c.id, folder.id), ...folderKeysOf(c.id, folder.items)];
     const keys = [c.id, ...folderKeysOf(c.id, c.items), ...CATEGORIES.map((cat) => categoryOpenKey(c.id, cat))];
     // folders of saved gRPC calls and connections, and anything else remembered under this collection
-    for (const k of Object.keys(open)) if (k.startsWith(`${c.id}:`)) keys.push(k);
+    for (const k of Object.keys(open)) if (k.startsWith(treeKey(c.id, ''))) keys.push(k);
     return keys;
   };
   useEffect(() => {
@@ -557,7 +557,7 @@ export const CollectionTree = memo(function CollectionTree({
     newRequest,
     newRequestLabel,
   };
-  const canHistory = !!git.status?.repository;
+  const canHistory = inGit;
   // the dragged row stays drawn while the list scrolls or changes under the drag (its dragend must reach React)
   const dragIndex = useMemo(() => (drag ? rows.findIndex((r) => (r.t === 'req' || r.t === 'folder') && r.c.id === drag.c.id && r.n.id === drag.n.id) : -1), [drag, rows]);
   const rowHeight = 2 * useApp((s) => s.settings?.fontSize ?? 14);
@@ -568,7 +568,7 @@ export const CollectionTree = memo(function CollectionTree({
       case 'col':
         return <CollectionRow c={r.c} open={r.open} renaming={renaming === r.c.id} dropMode={dropModeOf(r.c.id)} failing={health[r.c.id]?.failing} sent={health[r.c.id]?.sent} duplicate={duplicateNames.has(r.c.name)} ctx={ctx} />;
       case 'cat':
-        return <CategoryRow c={r.c} cat={r.cat} count={r.count} open={r.open} id={r.key} dropMode={dropModeOf(`${r.c.id}:${r.cat}`)} ctx={ctx} />;
+        return <CategoryRow c={r.c} cat={r.cat} count={r.count} open={r.open} id={r.key} dropMode={dropModeOf(treeKey(r.c.id, r.cat))} ctx={ctx} />;
       case 'folder':
         return <FolderRow c={r.c} n={r.n} depth={r.depth} open={r.open} renaming={renaming === r.key} dropMode={dropModeOf(r.key)} ctx={ctx} />;
       case 'xfolder':
@@ -583,7 +583,7 @@ export const CollectionTree = memo(function CollectionTree({
             depth={r.depth}
             active={activeRequestId === r.n.id}
             renaming={renaming === r.key}
-            examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), `${r.n.id}:examples`)}
+            examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), treeKey(r.n.id, 'examples'))}
             dropMode={dropModeOf(r.key)}
             ctx={ctx}
           />

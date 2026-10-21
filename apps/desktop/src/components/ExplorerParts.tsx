@@ -151,13 +151,13 @@ export async function newFolderIn(ops: FolderOps) {
   if (name) await ops.setFolders((fs) => (fs.includes(name) ? fs : [...fs, name]));
 }
 
-export async function renameFolderIn(ops: FolderOps, name: string, next: string) {
+async function renameFolderIn(ops: FolderOps, name: string, next: string) {
   await ops.assign((_, folder) => (folder === name ? next : folder));
   await ops.setFolders((fs) => fs.map((x) => (x === name ? next : x)));
 }
 
 /** Delete a folder at once, with Undo: its items move to the top level, and come back into it. */
-export function deleteFolderIn(ops: FolderOps, name: string, itemNoun: string) {
+function deleteFolderIn(ops: FolderOps, name: string, itemNoun: string) {
   return deleteWithUndo({
     kind: 'folder',
     name,

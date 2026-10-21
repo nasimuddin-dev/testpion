@@ -15,7 +15,7 @@ describe('the catalogue', () => {
   it('has the counts the docs state (changing them is a docs change: docs/ai-testing/rag-metrics.md is generated from this)', () => {
     const rows = metricCatalogue();
     const by = (k: string) => rows.filter((m) => m.kind === k).length;
-    expect({ total: rows.length, deterministic: by('deterministic'), judged: by('judged'), embedding: by('embedding'), sql: by('sql') }).toEqual({ total: 84, deterministic: 39, judged: 41, embedding: 3, sql: 1 });
+    expect({ total: rows.length, deterministic: by('deterministic'), judged: by('judged'), embedding: by('embedding'), sql: by('sql') }).toEqual({ total: 134, deterministic: 51, judged: 79, embedding: 3, sql: 1 });
     expect(new Set(rows.map((m) => m.id)).size).toBe(rows.length);
   });
 

@@ -30,7 +30,7 @@ interface Info {
 }
 
 /** The item on screen: the active editor tab's (request editors), else the place Back / Forward recorded. */
-export function useCurrentItemRef(): ItemRef | undefined {
+function useCurrentItemRef(): ItemRef | undefined {
   const view = useApp((s) => s.view);
   const payload = useApp((s) => s.nav.current.payload);
   const placeView = useApp((s) => s.nav.current.view);
@@ -52,7 +52,7 @@ export function useCurrentItemRef(): ItemRef | undefined {
  * uses with where each comes from in the active environment, its file and git state, the runs that included it, and
  * (for a request) its code. `ref.info` (core itemInfo; `item_info` for agents) reads it.
  */
-export function ContextInfo() {
+function ContextInfo() {
   const ref = useCurrentItemRef();
   const environment = useApp((s) => s.environment);
   // read only while the panel is shown (unpinned and closed, it waits at the edge)

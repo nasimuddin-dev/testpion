@@ -7,7 +7,7 @@
 export type CustomMetricKind = 'judge' | 'checklist' | 'rule' | 'formula' | 'embedding-set' | 'script';
 
 /** What a custom metric may see of the sample. */
-export type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts';
+export type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
 
 export interface CustomMetricExampleSample {
   question?: string;
@@ -88,8 +88,6 @@ export const CUSTOM_METRIC_KINDS: ReadonlyArray<{ id: CustomMetricKind; label: s
   { id: 'script', label: 'Script', summary: 'A sandboxed function of the sample that returns a score. No network, no files.', judged: false },
 ];
 
-/** The metric id as workspace files and the registry spell it. */
-export const customMetricId = (fileId: string) => `custom/${fileId}`;
 export const CUSTOM_METRIC_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 /** A starting file per kind (the editor's New, `testpion rag metric new`). */

@@ -172,6 +172,8 @@ export interface ProviderConfig {
   apiKey?: string;
   defaultModel?: string;
   embeddingModel?: string;
+  /** Models that take images (names or `*` globs); unset: decided by the kind and the model name (ai/vision.ts). */
+  visionModels?: string[];
   /** Azure OpenAI api-version, Anthropic version header, etc. */
   apiVersion?: string;
   /** AWS region (Amazon Bedrock); defaults to the one in the base URL. */
@@ -382,6 +384,8 @@ export interface RetrievedDoc {
   text: string;
   score?: number;
   source?: string;
+  /** An image this chunk holds: a data URI, an http(s) URL or a workspace path (eval/rag/images.ts). */
+  image?: string;
 }
 
 export interface RagTest extends TestBase {

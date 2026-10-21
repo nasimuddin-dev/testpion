@@ -86,9 +86,10 @@ export async function dryRunEvaluation(item: ProposalItem, ctx: VerifyContext): 
   let judgeNote: string | undefined;
   if (judged.length) {
     const judge = { ...(ev.judge ?? {}), ...(ev.maxJudgeCostUsd !== undefined ? { maxCostUsd: ev.maxJudgeCostUsd } : {}), ...(ev.maxJudgeCalls !== undefined ? { maxCalls: ev.maxJudgeCalls } : {}) };
-    if (!ctx.runDeps) judgeNote = `${judged.length} judged metric${judged.length === 1 ? '' : 's'} checked structurally only (no model is set up to price them)`;
+    const tasks = ctx.tasks ?? ctx.services?.ragJudge?.tasks;
+    if (!ctx.runDeps || !tasks) judgeNote = `${judged.length} judged metric${judged.length === 1 ? '' : 's'} checked structurally only (no model is set up to price them)`;
     else {
-      const host: RagJudgeHost = { deps: ctx.runDeps, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map() };
+      const host: RagJudgeHost = { deps: ctx.runDeps, tasks, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map() };
       try {
         const est = estimateRagRun(host, ctx.store, { evaluators: judged.map((c) => c.cfg), samples: Math.max(1, records.length), judge, shape: records.length ? sampleShapeOf(samples.filter((s) => s.answer)) : undefined, hasTarget: !!ev.target });
         if (est.judgeProblem) judgeNote = `${judged.length} judged metric${judged.length === 1 ? '' : 's'} checked structurally only: ${est.judgeProblem.split('\n')[0]}`;

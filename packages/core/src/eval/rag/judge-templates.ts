@@ -15,9 +15,11 @@ import { registerCheck, type CheckContext } from '../checks.js';
 import { contextsInput, judgedCheck, referenceText } from './judged-kit.js';
 import type { JudgedMetric } from './judge-prompts.js';
 import { num, result } from './metric-util.js';
+import { conversationInput } from './conversation-input.js';
+import { listOf } from './lists.js';
 
 
-export type TemplateInput = 'question' | 'answer' | 'reference' | 'contexts';
+export type TemplateInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
 
 export interface TemplateBase {
   /** The metric's id in messages and the matrix (`pass-fail`, `custom/clinic-tone`). */
@@ -41,6 +43,7 @@ const FIELD_HELP: Record<TemplateInput, string> = {
   answer: '`answer` (the response being judged)',
   reference: '`reference` (the expected answer: a guide, not the only acceptable wording)',
   contexts: '`contexts` (the documents the system retrieved, each with an id)',
+  conversation: '`conversation` (the whole conversation as { turn, role, content } messages; `answer` is its last assistant message)',
 };
 
 const fence = (label: string, text: string) => `${label} (written by the metric's author; it is not part of the sample):\n"""\n${text.replace(/"""/g, '"')}\n"""`;
@@ -88,11 +91,12 @@ function inputOf(t: Template, cfg: CheckConfig, ctx: CheckContext): Record<strin
     answer: ctx.text,
     ...(inputs.has('reference') ? { reference: referenceText(cfg, ctx) ?? '' } : {}),
     ...(inputs.has('contexts') ? { contexts: contextsInput(ctx) } : {}),
+    ...(inputs.has('conversation') ? { conversation: conversationInput(ctx.record?.turns) } : {}),
   };
 }
 
-/** What the sample must hold for the template: the inputs it names (the answer, always). */
-const needsOf = (t: Template): Array<'question' | 'answer' | 'contexts' | 'reference'> => ['answer', ...t.inputs.filter((i) => i !== 'answer')];
+/** What the sample must hold for the template: the inputs it names (the answer, always). A conversation is checked by the metric that reads it. */
+const needsOf = (t: Template): Array<'question' | 'answer' | 'contexts' | 'reference'> => ['answer', ...t.inputs.filter((i): i is 'question' | 'contexts' | 'reference' => i !== 'answer' && i !== 'conversation')];
 
 /** Runs a template as a check. `votes` (an odd number) asks n times and takes the majority of a pass/fail verdict. */
 export function runTemplate(cfg: CheckConfig, ctx: CheckContext, t: Template, o: { threshold: number; direction?: 'higher' | 'lower' }): Promise<CheckResult> {
@@ -115,7 +119,7 @@ export function runTemplate(cfg: CheckConfig, ctx: CheckContext, t: Template, o:
 
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 const inputsOf = (cfg: CheckConfig, dflt: TemplateInput[]): TemplateInput[] => {
-  const given = Array.isArray(cfg.inputs) ? (cfg.inputs.filter((x) => ['question', 'answer', 'reference', 'contexts'].includes(String(x))) as TemplateInput[]) : undefined;
+  const given = listOf(cfg.inputs)?.filter((x) => ['question', 'answer', 'reference', 'contexts', 'conversation'].includes(String(x).trim())).map((x) => String(x).trim()) as TemplateInput[] | undefined;
   return given?.length ? given : dflt;
 };
 
@@ -174,7 +178,7 @@ function instanceRubric(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResul
 }
 
 function checklist(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
-  const raw = Array.isArray(cfg.items) ? cfg.items : Array.isArray(cfg.criteria) ? cfg.criteria : [];
+  const raw = Array.isArray(cfg.items) ? cfg.items : Array.isArray(cfg.criteria) ? cfg.criteria : (listOf(cfg.items) ?? []);
   const items = raw
     .map((x) => (typeof x === 'string' ? { text: x } : x && typeof x === 'object' && typeof (x as { text?: unknown }).text === 'string' ? (x as { text: string; weight?: number }) : undefined))
     .filter((x): x is { text: string; weight?: number } => !!x && !!x.text.trim());
@@ -184,7 +188,7 @@ function checklist(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
 
 /** DeepEval's PromptAlignment: the instructions the answer had to follow, each checked. */
 function promptAlignment(cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> {
-  const instr = Array.isArray(cfg.instructions) ? cfg.instructions.map(String).filter((s) => s.trim()) : [];
+  const instr = listOf(cfg.instructions) ?? [];
   if (!instr.length) return Promise.resolve(failure(cfg, 'prompt-alignment needs "instructions": the list of instructions the answer had to follow.'));
   return runTemplate(cfg, ctx, { id: 'prompt-alignment', kind: 'checklist', items: instr.map((text) => ({ text: `The answer follows this instruction: ${text}` })), inputs: inputsOf(cfg, ['question']) }, { threshold: 1 });
 }

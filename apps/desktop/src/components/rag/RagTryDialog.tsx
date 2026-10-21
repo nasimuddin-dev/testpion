@@ -8,7 +8,7 @@ import type { CheckConfig, ProviderConfig } from '../../types';
 import { AiEstimateLine, estimateText } from '../ai/AiEstimateLine';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { EvidenceList } from '../Results';
-import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle } from '../ui';
 
 type Source = 'probe' | 'type';
 
@@ -38,7 +38,7 @@ export function RagTryDialog({
   /** A sample to start with (a stored result's). */
   initial?: TrySample;
   /** The evaluation's judge, started with and changeable here. */
-  judge?: { provider?: string; model?: string };
+  judge?: { provider?: string; model?: string; allowImages?: boolean };
   onClose(): void;
 }) {
   const env = useApp((s) => s.environment);
@@ -47,6 +47,10 @@ export function RagTryDialog({
   const [sample, setSample] = useState<TrySample>(initial ?? {});
   const [contexts, setContexts] = useState((initial?.contexts ?? []).map((c) => c.text).join('\n'));
   const [ids, setIds] = useState((initial?.referenceIds ?? []).join(', '));
+  // pictures of the sample (a file of the workspace, a URL or a data: URI), whether they may go to the judge, and the other fields of a record
+  const [pictures, setPictures] = useState((initial?.contexts ?? []).flatMap((c) => (c.image ? [c.image] : [])).join('\n'));
+  const [allowImages, setAllowImages] = useState(judge?.allowImages === true);
+  const [fieldsText, setFieldsText] = useState(initial?.record ? JSON.stringify(initial.record, null, 1) : '');
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [j, setJ] = useState(judge ?? {});
   const [busy, setBusy] = useState<'probe' | 'run' | undefined>();
@@ -63,10 +67,19 @@ export function RagTryDialog({
     () =>
       source === 'probe'
         ? sample
-        : { ...sample, question: q || undefined, contexts: lines(contexts).map((text) => ({ text })), referenceIds: ids.split(',').map((x) => x.trim()).filter(Boolean) },
-    [source, sample, q, contexts, ids],
+        : { ...sample, record: fieldsText.trim() ? undefined : sample.record, question: q || undefined, contexts: [...lines(contexts).map((text) => ({ text })), ...lines(pictures).map((image) => ({ text: '', image }))], referenceIds: ids.split(',').map((x) => x.trim()).filter(Boolean) },
+    [source, sample, q, contexts, ids, pictures, fieldsText],
   );
-  const judgeParam = j.provider || j.model ? j : undefined;
+  const judgeParam = j.provider || j.model || allowImages ? { ...j, ...(allowImages ? { allowImages: true } : {}) } : undefined;
+  // the other fields of a record, typed as JSON (a conversation, tool calls, should_refuse …); text that is not JSON yet is left out
+  const fields = useMemo(() => {
+    try {
+      const v = JSON.parse(fieldsText) as unknown;
+      return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [fieldsText]);
   const metric = String(check.type);
 
   // what the metric reads and what it would send, whenever the sample changes (nothing is sent)
@@ -74,7 +87,7 @@ export function RagTryDialog({
     if (!effective.answer && !effective.question) return;
     let live = true;
     const t = setTimeout(() => {
-      call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, sample: effective, judge: judgeParam, dryRun: true, environment: env }).then(
+      call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, sample: effective, fields, judge: judgeParam, dryRun: true, environment: env }).then(
         (r) => live && (setDry(r), setDryError(undefined)),
         (e) => live && (setDry(undefined), setDryError(asError(e).message)),
       );
@@ -84,14 +97,14 @@ export function RagTryDialog({
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(effective), metric, JSON.stringify(judgeParam), JSON.stringify(check)]);
+  }, [JSON.stringify(effective), JSON.stringify(fields), metric, JSON.stringify(judgeParam), JSON.stringify(check)]);
 
   const probe = async () => {
     if (!target || !q.trim()) return;
     setBusy('probe');
     setResult(undefined);
     try {
-      const r = await call<TryResult & { sample: TrySample }>('rag.metric.try', { metric, options: { ...check, type: undefined }, target, question: q, judge: judgeParam, dryRun: true, environment: env });
+      const r = await call<TryResult & { sample: TrySample }>('rag.metric.try', { metric, options: { ...check, type: undefined }, target, question: q, fields, judge: judgeParam, dryRun: true, environment: env });
       setSample({ ...r.sample, question: q });
       setDry(r);
     } catch (e) {
@@ -103,7 +116,7 @@ export function RagTryDialog({
   const run = async () => {
     setBusy('run');
     try {
-      setResult(await call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, sample: effective, judge: judgeParam, environment: env }));
+      setResult(await call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, sample: effective, fields, judge: judgeParam, environment: env }));
     } catch (e) {
       toastError(e);
     } finally {
@@ -148,7 +161,10 @@ export function RagTryDialog({
             />
             {judged && (
               <>
-                <span className="text-xs text-muted ml-auto">Judge</span>
+                <span className="ml-auto">
+                  <Toggle checked={allowImages} onChange={setAllowImages} data-rag-try-allow-images="" title="Pictures of the sample go to the judge as data. A picture cannot be masked; the judge must be able to see." label="Send pictures" />
+                </span>
+                <span className="text-xs text-muted">Judge</span>
                 <Select className="h-7 min-h-7 py-0 text-xs max-w-44" aria-label="Judge for this try" value={j.provider ?? ''} onChange={(e) => setJ({ provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })}>
                   <option value="">{judge?.provider ? 'The evaluation’s judge' : 'The AI settings’ large model'}</option>
                   {providers.map((p) => (
@@ -197,6 +213,12 @@ export function RagTryDialog({
               </Field>
               <Field label="Gold chunk ids (comma separated)">
                 <Input value={ids} onChange={(e) => setIds(e.target.value)} aria-label="Gold ids" />
+              </Field>
+              <Field label="Pictures (one per line: a file of the workspace, a URL or a data: URI)">
+                <Textarea rows={2} className="mono text-xs" value={pictures} onChange={(e) => setPictures(e.target.value)} aria-label="Sample pictures" data-rag-try-pictures />
+              </Field>
+              <Field label="More fields of the record (JSON): turns, tool_calls, should_refuse …">
+                <Textarea rows={2} className="mono text-xs" value={fieldsText} onChange={(e) => setFieldsText(e.target.value)} placeholder={'{ "turns": ["Hi", "What are your hours?"], "should_refuse": false }'} aria-label="Record fields" data-rag-try-fields />
               </Field>
             </div>
           )}

@@ -9,7 +9,7 @@ import type { CheckConfig, CheckResult } from '../../../model/types.js';
 import type { ProviderRegistry } from '../../../ai/index.js';
 import { listMetricFiles } from '../../../storage/metric-files.js';
 import type { WorkspaceStore } from '../../../storage/workspace.js';
-import { registerCheck, unregisterCheck } from '../../checks.js';
+import { overrideCheck, unregisterCheck } from '../../checks.js';
 import type { RagJudgeSetup } from '@testpion/shared';
 import type { RagJudgeHost } from '../judge.js';
 import { judgeEstimate } from '../metric-defs.js';
@@ -39,8 +39,9 @@ const HOW: Record<CustomMetricFile['kind'], (f: CustomMetricFile) => string> = {
 export function defOf(f: CustomMetricFile, hash: string): MetricDef {
   const id = `custom/${f.id}`;
   const judged = f.kind === 'judge' || f.kind === 'checklist';
-  const inputs = (f.inputs ?? ['question', 'answer']) as MetricInput[];
-  const requires: MetricInput[] = [...new Set<MetricInput>(['answer', ...inputs.filter((i) => i !== 'answer'), ...(f.kind === 'judge' && f.reference === 'guided' ? (['reference'] as const) : [])])];
+  const inputs = (f.inputs ?? ['question', 'answer']) as string[];
+  // the conversation a custom judge reads is the sample's `turns`
+  const requires: MetricInput[] = [...new Set<MetricInput>(['answer', ...(inputs.filter((i) => i !== 'answer').map((i) => (i === 'conversation' ? 'turns' : i)) as MetricInput[]), ...(f.kind === 'judge' && f.reference === 'guided' ? (['reference'] as const) : [])])];
   const refs = f.kind === 'formula' ? parseFormula(f.expression ?? '').refs.map((r) => resolveMetric(r)?.def).filter((d): d is MetricDef => !!d) : [];
   const formulaJudged = refs.some((d) => d.judge === 'service' || d.kind === 'judged');
   const first = f.examples?.[0];
@@ -98,7 +99,7 @@ export function registerCustomMetric(c: CompiledMetric): void {
   const old = getMetric(c.def.id);
   if (old) unregisterMetric(c.def.id);
   registerMetric(c.def);
-  registerCheck(c.def.check, c.check);
+  overrideCheck(c.def.check, c.check); // a metric whose file changed registers again
   registered.set(c.def.id, c.hash);
 }
 

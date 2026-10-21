@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { recordingTools } from '../../packages/core/src/mcp-server/recording-tools.js';
+import { recordingTools } from '../../packages/core/src/mcp-server/tools/recording-tools.js';
 import { collectionFromExchanges, exchangesToHar, Redactor, WorkspaceStore, type FlowSourceExchange, type SavedHttpRequest, type CollectionFolder } from '../../packages/core/src/index.js';
 import { tempDir } from '../helpers.js';
 

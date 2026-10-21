@@ -28,7 +28,7 @@ function runMonitor(id: string) {
 }
 
 /** What a problem offers: open what it names, run it again (a run, a monitor), ask the assistant. */
-export function problemActions(p: Problem): MenuItem[] {
+function problemActions(p: Problem): MenuItem[] {
   return [
     { label: LABEL.open, icon: <ChevronRight size={14} />, onSelect: () => void openRef(p.ref) },
     ...(p.kind === 'run' && p.ref.kind === 'run' ? [{ label: LABEL.runAgain, icon: <Play size={14} />, onSelect: () => void runAgain(p.ref.runId!) }] : []),

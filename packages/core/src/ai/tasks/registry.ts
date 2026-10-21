@@ -5,7 +5,7 @@
  * `ai_run_task`) and a cloud host all read this one table.
  */
 import { parseYaml, stringifyYaml as toYaml } from '../../util/lazy-yaml.js';
-import { checkLabel, type ItemRef } from '@testpion/shared';
+import { checkLabel, type AiTaskId, type ItemRef } from '@testpion/shared';
 import type { CheckConfig, Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { StoredResponse } from '../verify.js';
@@ -73,7 +73,7 @@ export interface PreparedItem {
 export type DraftItem = Omit<ProposalItem, 'id' | 'verification' | 'selected'> & { selected?: boolean };
 
 export interface AiTaskDef {
-  id: string;
+  id: AiTaskId;
   /** Bumped with every change to the instruction or the output format. */
   version: number;
   title: string;
@@ -248,7 +248,7 @@ const yamlTemplates = (code: string) => {
 
 const md = { kind: 'markdown' } as const;
 
-const T = (id: string, d: Omit<AiTaskDef, 'id' | 'instruction' | 'version'> & { version?: number }): AiTaskDef => ({ id, version: d.version ?? 1, instruction: TASK_INSTRUCTIONS[id]!, ...d });
+const T = (id: AiTaskId, d: Omit<AiTaskDef, 'id' | 'instruction' | 'version'> & { version?: number }): AiTaskDef => ({ id, version: d.version ?? 1, instruction: TASK_INSTRUCTIONS[id], ...d });
 
 export const AI_TASKS: readonly AiTaskDef[] = [
   T('explain-error', {

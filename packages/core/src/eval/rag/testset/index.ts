@@ -9,6 +9,5 @@ export { REFERENCE_SUPPORT, TESTSET_INSTRUCTION, TESTSET_VERSION } from './promp
 export { rememberCorpus, corpusOf, corpusToken } from './corpus-cache.js';
 export { verifySupport, verifyAnswerable, verifyDuplicate } from './verify.js';
 export { estimateTestset } from './estimate.js';
-export { generateTestset, estimateGeneration, resolveOptions, type GenerateOptions, type GenerateResult } from './generate.js';
 export { datasetPathOf, parseTypes as parseTestsetTypes, type TestsetLocal } from './task.js';
 export { applyDatasetRowItem, undoDatasetRows } from './apply.js';

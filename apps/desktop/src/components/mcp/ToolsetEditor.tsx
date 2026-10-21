@@ -16,6 +16,7 @@ import { Badge, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segm
 import { ToolResult, type ToolRun } from './ToolsPanel';
 import { useAiEnabled } from '../../lib/use-ai-enabled';
 import { LABEL } from '../../lib/vocabulary';
+import { aiButton } from '../../lib/ai-menu';
 
 /**
  * The Tools tab of a mock MCP server: the toolset an agent will see, designed here. The mock file (`*.mcp-mock.yaml`)
@@ -262,7 +263,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
               title="No tools yet"
               actions={[
                 { label: 'Add tool', icon: <Plus size={12} />, onClick: addTool },
-                ...(aiOn ? [{ label: 'Generate with AI', icon: <Sparkles size={12} />, onClick: () => void generate() }] : []),
+                ...(aiOn ? [{ ...aiButton('designToolset'), onClick: () => void generate() }] : []),
               ]}
             >
               A toolset is what an agent sees: each tool has a name, a description that says when to call it, an input schema, and the answers the mock gives. Design it here, then serve it with the

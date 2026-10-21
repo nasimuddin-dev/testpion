@@ -14,11 +14,13 @@ import { createHash } from 'node:crypto';
 import { ApsError } from '../../errors.js';
 import type { AppSettings } from '../../model/types.js';
 import { aiLocalOnly, assertLocalAllowed, resolveAiRoute } from '../../ai/ai-settings.js';
-import { prepareAiTask, runAiTask, type AiPreview, type AiRunDeps, type AiTaskRequest } from '../../ai/tasks/run.js';
+import type { prepareAiTask, runAiTask, AiPreview, AiRunDeps, AiTaskRequest } from '../../ai/tasks/run.js';
 import type { AiSurface } from '../../storage/ai-usage.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { ProviderRegistry } from '../../ai/index.js';
 import type { Redactor } from '../../util/redact.js';
+import type { ChatImage } from '../../ai/types.js';
+import { visionCapable } from '../../ai/vision.js';
 import { VERDICT_SCHEMA, type JudgedMetric, type Verdict } from './judge-prompts.js';
 import { validateSchema } from '../checks.js';
 
@@ -51,6 +53,8 @@ export interface DryJudgeCall {
 
 export interface RagJudgeHost {
   deps: AiRunDeps;
+  /** The AI task service, lent by the engine (engine.ts): this module takes only types from ai/tasks. */
+  tasks: RagTaskService;
   budget: JudgeBudget;
   /** Set on a dry host (see `dryHost`): judge calls are listed here and answered with an empty verdict, never sent. */
   dry?: DryJudgeCall[];
@@ -66,9 +70,16 @@ export interface JudgeAnswer {
   redactionCount: number;
 }
 
-/** The judge host of an engine context (engine.ts). */
-export function createRagJudgeHost(o: { store?: WorkspaceStore; providers: ProviderRegistry; redactor: Redactor; settings: AppSettings; surface: AiSurface; env?: Record<string, string | undefined> }): RagJudgeHost {
+/** The two calls of the AI task service a judge call needs (`prepareAiTask`, `runAiTask`). */
+export interface RagTaskService {
+  prepare: typeof prepareAiTask;
+  run: typeof runAiTask;
+}
+
+/** The judge host of an engine context; the engine lends the task service (`createRagJudgeHost` in engine.ts is the one hosts call). */
+export function buildRagJudgeHost(o: { store?: WorkspaceStore; providers: ProviderRegistry; redactor: Redactor; settings: AppSettings; surface: AiSurface; env?: Record<string, string | undefined>; tasks: RagTaskService }): RagJudgeHost {
   return {
+    tasks: o.tasks,
     deps: { store: o.store, providers: o.providers, redactor: o.redactor, settings: o.settings, surface: o.surface, env: o.env },
     budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
     inflight: new Map(),
@@ -77,7 +88,7 @@ export function createRagJudgeHost(o: { store?: WorkspaceStore; providers: Provi
 
 /** A host that sends nothing: the metrics run against it and every judge call they would make is recorded in `dry`. */
 export function dryHost(host: RagJudgeHost): RagJudgeHost & { dry: DryJudgeCall[] } {
-  return { deps: host.deps, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map(), dry: [] };
+  return { deps: host.deps, tasks: host.tasks, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map(), dry: [] };
 }
 
 /** What to configure for a judge: the one error a missing or refused judge gives, in every host. */
@@ -99,7 +110,7 @@ export function judgeSetupError(why: string, extra: string[] = []): ApsError {
  * Checks, before any sample is run, that the judge can be used: a route exists, its provider is configured and allowed
  * by Local only. Throws the setup error with what to configure otherwise.
  */
-export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provider: string; model: string } {
+export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provider: string; model: string; vision: boolean } {
   const { deps } = host;
   let route;
   try {
@@ -120,20 +131,25 @@ export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provi
     throw e;
   }
   assertLocalAllowed(resolved.provider.config, localOnly);
-  return { provider: resolved.provider.config.name, model: resolved.model };
+  return { provider: resolved.provider.config.name, model: resolved.model, vision: visionCapable(resolved.provider.config, resolved.model) };
 }
 
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
 /** The AI task request of a metric's judge call. */
 export function judgeRequest(metric: JudgedMetric, input: Record<string, unknown>, judge?: JudgeRef): AiTaskRequest {
-  return { task: 'rag-judge', question: metric.instruction, context: input, provider: judge?.provider, model: judge?.model };
+  // images ride beside the text fields (`__images`, from eval/rag/images.ts): they are data for a vision judge, never text in the context
+  const { __images, __allowImages, ...context } = input as Record<string, unknown> & { __images?: ChatImage[]; __allowImages?: boolean };
+  return { task: 'rag-judge', question: metric.instruction, context, provider: judge?.provider, model: judge?.model, ...(__images?.length ? { images: __images, allowImages: __allowImages === true } : {}) };
 }
+
+/** The messages as the cache key sees them: an image by its hash, so the same picture hits and a different one misses. */
+const keyMessages = (messages: AiPreview['messages']) => messages.map(({ images, ...m }) => (images?.length ? { ...m, images: images.map((i) => `${i.mime}:${i.sha256}`) } : m));
 
 /** "What will be sent": the exact messages, the context sections, the estimate and the redactions of a judge call (nothing is sent). */
 export function previewJudge(host: RagJudgeHost, metric: JudgedMetric, input: Record<string, unknown>, judge?: JudgeRef): AiPreview {
   assertJudgeUsable(host, judge);
-  return prepareAiTask(host.deps, judgeRequest(metric, input, judge)).preview;
+  return host.tasks.prepare(host.deps, judgeRequest(metric, input, judge)).preview;
 }
 
 const verdictProblems = (v: unknown, metric?: JudgedMetric): string[] => {
@@ -153,7 +169,7 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   assertJudgeUsable(host, o.judge);
   const deps: AiRunDeps = { ...host.deps, signal: o.signal ?? host.deps.signal };
   const req = judgeRequest(metric, input, o.judge);
-  const prepared = prepareAiTask(deps, req);
+  const prepared = host.tasks.prepare(deps, req);
   const { preview } = prepared;
   if (preview.privacy !== 'full') throw new ApsError('ConfigurationError', `Judged RAG metrics need the AI privacy level "Full (redacted)", not "${preview.privacy}"`, { why: 'A judge reads the question, the answer and the documents themselves; at a lower level they are not sent.', suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted).', 'Or use the metrics that need no model (token-f1, rouge, context-precision-ids …).'] });
   // a section that had to be shortened or sampled would be judged on part of the sample: refused, never silent
@@ -161,10 +177,12 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   if (cut.length) throw new ApsError('ValidationError', `The sample is too long for the judge (${cut.map((s) => `${s.name}: ${s.notes.join(', ')}`).join('; ')})`, { suggestions: ['Retrieve fewer or shorter documents, or score this sample with the metrics that need no model.'] });
   const judge = { provider: preview.providerName, model: preview.model, metric: metric.id, promptVersion: metric.version };
   // the key is the exact prompt (after redaction) with the model that answers: any change to the sample, the wording, the model or the task misses
-  const key = hash({ task: 'rag-judge', provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: preview.messages });
+  const key = hash({ task: 'rag-judge', provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: keyMessages(preview.messages) });
   const cache = host.deps.store?.meta;
   if (host.dry) {
-    host.dry.push({ metric: metric.id, version: metric.version, input, preview, cached: !o.fresh && !!cache?.getJudgeCache(key) });
+    // what a dry run lists goes to the window: the pictures are in preview.images (thumbnails), never twice as base64
+    const { __images: _img, ...shown } = input as Record<string, unknown>;
+    host.dry.push({ metric: metric.id, version: metric.version, input: shown, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, cached: !o.fresh && !!cache?.getJudgeCache(key) });
     return { verdict: { reasoning: '', items: [] }, cached: true, judge, usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, redactionCount: preview.redactionCount };
   }
   // `fresh` asks again whatever the cache holds (a repeat measures the judge's own noise); the answer is still stored
@@ -186,7 +204,7 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   if (maxCalls !== undefined && host.budget.calls >= maxCalls) throw new ApsError('ValidationError', `The judge budget is used up (${host.budget.calls} of ${maxCalls} model calls); this score is not computed`, { details: { budget: true } });
   if (maxCostUsd !== undefined && host.budget.costUsd >= maxCostUsd) throw new ApsError('ValidationError', `The judge budget is used up ($${host.budget.costUsd.toFixed(4)} of $${maxCostUsd}); this score is not computed`, { details: { budget: true } });
   const ask = (async (): Promise<JudgeAnswer> => {
-    const r = await runAiTask(deps, req);
+    const r = await host.tasks.run(deps, req);
     const problems = r.problems.length ? r.problems : verdictProblems(r.value, metric);
     if (r.value === undefined || problems.length)
       throw new ApsError('ValidationError', `The judge (${preview.providerName}/${preview.model}) did not answer in the verdict format: ${problems.slice(0, 3).join('; ') || 'no JSON'}`, {

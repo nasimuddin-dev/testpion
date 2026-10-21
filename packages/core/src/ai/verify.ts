@@ -47,6 +47,8 @@ export interface VerifyContext {
   store?: WorkspaceStore;
   /** The task runner's own dependencies (models, settings, redactor): a verifier that prices or dry-runs a judge builds its judge host from them. */
   runDeps?: AiRunDeps;
+  /** The task service, lent by the runner, for a verifier that builds a dry judge host (eval/rag takes only types from ai/tasks). */
+  tasks?: { prepare: typeof import('./tasks/run.js').prepareAiTask; run: typeof import('./tasks/run.js').runAiTask };
 }
 
 export type Verifier = (item: ProposalItem, ctx: VerifyContext) => Promise<VerificationBadge | undefined> | VerificationBadge | undefined;
