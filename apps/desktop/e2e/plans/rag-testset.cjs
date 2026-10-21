@@ -8,6 +8,8 @@ const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { withExpect, step } = require('../lib.cjs');
 
+const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
+
 const DOC = [
   'Happy Paws is a veterinary clinic. The clinic opens at 8am on weekdays and closes at 6pm. On Saturdays it opens at 9am and closes at noon.',
   'Puppies receive their first vaccine at 8 weeks. The booster follows at 12 weeks and costs 45 dollars.',
@@ -59,6 +61,19 @@ const steps = [
      return 'estimate: ' + /reference-support/.test(est.textContent) + ' | passages: ' + /1 document, 1 passages/.test(est.textContent) + ' | file written: ' + (await window.aps.invoke('rag.testset.sources')).datasets.some((d) => d.name === 'handbook.jsonl');`,
   ),
   step(
+    'voices-and-the-meaning-check-are-in-the-dialog',
+    `const dlg = document.querySelector('[data-rag-testset-dialog]');
+     const personas = dlg.querySelector('[data-rag-testset-personas]'); const styles = dlg.querySelectorAll('[data-rag-testset-styles] input[type=checkbox]');
+     const sel = dlg.querySelector('[data-rag-testset-dedupe]'); if (!personas || !sel) return 'NO FIELDS';
+     const before = !!dlg.querySelector('[data-rag-testset-embedder]');
+     ${setSelect('sel', 'By their words and meaning')}
+     const embedder = await __t.waitFor(() => dlg.querySelector('[data-rag-testset-embedder]'), 3000);
+     const est = await __t.waitFor(() => /dedupe-embedding/.test(dlg.querySelector('[data-rag-testset-estimate]')?.textContent ?? '') && dlg.querySelector('[data-rag-testset-estimate]'), 15000);
+     ${setSelect('sel', 'By their words')}
+     await __t.sleep(400);
+     return 'personas: true | styles: ' + styles.length + ' | embedder before: ' + before + ' | embedder shown: ' + !!embedder + ' | estimate line: ' + !!est + ' | embedder hidden again: ' + !dlg.querySelector('[data-rag-testset-embedder]');`,
+  ),
+  step(
     'what-will-be-sent-shows-the-passages',
     `const dlg = document.querySelector('[data-rag-testset-dialog]').closest('[role=dialog]');
      const b = [...dlg.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith('What will be sent')); if (!b) return 'NO BUTTON';
@@ -90,6 +105,7 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
+    'voices-and-the-meaning-check-are-in-the-dialog': /^personas: true \| styles: 6 \| embedder before: false \| embedder shown: true \| estimate line: true \| embedder hidden again: true$/,
     'the-data-tab-offers-generation': /^datasets: \d+ \| generate: true \| capture: true$/,
     'the-dialog-estimates-before-anything-is-sent': /^estimate: true \| passages: true \| file written: false$/,
     'what-will-be-sent-shows-the-passages': /^passage shown: true \| dialog still open: true$/,

@@ -26,8 +26,9 @@ afterAll(printScorecard);
 // (+60: the retrieval metrics of R1b (recall@k … r-precision, the lexical context metrics, string-similarity, context-relevance) are named too)
 // (+180: RAG R2 added about fifty metrics (judged, claim-level, lexical, agent, SQL) that are checks too, and the reference names every check type)
 // (+170: RAG R3 added about fifty more checks (conversation, agent, safety, multimodal, g-eval, dag …), named in the same list)
-const FLOW_BUDGET = 1360;
-const CHECKS_BUDGET = 940; // (+190: the same R2 metrics are named in the checks reference; +150: the same R3 checks)
+// (+10: the follow-up pass added four checks, answer-regex, answer-length, answer-json-schema and judge-cost, named in the same list)
+const FLOW_BUDGET = 1370;
+const CHECKS_BUDGET = 950; // (+190: the same R2 metrics are named in the checks reference; +150: the same R3 checks; +10: the four checks of the follow-up pass)
 
 describe('the format reference', () => {
   it('stays within its token budget', () => {

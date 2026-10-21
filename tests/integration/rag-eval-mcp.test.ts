@@ -64,10 +64,10 @@ afterAll(async () => {
 describe('RAG metric tools over MCP', () => {
   it('rag_metrics lists the catalogue and the presets; a Ragas name finds its metric', async () => {
     const all = (await call<{ count: number; metrics: Array<{ id: string; kind: string }>; presets: Array<{ id: string }> }>('rag_metrics', {})).data;
-    expect(all.count).toBe(134);
+    expect(all.count).toBe(138);
     expect(all.presets.map((p) => p.id)).toContain('ragas-core');
     expect((await call<{ metrics: Array<{ id: string }> }>('rag_metrics', { search: 'response_relevancy' })).data.metrics.map((m) => m.id)).toContain('answer-relevance');
-    expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(51);
+    expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(55);
   });
 
   it('rag_try_metric: a dry run shows the prompt and sends nothing; a real run scores; a free metric answers at once', async () => {
@@ -138,7 +138,7 @@ describe('RAG metric tools over MCP', () => {
   it('custom metrics: list, save (checked, confirmed), validate with examples, then usable as custom/<id> in rag_try_metric', async () => {
     const empty = (await call<{ count: number; kinds: unknown[] }>('rag_list_custom_metrics', {})).data;
     expect(empty.count).toBe(0);
-    expect(empty.kinds).toHaveLength(6);
+    expect(empty.kinds).toHaveLength(7);
     const file = ['id: no-promises', 'kind: rule', 'rules:', '  - { type: not-regex, pattern: "guarantee|promise", flags: i }', 'threshold: 1', 'examples:', '  - { name: fine, sample: { answer: "We will do our best." }, expect: pass }', '  - { name: promise, sample: { answer: "We guarantee a cure." }, expect: fail }'].join('\n');
     // an invalid file is refused with the reason, and nothing is written
     const bad = await call('rag_save_custom_metric', { id: 'broken', content: 'id: broken\nkind: judge\n' });

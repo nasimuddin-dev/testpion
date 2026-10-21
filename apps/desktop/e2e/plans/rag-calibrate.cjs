@@ -126,6 +126,12 @@ const steps = [
      return 'confusion: ' + conf + ' | numbers: ' + numbers + ' | disagreements: ' + dis + ' | advice: ' + /Only 2 labelled/.test(c.textContent);`,
   ),
   step(
+    'the-report-has-the-shared-download-control',
+    `const root = document.querySelector('[data-rag-calibration][data-output="rag.calibration"]'); if (!root) return 'NO MARKED PANEL';
+     const dl = root.querySelector('[data-output-download="rag.calibration"]'); if (!dl) return 'NO DOWNLOAD';
+     return 'download: true | formats menu: ' + !!root.querySelector('[data-output-formats="rag.calibration"]') + ' | enabled: ' + !dl.disabled + ' | jury rows: ' + root.querySelectorAll('[data-rag-judge-role=member]').length;`,
+  ),
+  step(
     'the-tuned-pass-mark-can-be-tried-in-the-matrix',
     `const tuned = document.querySelector('[data-rag-tuned="faithfulness"]'); if (!tuned) return 'NO TUNED';
      const text = short(tuned.textContent, 90);
@@ -157,6 +163,7 @@ module.exports = withExpect(
     'label-the-second-sample-pass-against-the-judge': /^pressed: true$/,
     'the-labels-are-a-workspace-file': /^file: labels\/Clinic-calibrate\.json \| labels: (hours|parking):faithfulness:pass,(hours|parking):faithfulness:pass \| judge kept: true$/,
     'calibrate-judge-shows-the-agreement': /^confusion: 1,0,1,0 \| numbers: .*Cohen.*kappa.* \| disagreements: 1 \| advice: true$/,
+    'the-report-has-the-shared-download-control': /^download: true \| formats menu: true \| enabled: true \| jury rows: 0$/,
     'the-tuned-pass-mark-can-be-tried-in-the-matrix': /^tuned: true \| matrix pass mark now ≤ 0\.5: true \| dialog closed: true$/,
     'clearing-a-label-removes-it': /^pressed: false \| labels left: 1$/,
   },
