@@ -1,3 +1,4 @@
+import { isRecord } from '@testpion/shared';
 import { basename } from 'node:path';
 import { KIND_INFO, gitFolderKey, kindOfPath, type ItemRef, type KindId } from '@testpion/shared';
 import { diffOpenApi } from '../openapi/diff.js';
@@ -13,7 +14,6 @@ import type { SemanticChange } from './semantic.js';
  */
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v);
 const same = sameValue;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -35,7 +35,7 @@ const make = (file: string, kindId: KindId, p: Part): SemanticChange => ({ file,
 /** Names of a key/value list (headers) or an object (env): "added A, changed B, removed C"; values are never named. */
 function pairChange(label: string, a: unknown, b: unknown): string | undefined {
   const asMap = (x: unknown): Map<string, string> =>
-    new Map(Array.isArray(x) ? x.filter(isRec).map((p) => [String(p.key ?? ''), JSON.stringify(p)]) : isRec(x) ? Object.entries(x).map(([k, v]) => [k, JSON.stringify(v)]) : []);
+    new Map(Array.isArray(x) ? x.filter(isRecord).map((p) => [String(p.key ?? ''), JSON.stringify(p)]) : isRecord(x) ? Object.entries(x).map(([k, v]) => [k, JSON.stringify(v)]) : []);
   const [x, y] = [asMap(a), asMap(b)];
   const added = [...y.keys()].filter((k) => !x.has(k));
   const removed = [...x.keys()].filter((k) => !y.has(k));
@@ -98,7 +98,7 @@ function listChanges(file: string, kind: 'mcp-server' | 'provider', before: stri
   const [x, y] = [parse(before), parse(after)];
   if (x === null || y === null) return undefined;
   const items = (f: unknown): Rec[] | undefined =>
-    f === undefined ? [] : isRec(f) && (f[key] === undefined || Array.isArray(f[key])) ? ((f[key] as unknown[] | undefined) ?? []).filter(isRec) : undefined;
+    f === undefined ? [] : isRecord(f) && (f[key] === undefined || Array.isArray(f[key])) ? ((f[key] as unknown[] | undefined) ?? []).filter(isRecord) : undefined;
   const [a, b] = [items(x), items(y)];
   if (!a || !b) return undefined;
   const ref = (id: string): ItemRef => (kind === 'mcp-server' ? { kind: 'mcp-server', serverId: id } : { kind: 'provider', providerId: id });
@@ -136,7 +136,7 @@ function listChanges(file: string, kind: 'mcp-server' | 'provider', before: stri
 /** workspace.json: the name, description and variables (names only). */
 function workspaceChanges(file: string, before: string | undefined, after: string | undefined): SemanticChange[] | undefined {
   const [a, b] = [parse(before), parse(after)];
-  if (a === null || b === null || (a !== undefined && !isRec(a)) || (b !== undefined && !isRec(b))) return undefined;
+  if (a === null || b === null || (a !== undefined && !isRecord(a)) || (b !== undefined && !isRecord(b))) return undefined;
   const ref: ItemRef = { kind: 'environment', scope: 'workspace' };
   const title = 'Workspace settings';
   if (!a || !b) return [make(file, 'workspace', { change: b ? 'added' : 'removed', title, details: [], ref })];
@@ -154,11 +154,11 @@ function workspaceChanges(file: string, before: string | undefined, after: strin
 /** debugger/rules.json: profiles added, removed or with other rules. */
 function rulesChanges(file: string, before: string | undefined, after: string | undefined): SemanticChange[] | undefined {
   const [a, b] = [parse(before), parse(after)];
-  if (a === null || b === null || (a !== undefined && !isRec(a)) || (b !== undefined && !isRec(b))) return undefined;
+  if (a === null || b === null || (a !== undefined && !isRecord(a)) || (b !== undefined && !isRecord(b))) return undefined;
   const title = 'Debugger rules';
   const ref: ItemRef = { kind: 'git-file', path: file };
   if (!a || !b) return [make(file, 'debugger-rules', { change: b ? 'added' : 'removed', title, details: [], ref })];
-  const [pa, pb] = [isRec(a.profiles) ? a.profiles : {}, isRec(b.profiles) ? b.profiles : {}];
+  const [pa, pb] = [isRecord(a.profiles) ? a.profiles : {}, isRecord(b.profiles) ? b.profiles : {}];
   const count = (v: unknown) => (Array.isArray(v) ? v.length : 0);
   const details: string[] = [];
   for (const k of Object.keys(pb)) if (!(k in pa)) details.push(`profile ${k} added`);

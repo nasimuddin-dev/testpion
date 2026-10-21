@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import type { CheckConfig, Collection, CollectionFolder, CollectionNode, KeyValue } from '../model/types.js';
+import { sha1Hex } from '../util/hash.js';
 
 /**
  * Pieces the exporters (Insomnia, OpenCollection, and the older Postman / Bruno ones) share: stable ids, TestPion's
@@ -21,7 +21,7 @@ export function safeFileName(name: string, fallback = 'request'): string {
 }
 
 /** A deterministic id with a prefix (`req_3f9c…`), so exporting the same collection twice gives the same ids. */
-export const stableId = (prefix: string, seed: string): string => `${prefix}_${createHash('sha1').update(seed).digest('hex').slice(0, 24)}`;
+export const stableId = (prefix: string, seed: string): string => `${prefix}_${sha1Hex(seed).slice(0, 24)}`;
 
 const q = (v: unknown) => JSON.stringify(v);
 const pathExpr = (path: string): string => {

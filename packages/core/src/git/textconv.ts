@@ -1,3 +1,4 @@
+import { isRecord } from '@testpion/shared';
 import { readFileSync } from 'node:fs';
 import { stableValue } from '../storage/stable-files.js';
 import { runGit } from './git.js';
@@ -17,7 +18,6 @@ import { runGit } from './git.js';
  */
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v);
 const body = (v: unknown): string => JSON.stringify(stableValue(v), null, 2);
 
 /** The heading of an item: the line `diff.testpion.xfuncname` shows as the hunk's context. */
@@ -29,7 +29,7 @@ function collection(c: Rec): string {
   const walk = (nodes: unknown, trail: string[]) => {
     if (!Array.isArray(nodes)) return;
     for (const n of nodes) {
-      if (!isRec(n)) continue;
+      if (!isRecord(n)) continue;
       const path = [...trail, String(n.name ?? n.id ?? '?')];
       out.push(head(path, n.id, String(n.kind ?? 'item')), body(Object.fromEntries(Object.entries(n).filter(([k]) => k !== 'items'))));
       walk(n.items, path);
@@ -43,7 +43,7 @@ function collection(c: Rec): string {
 function list(doc: Rec, key: string, what: string, label: string): string {
   const out: string[] = [head([label], undefined, what), body(Object.fromEntries(Object.entries(doc).filter(([k]) => k !== key)))];
   for (const i of doc[key] as unknown[]) {
-    if (!isRec(i)) continue;
+    if (!isRecord(i)) continue;
     out.push(head([label, String(i.name ?? i.key ?? i.id ?? '?')], i.id, what), body(i));
   }
   return out.join('\n') + '\n';
@@ -60,7 +60,7 @@ export function textconvText(text: string): string | undefined {
   } catch {
     return undefined;
   }
-  if (!isRec(doc)) return undefined;
+  if (!isRecord(doc)) return undefined;
   if (Array.isArray(doc.servers)) return list(doc, 'servers', 'MCP server', 'MCP servers');
   if (Array.isArray(doc.providers)) return list(doc, 'providers', 'AI provider', 'AI providers');
   if (Array.isArray(doc.items) && Array.isArray(doc.folders)) return list(doc, 'items', 'saved item', 'Saved items');

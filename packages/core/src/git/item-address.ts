@@ -1,3 +1,4 @@
+import { isRecord } from '@testpion/shared';
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { kindOfPath, libraryOfPath, type ItemRef, type KindId } from '@testpion/shared';
@@ -25,7 +26,6 @@ export interface ItemAddress {
 }
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** A workspace path as git names it: `/`, no leading `./`. */
 export const gitPathOf = (p: string): string => String(p ?? '').replace(/\\/g, '/').replace(/^\.\//, '');
@@ -70,7 +70,7 @@ export function addressOfRef(ref: ItemRef, o: FileOf = {}): ItemAddress | undefi
 function findNode(nodes: unknown, id: string): Rec | undefined {
   if (!Array.isArray(nodes)) return undefined;
   for (const n of nodes) {
-    if (!isRec(n)) continue;
+    if (!isRecord(n)) continue;
     if (n.id === id) return n;
     const inner = findNode(n.items, id);
     if (inner) return inner;
@@ -83,12 +83,12 @@ function replaceNode(nodes: unknown, id: string, value: Rec | undefined): { node
   const walk = (list: unknown[]): unknown[] => {
     const out: unknown[] = [];
     for (const n of list) {
-      if (isRec(n) && n.id === id) {
+      if (isRecord(n) && n.id === id) {
         found = true;
         if (value) out.push(value);
         continue;
       }
-      out.push(isRec(n) && Array.isArray(n.items) ? { ...n, items: walk(n.items) } : n);
+      out.push(isRecord(n) && Array.isArray(n.items) ? { ...n, items: walk(n.items) } : n);
     }
     return out;
   };
@@ -99,7 +99,7 @@ const parseJson = (text: string | undefined): Rec | undefined => {
   if (text === undefined) return undefined;
   try {
     const v = JSON.parse(text.replace(/^﻿/, '')) as unknown;
-    return isRec(v) ? v : undefined;
+    return isRecord(v) ? v : undefined;
   } catch {
     return undefined;
   }
@@ -113,7 +113,7 @@ export function readItem(a: ItemAddress, text: string | undefined): unknown {
   if (!doc) return undefined;
   if (a.mode === 'nested') return findNode(doc.items, a.itemId!);
   const list = doc[a.listKey!];
-  return Array.isArray(list) ? list.find((i) => isRec(i) && i.id === a.itemId) : undefined;
+  return Array.isArray(list) ? list.find((i) => isRecord(i) && i.id === a.itemId) : undefined;
 }
 
 /**
@@ -131,14 +131,14 @@ export function writeItem(a: ItemAddress, current: string | undefined, value: un
     doc.items = r.nodes;
   } else {
     const list = Array.isArray(doc[a.listKey!]) ? (doc[a.listKey!] as unknown[]) : [];
-    const at = list.findIndex((i) => isRec(i) && i.id === a.itemId);
+    const at = list.findIndex((i) => isRecord(i) && i.id === a.itemId);
     if (at >= 0) {
       if (value) list[at] = value;
       else list.splice(at, 1);
     } else if (value) list.push(value);
     doc[a.listKey!] = list;
     // a library keeps the folders its items are in
-    if (a.listKey === 'items' && isRec(value) && typeof value.folder === 'string' && value.folder) {
+    if (a.listKey === 'items' && isRecord(value) && typeof value.folder === 'string' && value.folder) {
       const folders = Array.isArray(doc.folders) ? (doc.folders as string[]) : [];
       if (!folders.includes(value.folder)) doc.folders = [...folders, value.folder];
     }

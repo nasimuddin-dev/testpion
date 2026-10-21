@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ApsError } from '../errors.js';
+import { sha1Hex } from '../util/hash.js';
 
 // node-forge (800 KB) loads with the first certificate made or read, not at startup (see util/lazy-require.ts)
 let forgeMod: typeof import('node-forge') | undefined;
@@ -63,7 +64,7 @@ export function ensureRootCertificate(dir: string): RootCertificate {
   const keys = forge().pki.rsa.generateKeyPair({ bits: 2048 });
   const cert = forge().pki.createCertificate();
   cert.publicKey = keys.publicKey;
-  cert.serialNumber = '01' + createHash('sha1').update(String(Date.now())).digest('hex').slice(0, 30);
+  cert.serialNumber = '01' + sha1Hex(String(Date.now())).slice(0, 30);
   cert.validity.notBefore = new Date(Date.now() - 24 * 3600_000);
   cert.validity.notAfter = new Date(Date.now() + 10 * 365 * 24 * 3600_000);
   cert.setSubject(SUBJECT);

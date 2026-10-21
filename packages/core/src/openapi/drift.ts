@@ -10,10 +10,10 @@
  * No model is involved: the findings are facts about the traffic. The AI half (ai/contract-drift.ts) explains their
  * impact and proposes the spec or test fix; the patches themselves are made by spec-patch.ts from what was observed.
  */
-import { createHash } from 'node:crypto';
 import type { ItemRef } from '@testpion/shared';
 import { findOperation, type OpenApiDoc } from './contract.js';
 import { isRecord } from '@testpion/shared';
+import { sha1Hex } from '../util/hash.js';
 
 type Json = Record<string, unknown>;
 
@@ -253,7 +253,7 @@ export function schemaFor(doc: OpenApiDoc, response: Json, contentType: string |
   return { schema: doc.swagger ? response.schema : undefined, contentKnown: true };
 }
 
-const hash = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 6);
+const hash = (s: string) => sha1Hex(s).slice(0, 6);
 
 /** The id of a finding: the same drift in another run has the same id. */
 export const driftId = (f: Pick<DriftFinding, 'kind' | 'operation' | 'status' | 'pointer' | 'expected'>): string => `d-${hash([f.kind, f.operation, f.status ?? '', f.pointer ?? '', f.expected ?? ''].join('|'))}`;

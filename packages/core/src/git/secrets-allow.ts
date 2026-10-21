@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ApsError } from '../errors.js';
@@ -6,6 +6,7 @@ import { atomicWrite } from '../storage/fsutil.js';
 import { stableText } from '../storage/stable-files.js';
 import { beginJournal } from './journal.js';
 import { workspaceFile } from './item-address.js';
+import { sha256Hex } from '../util/hash.js';
 
 /**
  * The allowlist of the staged secret scan (release C of planning/git-everything.md §4e): `.testpion/secrets-allow.json`
@@ -55,7 +56,7 @@ const LOCAL_SALT_FILE = '.local/secrets-allow-salt';
  * recoverable from it, but see the module comment for what that is worth for a short value.
  */
 export function secretFingerprint(file: string, item: string, field: string, value: string, salt?: string): string {
-  if (!salt) return createHash('sha256').update([file, item, field, value].join('\0')).digest('hex').slice(0, 32);
+  if (!salt) return sha256Hex([file, item, field, value].join('\0')).slice(0, 32);
   return scryptSync(value, [salt, file, item, field].join('\0'), 16, { N: 1 << 14, r: 8, p: 1 }).toString('hex');
 }
 

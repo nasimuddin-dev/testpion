@@ -5,7 +5,6 @@
  * workspace's `.local/flows/` (per computer, git-ignored; never in the YAML). The app's flow designer, `testpion flow
  * runs`, `testpion test --from / --seed-run` and the flow_runs / run_tests MCP tools read these.
  */
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { TestResult, TestStatus, Trace } from '../model/types.js';
@@ -18,6 +17,7 @@ import { readRunSummary } from './run-records.js';
 import type { StepResponse } from './flow-blocks.js';
 import { flowRunStatus, type FlowRunStatus } from './flow-data-run.js';
 import { PIN_BODY_LIMIT, isPartialValue, type PinnedResponse, type RunSeed } from './debug-hooks.js';
+import { sha1Hex } from '../util/hash.js';
 
 /** One run of a flow, as its history lists it. */
 export interface FlowRunRow {
@@ -267,7 +267,7 @@ export interface FlowDesignerState {
 }
 
 function stateFile(store: WorkspaceStore, rel: string): string {
-  const hash = createHash('sha1').update(rel.toLowerCase()).digest('hex').slice(0, 10);
+  const hash = sha1Hex(rel.toLowerCase()).slice(0, 10);
   return join(store.root, '.local', 'flows', `${rel.replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80)}-${hash}.json`);
 }
 

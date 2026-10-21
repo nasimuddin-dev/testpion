@@ -1,7 +1,8 @@
 import { closeSync, copyFileSync, cpSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
+import { sha1Hex } from '../util/hash.js';
 
 /**
  * End a write stream and wait until its file descriptor is closed. `end(cb)` only waits for 'finish'; the
@@ -172,7 +173,7 @@ function ownKey(path: string): string {
 
 /** The content fingerprint the watcher compares: `hash:<size>:<sha1>`. */
 export function contentFingerprint(bytes: Buffer): string {
-  return `hash:${bytes.length}:${createHash('sha1').update(bytes).digest('hex')}`;
+  return `hash:${bytes.length}:${sha1Hex(bytes)}`;
 }
 
 function recordOwn(path: string, fingerprint: string, dir?: boolean): void {

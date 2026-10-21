@@ -1,6 +1,5 @@
 import type { HttpRequestSpec } from '../model/types.js';
 import { pathToFileURL } from 'node:url';
-import { createHash } from 'node:crypto';
 import type {
   AgentTest,
   AuthConfig,
@@ -56,6 +55,7 @@ import { runCondition, runLog, runScriptStep, runSubFlow, type RunSubflow, type 
 import { runAssert, runSet } from './flow-control.js';
 import type { PinnedResponse } from './debug-hooks.js';
 import { assertProductionStep, isDataChangingMethod, isGraphQLMutation, isGrpcReadMethod, type ProductionGate } from '../net/production-guard.js';
+import { sha256Hex } from '../util/hash.js';
 
 export interface ExecServices {
   /** Source of a workspace script package (tp.require), when there is one. */
@@ -123,7 +123,7 @@ function summarize(v: unknown, n = OUTPUT_SUMMARY_CHARS): string {
 }
 
 function sha(s: string): string {
-  return createHash('sha256').update(s).digest('hex').slice(0, 12);
+  return sha256Hex(s).slice(0, 12);
 }
 
 /** What a step does to the API it calls, for the production guard: whether it may change data, and how to name it. */
