@@ -41,6 +41,24 @@ export interface Corpus {
   skipped: string[];
 }
 
+/** Ways a person words a question; a style changes the wording only, never the facts or the expected answer. */
+export const TESTSET_STYLES = ['formal', 'casual', 'terse', 'verbose', 'typos', 'non-native'] as const;
+export const TESTSET_STYLE_HELP: Record<(typeof TESTSET_STYLES)[number], string> = {
+  formal: 'Polite, complete sentences.',
+  casual: 'Chatty, contractions, slang.',
+  terse: 'A few keywords, no grammar (a search-box query).',
+  verbose: 'A long question with background before it.',
+  typos: 'Misspellings and missing punctuation, as typed in a hurry.',
+  'non-native': 'Simple words and slightly wrong grammar, as a second-language speaker writes.',
+};
+/** Most personas or styles one run takes, and the longest text of one. */
+export const MAX_VOICES = 8;
+export const MAX_VOICE_CHARS = 120;
+
+/** How a repeated question is found: by the words they share, or by what they mean (an embedding model, with the words as the fallback). */
+export const DEDUPE_MODES = ['lexical', 'embedding'] as const;
+export type DedupeMode = (typeof DEDUPE_MODES)[number];
+
 export interface TestsetOptions {
   /** Workspace-relative files or folders (the CLI also takes absolute paths). */
   paths?: string[];
@@ -51,6 +69,14 @@ export interface TestsetOptions {
   seed?: string;
   /** datasets/<name>.jsonl the accepted rows are added to. */
   name?: string;
+  /** Who asks: each question is written as one of these people would ask it, in turn (`a nurse on night shift`). */
+  personas?: string[];
+  /** How they word it, in turn (`terse`, `typos` … or any short description). */
+  styles?: string[];
+  /** How repeated questions are found (default lexical). */
+  dedupe?: DedupeMode;
+  /** The embedding model of `dedupe: embedding`, as provider/model (default: the provider of the judge or of the AI settings). */
+  embedder?: string;
 }
 
 /** The record written to a dataset (dataset-formats.ts, canonical TestPion record). */
@@ -62,7 +88,7 @@ export interface TestsetRecord {
   reference_contexts: string[];
   answerable: boolean;
   tags: string[];
-  metadata: { generator: { task: string; version: number; model?: string; seed: string; batch: number; type: TestsetType } };
+  metadata: { generator: { task: string; version: number; model?: string; seed: string; batch: number; type: TestsetType; persona?: string; style?: string } };
 }
 
 export interface RawSample {

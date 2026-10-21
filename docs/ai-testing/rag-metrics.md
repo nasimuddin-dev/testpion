@@ -2,7 +2,7 @@
 
 <!-- Generated from the metric registry by `node scripts/gen-rag-metrics-doc.mjs`. Do not edit by hand. -->
 
-TestPion has 134 RAG metrics. Each one can be chosen in an evaluation, tried on one sample first, gated in CI (`--min faithfulness=0.8`) and read in the samples × metrics matrix. A metric that needs a model says so, and no judged metric ever runs without a judge you chose. [Testing a RAG system](./rag.md) shows how to use them.
+TestPion has 138 RAG metrics. Each one can be chosen in an evaluation, tried on one sample first, gated in CI (`--min faithfulness=0.8`) and read in the samples × metrics matrix. A metric that needs a model says so, and no judged metric ever runs without a judge you chose. [Testing a RAG system](./rag.md) shows how to use them.
 
 | Metric | Kind | Higher is better | Reads | Judge calls |
 |---|---|---|---|---|
@@ -63,7 +63,7 @@ TestPion has 134 RAG metrics. Each one can be chosen in an evaluation, tried on 
 | [`completeness`](#completeness) | judge model | yes | question, answer | 1 |
 | [`factuality`](#factuality) | judge model | yes | question, answer, reference | 1 |
 | [`citation-accuracy`](#citation-accuracy) | judge model | yes | answer, contexts | 1 |
-| [`negative-rejection`](#negative-rejection) | no model | yes | answer | 0 |
+| [`negative-rejection`](#negative-rejection) | no model | yes | answer | 0 (1 with mode judge) |
 | [`ragas-score`](#ragas-score) | judge model | yes | question, answer, reference, contexts | 4 |
 | [`claim-precision`](#claim-precision) | judge model | yes | answer, reference | 2 (passes shared with the other claim-level metrics are paid once) |
 | [`claim-recall`](#claim-recall) | judge model | yes | answer, reference | 2 (passes shared with the other claim-level metrics are paid once) |
@@ -140,6 +140,10 @@ TestPion has 134 RAG metrics. Each one can be chosen in an evaluation, tried on 
 | [`summarization`](#summarization) | judge model | yes | answer, source | 2 |
 | [`faithfulness-hhem`](#faithfulness-hhem) | judge model | yes | answer, contexts | 1 judge call for the claims (shared) + 1 classifier call per claim |
 | [`reward-score`](#reward-score) | judge model | yes | question, answer | 1 reward-model call (no judge) |
+| [`answer-regex`](#answer-regex) | no model | yes | answer | 0 |
+| [`answer-length`](#answer-length) | no model | yes | answer | 0 |
+| [`answer-json-schema`](#answer-json-schema) | no model | yes | answer | 0 |
+| [`judge-cost`](#judge-cost) | no model | no (lower) | — | 0 |
 
 ## How names work
 
@@ -757,17 +761,23 @@ Whether each cited document really supports the sentence that cites it (the exis
 
 ### Negative rejection {#negative-rejection}
 
-`negative-rejection` · no model · higher is better · passes at 1 · no judge calls
+`negative-rejection` · no model · higher is better · passes at 1 · judge calls: 0 (1 with mode judge)
 
 Whether the system declines a question the documents cannot answer, without declining one they can. The dataset marks the unanswerable questions with `answerable: false`.
 
-**How.** 1 when the question is unanswerable and the answer declines (or it is answerable and the system answers); else 0. The metadata says whether the miss was a false refusal or a missed refusal.
+**How.** 1 when the question is unanswerable and the answer declines (or it is answerable and the system answers); else 0. The refusal is recognised by its wording (no model) or, with `mode: judge`, by a judge. The metadata says whether the miss was a false refusal or a missed refusal.
 
 **Example.** An unanswerable question answered with confidence: 0.
 
 **Reads.** the answer; also, when present: whether the question can be answered from the documents (dataset column "answerable": true or false).
 
+**Options.**
+
+- `mode` (regex | judge), default `regex`: How a refusal is recognised: by its wording, or by a judge.
+
 **Also called.** `rejection`
+
+**Prompts.** `refusal-judge-v1`
 
 ### RAGAS score {#ragas-score}
 
@@ -1026,6 +1036,64 @@ Precision, recall and F1 of the labels the answer gives (a classification, tags,
 
 **Also called.** `labels-f1`
 
+### Answer matches a pattern {#answer-regex}
+
+`answer-regex` · no model · higher is better · passes at 1 · no judge calls
+
+Whether the answer matches a regular expression (an ID format, a date, a required phrase), or, with `not: true`, matches none of it.
+
+**How.** 1 when the answer matches `pattern` (flags in `flags`), else 0; with `not: true` the other way round. No model.
+
+**Example.** Pattern `^\d{4}-\d{2}-\d{2}$` and the answer “2026-10-21”: 1.
+
+**Reads.** the answer.
+
+**Options.**
+
+- `pattern` (string): The regular expression.
+- `flags` (string): Its flags (i, m, s …).
+- `not` (boolean), default `false`: Pass when the answer does NOT match.
+
+**Also called.** `regex-match`
+
+### Answer length {#answer-length}
+
+`answer-length` · no model · higher is better · passes at 1 · no judge calls
+
+Whether the answer is neither too short nor too long, in characters, words or tokens (a token is counted as four characters).
+
+**How.** 1 when the size is at least `min` and at most `max`, else 0. No model.
+
+**Example.** An answer of 412 words with `max: 300`: 0.
+
+**Reads.** the answer.
+
+**Options.**
+
+- `unit` (characters | words | tokens), default `words`: What to count.
+- `min` (number): The fewest allowed.
+- `max` (number): The most allowed.
+
+**Also called.** `length-limit`
+
+### Answer is valid JSON {#answer-json-schema}
+
+`answer-json-schema` · no model · higher is better · passes at 1 · no judge calls
+
+Whether the answer is JSON that matches a JSON Schema (DeepEval JsonCorrectness): the answer itself, or the JSON inside a code fence.
+
+**How.** 1 when the answer parses as JSON and satisfies `schema` (any object or array when no schema is given), else 0, with the violations in the metadata. No model.
+
+**Example.** The schema requires an `id` and the answer is `{"name":"Ann"}`: 0.
+
+**Reads.** the answer.
+
+**Options.**
+
+- `schema` (string): A JSON Schema (an object).
+
+**Also called.** `json-correctness`
+
 ## Embedding
 
 ### Semantic similarity {#semantic-similarity}
@@ -1226,6 +1294,10 @@ How often the answer is wrong because of a relevant chunk: the share of its clai
 
 **Reads.** the answer; a reference answer (dataset column "reference"); the retrieved contexts.
 
+**Options.**
+
+- `mode` (relevant | irrelevant), default `relevant`: Ragas’ mode: which chunks the wrong claims are blamed on. irrelevant is the metric noise-sensitivity-irrelevant.
+
 **Also called.** `noise-sensitivity`, `noise_sensitivity`, `NoiseSensitivity`, `noise_sensitivity_relevant`
 
 **Ragas options.** A Ragas name (or the `ragas:` prefix) sets .
@@ -1243,6 +1315,10 @@ How often the answer is wrong because of an irrelevant chunk: the share of its c
 **Example.** Example sample: the answer makes 5 claims (3 are in the reference and the documents, 1 is wrong but a relevant chunk says it, 1 is in neither); the reference has 4 claims (3 are in the answer, all 4 in the documents); 3 of the 4 retrieved chunks are relevant. 0 / 5 = 0.
 
 **Reads.** the answer; a reference answer (dataset column "reference"); the retrieved contexts.
+
+**Options.**
+
+- `mode` (relevant | irrelevant), default `irrelevant`: Ragas’ mode: which chunks the wrong claims are blamed on. relevant is the metric noise-sensitivity-relevant.
 
 **Also called.** `noise_sensitivity_irrelevant`
 
@@ -2510,3 +2586,19 @@ What the retriever’s own scores say: the top score, the gap between the top tw
 
 - `stat` (top1 | gap | below-floor), default `top1`: Which statistic is the score.
 - `floor` (number), default `0.3`: For below-floor: the score under which a chunk counts as weak.
+
+### Judge cost {#judge-cost}
+
+`judge-cost` · no model · lower is better · no judge calls
+
+What judging this sample cost: the spend of the judge models of the other metrics of the same sample, in US dollars (the ledger has it per call).
+
+**How.** The sum of the cost of the judge calls the other metrics made for this sample; a cached call costs nothing. With `max` it also passes only at or under that many dollars.
+
+**Example.** Three judged metrics that made 4 calls: $0.0012.
+
+**Reads.** nothing from the dataset.
+
+**Options.**
+
+- `max` (number): The most the judging of one sample may cost (USD).

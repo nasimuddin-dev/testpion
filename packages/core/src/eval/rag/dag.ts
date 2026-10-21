@@ -89,6 +89,26 @@ export function dagProblems(spec: unknown): string[] {
   return out;
 }
 
+/** The most judge calls one sample can cost: the most judged nodes (not rules) on any path from the root. */
+export function dagMaxJudgeCalls(spec: DagSpec): number {
+  const memo = new Map<string, number>();
+  const calls = (id: string): number => {
+    const known = memo.get(id);
+    if (known !== undefined) return known;
+    memo.set(id, 0);
+    const n = spec.nodes[id];
+    if (!n) return 0;
+    const below = Math.max(0, ...refsOf(n).map(calls));
+    const v = below + (n.type === 'rule' ? 0 : 1);
+    memo.set(id, v);
+    return v;
+  };
+  return calls(spec.root);
+}
+
+/** The kinds of node a tree uses that ask a judge (for the prompts a metric lists). */
+export const dagJudgedKinds = (spec: DagSpec): Array<'binary' | 'choice' | 'task'> => [...new Set(Object.values(spec.nodes).map((n) => n.type).filter((t): t is 'binary' | 'choice' | 'task' => t !== 'rule'))];
+
 const textOf = (v: unknown) => (typeof v === 'string' ? v : '');
 
 /** Reads the tree from a check (an object, or JSON text). */

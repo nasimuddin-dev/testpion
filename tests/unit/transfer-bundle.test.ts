@@ -86,6 +86,7 @@ describe('round trip: every kind goes out and comes back the same', () => {
       'load-test',
       'mcp-mock',
       'mcp-server',
+      'metric',
       'monitor',
       'prompt',
       'proto',

@@ -3,7 +3,7 @@
  * result, list the labels, and the calibration report of a run against them (with the best pass mark per metric). The window
  * computes nothing: the engine does, the same as `testpion rag label|calibrate` and the MCP tools.
  */
-import { applyThreshold, calibrateRun, clearLabel, defaultLabelsName, labelResult, readLabels, recordOfResult } from '@testpion/core';
+import { applyThreshold, calibrateRun, clearLabel, defaultLabelsName, labelResult, makeExample, readLabels, recordOfResult, type MakeExampleInput } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export function ragCalibrateHandlers(be: Backend): Handlers {
@@ -26,6 +26,8 @@ export function ragCalibrateHandlers(be: Backend): Handlers {
     /** The calibration report of a run; `tune` adds the best pass mark per metric. */
     'rag.calibrate': ({ run, labels, metrics, tune, thresholds }: { run: string; labels?: string; metrics?: string[]; tune?: boolean; thresholds?: Record<string, number> }) => calibrateRun(be.ws, { run, labels: nameOf(run, labels), metrics, tune, thresholds }),
     /** Write a tuned pass mark into a saved evaluation's evaluator, or a custom metric file (with its `calibration:` summary). */
+    /** "Make an example of this": the labelled sample becomes an example of a custom metric (`examples:` of its file), with the person's verdict as what the metric must say. */
+    'rag.calibrate.example': (p: MakeExampleInput) => makeExample(be.ws, p),
     'rag.calibrate.apply': (p: { metric: string; threshold: number; evaluation?: string; calibration?: { run: string; kappa?: number; tpr?: number; tnr?: number; n: number } }) => applyThreshold(be.ws, p),
   };
 }

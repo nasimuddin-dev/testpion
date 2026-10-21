@@ -10,6 +10,7 @@ import { useDebounced } from '../ui';
 import { AiAction } from '../ai/AiAction';
 import { CodeEditor } from '../CodeEditor';
 import { Badge, Button, Callout, Empty, Field, Input, Modal, Select, Spinner, cx } from '../ui';
+import { DagTreeEditor } from './DagTreeEditor';
 import { RagTryDialog } from './RagTryDialog';
 
 interface Problem {
@@ -75,7 +76,7 @@ export function CustomMetricsList({ selected, onSelect, onNew }: { selected?: st
           <button key={m.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', selected === m.id ? 'bg-accent/10' : 'hover:bg-hover')} onClick={() => onSelect(m.id)} data-rag-metric-row={m.id}>
             <div className="flex items-center gap-1.5">
               <span className="truncate font-medium">{m.name}</span>
-              {m.kind && <Badge tone={m.kind === 'judge' || m.kind === 'checklist' ? 'judge' : 'ok'}>{KIND_LABEL[m.kind]}</Badge>}
+              {m.kind && <Badge tone={m.kind === 'judge' || m.kind === 'checklist' || m.kind === 'dag' ? 'judge' : 'ok'}>{KIND_LABEL[m.kind]}</Badge>}
               {!m.registered && <Badge tone="bad">not usable</Badge>}
             </div>
             <div className="text-xs text-muted truncate">
@@ -170,7 +171,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
   const runExamples = async () => {
     if (text === undefined) return;
     // a judged metric spends judge tokens: say how many calls, and what goes to the judge, before the first one
-    if (judged && !(await confirmAction({ title: 'Run the examples with your judge model?', message: `About ${plural(exampleCount || 1, 'judge call')}: one for each example${kind === 'checklist' ? ' and checklist item' : ''}.`, detail: 'Each example is sent to your judge model, with secrets, tokens and personal data masked, and the model is paid for it. Rule, formula and script metrics run on this computer for free.', confirmLabel: 'Run examples' }))) return;
+    if (judged && !(await confirmAction({ title: 'Run the examples with your judge model?', message: `About ${plural(exampleCount || 1, 'judge call')}: one for each example${fileKind === 'checklist' ? ' and checklist item' : fileKind === 'dag' ? ' and question of the tree it visits' : ''}.`, detail: 'Each example is sent to your judge model, with secrets, tokens and personal data masked, and the model is paid for it. Rule, formula and script metrics run on this computer for free.', confirmLabel: 'Run examples' }))) return;
     setRunning(true);
     try {
       setResults((await call<{ results: ExampleResult[] }>('rag.customMetric.examples', { text, id, environment: env })).results);
@@ -209,7 +210,9 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
       toastError(e);
     }
   };
-  const judged = kind === 'judge' || kind === 'checklist';
+  // the kind of the file in the editor: a saved one says it in its text, a new one is the chosen kind
+  const fileKind = (text !== undefined ? /^kind:\s*['"]?([a-z-]+)/m.exec(text)?.[1] : undefined) ?? kind;
+  const judged = fileKind === 'judge' || fileKind === 'checklist' || fileKind === 'dag';
   // how many examples the file holds: a judged metric asks the judge once for each (a checklist: once for each item), which spends tokens
   const [exampleCount, setExampleCount] = useState(0);
   useEffect(() => {
@@ -279,6 +282,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
               request={() => ({ task: 'rag-draft-metric', title: 'Draft a custom metric', question: description || undefined, context: { kind, id: id || undefined, existing: [], file: text } })}
             />
           </div>
+          {fileKind === 'dag' && text !== undefined && <DagTreeEditor text={text} onText={setText} />}
           <div className="h-80 border border-line rounded-lg overflow-hidden" data-rag-metric-yaml>
             {text === undefined ? (
               <div className="h-full grid place-items-center text-muted text-sm">{validId ? <Spinner /> : 'Give the metric an id to start from a file of its kind.'}</div>
@@ -301,7 +305,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
               Run examples
             </Button>
             <span className="text-xs text-muted" role="status" aria-live="polite" data-rag-metric-cost>
-              {judged ? `About ${plural(exampleCount || 1, 'judge call')}${kind === 'checklist' ? ' or more' : ''}: spends tokens` : 'Runs on this computer: free'}
+              {judged ? `About ${plural(exampleCount || 1, 'judge call')}${fileKind === 'checklist' || fileKind === 'dag' ? ' or more' : ''}: spends tokens` : 'Runs on this computer: free'}
             </span>
             <Button size="sm" icon={<FlaskConical size={12} />} disabled={!exists || dirty} onClick={() => setTrying(true)} title={exists && !dirty ? 'Try the saved metric on one sample' : 'Save the metric to try it on a sample'} data-rag-metric-try>
               Try on a sample

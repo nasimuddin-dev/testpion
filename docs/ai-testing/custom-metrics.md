@@ -16,7 +16,8 @@ The file is plain YAML under git, so a metric is reviewed, branched and merged l
 * **Draft with AI**: describe what good looks like, and the AI writes the file as a reviewed proposal. TestPion runs the draft against
   its own examples before showing it, and says when the draft does not agree with them. Nothing is written until you accept.
 * **The terminal**: `testpion rag metric new <id> --kind rule`, `new <id> --from-description "…"` (the AI drafts it), `list`, `validate <id> --examples`,
-  `rag metric test <id> --sample file.json`, `export` and `import` (copy a metric to another workspace).
+  `rag metric test <id> --sample file.json`, `export` and `import` (copy a metric to another workspace), and `rag metric example <id> --run <run> --result <id>` (add a labelled sample as an example).
+* **A bundle carries it.** *Export…* of a metric (or of the whole workspace) puts `metrics/<id>.yaml` in the bundle and *Import…* brings it back with the usual choices when the id exists: the file must be a metric of its own id and kind. A script metric and a judge metric are listed in the import's *Review* (nothing runs and nothing is sent on import).
 * **An agent**: the MCP tools `rag_list_custom_metrics`, `rag_validate_metric` (checks a file and runs its examples; with `run_examples`
   this spends the judge for a judged kind, so it asks to confirm) and `rag_save_custom_metric` (replacing an existing file asks for confirmation).
 
@@ -33,6 +34,7 @@ estimate used to read and parse all of them. The metric lists in the window relo
 | `formula` | An expression over other metrics: `0.5 * faithfulness + 0.5 * answer_relevance`. | the metrics it names |
 | `embedding-set` | Closeness to good answers (and distance from bad ones) by embedding. | one embedding call |
 | `script` | A sandboxed function of the sample that returns `{ score, reason }`. No network, no files, a time limit. | none |
+| `dag` | A decision tree of small judgements (see below): only the branch the answers lead to is asked, and a leaf holds the score. | one judge call for each question it visits |
 
 ```yaml
 id: clinic-tone
@@ -58,6 +60,40 @@ examples:
   otherwise. A formula that names itself, directly or through other formulas, is refused.
 * **Scripts** run in the same sandbox as test scripts, with no `tp.sendRequest`, no files and a time limit; a script that throws or
   returns something that is not a score gives an error for that sample, not a zero.
+
+### A decision tree {#dag}
+
+The `dag` kind is the built-in `dag` metric (DeepEval's DAG) as a file. Each node is one small question and the answer decides which
+node comes next; a leaf holds a score from 0 to 10 (divided by 10) and why:
+
+```yaml
+id: cites-right
+kind: dag
+inputs: [question, answer]
+threshold: 0.6
+tree:
+  root: cites
+  nodes:
+    cites:
+      type: binary                      # a yes / no judgement
+      question: Does the answer cite a source?
+      yes: which
+      no: { score: 0, reason: no citation }
+    which:
+      type: choice                      # pick one labelled option
+      question: Which document does it cite?
+      options:
+        the right one: { score: 10 }
+        a wrong one: { score: 4, reason: wrong document }
+```
+
+Four node types: `binary`, `choice`, `task` (write something down that later nodes read) and `rule` (a deterministic check, no model). The
+engine checks the tree when the file loads: every branch leads to a node or a leaf from 0 to 10, there is no cycle, no more than 40 nodes and
+12 deep, and a rule is a check that needs no model. The catalogue row says the most judge calls one sample can cost (the judged nodes on the
+longest path) and the estimate counts them; a tree of rules only is free. In the editor a **Decision tree** panel above the YAML shows the
+questions in the order they are asked: edit a question, choose where each answer leads (another question or a score and why), add and remove a
+question or an option, rename a node, pick the first one. Every change is written back into the YAML (the rest of the file and its comments stay)
+and the engine's own check says what is wrong. The AI draft does not write trees.
 
 ## The examples are the metric's tests {#examples}
 

@@ -5,8 +5,14 @@
 
 /** One call of the system under test, as a source read it: only what the capture needs (never headers or cookies). */
 export interface CapturedCall {
-  /** Where it came from: `history` entry, `debugger` session (HAR in debugger/), `har` file, `run` result. */
-  source: 'history' | 'debugger' | 'har' | 'run';
+  /** Where it came from: `history` entry, `debugger` session (HAR in debugger/), `har` file, `run` result, `messages` (a WebSocket message log). */
+  source: 'history' | 'debugger' | 'har' | 'run' | 'messages';
+  /** The protocol of the call (default http). A gRPC or MCP call in History has its request but no response; a WebSocket call is one sent message and the replies that followed it. */
+  protocol?: 'http' | 'grpc' | 'mcp' | 'websocket';
+  /** gRPC: the method (`rag.Rag/Ask`); MCP: the tool. */
+  operation?: string;
+  /** The call succeeded (set by the reader for the protocols that have no HTTP status); default: a 2xx status. */
+  ok?: boolean;
   /** The entry / exchange / result id (with the session or run it belongs to for the last three). */
   id: string;
   at?: string;
@@ -41,6 +47,8 @@ export type CaptureSourceSpec =
   | { kind: 'debugger'; session: string }
   | { kind: 'har'; file: string }
   | { kind: 'run'; run: string }
+  /** The message log of a WebSocket session saved from the message log's down arrow (JSON Lines: time, direction, data); `url` is the socket's address when the target's must match it. */
+  | { kind: 'messages'; file: string; url?: string }
   /** Calls handed over by a host that already holds them (the Debugger's live exchanges). */
   | { kind: 'calls'; calls: CapturedCall[] };
 

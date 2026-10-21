@@ -12,6 +12,7 @@ import { answerClaims, answerVsReference, envOf, referenceClaims, referenceVsAns
 import { embedTexts, cosine } from './embed-util.js';
 import { REFUSAL } from './failure.js';
 import { addUsage, assertJudgeUsable, contextsInput, describe, guarded, judgeMeta, judgePanel, judgedCheck, na, needContexts, needsField, noUsage, panelOf, referenceText, round3, strictOver, type JudgeHost, type PanelResult, type Usage } from './judged-kit.js';
+import { REFUSAL_JUDGE } from './prompts-safety.js';
 import { ANSWER_ACCURACY, CITATION_ACCURACY, COMPLETENESS, CORRECTNESS, FACTUALITY, HALLUCINATION, RESPONSE_GROUNDEDNESS } from './prompts-r2.js';
 import { num, result } from './metric-util.js';
 import type { JudgedMetric } from './judge-prompts.js';
@@ -308,16 +309,34 @@ const citationAccuracy = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckRes
 
 /* ------------------------------------------------------------------ negative rejection (no judge) */
 
-const negativeRejection = (cfg: CheckConfig, ctx: CheckContext): CheckResult => {
+/** The refusal judge of refusal-correctness under this metric's own id (the wording is the pinned `refusal-judge-v1`). */
+const NEGATIVE_REJECTION_JUDGE: JudgedMetric = { ...REFUSAL_JUDGE, id: 'negative-rejection' };
+
+const negativeRejection = async (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult> => {
   // without the flag, a question counts as answerable: only a refusal that should not have been is counted
   const answerable = ctx.record?.answerable !== false;
-  const declined = !ctx.text.trim() || REFUSAL.test(ctx.text);
+  const mode = cfg.mode === 'judge' ? 'judge' : 'regex';
+  let declined = !ctx.text.trim() || REFUSAL.test(ctx.text);
+  let detail: Record<string, unknown> = {};
+  if (mode === 'judge' && ctx.text.trim()) {
+    const r = await guarded(cfg, ctx, NEGATIVE_REJECTION_JUDGE, async (host) => {
+      const panel = panelOf(cfg, ctx, 1);
+      assertJudgeUsable(host, panel.judges?.[0] ?? panel.judge);
+      const p = await judgePanel(host, NEGATIVE_REJECTION_JUDGE, { question: ctx.question ?? '', answer: ctx.text }, panel);
+      if (p.score === undefined) return na(cfg, NEGATIVE_REJECTION_JUDGE, 'the judge returned no verdict', { explanation: p.reasoning });
+      return result(cfg, true, 'judged', { source: 'ai-judge', score: p.score, explanation: p.reasoning, metadata: judgeMeta(NEGATIVE_REJECTION_JUDGE, p, 1) });
+    });
+    if (typeof r.score !== 'number') return r;
+    declined = r.score >= 0.5;
+    const m = r.metadata as { judge?: unknown; judgeUsage?: unknown };
+    detail = { judge: m.judge, judgeUsage: m.judgeUsage, promptVersion: REFUSAL_JUDGE.version, reasoning: r.explanation };
+  }
   const ok = answerable ? !declined : declined;
   const kind = ok ? 'ok' : answerable ? 'false-refusal' : 'missed-refusal';
   return result(cfg, ok, ok ? (answerable ? 'the question is answerable and the system answered' : 'the question has no answer in the documents and the system declined') : answerable ? 'false refusal: the system declined a question it could answer' : 'missed refusal: the system answered a question the documents cannot answer', {
-    source: 'heuristic',
+    source: mode === 'judge' ? 'ai-judge' : 'heuristic',
     score: ok ? 1 : 0,
-    metadata: { kind, answerable, declined },
+    metadata: { metric: 'negative-rejection', mode, kind, answerable, declined, ...detail },
   });
 };
 

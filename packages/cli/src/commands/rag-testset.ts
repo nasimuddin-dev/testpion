@@ -7,7 +7,7 @@
  */
 import { Command } from 'commander';
 import { formatUsd } from '@testpion/shared';
-import { ApsError, aiRunDeps, applyProposal, estimateGeneration, generateTestset, TESTSET_TYPES, WorkspaceManager, type GenerateOptions } from '@testpion/core';
+import { ApsError, aiRunDeps, applyProposal, estimateGeneration, generateTestset, DEDUPE_MODES, TESTSET_STYLES, TESTSET_TYPES, WorkspaceManager, type DedupeMode, type GenerateOptions } from '@testpion/core';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
 import { machine } from '../output.js';
 import { printProposal } from './ai-print.js';
@@ -21,6 +21,10 @@ interface Flags {
   types?: string;
   name?: string;
   seed?: string;
+  persona?: string[];
+  style?: string[];
+  dedupe?: string;
+  embedder?: string;
   judge?: string;
   noJudge?: boolean;
   maxCost?: string;
@@ -43,6 +47,10 @@ export function registerRagTestsetCommands(rag: Command): void {
     .option('--types <list>', `question types, comma separated: ${TESTSET_TYPES.join(', ')} (default: all)`)
     .option('--name <name>', 'the dataset: datasets/<name>.jsonl (default: from the first document)')
     .option('--seed <text>', 'which passages are asked about: the same seed and documents ask about the same ones', 'testpion')
+    .option('--persona <text>', 'who asks, e.g. "a nurse on night shift": each question is written as that person would ask it, in turn (repeatable, at most 8)', collect)
+    .option('--style <text>', `how they word it, in turn: ${TESTSET_STYLES.join(', ')} or any short description (repeatable, at most 8)`, collect)
+    .option('--dedupe <mode>', `how repeated questions are found: ${DEDUPE_MODES.join(' or ')} (embedding also compares meaning; without a model that embeds the words are compared)`, 'lexical')
+    .option('--embedder <provider/model>', 'the embedding model of --dedupe embedding (default: the judge’s provider, else the AI settings’)')
     .option('--judge <provider/model>', 'the judge that checks each reference against its chunks (default: the AI settings’ large model)')
     .option('--no-judge-check', 'skip the judge’s check of the references; only the lexical, corpus and duplicate checks run')
     .option('--max-cost <usd>', 'refuse to run when the estimate may exceed this')
@@ -57,7 +65,7 @@ export function registerRagTestsetCommands(rag: Command): void {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
         if (!docs.length && !o.url?.length) throw new CliError('Name the documents: files or folders, or --url <https page>', EXIT.CONFIG_ERROR);
         const json = !!o.json || machine();
-        const opts: GenerateOptions = { paths: docs, urls: o.url, count: Number(o.count), typesText: o.types, name: o.name, seed: o.seed, judge: o.judge, noJudge: o.judgeCheck === false, allowAbsolute: true };
+        const opts: GenerateOptions = { paths: docs, urls: o.url, count: Number(o.count), typesText: o.types, name: o.name, seed: o.seed, personas: o.persona, styles: o.style, dedupe: o.dedupe as DedupeMode | undefined, embedder: o.embedder, judge: o.judge, noJudge: o.judgeCheck === false, allowAbsolute: true };
         const ctx = cliContext(store, o.environment);
         const config = async <T>(fn: () => Promise<T>): Promise<T> => {
           try {

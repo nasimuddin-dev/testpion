@@ -16,8 +16,10 @@ import { readCalls } from './sources.js';
 import type { CaptureOptions, CaptureResult } from './types.js';
 
 export { buildRecords, makeMasker, questionKey } from './build.js';
+export { REFERENCES_INSTRUCTION, REFERENCES_SCHEMA, REFERENCES_VERSION, MAX_DRAFTS } from './references-prompts.js';
+export { draftable, datasetRel, prepareReferences, proposeReferences, describeReferences, type ReferencesLocal } from './references.js';
 export { describeLocator, matchesTarget, questionLocator, readQuestion } from './question-path.js';
-export { callOfExchange, callOfHistory, callsOfHar, listCaptureSources, readCalls } from './sources.js';
+export { callOfExchange, callOfHistory, callsOfHar, callsOfMessages, listCaptureSources, readCalls } from './sources.js';
 export type { CapturedCall, CapturedRecord, CaptureOptions, CaptureReport, CaptureResult, CaptureSourceSpec, QuestionLocator } from './types.js';
 
 /** The preview of a dry run: this many records. */

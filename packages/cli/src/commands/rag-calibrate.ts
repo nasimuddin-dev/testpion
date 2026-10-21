@@ -4,8 +4,10 @@
  * disagreements, and the pass mark that would agree most). Deterministic statistics: no model is called. Exit 1 when a
  * kappa is below --min-kappa, 2 for a configuration error.
  */
-import { Command } from 'commander';
-import { ApsError, applyThreshold, calibrateRun, defaultLabelsName, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
+import { writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Command, Option } from 'commander';
+import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
 import { EXIT, CliError, bold, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
@@ -28,7 +30,7 @@ function printMetric(m: MetricCalibration): void {
   console.log(`  kappa ${num(a.kappa)}${m.interval.kappa ? ` [${m.interval.kappa.join(', ')}]` : ''} · accuracy ${num(a.accuracy)}${m.interval.accuracy ? ` [${m.interval.accuracy.join(', ')}]` : ''} · TPR ${num(a.tpr)} · TNR ${num(a.tnr)} · precision ${num(a.precision)}`);
   const c = a.confusion;
   console.log(dim(`  judge pass/person pass ${c.tp} · judge pass/person fail ${c.fp} · judge fail/person pass ${c.fn} · judge fail/person fail ${c.tn}`));
-  if (m.byJudge.length > 1) for (const j of m.byJudge) console.log(`  judge ${j.judge}: n=${j.agreement.n}, kappa ${num(j.agreement.kappa)}, accuracy ${num(j.agreement.accuracy)}`);
+  if (m.byJudge.length > 1) for (const j of m.byJudge) console.log(`  ${j.role === 'member' ? 'jury member' : j.role === 'jury' ? 'the jury together' : 'judge'} ${j.judge}: n=${j.agreement.n}, kappa ${num(j.agreement.kappa)}, accuracy ${num(j.agreement.accuracy)}, TPR ${num(j.agreement.tpr)}, TNR ${num(j.agreement.tnr)}`);
   console.log(`  ${m.advice}`);
   if (m.tuning) console.log(`  ${bold('Tuned pass mark')}: ${m.tuning.threshold} (kappa ${num(m.tuning.agreement.kappa)}${m.tuning.gain !== undefined ? `, ${m.tuning.gain >= 0 ? '+' : ''}${m.tuning.gain}` : ''})${m.tuning.warning ? `\n  ${yellow(m.tuning.warning)}` : ''}`);
   for (const d of m.disagreements.slice(0, 5)) console.log(`  ${red('≠')} ${d.record}: judge ${d.judge}, you ${d.human}${d.score !== undefined ? ` (score ${d.score})` : ''} ${dim(d.question ?? '')}`);
@@ -111,9 +113,11 @@ export function registerRagCalibrateCommands(rag: Command): void {
     .option('--evaluation <name>', 'with --apply: the saved evaluation whose evaluator gets the pass mark')
     .option('--min-kappa <k>', 'exit 1 when a metric’s kappa is below this', parseFloat)
     .option('--no-reviews', 'do not count good/bad reviews of results as `overall` labels')
+    .addOption(new Option('--format <format>', 'with --out: the report as md or json').choices(['md', 'json']).default('md'))
+    .option('-o, --out <file>', 'write the report to a file (Markdown by default) as well')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
     .option('--json', 'print as JSON')
-    .action((labels: string | undefined, o: { run: string; metric?: string; byJudge?: boolean; tune?: boolean; apply?: boolean; evaluation?: string; minKappa?: number; reviews?: boolean; workspace?: string; json?: boolean }) =>
+    .action((labels: string | undefined, o: { run: string; metric?: string; byJudge?: boolean; tune?: boolean; apply?: boolean; evaluation?: string; minKappa?: number; reviews?: boolean; format?: 'md' | 'json'; out?: string; workspace?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         needWorkspace(ephemeral);
         if (o.apply && !o.tune) throw new CliError('--apply needs --tune', EXIT.CONFIG_ERROR);
@@ -137,6 +141,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
               notApplied.push({ metric: m.metric, why: (e as Error).message });
             }
           }
+        if (o.out) writeFileSync(resolve(o.out), o.format === 'json' ? `${JSON.stringify(report, null, 2)}\n` : calibrationMarkdown(report));
         const low = o.minKappa === undefined ? [] : report.metrics.filter((m) => m.agreement.kappa === undefined || m.agreement.kappa < o.minKappa!);
         if (o.json) printJson({ ...report, ...(applied.length ? { applied } : {}), ...(notApplied.length ? { notApplied } : {}),...(o.minKappa !== undefined ? { minKappa: o.minKappa, belowMinKappa: low.map((m) => m.metric) } : {}) });
         else {
@@ -145,6 +150,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
           if (report.stale) console.log(yellow(`${report.stale} labels are about an answer this run did not give and were left out.`));
           for (const n of notApplied) console.log(yellow(`Not applied: ${n.metric}: ${n.why}`));
           for (const a of applied) console.log(`${green('Applied')} ${a.metric} pass mark ${a.threshold} → ${a.changed}`);
+          if (o.out) console.log(`${green('Wrote')} the calibration report → ${o.out}`);
         }
         if (low.length) {
           if (!o.json) console.error(red(`kappa is below ${o.minKappa} for: ${low.map((m) => m.metric).join(', ')}`));

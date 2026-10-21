@@ -71,7 +71,9 @@ export type OutputSource =
   /** The workspace at a glance (activity, collections' health, monitors, latest runs) as one HTML page. */
   | { kind: 'workspace-report'; days?: number; tzOffsetMin?: number }
   /** A RAG run's samples × metrics matrix, every row: `names: ragas` names the score columns as Ragas does; `thresholds` are the edited pass marks. */
-  | { kind: 'rag-matrix'; runId: string; names?: 'testpion' | 'ragas'; thresholds?: Record<string, number> };
+  | { kind: 'rag-matrix'; runId: string; names?: 'testpion' | 'ragas'; thresholds?: Record<string, number> }
+  /** How well a RAG run's judges agree with the person's labels (kappa, accuracy, the disagreements, the pass mark that agrees most). */
+  | { kind: 'rag-calibration'; runId: string; labels?: string; metrics?: string[] };
 
 const s =<I extends string>(id: I, label: string, formats: OutputFormatId[], redaction: OutputRedaction, extra: Partial<SurfaceFields> = {}): SurfaceFields & { id: I } => ({
   id,
@@ -131,6 +133,7 @@ const SURFACES = [
   s('chart', 'Charts', ['png', 'svg'], 'none'),
   s('env.matrix', 'Environment matrix and compare', ['csv', 'md', 'json'], 'redacted-default', { capturedRedacted: true }),
   s('rag.matrix', 'RAG metrics matrix', ['csv', 'json', 'html'], 'redacted-default', { cli: 'rag matrix', capturedRedacted: true, sources: ['rag-matrix'] }),
+  s('rag.calibration', 'RAG judge calibration report', ['md', 'json'], 'redacted-default', { cli: 'rag calibrate', capturedRedacted: true, sources: ['rag-calibration'] }),
   s('monitor.runs', 'Monitor runs', ['csv', 'json'], 'none', { cli: 'monitor results', sources: ['monitor-runs'] }),
   s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', { cli: 'output', sources: ['runs-overview'] }),
   s('workspace.report', 'Workspace report', ['html'], 'none', { cli: 'workspace-report', sources: ['workspace-report'] }),

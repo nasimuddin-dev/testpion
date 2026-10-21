@@ -29,6 +29,7 @@ export const BUNDLE_KIND_IDS = [
   'script-package',
   'mcp-server',
   'mcp-mock',
+  'metric',
   'provider',
   'grpc-call',
   'ws-connection',
@@ -161,7 +162,7 @@ export const plainName = (v: unknown, fallback: string): string =>
     : fallback;
 
 /** The folder each file kind lives in (the root of every id of that kind). */
-export const RAW_ROOT: Partial<Record<BundleKindId, string>> = { test: 'tests', spec: 'specs', dataset: 'datasets', proto: 'protos', 'script-package': 'packages', 'mcp-mock': 'mocks' };
+export const RAW_ROOT: Partial<Record<BundleKindId, string>> = { test: 'tests', spec: 'specs', dataset: 'datasets', proto: 'protos', 'script-package': 'packages', 'mcp-mock': 'mocks', metric: 'metrics' };
 
 /** The library of each saved-item kind. */
 export const LIBRARY_OF: Partial<Record<BundleKindId, string>> = {

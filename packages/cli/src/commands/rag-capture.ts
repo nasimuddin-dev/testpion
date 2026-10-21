@@ -1,5 +1,5 @@
 /**
- * `testpion rag capture`: a RAG dataset from real calls (History, a saved Debugger session, a HAR file, an evaluation run),
+ * `testpion rag capture`: a RAG dataset from real calls (History, a saved Debugger session, a HAR file, a WebSocket message log, an evaluation run),
  * the question read out of each request where the RAG target writes it and the answer and contexts out of the response with
  * the target's mapping. Secrets and personal data are masked before anything is written. Nothing is sent to any model.
  */
@@ -9,7 +9,9 @@ import { EXIT, CliError, bold, cliContext, dim, green, printJson, withWorkspace,
 
 interface Opts {
   target?: string;
-  from?: 'history' | 'debugger' | 'run' | 'har';
+  from?: 'history' | 'debugger' | 'run' | 'har' | 'messages';
+  messages?: string;
+  messagesUrl?: string;
   session?: string;
   run?: string;
   har?: string;
@@ -41,7 +43,11 @@ const num = (s: string | undefined, what: string): number | undefined => {
 };
 
 function sourceOf(o: Opts): CaptureSourceSpec {
-  const from = o.from ?? (o.session ? 'debugger' : o.run ? 'run' : o.har ? 'har' : 'history');
+  const from = o.from ?? (o.session ? 'debugger' : o.run ? 'run' : o.har ? 'har' : o.messages ? 'messages' : 'history');
+  if (from === 'messages') {
+    if (!o.messages) throw new CliError('--from messages needs --messages <file in the workspace>', EXIT.CONFIG_ERROR);
+    return { kind: 'messages', file: o.messages, ...(o.messagesUrl ? { url: o.messagesUrl } : {}) };
+  }
   if (from === 'debugger') {
     if (!o.session) throw new CliError('--from debugger needs --session <saved session, or the History id that saved it>', EXIT.CONFIG_ERROR);
     return { kind: 'debugger', session: o.session };
@@ -61,12 +67,14 @@ export function registerRagCaptureCommands(rag: Command): void {
   rag
     .command('capture')
     .description('make a RAG dataset from real calls: History, a saved Debugger session, a HAR file or an evaluation run; secrets and personal data are masked before it is written')
-    .addOption(new Option('--from <source>', 'where the calls are (default: found from the options below, else History)').choices(['history', 'debugger', 'run', 'har']))
+    .addOption(new Option('--from <source>', 'where the calls are (default: found from the options below, else History)').choices(['history', 'debugger', 'run', 'har', 'messages']))
     .option('--target <name>', 'the RAG target the calls were made to: its request says where the question is, its mapping reads the answer and contexts (not needed for --run)')
     .option('--history <ids...>', 'History entry ids (default: the recent HTTP entries)')
     .option('--session <name>', 'a saved Debugger session (debugger/<name>.har) or the id of the History entry that saved it')
     .option('--run <id>', 'an evaluation run: its answered samples become records')
     .option('--har <file>', 'a HAR file inside the workspace')
+    .option('--messages <file>', 'a WebSocket message log inside the workspace (the message log’s down arrow, JSON Lines): each sent message and the replies after it are a call')
+    .option('--messages-url <url>', 'with --messages: the socket’s address, when the target’s must match it')
     .option('--question-path <path>', 'where the question is when the target does not say: a JSONPath into the JSON request body ($.input.q) or query:<parameter>')
     .option('--name <name>', 'the dataset file: datasets/<name>.jsonl (default captured-<date>)')
     .option('--limit <n>', 'at most n records (the newest)')

@@ -16,3 +16,5 @@ import './metrics-extra.js';
 import './dag.js';
 import './metrics-endpoint.js';
 import './metric-defs-extra.js';
+import './metrics-format.js';
+import './metric-defs-format.js';

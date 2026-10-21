@@ -15,8 +15,10 @@ import { corpusToken, rememberCorpus } from '../eval/rag/testset/corpus-cache.js
 import { estimateTestset } from '../eval/rag/testset/estimate.js';
 import { jaccard, termSet } from '../eval/rag/testset/lexical.js';
 import { batchesOf } from '../eval/rag/testset/sample.js';
-import { clampCount, judgeOf, parseTypes } from '../eval/rag/testset/task.js';
-import type { Corpus, TestsetOptions, TestsetType } from '../eval/rag/testset/types.js';
+import { clampCount, judgeOf, parseDedupe, parseTypes, parseVoices } from '../eval/rag/testset/task.js';
+import { closestQuestion, embedderFor } from '../eval/rag/testset/dedupe.js';
+import { meaningBadge } from '../eval/rag/testset/verify.js';
+import type { Corpus, DedupeMode, TestsetOptions, TestsetType } from '../eval/rag/testset/types.js';
 
 export interface GenerateOptions extends TestsetOptions, Pick<LoadOptions, 'allowAbsolute' | 'guard'> {
   judge?: JudgeRef | string;
@@ -41,12 +43,17 @@ export interface Resolved {
   types: TestsetType[];
   seed: string;
   judge?: JudgeRef;
+  personas: string[];
+  styles: string[];
+  dedupe: DedupeMode;
+  embedder?: string;
 }
 
 export function resolveOptions(o: GenerateOptions): Resolved {
   if (!(o.paths?.length || o.urls?.length)) throw new ApsError('ValidationError', 'Name the documents: files or folders of the workspace, or https URLs');
   const judge = judgeOf(o.judge);
-  return { count: clampCount(o.count), types: parseTypes(o.types ?? o.typesText), seed: o.seed ?? 'testpion', ...(judge ? { judge } : {}) };
+  const embedder = o.embedder?.trim();
+  return { count: clampCount(o.count), types: parseTypes(o.types ?? o.typesText), seed: o.seed ?? 'testpion', ...(judge ? { judge } : {}), personas: parseVoices(o.personas, 'personas'), styles: parseVoices(o.styles, 'styles'), dedupe: parseDedupe(o.dedupe), ...(embedder ? { embedder } : {}) };
 }
 
 /** The estimate of a run, before it: reads the documents, builds nothing else, sends nothing. */
@@ -64,7 +71,9 @@ export async function generateTestset(deps: AiRunDeps, store: WorkspaceStore, o:
   const token = corpusToken(corpus, r.seed);
   rememberCorpus(token, corpus);
   const batches = batchesOf(r.count);
-  const context = { corpus: token, count: r.count, types: r.types, seed: r.seed, ...(o.name ? { name: o.name } : {}), ...(r.judge && !o.noJudge ? { judge: r.judge } : {}) };
+  const context = { corpus: token, count: r.count, types: r.types, seed: r.seed, ...(o.name ? { name: o.name } : {}), ...(r.judge && !o.noJudge ? { judge: r.judge } : {}), ...(r.personas.length ? { personas: r.personas } : {}), ...(r.styles.length ? { styles: r.styles } : {}), ...(r.dedupe === 'embedding' ? { dedupe: r.dedupe, ...(r.embedder ? { embedder: r.embedder } : {}) } : {}) };
+  // the embedding model that compares questions across batches (each batch's own verifier compares within it)
+  const embedder = r.dedupe === 'embedding' ? embedderFor({ providers: deps.providers, settings: deps.settings, env: deps.env, redactor: deps.redactor, signal: deps.signal }, r.embedder, r.judge?.provider) : undefined;
   // without a judge the services carry none: the verifier then reports the lexical check alone
   const runDeps: AiRunDeps = o.noJudge && deps.services ? { ...deps, services: { ...deps.services, ragJudge: undefined } } : deps;
   const items: ProposalItem[] = [];
@@ -101,6 +110,14 @@ export async function generateTestset(deps: AiRunDeps, store: WorkspaceStore, o:
       if (dup) {
         it.verification.push({ verifier: 'testset-duplicate', status: 'fail', label: 'asks the same as an earlier question', detail: `“${dup.question}”` });
         it.selected = false;
+      }
+      else if (embedder && seen.length) {
+        const m = await closestQuestion(embedder, q, seen.map((x) => x.question));
+        const badge = meaningBadge(m);
+        if (badge.status !== 'pass') {
+          it.verification.push(badge);
+          if (badge.status === 'fail') it.selected = false;
+        }
       }
       seen.push({ terms, question: q });
       items.push(it);

@@ -28,6 +28,7 @@ export function ragAuthorTools({ store, secrets, settings }: { store: WorkspaceS
           spec: str('An API definition under specs/'),
           goal: str('What the person wants to find out'),
           name: str('The name of the evaluation'),
+          slice_file: str('Also write the records the evaluation runs to datasets/<name>.jsonl (a file to open, diff and reuse); it must not be the dataset itself'),
           judge: str('The judge of the judged metrics as provider/model'),
           environment: str('Environment name'),
           dry_run: { type: 'boolean', description: 'Send nothing: return what would be sent to the model, with the estimate' },
@@ -40,7 +41,7 @@ export function ragAuthorTools({ store, secrets, settings }: { store: WorkspaceS
           const r = await runAiTask(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
             task: 'rag-author-evaluation',
             question: a.goal ? String(a.goal) : undefined,
-            context: { target: a.target, dataset: a.dataset, docs: a.docs, spec: a.spec, goal: a.goal, name: a.name, judge: a.judge },
+            context: { target: a.target, dataset: a.dataset, docs: a.docs, spec: a.spec, goal: a.goal, name: a.name, sliceFile: a.slice_file, judge: a.judge },
             dryRun: a.dry_run === true,
           });
           if (r.dryRun) return { dryRun: true, preview: r.preview };
@@ -53,7 +54,7 @@ export function ragAuthorTools({ store, secrets, settings }: { store: WorkspaceS
             ...(p
               ? {
                   proposal: { id: p.id, title: p.title, summary: p.summary, assumptions: p.assumptions, notes: p.notes, items: p.items.map((i) => ({ id: i.id, kind: i.kind, title: i.title, selected: i.selected, verification: i.verification, after: i.after })) },
-                  next: `Show the person the evaluation and its badges; save it with ai_apply_proposal { id: "${p.id}" } after they agree. Gates are not part of a saved evaluation: pass them as --min flags to rag_run's CLI equivalent (the summary lists them).`,
+                  next: `Show the person the evaluation and its badges; save it with ai_apply_proposal { id: "${p.id}" } after they agree. The gates are saved in the evaluation (its gates field): rag_run, a monitor of it and the CI step fail a run whose mean is under one.`,
                 }
               : {}),
           };

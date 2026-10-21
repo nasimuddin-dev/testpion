@@ -24,6 +24,7 @@ import { RagTryDialog } from '../components/rag/RagTryDialog';
 import { RagMetricMatrix } from '../components/rag/RagMetricMatrix';
 import { RagColumnMapper } from '../components/rag/RagColumnMapper';
 import { RagImportDialog } from '../components/rag/RagImportDialog';
+import { RagGatesField } from '../components/rag/RagGatesField';
 import { RagJudgeOptions } from '../components/rag/RagJudgeOptions';
 import { RagAuthorAction } from '../components/rag/RagAuthorAction';
 import { useRpc } from '../lib/use-rpc';
@@ -60,6 +61,8 @@ interface Draft {
   judge?: RagJudgeSetup;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
+  /** type rag: the lowest mean each metric may have in a run (saved with the evaluation). */
+  gates?: Record<string, number>;
 }
 
 const drafts = persisted<Draft>('eval', {
@@ -569,6 +572,12 @@ export function EvaluationsView() {
                 />
               ) : (
                 <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+              )}
+              {/* the gates belong to the metrics: under the picker, so the form above it keeps its height */}
+              {d.type === 'rag' && ragTarget && (
+                <div className="px-3 pb-3">
+                  <RagGatesField gates={d.gates} onChange={(gates) => set({ gates })} />
+                </div>
               )}
             </div>
           )}

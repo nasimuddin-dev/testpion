@@ -6,7 +6,7 @@
  * is cut from them. A threshold can be changed after the fact: pass and fail are decided from the stored scores.
  */
 import type { TestResult } from '../../model/types.js';
-import { round } from '../../util/stats.js';
+import { percentile, round } from '../../util/stats.js';
 import { FAILURE_CLASSES, type FailureClass } from './failure.js';
 import { METRIC_GROUPS, resolveMetric, type MetricGroup } from './metric-registry.js';
 import { matchExternal, type ExternalScores } from './ragas-io.js';
@@ -91,8 +91,6 @@ const mulberry32 = (seed: number) => () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
-
-const quantile = (sorted: number[], q: number) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1) + 1e-9)))]! : undefined);
 
 const passes = (c: MetricColumn, score: number, thresholds: Record<string, number>): boolean | undefined => {
   const t = thresholds[c.key] ?? thresholds[c.metric] ?? c.threshold;
@@ -314,7 +312,7 @@ function intervalOf(base: MatrixBase, c: MatrixColumnData): [number, number] | u
   base.work.bootstrapDraws += rounds * xs.length;
   means.sort();
   const sorted = Array.from(means);
-  s.ci = [round(quantile(sorted, 0.025)!, 4), round(quantile(sorted, 0.975)!, 4)];
+  s.ci = [round(percentile(sorted, 0.025)!, 4), round(percentile(sorted, 0.975)!, 4)];
   return s.ci;
 }
 
@@ -430,6 +428,18 @@ export function parseGates(specs: string[] | string | undefined): Record<string,
     const m = /^\s*(.+?)\s*[=:]\s*(-?[\d.]+)\s*$/.exec(part);
     if (!m) throw new Error(`A gate is metric=value (e.g. faithfulness=0.8), not "${part}"`);
     out[m[1]!] = Number(m[2]);
+  }
+  return out;
+}
+
+/** The gates of a run: the evaluation's own, with a metric given again by the caller (a `--min` flag, a monitor) taking the caller's mark. */
+export function mergeGates(base: Record<string, number> | undefined, over: Record<string, number> | undefined): Record<string, number> {
+  const canon = (k: string) => resolveMetric(k)?.def.id ?? k;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(base ?? {})) if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  for (const [k, v] of Object.entries(over ?? {})) {
+    for (const own of Object.keys(out)) if (own !== k && canon(own) === canon(k)) delete out[own];
+    out[k] = v;
   }
   return out;
 }

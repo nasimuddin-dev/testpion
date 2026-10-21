@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import type { RagTarget } from '@testpion/shared';
 import { maskSensitiveText, type Redactor } from '../../../util/redact.js';
 import { applyMapping, responseOf } from '../mapping.js';
-import { assertCapturable, describeLocator, matchesTarget, questionLocator, readQuestion } from './question-path.js';
+import { captureNote, describeLocator, matchesTarget, protocolOfTarget, questionLocator, readQuestion } from './question-path.js';
 import type { CapturedCall, CapturedRecord, CaptureOptions, CaptureReport, QuestionLocator } from './types.js';
 
 const MAX_EXAMPLES = 3;
@@ -80,7 +80,8 @@ export function buildRecords({ calls, target, options: o, redactor }: BuildInput
   const needsTarget = calls.some((c) => !c.sample);
   if (needsTarget) {
     if (!target) throw new Error('A RAG target is needed to read questions and answers out of captured requests');
-    assertCapturable(target);
+    const note = captureNote(target);
+    if (note) warnings.add(note);
     loc = questionLocator(target, o.questionPath);
     if (!loc) warnings.add('The target’s request has no {{question}} placeholder; pass the place of the question (--question-path "$.input.q" or query:<name>).');
   }
@@ -100,11 +101,19 @@ export function buildRecords({ calls, target, options: o, redactor }: BuildInput
     let contexts: CapturedRecord['contexts'];
     let reference: string | undefined;
     let referenceIds: string[] | undefined;
+    // the record holds the question alone: asked for, or the protocol keeps no response
+    let questionOnly = !!o.asQuestions;
     if (c.sample) {
       ({ question, answer, contexts, reference, referenceIds } = c.sample);
     } else {
-      if (onlySuccess && !(c.status !== undefined && c.status >= 200 && c.status < 300)) {
-        skips.add(c.status === undefined ? 'no response was recorded' : `the call answered ${c.status}, not 2xx`, c.id);
+      const have = c.protocol ?? 'http';
+      const want = protocolOfTarget(target!);
+      if (have !== want) {
+        skips.add(`a ${have} call, and the target is ${want}`, c.id);
+        continue;
+      }
+      if (onlySuccess && !(c.ok ?? (c.status !== undefined && c.status >= 200 && c.status < 300))) {
+        skips.add(c.ok === false ? 'the call did not succeed' : c.status === undefined ? 'no response was recorded' : `the call answered ${c.status}, not 2xx`, c.id);
         continue;
       }
       if (!matchesTarget(target!, c)) {
@@ -120,7 +129,9 @@ export function buildRecords({ calls, target, options: o, redactor }: BuildInput
         skips.add(`no question at ${describeLocator(loc)}`, c.id);
         continue;
       }
-      if (!o.asQuestions) {
+      // History keeps no response for a gRPC or an MCP call: what it has is the question
+      if (c.responseText === undefined && (have === 'grpc' || have === 'mcp')) questionOnly = true;
+      if (!questionOnly) {
         if (c.responseText === undefined) {
           skips.add('the response body was not recorded', c.id);
           continue;
@@ -140,8 +151,8 @@ export function buildRecords({ calls, target, options: o, redactor }: BuildInput
     const rec: CapturedRecord = {
       id: `cap-${hash(`${c.source}:${c.id}`).slice(0, 10)}`,
       question: q,
-      ...(o.asQuestions ? {} : { answer: mask(answer ?? ''), contexts: (contexts ?? []).map((d) => ({ id: d.id, text: mask(d.text), ...(d.score !== undefined ? { score: d.score } : {}), ...(d.source ? { source: mask(d.source) } : {}) })) }),
-      ...(reference && !o.asQuestions ? { reference: mask(reference) } : {}),
+      ...(questionOnly ? {} : { answer: mask(answer ?? ''), contexts: (contexts ?? []).map((d) => ({ id: d.id, text: mask(d.text), ...(d.score !== undefined ? { score: d.score } : {}), ...(d.source ? { source: mask(d.source) } : {}) })) }),
+      ...(reference && !questionOnly ? { reference: mask(reference) } : {}),
       ...(referenceIds?.length ? { reference_ids: referenceIds } : {}),
       tags: ['captured', c.source],
       metadata: { capturedFrom: { kind: c.source, id: c.id }, ...(c.at ? { at: c.at } : {}), ...(c.latencyMs !== undefined ? { latencyMs: c.latencyMs } : {}) },

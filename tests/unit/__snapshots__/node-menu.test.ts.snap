@@ -543,6 +543,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
   ],
   "metric": [
     [
+      "Export…",
+    ],
+    [
       "Delete…",
     ],
   ],

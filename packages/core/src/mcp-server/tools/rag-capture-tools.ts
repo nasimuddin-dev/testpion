@@ -14,7 +14,11 @@ const strList = (description: string) => ({ type: 'array', items: { type: 'strin
 const int = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 1 ? Math.floor(v) : undefined);
 
 function sourceOf(a: Record<string, unknown>): CaptureSourceSpec {
-  const from = String(a.from ?? (a.session ? 'debugger' : a.run ? 'run' : a.har ? 'har' : 'history'));
+  const from = String(a.from ?? (a.session ? 'debugger' : a.run ? 'run' : a.har ? 'har' : a.messages ? 'messages' : 'history'));
+  if (from === 'messages') {
+    if (!a.messages) throw new ApsError('ValidationError', '`messages` is a WebSocket message log (JSON Lines) inside the workspace');
+    return { kind: 'messages', file: String(a.messages), ...(a.messages_url ? { url: String(a.messages_url) } : {}) };
+  }
   if (from === 'debugger') {
     if (!a.session) throw new ApsError('ValidationError', '`session` is a saved Debugger session or the History id that saved it');
     return { kind: 'debugger', session: String(a.session) };
@@ -35,18 +39,20 @@ export function ragCaptureTools({ store, secrets, settings }: { store: Workspace
     {
       name: 'rag_capture_dataset',
       write: true,
-      doc: { when: 'Turning real calls to a RAG system (History, a saved Debugger session, a HAR file, an evaluation run) into a dataset, to score production-like questions.', whenNot: 'Generating questions from documents (rag_generate_testset) or converting another tool’s dataset (rag_import_dataset).', example: { target: 'clinic-rag', from: 'history', name: 'prod-questions', dedupe: true, dry_run: true } },
+      doc: { when: 'Turning real calls to a RAG system (History, a saved Debugger session, a HAR file, a WebSocket message log, an evaluation run) into a dataset, to score production-like questions.', whenNot: 'Generating questions from documents (rag_generate_testset) or converting another tool’s dataset (rag_import_dataset).', example: { target: 'clinic-rag', from: 'history', name: 'prod-questions', dedupe: true, dry_run: true } },
       description:
-        'Build a RAG dataset from real calls. The question is read from each request where the RAG target writes it ({{question}} in its request), the answer and the retrieved contexts from the response with the target’s mapping. Records get tags captured + the source and the call they came from; secrets are always masked and personal data (emails, phones, card and ID numbers) unless mask_pii is false; the request headers and cookies are never kept. `dry_run` returns the report (read, matched, skipped with reasons, masked, deduped, sampled) and the first records and writes nothing; otherwise datasets/<name>.jsonl is written (never over a file unless overwrite). `as_questions` writes questions only, so the target is called again when the dataset runs. Nothing is sent to a model.',
+        'Build a RAG dataset from real calls. The question is read from each request where the RAG target writes it ({{question}} in its request), the answer and the retrieved contexts from the response with the target’s mapping. Records get tags captured + the source and the call they came from; secrets are always masked and personal data (emails, phones, card and ID numbers) unless mask_pii is false; the request headers and cookies are never kept. `dry_run` returns the report (read, matched, skipped with reasons, masked, deduped, sampled) and the first records and writes nothing; otherwise datasets/<name>.jsonl is written (never over a file unless overwrite). `as_questions` writes questions only, so the target is called again when the dataset runs. A gRPC or MCP target is read from History, which keeps the request but not the response, so its dataset holds the questions; a WebSocket target is read from a saved message log (`messages`). Nothing is sent to a model.',
       inputSchema: {
         type: 'object',
         properties: {
           target: str('The RAG target the calls went to (rag_list_targets); not needed for from=run'),
-          from: { type: 'string', enum: ['history', 'debugger', 'run', 'har'], description: 'Where the calls are (default: found from session / run / har, else history)' },
+          from: { type: 'string', enum: ['history', 'debugger', 'run', 'har', 'messages'], description: 'Where the calls are (default: found from session / run / har / messages, else history)' },
           history: strList('History entry ids (default: the recent HTTP entries)'),
           session: str('A saved Debugger session (debugger/<name>.har) or the id of the History entry that saved it'),
           run: str('An evaluation run id: its answered samples become records'),
           har: str('A HAR file inside the workspace'),
+          messages: str('A WebSocket message log inside the workspace (JSON Lines saved from the message log: time, direction, data): each sent message and the replies after it are a call'),
+          messages_url: str('With messages: the socket\'s address, when the target\'s must match it'),
           question_path: str('Where the question is when the target does not say: a JSONPath into the JSON request body ($.input.q) or query:<parameter>'),
           name: str('datasets/<name>.jsonl (default captured-<date>)'),
           limit: { type: 'number', description: 'At most this many records (the newest)' },

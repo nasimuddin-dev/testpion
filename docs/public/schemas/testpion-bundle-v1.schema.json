@@ -63,7 +63,7 @@
   },
   "$defs": {
     "kind": {
-      "enum": ["collection", "environment", "test", "spec", "dataset", "proto", "script-package", "mcp-server", "mcp-mock", "provider", "grpc-call", "ws-connection", "prompt", "load-test", "evaluation", "monitor"]
+      "enum": ["collection", "environment", "test", "spec", "dataset", "proto", "script-package", "mcp-server", "mcp-mock", "metric", "provider", "grpc-call", "ws-connection", "prompt", "load-test", "evaluation", "monitor"]
     },
     "ref": { "type": "object", "required": ["kind", "id"], "properties": { "kind": { "$ref": "#/$defs/kind" }, "id": { "type": "string" } } },
     "item": {

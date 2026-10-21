@@ -110,6 +110,8 @@ export interface MetricDef {
   /** The Ragas names (snake_case, class and legacy class) and the options that give Ragas' own semantics when one is used instead of the id. */
   ragas?: { names: string[]; options?: Record<string, unknown>; differs?: string; /** The column Ragas gives it in its result table, when that is not its first snake_case name. */ key?: string };
   options?: Record<string, MetricOption>;
+  /** A `mode:` value that stands for another metric (Ragas' `noise_sensitivity` with `mode: irrelevant` is `noise-sensitivity-irrelevant`): the metric that implements that mode. */
+  modeRoutes?: Record<string, string>;
   /** `service`: the judge service (strict, cached, ledgered); `optional`: a judge when the check names one, else a heuristic. */
   judge?: 'service' | 'optional';
   /** Versioned prompts it sends (judged metrics). */
@@ -223,12 +225,25 @@ export function columnName(id: string, options: Record<string, unknown> = {}): s
 export function metricToCheck(name: string, extra: Record<string, unknown> = {}): CheckConfig {
   const r = resolveMetric(name);
   const options = { ...(r?.options ?? {}), ...extra };
+  const routed = r ? routeByMode(r.def, options.mode) : undefined;
+  if (routed) {
+    const { mode: _m, ...rest } = options;
+    return metricToCheck(routed.id, rest);
+  }
   return { ...options, type: r?.def.check ?? name, ...(r && !('name' in extra) && columnName(r.def.id, options) !== r.def.id ? { name: columnName(r.def.id, options) } : {}) } as CheckConfig;
+}
+
+/** The metric a `mode:` value stands for, when the metric routes modes (and the mode is not the metric's own). */
+export function routeByMode(def: MetricDef, mode: unknown): MetricDef | undefined {
+  const to = typeof mode === 'string' ? def.modeRoutes?.[mode] : undefined;
+  return to && to !== def.id ? registry.get(to) : undefined;
 }
 
 setCheckResolver((cfg) => {
   const r = resolveMetric(cfg.type);
-  return r ? { check: r.def.check, options: r.options } : undefined;
+  if (!r) return undefined;
+  const def = routeByMode(r.def, cfg.mode) ?? r.def;
+  return { check: def.check, options: r.options };
 });
 
 /** The inputs a metric is missing for a sample, with the message that says how to supply each. */

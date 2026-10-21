@@ -2,8 +2,8 @@
  * The evaluation a plan describes, built by TestPion from the plan (the model chooses; TestPion writes the file): a metric
  * that is not in the catalogue, cannot run on this data or has a pass mark outside its scale is dropped or fixed with a
  * note, never silently, so what is offered always runs. The result is a saved evaluation (library `evaluations`) as YAML text
- * for the review, plus the gates, which a saved evaluation has no field for: they travel as `--min` flags for `rag run`, a
- * monitor and CI, and the proposal says so.
+ * for the review; its gates are a field of the evaluation (`gates:`), which `rag run`, a monitor of the evaluation and the CI
+ * step fail a run under. `gateFlags` is the same thing as `--min` flags, for a person who wants to run it by hand.
  */
 import { stringifyYaml } from '../../../util/lazy-yaml.js';
 import type { CheckConfig } from '../../../model/types.js';
@@ -18,7 +18,7 @@ export interface BuiltEvaluation {
   evaluation: SavedEvaluation;
   /** The gates that survived, by canonical metric id (the lowest mean a run may have). */
   gates: Record<string, number>;
-  /** `--min` flags a run, a monitor or CI takes. */
+  /** The gates as `--min` flags (they are also saved in the evaluation). */
   gateFlags: string[];
   baseline: 'previous' | 'none';
   /** Records of the dataset in the evaluation, and how many the dataset has. */
@@ -145,10 +145,11 @@ export function buildEvaluation(plan: AuthorPlan, local: AuthorLocal, o: { suppl
     ...(Object.keys(judge).length ? { judge } : {}),
     ...(typeof j.maxCostUsd === 'number' && j.maxCostUsd >= 0 ? { maxJudgeCostUsd: j.maxCostUsd } : {}),
     ...(typeof j.maxCalls === 'number' && j.maxCalls >= 0 ? { maxJudgeCalls: Math.floor(j.maxCalls) } : {}),
+    ...(Object.keys(gates).length ? { gates } : {}),
   };
   const gateFlags = Object.entries(gates).map(([k, v]) => `--min ${k}=${v}`);
   const baseline = plan.baseline === 'previous' ? 'previous' : 'none';
-  const head = [`# AI-drafted by TestPion for the target "${local.target.name}": review the metrics and pass marks before running it.`, ...(gateFlags.length ? [`# Gates (a saved evaluation has no field for them): testpion rag run "${name}" ${gateFlags.join(' ')}${baseline === 'previous' ? ' --baseline <previous run>' : ''}`] : [])];
+  const head = [`# AI-drafted by TestPion for the target "${local.target.name}": review the metrics and pass marks before running it.`, ...(gateFlags.length ? [`# Gates are saved in the evaluation: testpion rag run "${name}" fails a run under one${baseline === 'previous' ? ' (add --baseline <previous run> to fail a run worse than the one before)' : ''}`] : [])];
   // the dataset is shown as its size, not repeated in the review (it is the dataset's own file)
   const shown = { ...evaluation, dataset: records.length ? `<${records.length} record${records.length === 1 ? '' : 's'} of ${local.dataset?.name}, kept in the evaluation>` : '' };
   return { evaluation, gates, gateFlags, baseline, records: { used: records.length, total: local.dataset?.total ?? 0 }, notes, yaml: `${head.join('\n')}\n${stringifyYaml(shown, { lineWidth: 0 })}` };

@@ -109,7 +109,7 @@ same answers. TestPion does not call or depend on any of these tools.
 
 ## Metrics {#metrics}
 
-The **Metrics** tab of the evaluation lists all 134 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, safety, conversations, agents and tools, pictures, SQL, and your own), with a search that finds a metric by
+The **Metrics** tab of the evaluation lists all 138 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, safety, conversations, agents and tools, pictures, SQL, and your own), with a search that finds a metric by
 its id, an older name or a Ragas name (`LLMContextRecall`, `nv_context_relevance`, `response_relevancy`):
 
 * **Presets** put a set in one click: *RAG triad*, *Ragas core*, *DeepEval RAG*, *NVIDIA RAG*, *Retrieval only*, *Free (no model at
@@ -167,6 +167,7 @@ Judged metrics ask a model through the AI task `rag-judge` (`testpion ai tasks`)
   tie, which does not pass); **repeat** n times (the first answer may come from the cache, the rest are asked again) and report the
   flip rate of the verdicts; **skip judging when retrieval failed** (`shortCircuit`: the judged answer metrics of a sample whose
   free retrieval metrics already failed are n/a, with no call); **share the answer's claims** (`shareClaims`).
+  A jury also votes on the **claim-level metrics** (`claim-precision`, `noise-sensitivity-relevant` …): each judge gives its verdict on every claim and the claim counts as supported by the majority (`mean`: half or more, `lowest`: all), with the judges' own shares and how often they agreed in the result. The claims themselves are extracted by the first judge only, because splitting is not a verdict.
 * **Shared claims.** Faithfulness and answer relevance both judge the answer's claims. With `shareClaims` the answer is split once
   (prompt `claims-v1`) and each metric judges those claims; the split is cached, so a third metric that reads claims costs nothing
   for it. With only two readers the extra call costs more than it saves, so sharing is on by default from three.
@@ -225,7 +226,8 @@ generator or the metric) and what to change first. It proposes nothing.
 * **Custom metrics** are files in `metrics/*.yaml` (a criterion for a judge, a checklist, rules, a formula, an embedding set, a
   sandboxed script): see [Custom RAG metrics](./custom-metrics.md).
 * **Claim-level metrics** (`claim-faithfulness`, `claim-recall`, `noise-sensitivity-relevant` …) split the answer and the reference
-  into claims once and share that work between them, so five of them cost about as much as two.
+  into claims once and share that work between them, so five of them cost about as much as two. Ragas' one `noise_sensitivity` takes `mode: relevant | irrelevant` as in Ragas (the check, `metricToCheck` and the matrix route it to `noise-sensitivity-relevant` or `-irrelevant`). `negative-rejection` takes `mode: judge` to have a judge decide whether the answer is a refusal when the wording of a refusal is not one the pattern knows.
+* **The shape of the answer and what judging cost**: `answer-regex` (a pattern, optionally `not`), `answer-length` (characters, words or tokens between `min` and `max`), `answer-json-schema` (the answer, or the JSON in a code fence, against a schema; DeepEval's JsonCorrectness) score 1 or 0 with no model, and `judge-cost` is the spend of the judge on the other metrics of the same sample, in dollars (lower is better; `max` gates it).
 * **SQL metrics** (`datacompy-score`, `sql-equivalence`) compare what the generated query returns with the reference query's result.
   The query runs only through a read-only executor: one `SELECT`, no `PRAGMA`, `ATTACH`, writes or extensions, a row limit, a time limit,
   a read-only connection (a PostgreSQL or MySQL source must be marked `readOnly: true`). The `database:` of the evaluation names the
@@ -254,7 +256,7 @@ generator or the metric) and what to change first. It proposes nothing.
 
 #### Conversations {#r3-conversations}
 
-A dataset record with `turns` is a conversation. `turns` is the list of the user's messages (strings), a list of messages
+A dataset record with `turns` is a conversation. In the column mapper (*Import…*, and any dataset whose columns are named otherwise) **Conversation** is a field: choose the column (`turns`, `conversation`, `messages`, `dialogue` or `transcript` are found by name) and the record's question becomes its last user message. `turns` is the list of the user's messages (strings), a list of messages
 (`{ role, content }`, OpenAI style, or Ragas' `human` / `ai` / `tool` messages with `tool_calls`), or a transcript text
 (`User: …` / `Assistant: …` lines). TestPion replays the user's messages **one after another** against the target, in one lane
 (turns of a conversation never run in parallel; the evaluation's concurrency is across conversations), and records the whole
@@ -267,6 +269,7 @@ How the system keeps the conversation is set in the target (**Conversations** in
 | one question per call (default) | `{{question}}` | `{{messages}}`, `{{history}}`, `{{historyText}}` are available too: with one question the history is empty. |
 | the request carries the history | `{{messages}}` (the earlier messages plus this one, `[{role, content}]`), `{{history}}` (the earlier ones), `{{historyText}}` (`User: …` lines) | For OpenAI-style bodies: `json: { messages: "{{messages}}" }`. |
 | the system keeps a session | `{{conversationId}}` (empty on the first turn) | Click the conversation id in the sample response and choose **Conversation id**; the id of each response is carried to the next turn. |
+| the session is a cookie | none | Turn on *The session is a cookie* (`conversation: { mode: server-session, cookies: true }`): the cookies each answer sets are sent with the next turn of **the same conversation**, an expired one is dropped, and no conversation sees another's. The run's shared cookie jar is not used for these calls, the values are treated as secrets and nothing of them is written to a result. No conversation id is needed. |
 
 The last turn's answer and chunks are the sample the single-turn metrics (`faithfulness` …) score. The conversation metrics read the
 transcript: `knowledge-retention` (does it ask again for what the user said?), `role-adherence` (needs `role`),

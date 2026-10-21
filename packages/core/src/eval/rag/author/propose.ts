@@ -5,6 +5,7 @@
 import { ApsError } from '../../../errors.js';
 import type { AiTaskInput, DraftItem } from '../../../ai/tasks/registry.js';
 import type { ProposalItem } from '../../../ai/proposal.js';
+import { parseRagDatasetText } from '../dataset-formats.js';
 import { buildEvaluation, type BuiltEvaluation } from './build.js';
 import type { AuthorLocal, AuthorPlan } from './types.js';
 
@@ -22,16 +23,29 @@ export function proposeEvaluation(a: { value?: unknown }, input: AiTaskInput): D
   const built = buildEvaluation(plan, local, { supplied: local.inputs });
   const { yaml, ...rest } = built;
   const data: AuthoredData = { ...rest, plan, source: { target: local.target.name, ...(local.dataset ? { dataset: local.dataset.name } : {}) } };
-  return [{ kind: 'evaluation', title: `Evaluation: ${built.evaluation.name}`, after: yaml, language: 'yaml', data }];
+  const items: DraftItem[] = [{ kind: 'evaluation', title: `Evaluation: ${built.evaluation.name}`, after: yaml, language: 'yaml', data }];
+  // the slice the evaluation runs, also as a dataset file of its own (a saved evaluation holds its dataset inside, where nobody opens or diffs it)
+  if (local.sliceFile && built.records.used > 0) {
+    const rows = parseRagDatasetText(built.evaluation.dataset, 'jsonl');
+    items.push({
+      kind: 'dataset-row',
+      title: `Dataset slice: ${rows.length} record${rows.length === 1 ? '' : 's'} to ${local.sliceFile}`,
+      after: built.evaluation.dataset,
+      language: 'json',
+      data: { dataset: local.sliceFile, records: rows, slice: true },
+    });
+  }
+  return items;
 }
 
 export function describeEvaluation(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
   const v = (value ?? {}) as AuthorPlan;
   const d = items[0]?.data as AuthoredData | undefined;
-  const gates = d && Object.keys(d.gates).length ? `Gates: ${d.gateFlags.join(' ')} (a saved evaluation has no field for them: pass them to \`testpion rag run\`, a monitor or the CI dialog).` : '';
+  const gates = d && Object.keys(d.gates).length ? `Gates: ${d.gateFlags.join(' ')} (saved in the evaluation: \`testpion rag run\`, a monitor of it and the CI step fail a run under one).` : '';
   const sample = d?.records ? `${d.records.used} of ${d.records.total} dataset records are in the evaluation.` : '';
+  const slice = items.find((i) => (i.data as { slice?: boolean } | undefined)?.slice) ? `The same ${d?.records.used} records are also written to ${(items.find((i) => (i.data as { slice?: boolean }).slice)!.data as { dataset: string }).dataset}.` : '';
   return {
-    summary: [typeof v.summary === 'string' ? v.summary : '', sample, gates, d?.baseline === 'previous' ? 'Run it with a baseline: fail a run that is worse than the one before.' : ''].filter(Boolean).join(' ') || undefined,
+    summary: [typeof v.summary === 'string' ? v.summary : '', sample, slice, gates, d?.baseline === 'previous' ? 'Run it with a baseline: fail a run that is worse than the one before.' : ''].filter(Boolean).join(' ') || undefined,
     assumptions: [...(Array.isArray(v.assumptions) ? v.assumptions.map(String) : []), ...(Array.isArray(v.risks) ? v.risks.map((r) => `Cannot tell: ${String(r)}`) : [])],
     notes: d?.notes ?? [],
   };

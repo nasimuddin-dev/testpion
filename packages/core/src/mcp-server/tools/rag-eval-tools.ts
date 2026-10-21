@@ -15,7 +15,7 @@ import { findSavedEvaluation, judgeSetupOf } from '../../runner/saved-evaluation
 import { probeRagTarget } from '../../runner/rag-probe.js';
 import { METRIC_GROUPS, metricCatalogueRows, resolveMetric } from '../../eval/rag/metric-registry.js';
 import { METRIC_PRESETS } from '../../eval/rag/catalogue-presets.js';
-import { buildMetricMatrix, checkGates, parseGates } from '../../eval/rag/metric-matrix.js';
+import { buildMetricMatrix, checkGates, mergeGates, parseGates } from '../../eval/rag/metric-matrix.js';
 import { compareMetricRuns } from '../../eval/rag/metric-compare.js';
 import { tryMetric, type TrySample } from '../../eval/rag/try-metric.js';
 import { pickRecord } from '../../eval/rag/record.js';
@@ -221,7 +221,8 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       run: async (a) => {
         const environment = checkEnvironment(a.environment);
         const d = chooseRagRun(findSavedEvaluation(store, String(a.evaluation)), { limit: 500, ...choices(a), ...(typeof a.limit === 'number' ? { limit: Math.min(500, a.limit) } : {}) });
-        const gates = gatesOf(a.min);
+        // the evaluation's own gates, with a `min` for the same metric taking its mark
+        const gates = mergeGates(d.gates, gatesOf(a.min));
         const out = await runRagEvaluation({ store, makeContext: () => context(environment), evaluation: d, twoPhase: a.two_phase === true, environment, concurrency: Math.min(8, d.concurrency || 4) });
         const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
         const results: TestResult[] = [];

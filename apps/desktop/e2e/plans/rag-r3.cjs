@@ -113,7 +113,9 @@ const steps = [
      const box = document.querySelector('[data-rag-allow-images]'); if (!box) return 'NO CHECKBOX';
      const off = box.getAttribute("aria-checked") === "true";
      await __t.real.click(box); await __t.sleep(300);
-     return 'off by default: ' + !off + ' | on after a click: ' + (document.querySelector('[data-rag-allow-images]').getAttribute('aria-checked') === 'true') + ' | summary says set: ' + /set/.test(document.querySelector('[data-rag-judge-options] summary').textContent);`,
+     const on = document.querySelector('[data-rag-allow-images]').getAttribute('aria-checked') === 'true';
+     await __t.real.click(document.querySelector('[data-rag-judge-options] summary')); await __t.sleep(300); // fold it again: the picker below needs the height
+     return 'off by default: ' + !off + ' | on after a click: ' + on + ' | summary says set: ' + /set/.test(document.querySelector('[data-rag-judge-options] summary').textContent);`,
   ),
   step(
     'try-a-multimodal-sample-with-a-picture',

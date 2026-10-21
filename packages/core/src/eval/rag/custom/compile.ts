@@ -17,6 +17,7 @@ import { getMetric, metricCatalogue, nameTaken, registerMetric, resolveMetric, u
 import { contextOfSample } from '../try-metric.js';
 import { defaultThreshold, checkOf, type CustomCheck } from './kinds.js';
 import { parseFormula } from './formula.js';
+import { dagJudgedKinds, dagMaxJudgeCalls, dagOf } from '../dag.js';
 import { parseCustomMetric, scoringHash, type MetricProblem } from './file.js';
 
 export interface CompiledMetric {
@@ -33,12 +34,17 @@ const HOW: Record<CustomMetricFile['kind'], (f: CustomMetricFile) => string> = {
   formula: (f) => `${f.expression ?? ''}: an expression over other metrics, which run first.`,
   'embedding-set': () => 'The cosine closeness of the answer to the good answers (and its distance from the bad ones), by embedding.',
   script: () => 'A sandboxed script returns the score from the sample (no network, no files).',
+  dag: (f) => `A decision tree of ${Object.keys(f.tree?.nodes ?? {}).length} nodes: only the branch the answers lead to is asked, and the leaf it ends on holds the score (0 to 10, divided by 10).`,
 };
 
 /** The definition a file compiles to. */
 export function defOf(f: CustomMetricFile, hash: string): MetricDef {
   const id = `custom/${f.id}`;
-  const judged = f.kind === 'judge' || f.kind === 'checklist';
+  // a tree asks a judge at every node that is not a rule
+  const tree = f.kind === 'dag' ? dagOf(f.tree) : undefined;
+  const treeSpec = tree && !Array.isArray(tree) ? tree : undefined;
+  const treeJudged = !!treeSpec && dagJudgedKinds(treeSpec).length > 0;
+  const judged = f.kind === 'judge' || f.kind === 'checklist' || treeJudged;
   const inputs = (f.inputs ?? ['question', 'answer']) as string[];
   // the conversation a custom judge reads is the sample's `turns`
   const requires: MetricInput[] = [...new Set<MetricInput>(['answer', ...(inputs.filter((i) => i !== 'answer').map((i) => (i === 'conversation' ? 'turns' : i)) as MetricInput[]), ...(f.kind === 'judge' && f.reference === 'guided' ? (['reference'] as const) : [])])];
@@ -55,20 +61,21 @@ export function defOf(f: CustomMetricFile, hash: string): MetricDef {
     what: f.description?.trim() || `${f.name || f.id}: a custom ${f.kind} metric of this workspace.`,
     how: HOW[f.kind](f),
     example: first ? `Example “${first.name ?? 'first'}”: ${first.expect === 'pass' ? 'passes' : 'fails'}.` : 'No example yet: add examples to the file; they are its regression tests.',
-    requires: f.kind === 'formula' ? [...new Set(refs.flatMap((d) => d.requires))] : f.kind === 'rule' || f.kind === 'script' || f.kind === 'embedding-set' ? ['answer'] : requires,
+    requires: f.kind === 'formula' ? [...new Set(refs.flatMap((d) => d.requires))] : f.kind === 'dag' ? ([...new Set<MetricInput>(['answer', ...(inputs.filter((i) => i !== 'answer').map((i) => (i === 'conversation' ? 'turns' : i)) as MetricInput[])])] as MetricInput[]) : f.kind === 'rule' || f.kind === 'script' || f.kind === 'embedding-set' ? ['answer'] : requires,
     ...(f.kind === 'embedding-set' ? { optional: ['goodAnswers' as MetricInput] } : {}),
     threshold: defaultThreshold(f),
     check: id,
     aliases: nameTaken(f.id, id) ? [] : [f.id],
     judge: judged || formulaJudged ? 'service' : undefined,
-    prompts: judged ? [`${f.id}-t<hash of the criteria>`] : undefined,
-    calls: f.kind === 'judge' ? String(Math.max(1, f.votes ?? 1)) : f.kind === 'checklist' ? '1' : f.kind === 'formula' ? 'the sum of its inputs' : f.kind === 'embedding-set' ? '0 model calls, one embedding call' : '0',
+    prompts: f.kind === 'dag' ? (treeSpec ? dagJudgedKinds(treeSpec).map((k) => `dag-${k}-v1`) : undefined) : judged ? [`${f.id}-t<hash of the criteria>`] : undefined,
+    calls: f.kind === 'judge' ? String(Math.max(1, f.votes ?? 1)) : f.kind === 'checklist' ? '1' : f.kind === 'dag' ? (treeSpec ? (treeJudged ? `at most ${dagMaxJudgeCalls(treeSpec)}, one for each question the answers lead to` : '0') : '?') : f.kind === 'formula' ? 'the sum of its inputs' : f.kind === 'embedding-set' ? '0 model calls, one embedding call' : '0',
     version: `${f.id}-v${f.version ?? 1}`,
     sources: [],
     custom: { kind: f.kind, fileVersion: f.version ?? 1, hash, file: `metrics/${f.id}.yaml` },
     estimate: (s, o) => {
       if (f.kind === 'judge') return judgeEstimate(s, { calls: Math.max(1, f.votes ?? 1), prompt: 120 + Math.ceil((f.criteria?.length ?? 0) / 4), reads: ['answerTokens', ...(inputs.includes('question') ? (['questionTokens'] as const) : []), ...(inputs.includes('contexts') ? (['contextTokens'] as const) : []), ...(f.reference === 'guided' || inputs.includes('reference') ? (['referenceTokens'] as const) : [])], items: () => 1 });
       if (f.kind === 'checklist') return judgeEstimate(s, { prompt: 120 + (f.items ?? []).reduce((a, i) => a + Math.ceil((typeof i === 'string' ? i : i.text).length / 4), 0), reads: ['questionTokens', 'answerTokens'], items: () => f.items?.length ?? 1 });
+      if (f.kind === 'dag' && treeSpec && treeJudged) return judgeEstimate(s, { calls: dagMaxJudgeCalls(treeSpec), prompt: 120, reads: ['answerTokens', ...(inputs.includes('question') ? (['questionTokens'] as const) : []), ...(inputs.includes('contexts') ? (['contextTokens'] as const) : []), ...(inputs.includes('reference') ? (['referenceTokens'] as const) : [])], items: () => 1 });
       if (f.kind === 'embedding-set') return { llmCalls: 0, embedCalls: 1, inputTokens: s.answerTokens + (f.good?.length ?? 1) * s.referenceTokens, outputTokens: 0 };
       if (f.kind === 'formula')
         return refs.reduce((a, d) => {

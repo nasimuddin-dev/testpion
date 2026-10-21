@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useRpc } from '../../lib/use-rpc';
 import { AiAction } from '../ai/AiAction';
-import { Field, Input, Select } from '../ui';
+import { Field, Input, Select, Toggle } from '../ui';
 
 interface AuthorContext {
   datasets: Array<{ path: string; name: string; format: string }>;
@@ -24,6 +24,9 @@ interface AuthorInputs {
 export function RagAuthorAction({ target }: { target: string }) {
   const [goal, setGoal] = useState('');
   const [dataset, setDataset] = useState('');
+  const [slice, setSlice] = useState(false);
+  // the records the evaluation runs, also as a file of their own: datasets/<dataset>-slice.jsonl
+  const sliceFile = slice && dataset ? `${dataset.replace(/\.[^.]+$/, '')}-slice` : undefined;
   const context = useRpc<AuthorContext>('rag.author.context', undefined, { keep: true, reloadOn: ['data.changed'] });
   const inputs = useRpc<AuthorInputs>('rag.author.inputs', { target, dataset: dataset || undefined }, { keep: true });
   return (
@@ -43,11 +46,12 @@ export function RagAuthorAction({ target }: { target: string }) {
           </Select>
         </Field>
       </div>
+      {dataset && <Toggle checked={slice} onChange={setSlice} label="Also save the records it runs as a dataset file" title={`Writes datasets/${dataset.replace(/\.[^.]+$/, '')}-slice.jsonl: a file you can open, compare and reuse (a saved evaluation keeps its dataset inside)`} data-rag-author-slice />}
       <div className="flex items-center gap-2 flex-wrap">
         <AiAction
           label="Draft an evaluation with AI"
           hint="The AI drafts the metrics, pass marks, judge options and gates; TestPion drops what cannot run on this data, dry-runs the rest on a few samples (nothing is sent to a judge) and offers it as a proposal you review."
-          request={() => ({ task: 'rag-author-evaluation', title: 'Draft a RAG evaluation', question: goal || undefined, context: { target, dataset: dataset || undefined, goal: goal || undefined } })}
+          request={() => ({ task: 'rag-author-evaluation', title: 'Draft a RAG evaluation', question: goal || undefined, context: { target, dataset: dataset || undefined, goal: goal || undefined, sliceFile } })}
         />
         {inputs && (
           <span className="text-xs text-muted" data-rag-author-inputs title={inputs.notRunnable.slice(0, 12).map((n) => `${n.id}: needs ${n.missing.join(', ')}`).join('\n')}>

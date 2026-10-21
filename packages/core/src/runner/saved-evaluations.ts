@@ -37,6 +37,8 @@ export interface SavedEvaluation {
   judge?: Pick<RagJudgeSetup, 'provider' | 'model' | 'judges' | 'aggregate' | 'swap' | 'repeat' | 'shortCircuit' | 'shareClaims' | 'sampleShare'>;
   maxJudgeCostUsd?: number;
   maxJudgeCalls?: number;
+  /** type `rag`: the gates of the evaluation, metric -> the lowest mean it may have in a run. `testpion rag run`, a monitor of the evaluation and the CI step fail a run under one (a `--min` flag or the monitor's own gates win for the same metric). */
+  gates?: Record<string, number>;
   /** `ragas`: every metric takes the options of its Ragas name (reverse-question answer relevance, per-chunk precision, entity recall by model …). */
   compat?: 'ragas';
   /** type `rag` with a target: call it this many times per question (2 to 10) and score the mean of the calls. */

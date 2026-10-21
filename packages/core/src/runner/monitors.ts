@@ -379,6 +379,7 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
   let runId = firstRunId;
   /** The evaluation monitors record their own run (and say which gates failed). */
   let gateReasons: string[] = [];
+  let gated = false;
   let rag: MonitorRagInfo | undefined;
   try {
     if (monitor.evaluation) {
@@ -386,6 +387,7 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
       summary = r.summary;
       runId = r.runId;
       gateReasons = r.gateReasons;
+      gated = r.gated;
       rag = r.rag;
     } else if (monitor.testFile) summary = await runMonitorTestFile(o, runId);
     else {
@@ -438,7 +440,7 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
     durationMs: summary.durationMs,
     runId,
     // an evaluation with gates is judged by its gates (a sample that scores low is what a metric is for); the system not answering always fails
-    status: (monitor.evaluation && (Object.keys(monitor.gates ?? {}).length || monitor.baseline) ? summary.errors || gateReasons.length || summary.cancelled : summary.failed || summary.errors || summary.cancelled) || slow || certSoon ? 'failed' : 'passed',
+    status: (monitor.evaluation && (gated || Object.keys(monitor.gates ?? {}).length || monitor.baseline) ? summary.errors || gateReasons.length || summary.cancelled : summary.failed || summary.errors || summary.cancelled) || slow || certSoon ? 'failed' : 'passed',
     total: summary.total,
     passed: summary.passed,
     failed: summary.failed,

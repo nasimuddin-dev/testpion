@@ -4,7 +4,7 @@
  * treat it alike. These are the data the window edits and the engine (core eval/rag/custom) validates and runs; browser-safe.
  */
 
-export type CustomMetricKind = 'judge' | 'checklist' | 'rule' | 'formula' | 'embedding-set' | 'script';
+export type CustomMetricKind = 'judge' | 'checklist' | 'rule' | 'formula' | 'embedding-set' | 'script' | 'dag';
 
 /** What a custom metric may see of the sample. */
 export type CustomMetricInput = 'question' | 'answer' | 'reference' | 'contexts' | 'conversation';
@@ -32,6 +32,19 @@ export interface CustomMetricRule {
   /** A deterministic check type (regex, contains, not-contains, length, json-schema, exists, equals …) and its options. */
   type: string;
   [option: string]: unknown;
+}
+
+/** The branch of a decision-tree node: the id of the next node, or a leaf with the score (0 to 10) and why. */
+export type CustomDagBranch = string | { score: number; reason?: string };
+/** A node of a `dag` metric: a yes/no question, a choice among labelled options, a task that writes something down for later nodes, or a deterministic rule. */
+export type CustomDagNode =
+  | { type: 'binary'; question: string; yes: CustomDagBranch; no: CustomDagBranch }
+  | { type: 'choice'; question: string; options: Record<string, CustomDagBranch> }
+  | { type: 'task'; instruction: string; next: CustomDagBranch }
+  | { type: 'rule'; check: { type: string; [option: string]: unknown }; yes: CustomDagBranch; no: CustomDagBranch };
+export interface CustomDagTree {
+  root: string;
+  nodes: Record<string, CustomDagNode>;
 }
 
 /** The file `metrics/<id>.yaml`. */
@@ -68,6 +81,8 @@ export interface CustomMetricFile {
   embedder?: string;
   /** script: the body of a function of `sample` that returns { score, reason?, items? }. */
   script?: string;
+  /** dag: the decision tree (DeepEval DAG): only the branch the answers lead to is asked; a leaf holds the score from 0 to 10, divided by 10. */
+  tree?: CustomDagTree;
   threshold?: number;
   direction?: 'higher' | 'lower';
   /** The judge of a judge / checklist metric; else the evaluation's. */
@@ -86,6 +101,7 @@ export const CUSTOM_METRIC_KINDS: ReadonlyArray<{ id: CustomMetricKind; label: s
   { id: 'formula', label: 'Formula', summary: 'An expression over other metrics: 0.5*faithfulness + 0.5*answer_relevance. Runs those metrics.', judged: false },
   { id: 'embedding-set', label: 'Embedding set', summary: 'Closeness to good answers (and distance from bad ones) by embedding. One embedding call.', judged: false },
   { id: 'script', label: 'Script', summary: 'A sandboxed function of the sample that returns a score. No network, no files.', judged: false },
+  { id: 'dag', label: 'Decision tree', summary: 'A tree of small judgements: only the branch the answers lead to is asked, and a leaf holds the score. One judge call for each question it visits.', judged: true },
 ];
 
 export const CUSTOM_METRIC_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -104,6 +120,21 @@ export function customMetricTemplate(kind: CustomMetricKind, id: string): Custom
       return { ...head, kind, expression: '0.5 * faithfulness + 0.5 * answer_relevance', threshold: 0.7, examples: [] };
     case 'embedding-set':
       return { ...head, kind, good: ['The clinic opens at 8am on weekdays.'], negatives: [], aggregate: 'max', threshold: 0.8, examples: [] };
+    case 'dag':
+      return {
+        ...head,
+        kind,
+        inputs: ['question', 'answer'],
+        tree: {
+          root: 'answers',
+          nodes: {
+            answers: { type: 'binary', question: 'Does the answer address the question that was asked?', yes: 'tone', no: { score: 2, reason: 'it does not answer the question' } },
+            tone: { type: 'binary', question: 'Is the answer polite and in plain language?', yes: { score: 10, reason: 'answers politely' }, no: { score: 6, reason: 'answers, but not politely' } },
+          },
+        },
+        threshold: 0.6,
+        examples: [],
+      };
     case 'script':
       return { ...head, kind, script: "// sample: { question, answer, reference, contexts: [{ id, text }] }\nconst words = sample.answer.split(/\\s+/).filter(Boolean).length;\nreturn { score: words <= 80 ? 1 : 0, reason: words + ' words' };", threshold: 1, examples: [] };
   }

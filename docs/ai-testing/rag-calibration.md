@@ -38,10 +38,21 @@ Label at least 30 samples, with passes **and** fails: a metric with 8 labels, al
 | 95% interval | A seeded bootstrap interval of kappa and accuracy: the same labels always give the same interval. With few labels it is wide: that is the point. |
 | Confusion matrix | judge × you. *Judge pass, you fail* means the judge is too lenient; *judge fail, you pass*, too strict. |
 | Per judge model | The same numbers for each judge model that scored the labelled samples (a run, or a re-score with another judge, records which one judged). |
+| Per member of a jury | With a jury (`judges:`) the table has a row for **the jury together** (its aggregate verdict, what the metric decided) and one row for **each member**, with that judge's own kappa, accuracy, TPR and TNR against the same labels. Seeing that one member is too lenient is how you drop it or swap it. |
 | Disagreements | Each sample where the judge and you differ, with the question, answer, the judge's reason and your note, and a link to open it. They are the best new examples for a metric's criterion. |
+
+The report works for **every judged metric**, the safety ones (`toxicity`, `bias`, `jailbreak-resistance` …) and the conversation ones (`knowledge-retention`, `conversation-completeness` …) included. For a safety metric a judge that is too lenient lets an unsafe answer through, and the advice says so. A conversation is judged as a whole, so a label belongs to **the whole transcript** it was made on: if the same record goes differently in a later run (another turn, another answer) the label is left out as stale, and a disagreement shows the last turns of the conversation, not only the final answer.
 
 The judge's verdict is its score against the metric's pass mark (the one the run used, or the one you edited in the matrix), so what-if
 pass marks calibrate too.
+
+## Make an example of a disagreement {#example}
+
+A sample where a **custom** metric disagrees with you is the best test that metric can get. **Make an example of this** (a button on each disagreement of a custom metric) adds the sample to the `examples:` of the metric's file, with *your* verdict as what the metric must say. **Run examples** then checks it, and an edit to the criterion that fixes this case cannot quietly break another. The file is edited as text, so its comments and layout stay; the same sample is not added twice; a metric has at most 50 examples. A built-in metric has no file to put an example in: copy it into a custom metric first.
+
+## Keep the report {#report-file}
+
+The down arrow of the report saves it as a file: **Markdown** (the numbers per metric, the confusion table, each judge and each member of a jury, the pass mark that agrees most and every disagreement with the question, the answer or the last turns, the judge's reason and your note: something to attach to a pull request) or **JSON** (the same numbers). Both are built by the engine from the same labels, so the CLI writes the identical file.
 
 ## Tune the pass mark {#tune}
 
@@ -67,6 +78,11 @@ testpion rag calibrate --run <run> --tune
 testpion rag calibrate Clinic-RAG --run <run> --metric faithfulness,answer-relevance --json
 testpion rag calibrate --run <run> --min-kappa 0.6      # exit 1 when a metric is below it
 testpion rag calibrate --run <run> --tune --apply --evaluation "Clinic RAG"
+testpion rag calibrate --run <run> --tune --out calibration.md            # the report as a file (--format json for the numbers)
+testpion output rag.calibration --run <run> --format md --out calibration.md
+
+# a disagreement becomes an example of the custom metric (your label is the verdict, or give --expect)
+testpion rag metric example custom/clinic-tone --run <run> --result hours --expect fail
 ```
 
 `--apply` writes the tuned pass mark of every metric whose kappa it improves into the saved evaluation (`--evaluation`) or, for `custom/<id>`, the metric file.
@@ -78,9 +94,11 @@ Exit codes: 0 fine, 1 a metric below `--min-kappa`, 2 a configuration error.
 * `rag_label` records the verdict **a person** gave (run, result, metric, `pass` or `fail`, an optional note). An agent labels what the person told it to label, not what it
   thinks of the answer: a label is the ground truth the judge is measured against.
 * `rag_calibrate` returns the report as JSON (`run_id`, optional `labels`, `metrics`, `tune`). It changes nothing; applying a tuned pass mark is a deliberate step in the app or the CLI.
+* `rag_make_metric_example` adds a labelled sample to a custom metric's `examples:` (`metric`, `run_id`, `result`, `expect` or the person's label). It edits only that metric's own file, the way the editor does.
 
 ## Limits {#limits}
 
 * Labels measure the judge against **you**. If you are inconsistent, so is the ceiling; label with a second person and compare.
 * A kappa from 30 labels is rough: read the interval, not the point.
-* A jury or a swap run is one verdict per metric (its aggregate); the per-judge table shows the first judge recorded.
+* A swap or a repeat run is one verdict per metric (its aggregate). A jury is one verdict too, with a row for each member in the table.
+* A trend of a jury's members over runs is not kept: the report is per run.

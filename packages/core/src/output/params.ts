@@ -39,6 +39,8 @@ export interface OutputParams {
   historyId?: string;
   /** rag.matrix: name the score columns as Ragas does. */
   names?: string;
+  /** rag.calibration: the label set (default: the run's evaluation). */
+  labels?: string;
 }
 
 /** Per surface the CLI / MCP can build: its parameters (the first is required unless it says otherwise) and what they mean. */
@@ -48,6 +50,7 @@ export const OUTPUT_PARAMS: Record<string, { params: Array<keyof OutputParams>; 
   'flow.grid': { params: ['dataRun', 'status'], required: ['dataRun'], hint: 'the data run or matrix id (`testpion flow runs`)' },
   'eval.matrix': { params: ['runs', 'baseline'], required: ['runs'], hint: 'the evaluation run ids (the matrix columns), and a baseline run to compare with' },
   'rag.matrix': { params: ['run', 'names'], required: ['run'], hint: 'the RAG run id (`testpion history`, the app); names: ragas names the score columns as Ragas does' },
+  'rag.calibration': { params: ['run', 'labels'], required: ['run'], hint: 'the RAG run id; labels: the label set (default: the run’s evaluation). Compares the run’s judges with your Pass/Fail labels' },
   history: { params: ['query', 'kind', 'failed', 'limit'], hint: 'filters as `testpion history list`' },
   traces: { params: ['traces', 'query', 'kind', 'failed', 'limit'], hint: 'trace ids, or filters for the newest' },
   'monitor.runs': { params: ['monitor', 'limit'], required: ['monitor'], hint: 'the monitor’s name or id' },
@@ -103,6 +106,8 @@ export function outputSourceFor(store: WorkspaceStore, surface: string, format: 
       return { kind: 'grid', grid: 'scale-rows', params: { id: p.dataRun, ...(p.status ? { status: p.status } : {}) } };
     case 'rag.matrix':
       return { kind: 'rag-matrix', runId: p.run!, ...(p.names === 'ragas' ? { names: 'ragas' as const } : {}) };
+    case 'rag.calibration':
+      return { kind: 'rag-calibration', runId: p.run!, ...(p.labels ? { labels: p.labels } : {}) };
     case 'eval.matrix':
       return { kind: 'grid', grid: 'eval-matrix', params: { runs: p.runs, ...(p.baseline ? { baseline: p.baseline } : {}) } };
     case 'history':

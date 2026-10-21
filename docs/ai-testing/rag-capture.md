@@ -18,6 +18,8 @@ cookies are never kept: a record holds the question, the answer and the contexts
 | **The Debugger, live** | The exchanges selected in the HTTP Debugger. | Debugger ▸ right-click ▸ **Create RAG dataset from selection…** |
 | **A HAR file** | Any `.har` file in the workspace (browser tools, proxies). | CLI `--har <file>` |
 | **An evaluation run** | The answered samples of a RAG run (question, answer and contexts were captured by the run). No target is needed. | CLI `--run <run id>` |
+| **gRPC and MCP calls in History** | The request of a call (the gRPC message, the MCP tool's arguments). History keeps no response for them, so the dataset holds the **questions**; the target answers them when an evaluation runs. | CLI `--target <a gRPC or MCP target>`; History |
+| **A WebSocket message log** | The log saved from the down arrow of a WebSocket tab (JSON Lines: time, direction, data), kept in `messages/` of the workspace. Each sent message and the messages received before the next one is a call; the target's mapping reads the answer from them. | CLI `--messages <file>` (`--messages-url` when the target's address must match) |
 
 A capture that became a collection or a flow keeps no exchanges; save the session from the Debugger to use it as a source.
 
@@ -50,6 +52,14 @@ again. **Questions only** (`--as-questions`) leaves them out, so running the dat
 production questions). There is no reference answer: add one by hand, or use only the metrics that need none (faithfulness, answer
 relevance, context relevance).
 
+## Other protocols {#protocols}
+
+The RAG target says which protocol the calls are for, and a call of another protocol is skipped with its reason ("a mcp call, and the target is grpc"). **gRPC**: the call is matched by its method (`rag.Rag/Ask`) and, when both are known, its address; the question is read from the message where the target writes `{{question}}`. **MCP**: matched by the tool; the question is read from the arguments (`query: "Answer briefly: {{question}}"` gives back only the question). **WebSocket**: the question is read from the sent message, the answer and the contexts from the replies with the target's mapping (the replies are read as `received`, the way a live WebSocket target reads them). A call that got no reply is a call that did not succeed. The report says it when a protocol keeps no response.
+
+## Draft the reference answers {#references}
+
+A captured dataset has the question, the answer the system gave and the passages it retrieved, but no reference answer. **Draft reference answers…** (Data ▸ a dataset, `testpion rag draft-references <dataset>`, MCP `rag_draft_references`) has the AI write one for each record that has none, **from the passages that record retrieved, not from the system's own answer** (a wrong answer is not copied; it is not even sent). A record whose passages do not hold the answer is marked unanswerable. Every draft is checked against its passages (the share of its words in them, and a judge's claim-by-claim check when a judge is available) and the result is **one proposal** you read in the usual review: accepting an item replaces the record of the same id in `datasets/<name>.jsonl` and keeps the rest of it (the answer, the contexts, the tags); one Undo puts the file back. Up to 12 records per run (`--limit`, `--ids`); run it again for the next ones. The estimate and *What will be sent* come first, the questions and passages are sent redacted, and the AI privacy level must be Full. `--estimate` sends nothing.
+
 ## In the window {#window}
 
 **Create dataset from captured calls** is one dialog, opened from History, from the Debugger and from AI Lab ▸ RAG. Choose the source and
@@ -69,8 +79,8 @@ testpion rag capture --run run_2026-10-20_ab12 --name last-run-answers
 
 ## Limits {#limits}
 
-* HTTP and server-sent-event targets only. A WebSocket, gRPC or MCP target has no request body in History to read a question from.
+* History keeps no response for a gRPC or an MCP call, so those datasets hold questions only; a WebSocket call needs the message log saved from the WebSocket tab (nothing records it by itself).
 * A response body is read from `payloads/` (History) or the HAR file; a response that was not recorded is skipped with that reason.
-* Drafting reference answers with a model is not part of capture. Do it from the dataset afterwards, as a reviewed proposal.
+* Drafting reference answers is a separate step after capture (above): nothing in capture calls a model.
 
 :::

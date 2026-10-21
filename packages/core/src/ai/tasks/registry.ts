@@ -29,6 +29,7 @@ import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { responseOfContext, SUGGEST_MAPPING_SCHEMA, suggestedMappingProblems } from '../../eval/rag/suggest-mapping.js';
 import { proposeMetricDraft } from '../rag-draft-metric.js';
 import { ragTestsetTask } from './rag-testset-task.js';
+import { ragReferencesTask } from './rag-references-task.js';
 import { ragAuthorTask } from './rag-author-task.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
@@ -694,6 +695,7 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     propose: proposeMetricDraft,
   }),
   ragTestsetTask(),
+  ragReferencesTask(),
   ragAuthorTask(),
   T('nl-search', {
     title: 'Ask about history, runs and traces',

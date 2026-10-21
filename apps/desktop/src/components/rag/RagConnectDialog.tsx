@@ -69,6 +69,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
   const [readOnly, setReadOnly] = useState(false);
   const [limits, setLimits] = useState<RagLimits>({});
   const [conversation, setConversation] = useState<'' | 'stateless-history' | 'server-session'>('');
+  const [cookies, setCookies] = useState(false);
   const [presetId, setPresetId] = useState('');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestNotes, setSuggestNotes] = useState<string[]>([]);
@@ -91,6 +92,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
     setReadOnly(existing.data.readOnly === true);
     setLimits(existing.data.limits ?? {});
     setConversation(existing.data.conversation?.mode ?? '');
+    setCookies(existing.data.conversation?.cookies === true);
   }, [existing, loaded]);
 
   const parsed = useMemo((): { step?: Record<string, unknown>; problem?: string } => {
@@ -102,7 +104,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
     }
   }, [stepText]);
   const cleanLimits = Object.fromEntries(Object.entries(limits).filter(([, v]) => typeof v === 'number' && v >= 0)) as RagLimits;
-  const target: RagTarget | undefined = parsed.step ? { protocol, step: parsed.step, mapping, ...(readOnly ? { readOnly: true } : {}), ...(Object.keys(cleanLimits).length ? { limits: cleanLimits } : {}), ...(conversation ? { conversation: { mode: conversation } } : {}) } : undefined;
+  const target: RagTarget | undefined = parsed.step ? { protocol, step: parsed.step, mapping, ...(readOnly ? { readOnly: true } : {}), ...(Object.keys(cleanLimits).length ? { limits: cleanLimits } : {}), ...(conversation ? { conversation: { mode: conversation, ...(conversation === 'server-session' && cookies ? { cookies: true } : {}) } } : {}) } : undefined;
 
   /** One-click start from a framework's request and mapping (OpenAI-compatible, LangServe, LlamaIndex, Haystack, Dify, Flowise …). */
   const applyPreset = (id: string) => {
@@ -281,6 +283,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                   <option value="server-session">the system keeps a session ({'{{conversationId}}'})</option>
                 </Select>
               </label>
+              {conversation === 'server-session' && <Toggle checked={cookies} onChange={setCookies} label="The session is a cookie: send the cookies each answer sets with the next turn" title="Only within one conversation; the values are treated as secrets and never written to a result" data-rag-conversation-cookies />}
               <details className="text-xs rounded-lg border border-line px-2 py-1" data-rag-limits>
                 <summary className="cursor-pointer text-muted select-none">Limits on the calls an evaluation makes{Object.keys(cleanLimits).length ? ' · set' : ''}</summary>
                 <div className="grid grid-cols-4 gap-2 mt-2 pb-1">

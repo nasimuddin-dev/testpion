@@ -100,6 +100,49 @@ const steps = [
      const l = await window.aps.invoke('rag.customMetrics');
      return 'metrics: ' + l.metrics.map((m) => m.id).sort().join(',');`,
   ),
+  // the dag kind: a Decision tree panel above the YAML; every change is written back into the file
+  step(
+    'a-decision-tree-metric-has-a-tree-editor',
+    `await __t.view('AI Lab'); await __t.sleep(600);
+     const rag = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!rag) return 'NO TAB RAG';
+     await __t.real.click(rag); await __t.sleep(600);
+     const sw = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!sw) return 'NO SWITCH Metrics';
+     await __t.real.click(sw);
+     await __t.waitFor(() => document.querySelector('[data-rag-metric-new]'), 5000);
+     await __t.real.click('[data-rag-metric-new]');
+     const ed = await __t.waitFor(() => document.querySelector('[data-rag-metric-editor]'), 5000); if (!ed) return 'NO EDITOR';
+     await __t.real.click('[data-rag-metric-id]'); await __t.real.type('tone-tree');
+     ${setSelect(`document.querySelector('[data-rag-metric-kind]')`, 'Decision tree')}
+     const loaded = await __t.waitFor(() => ${EDITOR_IN('[data-rag-metric-yaml]')}?.getModel().getValue().includes('kind: dag'), 8000); if (!loaded) return 'NO TEMPLATE';
+     const tree = await __t.waitFor(() => document.querySelector('[data-dag-editor]'), 5000); if (!tree) return 'NO TREE EDITOR';
+     await __t.sleep(400);
+     return 'nodes: ' + tree.querySelectorAll('[data-dag-node]').length + ' | first: ' + (tree.querySelector('[data-dag-root]')?.value) + ' | add buttons: ' + tree.querySelectorAll('[data-dag-add]').length + ' | cost line: ' + document.querySelector('[data-rag-metric-cost]')?.textContent.trim().replace(/\\d+ judge calls?/, 'N judge calls');`,
+  ),
+  step(
+    'adding-a-rule-writes-it-into-the-yaml',
+    `await __t.real.click('[data-dag-add="rule"]');
+     const third = await __t.waitFor(() => document.querySelectorAll('[data-dag-node]').length === 3, 5000); if (!third) return 'NO THIRD NODE';
+     await __t.sleep(500);
+     const yaml = ${EDITOR_IN('[data-rag-metric-yaml]')}.getModel().getValue();
+     return 'nodes: 3 | yaml has the rule: ' + /type: rule/.test(yaml) + ' | still kind dag: ' + /kind: dag/.test(yaml) + ' | not reached badge: ' + /not reached/.test(document.querySelector('[data-dag-node="n3"]')?.textContent ?? '');`,
+  ),
+  step(
+    'a-branch-can-lead-to-the-new-node',
+    `const sel = document.querySelector('[data-dag-node="answers"] select[aria-label="Where no leads"]'); if (!sel) return 'NO BRANCH SELECT';
+     ${setSelect(`document.querySelector('[data-dag-node="answers"] select[aria-label="Where no leads"]')`, 'asks n3')}
+     await __t.sleep(600);
+     const yaml = ${EDITOR_IN('[data-rag-metric-yaml]')}.getModel().getValue();
+     const reached = !/not reached/.test(document.querySelector('[data-dag-node="n3"]')?.textContent ?? '');
+     return 'yaml has no: n3: ' + /no: n3/.test(yaml) + ' | n3 reached: ' + reached;`,
+  ),
+  step(
+    'the-engine-checks-the-tree-and-save-lists-it',
+    `await __t.sleep(700);
+     const errors = [...(document.querySelector('[data-rag-metric-problems]')?.querySelectorAll('li') ?? [])].filter((li) => /^Error/.test(li.textContent)).length;
+     if (!document.querySelector('[data-rag-metric-save]').disabled) { await __t.real.click('[data-rag-metric-save]'); await __t.sleep(900); }
+     const row = await __t.waitFor(() => document.querySelector('[data-rag-metric-row="tone-tree"]'), 8000);
+     return 'errors: ' + errors + ' | listed: ' + !!row + ' | kind badge: ' + /Decision tree/.test(row?.textContent ?? '');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
@@ -111,4 +154,8 @@ module.exports = withExpect(steps, {
   'the-metric-is-in-the-picker': /^shown: custom\/no-guarantee(,no-guarantee)?$/,
   'the-pickers-edit-link-opens-the-editor': /^editor open \| delete offered: true \| save as offered: true$/,
   'save-as-makes-a-copy': /^metrics: no-guarantee,no-guarantee-v2$/,
+  'a-decision-tree-metric-has-a-tree-editor': /^nodes: 2 \| first: answers \| add buttons: 4 \| cost line: About N judge calls? or more: spends tokens$/,
+  'adding-a-rule-writes-it-into-the-yaml': /^nodes: 3 \| yaml has the rule: true \| still kind dag: true \| not reached badge: true$/,
+  'a-branch-can-lead-to-the-new-node': /^yaml has no: n3: true \| n3 reached: true$/,
+  'the-engine-checks-the-tree-and-save-lists-it': /^errors: 0 \| listed: true \| kind badge: true$/,
 });

@@ -7,7 +7,7 @@
 import { createEngineContext } from '../../engine.js';
 import { aiRunDeps } from '../../ai/tasks/run.js';
 import { estimateGeneration, generateTestset, type GenerateOptions } from '../../runner/rag-testset-generate.js';
-import { TESTSET_TYPES } from '../../eval/rag/testset/types.js';
+import { DEDUPE_MODES, TESTSET_STYLES, TESTSET_TYPES } from '../../eval/rag/testset/types.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -36,6 +36,10 @@ export function ragTestsetTools({ store, secrets, settings }: { store: Workspace
           types: { type: 'array', items: { type: 'string', enum: [...TESTSET_TYPES] }, description: 'Question types (default: all five)' },
           name: str('The dataset: datasets/<name>.jsonl (default: from the first document)'),
           seed: str('Which passages are asked about (the same seed and documents ask about the same ones)'),
+          personas: strList('Who asks, e.g. "a nurse on night shift" (at most 8): each question is written as one of them would ask it, in turn'),
+          styles: strList(`How they word it, in turn (at most 8): ${TESTSET_STYLES.join(', ')} or any short description; a style changes the wording, never the expected answer`),
+          dedupe: { type: 'string', enum: [...DEDUPE_MODES], description: 'How repeated questions are found: lexical (shared words, default) or embedding (also by meaning; an embedding model is used, else the words)' },
+          embedder: str('The embedding model of dedupe: embedding, as provider/model (default: the judge’s provider, else the AI settings’)'),
           judge: str('The judge that checks references against their chunks, as provider/model (default: the AI settings’ large model)'),
           no_judge_check: { type: 'boolean', description: 'Skip the judge’s check (lexical, corpus and duplicate checks still run)' },
           environment: str('Environment name'),
@@ -50,6 +54,10 @@ export function ragTestsetTools({ store, secrets, settings }: { store: Workspace
           types: Array.isArray(a.types) ? (a.types.map(String) as never) : undefined,
           name: a.name ? String(a.name) : undefined,
           seed: a.seed ? String(a.seed) : undefined,
+          personas: Array.isArray(a.personas) ? a.personas.map(String) : undefined,
+          styles: Array.isArray(a.styles) ? a.styles.map(String) : undefined,
+          dedupe: a.dedupe === 'embedding' ? 'embedding' : undefined,
+          embedder: a.embedder ? String(a.embedder) : undefined,
           judge: a.judge ? String(a.judge) : undefined,
           noJudge: a.no_judge_check === true,
         };

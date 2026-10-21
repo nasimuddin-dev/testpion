@@ -24,6 +24,8 @@ export interface RagLabel {
   /** sha256 (12 hex) of the question and of the answer that was labelled. */
   questionHash?: string;
   answerHash?: string;
+  /** A conversation: the hash of the whole transcript that was labelled (a metric of a conversation judges every turn, not only the last answer). */
+  transcriptHash?: string;
   by?: string;
   at: string;
   note?: string;
@@ -38,6 +40,8 @@ export interface LabelsFile {
 }
 
 export const hash12 = (s: string | undefined): string | undefined => (s === undefined ? undefined : createHash('sha256').update(s).digest('hex').slice(0, 12));
+/** A conversation as text for hashing and for showing: `role: content` per turn. */
+export const transcriptText = (turns: ReadonlyArray<{ role: string; content: string }> | undefined): string | undefined => (turns?.length ? turns.map((t) => `${t.role}: ${t.content}`).join('\n') : undefined);
 export const recordOfResult = (resultId: string) => resultId.slice(resultId.lastIndexOf(':') + 1);
 
 export function checkLabelsName(name: string): string {

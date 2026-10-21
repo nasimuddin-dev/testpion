@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CalibrationReport, MetricCalibration } from '@testpion/core';
+import { outputFileName } from '@testpion/shared';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { Badge, Button, Callout, Modal, Spinner } from '../ui';
+import type { OutputSpec } from '../output/output-core';
+import { OutputActions } from '../output/OutputFrame';
 
 const num = (x: number | undefined) => (x === undefined ? '—' : String(x));
 const TONE = { good: 'ok', fair: 'warn', poor: 'bad', unknown: 'default' } as const;
@@ -43,6 +46,17 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
   const a = m.agreement;
   const tuned = m.tuning;
   const custom = m.metric.startsWith('custom/');
+  const [made, setMade] = useState<string[]>([]);
+  /** "Make an example of this": the sample you labelled becomes an example of the metric's file, with your verdict as what the metric must say. */
+  const makeExample = async (resultId: string, expect: 'pass' | 'fail') => {
+    try {
+      const r = await call<{ file: string; examples: number }>('rag.calibrate.example', { metric: m.metric, run, result: resultId, expect });
+      setMade((x) => [...x, resultId]);
+      useApp.getState().toast(`Added to ${r.file} (${r.examples} example${r.examples === 1 ? '' : 's'})`, 'success');
+    } catch (e) {
+      toastError(e);
+    }
+  };
   const canApply = !!tuned && m.metric !== 'overall' && (custom || !!evaluation);
   const apply = async () => {
     try {
@@ -98,16 +112,24 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
               <th className="text-left font-normal pr-3">Judge model</th>
               <th className="text-right font-normal pr-3">n</th>
               <th className="text-right font-normal pr-3">kappa</th>
-              <th className="text-right font-normal">accuracy</th>
+              <th className="text-right font-normal pr-3">accuracy</th>
+              <th className="text-right font-normal pr-3">TPR</th>
+              <th className="text-right font-normal">TNR</th>
             </tr>
           </thead>
           <tbody>
             {m.byJudge.map((j) => (
-              <tr key={j.judge}>
-                <td className="pr-3 mono">{j.judge}</td>
+              <tr key={`${j.role}-${j.judge}`} data-rag-judge-role={j.role}>
+                <td className="pr-3 mono">
+                  {j.judge}
+                  {j.role === 'member' && <span className="text-muted"> · jury member</span>}
+                  {j.role === 'jury' && <span className="text-muted"> · together</span>}
+                </td>
                 <td className="text-right tabular-nums pr-3">{j.agreement.n}</td>
                 <td className="text-right tabular-nums pr-3">{num(j.agreement.kappa)}</td>
-                <td className="text-right tabular-nums">{num(j.agreement.accuracy)}</td>
+                <td className="text-right tabular-nums pr-3">{num(j.agreement.accuracy)}</td>
+                <td className="text-right tabular-nums pr-3">{num(j.agreement.tpr)}</td>
+                <td className="text-right tabular-nums">{num(j.agreement.tnr)}</td>
               </tr>
             ))}
           </tbody>
@@ -141,14 +163,33 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
                   <Badge tone={d.judge === 'pass' ? 'ok' : 'bad'}>judge {d.judge}</Badge>
                   <Badge tone={d.human === 'pass' ? 'ok' : 'bad'}>you {d.human}</Badge>
                   {d.score !== undefined && <span className="text-muted">score {d.score}</span>}
+                  {custom && (
+                    <Button size="sm" className="ml-auto" disabled={made.includes(d.resultId)} onClick={() => void makeExample(d.resultId, d.human)} title={`Adds this sample to the examples of the metric file, so the metric must say “${d.human}” for it from now on`} data-rag-make-example={d.resultId}>
+                      {made.includes(d.resultId) ? 'Example added' : 'Make an example of this'}
+                    </Button>
+                  )}
                   {onOpen && (
-                    <button className="ml-auto text-accent hover:underline" onClick={() => onOpen(d.resultId, m.metric)}>
+                    <button className={custom ? 'text-accent hover:underline' : 'ml-auto text-accent hover:underline'} onClick={() => onOpen(d.resultId, m.metric)}>
                       Open the sample
                     </button>
                   )}
                 </div>
                 {d.question && <div className="mt-0.5">Q: {d.question}</div>}
-                {d.answer && <div className="text-muted truncate" title={d.answer}>A: {d.answer}</div>}
+                {d.conversation && (
+                  <div className="text-muted" data-rag-disagreement-conversation>
+                    {d.conversation.slice(-4).map((t, i) => (
+                      <div key={i} className="truncate" title={t.content}>
+                        {t.role}: {t.content}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {d.jury && (
+                  <div className="text-muted" data-rag-disagreement-jury>
+                    Jury: {d.jury.map((j) => `${j.judge} ${j.pass ? 'pass' : 'fail'}`).join(', ')}
+                  </div>
+                )}
+                {!d.conversation && d.answer && <div className="text-muted truncate" title={d.answer}>A: {d.answer}</div>}
                 {d.reason && <div className="text-muted">{d.reason}</div>}
                 {d.note && <div>Your note: {d.note}</div>}
               </li>
@@ -170,6 +211,20 @@ export function RagCalibration({ runId, evaluation, onUseThreshold, onOpenSample
   const [report, setReport] = useState<CalibrationReport>();
   const [error, setError] = useState<string>();
   const [rev, setRev] = useState(0);
+  // the report as a file (Markdown or JSON): the engine builds it from the same labels, the same run
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'rag-calibration' as const, runId, ...(report?.labels ? { labels: report.labels } : {}) };
+    return {
+      id: 'rag.calibration',
+      what: 'Judge calibration report',
+      name: outputFileName({ name: `rag-calibration-${runId}`, ext: '' }),
+      formats: [
+        { format: 'md', label: 'Report (Markdown)', source, default: true },
+        { format: 'json', label: 'Numbers (JSON)', source },
+      ],
+      empty: report?.metrics.length ? undefined : 'Nothing is labelled yet',
+    };
+  }, [runId, report?.labels, report?.metrics.length]);
   useEffect(() => {
     let live = true;
     setReport(undefined);
@@ -183,7 +238,10 @@ export function RagCalibration({ runId, evaluation, onUseThreshold, onOpenSample
   }, [runId, rev]);
   return (
     <Modal title="Calibrate judge" onClose={onClose} width={880} footer={<Button onClick={onClose}>Close</Button>}>
-      <div className="grid gap-3 text-sm" data-rag-calibration>
+      <div className="grid gap-3 text-sm" data-rag-calibration data-output="rag.calibration">
+        <div className="flex items-center">
+          <OutputActions spec={spec} />
+        </div>
         {error && <Callout tone="bad">{error}</Callout>}
         {!report && !error && <Spinner />}
         {report && (

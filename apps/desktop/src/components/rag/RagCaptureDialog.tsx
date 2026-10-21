@@ -4,12 +4,13 @@ import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, Toggle } from '../ui';
 
-type From = 'history' | 'debugger' | 'har' | 'run' | 'exchanges';
+type From = 'history' | 'debugger' | 'har' | 'run' | 'exchanges' | 'messages';
 
 interface Sources {
   targets: Array<{ id: string; name: string; protocol: string; mapped: string; problems: string[] }>;
   sessions: string[];
   hars: string[];
+  messages?: string[];
   runs: Array<{ id: string; name: string; startedAt: string; total: number }>;
   debuggerExchanges: number;
 }
@@ -22,14 +23,15 @@ export interface CaptureInitial {
   session?: string;
   run?: string;
   har?: string;
+  messages?: string;
   /** In words: "12 History entries". */
   label?: string;
 }
 
-const FROM_LABEL: Record<From, string> = { history: 'Recent History entries', debugger: 'A saved Debugger session', har: 'A HAR file of the workspace', run: 'An evaluation run (its answered samples)', exchanges: 'Exchanges of the Debugger' };
+const FROM_LABEL: Record<From, string> = { history: 'Recent History entries', debugger: 'A saved Debugger session', har: 'A HAR file of the workspace', messages: 'A WebSocket message log of the workspace', run: 'An evaluation run (its answered samples)', exchanges: 'Exchanges of the Debugger' };
 
 /**
- * Create a RAG dataset from real calls (History, a saved Debugger session, a HAR file, an evaluation run, the Debugger's
+ * Create a RAG dataset from real calls (History, a saved Debugger session, a HAR file, a WebSocket message log, an evaluation run, the Debugger's
  * exchanges): choose the RAG target the calls went to (its request says where the question is, its mapping reads the answer and
  * the retrieved contexts), preview what the dataset would hold and what was left out and why, then create it. Personal data
  * and secrets are masked before anything is written; nothing is sent to a model. One dialog for every place that offers it.
@@ -38,7 +40,7 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
   const [sources, setSources] = useState<Sources>();
   const [from, setFrom] = useState<From>(initial?.from ?? 'history');
   const [target, setTarget] = useState('');
-  const [pick, setPick] = useState({ session: initial?.session ?? '', har: initial?.har ?? '', run: initial?.run ?? '' });
+  const [pick, setPick] = useState({ session: initial?.session ?? '', har: initial?.har ?? '', messages: initial?.messages ?? '', run: initial?.run ?? '' });
   const [name, setName] = useState('');
   const [dedupe, setDedupe] = useState(true);
   const [success, setSuccess] = useState(true);
@@ -54,7 +56,7 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
     void call<Sources>('rag.capture.sources').then((s) => {
       setSources(s);
       setTarget((t) => t || s.targets.find((x) => !x.problems.length)?.id || s.targets[0]?.id || '');
-      setPick((p) => ({ session: p.session || s.sessions[0] || '', har: p.har || s.hars[0] || '', run: p.run || s.runs[0]?.id || '' }));
+      setPick((p) => ({ session: p.session || s.sessions[0] || '', har: p.har || s.hars[0] || '', messages: p.messages || s.messages?.[0] || '', run: p.run || s.runs[0]?.id || '' }));
     }, toastError);
   }, []);
   const fixed = !!(initial?.history || initial?.exchanges);
@@ -67,6 +69,7 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
       exchanges: initial?.exchanges,
       session: pick.session || undefined,
       har: pick.har || undefined,
+      messages: from === 'messages' ? pick.messages || undefined : undefined,
       run: pick.run || undefined,
       name: name.trim() || undefined,
       dedupe: dedupe ? ('newest' as const) : false,
@@ -124,7 +127,7 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
               <div className="h-8 flex items-center text-muted">{initial?.label ?? FROM_LABEL[from]}</div>
             ) : (
               <Select value={from} onChange={(e) => setFrom(e.target.value as From)} aria-label="Source of the calls" data-rag-capture-from>
-                {(['history', 'debugger', 'har', 'run'] as const).map((f) => (
+                {(['history', 'debugger', 'har', 'messages', 'run'] as const).map((f) => (
                   <option key={f} value={f}>
                     {FROM_LABEL[f]}
                   </option>
@@ -136,7 +139,7 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
           {needsTarget && (
             <Field label="RAG target the calls went to" hint="Its request says where the question is; its mapping reads the answer and the retrieved contexts">
               <Select value={target} onChange={(e) => setTarget(e.target.value)} aria-label="RAG target" data-rag-capture-target>
-                {!sources?.targets.length && <option value="">No HTTP RAG target yet</option>}
+                {!sources?.targets.length && <option value="">No RAG target yet</option>}
                 {sources?.targets.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
@@ -163,6 +166,18 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
               <Select value={pick.har} onChange={(e) => setPick({ ...pick, har: e.target.value })} aria-label="HAR file">
                 {!sources?.hars.length && <option value="">No .har file in datasets/, imports/ or har/</option>}
                 {sources?.hars.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          {!fixed && from === 'messages' && (
+            <Field label="Message log" hint="Saved from the message log of a WebSocket tab (the down arrow, JSON Lines) into messages/ of the workspace">
+              <Select value={pick.messages} onChange={(e) => setPick({ ...pick, messages: e.target.value })} aria-label="Message log" data-rag-capture-messages>
+                {!sources?.messages?.length && <option value="">No message log in messages/, imports/ or har/</option>}
+                {sources?.messages?.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>

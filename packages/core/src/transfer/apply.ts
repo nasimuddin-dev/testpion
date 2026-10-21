@@ -70,6 +70,7 @@ const ORDER: BundleKindId[] = [
   'dataset',
   'proto',
   'script-package',
+  'metric',
   'test',
   'mcp-server',
   'provider',

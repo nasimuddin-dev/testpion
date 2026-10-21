@@ -52,6 +52,8 @@ const OPTIONS: Record<string, (url: string) => Record<string, unknown>> = {
   checklist: () => ({ items: ['Mentions the opening hours', 'Is polite'] }),
   'prompt-alignment': () => ({ instructions: ['Answer in one sentence'] }),
   'per-turn': () => ({ metric: 'faithfulness' }),
+  'answer-regex': () => ({ pattern: 'clinic' }),
+  'answer-length': () => ({ max: 200 }),
 };
 
 /** The few metrics that read another shape of answer than prose. */

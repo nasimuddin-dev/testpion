@@ -10,7 +10,7 @@ import type { CheckContext } from '../checks.js';
 import { CLAIMS } from './judge-prompts-more.js';
 import { FAITHFULNESS_ON_CLAIMS } from './judge-prompts-more.js';
 import type { JudgedMetric } from './judge-prompts.js';
-import { addUsage, judgePanel, noUsage, panelOf, single, type JudgeHost, type PanelItem, type PanelOptions, type Usage } from './judged-kit.js';
+import { addUsage, judgePanel, noUsage, panelOf, round3, single, type JudgeHost, type PanelItem, type PanelOptions, type Usage } from './judged-kit.js';
 import { CHUNK_RELEVANCE, CLAIMS_OF_REFERENCE, CLAIMS_VS_REFERENCE, REFERENCE_CLAIMS_IN_CONTEXTS, REFERENCE_CLAIMS_VS_ANSWER } from './prompts-r2.js';
 
 export interface Pass {
@@ -23,6 +23,8 @@ export interface Pass {
   redactions: number;
   judge: { provider: string; model: string; metric: string; promptVersion: string };
   reasoning: string;
+  /** A verdict pass asked of a jury: each judge's share of "yes" and how often the judges agreed claim by claim. */
+  jury?: { judges: Array<{ provider: string; model: string; score: number; passed: boolean }>; aggregate: string; agreement: number };
 }
 
 /** What a metric needs to ask a pass: the host, the sample and the judge options. */
@@ -50,7 +52,7 @@ async function remembered(env: PassEnv, key: string, run: () => Promise<Pass>): 
   return pass;
 }
 
-/** The first judge only, once: a claim pass is extraction, not a verdict a jury should vote on. */
+/** The first judge only, once: used for the extraction of claims (a jury votes on the verdicts about them, see verdicts). */
 const ask = async (env: PassEnv, m: JudgedMetric, input: Record<string, unknown>, panel: PanelOptions, texts: (r: Awaited<ReturnType<typeof judgePanel>>) => string[]): Promise<Pass> => {
   const r = await judgePanel(env.host, m, input, panel);
   const items = r.items;
@@ -70,10 +72,25 @@ export const referenceClaims = (env: PassEnv, reference: string): Promise<Pass> 
 async function verdicts(env: PassEnv, key: string, m: JudgedMetric, input: Record<string, unknown>, texts: string[]): Promise<Pass> {
   return remembered(env, key, async () => {
     if (!texts.length) return { texts, flags: [], items: [], usage: noUsage(), redactions: 0, judge: { provider: '', model: '', metric: m.id, promptVersion: m.version }, reasoning: '' };
-    // one judge, once: a pass is a set of verdicts the metrics do arithmetic on, not a score a jury votes on
-    const p = await ask(env, m, input, single(env.panel), () => texts);
+    const judges = env.panel.judges ?? [];
     // the judge answers in the order it was given; a missing verdict is a "no"
-    return { ...p, texts, flags: texts.map((_, i) => p.items[i]?.ok === true) };
+    const flagsOf = (p: Pass) => texts.map((_, i) => p.items[i]?.ok === true);
+    if (judges.length < 2) {
+      const p = await ask(env, m, input, single(env.panel), () => texts);
+      return { ...p, texts, flags: flagsOf(p) };
+    }
+    // a jury votes claim by claim; the extraction of the claims stays with the first judge
+    const parts = await Promise.all(judges.map((j) => ask(env, m, input, single({ ...env.panel, judges: [j] }), () => texts)));
+    const votes = parts.map(flagsOf);
+    const how = env.panel.aggregate ?? 'majority';
+    const count = (i: number) => votes.filter((v) => v[i]).length;
+    // majority: more than half say yes (a tie goes to "no"); mean: half or more; min: every judge says yes
+    const flags = texts.map((_, i) => (how === 'min' ? count(i) === votes.length : how === 'mean' ? count(i) * 2 >= votes.length : count(i) * 2 > votes.length));
+    const first = parts[0]!;
+    const items = first.items.map((it, i) => ({ ...it, ok: flags[i] ?? false, evidence: `${count(i)} of ${votes.length} judges: ${it.evidence}`.slice(0, 300) }));
+    const jury = parts.map((p, i) => ({ provider: p.judge.provider, model: p.judge.model, score: round3(votes[i]!.filter(Boolean).length / Math.max(1, texts.length)), passed: votes[i]!.length > 0 && votes[i]!.every(Boolean) }));
+    const usage = parts.reduce<Usage>((a, p) => addUsage(a, p.usage), noUsage());
+    return { texts, flags, items, usage, redactions: Math.max(...parts.map((p) => p.redactions)), judge: first.judge, reasoning: first.reasoning, jury: { judges: jury, aggregate: how, agreement: round3(texts.length ? texts.filter((_, i) => count(i) === 0 || count(i) === votes.length).length / texts.length : 1) } };
   });
 }
 

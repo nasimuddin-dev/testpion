@@ -652,11 +652,11 @@ const KINDS: readonly ItemKindInfo[] = [
     pathId: 'stem',
     sample: 'metrics/politeness.yaml',
     // a custom RAG metric (AI Lab ▸ RAG ▸ Metrics, `testpion rag metric`, the rag_*_custom_metric tools): a file the metric editor, the CLI and the
-    // MCP tools write; what is not built says when it will be
+    // MCP tools write; a bundle carries it (and `rag metric export` / `import` copy one); what is not built says when it will be
     capabilities: {
       ...FILE_ITEM,
-      export: { na: 'copied with `testpion rag metric export` and `import` (the workspace bundle does not carry metrics yet)' },
-      import: { na: 'copied with `testpion rag metric export` and `import` (the workspace bundle does not carry metrics yet)' },
+      export: true,
+      import: true,
       open: { na: 'edited in AI Lab ▸ RAG ▸ Metrics, where the metrics are listed' },
       link: { na: 'used by name (custom/<id>) in evaluations, presets and formulas' },
       rename: { na: 'the file name is the metric id that evaluations name: make it again under another id (New) and delete the old file' },
