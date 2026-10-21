@@ -131,8 +131,11 @@ function parseImport(textIn: string, opts: { name?: string } = {}): ImportDocume
 
 /** A text read, converted and checked: the document with its report (nothing is written anywhere). */
 export function importDocument(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): { document: ImportDocument; report: ImportReport } {
-  const document = nested(() => finishDocument(parseImport(text, opts), opts));
-  return { document, report: buildReport(document) };
+  // the report walks the folders too: it is inside the same guard (Node 24's stack is smaller than Node 26's)
+  return nested(() => {
+    const document = finishDocument(parseImport(text, opts), opts);
+    return { document, report: buildReport(document) };
+  });
 }
 
 /** A file nested thousands of levels deep overflows the stack of any recursive reader: that is a message, not a crash. */

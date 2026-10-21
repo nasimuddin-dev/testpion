@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.54.1 — 2026-10-21
+
+Importing a file with thousands of folders nested inside each other now says so in plain words on every Node version, instead of failing with a stack overflow while the import report was being built. Nothing else changes.
+
 ## 0.54.0 — 2026-10-21
 
 0.54 is the everything release. Everything you make in TestPion can now be saved, exported, imported and put under git: a bundle holds any kind of item (collections, environments, API definitions, datasets, MCP servers, prompts, monitors, tests and more), imports come from every other API tool with a preview, a report and Undo, and git shows, restores, stages and merges each item rather than a whole file. AI now checks its own work (tests from a spec, tidying an import, security tests, contract drift, search in your own words), TestPion tests RAG systems with 138 metrics and a cost shown before every run, and the app and the command line start and run faster, with safer saves, imports and downloads.
