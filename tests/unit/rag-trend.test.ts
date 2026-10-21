@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { WorkspaceStore, analyzeTrend, ragTrend, recordRun, regressionLines, regressionMarkdown, trendCsv, trendTable, type MetricComparison, type RunSummary, type TrendPoint } from '../../packages/core/src/index.js';
+import { WorkspaceStore, workspaceAttention, analyzeTrend, ragTrend, recordRun, regressionLines, regressionMarkdown, trendCsv, trendTable, type MetricComparison, type RunSummary, type TrendPoint } from '../../packages/core/src/index.js';
 
 const point = (i: number, mean: number, o: Partial<TrendPoint> = {}, ci?: [number, number]): TrendPoint => ({ runId: `r${i}`, name: 'ev', at: `2026-10-0${i}T00:00:00Z`, n: 10, judge: 'mock/m1', versions: 'faithfulness@v1', metrics: { faithfulness: { mean, n: 10, naCount: 0, ...(ci ? { ci } : {}) } }, ...o });
 
@@ -91,6 +91,35 @@ describe('ragTrend over stored runs', () => {
       writeFileSync(join(ws.runDir('run-1'), 'results.jsonl'), JSON.stringify({ id: 'Clinic RAG:q0', name: 'q0', status: 'passed', checks: [{ type: 'faithfulness', name: 'faithfulness', passed: true, source: 'ai-judge', score: 0.6, message: '', metadata: { judge: { provider: 'mock', model: 'm1' }, promptVersion: 'faithfulness-v1' } }] }) + '\n');
       expect((await ragTrend(ws, { evaluation: 'Clinic RAG', metrics: ['faithfulness'] })).points[0]!.metrics.faithfulness?.mean).toBe(0.6);
       await expect(ragTrend(ws, {})).rejects.toThrow(/Name an evaluation/);
+    } finally {
+      ws.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Needs attention', () => {
+  it('names a metric that fell over the last runs, from the cached means only', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-trend-att-'));
+    const ws = WorkspaceStore.create(join(dir, 'ws'), 'trend');
+    try {
+      ws.saveLibrary('evaluations', { folders: [], items: [{ id: 'ev', name: 'Clinic RAG', data: { name: 'Clinic RAG', type: 'rag', evaluators: [] } as never }] });
+      const make = async (i: number, score: number) => {
+        const id = `run-${i}`;
+        const d = ws.runDir(id);
+        mkdirSync(d, { recursive: true });
+        writeFileSync(join(d, 'results.jsonl'), JSON.stringify({ id: 'Clinic RAG:q0', name: 'q0', status: 'passed', checks: [{ type: 'faithfulness', name: 'faithfulness', passed: true, source: 'ai-judge', score, message: '', metadata: { threshold: 0.7, judge: { provider: 'mock', model: 'm1' }, promptVersion: 'faithfulness-v1' } }] }) + '\n');
+        const s = { runId: id, name: 'Clinic RAG', startedAt: `2026-10-0${i}T10:00:00.000Z`, finishedAt: `2026-10-0${i}T10:01:00.000Z`, durationMs: 1, total: 1, passed: 1, failed: 0, skipped: 0, errors: 0, latency: {}, tokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, costUsd: 0, cancelled: false, scores: {}, reproducibility: {} } as unknown as RunSummary;
+        await recordRun(ws, s, d);
+      };
+      for (const [i, v] of [[1, 0.9], [2, 0.9], [3, 0.9], [4, 0.6]] as const) await make(i, v);
+      // nothing cached yet: the list never scans results
+      expect((await workspaceAttention(ws)).filter((a) => a.group === 'RAG metrics')).toEqual([]);
+      await ragTrend(ws, { evaluation: 'Clinic RAG' });
+      const items = (await workspaceAttention(ws)).filter((a) => a.group === 'RAG metrics');
+      expect(items).toHaveLength(1);
+      expect(items[0]!.message).toBe('Clinic RAG: faithfulness dropped 0.3 over 3 runs (0.9 to 0.6)');
+      expect(items[0]!.ref).toMatchObject({ kind: 'run', runId: 'run-4' });
     } finally {
       ws.close();
       rmSync(dir, { recursive: true, force: true });

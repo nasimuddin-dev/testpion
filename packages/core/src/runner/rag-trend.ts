@@ -13,7 +13,7 @@ import { resolveMetric } from '../eval/rag/metric-registry.js';
 import { atomicWrite, readJson } from '../storage/fsutil.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { runResults, runResultsFile } from './run-results.js';
-import { findSavedEvaluation } from './saved-evaluations.js';
+import { findSavedEvaluation, listSavedEvaluations } from './saved-evaluations.js';
 import { MONITOR_RUN_PREFIX } from './result-source.js';
 
 export interface RagTrendQuery {
@@ -70,7 +70,7 @@ async function judgeOf(store: Pick<WorkspaceStore, 'runDir'>, id: string): Promi
   return { ...(judge ? { judge } : {}), ...(versions.size ? { versions: [...versions].sort().join(',') } : {}) };
 }
 
-async function pointOf(store: WorkspaceStore, run: { id: string; name: string; startedAt: string }): Promise<TrendPoint | undefined> {
+async function pointOf(store: WorkspaceStore, run: { id: string; name: string; startedAt: string }, o: { cacheOnly?: boolean } = {}): Promise<TrendPoint | undefined> {
   const key = keyOf(store, run.id);
   if (!key) return undefined;
   let c: Cached | undefined;
@@ -79,6 +79,7 @@ async function pointOf(store: WorkspaceStore, run: { id: string; name: string; s
   } catch {
     /* no cache yet, or an unreadable one: built again */
   }
+  if ((!c || c.key !== key) && o.cacheOnly) return undefined;
   if (!c || c.key !== key) {
     const m = await buildMetricMatrix(runResults(store, run.id), { runId: run.id, limit: 1 });
     if (!m.total) return undefined;
@@ -116,4 +117,28 @@ export async function ragTrend(store: WorkspaceStore, q: RagTrendQuery): Promise
   const a = analyzeTrend(points, { minDelta: q.minDelta, lower });
   const filter = (p: TrendPoint): TrendPoint => (keep ? { ...p, metrics: Object.fromEntries(Object.entries(p.metrics).filter(([k]) => keep.has(k) || keep.has(resolveMetric(k)?.def.id ?? k))) } : p);
   return { ...(name ? { evaluation: name } : {}), points: a.points.map(filter), findings: keep ? a.findings.filter((f) => keep.has(f.metric) || keep.has(resolveMetric(f.metric)?.def.id ?? f.metric)) : a.findings };
+}
+
+/**
+ * Metrics of saved RAG evaluations whose newest run got worse against the runs before it, for "Needs attention". It reads only
+ * the cached means (a trend is cached whenever it is looked at and after every monitor run), so the Problems list never scans
+ * the results of big runs; an evaluation with fewer than 3 cached runs says nothing.
+ */
+export async function ragTrendFindings(store: WorkspaceStore): Promise<Array<{ evaluation: string; finding: TrendFinding }>> {
+  const out: Array<{ evaluation: string; finding: TrendFinding }> = [];
+  const all = store.meta.listRuns({ limit: 200 }).items;
+  for (const ev of listSavedEvaluations(store).filter((e) => e.type === 'rag')) {
+    const runs = all.filter((r) => r.name === ev.name || r.name === `${MONITOR_RUN_PREFIX}${ev.name}`).slice(0, 5);
+    const points: TrendPoint[] = [];
+    for (const r of runs) {
+      const p = await pointOf(store, r, { cacheOnly: true });
+      if (!p) break;
+      points.push(p);
+    }
+    if (points.length < 3) continue;
+    points.reverse();
+    const lower = new Set(points.flatMap((p) => Object.keys(p.metrics)).filter((k) => resolveMetric(k)?.def.direction === 'lower'));
+    for (const finding of analyzeTrend(points, { lower }).findings) if (finding.worse) out.push({ evaluation: ev.name, finding });
+  }
+  return out;
 }

@@ -10,12 +10,13 @@ import { listCertificates } from './certificates.js';
 import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
 import { flakyTests } from '../runner/test-history.js';
 import { collectionRequests } from '../runner/collection-run.js';
+import { ragTrendFindings } from '../runner/rag-trend.js';
 
 export interface AttentionItem {
   kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file';
   severity: 'high' | 'medium' | 'low';
   /** What the list groups it under. */
-  group: 'Workspace files' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Flaky tests';
+  group: 'Workspace files' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Flaky tests' | 'RAG metrics';
   /** A check that did not hold (failure), something that could not run or be read (error), or a warning. */
   type: 'failure' | 'error' | 'warning';
   /** When it happened (ISO), when known. */
@@ -90,6 +91,13 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
       message: `"${t.name}" is flaky: its result changed ${t.flips} times in ${t.runs} runs${t.retried ? `, ${t.retried} passed after a retry` : ''}`,
       ref: { kind: 'test-case', testId: t.id },
     });
+  // a RAG metric that fell against the runs before it (cached means only: this list never scans big runs)
+  try {
+    for (const { evaluation, finding: f } of await ragTrendFindings(store))
+      out.push({ kind: 'run', severity: 'medium', group: 'RAG metrics', type: 'warning', message: `${evaluation}: ${f.text}`, ref: { kind: 'run', runId: f.runId } });
+  } catch {
+    /* a trend is a courtesy: the rest of the list stands */
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity]);
 }

@@ -117,5 +117,7 @@ export async function runMonitorEvaluation(o: { store: WorkspaceStore; monitor: 
       rag.baseline = `${baseId} (could not compare: ${e.message})`;
     }
   }
+  // the trend is cached from the run on, so Needs attention can say "faithfulness dropped over 3 nights" without scanning results
+  await ragTrend(store, { evaluation: monitor.evaluation, runs: 5 }).catch(() => undefined);
   return { summary: out.summary, runId: out.runId, gateReasons, rag };
 }
