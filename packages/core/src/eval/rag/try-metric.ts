@@ -9,6 +9,7 @@ import type { RagJudgeSetup } from '@testpion/shared';
 import type { CheckConfig, CheckResult } from '../../model/types.js';
 import type { ProviderRegistry } from '../../ai/index.js';
 import type { CheckContext } from '../checks.js';
+import type { SqlSource } from '../../runner/sql-exec.js';
 import { ApsError } from '../../errors.js';
 import { dryHost, type DryJudgeCall, type RagJudgeHost } from './judge.js';
 import { INPUT_LABELS, metricToCheck, resolveMetric, type MetricDef, type MetricInput } from './metric-registry.js';
@@ -88,27 +89,42 @@ export interface TryResult {
   result?: CheckResult;
   /** A real run: what the judge spent on it. */
   usage?: { calls: number; inputTokens: number; outputTokens: number; costUsd: number; cached: boolean };
+  /** What was left out of the request and why (a `database` in the options). */
+  notes?: string[];
+}
+
+/**
+ * The options of a request come from outside (an agent's tool call, the renderer): they never name a database. A SQL metric
+ * reads the database of a saved definition only (the evaluation's, or the metric file's own), so a request cannot point a
+ * metric at a file or a connection of its choosing (review 2, finding 1).
+ */
+export function stripCallerDatabase(cfg: CheckConfig): { cfg: CheckConfig; notes: string[] } {
+  if (!('database' in cfg)) return { cfg, notes: [] };
+  const { database: _database, ...rest } = cfg as CheckConfig & { database?: unknown };
+  return { cfg: rest as CheckConfig, notes: ['`database` in the options was ignored: a SQL metric uses the database of a saved evaluation (give `evaluation`) or of its own metric file.'] };
 }
 
 export async function tryMetric(
-  o: { providers?: ProviderRegistry; ragJudge: RagJudgeHost; /** The workspace folder: a picture given by path is read from inside it. */ workspaceRoot?: string },
-  req: { metric: string | CheckConfig; sample: TrySample; judge?: RagJudgeSetup; dryRun?: boolean; signal?: AbortSignal },
+  o: { providers?: ProviderRegistry; ragJudge: RagJudgeHost; /** The workspace folder: a picture given by path is read from inside it, and a SQL metric needs it. */ workspaceRoot?: string },
+  req: { metric: string | CheckConfig; sample: TrySample; judge?: RagJudgeSetup; dryRun?: boolean; signal?: AbortSignal; /** The database of the saved evaluation the metric belongs to (read from the workspace by the caller, never from the request). */ database?: SqlSource },
 ): Promise<TryResult> {
   const name = typeof req.metric === 'string' ? req.metric : req.metric.type;
   const resolved = resolveMetric(name);
   if (!resolved) throw new ApsError('ValidationError', `No RAG metric called "${name}"`, { suggestions: ['List them with `testpion rag metrics` (the id, an alias or a Ragas name works).'] });
   const def = resolved.def;
-  const cfg: CheckConfig = typeof req.metric === 'string' ? metricToCheck(req.metric) : { ...resolved.options, ...req.metric, type: def.check };
+  const given = typeof req.metric === 'string' ? { cfg: undefined, notes: [] as string[] } : stripCallerDatabase(req.metric);
+  const cfg: CheckConfig = { ...(typeof req.metric === 'string' ? metricToCheck(req.metric) : { ...resolved.options, ...given.cfg, type: def.check }), ...(req.database && ['datacompy-score', 'sql-equivalence'].includes(def.check) ? { database: req.database } : {}) };
+  const notes = given.notes;
   const missing = missingFor(def, req.sample);
   const head = { metric: { id: def.id, name: def.name, kind: def.kind, direction: def.direction, ...(def.threshold !== undefined ? { threshold: def.threshold } : {}) }, missing };
   if (req.dryRun) {
-    if (def.kind === 'deterministic' || def.kind === 'sql') return { ...head, willSend: [] };
+    if (def.kind === 'deterministic' || def.kind === 'sql') return { ...head, willSend: [], ...(notes.length ? { notes } : {}) };
     const dry = dryHost(o.ragJudge);
     await scoreRagSample([cfg], contextOfSample(req.sample, { judge: req.judge, providers: o.providers, ragJudge: dry, signal: req.signal, workspaceRoot: o.workspaceRoot }));
-    return { ...head, willSend: dry.dry.map((c) => ({ metric: c.metric, version: c.version, cached: c.cached, preview: c.preview })) };
+    return { ...head, willSend: dry.dry.map((c) => ({ metric: c.metric, version: c.version, cached: c.cached, preview: c.preview })), ...(notes.length ? { notes } : {}) };
   }
   const { checks } = await scoreRagSample([cfg], contextOfSample(req.sample, { judge: req.judge, providers: o.providers, ragJudge: o.ragJudge, signal: req.signal, workspaceRoot: o.workspaceRoot }));
   const result = checks[0]!;
   const usage = (result.metadata as { judgeUsage?: TryResult['usage'] } | undefined)?.judgeUsage;
-  return { ...head, result, ...(usage ? { usage } : {}) };
+  return { ...head, result, ...(usage ? { usage } : {}), ...(notes.length ? { notes } : {}) };
 }

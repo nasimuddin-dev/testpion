@@ -6,11 +6,13 @@
  *     SELECT, WITH or VALUES and contains no keyword that writes, attaches, loads, locks or sleeps; functions that read
  *     files, sleep or build huge values are refused. For PostgreSQL and MySQL the text is read twice, with and without
  *     backslash escapes in strings, and both readings must agree, so a string the server ends differently cannot hide a
- *     second statement;
+ *     second statement. The comment forms the dialects read differently (MySQL `--x`, `#`, `/*! *\/`, `/*M! *\/`) are
+ *     refused, never stripped (tests/unit/sql-exec-hostile.test.ts holds the corpus per dialect);
  *  2. the query runs wrapped as `SELECT * FROM (<query>) LIMIT n+1`: a result of more than n rows is refused, never cut;
  *  3. the connection is read-only: SQLite opened read-only (and `query_only`), PostgreSQL `BEGIN READ ONLY` with a statement
  *     timeout, MySQL `START TRANSACTION READ ONLY` with `MAX_EXECUTION_TIME`; when that cannot be set the query is not run;
- *  4. a time limit: a SQLite query runs in a worker thread that is terminated when the time is up;
+ *  4. a time limit and a memory limit: a SQLite query runs in a worker thread that is terminated when the time is up or the
+ *     process has grown too much (SQLite strings live in native memory; see SQLITE_GUARDS);
  *  5. at most 4 queries at once per data source.
  *
  * The connection must be declared `readOnly: true` for PostgreSQL and MySQL (the docs ask for a read-only database user too).
@@ -31,35 +33,58 @@ export const SQL_DEFAULTS = { maxRows: 10_000, timeoutMs: 10_000, maxConcurrent:
 
 type Tok = { k: 'word' | 'string' | 'name' | 'punct' | 'number'; v: string };
 
-/** Splits SQL into words, strings, quoted names and punctuation; comments vanish. `escapes`: a backslash escapes in a string. */
-function tokenize(sql: string, o: { escapes: boolean; brackets: boolean; backticks: boolean }): Tok[] | string {
+/** How one reading of the text lexes it: `escapes` = a backslash escapes in a string; the rest are the dialect's quoting rules. */
+interface Reading {
+  escapes: boolean;
+  brackets: boolean;
+  backticks: boolean;
+  dialect: SqlDialect;
+}
+
+/** What ends a line comment. The earliest end is taken: PostgreSQL ends it at a carriage return, so a "\r; DROP" cannot hide behind `--`. */
+const LINE_END = /[\n\r\u0085\u2028\u2029]/;
+const SPACE = /[ \t\n\r\f\v]/;
+
+/**
+ * Splits SQL into words, strings, quoted names and punctuation; comments vanish. The comment forms of the dialects differ
+ * (MySQL: `-- ` needs a space, `#` is a comment, `/*! … *\/` and `/*M! … *\/` are code; PostgreSQL ends a line comment at `\r`),
+ * so a form whose meaning depends on the dialect is REFUSED here, never stripped: what the checker cannot see, the server may run.
+ */
+function tokenize(sql: string, o: Reading): Tok[] | string {
   const out: Tok[] = [];
   let i = 0;
   const n = sql.length;
   while (i < n) {
     const c = sql[i]!;
     const two = sql.slice(i, i + 2);
-    if (/\s/.test(c)) i++;
+    if (SPACE.test(c)) i++;
+    else if (/\s/.test(c)) return 'it contains an unusual space character';
+    else if (c < ' ' || c === '\x7f') return 'it contains a control character';
     else if (two === '--') {
-      const j = sql.indexOf('\n', i);
-      i = j < 0 ? n : j + 1;
+      // MySQL and MariaDB: `--x` is `- -x`, only `-- ` (a space, a control character or the end) starts a comment
+      if (o.dialect === 'mysql' && i + 2 < n && !SPACE.test(sql[i + 2]!)) return 'a "--" that is not followed by a space (MySQL reads it as two minus signs, other servers as a comment)';
+      const m = LINE_END.exec(sql.slice(i));
+      i = m ? i + m.index + 1 : n;
+    } else if (c === '#' && o.dialect === 'mysql') {
+      return 'a "#" comment (MySQL reads the rest of the line as a comment, other servers as code)';
     } else if (two === '/*') {
-      // an executable comment (MySQL /*! … */, optimizer hints) is code to the server, so it is not allowed to look like a comment
-      if (sql[i + 2] === '!' || sql[i + 2] === '+') return 'a /*! … */ or /*+ … */ comment can carry code for the server';
+      // an executable comment (MySQL /*! … */, MariaDB /*M! … */, optimizer hints) is code to the server, so it is not allowed to look like a comment
+      if (sql[i + 2] === '!' || sql[i + 2] === '+' || (sql[i + 2] === 'M' && sql[i + 3] === '!')) return 'a /*! … */, /*M! … */ or /*+ … */ comment can carry code for the server';
       const j = sql.indexOf('*/', i + 2);
       if (j < 0) return 'a comment is not closed';
       i = j + 2;
-    } else if (c === "'") {
+    } else if (c === "'" || (c === '"' && o.dialect === 'mysql' && o.escapes)) {
+      // a MySQL double-quoted text is a string with backslash escapes; the other reading (a quoted name) is the branch below
       let j = i + 1;
       for (;;) {
-        if (j >= n) return 'a string is not closed';
+        if (j >= n) return c === "'" ? 'a string is not closed' : 'a quoted name is not closed';
         if (o.escapes && sql[j] === '\\') j += 2;
-        else if (sql[j] === "'") {
-          if (sql[j + 1] === "'") j += 2;
+        else if (sql[j] === c) {
+          if (sql[j + 1] === c) j += 2;
           else break;
         } else j++;
       }
-      out.push({ k: 'string', v: sql.slice(i, j + 1) });
+      out.push({ k: c === "'" ? 'string' : 'name', v: sql.slice(i + 1, j) });
       i = j + 1;
     } else if (c === '"' || (c === '`' && o.backticks) || (c === '[' && o.brackets)) {
       const close = c === '[' ? ']' : c;
@@ -78,9 +103,13 @@ function tokenize(sql: string, o: { escapes: boolean; brackets: boolean; backtic
       out.push({ k: 'word', v: m[0].toLowerCase() });
       i += m[0].length;
     } else if (/[0-9]/.test(c)) {
-      const m = /^[0-9][0-9a-zA-Z_.]*/.exec(sql.slice(i))!;
+      // a number ends where its digits end: what follows (`1union`, `0x1F`) is a word the checker must see
+      const m = /^[0-9][0-9_]*(?:\.[0-9_]*)?(?:[eE][+-]?[0-9]+)?/.exec(sql.slice(i))!;
       out.push({ k: 'number', v: m[0] });
       i += m[0].length;
+    } else if (c === '\\') {
+      // a client command (psql \copy, mysql \G) or an escape outside a string: an LLM-written SELECT never needs one
+      return 'it contains a backslash outside a string';
     } else {
       out.push({ k: 'punct', v: c });
       i++;
@@ -93,7 +122,7 @@ const FORBIDDEN = new Set([
   'insert', 'update', 'delete', 'drop', 'create', 'alter', 'attach', 'detach', 'pragma', 'vacuum', 'reindex', 'truncate', 'grant', 'revoke', 'copy', 'call', 'exec', 'execute', 'merge', 'lock', 'set', 'begin', 'commit', 'rollback', 'savepoint', 'release', 'load', 'into', 'outfile', 'dumpfile', 'returning', 'analyze', 'explain', 'declare', 'do', 'handler', 'prepare', 'deallocate', 'listen', 'notify', 'unlisten', 'reset', 'show', 'use',
 ]);
 /** A word that is only forbidden as a statement or a clause: `replace` is a function in SQLite and MySQL. */
-const FUNCTION_DENY = /^(pg_sleep\w*|pg_read_\w+|pg_ls_\w+|pg_stat_file|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_logical_\w+|lo_\w+|dblink\w*|set_config|sleep|benchmark|load_file|get_lock|release_lock|is_free_lock|sys_exec|sys_eval|load_extension|readfile|writefile|edit|fts3_tokenizer|zeroblob|randomblob|repeat|rpad|lpad|replicate|query_to_xml\w*|xmlparse|current_setting|txid_\w+|nextval|setval)$/;
+const FUNCTION_DENY = /^(pg_sleep\w*|pg_read_\w+|pg_ls_\w+|pg_stat_file|pg_file_\w+|pg_advisory_\w+|pg_notify|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_logical_\w+|pg_create_\w+|pg_drop_\w+|pg_replication_\w+|pg_switch_\w+|pg_promote|pg_export_snapshot|pg_import_system_collations|lo_\w+|dblink\w*|set_config|sleep|benchmark|load_file|get_lock|release_lock|release_all_locks|is_free_lock|is_used_lock|master_pos_wait|source_pos_wait|wait_for_executed_gtid_set|sys_exec|sys_eval|load_extension|readfile|writefile|edit|fts3_tokenizer|zeroblob|randomblob|repeat|rpad|lpad|replicate|query_to_xml\w*|xmlparse|current_setting|txid_\w+|nextval|setval)$/;
 
 function refuse(msg: string): never {
   throw new ApsError('ValidationError', `This SQL cannot be run: ${msg}`, {
@@ -112,9 +141,14 @@ function checkTokens(toks: Tok[]): void {
   if (!first) refuse('the query is empty');
   if (first.k !== 'word' || !['select', 'with', 'values'].includes(first.v)) refuse(`it starts with ${first.k === 'word' ? first.v.toUpperCase() : `"${first.v}"`}, not SELECT, WITH or VALUES`);
   body.forEach((t, i) => {
-    if (t.k !== 'word') return;
     const next = body[i + 1];
     const call = next?.k === 'punct' && next.v === '(';
+    // a quoted function name is still that function ("pg_read_file"('/etc/passwd'), `load_file`(…))
+    if (t.k === 'name') {
+      if (call && FUNCTION_DENY.test(t.v.toLowerCase())) refuse(`the function ${t.v}() can read files, sleep, load code or build huge values`);
+      return;
+    }
+    if (t.k !== 'word') return;
     if (t.v === 'replace' && !call) refuse('REPLACE is only allowed as a function');
     if (t.v === 'for' && body[i + 1]?.k === 'word' && ['update', 'share', 'no', 'key'].includes(body[i + 1]!.v)) refuse('FOR UPDATE / FOR SHARE locks rows');
     if (FORBIDDEN.has(t.v)) refuse(`${t.v.toUpperCase()} is not allowed in a read-only query`);
@@ -132,8 +166,12 @@ export function checkReadOnlySql(sql: string, dialect: SqlDialect): string {
   if (text.length > SQL_DEFAULTS.maxChars) refuse(`it is longer than ${SQL_DEFAULTS.maxChars} characters`);
   // a NUL ends a string for some drivers and the text for others
   if (text.includes('\0')) refuse('it contains a NUL character');
-  const readings: Array<{ escapes: boolean; brackets: boolean; backticks: boolean }> =
-    dialect === 'sqlite' ? [{ escapes: false, brackets: true, backticks: true }] : dialect === 'mysql' ? [{ escapes: false, brackets: false, backticks: true }, { escapes: true, brackets: false, backticks: true }] : [{ escapes: false, brackets: false, backticks: false }, { escapes: true, brackets: false, backticks: false }];
+  const readings: Reading[] =
+    dialect === 'sqlite'
+      ? [{ escapes: false, brackets: true, backticks: true, dialect }]
+      : dialect === 'mysql'
+        ? [{ escapes: false, brackets: false, backticks: true, dialect }, { escapes: true, brackets: false, backticks: true, dialect }]
+        : [{ escapes: false, brackets: false, backticks: false, dialect }, { escapes: true, brackets: false, backticks: false, dialect }];
   for (const r of readings) {
     const toks = tokenize(text, r);
     if (typeof toks === 'string') refuse(toks);
@@ -165,6 +203,8 @@ export interface SqlSource {
 export interface SqlLimits {
   maxRows?: number;
   timeoutMs?: number;
+  /** SQLite: stop the query when the process has grown by this many MB (default SQLITE_GUARDS.memoryGrowthMb). */
+  memoryMb?: number;
 }
 
 export interface SqlResult {
@@ -208,14 +248,28 @@ export function resolveSqlSource(src: SqlSource, o: { base?: string; env?: Recor
 
 /* ------------------------------------------------------------------ 3. the run */
 
+/**
+ * What a SQLite query may take. A SQLite string lives in native memory, outside the worker's V8 limit, and `x||x` in a recursive
+ * query, `printf('%1000000000c')` or `group_concat` can ask for a gigabyte in milliseconds, so the engine's own limits are set
+ * (`sqlite3_limit`, through the driver's `limits` option where the Node version has it) and the heap is capped; the parent also
+ * stops a worker whose query makes the process grow by more than `memoryGrowthMb`, whatever the Node version.
+ */
+export const SQLITE_GUARDS = {
+  limits: { length: 16_777_216, sqlLength: 65_536, column: 200, exprDepth: 100, compoundSelect: 30, functionArg: 32, attach: 0, likePatternLength: 1000, variableNumber: 32, triggerDepth: 10 },
+  hardHeapBytes: 256 * 1024 * 1024,
+  memoryGrowthMb: 1024,
+  watchMs: 50,
+} as const;
+
 /** The worker's program: opens the file read-only, runs one prepared statement, answers up to maxRows + 1 rows. */
 const SQLITE_WORKER = `
 const { parentPort, workerData } = require('node:worker_threads');
 process.emitWarning = () => {};
 try {
   const { DatabaseSync } = require('node:sqlite');
-  const db = new DatabaseSync(workerData.path, { readOnly: true });
+  const db = new DatabaseSync(workerData.path, { readOnly: true, limits: workerData.limits });
   db.exec('PRAGMA query_only = ON');
+  try { db.exec('PRAGMA hard_heap_limit = ' + workerData.hardHeapBytes); } catch {}
   const stmt = db.prepare(workerData.sql);
   const rows = [];
   let columns = [];
@@ -232,13 +286,21 @@ try {
 }
 `;
 
-function runSqlite(path: string, sql: string, maxRows: number, timeoutMs: number, signal?: AbortSignal): Promise<SqlResult> {
+function runSqlite(path: string, sql: string, maxRows: number, timeoutMs: number, signal?: AbortSignal, memoryMb: number = SQLITE_GUARDS.memoryGrowthMb): Promise<SqlResult> {
   return new Promise((resolveP, reject) => {
-    const w = new Worker(SQLITE_WORKER, { eval: true, workerData: { path, sql, maxRows }, resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32 } });
+    const w = new Worker(SQLITE_WORKER, { eval: true, workerData: { path, sql, maxRows, limits: SQLITE_GUARDS.limits, hardHeapBytes: SQLITE_GUARDS.hardHeapBytes }, resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32 } });
     let done = false;
+    const rss0 = process.memoryUsage.rss();
+    // native memory is not covered by resourceLimits: a query that makes the process grow this much is stopped
+    const watch = setInterval(() => {
+      const grown = (process.memoryUsage.rss() - rss0) / 1_048_576;
+      if (grown > memoryMb) finish(() => reject(new ApsError('ValidationError', `The SQL query used more than ${memoryMb} MB of memory and was stopped`, { suggestions: ['Ask for a query that builds smaller values.'] })));
+    }, SQLITE_GUARDS.watchMs);
+    watch.unref();
     const finish = (f: () => void) => {
       if (done) return;
       done = true;
+      clearInterval(watch);
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
       void w.terminate();
@@ -265,7 +327,7 @@ export async function runReadOnlySql(src: ResolvedSource, sql: string, limits: S
   const release = await gateOf(src.key).acquire(signal);
   try {
     let result: SqlResult;
-    if (src.dialect === 'sqlite') result = await runSqlite(src.path!, wrapped, maxRows, timeoutMs, signal);
+    if (src.dialect === 'sqlite') result = await runSqlite(src.path!, wrapped, maxRows, timeoutMs, signal, limits.memoryMb);
     else {
       let host: URL;
       try {

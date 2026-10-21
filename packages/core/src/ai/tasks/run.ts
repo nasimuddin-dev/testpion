@@ -211,8 +211,12 @@ function composeMessages(def: AiTaskDef, contextText: string, req: AiTaskRequest
   return [{ role: 'system', content: `${SYSTEM} ${def.instruction}${stable}${reference}${FORMAT}${first ? '' : ` ${FOLLOW_UP}`}` }, ...history, { role: 'user', content: turn }];
 }
 
+/** How many calls were built (a counter for tests and profiling: a judged RAG sample used to be built twice per real call). */
+export const prepareStats = { built: 0 };
+
 /** Build the call without sending it: route, context, messages and the estimate. */
 export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext: Record<string, unknown> = {}) {
+  prepareStats.built++;
   const def = aiTask(req.task, { lenient: deps.surface === 'app' });
   if (!def) throw unknownTask(req.task);
   const route = resolveAiRoute({ settings: deps.settings, tier: def.tier, override: { provider: req.provider, model: req.model }, env: deps.env });
@@ -283,8 +287,11 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
 
 let counter = 0;
 
-/** Run an AI task (see the module comment). */
-export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<AiTaskResult> {
+/**
+ * Run an AI task (see the module comment). `prepared` is the call already built by `prepareAiTask(deps, req)` for this very
+ * request (the RAG judge builds it first to read the cache): it is used as it is, not built again.
+ */
+export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepared?: ReturnType<typeof prepareAiTask> } = {}): Promise<AiTaskResult> {
   // Settings ▸ AI assistant ▸ "Hide AI actions": the window offers none, and a stale one is refused here (the CLI and MCP are explicit calls)
   if (deps.surface === 'app' && aiHidden(deps.settings))
     throw new ApsError('ConfigurationError', 'AI actions are hidden', { why: 'Settings ▸ AI assistant has "Hide all AI actions" on, so the window runs no AI task. Nothing was sent.', suggestions: ['Turn it off in Settings ▸ AI assistant to use the AI actions again.'] });
@@ -316,7 +323,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
   }
   // the tp.* reference is read from the sandbox once per process (before the messages are composed)
   if (own && [own.format].flat().includes('script')) await loadScriptApi();
-  const { def, provider, model, preview, maxOutputTokens, preferStable } = prepareAiTask(deps, req, itemContext);
+  const { def, provider, model, preview, maxOutputTokens, preferStable } = o.prepared && !req.item ? o.prepared : prepareAiTask(deps, req, itemContext);
   const { messages, ...summary } = preview;
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
   // a dry run's messages go to the window: the pictures are in `preview.images` (thumbnails), not twice in the messages

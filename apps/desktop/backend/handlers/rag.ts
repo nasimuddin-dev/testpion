@@ -15,11 +15,13 @@ import {
   METRIC_GROUPS,
   METRIC_PRESETS,
   applyMapping,
-  buildMetricMatrix,
+  ragMatrix,
+  ragMatrixIntervals,
   compareMetricRuns,
   estimateRagEvaluation,
   estimateRescore,
   findRagTarget,
+  findSavedEvaluation,
   importBeir,
   mapColumns,
   missingDatasetInputs,
@@ -31,10 +33,13 @@ import {
   readRunSummary,
   rescoreRun,
   runResults,
+  stripCallerDatabase,
+  withEvaluationDatabase,
   storedSample,
   suggestColumnMapping,
   tryMetric,
   RAG_FIELDS,
+  type CheckConfig,
   type ColumnMapping,
   type MatrixQuery,
   type SavedEvaluation,
@@ -52,6 +57,12 @@ import {
   type RagTarget,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+
+/** The evaluators of a request: a `database` they carry is dropped, and a SAVED evaluation's database (named by `evaluation`) is the one the SQL metrics use. */
+function savedDatabaseOnly(be: Backend, evaluators: Array<{ type: string }>, evaluation?: string): CheckConfig[] {
+  const safe = evaluators.map((e) => stripCallerDatabase(e as CheckConfig).cfg);
+  return evaluation ? withEvaluationDatabase(safe, findSavedEvaluation(be.ws, evaluation).database) : safe;
+}
 
 export function ragHandlers(be: Backend): Handlers {
   return {
@@ -111,10 +122,10 @@ export function ragHandlers(be: Backend): Handlers {
       }
     },
     /** What re-scoring a finished run will cost: every prompt built for its stored samples. */
-    'rag.estimateRescore': async ({ runId, evaluators, judge, environment }: { runId: string; evaluators: Array<{ type: string }>; judge?: SavedEvaluation['judge']; environment?: string }) => {
+    'rag.estimateRescore': async ({ runId, evaluators, evaluation, judge, environment }: { runId: string; evaluators: Array<{ type: string }>; evaluation?: string; judge?: SavedEvaluation['judge']; environment?: string }) => {
       const ctx = be.context({ environment });
       try {
-        return await estimateRescore(be.ws, ctx, runId, evaluators, judge);
+        return await estimateRescore(be.ws, ctx, runId, savedDatabaseOnly(be, evaluators, evaluation), judge);
       } finally {
         await ctx.dispose();
       }
@@ -123,7 +134,7 @@ export function ragHandlers(be: Backend): Handlers {
      * Try one metric on one sample: given, taken from a result of a run (`runId` + `resultId`), or probed from a target.
      * `dryRun` shows the exact judge prompts and sends nothing.
      */
-    'rag.metric.try': async (p: { metric: string; options?: Record<string, unknown>; sample?: TrySample; runId?: string; resultId?: string; target?: string; question?: string; judge?: SavedEvaluation['judge']; dryRun?: boolean; environment?: string; fields?: Record<string, unknown> }) => {
+    'rag.metric.try': async (p: { metric: string; options?: Record<string, unknown>; /** A saved evaluation: its `database` is the one a SQL metric uses (a `database` in `options` is ignored). */ evaluation?: string; sample?: TrySample; runId?: string; resultId?: string; target?: string; question?: string; judge?: SavedEvaluation['judge']; dryRun?: boolean; environment?: string; fields?: Record<string, unknown> }) => {
       const ctx = be.context({ environment: p.environment });
       try {
         let sample: TrySample = p.sample ?? {};
@@ -140,7 +151,8 @@ export function ragHandlers(be: Backend): Handlers {
           sample = { ...sample, question: p.question ?? sample.question, answer: probe.sample.answer, contexts: probe.sample.contexts, latencyMs: probe.latencyMs };
         }
         if (extra) sample = { ...sample, record: { ...(sample.record ?? {}), ...extra }, ...(extra.toolCalls ? { toolCalls: extra.toolCalls } : {}) };
-        const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: be.ws.root }, { metric: { ...(p.options ?? {}), type: p.metric }, sample, judge: p.judge, dryRun: p.dryRun });
+        const database = p.evaluation ? findSavedEvaluation(be.ws, p.evaluation).database : undefined;
+        const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: be.ws.root }, { metric: { ...(p.options ?? {}), type: p.metric }, sample, judge: p.judge, dryRun: p.dryRun, database });
         return { ...r, sample };
       } finally {
         await ctx.dispose();
@@ -162,7 +174,9 @@ export function ragHandlers(be: Backend): Handlers {
       return { dataUri: `data:${i.prepared.mime};base64,${i.prepared.bytes.toString('base64')}`, mime: i.prepared.mime, bytes: i.prepared.bytes.length, width: i.prepared.width, height: i.prepared.height, sha256: i.prepared.sha256, stripped: i.prepared.stripped };
     },
     /** The samples × metrics matrix of a run: a page of rows, the columns grouped by type, the aggregates over every sample. */
-    'rag.matrix': async ({ runId, ...q }: { runId: string } & MatrixQuery) => buildMetricMatrix(runResults(be.ws, runId), { ...q, runId }),
+    'rag.matrix': async ({ runId, ...q }: { runId: string } & MatrixQuery) => ragMatrix(be.ws, runId, q),
+    /** The 95% intervals of some columns of the matrix (the window asks for the visible ones after the first page; computed once each). */
+    'rag.matrixCi': ({ runId, keys }: { runId: string; keys: string[] }) => ragMatrixIntervals(be.ws, runId, keys),
     /** One result of a run with the sample it was scored on (the drill-down of a matrix cell). */
     'rag.sample': async ({ runId, resultId }: { runId: string; resultId: string }) => {
       for await (const r of runResults(be.ws, runId)) if (r.id === resultId) return { result: r, sample: storedSample(r) ?? null };
@@ -171,11 +185,11 @@ export function ragHandlers(be: Backend): Handlers {
     /** Two runs, metric by metric, with a paired bootstrap on the shared samples. */
     'rag.compare': ({ runId, baselineId, minDelta }: { runId: string; baselineId: string; minDelta?: number }) => compareMetricRuns(runResults(be.ws, runId), runResults(be.ws, baselineId), { minDelta }),
     /** Score a finished run again with other metrics or another judge (no call to the RAG system); a new run is recorded. */
-    'rag.rescore': async ({ runId, evaluators, judge, environment }: { runId: string; evaluators?: Array<{ type: string }>; judge?: SavedEvaluation['judge']; environment?: string }) => {
+    'rag.rescore': async ({ runId, evaluators, evaluation, judge, environment }: { runId: string; evaluators?: Array<{ type: string }>; evaluation?: string; judge?: SavedEvaluation['judge']; environment?: string }) => {
       const ctx = be.context({ environment });
       try {
         // the new run keeps the evaluation's name, so it sits with the evaluation's other runs
-        const r = await rescoreRun(be.ws, { runId, evaluators, judge, providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, name: readRunSummary(be.ws, runId)?.name });
+        const r = await rescoreRun(be.ws, { runId, evaluators: evaluators ? savedDatabaseOnly(be, evaluators, evaluation) : undefined, judge, providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, name: readRunSummary(be.ws, runId)?.name });
         return { runId: r.runId, rescored: r.rescored, skipped: r.skipped };
       } finally {
         await ctx.dispose();

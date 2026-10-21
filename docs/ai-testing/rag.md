@@ -229,7 +229,18 @@ generator or the metric) and what to change first. It proposes nothing.
 * **SQL metrics** (`datacompy-score`, `sql-equivalence`) compare what the generated query returns with the reference query's result.
   The query runs only through a read-only executor: one `SELECT`, no `PRAGMA`, `ATTACH`, writes or extensions, a row limit, a time limit,
   a read-only connection (a PostgreSQL or MySQL source must be marked `readOnly: true`). The `database:` of the evaluation names the
-  source.
+  source, and only a saved definition can: a `database` in the options of an agent's `rag_try_metric` or of the Try dialog is ignored
+  (give `evaluation`, and its database is used).
+  * A **SQLite** file must lie inside the workspace; where the workspace folder is not known the metric does not run at all.
+  * A **PostgreSQL / MySQL** connection (`url`, or `connectionEnv` naming an environment variable) is a file in your workspace
+    naming a connection of its choosing, so it is **n/a until you allow that target on this computer**:
+    `testpion rag trust-db "$SHOP_DB -> postgres://reader:***@db.example:5432/shop"` (the n/a message prints the line;
+    `--list` and `--forget` manage them). The decision names the variable and the host and database it points to, never a
+    password, and is kept in the app's data folder, not in the workspace or the repository. If the variable later points somewhere
+    else, you are asked again. A database marked `production: true` also asks the production question.
+  * The checker reads the query the way the server does: MySQL's `--x`, `#` comments and `/*! … */` / `/*M! … */` comments, a
+    backslash outside a string, unusual spaces and quoted function names are refused rather than stripped. A SQLite query is also
+    stopped by SQLite's size limits (16 MB a value, 30 compound terms, 32 function arguments) and by a memory limit (1 GB of growth).
 * **Repeating the target** (`--repeat-target 3`, "Calls per question" in the CI dialog) calls your system several times per question and
   scores the mean, with the spread: the system's own noise. A failed call counts as the worst score.
 * **Ragas compatibility.** `--compat ragas` reads the metric names as Ragas spells them, with Ragas' options. `testpion rag export --to ragas --names ragas`

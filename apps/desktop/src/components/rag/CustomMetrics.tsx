@@ -4,6 +4,7 @@ import { CUSTOM_METRIC_KINDS, type CustomMetricKind } from '@testpion/shared';
 import { call } from '../../api';
 import { confirmAction, promptText, toastError, useApp } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
+import { touchesFiles, type DataChangedEvent } from '../../lib/data-changed';
 import { plural } from '../../lib/format';
 import { useDebounced } from '../ui';
 import { AiAction } from '../ai/AiAction';
@@ -37,9 +38,17 @@ interface ExampleResult {
   message: string;
 }
 
+/** A `data.changed` that touched metric files (or replaced the whole workspace): the only change that alters the metric catalogue, so the lists reload for no other. */
+export function metricFilesChanged(e: DataChangedEvent | undefined): boolean {
+  // metric files are of the watcher's kind "other"; its paths say which (50 paths or more are cut: assume metrics among them)
+  if (!touchesFiles(e, ['other'])) return false;
+  if (!e?.kinds || e.kinds.includes('workspace')) return true;
+  return !e.paths || e.paths.length >= 50 || e.paths.some((p) => p.startsWith('metrics/'));
+}
+
 /** The custom metrics of the workspace (metrics/*.yaml): kept as the engine reads them, listed with what is wrong with each. */
 function useCustomMetrics() {
-  return useRpc<{ kinds: typeof CUSTOM_METRIC_KINDS; metrics: CustomMetricRow[] }>('rag.customMetrics', undefined, { reloadOn: ['data.changed'], keep: true });
+  return useRpc<{ kinds: typeof CUSTOM_METRIC_KINDS; metrics: CustomMetricRow[] }>('rag.customMetrics', undefined, { reloadOn: ['data.changed'], reloadIf: metricFilesChanged, keep: true });
 }
 
 const KIND_LABEL = Object.fromEntries(CUSTOM_METRIC_KINDS.map((k) => [k.id, k.label])) as Record<string, string>;

@@ -260,7 +260,7 @@ export function RagPivot({ runs }: { runs: RunChoice[] }) {
  * and a judge you choose (another model, a jury). What it costs is estimated from the stored answers first, with the cache
  * hits counted. The result is a new run beside the old one.
  */
-export function RagRescoreDialog({ runId, evaluators, judge, providers, onDone, onClose }: { runId: string; evaluators: CheckConfig[]; judge?: RagJudgeSetup; providers: ProviderConfig[]; onDone(newRunId: string): void; onClose(): void }) {
+export function RagRescoreDialog({ runId, evaluators, evaluation, judge, providers, onDone, onClose }: { runId: string; evaluators: CheckConfig[]; /** The saved evaluation whose database the SQL metrics use. */ evaluation?: string; judge?: RagJudgeSetup; providers: ProviderConfig[]; onDone(newRunId: string): void; onClose(): void }) {
   const [which, setWhich] = useState<'run' | 'evaluation'>(evaluators.length ? 'evaluation' : 'run');
   const [j, setJ] = useState<RagJudgeSetup>(judge ?? {});
   const [est, setEst] = useState<RunEstimate>();
@@ -272,7 +272,7 @@ export function RagRescoreDialog({ runId, evaluators, judge, providers, onDone, 
     let live = true;
     setEst(undefined);
     setError(undefined);
-    void call<RunEstimate>('rag.estimateRescore', { runId, evaluators: chosen, judge: dj }).then(
+    void call<RunEstimate>('rag.estimateRescore', { runId, evaluators: chosen, ...(evaluation ? { evaluation } : {}), judge: dj }).then(
       (r) => live && setEst(r),
       (e) => live && setError(asError(e).message),
     );
@@ -284,7 +284,7 @@ export function RagRescoreDialog({ runId, evaluators, judge, providers, onDone, 
   const go = async () => {
     setBusy(true);
     try {
-      const r = await call<{ runId: string }>('rag.rescore', { runId, evaluators: chosen, judge: j });
+      const r = await call<{ runId: string }>('rag.rescore', { runId, evaluators: chosen, ...(evaluation ? { evaluation } : {}), judge: j });
       onDone(r.runId);
       onClose();
     } catch (e) {

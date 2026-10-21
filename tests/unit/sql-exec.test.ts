@@ -105,8 +105,8 @@ describe('the statement check: what is refused', () => {
     // dollar quoting hides code from a quote-aware reader
     expect(refused('SELECT $$; DROP TABLE customers; $$', 'postgres')).toMatch(/second statement|dollar-quoted/);
     expect(refused('SELECT $tag$ x $tag$', 'postgres')).toMatch(/dollar-quoted/);
-    // a MySQL # comment is not recognised, so what follows is read as code (and refused if it is a keyword)
-    expect(refused('SELECT 1 # ; DROP TABLE customers', 'mysql')).toMatch(/second statement|DROP/);
+    // a MySQL # comment is a comment to MySQL and code to the others: refused outright, not stripped
+    expect(refused('SELECT 1 # ; DROP TABLE customers', 'mysql')).toMatch(/"#" comment/);
   });
 
   it('empty, NUL and very long texts', () => {

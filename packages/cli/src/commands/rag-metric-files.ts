@@ -11,7 +11,10 @@ import {
   ApsError,
   buildMetricMatrix,
   compileCustomMetric,
+  forgetDatabase,
   stringifyYaml,
+  trustDatabase,
+  trustedDatabases,
   listMetricFiles,
   parseCustomMetric,
   parseRagasResult,
@@ -233,6 +236,34 @@ export function registerRagMetricFileCommands(rag: Command): void {
           writeFileSync(resolve(o.out), text);
           console.log(`${green('Wrote')} ${m.total} samples × ${m.columns.length} metrics → ${o.out}`);
         } else process.stdout.write(text);
+      }),
+    );
+
+  // the person's decision, kept in the app's data folder on this computer: no MCP tool can make it
+  rag
+    .command('trust-db')
+    .description('allow, list or forget the PostgreSQL / MySQL connections the SQL metrics of this workspace may use on this computer (a connection a workspace file names is n/a until you allow it)')
+    .argument('[target]', 'the target the metric names, e.g. "$SHOP_DB -> postgres://host:5432/shop" (the n/a message prints it)')
+    .option('--list', 'list the allowed targets')
+    .option('--forget', 'forget the target (or all of the workspace’s when none is given)')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option('--json', 'print as JSON')
+    .action((target: string | undefined, o: { list?: boolean; forget?: boolean; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, (store, ephemeral) => {
+        needWorkspace(ephemeral);
+        if (o.forget) {
+          const n = forgetDatabase(store.root, target);
+          return o.json ? printJson({ forgotten: n }) : console.log(`${green('Forgot')} ${n} allowed database${n === 1 ? '' : 's'}`);
+        }
+        if (o.list || !target) {
+          const rows = trustedDatabases(store.root);
+          if (o.json) return printJson({ count: rows.length, databases: rows });
+          if (!rows.length) return console.log(dim('No database is allowed for this workspace on this computer.'));
+          for (const r of rows) console.log(`${r.target}  ${dim(r.at)}`);
+          return;
+        }
+        trustDatabase(store.root, target);
+        console.log(`${green('Allowed')} ${target} for this workspace on this computer`);
       }),
     );
 }

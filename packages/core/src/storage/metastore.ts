@@ -365,7 +365,7 @@ class SqliteMetaStore implements MetaStore {
     // the AI usage ledger (a table of its own: no schema bump, older databases get it on open)
     this.db.exec('CREATE TABLE IF NOT EXISTS ai_calls (id TEXT PRIMARY KEY, at TEXT, doc TEXT); CREATE INDEX IF NOT EXISTS ai_calls_at ON ai_calls(at DESC);');
     // the judge cache (a table of its own too): a verdict by the content hash of its prompt
-    this.db.exec('CREATE TABLE IF NOT EXISTS judge_cache (key TEXT PRIMARY KEY, at TEXT, doc TEXT);');
+    this.db.exec('CREATE TABLE IF NOT EXISTS judge_cache (key TEXT PRIMARY KEY, at TEXT, doc TEXT); CREATE INDEX IF NOT EXISTS judge_cache_at ON judge_cache(at);');
     const row = this.db.prepare("SELECT value FROM meta WHERE key='schema'").get() as { value: string } | undefined;
     const v = row ? Number(row.value) : 0;
     if (v < 1) {

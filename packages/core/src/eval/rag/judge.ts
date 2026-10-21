@@ -51,6 +51,16 @@ export interface DryJudgeCall {
   cached: boolean;
 }
 
+/** What an estimate needs of the dry calls, counted as they happen: a prompt is several KB, and 5,000 samples × 10 metrics are 50,000 of them. */
+export interface DryTally {
+  calls: number;
+  /** Calls whose verdict the cache already holds. */
+  cached: number;
+  inputTokens: number;
+  /** The input tokens of the calls the cache does not hold. */
+  freshInputTokens: number;
+}
+
 export interface RagJudgeHost {
   deps: AiRunDeps;
   /** The AI task service, lent by the engine (engine.ts): this module takes only types from ai/tasks. */
@@ -58,6 +68,10 @@ export interface RagJudgeHost {
   budget: JudgeBudget;
   /** Set on a dry host (see `dryHost`): judge calls are listed here and answered with an empty verdict, never sent. */
   dry?: DryJudgeCall[];
+  /** Set on a dry host made `{ tally: true }`: the calls are only counted (nothing is kept in `dry`). */
+  tally?: DryTally;
+  /** The judges already checked usable (by provider and model): the route is resolved once per run, not once per judged cell. */
+  usable?: Map<string, { provider: string; model: string; vision: boolean }>;
   /** Verdicts being asked right now, by key: the same question asked twice at once is asked once. */
   inflight: Map<string, Promise<JudgeAnswer>>;
 }
@@ -86,9 +100,12 @@ export function buildRagJudgeHost(o: { store?: WorkspaceStore; providers: Provid
   };
 }
 
-/** A host that sends nothing: the metrics run against it and every judge call they would make is recorded in `dry`. */
-export function dryHost(host: RagJudgeHost): RagJudgeHost & { dry: DryJudgeCall[] } {
-  return { deps: host.deps, tasks: host.tasks, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map(), dry: [] };
+/**
+ * A host that sends nothing: the metrics run against it and every judge call they would make is recorded in `dry` (the
+ * prompt, for "What will be sent"), or with `{ tally: true }` only counted in `tally` (an estimate over many samples).
+ */
+export function dryHost(host: RagJudgeHost, o: { tally?: boolean } = {}): RagJudgeHost & { dry: DryJudgeCall[]; tally?: DryTally } {
+  return { deps: host.deps, tasks: host.tasks, budget: { calls: 0, cached: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, inflight: new Map(), dry: [], ...(o.tally ? { tally: { calls: 0, cached: 0, inputTokens: 0, freshInputTokens: 0 } } : {}), usable: host.usable };
 }
 
 /** What to configure for a judge: the one error a missing or refused judge gives, in every host. */
@@ -111,6 +128,11 @@ export function judgeSetupError(why: string, extra: string[] = []): ApsError {
  * by Local only. Throws the setup error with what to configure otherwise.
  */
 export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provider: string; model: string; vision: boolean } {
+  // the same judge is asked about for every judged cell of a run: the route is resolved once per run
+  const memo = (host.usable ??= new Map());
+  const memoKey = `${judge?.provider ?? ''}/${judge?.model ?? ''}`;
+  const known = memo.get(memoKey);
+  if (known) return known;
   const { deps } = host;
   let route;
   try {
@@ -131,7 +153,9 @@ export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provi
     throw e;
   }
   assertLocalAllowed(resolved.provider.config, localOnly);
-  return { provider: resolved.provider.config.name, model: resolved.model, vision: visionCapable(resolved.provider.config, resolved.model) };
+  const usable = { provider: resolved.provider.config.name, model: resolved.model, vision: visionCapable(resolved.provider.config, resolved.model) };
+  memo.set(memoKey, usable);
+  return usable;
 }
 
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -181,8 +205,17 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   const cache = host.deps.store?.meta;
   if (host.dry) {
     // what a dry run lists goes to the window: the pictures are in preview.images (thumbnails), never twice as base64
-    const { __images: _img, ...shown } = input as Record<string, unknown>;
-    host.dry.push({ metric: metric.id, version: metric.version, input: shown, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, cached: !o.fresh && !!cache?.getJudgeCache(key) });
+    const cached = !o.fresh && !!cache?.getJudgeCache(key);
+    if (host.tally) {
+      // an estimate keeps counts, not prompts
+      host.tally.calls++;
+      host.tally.inputTokens += preview.estimate.inputTokens;
+      if (cached) host.tally.cached++;
+      else host.tally.freshInputTokens += preview.estimate.inputTokens;
+    } else {
+      const { __images: _img, ...shown } = input as Record<string, unknown>;
+      host.dry.push({ metric: metric.id, version: metric.version, input: shown, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, cached });
+    }
     return { verdict: { reasoning: '', items: [] }, cached: true, judge, usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }, redactionCount: preview.redactionCount };
   }
   // `fresh` asks again whatever the cache holds (a repeat measures the judge's own noise); the answer is still stored
@@ -204,7 +237,8 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   if (maxCalls !== undefined && host.budget.calls >= maxCalls) throw new ApsError('ValidationError', `The judge budget is used up (${host.budget.calls} of ${maxCalls} model calls); this score is not computed`, { details: { budget: true } });
   if (maxCostUsd !== undefined && host.budget.costUsd >= maxCostUsd) throw new ApsError('ValidationError', `The judge budget is used up ($${host.budget.costUsd.toFixed(4)} of $${maxCostUsd}); this score is not computed`, { details: { budget: true } });
   const ask = (async (): Promise<JudgeAnswer> => {
-    const r = await host.tasks.run(deps, req);
+    // the call built above for the cache key is the one that runs
+    const r = await host.tasks.run(deps, req, { prepared });
     const problems = r.problems.length ? r.problems : verdictProblems(r.value, metric);
     if (r.value === undefined || problems.length)
       throw new ApsError('ValidationError', `The judge (${preview.providerName}/${preview.model}) did not answer in the verdict format: ${problems.slice(0, 3).join('; ') || 'no JSON'}`, {

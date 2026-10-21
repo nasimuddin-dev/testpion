@@ -102,6 +102,19 @@ const q = (v: unknown) => JSON.stringify(String(v ?? ''));
  * do; `preview` is the same call in the tool's own dry-run mode, run to show the details without changing anything.
  */
 export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a: Args): string; preview?(a: Args): Args }> = {
+  // the RAG tools that send requests to the system under test or spend the judge's tokens: an agent's own choice of evaluation
+  // and budget is not the person's (security review 2, finding 11)
+  rag_run: { describe: (a) => `run the saved evaluation ${q(a.evaluation)}: send ${typeof a.limit === 'number' ? `its first ${Math.min(500, a.limit)}` : 'up to 500 of its'} dataset records to the RAG target and score them, which calls the judge model (costs money; ${typeof a.max_cost_usd === 'number' || typeof a.max_calls === 'number' ? 'capped by the max_cost_usd / max_calls you gave' : 'no max_cost_usd or max_calls given: call rag_estimate first and pass one'})` },
+  rag_rescore: { describe: (a) => `score the finished run ${q(a.run_id)} again, which calls the judge model for every sample the cache does not hold (costs money; ${typeof a.max_cost_usd === 'number' || typeof a.max_calls === 'number' ? 'capped by the max_cost_usd / max_calls you gave' : 'no max_cost_usd or max_calls given: call rag_estimate with run_id first and pass one'})` },
+  rag_try_metric: {
+    when: (a) => !(a.dry_run === true && !a.target),
+    describe: (a) => `${a.target ? `ask the RAG target ${q(a.target)} the question (a real request to the system under test)${a.dry_run === true ? '' : ' and '}` : ''}${a.dry_run === true ? '' : `score the sample with ${q(a.metric)}, which calls the judge model when the metric is judged (costs money)`}`,
+    // the same call as a dry run that asks no target: it shows what the judge would receive and sends nothing
+    preview: (a) => ({ ...a, dry_run: true, target: undefined }),
+  },
+  rag_probe: { describe: (a) => `send the question ${q(a.question)} to the RAG target ${q(a.target)} (a real request to the system under test, with the variables of the environment)` },
+  rag_validate_metric: { when: (a) => a.run_examples === true, describe: () => 'run the metric’s examples through the metric, which calls the judge model for a judged or checklist metric (costs money)' },
+  rag_import_dataset: { when: (a) => typeof a.save_as === 'string' && !!a.save_as, describe: (a) => `write the converted records to the new file datasets/${String(a.save_as)}.jsonl (never over a file)` },
   rag_save_custom_metric: { when: (a) => a.overwrite === true, describe: (a) => `replace the custom metric file metrics/${String(a.id ?? '')}.yaml with the new text (git brings the old one back)` },
   rag_generate_testset: { when: (a) => a.dry_run !== true, describe: (a) => `send passages of ${[...(Array.isArray(a.paths) ? a.paths : []), ...(Array.isArray(a.urls) ? a.urls : [])].map(q).join(', ') || 'the documents'} (redacted) to the AI model, one call per eight questions, and the judge’s check of each reference, which costs money; nothing is written until the proposal is applied` },
   rag_author_evaluation: { when: (a) => a.dry_run !== true, describe: (a) => `send the shape of the RAG target ${q(a.target)}, a few dataset rows and the metric catalogue to the AI model, which costs money; nothing is saved until the proposal is applied` },

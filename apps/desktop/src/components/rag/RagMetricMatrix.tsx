@@ -1,8 +1,9 @@
 import { ChevronDown, ChevronRight, RefreshCw, Scale } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import type { MatrixCell, MetricMatrix } from '@testpion/core';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MatrixCell, MatrixRow, MetricColumn, MetricMatrix } from '@testpion/core';
 import { outputFileName, type RagJudgeSetup } from '@testpion/shared';
 import { call } from '../../api';
+import { listWindow } from '../../lib/list-window';
 import type { CheckConfig, ProviderConfig } from '../../types';
 import { useDebounced } from '../ui';
 import { Badge, Button, Input, Segmented, Select, Spinner, cx } from '../ui';
@@ -14,6 +15,16 @@ import { RagCalibration } from './RagCalibration';
 import { RagTrend } from './RagTrend';
 
 const PAGE = 100;
+/** A sample row is one fixed height, so only the rows on screen are drawn (100 rows × 84 metrics is 8,400 cells). */
+const ROW_H = 44;
+
+/** The columns of a group, as the table draws them: all of them, and the ones shown (none of them collapsed). */
+interface GroupLayout {
+  id: string;
+  collapsed: boolean;
+  all: Array<{ c: MetricColumn; i: number }>;
+  shown: Array<{ c: MetricColumn; i: number }>;
+}
 
 /** Ten bars of a distribution over 0..1: where the scores of a metric fall (a sparkline of counts). */
 function Spark({ bins }: { bins: number[] }) {
@@ -39,6 +50,77 @@ const STAT: Record<string, { label: string; title: string }> = {
 
 const cellClass = (c: MatrixCell | null) => (!c ? '' : c.failed ? 'bg-bad/10 text-bad' : c.na ? 'text-muted' : c.passed === false ? 'bg-bad/10 text-bad' : c.passed === true ? 'bg-ok/10 text-ok' : '');
 
+/** The pass mark of a column: typed here, handed on a moment after the last keystroke, so typing never redraws the table. */
+function PassMark({ column, value, onCommit }: { column: string; value: number | undefined; onCommit(key: string, v: number): void }) {
+  const [text, setText] = useState(value === undefined ? '' : String(value));
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (text.trim() === '' || !Number.isFinite(Number(text))) return;
+    const t = setTimeout(() => onCommit(column, Number(text)), 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+  return (
+    <input type="number" step="0.05" className="w-12 bg-transparent border-b border-line text-right" value={text} onChange={(e) => setText(e.target.value)} aria-label={`${column} pass mark`} data-rag-threshold={column} />
+  );
+}
+
+/** One sample's row. Memoised: a row is redrawn only when its own data, the layout or the collapsed groups change. */
+const MatrixRowView = memo(function MatrixRowView({ r, layout, onOpen }: { r: MatrixRow; layout: GroupLayout[]; onOpen(id: string, metric: string): void }) {
+  const groupMean = (g: GroupLayout) => {
+    const xs = g.all.flatMap(({ i }) => (r.cells[i]?.score !== undefined ? [r.cells[i]!.score!] : []));
+    return xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 1000) / 1000 : undefined;
+  };
+  return (
+    <tr className="hover:bg-hover" style={{ height: ROW_H }} data-rag-row={r.id}>
+      <td className="px-2 py-1 border-b border-line/60 max-w-72">
+        <div className="truncate" title={r.question ?? r.name}>
+          {r.name}
+        </div>
+        <div className="flex items-center gap-1 text-muted truncate">
+          {r.failure && (
+            <Badge tone="warn" title={r.failure.reason}>
+              {r.failure.class}
+            </Badge>
+          )}
+          <span className="truncate">{r.question}</span>
+        </div>
+      </td>
+      {layout.map((g) =>
+        g.collapsed ? (
+          <td key={g.id} className="px-2 py-1 text-right tabular-nums border-b border-l border-line/60">
+            {groupMean(g) ?? ''}
+          </td>
+        ) : (
+          g.shown.map(({ c, i }) => {
+            const cell = r.cells[i] ?? null;
+            return (
+              <td
+                key={c.key}
+                className={cx('px-2 py-1 text-right tabular-nums border-b border-l border-line/60', cellClass(cell), cell && 'cursor-pointer')}
+                title={cell?.na ?? cell?.failed}
+                onClick={() => cell && onOpen(r.id, c.key)}
+                data-rag-cell={`${r.id}|${c.key}`}
+              >
+                {cell && (
+                  // a button inside the cell: the keyboard reaches it and Enter opens the sample (its click is the cell's); pass and fail are said in a mark and in words, not by colour alone
+                  <button type="button" className="w-full text-right" aria-label={`${r.name}, ${c.key}: ${cell.failed ? `error, ${cell.failed}` : cell.score !== undefined ? `${cell.score}, ${cell.passed === false ? 'failed' : cell.passed === true ? 'passed' : 'no pass mark'}` : 'not scored'}`}>
+                    {cell.failed ? 'error' : cell.score !== undefined ? <>{cell.passed === true ? <span aria-hidden>✓ </span> : cell.passed === false ? <span aria-hidden>✗ </span> : null}{cell.score}</> : 'n/a'}
+                  </button>
+                )}
+              </td>
+            );
+          })
+        ),
+      )}
+    </tr>
+  );
+});
+
 /**
  * The samples × metrics matrix of a RAG run: one row per sample, one column per metric, grouped by type under two header
  * rows. A cell is that metric's own score, coloured by its pass mark (n/a is grey, never a zero). The header carries each
@@ -52,6 +134,7 @@ export function RagMetricMatrix({
   judge,
   runs = [],
   evaluators = [],
+  evaluation,
   providers = [],
   onRescored,
   evaluation,
@@ -65,6 +148,8 @@ export function RagMetricMatrix({
   runs?: RunChoice[];
   /** The evaluation's metrics now (score the run again with them). */
   evaluators?: CheckConfig[];
+  /** The saved evaluation: the database of its SQL metrics is used when the run is scored again. */
+  evaluation?: string;
   providers?: ProviderConfig[];
   onRescored?(runId: string): void;
 }) {
@@ -79,20 +164,102 @@ export function RagMetricMatrix({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [m, setM] = useState<MetricMatrix>();
   const [detail, setDetail] = useState<{ id: string; metric: string }>();
+  // the 95% intervals are asked for the columns on screen after the first page is drawn (the backend computes each once)
+  const [ci, setCi] = useState<Record<string, [number, number]>>({});
+  const asked = useRef(new Set<string>());
   const q = useDebounced(query, 250);
-  const t = useDebounced(thr, 250);
   useEffect(() => setOffset(0), [q, failure, sort, runId]);
   useEffect(() => {
+    setCi({});
+    asked.current = new Set();
+  }, [runId]);
+  useEffect(() => {
     let live = true;
-    void call<MetricMatrix>('rag.matrix', { runId, offset, limit: PAGE, query: q || undefined, failure: failure || undefined, sort: sort || undefined, thresholds: t }).then(
+    void call<MetricMatrix>('rag.matrix', { runId, offset, limit: PAGE, query: q || undefined, failure: failure || undefined, sort: sort || undefined, thresholds: thr, ci: false }).then(
       (r) => live && setM(r),
       () => live && setM(undefined),
     );
     return () => {
       live = false;
     };
-  }, [runId, offset, q, failure, sort, t]);
+  }, [runId, offset, q, failure, sort, thr]);
+  const visibleKeys = useMemo(() => (m?.columns ?? []).filter((c) => !collapsed.has(c.group)).map((c) => c.key), [m?.columns, collapsed]);
+  useEffect(() => {
+    const keys = visibleKeys.filter((k) => !asked.current.has(k));
+    if (!keys.length) return;
+    keys.forEach((k) => asked.current.add(k));
+    // in chunks, so the first intervals appear at once and a run of 84 metrics never blocks the backend for one long call
+    const chunks: string[][] = [];
+    for (let i = 0; i < keys.length; i += 12) chunks.push(keys.slice(i, i + 12));
+    void (async () => {
+      for (const keysOfChunk of chunks) {
+        try {
+          const got = await call<Record<string, [number, number]>>('rag.matrixCi', { runId, keys: keysOfChunk });
+          setCi((prev) => ({ ...prev, ...got }));
+        } catch {
+          keysOfChunk.forEach((k) => asked.current.delete(k));
+          return;
+        }
+      }
+    })();
+  }, [visibleKeys, runId]);
   const agg = useMemo(() => new Map((m?.aggregates ?? []).map((a) => [a.key, a])), [m]);
+  const commitMark = useCallback((key: string, v: number) => setThr((prev) => (prev[key] === v ? prev : { ...prev, [key]: v })), []);
+  const open = useCallback((id: string, metric: string) => setDetail({ id, metric }), []);
+  // the columns of each group, as the table draws them (once per answer and per collapsed group, not once per row)
+  const layout = useMemo<GroupLayout[]>(() => {
+    const cols = (m?.columns ?? []).map((c, i) => ({ c, i }));
+    return (m?.groups ?? []).map((g) => {
+      const all = cols.filter(({ c }) => c.group === g.id);
+      return { id: g.id, collapsed: collapsed.has(g.id), all, shown: collapsed.has(g.id) ? [] : all };
+    });
+  }, [m?.columns, m?.groups, collapsed]);
+  // the output spec only changes with the run, the pass marks and the sample count, not with every keystroke or redraw
+  const total = m?.total ?? 0;
+  const spec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'rag-matrix' as const, runId, ...(Object.keys(thr).length ? { thresholds: thr } : {}) };
+    return {
+      id: 'rag.matrix',
+      what: 'RAG metrics matrix',
+      name: outputFileName({ name: `rag-metrics-${runId}`, ext: '' }),
+      formats: [
+        { format: 'csv', label: 'Samples × metrics (CSV)', source, default: true },
+        { format: 'json', label: 'Matrix with aggregates (JSON)', source },
+        { format: 'html', label: 'Report (HTML)', source },
+      ],
+      empty: total ? undefined : 'No scored samples',
+    };
+  }, [runId, thr, total]);
+  // only the rows on screen are drawn: the scroll box and the header's height give the window
+  const scroller = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLTableSectionElement>(null);
+  const [win, setWin] = useState({ top: 0, height: 600 });
+  const ready = !!m && m.columns.length > 0;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    let frame: number | undefined;
+    const measure = () => {
+      frame = undefined;
+      setWin((w) => (w.top === el.scrollTop && w.height === (el.clientHeight || w.height) ? w : { top: el.scrollTop, height: el.clientHeight || w.height }));
+    };
+    const onScroll = () => {
+      if (frame === undefined) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    const ro = new ResizeObserver(onScroll);
+    ro.observe(el);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener('scroll', onScroll);
+      if (frame !== undefined) cancelAnimationFrame(frame);
+    };
+  }, [ready]);
+  // a new page, filter or sort starts at the top
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollTop = 0;
+  }, [offset, q, failure, sort, runId]);
   if (!m)
     return (
       <div className="h-full grid place-items-center">
@@ -100,25 +267,9 @@ export function RagMetricMatrix({
       </div>
     );
   if (!m.columns.length) return <div className="p-4 text-sm text-muted">This run holds no scored RAG samples.</div>;
-  // the down arrow: every sample and every metric of the run (the backend builds the file; the pass marks edited here go with it)
-  const source = { kind: 'rag-matrix' as const, runId, ...(Object.keys(t).length ? { thresholds: t } : {}) };
-  const spec: OutputSpec = {
-    id: 'rag.matrix',
-    what: 'RAG metrics matrix',
-    name: outputFileName({ name: `rag-metrics-${runId}`, ext: '' }),
-    formats: [
-      { format: 'csv', label: 'Samples × metrics (CSV)', source, default: true },
-      { format: 'json', label: 'Matrix with aggregates (JSON)', source },
-      { format: 'html', label: 'Report (HTML)', source },
-    ],
-    empty: m.total ? undefined : 'No scored samples',
-  };
-  const shownCols = m.columns.map((c, i) => ({ c, i })).filter(({ c }) => !collapsed.has(c.group));
   const toggle = (g: string) => setCollapsed((s) => (s.has(g) ? new Set([...s].filter((x) => x !== g)) : new Set([...s, g])));
-  const groupMean = (cells: Array<MatrixCell | null>, group: string) => {
-    const xs = m.columns.flatMap((c, i) => (c.group === group && cells[i]?.score !== undefined ? [cells[i]!.score!] : []));
-    return xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 1000) / 1000 : undefined;
-  };
+  const drawn = layout.reduce((n, g) => n + (g.collapsed ? 1 : g.shown.length), 1);
+  const w = listWindow({ count: m.rows.length, rowHeight: ROW_H, scrollTop: Math.max(0, win.top - (head.current?.offsetHeight ?? 0)), height: win.height, overscan: 6 });
   return (
     <div className="h-full flex flex-col min-h-0" data-rag-matrix data-output="rag.matrix">
       <div className="flex items-center gap-2 px-2 pt-2 flex-wrap">
@@ -162,7 +313,7 @@ export function RagMetricMatrix({
           onClose={() => setCalibrating(false)}
         />
       )}
-      {rescoring && <RagRescoreDialog runId={runId} evaluators={evaluators} judge={judge} providers={providers} onDone={(id) => onRescored?.(id)} onClose={() => setRescoring(false)} />}
+      {rescoring && <RagRescoreDialog runId={runId} evaluators={evaluators} evaluation={evaluation} judge={judge} providers={providers} onDone={(id) => onRescored?.(id)} onClose={() => setRescoring(false)} />}
       <div className={cx('flex items-center gap-2 p-2 border-b border-line flex-wrap', view !== 'samples' && 'hidden')}>
         <Input className="w-56" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search samples, questions, tags" aria-label="Search samples" />
         <Select className="h-7 min-h-7 py-0 text-xs" value={failure} onChange={(e) => setFailure(e.target.value)} aria-label="Why a sample failed" data-rag-failure-filter>
@@ -188,9 +339,9 @@ export function RagMetricMatrix({
           {m.failures.length > 0 && <> · {m.failures.map((f) => `${f.label} ${f.count}`).join(', ')}</>}
         </span>
       </div>
-      <div className={cx('flex-1 min-h-0 overflow-auto', view !== 'samples' && 'hidden')}>
+      <div ref={scroller} className={cx('flex-1 min-h-0 overflow-auto', view !== 'samples' && 'hidden')}>
         <table className="text-xs border-separate border-spacing-0 min-w-full" data-rag-matrix-table>
-          <thead className="sticky top-0 z-10 bg-bg">
+          <thead ref={head} className="sticky top-0 z-10 bg-bg">
             <tr>
               <th className="text-left px-2 py-1 border-b border-line min-w-56" rowSpan={2}>
                 Sample
@@ -204,31 +355,20 @@ export function RagMetricMatrix({
               ))}
             </tr>
             <tr>
-              {m.groups.map((g) =>
-                collapsed.has(g.id) ? (
+              {layout.map((g) =>
+                g.collapsed ? (
                   <th key={g.id} className="px-2 py-1 border-b border-l border-line text-right font-normal text-muted" title={STAT.mean!.title}>
                     average
                   </th>
                 ) : (
-                  shownCols
-                    .filter(({ c }) => c.group === g.id)
-                    .map(({ c }) => (
-                      <th key={c.key} className="px-2 py-1 border-b border-l border-line text-right font-medium align-bottom" data-rag-col={c.key}>
-                        <div className="whitespace-nowrap">{c.key}</div>
-                        <div className="font-normal text-muted whitespace-nowrap">
-                          {c.direction === 'lower' ? '≤' : '≥'}{' '}
-                          <input
-                            type="number"
-                            step="0.05"
-                            className="w-12 bg-transparent border-b border-line text-right"
-                            value={thr[c.key] ?? c.threshold ?? ''}
-                            onChange={(e) => setThr({ ...thr, [c.key]: Number(e.target.value) })}
-                            aria-label={`${c.key} pass mark`}
-                            data-rag-threshold={c.key}
-                          />
-                        </div>
-                      </th>
-                    ))
+                  g.shown.map(({ c }) => (
+                    <th key={c.key} className="px-2 py-1 border-b border-l border-line text-right font-medium align-bottom" data-rag-col={c.key}>
+                      <div className="whitespace-nowrap">{c.key}</div>
+                      <div className="font-normal text-muted whitespace-nowrap">
+                        {c.direction === 'lower' ? '≤' : '≥'} <PassMark column={c.key} value={thr[c.key] ?? c.threshold} onCommit={commitMark} />
+                      </div>
+                    </th>
+                  ))
                 ),
               )}
             </tr>
@@ -237,88 +377,56 @@ export function RagMetricMatrix({
                 <th className="text-left px-2 py-0.5 font-normal text-muted border-b border-line/60" title={STAT[stat]!.title}>
                   {STAT[stat]!.label}
                 </th>
-                {m.groups.map((g) =>
-                  collapsed.has(g.id) ? (
+                {layout.map((g) =>
+                  g.collapsed ? (
                     <td key={g.id} className="px-2 py-0.5 border-l border-line/60" />
                   ) : (
-                    shownCols
-                      .filter(({ c }) => c.group === g.id)
-                      .map(({ c }) => {
-                        const a = agg.get(c.key);
-                        return (
-                          <td key={c.key} className="px-2 py-0.5 text-right tabular-nums border-b border-l border-line/60">
-                            {!a
-                              ? ''
-                              : stat === 'mean'
-                                ? (a.mean ?? '—')
-                                : stat === 'p10'
-                                  ? (a.p10 ?? '—')
-                                  : stat === 'pass'
-                                    ? a.passRate !== undefined
-                                      ? `${Math.round(a.passRate * 100)}%`
-                                      : '—'
-                                    : stat === 'n/a'
-                                      ? a.naCount || ''
-                                      : stat === '95%'
-                                        ? a.ci
-                                          ? `${a.ci[0]}–${a.ci[1]}`
-                                          : '—'
-                                        : <Spark bins={a.distribution} />}
-                          </td>
-                        );
-                      })
+                    g.shown.map(({ c }) => {
+                      const a = agg.get(c.key);
+                      const interval = a?.ci ?? ci[c.key];
+                      return (
+                        <td key={c.key} className="px-2 py-0.5 text-right tabular-nums border-b border-l border-line/60">
+                          {!a
+                            ? ''
+                            : stat === 'mean'
+                              ? (a.mean ?? '—')
+                              : stat === 'p10'
+                                ? (a.p10 ?? '—')
+                                : stat === 'pass'
+                                  ? a.passRate !== undefined
+                                    ? `${Math.round(a.passRate * 100)}%`
+                                    : '—'
+                                  : stat === 'n/a'
+                                    ? a.naCount || ''
+                                    : stat === '95%'
+                                      ? interval
+                                        ? `${interval[0]}–${interval[1]}`
+                                        : a.n < 3
+                                          ? '—'
+                                          : ''
+                                      : <Spark bins={a.distribution} />}
+                        </td>
+                      );
+                    })
                   ),
                 )}
               </tr>
             ))}
           </thead>
           <tbody>
-            {m.rows.map((r) => (
-              <tr key={r.id} className="hover:bg-hover" data-rag-row={r.id}>
-                <td className="px-2 py-1 border-b border-line/60 max-w-72">
-                  <div className="truncate" title={r.question ?? r.name}>
-                    {r.name}
-                  </div>
-                  <div className="flex items-center gap-1 text-muted truncate">
-                    {r.failure && (
-                      <Badge tone="warn" title={r.failure.reason}>
-                        {r.failure.class}
-                      </Badge>
-                    )}
-                    <span className="truncate">{r.question}</span>
-                  </div>
-                </td>
-                {m.groups.map((g) =>
-                  collapsed.has(g.id) ? (
-                    <td key={g.id} className="px-2 py-1 text-right tabular-nums border-b border-l border-line/60">
-                      {groupMean(r.cells, g.id) ?? ''}
-                    </td>
-                  ) : (
-                    shownCols
-                      .filter(({ c }) => c.group === g.id)
-                      .map(({ c, i }) => {
-                        const cell = r.cells[i] ?? null;
-                        return (
-                          <td
-                            key={c.key}
-                            className={cx('px-2 py-1 text-right tabular-nums border-b border-l border-line/60', cellClass(cell), cell && 'cursor-pointer')}
-                            title={cell?.na ?? cell?.failed}
-                            onClick={() => cell && setDetail({ id: r.id, metric: c.key })}
-                            data-rag-cell={`${r.id}|${c.key}`}
-                          >
-                            {cell && (
-                              // a button inside the cell: the keyboard reaches it and Enter opens the sample (its click is the cell's); pass and fail are said in a mark and in words, not by colour alone
-                              <button type="button" className="w-full text-right" aria-label={`${r.name}, ${c.key}: ${cell.failed ? `error, ${cell.failed}` : cell.score !== undefined ? `${cell.score}, ${cell.passed === false ? 'failed' : cell.passed === true ? 'passed' : 'no pass mark'}` : 'not scored'}`}>
-                                {cell.failed ? 'error' : cell.score !== undefined ? <>{cell.passed === true ? <span aria-hidden>✓ </span> : cell.passed === false ? <span aria-hidden>✗ </span> : null}{cell.score}</> : 'n/a'}
-                              </button>
-                            )}
-                          </td>
-                        );
-                      })
-                  ),
-                )}
+            {w.start > 0 && (
+              <tr aria-hidden style={{ height: w.start * ROW_H }}>
+                <td colSpan={drawn} />
               </tr>
+            )}
+            {m.rows.slice(w.start, w.end).map((r) => (
+              <MatrixRowView key={r.id} r={r} layout={layout} onOpen={open} />
             ))}
+            {w.end < m.rows.length && (
+              <tr aria-hidden style={{ height: (m.rows.length - w.end) * ROW_H }}>
+                <td colSpan={drawn} />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
