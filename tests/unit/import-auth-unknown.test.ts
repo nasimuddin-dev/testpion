@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { importAny, type CollectionFolder, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { type CollectionFolder, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 import { mapForeignAuth, type ForeignTool } from '../../packages/core/src/import/foreign-auth.js';
 
 // IMP-FIX-1: an auth scheme TestPion doesn't have is never `inherit` (the request would quietly send the parent's

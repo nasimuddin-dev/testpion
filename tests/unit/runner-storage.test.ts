@@ -20,7 +20,6 @@ import {
   MemorySecretStore,
   envNameForSecret,
   createEngineContext,
-  importAny,
   WorkspaceSearch,
   readJson,
   ProviderRegistry,
@@ -31,6 +30,7 @@ import {
   type TestCase,
   type TestResult,
 } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 let dir: string;
 beforeEach(() => {

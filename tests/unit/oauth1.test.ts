@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { exportPostmanCollection, importAny, oauth1BaseString, signOAuth1 } from '../../packages/core/src/index.js';
+import { exportPostmanCollection, oauth1BaseString, signOAuth1 } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 describe('OAuth 1.0a', () => {
   it('builds the RFC 5849 §3.4.1.1 signature base string', () => {

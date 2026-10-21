@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { detectFormat, importAny, importAsyncApi, importIntoWorkspace, WorkspaceStore } from '../../packages/core/src/index.js';
+import { detectFormat, importAsyncApi, importIntoWorkspace, WorkspaceStore } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const kafka2 = `asyncapi: 2.6.0
 info:

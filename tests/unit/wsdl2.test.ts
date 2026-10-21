@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { detectFormat, importAny, type CollectionFolder, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { detectFormat, type CollectionFolder, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const WSDL2 = `<?xml version="1.0" encoding="utf-8"?>
 <description xmlns="http://www.w3.org/ns/wsdl" targetNamespace="urn:clinic" xmlns:tns="urn:clinic" xmlns:wsoap="http://www.w3.org/ns/wsdl/soap" xmlns:whttp="http://www.w3.org/ns/wsdl/http" xmlns:xs="http://www.w3.org/2001/XMLSchema">

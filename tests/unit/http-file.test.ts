@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { fakeServices } from '../helpers.js';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { collectionToHttpFile, detectFormat, importAny, importHttpFile, isHttpFile, runTests, type ExecServices, type SavedHttpRequest, type TestCase } from '../../packages/core/src/index.js';
+import { collectionToHttpFile, detectFormat, importHttpFile, isHttpFile, runTests, type ExecServices, type SavedHttpRequest, type TestCase } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const restClient = `@baseUrl = http://127.0.0.1:PORT
 @contentType = application/json

@@ -7,7 +7,6 @@ import {
   WorkspaceStore,
   bruFilesToBrunoExport,
   collectionToBru,
-  importAny,
   importIntoWorkspace,
   readBrunoFolder,
   runScript,
@@ -15,6 +14,7 @@ import {
   type CollectionNode,
   type SavedHttpRequest,
 } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 import { brunoToTp, tpToBruno } from '../../packages/core/src/scripts/bruno.js';
 
 // IMP-FIX-3: Bruno scripts come over as tp.* (bru.* rewritten where TestPion has it, a TODO where it doesn't) with a

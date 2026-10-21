@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, detectFormat, importAny, importIntoWorkspace, schemaFromText, type SavedGraphQLRequest } from '../../packages/core/src/index.js';
+import { WorkspaceStore, detectFormat, importIntoWorkspace, schemaFromText, type SavedGraphQLRequest } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 // IMP-FIX-4: a GraphQL schema file (SDL) was detected but not imported ("Unrecognised import format (graphql-sdl)").
 // It now imports as a GraphQL request for the endpoint ({{graphqlUrl}}) with a runnable operation for the first Query

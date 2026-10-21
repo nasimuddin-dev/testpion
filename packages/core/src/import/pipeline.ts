@@ -40,7 +40,7 @@ export function finishDocument(doc: ImportDocument, opts: { scripts?: ImportScri
   return doc;
 }
 
-/** What `importAny` returns (its shape predates the import document: the CLI, the app, MCP and the tests read it). */
+/** The import result in its older shape (it predates the import document: the CLI, the app and MCP read it); `legacyResult` makes it from a document. */
 export interface ImportAnyResult {
   format: string;
   collection?: Collection;
@@ -59,7 +59,7 @@ export interface ImportAnyResult {
 }
 
 /**
- * The document as the result `importAny` has always returned. Postman's globals file has no environment of its own in the
+ * The document as the older import result. Postman's globals file has no environment of its own in the
  * document (they are workspace globals); the old result, which the runner's `--globals` reads, shows them as one.
  */
 export function legacyResult(doc: ImportDocument, opts: { globalsAsEnvironment?: boolean } = {}): ImportAnyResult {

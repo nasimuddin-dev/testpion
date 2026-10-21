@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { digestAuthorization, executeHttp, exportPostmanCollection, importAny, parseCurl, parseDigestChallenge, Redactor, signAwsV4 } from '../../packages/core/src/index.js';
+import { digestAuthorization, executeHttp, exportPostmanCollection, parseCurl, parseDigestChallenge, Redactor, signAwsV4 } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const AWS = { accessKey: 'AKIDEXAMPLE', secretKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY', region: 'us-east-1', service: 'service' };
 const AT = new Date(Date.UTC(2015, 7, 30, 12, 36, 0));
