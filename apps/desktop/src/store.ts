@@ -502,6 +502,17 @@ export function toastError(e: unknown): void {
   useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined));
 }
 
+/** Run an action; a failure is shown as the one error toast (`toastError`). Resolves true when it ran to the end. */
+export async function attempt(run: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await run();
+    return true;
+  } catch (e) {
+    toastError(e);
+    return false;
+  }
+}
+
 /** A push the remote refused because it has commits this branch does not (the core's hint says "pull first"). */
 export const isPushRejected = (e: unknown): boolean => {
   const err = asError(e);

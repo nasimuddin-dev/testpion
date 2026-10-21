@@ -1,7 +1,7 @@
 import { Terminal, Workflow } from 'lucide-react';
 import { createElement } from 'react';
 import { call } from '../api';
-import { toastError, useApp, type CiRequest } from '../store';
+import { toastError, useApp, type CiRequest, attempt } from '../store';
 import { copyText } from './clipboard';
 import { LABEL } from './vocabulary';
 import type { MenuItem } from '../components/ui';
@@ -19,13 +19,11 @@ interface RunCi {
  * `runId` agree. `runId` 'last' is the latest run.
  */
 export async function runInCi(runId: string): Promise<void> {
-  try {
+  await attempt(async () => {
     const r = await call<RunCi>('runs.ci', { runId });
     if (r.note) useApp.getState().toast(r.note, 'info');
     useApp.getState().set({ ci: r.request });
-  } catch (e) {
-    toastError(e);
-  }
+  });
 }
 
 /** Copy the command that runs `runId` again from a terminal (the same files or collection, filter and environment). */

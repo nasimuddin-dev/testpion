@@ -8,7 +8,7 @@ import { VirtualList } from './ui';
 import { focusRow } from './TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
 import { closeTabsFor } from './EditorTabs';
@@ -162,12 +162,10 @@ export const CollectionTree = memo(function CollectionTree({
   const inGit = useGitRepo();
   /** A copy of the collection with everything it holds (its gRPC calls and connections too). */
   const duplicateCollection = async (c: Collection) => {
-    try {
+    await attempt(async () => {
       const copy = await call<Collection>('col.duplicate', { id: c.id });
       useApp.getState().toast(`Duplicated as "${copy.name}"`, 'success', { ref: { kind: 'collection', collectionId: copy.id } });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Move a collection to Recently deleted (restorable for 30 days); its tabs close; Undo in the message brings it back. */
   const deleteCollection = (c: Collection) =>

@@ -2,7 +2,7 @@ import { Copy, FlaskConical, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CUSTOM_METRIC_KINDS, type CustomMetricKind } from '@testpion/shared';
 import { call } from '../../api';
-import { confirmAction, promptText, toastError, useApp } from '../../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
 import { touchesFiles, type DataChangedEvent } from '../../lib/data-changed';
 import { plural } from '../../lib/format';
@@ -142,15 +142,13 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
   const dirty = text !== undefined && text !== saved;
   const save = async () => {
     if (text === undefined) return;
-    try {
+    await attempt(async () => {
       await call('rag.customMetric.save', { id, text, overwrite: exists });
       setSaved(text);
       setExists(true);
       useApp.getState().toast(`Saved metrics/${id}.yaml`, 'success');
       onSaved?.(id);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   // a copy under another id (the file name is the id evaluations name, so a rename is a copy and a delete)
   const saveAs = async () => {
@@ -158,15 +156,13 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
     const next = (await promptText('Save as', { message: 'Id of the copy (lower-case letters, digits, hyphens)', value: `${id}-copy`, okLabel: 'Save a copy' }))?.trim().toLowerCase();
     if (!next || next === id) return;
     if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(next)) return void toastError(new Error(`"${next}" is not a metric id: lower-case letters, digits and hyphens`));
-    try {
+    await attempt(async () => {
       const copy = /^id:.*$/m.test(text) ? text.replace(/^id:.*$/m, `id: ${next}`) : `id: ${next}\n${text}`;
       await call('rag.customMetric.save', { id: next, text: copy, overwrite: false });
       useApp.getState().toast(`Saved metrics/${next}.yaml`, 'success');
       onSaved?.(next);
       onClose();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const runExamples = async () => {
     if (text === undefined) return;
@@ -193,7 +189,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
     const where = [...used.evaluations.map((n) => `evaluation “${n}”`), ...used.formulas.map((n) => `formula metric ${n}`)];
     const yes = await confirmAction({ title: `Delete ${id}?`, message: `metrics/${id}.yaml is deleted.${where.length ? ` It is used by ${where.join(', ')}; they will not find it.` : ''}`, detail: inRepository ? 'The file is in git: its history keeps it. Undo puts it back right away.' : 'Undo puts it back right away; after that the file is gone for good.', confirmLabel: 'Delete', danger: true });
     if (!yes) return;
-    try {
+    await attempt(async () => {
       const was = saved;
       await call('rag.customMetric.delete', { id });
       onSaved?.(id);
@@ -206,9 +202,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
           },
           restored: `metrics/${id}.yaml is back`,
         });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   // the kind of the file in the editor: a saved one says it in its text, a new one is the chosen kind
   const fileKind = (text !== undefined ? /^kind:\s*['"]?([a-z-]+)/m.exec(text)?.[1] : undefined) ?? kind;

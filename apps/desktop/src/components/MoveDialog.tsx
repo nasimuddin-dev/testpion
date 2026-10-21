@@ -1,7 +1,7 @@
 import { Folder, FolderTree } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Collection, CollectionNode } from '../types';
-import { Button, cx, Field, Modal, Select } from './ui';
+import { Button, cx, Field, Modal, Select, NamedOptions } from './ui';
 
 /** Ids of a node and everything inside it (a folder can't move into itself). */
 export function subtreeIds(n: CollectionNode): string[] {
@@ -68,11 +68,7 @@ export function MoveDialog({
       <div className="flex flex-col gap-3">
         <Field label="Collection">
           <Select value={colId} onChange={(e) => (setColId(e.target.value), setFolderId(undefined))}>
-            {collections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            <NamedOptions items={collections} />
           </Select>
         </Field>
         <Field label="Folder">

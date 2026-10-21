@@ -6,7 +6,7 @@ import { useCollectionTree } from '../../lib/collections-store';
 import { AiEstimateLine } from './AiEstimateLine';
 import { useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
 import type { CollectionNode } from '../../types';
-import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced } from '../ui';
+import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced, NamedOptions } from '../ui';
 import { AiPreviewDialog, type AiPrivacy } from './AiPreviewDialog';
 import { FlowProposalReview } from './FlowProposalReview';
 import { ProposalReview } from './ProposalReview';
@@ -291,11 +291,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
                     setFolderId('');
                   }}
                 >
-                  {cols.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={cols} />
                 </Select>
               </Field>
               <Field label="Folder">

@@ -10,7 +10,7 @@ import { afterScopeChange } from '../../lib/ws-scope';
 import { AssertionEditor } from '../../components/AssertionEditor';
 import { CodeEditor } from '../../components/CodeEditor';
 import { AddKeyButton, setupProviderOf } from '../../components/Results';
-import { Badge, Empty, Field, IconButton, Input, Select, Split, Tabs, Textarea } from '../../components/ui';
+import { Badge, Empty, Field, IconButton, Input, Select, Split, Tabs, Textarea, NamedOptions } from '../../components/ui';
 
 /** What the AI Lab tabs share: the prompt draft and its editors, the model picker, the pieces that say a provider is not ready. */
 export interface ChatResult {
@@ -100,11 +100,7 @@ export function ModelPicker({ providers, provider, model, onChange }: { provider
   return (
     <div className="flex items-center gap-1">
       <Select aria-label="Provider" value={p?.id ?? ''} onChange={(e) => onChange(e.target.value, providers.find((x) => x.id === e.target.value)?.defaultModel ?? '')}>
-        {providers.map((x) => (
-          <option key={x.id} value={x.id}>
-            {x.name}
-          </option>
-        ))}
+        <NamedOptions items={providers} />
       </Select>
       <Input aria-label="Model" list={`models-${p?.id}`} className="w-48 mono" placeholder={p?.defaultModel ?? 'model name'} value={model} onChange={(e) => onChange(p?.id ?? '', e.target.value)} />
       <datalist id={`models-${p?.id}`}>

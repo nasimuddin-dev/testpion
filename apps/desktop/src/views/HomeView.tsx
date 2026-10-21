@@ -1,3 +1,4 @@
+import { envColor } from '../components/EnvSelect';
 import { openDocs } from '../lib/docs-link';
 import { openImport } from '../components/ImportHost';
 import { askAssistant } from '../components/ai/AiAction';
@@ -431,7 +432,7 @@ export function HomeView() {
                   onClick={() => useApp.getState().setEnvironment(e.name)}
                   title={e.problem ? `This environment's file cannot be read: ${e.problem}` : 'Make this the active environment'}
                 >
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)') }} />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
                   <span className="truncate flex-1">{e.name}</span>
                   {e.isProduction && <Badge tone="bad">prod</Badge>}
                   {e.name === env && <Badge tone="accent">active</Badge>}

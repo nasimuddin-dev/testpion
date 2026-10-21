@@ -16,7 +16,7 @@ import { SidebarShell } from '../components/SidebarShell';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
 import { useIntent } from '../hooks';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Metric, MetricGrid, PageHeader, Select, Split, Tabs, Toggle, Textarea } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Metric, MetricGrid, PageHeader, Select, Split, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
 import { ErrorPanel } from '../components/Results';
 import { LoadTimeline, StatusCodes } from '../components/LoadCharts';
 import { LoadHistory } from '../components/LoadHistory';
@@ -421,11 +421,7 @@ export function LoadView() {
             <div className="grid grid-cols-2 gap-2">
               <Field label="Collection">
                 <Select value={collection?.id ?? ''} onChange={(e) => set({ collectionId: e.target.value, folderId: '' })}>
-                  {collections.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={collections} />
                 </Select>
               </Field>
               <Field label="Requests">
@@ -483,11 +479,7 @@ export function LoadView() {
             <div className="grid grid-cols-2 gap-2">
               <Field label="Provider">
                 <Select value={d.provider} onChange={(e) => set({ provider: e.target.value })}>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={providers} />
                 </Select>
               </Field>
               <Field label="Model">

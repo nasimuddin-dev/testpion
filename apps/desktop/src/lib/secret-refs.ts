@@ -1,5 +1,5 @@
 import { call, on } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, useApp, attempt } from '../store';
 
 interface Blocked {
   ref: string;
@@ -22,13 +22,11 @@ export async function allowSecretRefs(environment: string, refs: Blocked[]): Pro
     confirmLabel: 'Allow on this computer',
   });
   if (!ok) return false;
-  try {
+  await attempt(async () => {
     const r = await call<PrefetchResult>('secrets.allow', { environment, refs: refs.map((x) => x.ref) });
     if (r.failed.length) useApp.getState().toast(`${r.failed[0]!.error}${r.failed.length > 1 ? ` (+${r.failed.length - 1} more)` : ''}`, 'error');
     else useApp.getState().toast(`Read ${r.fetched.length === 1 ? 'the secret' : `${r.fetched.length} secrets`} from ${tools}: send again to use ${r.fetched.length === 1 ? 'it' : 'them'}`, 'success');
-  } catch (e) {
-    toastError(e);
-  }
+  });
   return true;
 }
 

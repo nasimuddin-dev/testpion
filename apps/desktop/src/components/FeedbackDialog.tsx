@@ -3,7 +3,7 @@ import { Bug, Copy, Download, ExternalLink, HelpCircle, Lightbulb, Mail, Paintbr
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { call } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
-import { toastError, useApp } from '../store';
+import { useApp, attempt } from '../store';
 import { LinkButton, Button, cx, Field, Input, Modal, Toggle, Textarea } from './ui';
 
 export type FeedbackKind = 'bug' | 'idea' | 'ui' | 'question';
@@ -114,11 +114,9 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
   };
   const save = async () => {
     if (!report) return;
-    try {
+    await attempt(async () => {
       finishSave(await call<SaveResult>('feedback.save', { title: report.title, body: report.body }), 'Report');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   return (

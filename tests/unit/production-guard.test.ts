@@ -344,7 +344,8 @@ describe('the backend boundary: every send and run method', () => {
     const roots = [join(__dirname, '../../packages/core/src'), join(__dirname, '../../packages/cli/src'), join(__dirname, '../../apps/desktop/backend')];
     const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : /\.ts$/.test(f) ? [join(d, f)] : []));
     const calls = roots.flatMap(walk).flatMap((f) => [...readFileSync(f, 'utf8').matchAll(/scriptRequestSender\(\{([^}]*)\}\)/g)].map((m) => ({ f, args: m[1]! })));
-    expect(calls.length).toBeGreaterThanOrEqual(3);
+    // the runner and the desktop backend's scriptHost (HTTP and GraphQL sends share it)
+    expect(calls.length).toBeGreaterThanOrEqual(2);
     expect(calls.filter((c) => !/\bproduction:/.test(c.args)).map((c) => c.f)).toEqual([]);
   });
 

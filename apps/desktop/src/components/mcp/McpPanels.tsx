@@ -2,7 +2,7 @@ import { CodeBlock } from '../CodeBlock';
 import { Braces, FileText, MessageSquare } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on, type NormalizedError } from '../../api';
-import { toastError } from '../../store';
+import { attempt } from '../../store';
 import { formatMs, plural } from '../../lib/format';
 import { JsonTree } from '../JsonView';
 import { useSticky } from '../../lib/sticky';
@@ -117,15 +117,13 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
   );
   const toggleSubscribe = async () => {
     const on_ = subscribed.has(uri);
-    try {
+    await attempt(async () => {
       await call(on_ ? 'mcp.unsubscribe' : 'mcp.subscribe', { serverId, uri });
       const next = new Set(subscribed);
       if (on_) next.delete(uri);
       else next.add(uri);
       setSubscribed(next);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const [content, setContent] = useSticky<{ contents: Array<{ uri: string; mimeType?: string; text?: string; blob?: string }>; durationMs: number } | { error: NormalizedError } | undefined>(
     `mcp:${serverId}:resourceContent`,

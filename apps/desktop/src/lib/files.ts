@@ -1,5 +1,5 @@
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { useApp, attempt } from '../store';
 
 /**
  * Host-agnostic file handling for the UI (desktop today, browser / cloud later). The UI never gets
@@ -67,7 +67,7 @@ export async function generateFlows(source: { path: string } | { collectionId: s
     confirmLabel: 'Generate flows',
   });
   if (!ok) return;
-  try {
+  await attempt(async () => {
     const r = await call<{ written: Array<{ path: string; tests: number }>; skipped: string[]; resources: string[]; variables: string[] }>('openapi.generateFlows', 'path' in source ? { path: source.path } : { collectionId: source.collectionId });
     const n = r.written.reduce((k, f) => k + f.tests, 0);
     useApp
@@ -81,9 +81,7 @@ export async function generateFlows(source: { path: string } | { collectionId: s
         r.written.length ? 'success' : 'warning',
         r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
       );
-  } catch (e) {
-    toastError(e);
-  }
+  });
 }
 
 export function pickTextFile(accept: string): Promise<{ name: string; text: string } | null> {

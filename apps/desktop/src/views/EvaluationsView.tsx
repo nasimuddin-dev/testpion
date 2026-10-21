@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
 import { call, on } from '../api';
-import { persisted, promptText, toastError, useApp } from '../store';
+import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
 import { countDatasetRecords, datasetFormatOf, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
@@ -36,7 +36,7 @@ import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Segmented, Select, Split, Tabs } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Segmented, Select, Split, Tabs, NamedOptions } from '../components/ui';
 import { EnvBadge } from '../components/EnvSelect';
 
 interface Draft {
@@ -149,12 +149,10 @@ export function EvaluationsView() {
     set({ type, ...(type === 'rag' && untouched ? { evaluators: RAG_STARTER_EVALUATORS, ...(d.dataset === drafts.defaults.dataset ? { dataset: RAG_STARTER_DATASET } : {}) } : {}) });
   };
   const exportRag = async (to: 'ragas' | 'deepeval') => {
-    try {
+    await attempt(async () => {
       const r = await call<{ text: string; count: number }>('rag.convert', { text: d.dataset, name: `dataset.${d.datasetFormat}`, to });
       downloadContent(`${(d.name || 'dataset').replace(/[^\w.-]+/g, '-')}-${to}.jsonl`, r.text, { type: 'application/x-ndjson' });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
@@ -205,15 +203,13 @@ export function EvaluationsView() {
   const spends = d.type === 'rag' && !!ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e));
   const run = () => (spends ? setEstimating(true) : void runDraft(d));
   const runDraft = async (d: Draft) => {
-    try {
+    await attempt(async () => {
       // the engine builds the test template, exactly as `testpion eval run` and the run_evaluation MCP tool do
       const r = await call<{ runId: string }>('eval.runDraft', { draft: d, environment: env });
       setRunId(r.runId);
       setPane('runs');
       setRuns((rs) => [{ id: r.runId, name: d.name, startedAt: new Date().toISOString(), passed: 0, total: 0, failed: 0, errors: 0 }, ...rs]);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   return (
@@ -350,11 +346,7 @@ export function EvaluationsView() {
               <Field label="RAG target" className="flex-1 min-w-0" hint={ragTarget ? undefined : 'Without a target the contexts and answers written in the dataset are scored.'}>
                 <Select value={d.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })} aria-label="RAG target" data-rag-target>
                   <option value="">None: score what the dataset holds</option>
-                  {ragTargets.lib.items.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={ragTargets.lib.items} />
                 </Select>
               </Field>
               <Button icon={<Database size={13} />} onClick={() => setConnect(true)} title="Connect a RAG system: request, probe, click-to-map" data-rag-connect-open>
@@ -369,11 +361,7 @@ export function EvaluationsView() {
               <Field label="Judge provider" hint="Judged metrics only">
                 <Select value={d.judge?.provider ?? ''} onChange={(e) => set({ judge: { ...d.judge, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } })} aria-label="Judge provider">
                   <option value="">The AI settings’ large model</option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
+                  <NamedOptions items={providers} />
                 </Select>
               </Field>
               <Field label="Judge model">
@@ -384,11 +372,7 @@ export function EvaluationsView() {
           <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
             <Field label="Provider">
               <Select value={d.provider} onChange={(e) => set({ provider: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? '' })}>
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <NamedOptions items={providers} />
               </Select>
             </Field>
             <Field label="Model">

@@ -1,7 +1,7 @@
 import { Cookie, Lock, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, useApp, attempt } from '../store';
 import { Badge, Button, cx, Empty, Field, IconButton, Input, Modal, Toggle } from './ui';
 
 export interface JarCookie {
@@ -62,13 +62,11 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
   const count = (d: string) => cookies.filter((c) => c.domain === d).length;
 
   const act = async (fn: () => Promise<unknown>, done?: string) => {
-    try {
+    await attempt(async () => {
       await fn();
       await reload();
       if (done) toast(done, 'success');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   const addDomain = async () => {

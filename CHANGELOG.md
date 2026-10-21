@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A lighter window
+
+- **Switching tabs redraws about half as much.** The highlight of the open item is read by the rows that show it, not by the whole Explorer, so a switch redraws the two rows whose highlight changes (20 switches over a 500-request workspace: 11,700 component renders before, 6,200 now). The Import dialog loads when you import, not at start (24 KB less on the start path).
+
 ### RAG follow-ups: judges, test sets, capture, calibration, authoring
 
 - **138 metrics** (was 134). `answer-regex`, `answer-length` and `answer-json-schema` (DeepEval's JsonCorrectness) score the shape of an answer 1 or 0 with no model; `judge-cost` is what judging the other metrics of the sample cost, in dollars (lower is better, `max` gates it). `negative-rejection` takes `mode: judge` for a refusal the pattern does not know. Ragas' one `noise_sensitivity` takes `mode: relevant | irrelevant`. A jury now also votes on the claim-level metrics, claim by claim.

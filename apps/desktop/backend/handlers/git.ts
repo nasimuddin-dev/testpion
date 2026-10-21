@@ -47,27 +47,12 @@ import {
   isWorkspaceDir,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
-import { journalFiles, journalResolve } from './git-undoable.js';
+import { journalFiles, journalResolve, gitHelpers } from './git-undoable.js';
 
 export function gitHandlers(be: Backend): Handlers {
-  const ws = () => be.ws.root;
-  /**
-   * After git rewrote files (discard, switch, pull, restore): reload and tell the views, without the "changed
-   * outside TestPion" notice (the user asked for it).
-   */
-  const rewritten = async <T>(op: () => Promise<T>): Promise<T> => {
-    try {
-      return await op();
-    } finally {
-      be.adoptDiskState(); // git wrote the files for the app: they are its own changes, not outside ones
-      be.ws.reloadWorkspaceFile();
-      be.host.emit('data.changed', { method: 'git' });
-      be.host.emit('git.changed', {});
-    }
-  };
+  const { ws, rewritten, changed } = gitHelpers(be);
   const mergeDriverChecked = new Set<string>();
   const proposalFile = () => join(ws(), '.local', 'git-proposal.json');
-  const changed = <T>(r: T): T => (be.host.emit('git.changed', {}), r);
 
   /** Register a cloned or connected workspace folder in the workspace list and open it. */
   const openFolder = (dir: string) => {

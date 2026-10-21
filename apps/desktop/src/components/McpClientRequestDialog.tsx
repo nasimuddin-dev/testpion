@@ -2,7 +2,7 @@ import { CodeBlock } from './CodeBlock';
 import { MessageSquareText, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import { JsonSchemaForm } from './JsonSchemaForm';
 import { Badge, Button, Modal, Textarea } from './ui';
 import type { ClientRequest } from './McpClientRequests';
@@ -17,11 +17,9 @@ export function McpClientRequestDialog({ current, onDone }: { current: ClientReq
   const [drafting, setDrafting] = useState(false);
   const env = useApp((s) => s.environment);
   const respond = async (result: unknown) => {
-    try {
+    await attempt(async () => {
       await call('mcp.clientRespond', { id: current.id, result });
-    } catch (e) {
-      toastError(e);
-    }
+    });
     onDone(current.id);
   };
   const missing = (current.params.requestedSchema?.required ?? []).filter((k) => values[k] === undefined || values[k] === '');

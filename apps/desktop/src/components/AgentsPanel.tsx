@@ -2,7 +2,7 @@ import { CodeBlock } from './CodeBlock';
 import { Bot, Check, Copy, FileText, PlugZap, Workflow } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import { Badge, Button, Tabs, Toggle } from './ui';
 import { useCopied } from '../lib/clipboard';
 import { RunInTerminalButton } from './RunInTerminal';
@@ -104,15 +104,13 @@ export function AgentsPanel() {
   };
   const targets: AgentTarget[] = ['agents', ...(also.claude ? (['claude'] as const) : []), ...(also.cursor ? (['cursor'] as const) : [])];
   const writeAgentsMd = async () => {
-    try {
+    await attempt(async () => {
       const r = await call<AgentsInitResult>('agents.init', { targets });
       setWritten(r);
       const skipped = r.files.filter((f) => f.status === 'skipped');
       useApp.getState().toast(r.files.map((f) => `${f.path} ${f.status}`).join(' · '), skipped.length ? 'warning' : 'success');
       setInfo({ ...info, agentsMd: true, agentFiles: { ...info.agentFiles, ...Object.fromEntries(r.files.filter((f) => f.status !== 'skipped').map((f) => [f.target, true])) } });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   return (
     <div className="flex flex-col gap-5">

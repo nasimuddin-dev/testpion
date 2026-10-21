@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { LABEL } from '../lib/vocabulary';
 import { asError, call, on, type NormalizedError } from '../api';
-import { ask, persisted, toastError, useApp } from '../store';
+import { ask, persisted, toastError, useApp, attempt } from '../store';
 import { restoreFolder } from '../components/FolderList';
 import { deleteMcpServerWithUndo } from '../lib/undo-delete';
 import { useDoc, useDocs } from '../lib/docs';
@@ -214,13 +214,11 @@ It runs with your permissions. Allow it only if you know where this workspace co
   };
   /** Record the connected server (tools, resources, prompts and the calls made so far) as a mock server. */
   const saveMock = async (id: string) => {
-    try {
+    await attempt(async () => {
       const r = await call<{ path: string; tools: number; calls: number; resources: number }>('mcp.mock.save', { serverId: id, addServer: true });
       useApp.getState().toast(`Saved ${r.path}: ${plural(r.tools, 'tool')}, ${plural(r.calls, 'recorded call')}. Added as a mock server.`, 'success');
       await load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   // folders of the server list (empty folders included) live in the workspace library "mcp"
   const [folders, setFolders] = useState<string[]>([]);

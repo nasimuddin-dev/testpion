@@ -2,7 +2,7 @@ import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderPlus, L
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
 import { touchesFiles, type DataChangedEvent, type FileKind } from '../lib/data-changed';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
 import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
@@ -260,20 +260,16 @@ export function Explorer() {
 
   const intent = useApp.getState().openIntent;
   const saveCollection = async (c: Collection) => {
-    try {
+    await attempt(async () => {
       await call('col.save', c);
       // the saved collection is read back by the shared list (its data.changed); the explorer's other lists did not change
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Change a collection the tree shows (an outline): the change applies to the whole collection. */
   const editCollection = async (c: Collection, f: (whole: Collection) => Collection) => {
-    try {
+    await attempt(async () => {
       await saveCollection(f(await fullCollection(c)));
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const newCollection = async () => {
     const name = await promptText('New collection', { message: 'Collection name', placeholder: 'My API', okLabel: 'Create' });
@@ -313,12 +309,10 @@ export function Explorer() {
   /** The datasets: a new empty one, generated test data, and a row's rename, duplicate and delete (the file goes to Recently deleted). */
   const [generatingData, setGeneratingData] = useState(false);
   const datasetAction = async (fn: () => Promise<unknown>) => {
-    try {
+    await attempt(async () => {
       await fn();
       await load(false, DATASETS);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const newDataset = async (format: 'csv' | 'jsonl') => {
     const name = await promptText(`New ${format.toUpperCase()} dataset`, { message: 'File name in the datasets folder', placeholder: format === 'csv' ? 'users' : 'cases', okLabel: 'Create' });
@@ -351,13 +345,11 @@ export function Explorer() {
   });
   /** Change a saved gRPC call / connection list (move, rename, duplicate, delete): the one place that loads, edits and saves it. */
   const editLibrary = async (kind: 'grpc' | 'websocket', fn: (items: Array<LibraryItem<unknown>>) => Array<LibraryItem<unknown>>) => {
-    try {
+    await attempt(async () => {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: { folders: lib.folders, items: fn(lib.items) } });
       await load(false, LIBRARY);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Move a saved gRPC call / connection to another collection. */
   const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
@@ -435,22 +427,18 @@ export function Explorer() {
   };
   /** Change the MCP server list (rename, duplicate, move to a folder). */
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
-    try {
+    await attempt(async () => {
       await call('mcp.saveServers', { servers: fn(servers.map(({ connected: _c, ...s }) => s as McpServerConfig)) });
       await load(false, MCP);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Change a folders library (the folder names, and which folder each item is in), read fresh so steps in a row see each other. */
   const editFolderLib = async (kind: 'mcp-folders' | 'spec-folders' | 'dataset-folders', fn: (lib: Library<unknown>) => Pick<Library<unknown>, 'folders' | 'items'>) => {
-    try {
+    await attempt(async () => {
       const lib = await call<Library<unknown>>('lib.get', { kind });
       await call('lib.save', { kind, library: fn(lib) });
       await load(false, LIBRARY);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const specFolderOf = new Map(specFolders.items.map((i) => [i.id, i.folder]));
   const datasetFolderOf = new Map(datasetFolders.items.map((i) => [i.id, i.folder]));

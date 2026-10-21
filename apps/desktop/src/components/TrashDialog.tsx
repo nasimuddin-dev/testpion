@@ -1,7 +1,7 @@
 import { Database, FileCode2, FolderTree, KeyRound, Plug, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, useApp, attempt } from '../store';
 import { plural, timeAgo } from '../lib/format';
 import { Button, Empty, IconButton, Modal } from './ui';
 
@@ -34,15 +34,13 @@ export function TrashDialog({ kinds, onClose, onRestored }: { kinds?: readonly T
   const load = () => void call<TrashItem[]>('trash.list').then((all) => setItems(kinds ? all.filter((i) => kinds.includes(i.kind)) : all));
   useEffect(load, [shown]);
   const restore = async (it: TrashItem) => {
-    try {
+    await attempt(async () => {
       const r = await call<{ kind: TrashItem['kind']; id: string; name: string }>('trash.restore', { id: it.id });
       toast(`Restored "${r.name}"`, 'success');
       await useApp.getState().refreshWorkspace();
       onRestored?.(r);
       load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const purge = async (it?: TrashItem) => {
     const what = it ? `"${it.name}"` : `all ${items?.length ?? 0} deleted items`;

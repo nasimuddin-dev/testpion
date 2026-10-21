@@ -1,7 +1,7 @@
 import { Bug, Circle, Copy, FolderPlus, Square, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import { plural } from '../lib/format';
 import { Badge, Button, Empty, Field, Input, Modal, VirtualList, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
@@ -52,16 +52,14 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
     setRunning(undefined);
   };
   const save = async () => {
-    try {
+    await attempt(async () => {
       const r = await call<{ collectionId: string; name: string; requests: number; placeholders: string[] }>('record.save', { name });
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast(
         `Saved ${plural(r.requests, 'request')} to "${r.name}"${r.placeholders.length ? `. Secrets were replaced by variables: set ${r.placeholders.join(', ')} as secret environment variables` : ''}`,
         'success',
       );
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   return (
     <Modal title="Capture: reverse proxy for one API" onClose={onClose} width={760}>

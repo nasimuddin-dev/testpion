@@ -6,7 +6,7 @@ import { FolderList } from '../../components/FolderList';
 import { SidebarShell } from '../../components/SidebarShell';
 import { EnvironmentsPane, HistoryPane } from '../../components/SidebarPanes';
 import { asError, call, on, type NormalizedError } from '../../api';
-import { promptText, toastError, useApp } from '../../store';
+import { promptText, toastError, useApp, attempt } from '../../store';
 import { useIntent, useSendShortcut } from '../../hooks';
 import type { ProviderConfig } from '../../types';
 import { formatCost, formatMs, uid, undatedModel } from '../../lib/format';
@@ -146,12 +146,10 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     } catch {
       /* storage unavailable */
     }
-    try {
+    await attempt(async () => {
       const out = await call<{ path: string; rows: number }>('datasets.appendRow', { name, row: { ...d.input, expected: r.isJson ? r.json : r.text } });
       useApp.getState().toast(`Added case ${out.rows} to ${out.path} (Evaluations ▸ Dataset ▸ workspace dataset)`, 'success', { ref: refOfWorkspacePath(out.path) ?? { kind: 'dataset', name: out.path.replace(/^.*\//, '') } });
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const r = result && !('error' in result) ? result : undefined;
   const spec = useMemo(() => answerOutputSpec(r), [r]);

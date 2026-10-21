@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FolderOpen, Link2, Upload, Undo2 } from 'lucide-react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import { LABEL } from '../lib/vocabulary';
 import { aiHidden } from '../lib/ai-visible';
 import { startTidyImport } from './ai/flow-generate';
@@ -75,12 +75,10 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
     }
   };
   const pick = (fn: () => Promise<ImportSource | null>) => async () => {
-    try {
+    await attempt(async () => {
       const src = await fn();
       if (src) await run(src);
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   useEffect(() => {
     void call<{ set: boolean }>('import.postmanKey').then((r) => setKeySet(r.set), () => undefined);

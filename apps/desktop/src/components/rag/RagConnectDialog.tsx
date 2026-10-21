@@ -8,7 +8,7 @@ import { toastAiError } from '../../lib/ai-errors';
 import { AiAction } from '../ai/AiAction';
 import { useLibrary } from '../../lib/library';
 import { parseYaml, stringifyYaml } from '../../lib/yaml';
-import { Badge, Button, Callout, Field, FooterHint, Input, Modal, Select, Spinner, Toggle, type MenuItem } from '../ui';
+import { Badge, Button, Callout, Field, FooterHint, Input, Modal, Select, Spinner, Toggle, type MenuItem, NamedOptions } from '../ui';
 import { CodeEditor } from '../CodeEditor';
 import { JsonTree } from '../JsonView';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
@@ -241,11 +241,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
             <Field label="Start from">
               <Select value={presetId} onChange={(e) => applyPreset(e.target.value)} aria-label="Start from a preset" data-rag-preset-select>
                 <option value="">A blank request</option>
-                {RAG_TARGET_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <NamedOptions items={RAG_TARGET_PRESETS} />
               </Select>
             </Field>
             <Field label="Protocol">

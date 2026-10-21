@@ -21,6 +21,14 @@ export function collectionsHandlers(be: Backend): Handlers {
     return be.ws.safePath(clean, be.ws.path('datasets'));
   };
   const datasetName = (file: string) => relative(be.ws.path('datasets'), file).split(sep).join('/');
+  /** A new file under datasets/ named `base.ext`; never an existing one: base-2.ext, base-3.ext … */
+  const newDatasetPath = (base: string, ext: string) => {
+    const dir = be.ws.path('datasets');
+    mkdirSync(dir, { recursive: true });
+    let dest = join(dir, `${base}.${ext}`);
+    for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.${ext}`);
+    return dest;
+  };
   return {
     'col.list': () => be.ws.listCollections(),
     /** Every collection as a tree (ids, names, methods, folders; no bodies, headers or scripts): what the explorer lists. */
@@ -278,10 +286,7 @@ export function collectionsHandlers(be: Backend): Handlers {
     'datasets.create': ({ name, format }: { name: string; format: 'csv' | 'jsonl' }) => {
       const ext = format === 'csv' ? 'csv' : 'jsonl';
       const base = basename(name.trim()).replace(/\.(csv|jsonl)$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 100) || 'data';
-      const dir = be.ws.path('datasets');
-      mkdirSync(dir, { recursive: true });
-      let dest = join(dir, `${base}.${ext}`);
-      for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.${ext}`);
+      const dest = newDatasetPath(base, ext);
       writeOwned(dest, format === 'csv' ? 'id,name\n' : '');
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(dest), path: dest };
@@ -340,13 +345,10 @@ export function collectionsHandlers(be: Backend): Handlers {
     'datasets.saveCsv': ({ name, text }: { name: string; text: string }) => {
       if (text.length > 50 * 1024 * 1024) throw new ApsError('ValidationError', 'The data is larger than 50 MB');
       const base = basename(name).replace(/\.csv$/i, '').replace(/[^\w.-]+/g, '_').slice(0, 100) || 'data';
-      const dir = be.ws.path('datasets');
-      mkdirSync(dir, { recursive: true });
-      let dest = join(dir, `${base}.csv`);
-      for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.csv`);
+      const dest = newDatasetPath(base, 'csv');
       writeOwned(dest, text);
       be.host.emit('data.changed', { kind: 'datasets' });
-      return { path: dest, name: relative(dir, dest).split(sep).join('/') };
+      return { path: dest, name: datasetName(dest) };
     },
     /**
      * A data file uploaded from the browser (no native file picker): it is stored in the workspace's

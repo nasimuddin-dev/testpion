@@ -71,6 +71,20 @@ function describeAuth(a: AuthConfig): string {
   return typeof what === 'string' && what ? `${label}: ${what}` : label;
 }
 
+/** The username and password fields of basic, digest and NTLM auth (values may be {{variables}}). */
+function UserPasswordFields({ username, password, set }: { username: string; password: string; set(patch: Record<string, unknown>): void }) {
+  return (
+    <>
+      <Field label="Username">
+        <Input value={username} onChange={(e) => set({ username: e.target.value })} />
+      </Field>
+      <Field label="Password">
+        <Input type="password" value={password} onChange={(e) => set({ password: e.target.value })} />
+      </Field>
+    </>
+  );
+}
+
 /**
  * Auth configuration; values support {{variables}} so credentials can live in secret environment variables.
  * `inherited`: the auth this item gets when it has none of its own and where it comes from (a test file's `defaults:`):
@@ -125,12 +139,7 @@ export function AuthEditor({
       )}
       {a.type === 'basic' && (
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Username">
-            <Input value={a.username} onChange={(e) => set({ username: e.target.value })} />
-          </Field>
-          <Field label="Password">
-            <Input type="password" value={a.password} onChange={(e) => set({ password: e.target.value })} />
-          </Field>
+          <UserPasswordFields username={a.username} password={a.password} set={set} />
         </div>
       )}
       {a.type === 'apiKey' && (
@@ -244,12 +253,7 @@ export function AuthEditor({
       {a.type === 'digest' && (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Username">
-              <Input value={a.username} onChange={(e) => set({ username: e.target.value })} />
-            </Field>
-            <Field label="Password">
-              <Input type="password" value={a.password} onChange={(e) => set({ password: e.target.value })} />
-            </Field>
+            <UserPasswordFields username={a.username} password={a.password} set={set} />
           </div>
           <p className="text-xs text-muted">The first request receives the server's challenge (401); TestPion answers it and sends the request again. MD5, SHA-256 and their -sess variants.</p>
         </>
@@ -314,12 +318,7 @@ export function AuthEditor({
       {a.type === 'ntlm' && (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Username">
-              <Input value={a.username} onChange={(e) => set({ username: e.target.value })} />
-            </Field>
-            <Field label="Password">
-              <Input type="password" value={a.password} onChange={(e) => set({ password: e.target.value })} />
-            </Field>
+            <UserPasswordFields username={a.username} password={a.password} set={set} />
             <Field label="Domain (optional)">
               <Input value={a.domain ?? ''} onChange={(e) => set({ domain: e.target.value || undefined })} />
             </Field>

@@ -2,7 +2,7 @@ import { editorLanguageOfText } from '../data-languages';
 import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { call } from '../api';
-import { toastError } from '../store';
+import { attempt } from '../store';
 import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import type { SavedExample } from '../types';
 import { CodeEditor } from './CodeEditor';
@@ -33,11 +33,9 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
   latest.current = examples;
   const persist = async (next: SavedExample[]) => {
     if (!collectionId || !requestId) return;
-    try {
+    await attempt(async () => {
       onChange(await call<SavedExample[]>('col.setExamples', { collectionId, requestId, examples: next }));
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
 
   if (!examples.length)

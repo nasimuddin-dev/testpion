@@ -2,7 +2,7 @@ import { Bot, FileCode2, FilePlus2, FileSpreadsheet, History, KeyRound, Layers, 
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { useExternalChange } from '../lib/external-change';
 import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
@@ -543,14 +543,12 @@ export function TestsView() {
 
   /** Move a test file to another path inside tests/ (a rename, or a move to another folder); its tab follows. */
   const movePath = async (path: string, to: string) => {
-    try {
+    await attempt(async () => {
       await call('tests.write', { path: to, content: await call<string>('tests.read', { path }) });
       await call('tests.delete', { path });
       renameOpen(path, to);
       await loadTree();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Rename or move a test file from its tab (its path inside tests/: a path can move it, which a name can't). */
   const renameFile = async (path: string) => {
@@ -619,13 +617,11 @@ export function TestsView() {
   };
   /** Export as Arazzo…: the flow as an Arazzo 1.0 workflow, saved with a dialog (or downloaded); what did not fit is said in a toast. */
   const exportArazzo = async (path: string) => {
-    try {
+    await attempt(async () => {
       const r = await call<{ notes: string[]; saved: SaveResult }>('tests.exportArazzo', { path, save: true });
       finishSave(r.saved, 'Arazzo workflow');
       if ((r.saved?.path || r.saved?.download) && r.notes.length) useApp.getState().toast(`Arazzo: ${r.notes.slice(0, 3).join('; ')}${r.notes.length > 3 ? ` (+${r.notes.length - 3} more)` : ''}`, 'warning');
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** Every folder path under (and including) a folder of the tree: its Expand all and Collapse all. */
   const dirsUnder = (n: Node): string[] => (n.kind === 'dir' ? [n.path, ...(n.children ?? []).flatMap(dirsUnder)] : []);
@@ -661,16 +657,14 @@ export function TestsView() {
     const files: string[] = [];
     const walk = (x: Node) => (x.kind === 'file' ? files.push(x.path) : (x.children ?? []).forEach(walk));
     walk(n);
-    try {
+    await attempt(async () => {
       // the files first, then the old folder: a failure in between leaves a copy, never a loss
       for (const p of files) await call('tests.write', { path: `${to}${p.slice(n.path.length)}`, content: await call<string>('tests.read', { path: p }) });
       await call('tests.delete', { path: n.path });
       for (const p of files) renameOpen(p, `${to}${p.slice(n.path.length)}`);
       setOpen((o) => ({ ...o, [to]: o[n.path] ?? true }));
       await loadTree();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   /** A folder's menu: new test file here, expand or collapse it, run it, run it in CI, rename it, delete it (Undo). */
   const folderMenu = (n: Node): NodeMenuCtx => ({

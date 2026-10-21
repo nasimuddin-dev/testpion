@@ -15,14 +15,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
-import { toastError, useApp } from '../store';
+import { toastError, useApp, attempt } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
-import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip, NamedOptions } from '../components/ui';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
 import { VarInput } from '../components/VarInput';
@@ -209,11 +209,9 @@ export function MonitorsView() {
     setSel(saved.id);
   };
   const toggle = async (m: MonitorRow) => {
-    try {
+    await attempt(async () => {
       await call('monitor.save', { monitor: { ...m, enabled: !m.enabled } });
-    } catch (e) {
-      toastError(e);
-    }
+    });
     await load();
   };
   /** At once, with Undo in the message (the same as the list's Delete). */
@@ -229,12 +227,10 @@ export function MonitorsView() {
   const update = async (id: string, change: Partial<MonitorDraft>) => {
     const m = rows.find((x) => x.id === id);
     if (!m) return;
-    try {
+    await attempt(async () => {
       await call('monitor.save', { monitor: { ...m, ...change } });
       await load();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const monitorOps: FolderListOps = {
     renameItem: (id, name) => update(id, { name }),
@@ -720,22 +716,14 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
           {target === 'collection' ? (
             <Field label="Collection">
               <Select value={d.collectionId} onChange={(e) => setD({ ...d, collectionId: e.target.value, selection: undefined })}>
-                {collections.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                <NamedOptions items={collections} />
               </Select>
             </Field>
           ) : target === 'evaluation' ? (
             <Field label="RAG evaluation">
               <Select value={d.evaluation ?? ''} onChange={(e) => setD({ ...d, evaluation: e.target.value || undefined })} aria-label="RAG evaluation">
                 <option value="">Pick a saved RAG evaluation…</option>
-                {ragEvaluations.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
+                <NamedOptions items={ragEvaluations} />
               </Select>
             </Field>
           ) : (

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { call } from '../../api';
-import { toastError, useApp } from '../../store';
+import { useApp, attempt } from '../../store';
 import { pickTextFile } from '../../lib/files';
 import { Button, Callout, Field, Modal, Select } from '../ui';
 
@@ -35,7 +35,7 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
     }
   };
   const run = async () => {
-    try {
+    await attempt(async () => {
       const r =
         format === 'beir'
           ? await call<{ count: number; notes: string[]; text: string }>('rag.importBeir', { queries: files.file!.text, qrels: files.qrels!.text, corpus: files.corpus?.text })
@@ -45,9 +45,7 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
       onImport(r.text);
       useApp.getState().toast(`Imported ${r.count} records${r.notes.length ? `. ${r.notes[0]}` : ''}`, r.notes.length ? 'info' : 'success');
       if (!r.notes.length) onClose();
-    } catch (e) {
-      toastError(e);
-    }
+    });
   };
   const ready = !!files.file && (format !== 'beir' || !!files.qrels) && imported === undefined;
   return (

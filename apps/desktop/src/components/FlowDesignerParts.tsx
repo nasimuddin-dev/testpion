@@ -23,7 +23,7 @@ import { asMap, asRows, asText, BlockFields, RunControlFields, useCommitted } fr
 import { ControlBlockFields, GroupFields, UntilFields } from './FlowControlFields';
 import { KeyValueEditor } from './KeyValueEditor';
 import { VarInput } from './VarInput';
-import { Badge, Button, cx, Field, Input, LinkButton, Modal, SectionTitle, Select, statusTone, Textarea } from './ui';
+import { Badge, Button, cx, Field, Input, LinkButton, Modal, SectionTitle, Select, statusTone, Textarea, NamedOptions } from './ui';
 
 /* ------------------------------------------------------------------ the hover card */
 
@@ -419,11 +419,7 @@ export function CollectionPicker({ onPick, onClose }: { onPick(collection: strin
       ) : (
         <div className="grid gap-3 text-sm" data-collection-picker>
           <Select aria-label="Collection" value={col?.id} onChange={(e) => setId(e.target.value)}>
-            {cols.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            <NamedOptions items={cols} />
           </Select>
           <p className="text-xs text-muted">A request becomes one step; a folder adds its requests in order, each waiting for the one before it, with ids and tokens from saved examples extracted.</p>
           <div className="max-h-[50vh] overflow-auto">{col && rows(col.items, 0)}</div>

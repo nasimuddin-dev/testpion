@@ -10,6 +10,39 @@ import type { FlowMark } from './FlowDiagram';
 import { TEST_KINDS } from './TreeParts';
 import { cx } from './ui';
 
+/**
+ * The two marks at a node's top right: × (a problem with the step: red for an error, amber for a warning) and ! (variables
+ * with no value). One component for the node at the two zoom levels: `big` is the far, simplified drawing.
+ */
+function StatusMarks({ w, problem, missingVars, big }: { w: number; problem?: string; missingVars?: string[]; big?: boolean }) {
+  const r = big ? 14 : 7;
+  const y = big ? 22 : 15;
+  const dy = big ? 7 : 3.5;
+  const glyph = big ? 'fill-bg text-[20px] font-bold' : 'fill-bg text-[10px] font-bold';
+  const edge = big ? 22 : 16;
+  const second = big ? 56 : 34;
+  return (
+    <>
+      {problem && (
+        <g transform={`translate(${w - (missingVars ? second : edge)} ${y})`} data-flow-problem-mark={problem}>
+          <circle r={r} className={problem === 'error' ? 'fill-bad' : 'fill-warn'} />
+          <text y={dy} textAnchor="middle" className={glyph}>
+            ×
+          </text>
+        </g>
+      )}
+      {missingVars && (
+        <g transform={`translate(${w - edge} ${y})`} data-flow-unresolved={missingVars.join(',')}>
+          <circle r={r} className="fill-warn" />
+          <text y={dy} textAnchor="middle" className={glyph}>
+            !
+          </text>
+        </g>
+      )}
+    </>
+  );
+}
+
 /** The + that shows beside an output port while the step is hovered: add a block after it. */
 function PortAdd({ x, y, onClick }: { x: number; y: number; onClick(at: { x: number; y: number }): void }) {
   return (
@@ -174,22 +207,7 @@ function FlowNodeViewImpl({
             </text>
           </g>
         )}
-        {problem && (
-          <g transform={`translate(${n.w - (missingVars ? 56 : 22)} 22)`} data-flow-problem-mark={problem}>
-            <circle r={14} className={problem === 'error' ? 'fill-bad' : 'fill-warn'} />
-            <text y={7} textAnchor="middle" className="fill-bg text-[20px] font-bold">
-              ×
-            </text>
-          </g>
-        )}
-        {missingVars && (
-          <g transform={`translate(${n.w - 22} 22)`} data-flow-unresolved={missingVars.join(',')}>
-            <circle r={14} className="fill-warn" />
-            <text y={7} textAnchor="middle" className="fill-bg text-[20px] font-bold">
-              !
-            </text>
-          </g>
-        )}
+        <StatusMarks w={n.w} problem={problem} missingVars={missingVars} big />
         {/* the ports stay usable: big enough to grab at this zoom */}
         {editable && (
           <>
@@ -284,22 +302,7 @@ function FlowNodeViewImpl({
           {loop}
         </text>
       )}
-      {problem && (
-        <g transform={`translate(${n.w - (missingVars ? 34 : 16)} 15)`} data-flow-problem-mark={problem}>
-          <circle r={7} className={problem === 'error' ? 'fill-bad' : 'fill-warn'} />
-          <text y={3.5} textAnchor="middle" className="fill-bg text-[10px] font-bold">
-            ×
-          </text>
-        </g>
-      )}
-      {missingVars && (
-        <g transform={`translate(${n.w - 16} 15)`} data-flow-unresolved={missingVars.join(',')}>
-          <circle r={7} className="fill-warn" />
-          <text y={3.5} textAnchor="middle" className="fill-bg text-[10px] font-bold">
-            !
-          </text>
-        </g>
-      )}
+      <StatusMarks w={n.w} problem={problem} missingVars={missingVars} />
       <text x={12} y={42} className="text-[11px] mono">
         <tspan className={kind[1]} fill="currentColor" fontWeight="bold">
           {kind[0]}

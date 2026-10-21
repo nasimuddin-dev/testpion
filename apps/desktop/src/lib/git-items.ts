@@ -1,6 +1,6 @@
 import { gitRefKey, type ItemRef } from '@testpion/shared';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, toastError, useApp, attempt } from '../store';
 import { gitSnapshot } from './git';
 import { icon, type Act, type ActionId, type NodeKind, type NodeMenuCtx } from './node-menu-actions';
 import type { MenuItem } from '../components/ui';
@@ -73,12 +73,10 @@ export async function discardGitItem(ref: ItemRef, name: string): Promise<void> 
 
 /** Stage (or unstage) the file an item is in; the message says when other changed items come along. */
 async function stageGitItem(ref: ItemRef, unstage = false): Promise<void> {
-  try {
+  await attempt(async () => {
     const r = await call<{ message: string; applied: boolean }>('git.itemStage', { ref, unstage });
     useApp.getState().toast(r.message, r.applied ? 'success' : 'info');
-  } catch (e) {
-    toastError(e);
-  }
+  });
 }
 
 /** The git submenu of a node with an ItemRef: History in git…, Stage changes, Discard changes… (the last two disabled while nothing changed). */

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { plural } from '../lib/format';
 import { Button, cx, Input, Segmented, Select } from './ui';
 import { ChartCard } from './charts';
-import { promptText, toastError, useApp } from '../store';
+import { promptText, useApp, attempt } from '../store';
 import { call } from '../api';
 import { copyText } from '../lib/clipboard';
 
@@ -115,12 +115,10 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
           onClick={async () => {
             const name = await promptText('Save as dataset', { message: 'File name in the datasets folder', value: path === '$' ? 'response' : path.split('.').pop()!, okLabel: 'Save' });
             if (!name) return;
-            try {
+            await attempt(async () => {
               const r = await call<{ name: string }>('datasets.saveCsv', { name, text: rowsToCsv(shown, columns) });
               useApp.getState().toast(`Saved ${plural(shown.length, 'row')} to datasets/${r.name}. Pick it in the Collection Runner.`, 'success', { ref: { kind: 'dataset', name: r.name } });
-            } catch (e) {
-              toastError(e);
-            }
+            });
           }}
         >
           Save as dataset
