@@ -9,10 +9,12 @@ const only = process.argv.length === 3 ? process.argv[2] : undefined;
 
 async function answerQuickly() {
   if (process.env.TESTPION_FULL_CLI || !['--version', '-V', '--help', '-h'].includes(only ?? '')) return false;
-  const file = new URL('../dist/fast-index.json', import.meta.url);
+  // (the npm package copies this file and points the one import below at its bundle: this is the only place that names the build's folder)
+  const dist = '../dist/';
+  const file = new URL(`${dist}fast-index.json`, import.meta.url);
   let index;
   try {
-    if (statSync(file).mtimeMs < statSync(new URL('../dist/index.js', import.meta.url)).mtimeMs) return false;
+    if (statSync(file).mtimeMs < statSync(new URL(`${dist}index.js`, import.meta.url)).mtimeMs) return false;
     index = JSON.parse(readFileSync(file, 'utf8'));
   } catch {
     return false;
