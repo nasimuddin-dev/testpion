@@ -154,7 +154,7 @@ const PII_PATTERNS: Array<{ kind: string; re: RegExp; valid?: (m: string) => boo
   {
     // a phone number with separators or a country code (9–15 digits); dates, times and plain ids do not match
     kind: 'phone',
-    re: /(?<![\w.:/-]|\d[ .-])(?:\+\d{1,3}[ .-]?)?(?:\(\d{2,4}\)[ .-]?|\d{2,4}[ .-])\d{3,4}[ .-]\d{3,4}(?![\w.:/-]|[ .-]\d)/g,
+    re: /(?<![\w.:/-]|\d[ .-])(?:\+\d{1,3}[ .-]?)?(?:\(\d{2,4}\)[ .-]?|\d{2,4}[ .-])\d{3,4}[ .-]\d{3,4}(?![\w:/-]|\.\w|[ .-]\d)/g,
     valid: (m) => {
       const n = m.replace(/\D/g, '').length;
       return n >= 9 && n <= 15 && !/^\d{4}-\d{2}-\d{2}/.test(m);

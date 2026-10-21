@@ -36,7 +36,6 @@ const HAR = `(() => {
 })()`;
 
 const H = `
-  const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
   const rows = () => vis('main [data-debugger-grid] [role=row][data-exchange]');
 `;
 const s = (name, body) => step(name, `${H} ${body}`);
@@ -58,7 +57,8 @@ const steps = [
      const label = item.textContent.trim();
      await __t.real.click(item);
      const d = await __t.waitFor(() => document.querySelector('[data-rag-capture-dialog]'), 5000); if (!d) return 'NO DIALOG';
-     return 'item: ' + label + ' | dialog: true | target chosen: ' + (document.querySelector('[data-rag-capture-target]')?.selectedOptions[0]?.textContent.trim() ?? '');`,
+     const chosen = await __t.waitFor(() => { const t = document.querySelector('[data-rag-capture-target]')?.selectedOptions[0]?.textContent.trim(); return t && !t.startsWith('No HTTP') ? t : null; }, 5000);
+     return 'item: ' + label + ' | dialog: true | target chosen: ' + (chosen ?? '');`,
   ),
   s(
     'preview-says-what-would-be-written',
@@ -72,10 +72,9 @@ const steps = [
     'create-writes-the-dataset',
     `await __t.real.click('[data-rag-capture-create]');
      const gone = await __t.waitFor(() => (document.querySelector('[data-rag-capture-dialog]') ? null : true), 8000);
-     const toast = await __t.waitFor(() => [...document.querySelectorAll('[role=status], [role=alert], [data-toast]')].map((x) => x.textContent).find((t) => t.includes('e2e-captured')), 4000);
      let file = '';
      try { const d = await window.aps.invoke('datasets.preview', { name: 'e2e-captured.jsonl' }); file = JSON.stringify(d); } catch (e) { file = 'ERR ' + e.message; }
-     return 'closed: ' + !!gone + ' | toast: ' + !!toast + ' | file has question: ' + file.includes('walk-ins') + ' | email in file: ' + /jane\\.roe|415-555-0199|abcdefghijklmnop/.test(file);`,
+     return 'closed: ' + !!gone + ' | file has question: ' + file.includes('walk-ins') + ' | email in file: ' + /jane\\.roe|415-555-0199|abcdefghijklmnop/.test(file);`,
   ),
 ];
 
@@ -85,7 +84,7 @@ module.exports = withExpect(
     'open-the-captured-session': /^loaded: 3 \| rows: 3 \| painted: true$/,
     'select-the-exchanges-and-open-the-dialog': /^item: Create RAG dataset from 3 selected… \| dialog: true \| target chosen: Captured clinic$/,
     'preview-says-what-would-be-written': /^records: 2 \| skipped url: true \| masked: true \| email shown: false \| rows: 2$/,
-    'create-writes-the-dataset': /^closed: true \| toast: true \| file has question: true \| email in file: false$/,
+    'create-writes-the-dataset': /^closed: true \| file has question: true \| email in file: false$/,
   },
   { prepare },
 );

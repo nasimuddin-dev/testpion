@@ -73,6 +73,10 @@ describe('building records', () => {
     expect(JSON.stringify(keep)).toContain('jane.doe@example.com');
     expect(JSON.stringify(keep)).not.toContain('hunter2-secret');
   });
+  it('masks a phone number that ends a sentence', () => {
+    const { records } = buildRecords({ calls: [call('1', 'Q', 'We are open. Call 415-555-0199.')], target, options: {} });
+    expect(records[0]!.answer).not.toContain('415-555-0199');
+  });
   it('keeps the newest of repeated questions (or the first), and counts them', () => {
     const calls = [call('1', 'Same question?', 'old'), call('2', 'same  question', 'new'), call('3', 'Other', 'o')];
     expect(buildRecords({ calls, target, options: { dedupe: true } }).records.map((r) => r.answer)).toEqual(['new', 'o']);
