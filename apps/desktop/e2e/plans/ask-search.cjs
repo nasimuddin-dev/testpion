@@ -129,6 +129,10 @@ const steps = [
      const label = short(row.textContent, 80);
      await __t.real.key('Enter');
      const d = await __t.waitFor(() => dlg(), 4000); if (!d) return 'NO DIALOG';
+     // asking spends tokens: the dialog opened with the question shows the estimate and waits for Ask
+     const est = await __t.waitFor(() => /tokens in/.test(document.querySelector('[data-ask-estimate]')?.textContent ?? '') || null, 8000); if (!est) return 'NO ESTIMATE ' + short(document.querySelector('[data-ask-estimate]')?.textContent, 100);
+     if (document.querySelector('[data-ask-explain]')) return 'ASKED BEFORE THE CLICK';
+     await __t.real.click(document.querySelector('[data-ask-submit]'));
      if (!(await waitHits(1))) return 'NO RESULTS ' + short(dlg()?.textContent, 300);
      return 'row: ' + label + ' | question: ' + askInput().value + ' | explain: ' + short(document.querySelector('[data-ask-explain]')?.textContent, 110) + ' | hit: ' + short(hits()[0], 50) + ' | scope note: ' + /Asking within/.test(d.textContent);`,
   ),
@@ -142,6 +146,7 @@ const steps = [
      const last = [...document.querySelectorAll('[role=dialog] [role=option]')].at(-1) === row;
      await __t.real.click(row);
      const d = await __t.waitFor(() => dlg(), 4000); if (!d) return 'NO DIALOG';
+     await __t.real.click(document.querySelector('[data-ask-submit]'));
      return 'last row: ' + last + ' | asks: ' + askInput().value;`,
   ),
   step(

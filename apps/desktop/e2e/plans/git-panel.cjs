@@ -163,7 +163,7 @@ const steps = [
       if (!item) return 'NO MENU ' + items;
       item.click();
       const list = await __t.waitFor(() => document.querySelector('[aria-label="Versions"]'), 6000);
-      const versions = list ? [...list.querySelectorAll('li')].map((l) => l.querySelector('div')?.textContent.trim()) : [];
+      const versions = list ? [...list.querySelectorAll('[data-version]')].map((l) => l.querySelector('div')?.textContent.trim()) : [];
       await __t.esc();
       return 'versions: ' + versions.join(' / ');
     })()`,
@@ -195,10 +195,51 @@ const steps = [
       if (!item) return 'NO MENU: ' + [...document.querySelectorAll('[role=menuitem]')].map((m) => m.textContent.trim()).join(' | ');
       item.click();
       const list = await __t.waitFor(() => document.querySelector('[aria-label="Versions"]'), 6000);
-      const n = list ? list.querySelectorAll('li').length : 0;
+      const n = list ? list.querySelectorAll('[data-version]').length : 0;
       const diff = await __t.waitFor(() => document.querySelector('[role=dialog] [data-history-diff] table'), 6000);
       await __t.esc();
       return 'versions: ' + (n >= 2) + ' | compared with now: ' + !!diff;
+    })()`,
+  ],
+  [
+    'the-repository-is-out-of-reach',
+    `main:
+      const { renameSync } = require('node:fs'); const { join } = require('node:path');
+      renameSync(join(home, 'ws', '.git'), join(home, 'ws', '.git-away'));
+      return 'moved';`,
+    false,
+  ],
+  [
+    'a-history-that-fails-says-so-and-offers-retry',
+    `(async () => {
+      await __t.requests(); await __t.sleep(500);
+      await __t.menu('HTTP basics (httpbin)');
+      const item = (await (async () => { const g = [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim().startsWith('Git')); if (!g) return undefined; g.click(); await __t.sleep(250); return [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'History in git…'); })());
+      if (!item) return 'NO MENU';
+      item.click();
+      const dlg = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => d.getClientRects().length && /History of/.test(d.textContent)), 6000); if (!dlg) return 'NO DIALOG';
+      const alert = await __t.waitFor(() => dlg.querySelector('[role=alert]'), 8000); if (!alert) return 'NO ERROR (spinner: ' + !!dlg.querySelector('[role=status]') + ', text: ' + dlg.textContent.slice(0, 120) + ')';
+      const retry = [...alert.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Retry');
+      return 'error shown: ' + /Could not read the versions/.test(alert.textContent) + ' | retry offered: ' + !!retry + ' | wrong empty state: ' + /No commits changed this yet/.test(dlg.textContent);
+    })()`,
+  ],
+  [
+    'the-repository-is-back',
+    `main:
+      const { renameSync } = require('node:fs'); const { join } = require('node:path');
+      renameSync(join(home, 'ws', '.git-away'), join(home, 'ws', '.git'));
+      return 'moved back';`,
+    false,
+  ],
+  [
+    'retry-shows-the-versions',
+    `(async () => {
+      const dlg = [...document.querySelectorAll('[role=dialog]')].find((d) => d.getClientRects().length && /History of/.test(d.textContent)); if (!dlg) return 'NO DIALOG';
+      const retry = [...dlg.querySelectorAll('[role=alert] button')].find((b) => b.textContent.trim() === 'Retry'); if (!retry) return 'NO RETRY';
+      await __t.real.click(retry);
+      const list = await __t.waitFor(() => dlg.querySelector('[aria-label="Versions"] [data-version]'), 8000);
+      await __t.esc();
+      return 'versions after retry: ' + !!list;
     })()`,
   ],
   [
@@ -276,6 +317,10 @@ module.exports = withExpect(
     'request-history': /^versions: Call \/anything \/ Start the API tests$/,
     'compare-a-change': /^request part: true$/,
     'collection-history': /^versions: true \| compared with now: true$/,
+    'the-repository-is-out-of-reach': /^moved$/,
+    'a-history-that-fails-says-so-and-offers-retry': /^error shown: true \| retry offered: true \| wrong empty state: false$/,
+    'the-repository-is-back': /^moved back$/,
+    'retry-shows-the-versions': /^versions after retry: true$/,
     'conflicting-changes': /^ready$/,
     'conflict-compared-and-resolved': /^differing parts: request.url \| url: get\?side=theirs$/,
     'branch-renamed': /^current: trunk$/,

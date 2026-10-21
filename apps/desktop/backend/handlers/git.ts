@@ -48,6 +48,7 @@ import {
   isWorkspaceDir,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { journalFiles, journalResolve } from './git-undoable.js';
 
 export function gitHandlers(be: Backend): Handlers {
   const ws = () => be.ws.root;
@@ -119,7 +120,12 @@ export function gitHandlers(be: Backend): Handlers {
     'git.show': ({ path, rev }: { path: string; rev?: string }) => gitShow(ws(), path, rev),
     'git.stage': async ({ paths }: { paths: string[] }) => changed(await gitStage(ws(), paths)),
     'git.unstage': async ({ paths }: { paths: string[] }) => changed(await gitUnstage(ws(), paths)),
-    'git.discard': ({ files }: { files: Array<Pick<GitFile, 'path' | 'state'>> }) => rewritten(() => gitDiscard(ws(), files)),
+    /** Throw away changes to files; the answer's `undoId` puts them back (git.undo), the new files that were deleted too. */
+    'git.discard': async ({ files }: { files: Array<Pick<GitFile, 'path' | 'state'>> }) => {
+      const undoId = journalFiles(ws(), 'discard', files.length === 1 ? `Discard changes to ${files[0]!.path}` : `Discard changes to ${files.length} files`, files.map((f) => f.path));
+      await rewritten(() => gitDiscard(ws(), files));
+      return { undoId };
+    },
     /** Secrets typed into the workspace that a commit would publish (GIT-104). */
     'git.check': () => findCommittableSecrets(be.ws),
     /**
@@ -229,8 +235,11 @@ export function gitHandlers(be: Backend): Handlers {
     /** What conflicts in one file, request by request and part by part (GIT-302's side-by-side view). */
     'git.conflictDetail': ({ path }: { path: string }) => gitConflictDetail(ws(), path),
     /** Settle a conflicted file: one side for every conflict, or a choice per conflict (`resolutions`, keys from git.conflictDetail). */
-    'git.resolve': ({ path, side, resolutions }: { path: string; side?: 'ours' | 'theirs'; resolutions?: Record<string, 'ours' | 'theirs'> }) =>
-      rewritten(() => gitResolve(ws(), path, side ?? 'ours', resolutions)),
+    'git.resolve': async ({ path, side, resolutions }: { path: string; side?: 'ours' | 'theirs'; resolutions?: Record<string, 'ours' | 'theirs'> }) => {
+      const undoId = await journalResolve(ws(), path);
+      await rewritten(() => gitResolve(ws(), path, side ?? 'ours', resolutions));
+      return { undoId };
+    },
     /** Give up a pull that stopped on conflicts. */
     'git.abortMerge': () => rewritten(() => gitAbortMerge(ws())),
     /**

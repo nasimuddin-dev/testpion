@@ -1,6 +1,6 @@
 import type { ShareResult } from '@testpion/core';
 import { call } from '../api';
-import { confirmAction, toastError, useApp } from '../store';
+import { confirmAction, promptText, toastError, useApp } from '../store';
 import { plural } from './format';
 import { toastWithUndo } from './git-items';
 
@@ -31,6 +31,24 @@ export async function shareDebuggerSession(name: string): Promise<boolean> {
   } catch (e) {
     toastError(e);
     return false;
+  }
+}
+
+/** The palette's Share a Debugger Session…: the saved session (the one, or the one named) is shared the same way as from the Debugger's menu. */
+export async function pickAndShareSession(): Promise<void> {
+  try {
+    const saved = (await call<Array<{ name: string; autosave: boolean }>>('debug.sessions')).filter((s) => !s.autosave);
+    if (!saved.length) return void useApp.getState().toast('No saved session to share yet: capture traffic in the Debugger and choose Save session… first.', 'info', { label: 'Open the Debugger', onClick: () => useApp.getState().setView('debugger') });
+    if (saved.length === 1) {
+      await shareDebuggerSession(saved[0]!.name);
+      return;
+    }
+    const name = await promptText('Share which session?', { message: `Saved sessions: ${saved.map((s) => s.name).join(', ')}`, value: saved[0]!.name, okLabel: 'Next' });
+    if (!name) return;
+    if (!saved.some((s) => s.name === name.trim())) return void useApp.getState().toast(`There is no saved session named ${name.trim()}`, 'warning');
+    await shareDebuggerSession(name.trim());
+  } catch (e) {
+    toastError(e);
   }
 }
 

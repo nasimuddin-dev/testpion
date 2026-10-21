@@ -52,12 +52,12 @@ export function ImportReportView({ report, markdown, onFixWithAi }: { report: Re
         {report.scripts && (report.scripts.converted > 0 || report.scripts.kept > 0 || report.scripts.todo > 0) && (
           <span className="text-xs text-muted">
             scripts: {report.scripts.converted} converted to tp.*{report.scripts.kept ? `, ${report.scripts.kept} kept as written` : ''}
-            {report.scripts.todo ? `, ${report.scripts.todo} marked TODO(import)` : ''}
+            {report.scripts.todo ? `, ${report.scripts.todo} marked for a rewrite` : ''}
           </span>
         )}
         <span className="ml-auto flex gap-1">
           {onFixWithAi && report.findings.some((f) => f.code === 'SCRIPT_API') && (
-            <Button size="sm" icon={<Sparkles size={12} />} title="Rewrite the scripts marked TODO(import) with TestPion's script API: a reviewed proposal, each script checked in the sandbox" onClick={onFixWithAi} data-import-fix-ai>
+            <Button size="sm" icon={<Sparkles size={12} />} title="Rewrite the scripts the import marked, with TestPion's script API: a reviewed proposal, each script checked in the sandbox" onClick={onFixWithAi} data-import-fix-ai>
               {LABEL.fixImportLeftovers}
             </Button>
           )}
@@ -99,7 +99,7 @@ export function ImportReportView({ report, markdown, onFixWithAi }: { report: Re
           </div>
         );
       })}
-      {report.truncated ? <p className="text-xs text-muted">{report.truncated} more findings are not listed (Download has the first 2000; `testpion import --json` lists all).</p> : null}
+      {report.truncated ? <p className="text-xs text-muted">{report.truncated} more findings are not listed (Download has the first 2000; the command testpion import --json in a terminal lists all).</p> : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-export { BUNDLE_FORMAT, BUNDLE_VERSION, BUNDLE_KIND_IDS, DATASET_EMBED_BYTES, TRANSFER_LIMITS, isBundleKind } from './format.js';
+export { BUNDLE_FORMAT, BUNDLE_VERSION, BUNDLE_KIND_IDS, DATASET_EMBED_BYTES, TRANSFER_LIMITS, decodeBase64, isBundleKind } from './format.js';
 export type { BundleItem, BundleKindId, BundleManifest, ParsedBundle, TransferLimits } from './format.js';
 export { ZIP_LIMITS, readZip, writeZip, writeZipAsync } from './zip.js';
 export { looksLikeBundle, readBundle, serialize as serializeBundle, serializeAsync as serializeBundleAsync } from './container.js';

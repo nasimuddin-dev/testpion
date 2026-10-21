@@ -16,19 +16,20 @@ export interface ZipLimits {
   entries: number;
   /** Largest entry once inflated, in bytes. */
   entryBytes: number;
-  /** All entries once inflated, in bytes. */
+  /** All entries once inflated, in bytes. The reader keeps every entry in memory at once, so this is what an import can ask of the computer. */
   totalBytes: number;
-  /** An entry above `ratioFrom` bytes that inflates to more than this many times its compressed size is refused (a zip bomb). */
+  /** An entry that inflates to more than this many times its compressed size is refused (a zip bomb); so is the archive as a whole. */
   ratio: number;
-  ratioFrom: number;
+  /** A compressed size below this counts as this much, so a few bytes of header never make a small file look like a bomb. */
+  ratioFloor: number;
 }
 
 export const ZIP_LIMITS: Readonly<ZipLimits> = {
   entries: 20_000,
   entryBytes: 512 * 1024 * 1024,
-  totalBytes: 2 * 1024 * 1024 * 1024,
+  totalBytes: 512 * 1024 * 1024,
   ratio: 100,
-  ratioFrom: 1024 * 1024,
+  ratioFloor: 1024,
 };
 
 export interface ZipEntry {
@@ -166,6 +167,7 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[]
   const out: ZipEntry[] = [];
   const seen = new Set<string>();
   let total = 0;
+  let packed = 0;
   let pos = cdOffset;
   for (let n = 0; n < count; n++) {
     if (pos + 46 > buf.length || buf.readUInt32LE(pos) !== 0x02014b50) bad('the zip directory is damaged');
@@ -200,8 +202,10 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[]
     if (seen.has(key)) bad(`"${name}" appears twice (names are compared without case, as Windows and macOS do)`);
     seen.add(key);
     if (usize > limits.entryBytes) bad(`"${name}" is ${usize} bytes inflated (at most ${limits.entryBytes})`);
-    if (usize > limits.ratioFrom && csize > 0 && usize / csize > limits.ratio) bad(`"${name}" inflates ${Math.round(usize / csize)} times its size (a zip bomb)`);
+    // every entry, whatever its size: 20,000 entries a little under a megabyte each are a bomb as much as one big one
+    if (usize / Math.max(csize, limits.ratioFloor) > limits.ratio) bad(`"${name}" inflates ${Math.round(usize / Math.max(csize, 1))} times its size (a zip bomb)`);
     total += usize;
+    packed += csize;
     if (total > limits.totalBytes) bad(`the files inflate to more than ${limits.totalBytes} bytes`);
 
     if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) bad(`"${name}" has a damaged header`);
@@ -218,5 +222,7 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS): ZipEntry[]
     if (crc32(data) !== crc) bad(`"${name}" is damaged (its checksum does not match)`);
     out.push({ name, data });
   }
+  // the archive as a whole, by what the directory declares (checked again here with the sizes that held)
+  if (total / Math.max(packed, limits.ratioFloor) > limits.ratio) bad(`the files inflate ${Math.round(total / Math.max(packed, 1))} times the archive's size (a zip bomb)`);
   return out;
 }

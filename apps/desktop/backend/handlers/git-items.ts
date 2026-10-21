@@ -18,6 +18,7 @@ import {
   type ItemTargetInput,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { restoreConflict, savedConflict } from './git-undoable.js';
 
 export function gitItemHandlers(be: Backend): Handlers {
   const ws = () => be.ws.root;
@@ -53,7 +54,12 @@ export function gitItemHandlers(be: Backend): Handlers {
     /** Stage or unstage the file an item is in (the result names the other changed items that come along). */
     'git.itemStage': async ({ unstage, dryRun, ...p }: ItemTargetInput & { unstage?: boolean; dryRun?: boolean }) => changed(await stageItem(ws(), target(p), { unstage, dryRun })),
     /** Undo the newest (or the given) restore / discard. */
-    'git.undo': ({ id }: { id?: string }) => rewritten(() => undoJournal(ws(), id)),
+    'git.undo': async ({ id }: { id?: string }) => {
+      const conflict = savedConflict(ws(), id);
+      const entry = await rewritten(() => undoJournal(ws(), id));
+      if (conflict) await restoreConflict(ws(), conflict);
+      return entry;
+    },
     'git.undoList': () => listJournal(ws()),
     /** The workspace's recent commits touching one file (the timeline of a whole-file item). */
     'git.fileLog': ({ file, limit }: { file: string; limit?: number }) => gitLog(ws(), { path: file, limit }),

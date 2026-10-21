@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AiTaskResult, DriftReport, DriftSource, Proposal, ProposalFinding, ProposalItem } from '@testpion/core';
 import { asError, call } from '../../api';
 import { aiSetupAction } from '../../lib/ai-errors';
-import { formatCost } from '../../lib/format';
+import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
 import { toastError, useApp, type AiAnalysisRequest, type AssistantRequest } from '../../store';
 import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, useDebounced } from '../ui';
 import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
@@ -44,7 +44,7 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
   const [hint, setHint] = useState('');
   const [report, setReport] = useState<Report>();
   const [reportError, setReportError] = useState<string>();
-  const [estimate, setEstimate] = useState<{ text: string; ok: boolean }>();
+  const [estimate, setEstimate] = useState<EstimateState>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<ReturnType<typeof asError>>();
   const [proposal, setProposal] = useState<Proposal>();
@@ -88,10 +88,7 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
     call<AiTaskResult>('ai.driftExplain', params({ dryRun: true })).then(
       ({ preview: p }) =>
         live &&
-        setEstimate({
-          ok: true,
-          text: `${p.providerName} · ${p.model}${p.local ? ' (on this computer)' : ''} · ≈ ${p.estimate.inputTokens.toLocaleString()} tokens in${p.estimate.priceKnown ? ` · up to ${formatCost(p.estimate.maxCostUsd ?? 0)}` : ''}`,
-        }),
+        setEstimate(estimateOf(p)),
       (e) => live && setEstimate({ ok: false, text: asError(e).message }),
     );
     return () => {
@@ -266,9 +263,7 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
           <span className="text-muted">Sent</span>
           <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
         </div>
-        <div className="text-xs text-muted min-h-5" data-ai-analysis-estimate>
-          {report?.findings.length ? estimate ? <span className={estimate.ok ? '' : 'text-warn'}>{estimate.text}</span> : <Spinner size={11} /> : null}
-        </div>
+        <AiEstimateLine estimate={report?.findings.length ? estimate : undefined} waiting={!!report?.findings.length} data-ai-analysis-estimate="" />
         <p className="text-xs text-muted">
           The comparison above is TestPion’s own: nothing is sent for it. The model sees the findings (kind, operation, place, what the document says, what was seen, how often) and the schemas involved — not the traffic; example values only at the Full
           level, masked. Every patch is made by TestPion from what was observed and checked against the same traffic: the drift must be gone and no other may appear. Nothing changes before you accept it.

@@ -9,6 +9,7 @@ import { basename } from 'node:path';
 import {
   ApsError,
   TRANSFER_LIMITS,
+  decodeBase64,
   applyImport,
   buildBundleAsync,
   describeBundle,
@@ -90,7 +91,7 @@ export function bundleHandlers(be: Backend): Handlers {
     'bundle.preview': async ({ pick, base64, path, fileName }: { pick?: boolean; base64?: string; path?: string; fileName?: string }) => {
       let bytes: Buffer;
       let name = fileName ?? 'bundle';
-      if (base64 !== undefined) bytes = Buffer.from(base64, 'base64');
+      if (base64 !== undefined) bytes = decodeBase64(base64, TRANSFER_LIMITS.fileBytes, 'That file');
       else {
         let file = path;
         if (pick) {

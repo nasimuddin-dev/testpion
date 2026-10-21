@@ -72,32 +72,32 @@ export function GitLargeFiles({ afterChange }: { afterChange(): void }) {
           <div className="font-medium flex items-center gap-2">
             <Database size={15} /> {plural(offer.length, 'big file')} {offer.length === 1 ? 'is' : 'are'} over the limit for plain git
           </div>
-          <div className="text-xs text-muted">Every clone downloads them, and GitHub rejects a file over 100 MB. Keep them out of the repository: with Git LFS, or by reference.</div>
+          <div className="text-xs text-muted">Every clone downloads them, and GitHub rejects a file over 100 MB. Keep them out of the repository: move them to large-file storage (Git LFS), or keep them out of git and share them by link.</div>
           <ul className="rounded-md border border-line bg-panel" aria-label="Big files">
             {offer.map((f) => (
-              <li key={f.file} className="flex items-center gap-2 px-2 py-1 text-xs border-b border-line last:border-b-0" data-large-file={f.file}>
+              <li key={f.file} className="flex flex-wrap items-center gap-2 px-2 py-1 text-xs border-b border-line last:border-b-0" data-large-file={f.file}>
                 <FileArchive size={13} className="text-muted shrink-0" />
                 <span className="font-mono truncate">{f.file}</span>
                 <span className="text-muted shrink-0">{mb(f.bytes)}</span>
                 {f.level === 'refuse' && <span className="text-bad shrink-0">a commit is refused</span>}
-                <span className="ml-auto flex gap-1 shrink-0">
+                <span className="ml-auto flex flex-wrap justify-end gap-1">
                   <Button
                     size="sm"
                     loading={busy === f.file + 'lfs'}
                     onClick={() => void track(f, 'lfs')}
-                    title="A pointer is committed; the data goes to the LFS server (git-lfs must be installed)"
+                    title="A small stand-in file is committed and the data goes to a large-file server (the git-lfs tool must be installed)"
                     data-large-lfs=""
                   >
-                    Git LFS…
+                    Move to large-file storage (Git LFS)…
                   </Button>
                   <Button
                     size="sm"
                     loading={busy === f.file + 'reference'}
                     onClick={() => void track(f, 'reference')}
-                    title="A small .ref file with the checksum is committed; the data file is git-ignored"
+                    title="A small file with the checksum and the link is committed; the data file itself stays out of git"
                     data-large-reference=""
                   >
-                    By reference…
+                    Keep out of git, share by link…
                   </Button>
                 </span>
               </li>

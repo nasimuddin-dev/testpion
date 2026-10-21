@@ -23,6 +23,7 @@ import {
   stashPush,
   stashShow,
   undoJournal,
+  isGitFolderName,
   workspaceFile,
 } from '../../packages/core/src/index.js';
 import { makeRepo, type TestRepo } from '../helpers-git';
@@ -123,6 +124,14 @@ describe('restore one item', () => {
     expect(() => workspaceFile(r.ws, '../x')).toThrow(/Not a path/);
     expect(() => workspaceFile(r.ws, 'C:/Windows/x')).toThrow(/Not a path/);
     expect(() => workspaceFile(r.ws, '.git/config')).toThrow(/\.git/);
+    // the git folder under every spelling a file system treats as the same folder, at any depth
+    for (const p of ['.GIT/hooks/pre-commit', '.Git/config', '.git./config', '.git /config', '.git.../hooks/x', 'GIT~1/hooks/pre-commit', 'git~2/config', '.git::$INDEX_ALLOCATION/config', 'sub/.git/hooks/pre-commit', 'sub/.GIT/config', '.​git/config'])
+      expect(() => workspaceFile(r.ws, p), p).toThrow(/\.git/);
+    expect(isGitFolderName('.gitignore')).toBe(false);
+    expect(isGitFolderName('.github')).toBe(false);
+    expect(isGitFolderName('digit~1')).toBe(false);
+    expect(() => workspaceFile(r.ws, '.gitattributes')).not.toThrow();
+    expect(() => workspaceFile(r.ws, '.github/CODEOWNERS')).not.toThrow();
     await expect(restoreItemVersion(r.ws, a('search'), '--output=x')).rejects.toThrow(/Not a valid git revision/);
   });
 });

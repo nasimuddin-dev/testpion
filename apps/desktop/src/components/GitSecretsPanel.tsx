@@ -74,12 +74,12 @@ export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findin
   return (
     <Callout tone="bad" block role="alert" data-staged-secrets="">
       <div className="flex items-center gap-2 font-medium">
-        <ShieldAlert size={15} className="text-bad" /> Not committed: {findings.length} secret{findings.length === 1 ? ' is' : 's are'} typed into the staged files
+        <ShieldAlert size={15} className="text-bad" /> Not committed: {findings.length} secret{findings.length === 1 ? ' is' : 's are'} typed into the files you chose for this commit
       </div>
       <div className="text-xs text-muted">
         {certain.length ? 'A value typed into a file would go to everyone who pulls. Replace each with the {{variable}} shown (its value stays on this computer as a secret variable), then commit again. This cannot be committed anyway.' : 'These look like secrets. Replace them with the {{variable}} shown, or confirm that they are not.'}
       </div>
-      <ul className="rounded-md border border-line bg-panel" aria-label="Secrets in the staged files">
+      <ul className="rounded-md border border-line bg-panel" aria-label="Secrets in the files chosen for this commit">
         {findings.map((f, i) => (
           <li key={f.file + f.item + f.field + i} className="flex items-center gap-2 px-2 py-1 text-xs border-b border-line last:border-b-0" data-secret-item={f.item}>
             <button className="font-medium truncate hover:underline text-left" title={f.message} onClick={() => f.ref && void openRef(f.ref)}>
@@ -105,11 +105,11 @@ export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findin
       </ul>
       <div className="flex flex-wrap gap-2">
         {canFix.length > 0 && (
-          <Button size="sm" variant="primary" icon={<KeyRound size={13} />} loading={busy} onClick={() => void fix()} title="Move the values to secret variables of the active environment and stage the fixed files" data-secrets-fix="">
-            Fix all {canFix.length === findings.length ? '' : `(${canFix.length})`}
+          <Button size="sm" variant="primary" icon={<KeyRound size={13} />} loading={busy} onClick={() => void fix()} title="Move the values to secret variables of the active environment and choose the fixed files for the commit" data-secrets-fix="">
+            {canFix.length === findings.length ? 'Fix all' : `Fix all that can be (${canFix.length} of ${findings.length})`}
           </Button>
         )}
-        <Button size="sm" icon={<X size={13} />} onClick={() => onChange(undefined)}>
+        <Button size="sm" icon={<X size={13} />} onClick={() => onChange(undefined)} title="Hide this list for now: the next commit checks again">
           Later
         </Button>
         {!certain.length && (

@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { FlakyReport, Proposal, ProposalAttempt, ProposalFinding, ProposalItem, TriageResult } from '@testpion/core';
 import { asError, call } from '../../api';
 import { aiSetupAction } from '../../lib/ai-errors';
-import { formatCost } from '../../lib/format';
 import { runAgain } from '../../lib/run-again';
 import { toastError, useApp, type AiAnalysisRequest, type AssistantRequest } from '../../store';
 import { Badge, Button, Field, Input, Modal, Segmented, Spinner } from '../ui';
+import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
 import { AiPreviewDialog, PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
 import { Findings } from './Findings';
 import { ProposalReview } from './ProposalReview';
@@ -45,7 +45,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<ReturnType<typeof asError>>();
   const [draft, setDraft] = useState<Report>();
-  const [estimate, setEstimate] = useState<{ text: string; ok: boolean }>();
+  const [estimate, setEstimate] = useState<EstimateState>();
   const [result, setResult] = useState<Report>();
   const [previewing, setPreviewing] = useState<AssistantRequest>();
   const [attempt, setAttempt] = useState<ProposalAttempt>();
@@ -68,10 +68,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
         setDraft(r);
         const p = r.preview;
         if (p)
-          setEstimate({
-            ok: true,
-            text: `${p.providerName} · ${p.model}${p.local ? ' (on this computer)' : ''} · ≈ ${p.estimate.inputTokens.toLocaleString()} tokens in${p.estimate.priceKnown ? ` · up to ${formatCost(p.estimate.maxCostUsd ?? 0)}` : ''}`,
-          });
+          setEstimate(estimateOf(p));
       },
       (e) => {
         if (!live) return;
@@ -298,9 +295,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
           <span className="text-muted">Sent</span>
           <Segmented label="Privacy level" value={privacy} onChange={(v) => setPrivacy(v as AiPrivacy)} options={PRIVACY_OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.title }))} />
         </div>
-        <div className="text-xs text-muted min-h-5" data-ai-analysis-estimate>
-          {estimate ? <span className={estimate.ok ? '' : 'text-warn'}>{estimate.text}</span> : <Spinner size={11} />}
-        </div>
+        <AiEstimateLine estimate={estimate} data-ai-analysis-estimate="" />
         <p className="text-xs text-muted">
           {triage
             ? 'TestPion groups the failures first; the model sees each group’s examples (the request, the response, the failed check, what changed since the last passing run), never all of them. Secrets, tokens and personal data are masked; Metadata only sends no body values and no failure messages. Every fix is checked against the failing and the last passing response before you see it; nothing changes before you accept it.'
