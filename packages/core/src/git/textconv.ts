@@ -1,6 +1,7 @@
 import { isRecord } from '@testpion/shared';
 import { readFileSync } from 'node:fs';
 import { stableValue } from '../storage/stable-files.js';
+import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { runGit } from './git.js';
 
 /**
@@ -50,15 +51,39 @@ function list(doc: Rec, key: string, what: string, label: string): string {
 }
 
 /**
- * The readable text of a TestPion JSON file, or undefined when the text is not one (a raw document, other JSON, a
- * broken file): the caller then prints the text as it is.
+ * A test or flow file (YAML): the file's own settings first, then each step under a heading of its own, as YAML, so a
+ * `git diff` of a flow names the step that changed. Steps are the list under `steps:` (a flow) or `tests:` (a test file);
+ * a YAML document without one (an API definition, a mock) is not read this way.
+ */
+function steps(doc: Rec, label: string): string | undefined {
+  const key = Array.isArray(doc.steps) ? 'steps' : Array.isArray(doc.tests) ? 'tests' : undefined;
+  if (!key) return undefined;
+  const list = (doc[key] as unknown[]).filter(isRecord);
+  if (!list.length || !list.every((s) => 'id' in s || 'name' in s || 'request' in s)) return undefined;
+  const title = String(doc.name ?? label);
+  const rest = Object.fromEntries(Object.entries(doc).filter(([k]) => k !== key));
+  const out: string[] = [head([title], undefined, key === 'steps' ? 'flow' : 'test file'), Object.keys(rest).length ? stringifyYaml(rest).trimEnd() : '(no settings)'];
+  for (const st of list) out.push(head([title, String(st.name ?? st.id ?? '?')], st.id, 'step'), stringifyYaml(st).trimEnd());
+  return out.join('\n') + '\n';
+}
+
+/**
+ * The readable text of a TestPion JSON file or a test / flow YAML file, or undefined when the text is not one (a raw
+ * document, other JSON or YAML, a broken file): the caller then prints the text as it is.
  */
 export function textconvText(text: string): string | undefined {
   let doc: unknown;
   try {
     doc = JSON.parse(text.replace(/^﻿/, ''));
   } catch {
-    return undefined;
+    // not JSON: a test or flow file is YAML (anything else YAML prints as it is)
+    if (!/^(?:tests|steps):\s*$/m.test(text)) return undefined;
+    try {
+      const y = parseYaml(text);
+      return isRecord(y) ? steps(y, 'Test file') : undefined;
+    } catch {
+      return undefined;
+    }
   }
   if (!isRecord(doc)) return undefined;
   if (Array.isArray(doc.servers)) return list(doc, 'servers', 'MCP server', 'MCP servers');

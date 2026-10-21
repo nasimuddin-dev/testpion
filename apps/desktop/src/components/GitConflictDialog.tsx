@@ -45,12 +45,21 @@ interface Hunk {
   ours: string;
   base: string;
   theirs: string;
+  /** The step of a test or flow file it is in. */
+  step?: string;
+}
+/** The hunks of one step of a test or flow file: settled in one choice, or hunk by hunk. */
+interface Step {
+  key: string;
+  step: string;
+  hunks: string[];
 }
 interface Detail {
   path: string;
   mode: 'items' | 'text' | 'binary';
   items: ConflictItem[];
   hunks: Hunk[];
+  steps?: Step[];
   sizes?: { ours?: number; theirs?: number };
 }
 type Choice = 'ours' | 'theirs' | 'edit';
@@ -85,11 +94,14 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
   useEffect(() => {
     void call<Detail>('git.conflictDetail', { path }).then((d) => {
       setDetail(d);
-      setChoices(Object.fromEntries([...d.items.map((i) => [i.key, 'ours' as Choice]), ...d.hunks.map((h) => [h.key, 'ours' as Choice])]));
+      const inSteps = new Set((d.steps ?? []).flatMap((s) => s.hunks));
+      setChoices(Object.fromEntries([...d.items.map((i) => [i.key, 'ours' as Choice]), ...(d.steps ?? []).map((s) => [s.key, 'ours' as Choice]), ...d.hunks.filter((h) => !inSteps.has(h.key)).map((h) => [h.key, 'ours' as Choice])]));
       setEdits(Object.fromEntries([...d.items.map((i) => [i.key, i.editable ?? '']), ...d.items.flatMap((i) => (i.fields ?? []).map((f) => [f.key, f.oursJson ?? ''])), ...d.hunks.map((h) => [h.key, h.ours])]));
     }, toastError);
   }, [path]);
-  const keys = useMemo(() => [...(detail?.items ?? []).map((i) => i.key), ...(detail?.hunks ?? []).map((h) => h.key)], [detail]);
+  // a test or flow file settles its clashes by step (a hunk of a step is settled with it); a hunk outside the steps stays a hunk
+  const inSteps = useMemo(() => new Set((detail?.steps ?? []).flatMap((s) => s.hunks)), [detail]);
+  const keys = useMemo(() => [...(detail?.items ?? []).map((i) => i.key), ...(detail?.steps ?? []).map((s) => s.key), ...(detail?.hunks ?? []).filter((h) => !inSteps.has(h.key)).map((h) => h.key)], [detail, inSteps]);
   const counts = useMemo(() => {
     const v = keys.map((k) => choices[k] ?? 'ours');
     return { ours: v.filter((x) => x === 'ours').length, theirs: v.filter((x) => x === 'theirs').length, edited: v.filter((x) => x === 'edit').length };
@@ -117,7 +129,13 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
           // a field settled differently from its item
           if (c !== 'edit') for (const f of i.fields ?? []) if (choices[f.key] && choices[f.key] !== c) put(f.key, choices[f.key]!);
         }
-        for (const h of detail?.hunks ?? []) put(h.key, choices[h.key] ?? 'ours');
+        for (const h of detail?.hunks ?? []) if (!inSteps.has(h.key)) put(h.key, choices[h.key] ?? 'ours');
+        for (const st of detail?.steps ?? []) {
+          const c = choices[st.key] ?? 'ours';
+          put(st.key, c);
+          // a hunk settled differently from its step
+          for (const hk of st.hunks) if (choices[hk] && choices[hk] !== c) put(hk, choices[hk]!);
+        }
       }
       const r = await call<{ undoId?: string }>('git.resolve', { path, side: detail?.mode === 'binary' ? whole : 'ours', ...(resolutions ? { resolutions } : {}) });
       toastWithUndo(`${path} resolved${counts.ours + counts.theirs + counts.edited ? `: ${counts.ours} kept as mine, ${counts.theirs} taken from theirs${counts.edited ? `, ${counts.edited} edited` : ''}` : ''}`, r.undoId);
@@ -242,7 +260,51 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
               </section>
             );
           })}
-          {detail.hunks.map((h) => {
+          {(detail.steps ?? []).map((st) => {
+            const choice = choices[st.key] ?? 'ours';
+            return (
+              <section key={st.key} className="rounded-lg border border-line" data-conflict={st.key}>
+                <header className="flex items-center gap-2 px-3 py-2 border-b border-line">
+                  <span className="font-medium text-sm truncate">Step {st.step}</span>
+                  <Badge tone="warn">changed on both sides</Badge>
+                  <span className="ml-auto">
+                    <Segmented label={`Which version of step ${st.step}`} value={choice === 'edit' ? 'ours' : choice} onChange={(v) => choose(st.key, v)} options={LABELS().filter((o) => o.value !== 'edit')} />
+                  </span>
+                </header>
+                <div className="grid gap-2 p-2" data-conflict-fields>
+                  <div className="text-xs text-muted">Only these lines clash; every other line of the step was merged.</div>
+                  {st.hunks.map((hk) => {
+                    const h = detail.hunks.find((x) => x.key === hk)!;
+                    const hc = choices[hk] ?? choice;
+                    return (
+                      <div key={hk} className="rounded-md border border-line" data-conflict-field={hk}>
+                        <div className="flex items-center gap-2 px-2 py-1 border-b border-line">
+                          <span className="font-mono text-xs truncate">{h.where}</span>
+                          <span className="ml-auto">
+                            <Segmented label={`Which version of ${h.where}`} value={hc} onChange={(v) => choose(hk, v)} options={LABELS()} />
+                          </span>
+                        </div>
+                        {hc === 'edit' ? (
+                          <EditBox label={`Edit ${h.where}`} value={edits[hk] ?? ''} onChange={(v) => setEdits({ ...edits, [hk]: v })} />
+                        ) : (
+                          <PartsTable
+                            rows={[{ part: 'Lines', differs: true, values: { base: h.base, ours: h.ours, theirs: h.theirs } }]}
+                            emptyText=""
+                            columns={[
+                              { key: 'base', label: 'Before (common)' },
+                              { key: 'ours', label: 'Mine', chosen: hc === 'ours', highlight: true },
+                              { key: 'theirs', label: 'Theirs', chosen: hc === 'theirs', highlight: true },
+                            ]}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+          {detail.hunks.filter((h) => !inSteps.has(h.key)).map((h) => {
             const choice = choices[h.key] ?? 'ours';
             return (
               <section key={h.key} className="rounded-lg border border-line" data-conflict={h.key}>

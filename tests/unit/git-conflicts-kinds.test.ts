@@ -196,6 +196,41 @@ describe('text: test files, API definitions, datasets', () => {
     await reset();
   });
 
+  it('a flow file: the hunks are grouped by step, one choice settles a step, a hunk of the file’s settings stays a hunk', async () => {
+    r.write('tests/flows/two.yaml', 'name: Two\nowner: base\nsteps:\n  - id: a\n    request:\n      url: "{{h}}/a"\n  - id: b\n    request:\n      url: "{{h}}/b"\n');
+    await r.commit('two steps');
+    const make = () =>
+      conflict(
+        'tests/flows/two.yaml',
+        (t) => t.replace('/a"', '/a-ours"').replace('/b"', '/b-ours"').replace('owner: base', 'owner: ours'),
+        (t) => t.replace('/a"', '/a-theirs"').replace('/b"', '/b-theirs"').replace('owner: base', 'owner: theirs'),
+      );
+    await make();
+    const d = await gitConflictDetail(r.ws, 'tests/flows/two.yaml');
+    expect(d.mode).toBe('text');
+    expect(d.hunks).toHaveLength(3);
+    expect(d.hunks.map((h) => h.step)).toEqual([undefined, 'a', 'b']);
+    expect(d.steps).toEqual([
+      { key: 'step:a', step: 'a', hunks: [d.hunks[1]!.key] },
+      { key: 'step:b', step: 'b', hunks: [d.hunks[2]!.key] },
+    ]);
+    // a step is settled in one choice; the settings hunk takes the side asked for
+    await gitResolve(r.ws, 'tests/flows/two.yaml', 'ours', { 'step:a': 'theirs' });
+    let text = r.read('tests/flows/two.yaml');
+    expect(text).toContain('/a-theirs"');
+    expect(text).toContain('/b-ours"');
+    expect(text).toContain('owner: ours');
+    expect(text).not.toContain('<<<<<<<');
+    await reset();
+    await make();
+    // a choice of the hunk itself wins over the choice of its step
+    await gitResolve(r.ws, 'tests/flows/two.yaml', 'ours', { 'step:b': 'theirs', [d.hunks[2]!.key]: 'ours', 'hunk:0': 'theirs' });
+    text = r.read('tests/flows/two.yaml');
+    expect(text).toContain('/b-ours"');
+    expect(text).toContain('owner: theirs');
+    await reset();
+  });
+
   it('an API definition and a dataset (CSV) are text too', async () => {
     await conflict(
       'specs/x.yaml',

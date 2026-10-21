@@ -341,6 +341,11 @@ export async function describeGitChanges(ws: string, files: GitFile[]): Promise<
         if (!isBatchable(w.wasSpec) || (w.idxSpec && !isBatchable(w.idxSpec))) w.slow = true;
         else specs.push(w.wasSpec, ...(w.idxSpec ? [w.idxSpec] : []));
       }
+    } else if (repo && f.staged && f.alsoUnstaged) {
+      // a new file staged and changed again (one of its items staged alone): the index copy tells which items are staged
+      w.idxSpec = `:${inRepo(f.path)}`;
+      if (!isBatchable(w.idxSpec)) w.slow = true;
+      else specs.push(w.idxSpec);
     }
     await tick();
   }
@@ -399,17 +404,21 @@ export async function describeGitChanges(ws: string, files: GitFile[]): Promise<
       const now: { text?: string; size?: number } = f.state === 'deleted' || !w.stat ? {} : isBinaryPath(f.path) || w.stat.size > READ_LIMIT ? { size: w.stat.size } : w.text === undefined ? {} : { text: w.text, size: w.stat.size };
       let was: { text?: string; size?: number } = {};
       let idxText: string | undefined;
+      // a new file staged and changed again has no earlier version: its index copy is what tells the staged items apart
+      const splitsNew = w.state === 'added' && !w.wasPath;
       if (w.slow) {
-        was = await readRev(ws, w.wasPath!);
-        if (f.staged && f.alsoUnstaged && was.text !== undefined && now.text !== undefined) idxText = await gitIndexText(ws, f.path);
-      } else if (w.wasSpec) {
-        const info = infos.get(w.wasSpec);
-        was = { text: info && wantedText(w.wasPath!, info) ? texts.get(info.oid) : undefined, size: mayBeBig(w.wasPath!) ? info?.size : undefined };
+        if (w.wasPath) was = await readRev(ws, w.wasPath);
+        if (f.staged && f.alsoUnstaged && (was.text !== undefined || splitsNew) && now.text !== undefined) idxText = await gitIndexText(ws, f.path);
+      } else if (w.wasSpec || splitsNew) {
+        if (w.wasSpec) {
+          const info = infos.get(w.wasSpec);
+          was = { text: info && wantedText(w.wasPath!, info) ? texts.get(info.oid) : undefined, size: mayBeBig(w.wasPath!) ? info?.size : undefined };
+        }
         const idx = w.idxSpec ? infos.get(w.idxSpec) : undefined;
         if (idx) idxText = texts.get(idx.oid);
       }
       const rows = describeFile(f.path, was.text, now.text, w.state, f.from, { before: was.size, after: now.size });
-      if (f.staged && f.alsoUnstaged && was.text !== undefined && now.text !== undefined) {
+      if (f.staged && f.alsoUnstaged && (was.text !== undefined || splitsNew) && now.text !== undefined) {
         // staged and changed again: the changes the index already has are the staged ones (an item staged alone)
         const ids = (cs: SemanticChange[]) => new Set(cs.map((c) => c.itemId ?? ''));
         const inIndex = idxText === undefined ? new Set<string>() : ids(describeFile(f.path, was.text, idxText, w.state, f.from));
@@ -520,12 +529,45 @@ export async function describeRevChanges(ws: string, from: string, to?: string):
     if (status.startsWith('R') || status.startsWith('C')) files.push({ status: 'R', from: rel(parts[++i]!), path: rel(parts[++i]!) });
     else files.push({ status: status[0]!, path: rel(parts[++i]!) });
   }
+  // However many files changed, git is asked twice: what each blob is (`cat-file --batch-check`), then the texts that are
+  // wanted (`cat-file --batch`) - the way describeGitChanges reads them. A path git's one-line input cannot say is read the slow way.
+  const base = realFolder(ws);
+  const inRepo = (p: string) => relative(repo, resolve(base, p)).split(sep).join('/');
+  const specOf = (rev: string, path: string) => `${rev}:${inRepo(path)}`;
+  const wasPathOf = (f: { path: string; from?: string }) => f.from ?? f.path;
+  const specs: string[] = [];
+  for (const f of files) {
+    if (f.status !== 'A') specs.push(specOf(from, wasPathOf(f)));
+    if (to && f.status !== 'D') specs.push(specOf(to, f.path));
+  }
+  const infos = await gitBlobInfos(ws, specs);
+  const wanted = (path: string, info: GitBlobInfo | undefined) => !!info && info.type === 'blob' && !isBinaryPath(path) && !(mayBeBig(path) && info.size > READ_LIMIT);
+  const oids: string[] = [];
+  const sizes = new Map<string, number>();
+  const want = (path: string, spec: string) => {
+    const info = infos.get(spec);
+    if (wanted(path, info)) (oids.push(info!.oid), sizes.set(info!.oid, info!.size));
+  };
+  for (const f of files) {
+    if (f.status !== 'A' && isBatchable(specOf(from, wasPathOf(f)))) want(wasPathOf(f), specOf(from, wasPathOf(f)));
+    if (to && f.status !== 'D' && isBatchable(specOf(to, f.path))) want(f.path, specOf(to, f.path));
+  }
+  const texts = oids.length ? await gitBlobTexts(ws, oids, sizes) : new Map<string, string>();
+  /** One side of a file in a commit, from the batch (or the slow way for a path the batch cannot say). */
+  const side = async (rev: string, path: string): Promise<{ text?: string; size?: number }> => {
+    const spec = specOf(rev, path);
+    if (!isBatchable(spec)) return readRev(ws, path, rev);
+    const info = infos.get(spec);
+    return { text: info && wanted(path, info) ? texts.get(info.oid) : undefined, size: mayBeBig(path) ? info?.size : undefined };
+  };
+  const tick = yielder();
   const result: SemanticChange[] = [];
   for (const f of files) {
-    const was = f.status === 'A' ? {} : await readRev(ws, f.from ?? f.path, from);
-    const now = f.status === 'D' ? {} : to ? await readRev(ws, f.path, to) : readWorking(ws, f.path);
+    const was = f.status === 'A' ? {} : await side(from, wasPathOf(f));
+    const now = f.status === 'D' ? {} : to ? await side(to, f.path) : readWorking(ws, f.path);
     const state: FileState = f.status === 'A' ? 'added' : f.status === 'D' ? 'removed' : f.status === 'R' ? 'renamed' : 'changed';
     result.push(...describeFile(f.path, was.text, now.text, state, f.from, { before: was.size, after: now.size }));
+    await tick();
   }
   return withRefs(result);
 }

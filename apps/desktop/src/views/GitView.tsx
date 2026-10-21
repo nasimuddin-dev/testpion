@@ -19,6 +19,7 @@ import { GitFixDialog } from '../components/GitFixDialog';
 import { GitLargeFiles } from '../components/GitLargeFiles';
 import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
 import { toastWithUndo } from '../lib/git-items';
+import { gitSnapshot, refreshGit, useGitFull } from '../lib/git';
 
 export interface GitFile {
   path: string;
@@ -97,8 +98,8 @@ async function okToPull(): Promise<boolean> {
  * written message on request), branches, pull and push, and a link to open a pull request.
  */
 export function GitView() {
-  const [status, setStatus] = useState<GitStatusInfo>();
-  const [changes, setChanges] = useState<SemanticChange[]>([]);
+  // the status and the changes are the shared read (lib/git.ts) that the marks and the status bar use: this view asks git for the rest
+  const { status, changes } = useGitFull();
   const [itemDiff, setItemDiff] = useState<{ file: string; itemId?: string }>();
   const [message, setMessage] = useState('');
   const aiOn = useAiEnabled();
@@ -118,15 +119,13 @@ export function GitView() {
 
   const load = useCallback(async () => {
     try {
-      const { changes: ch, ...st } = await call<GitStatusInfo & { changes: SemanticChange[] }>('git.changes');
-      setStatus(st);
-      if (!st.repository) return;
+      await refreshGit();
+      if (!gitSnapshot().status?.repository) return;
       const [br, lg, pr] = await Promise.all([
         call<typeof branches>('git.branches'),
         call<typeof log>('git.log', { limit: 30 }),
         call<{ url?: string }>('git.pullRequestUrl').catch(() => ({ url: undefined })),
       ]);
-      setChanges(ch);
       // a commit an AI agent proposed: its message, for the user to review
       const proposal = await call<{ message: string } | null>('git.proposal').catch(() => null);
       if (proposal?.message) setMessage((m) => m || proposal.message);

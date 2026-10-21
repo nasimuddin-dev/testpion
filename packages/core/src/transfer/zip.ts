@@ -202,9 +202,29 @@ export function dataStart(buf: Buffer, rec: Pick<ZipRecord, 'local'>): number {
   return local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
 }
 
+/**
+ * What a caller may relax or word differently without a second reader: the import of a foreign archive (a Postman data
+ * export, a zipped Bruno folder) is this reader with a policy, not another parser. Every safety check stays on.
+ */
+export interface ZipPolicy {
+  /** Entries left out before any check (macOS resource forks, thumbnails), by name with `/` separators. */
+  ignore?: (name: string) => boolean;
+  /** A link or special file is skipped, not a reason to refuse the archive. */
+  skipLinks?: boolean;
+  /** A backslash in a name is a separator (some Windows tools write them) and a leading `./` is dropped; the result is checked as usual. */
+  lenientNames?: boolean;
+  /** How the bytes of a name are read: utf8 by default; `flags` are the entry's general-purpose flags (bit 11 says utf8). */
+  decodeName?: (bytes: Buffer, flags: number) => string;
+  /** The error for a refused archive (the import words it for its own dialog). */
+  fail?: (why: string) => Error;
+}
+
 /** Read every file of the archive, or throw with what is wrong (see the module comment for what is refused). */
-export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS, subject = 'TestPion bundle'): ZipEntry[] {
-  const bad = (why: string): never => badZip(why, subject);
+export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS, subject = 'TestPion bundle', policy: ZipPolicy = {}): ZipEntry[] {
+  const bad = (why: string): never => {
+    if (policy.fail) throw policy.fail(why);
+    return badZip(why, subject);
+  };
   if (!looksLikeZip(buf)) bad('it is not a zip archive');
   const eocd = findEndOfDirectory(buf);
   if (eocd < 0) bad('the zip directory is missing (a damaged or cut-off file)');
@@ -224,8 +244,10 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS, subject = '
     const rec = readRecord(buf, pos);
     if (!rec) return bad('the zip directory is damaged');
     const { madeBy, flags, method, crc, csize, usize, external } = rec;
-    const name = rec.nameBytes.toString('utf8');
+    let name = policy.decodeName ? policy.decodeName(rec.nameBytes, flags) : rec.nameBytes.toString('utf8');
     pos = rec.next;
+    if (policy.lenientNames) name = name.replace(/\\/g, '/').replace(/^\.\//, '');
+    if (policy.ignore?.(name)) continue;
 
     const isDir = name.endsWith('/');
     const why = badEntryName(isDir ? name.slice(0, -1) : name);
@@ -236,7 +258,10 @@ export function readZip(buf: Buffer, limits: ZipLimits = ZIP_LIMITS, subject = '
     // unix attributes (host 3): a symbolic link, device or pipe is never part of a bundle
     if (madeBy >> 8 === 3) {
       const mode = (external >>> 16) & 0o170000;
-      if (mode !== 0 && mode !== 0o100000) bad(`"${name}" is a link or a special file, not a plain file`);
+      if (mode !== 0 && mode !== 0o100000) {
+        if (policy.skipLinks) continue;
+        bad(`"${name}" is a link or a special file, not a plain file`);
+      }
     }
     const key = name.toLowerCase();
     if (seen.has(key)) bad(`"${name}" appears twice (names are compared without case, as Windows and macOS do)`);

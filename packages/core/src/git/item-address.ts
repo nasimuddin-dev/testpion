@@ -146,6 +146,111 @@ export function writeItem(a: ItemAddress, current: string | undefined, value: un
   return canonicalText(a.file, JSON.stringify(doc)) ?? stableText(doc);
 }
 
+/** The nodes from the top down to the one with `id`: the folders that hold it, then the node itself. */
+function chainTo(nodes: unknown, id: string): Rec[] | undefined {
+  if (!Array.isArray(nodes)) return undefined;
+  for (const n of nodes) {
+    if (!isRecord(n)) continue;
+    if (n.id === id) return [n];
+    const inner = chainTo(n.items, id);
+    if (inner) return [n, ...inner];
+  }
+  return undefined;
+}
+
+/** Take the node out of the tree and the given folders when they are left empty (the way back from {@link addNestedItem}). */
+function withoutNode(nodes: unknown[], id: string, shells: ReadonlySet<string>): unknown[] {
+  const out: unknown[] = [];
+  for (const n of nodes) {
+    if (isRecord(n) && n.id === id) continue;
+    if (isRecord(n) && Array.isArray(n.items)) {
+      const items = withoutNode(n.items, id, shells);
+      if (!items.length && shells.has(String(n.id))) continue;
+      out.push({ ...n, items });
+    } else out.push(n);
+  }
+  return out;
+}
+
+/**
+ * A nested item that the index copy does not have yet (a request that is new, in a folder that may be new too): it is
+ * put under the same folders as in `source`, the folders it needs being made from the source's own (without their other
+ * items). `base` is the index copy, or undefined for a file that is new: then the source's header (id, name, variables,
+ * auth …) with no items is the start. Exact or not at all: with the item and the folders made for it taken out again the
+ * text must be what it was, else undefined (the caller stages the whole file).
+ */
+export function addNestedItem(a: ItemAddress, base: string | undefined, source: string | undefined): string | undefined {
+  if (a.mode !== 'nested' || source === undefined) return undefined;
+  const sdoc = parseJson(source);
+  const chain = sdoc && chainTo(sdoc.items, a.itemId!);
+  if (!sdoc || !chain) return undefined;
+  const start = base === undefined ? { ...sdoc, items: [] } : parseJson(base);
+  if (!start) return undefined;
+  const original = JSON.parse(JSON.stringify(start)) as Rec;
+  const doc = JSON.parse(JSON.stringify(start)) as Rec;
+  const shells = new Set<string>();
+  let list = (Array.isArray(doc.items) ? doc.items : (doc.items = [])) as unknown[];
+  for (const step of chain.slice(0, -1)) {
+    let folder = list.find((n) => isRecord(n) && n.id === step.id) as Rec | undefined;
+    if (!folder) {
+      folder = { ...step, items: [] };
+      list.push(folder);
+      shells.add(String(step.id));
+    }
+    list = (Array.isArray(folder.items) ? folder.items : (folder.items = [])) as unknown[];
+  }
+  list.push(chain[chain.length - 1]);
+  const text = canonicalText(a.file, JSON.stringify(doc)) ?? stableText(doc);
+  const check = parseJson(text);
+  if (!check) return undefined;
+  const back = { ...check, items: withoutNode(Array.isArray(check.items) ? check.items : [], a.itemId!, shells) };
+  const expected = canonicalText(a.file, JSON.stringify(original)) ?? stableText(original);
+  const roundTrip = canonicalText(a.file, JSON.stringify(back)) ?? stableText(back);
+  return sameText(roundTrip, expected) ? text : undefined;
+}
+
+const idsOf = (nodes: unknown, into: Set<string> = new Set()): Set<string> => {
+  if (Array.isArray(nodes)) for (const n of nodes) if (isRecord(n)) (into.add(String(n.id)), idsOf(n.items, into));
+  return into;
+};
+
+/**
+ * A nested item taken out of the index copy, with the folders it leaves empty when the last commit did not have them
+ * (the way back from staging a request that is new, in a folder that is new): the folder goes too. Exact or not at all:
+ * putting the item back must give `base` again, else undefined.
+ */
+export function removeNestedItem(a: ItemAddress, base: string, head: string | undefined): string | undefined {
+  if (a.mode !== 'nested') return undefined;
+  const doc = parseJson(base);
+  if (!doc) return undefined;
+  const committed = idsOf(parseJson(head)?.items);
+  const prune = (list: unknown[]): unknown[] => {
+    const out: unknown[] = [];
+    for (const n of list) {
+      if (isRecord(n) && n.id === a.itemId) continue;
+      if (isRecord(n) && Array.isArray(n.items)) {
+        const items = prune(n.items);
+        // a folder emptied by this removal that was never committed goes with it
+        if (!items.length && n.items.length && !committed.has(String(n.id))) continue;
+        out.push({ ...n, items });
+      } else out.push(n);
+    }
+    return out;
+  };
+  doc.items = prune(Array.isArray(doc.items) ? doc.items : []);
+  const text = canonicalText(a.file, JSON.stringify(doc)) ?? stableText(doc);
+  const back = addNestedItem(a, text, base);
+  return back !== undefined && sameText(back, base) ? text : undefined;
+}
+
+/** Whether a file's text holds no items any more (a list or a tree that was emptied). */
+export function holdsNoItems(a: ItemAddress, text: string): boolean {
+  const doc = parseJson(text);
+  if (!doc) return false;
+  const list = a.mode === 'nested' ? doc.items : doc[a.listKey!];
+  return Array.isArray(list) && list.length === 0;
+}
+
 function emptyDoc(a: ItemAddress): Rec {
   if (a.mode === 'nested') return { items: [] };
   return a.listKey === 'items' ? { schemaVersion: '1.0', folders: [], items: [] } : { schemaVersion: '1.0', [a.listKey!]: [] };

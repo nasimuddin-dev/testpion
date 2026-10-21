@@ -3,7 +3,7 @@ import { ApsError } from '../errors.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { canonicalText, stableValue } from '../storage/stable-files.js';
 import { assertGitRev, gitLog, gitShow, gitStage, gitStatus, gitUnstage, gitVersion, repoRoot, runGit, toRepoPath, type GitCommit } from './git.js';
-import { addressOf, matchEol, readItem, sameText, workspaceFile, writeItem, type ItemAddress } from './item-address.js';
+import { addNestedItem, addressOf, holdsNoItems, matchEol, readItem, removeNestedItem, sameText, workspaceFile, writeItem, type ItemAddress } from './item-address.js';
 import { isBinaryPath } from './item-changes.js';
 import { beginJournal } from './journal.js';
 import { describeFile, describeGitChanges, diffTexts, type PartChange } from './semantic.js';
@@ -355,21 +355,41 @@ export async function stageItem(ws: string, a: ItemAddress, o: { unstage?: boole
 async function stageItemBlob(ws: string, a: ItemAddress, title: string, others: string[], o: { unstage?: boolean; dryRun?: boolean }): Promise<ItemStageResult | undefined> {
   const [head, idx, work] = [await textAt(ws, a.file, 'HEAD'), await indexText(ws, a.file), workingText(ws, a.file)];
   const base = idx ?? head;
-  // a new or deleted file is one change; a staged version that is not stable would stage the formatting of every other item too
-  if (base === undefined || work === undefined || head === undefined) return undefined;
-  if (canonicalText(a.file, base) !== base.replace(/\r\n?/g, '\n')) return undefined;
-  const value = o.unstage ? readItem(a, head) : readItem(a, work);
-  const before = readItem(a, base);
-  // a nested item that is new has no place in the index copy yet (its folder may be new too): the file goes whole
-  if (a.mode === 'nested' && before === undefined && value !== undefined) return undefined;
-  const next = writeItem(a, base, value);
-  if (next === undefined) return undefined;
-  // exact or not at all: putting the item back must give the index copy as it was
-  const back = writeItem(a, next, before);
-  if (back === undefined || !sameText(back, writeItem(a, base, before))) return undefined;
   const verb = o.unstage ? 'unstage' : 'stage';
-  if (sameText(next, base)) return { file: a.file, itemId: a.itemId, title, applied: false, alsoStages: [], partial: true, leftUnstaged: others, message: `${title} is already ${o.unstage ? 'unstaged' : 'staged'}` };
-  if (!o.dryRun) await setIndexText(ws, a.file, next);
+  // a staged version that is not stable would stage the formatting of every other item too: the file goes whole
+  if (base !== undefined && canonicalText(a.file, base) !== base.replace(/\r\n?/g, '\n')) return undefined;
+  let next: string | undefined;
+  let emptied = false;
+  if (base === undefined) {
+    // a new file with nothing in the index yet: the item goes in alone, under the file's own header (id, name, variables …)
+    if (o.unstage || work === undefined) return undefined;
+    const value = readItem(a, work);
+    if (value === undefined) return undefined;
+    next = a.mode === 'nested' ? addNestedItem(a, undefined, work) : writeItem(a, undefined, value);
+  } else {
+    // a deleted file: the item's deletion is staged alone (the index copy keeps the file's other items)
+    const source = o.unstage ? head : work;
+    const value = readItem(a, source);
+    const before = readItem(a, base);
+    if (a.mode === 'nested' && before === undefined && value !== undefined) {
+      // a nested item that is new, or one deleted and put back: placed under its folders in the index copy (the folders it needs are made)
+      next = addNestedItem(a, base, source);
+    } else if (a.mode === 'nested' && before !== undefined && value === undefined) {
+      // a nested item taken out of the index copy (unstaging what is new, staging a deletion): the folders it leaves empty go too when they are new
+      next = removeNestedItem(a, base, head);
+    } else {
+      next = writeItem(a, base, value);
+      if (next === undefined) return undefined;
+      // exact or not at all: putting the item back must give the index copy as it was
+      const back = writeItem(a, next, before);
+      if (back === undefined || !sameText(back, writeItem(a, base, before))) return undefined;
+    }
+    // the last item of a file that is not committed yet leaves the index with the file
+    emptied = o.unstage === true && head === undefined && next !== undefined && holdsNoItems(a, next);
+  }
+  if (next === undefined) return undefined;
+  if (base !== undefined && sameText(next, base)) return { file: a.file, itemId: a.itemId, title, applied: false, alsoStages: [], partial: true, leftUnstaged: others, message: `${title} is already ${o.unstage ? 'unstaged' : 'staged'}` };
+  if (!o.dryRun) await (emptied ? gitUnstage(ws, [a.file]) : setIndexText(ws, a.file, next));
   const left = others.length ? `; the file's ${others.length} other changed item${others.length === 1 ? '' : 's'} stay${others.length === 1 ? 's' : ''} ${o.unstage ? 'as they are' : 'unstaged'}` : '';
   return {
     file: a.file,

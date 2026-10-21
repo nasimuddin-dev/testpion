@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { canonicalText, normalizeText } from '../storage/stable-files.js';
 import { atomicWrite, readJson } from '../storage/fsutil.js';
@@ -100,6 +101,25 @@ function candidates(root: string): string[] {
   list('tests', (f) => /\.ya?ml$/i.test(f), true);
   for (const f of ['workspace.json', 'mcp-servers.json', 'providers.json', 'debugger/rules.json']) if (existsSync(join(root, f))) out.push(f);
   return out;
+}
+
+/**
+ * The files git tracks that the ignore rules say to leave out. `plannedIgnore` is the `.gitignore` the fix is about to write:
+ * its lines count too, so the list a preview shows is the list the fix removes (the new lines can match more files).
+ */
+async function trackedButIgnored(root: string, plannedIgnore?: string): Promise<string[]> {
+  let dir: string | undefined;
+  try {
+    const args = ['ls-files', '-ci', '--exclude-standard', '-z'];
+    if (plannedIgnore) {
+      dir = mkdtempSync(join(tmpdir(), 'tp-ignore-'));
+      writeFileSync(join(dir, 'ignore'), plannedIgnore);
+      args.push(`--exclude-from=${join(dir, 'ignore')}`);
+    }
+    return (await runGit(root, [...args, '--', '.']).catch(() => '')).split('\0').filter(Boolean);
+  } finally {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 async function configured(ws: string, key: string): Promise<string | undefined> {
@@ -259,7 +279,8 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
   }
   let tracked: string[] = [];
   if (inRepository) {
-    tracked = (await runGit(root, ['ls-files', '-ci', '--exclude-standard', '-z', '--', '.']).catch(() => '')).split('\0').filter(Boolean);
+    // computed with the .gitignore this fix writes, so the preview and the fix agree
+    tracked = await trackedButIgnored(root, writes.get('.gitignore'));
     if (tracked.length)
       steps.push({
         id: 'untrack',
@@ -323,6 +344,8 @@ export async function fixGitSetup(store: WorkspaceStore, o: GitFixOptions = {}):
   if (writes.has('workspace.json')) store.reloadWorkspaceFile();
   for (const d of pending) await d.set();
   if (installHook) installPreCommitHook(root, typeof o.hook === 'object' ? o.hook.cli : undefined);
+  // asked again now that the rules are written: what the new lines match is in the list
+  if (o.untrack) tracked = await trackedButIgnored(root);
   if (o.untrack && tracked.length)
     for (let i = 0; i < tracked.length; i += MAX_UNTRACK_LIST) await runGit(root, ['rm', '--cached', '-r', '--quiet', '--ignore-unmatch', '--', ...tracked.slice(i, i + MAX_UNTRACK_LIST)]);
   const did = steps.filter((s) => s.state === 'todo').map((s) => s.title);

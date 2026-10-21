@@ -36,6 +36,9 @@ export const GITATTRIBUTES_LINES = [
   'library/*.json merge=testpion diff=testpion',
   'mcp-servers.json merge=testpion diff=testpion',
   'providers.json merge=testpion diff=testpion',
+  // test and flow files are YAML: the diff driver prints them step by step (the merge stays git's own line merge)
+  'tests/**/*.yaml diff=testpion',
+  'tests/**/*.yml diff=testpion',
 ];
 
 export interface GitReadyResult {

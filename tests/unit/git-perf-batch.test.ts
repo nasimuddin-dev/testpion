@@ -65,7 +65,10 @@ describe('git changes: processes per refresh and event-loop blocks', () => {
     const t0 = performance.now();
     const before = gitSpawns.count;
     const reference = await describeRevChanges(ws, 'HEAD');
-    console.log(`the file-by-file reading of the same 300 files: ${gitSpawns.count - before} git processes, ${(performance.now() - t0).toFixed(0)} ms`);
+    const spawned = gitSpawns.count - before;
+    console.log(`a diff against HEAD of the same 300 files: ${spawned} git processes, ${(performance.now() - t0).toFixed(0)} ms`);
+    // B-26b: the diff between two commits is batched like the working-folder one (the list of changes, the repository root, the blob sizes, the blobs)
+    expect(spawned).toBeLessThanOrEqual(6);
     const key = (cs: typeof now) => cs.map((c) => JSON.stringify({ file: c.file, kind: c.kind, kindId: c.kindId, change: c.change, title: c.title, details: c.details, ref: c.ref, containers: c.containers, itemId: c.itemId })).sort();
     expect(key(now)).toEqual(key(reference));
   });

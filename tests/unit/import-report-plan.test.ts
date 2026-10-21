@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, readdirSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
+import { crc32, deflateRawSync } from 'node:zlib';
 import {
   WorkspaceStore,
   importDocument,
@@ -262,6 +262,7 @@ function makeZip(entries: Array<{ name: string; data: Buffer | string; store?: b
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
     local.writeUInt16LE(e.store ? 0 : 8, 8);
+    local.writeUInt32LE(crc32(raw), 14);
     local.writeUInt32LE(data.length, 18);
     local.writeUInt32LE(raw.length, 22);
     local.writeUInt16LE(name.length, 26);
@@ -271,6 +272,7 @@ function makeZip(entries: Array<{ name: string; data: Buffer | string; store?: b
     cd.writeUInt16LE(20, 4);
     cd.writeUInt16LE(20, 6);
     cd.writeUInt16LE(e.store ? 0 : 8, 10);
+    cd.writeUInt32LE(crc32(raw), 16);
     cd.writeUInt32LE(data.length, 20);
     cd.writeUInt32LE(e.claimSize ?? raw.length, 24);
     cd.writeUInt16LE(name.length, 28);
@@ -299,9 +301,9 @@ describe('archives and folders', () => {
   it('refuses hostile archives: traversal, absolute and drive paths, NUL, bombs, too many entries, not a zip', () => {
     for (const name of ['../evil.txt', 'a/../../evil.txt', '/etc/passwd', 'C:/Windows/x', 'a\\..\\b', 'nul\0.txt']) expect(() => readZip(makeZip([{ name, data: 'x' }])), name).toThrow(/cannot be imported/);
     expect(() => readZip(makeZip([{ name: 'bomb.txt', data: Buffer.alloc(5_000_000) }]))).toThrow(/zip bomb/);
-    expect(() => readZip(makeZip([{ name: 'lie.txt', data: Buffer.alloc(100_000, 'a'), claimSize: 10 }]))).toThrow(/damaged or larger/);
-    expect(() => readZip(makeZip([{ name: 'a', data: '1' }, { name: 'b', data: '2' }]), { maxEntries: 1 })).toThrow(/entries/);
-    expect(() => readZip(Buffer.from('this is not a zip file at all, only text'))).toThrow(/not a ZIP/);
+    expect(() => readZip(makeZip([{ name: 'lie.txt', data: Buffer.alloc(100_000, 'a'), claimSize: 10 }]))).toThrow(/declared size/);
+    expect(() => readZip(makeZip([{ name: 'a', data: '1' }, { name: 'b', data: '2' }]), { maxEntries: 1 })).toThrow(/2 files/);
+    expect(() => readZip(Buffer.from('this is not a zip file at all, only text'))).toThrow(/not a zip/i);
     // a skipped macOS resource fork is not an error
     expect(readZip(makeZip([{ name: '__MACOSX/._a', data: 'x' }, { name: 'a', data: 'y' }])).map((e) => e.path)).toEqual(['a']);
   });

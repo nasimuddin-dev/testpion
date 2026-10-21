@@ -142,6 +142,13 @@ function useGitValue<T>(select: (s: GitState) => T, equal: (a: T, b: T) => boole
   });
 }
 
+/** The status and what changed, item by item: what the Git view lists (the same read the marks and the status bar use: the view asks git for nothing itself). */
+export const useGitFull = (): { status?: GitStatusInfo; changes: SemanticChange[] } =>
+  useGitValue(
+    (s) => ({ status: s.status, changes: s.changes }),
+    (a, b) => a.status === b.status && a.changes === b.changes,
+  );
+
 /** Whether the workspace is a git repository (the explorer's History entries, the environments' history). */
 export const useGitRepo = (): boolean => useGitValue((s) => !!s.status?.repository);
 

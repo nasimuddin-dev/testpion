@@ -32,6 +32,16 @@ export interface ConflictHunk {
   ours: string;
   base: string;
   theirs: string;
+  /** The id of the step of a test or flow file this hunk is in (settle all of a step's hunks with `step:<id>`). */
+  step?: string;
+}
+
+/** The hunks of one step of a test or flow file: one choice for the step (`key`: `step:<id>`) settles them all. */
+export interface ConflictStep {
+  key: string;
+  step: string;
+  /** The keys of its hunks. */
+  hunks: string[];
 }
 
 export interface ConflictField {
@@ -55,6 +65,8 @@ export interface ConflictDetail {
   kind?: KindId;
   items: Array<Omit<MergeConflict, 'base' | 'ours' | 'theirs' | 'fields'> & { parts: Part[]; fields?: ConflictField[]; /** The item as JSON, to start an edit from (ours). */ editable?: string }>;
   hunks: ConflictHunk[];
+  /** A test or flow file: the hunks grouped by the step they are in, so a conflict is settled by step; a hunk outside any step stays a hunk. */
+  steps?: ConflictStep[];
   /** For `binary`: the size of each side in bytes. */
   sizes?: { ours?: number; theirs?: number };
 }
@@ -126,19 +138,54 @@ function whereIn(oursText: string, line: number): string {
   return `line ${line}`;
 }
 
-function textHunks(base: string, ours: string, theirs: string): ConflictHunk[] {
-  return mergeSegments(base, ours, theirs)
-    .filter((s): s is Extract<Segment, { line: number }> => 'line' in s)
-    .map((s, n) => ({ key: `hunk:${n}`, where: whereIn(ours, s.line), ours: s.ours, base: s.base, theirs: s.theirs }));
+/**
+ * The step of a test or flow file a line is in: the nearest `id:` above it that starts a list item (`- id: create-order`) or
+ * sits at a step's own indentation. Undefined for a line outside the steps (the file's settings).
+ */
+function stepOf(oursText: string, line: number): string | undefined {
+  const lines = oursText.split('\n');
+  // the steps are the list under `tests:` / `steps:`; their items start at one indentation (a header list inside a step is deeper)
+  const header = lines.findIndex((l) => /^(tests|steps):\s*$/.test(l));
+  if (header < 0) return undefined;
+  const first = lines.slice(header + 1).find((l) => /^\s*-\s/.test(l));
+  if (!first) return undefined;
+  const indent = /^(\s*)/.exec(first)![1]!.length;
+  for (let i = Math.min(line, lines.length) - 1; i > header; i--) {
+    const m = /^(\s*)-\s+(?:id|name):\s*["']?([^"'\n#]+?)["']?\s*$/.exec(lines[i]!);
+    if (m && m[1]!.length === indent) return m[2];
+    // a setting of the file after the steps (an unindented key) is not in any step
+    if (/^[A-Za-z_][\w-]*:/.test(lines[i]!)) return undefined;
+  }
+  return undefined;
 }
 
+function textHunks(base: string, ours: string, theirs: string, bySteps = false): ConflictHunk[] {
+  return mergeSegments(base, ours, theirs)
+    .filter((s): s is Extract<Segment, { line: number }> => 'line' in s)
+    .map((s, n) => {
+      const step = bySteps ? stepOf(ours, s.line) : undefined;
+      return { key: `hunk:${n}`, where: whereIn(ours, s.line), ours: s.ours, base: s.base, theirs: s.theirs, ...(step ? { step } : {}) };
+    });
+}
+
+/** The hunks of a test or flow file grouped by step (a step with one hunk too: the choice is made by step everywhere). */
+function stepsOf(hunks: ConflictHunk[]): ConflictStep[] {
+  const by = new Map<string, string[]>();
+  for (const h of hunks) if (h.step) (by.get(h.step) ?? by.set(h.step, []).get(h.step)!).push(h.key);
+  return [...by].map(([step, keys]) => ({ key: `step:${step}`, step, hunks: keys }));
+}
+
+const isStepFile = (path: string, kind: KindId | undefined) => kind === 'test' && /\.ya?ml$/i.test(path);
+
 /** The text with each hunk settled: `side` for the ones without a choice. */
-function applyHunks(base: string, ours: string, theirs: string, side: 'ours' | 'theirs', resolutions: MergeResolutions): string {
+function applyHunks(base: string, ours: string, theirs: string, side: 'ours' | 'theirs', resolutions: MergeResolutions, bySteps = false): string {
   let n = 0;
   return mergeSegments(base, ours, theirs)
     .map((s) => {
       if ('text' in s) return s.text;
-      const r = resolutions[`hunk:${n++}`] ?? side;
+      // a choice for a step settles its hunks, unless the hunk has a choice of its own
+      const step = bySteps ? stepOf(ours, s.line) : undefined;
+      const r = resolutions[`hunk:${n++}`] ?? (step ? resolutions[`step:${step}`] : undefined) ?? side;
       if (r === 'ours') return s.ours;
       if (r === 'theirs') return s.theirs;
       return r.edit === '' || r.edit.endsWith('\n') ? r.edit : `${r.edit}\n`;
@@ -157,7 +204,12 @@ export async function gitConflictDetail(ws: string, path: string): Promise<Confl
     return { path, mode: 'binary', ...(kind ? { kind } : {}), items: [], hunks: [], sizes: { ours: await size(2), theirs: await size(3) } };
   }
   const merged = mergeModeOfPath(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
-  if (!merged) return { path, mode: 'text', ...(kind ? { kind } : {}), items: [], hunks: textHunks(base, ours, theirs) };
+  if (!merged) {
+    const bySteps = isStepFile(path, kind);
+    const hunks = textHunks(base, ours, theirs, bySteps);
+    const steps = bySteps ? stepsOf(hunks) : [];
+    return { path, mode: 'text', ...(kind ? { kind } : {}), items: [], hunks, ...(steps.length ? { steps } : {}) };
+  }
   return {
     path,
     mode: 'items',
@@ -192,6 +244,7 @@ export async function gitConflictDetail(ws: string, path: string): Promise<Confl
  * in the stable form; a text file is merged by lines with the hunks settled; a binary file is taken whole.
  */
 export async function gitResolve(ws: string, path: string, side: 'ours' | 'theirs', resolutions?: MergeResolutions): Promise<void> {
+  const kind = kindOfPath(path, { raw: true })?.kind;
   const [base, ours, theirs] = await conflictStages(ws, path);
   const abs = workspaceFile(ws, path);
   const meaning = !isBinaryPath(path) && mergeModeOfPath(path) ? mergeWorkspaceTexts(base, ours, theirs, {}, path) : undefined;
@@ -201,7 +254,7 @@ export async function gitResolve(ws: string, path: string, side: 'ours' | 'their
     const merged = mergeWorkspaceTexts(base, ours, theirs, all, path)!;
     atomicWrite(abs, matchEol(safeRead(abs), merged.text));
   } else if (!isBinaryPath(path) && resolutions && Object.keys(resolutions).length) {
-    atomicWrite(abs, matchEol(safeRead(abs), applyHunks(base, ours, theirs, side, resolutions)));
+    atomicWrite(abs, matchEol(safeRead(abs), applyHunks(base, ours, theirs, side, resolutions, isStepFile(path, kind))));
   } else await runGit(ws, ['checkout', `--${side}`, '--', path]);
   await runGit(ws, ['add', '--', path]);
 }

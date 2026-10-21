@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
+import { crc32, deflateRawSync } from 'node:zlib';
 import {
   collectionToBru,
   collectionToOpenCollection,
@@ -34,13 +34,16 @@ function zip(entries: Array<{ name: string; data: Buffer; method?: 0 | 8; flags?
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(e.flags ?? 0x800, 6);
     local.writeUInt16LE(e.method ?? 8, 8);
+    local.writeUInt32LE(crc32(e.data), 14);
     local.writeUInt32LE(raw.length, 18);
     local.writeUInt32LE(e.usize ?? e.data.length, 22);
     local.writeUInt16LE(name.length, 26);
     locals.push(local, name, raw);
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE((3 << 8) | 20, 4); // made on Unix: its attributes can say "symlink"
     central.writeUInt16LE(e.flags ?? 0x800, 8);
+    central.writeUInt32LE(crc32(e.data), 16);
     central.writeUInt16LE(e.method ?? 8, 10);
     central.writeUInt32LE(raw.length, 20);
     central.writeUInt32LE(e.usize ?? e.data.length, 24);
@@ -64,23 +67,23 @@ describe('archives', () => {
   it('a zip bomb (a huge ratio) is refused', () => {
     const bomb = zip([{ name: 'big.json', data: Buffer.alloc(60 * 1024 * 1024, 0x20) }]);
     expect(bomb.length).toBeLessThan(200_000);
-    expect(() => readZip(bomb)).toThrow(/compresses \d+ times|zip bomb|larger than/);
+    expect(() => readZip(bomb)).toThrow(/zip bomb|bytes inflated/);
   });
   it('too much data together, too many entries, an encrypted entry, a symlink', () => {
     const big = Buffer.alloc(30 * 1024 * 1024, 'a'.charCodeAt(0));
     // (random-looking data compresses badly, so the ratio cap does not stop this one: the total does)
     const noisy = Buffer.alloc(8 * 1024 * 1024);
     for (let i = 0; i < noisy.length; i++) noisy[i] = (i * 2654435761) >>> 24;
-    expect(() => readZip(zip(Array.from({ length: 30 }, (_, i) => ({ name: `f${i}.bin`, data: noisy, method: 0 as const }))), { maxBytes: 100 * 1024 * 1024 })).toThrow(/more than 100 MB/);
+    expect(() => readZip(zip(Array.from({ length: 30 }, (_, i) => ({ name: `f${i}.bin`, data: noisy, method: 0 as const }))), { maxBytes: 100 * 1024 * 1024 })).toThrow(/inflate to more than 104857600 bytes/);
     void big;
     expect(() => readZip(zip([{ name: 'a.json', data: Buffer.from('{}'), flags: 0x801 }]))).toThrow(/encrypted/);
-    expect(() => readZip(zip(Array.from({ length: 5 }, (_, i) => ({ name: `a${i}.json`, data: Buffer.from('{}') }))), { maxEntries: 3 })).toThrow(/5 entries/);
+    expect(() => readZip(zip(Array.from({ length: 5 }, (_, i) => ({ name: `a${i}.json`, data: Buffer.from('{}') }))), { maxEntries: 3 })).toThrow(/5 files/);
     // a symlink entry (Unix mode 0120000) is skipped, never followed
     const withLink = zip([{ name: 'link.json', data: Buffer.from('/etc/passwd'), attrs: (0xa1ff << 16) >>> 0 }, { name: 'ok.json', data: Buffer.from('{}') }]);
     expect(readZip(withLink).map((e) => e.path)).toEqual(['ok.json']);
   });
   it('entry names that leave the archive are refused', () => {
-    for (const name of ['../evil.json', '/etc/passwd', 'C:\\Windows\\x.json', 'a/../../b.json', 'bad\0name.json']) expect(() => readZip(zip([{ name, data: Buffer.from('{}') }])), name).toThrow(/outside the archive|NUL/);
+    for (const name of ['../evil.json', '/etc/passwd', 'C:\\Windows\\x.json', 'a/../../b.json', 'bad\0name.json']) expect(() => readZip(zip([{ name, data: Buffer.from('{}') }])), name).toThrow(/leaves the archive|absolute path|control character/);
   });
   it('a damaged archive says so', () => {
     expect(() => readZip(Buffer.concat([zip([{ name: 'a.json', data: Buffer.from('{}') }]).subarray(0, 40), Buffer.from('garbage')]))).toThrow(/ZIP|damaged/);
