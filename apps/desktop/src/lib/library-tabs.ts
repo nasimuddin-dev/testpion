@@ -84,12 +84,13 @@ export function useLibraryTabs<D>(group: string, drafts: Drafts<D>, opts: { keep
     if (tab.preview) keep(tab.id);
   };
   /**
-   * Open a saved item: its tab when it has one; else in the preview tab (replaced) when `preview`, else a new tab.
+   * Open a saved item: its tab when it has one, else a new tab of its own.
    * `data` is the item's saved draft (the tab starts from it).
    */
   const keepFirst = !!opts.keepFirst;
-  const open = (savedId: string, data: D, o: { preview?: boolean } = {}) => {
-    const r = openTab(stRef.current, savedId, !!o.preview, uid('t'), keepFirst);
+  const open = (savedId: string, data: D, _o: { preview?: boolean } = {}) => {
+    // every click opens its own tab (a preview that the next click replaced lost the response and the edits of the one before: owner, 2026-10-21); `_o.preview` is accepted for the callers that still pass it
+    const r = openTab(stRef.current, savedId, false, uid('t'), keepFirst);
     if (r.fresh) {
       draftsOf(r.id).save(data);
       // the tab on screen was reused: it shows the item now

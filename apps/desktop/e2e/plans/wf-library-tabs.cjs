@@ -39,7 +39,7 @@ const H = `
 
 const steps = [
   step(
-    'preview-replaced',
+    'each-click-opens-its-own-tab',
     `${H}
      await __t.view('Load'); await __t.sleep(800);
      const a = await __t.waitFor(() => item('E2E load A'), 4000); if (!a) return 'NO ITEM';
@@ -49,12 +49,12 @@ const steps = [
      return first + ' → ' + names();`,
   ),
   step(
-    'double-click-keeps',
+    'clicking-an-open-one-shows-it',
     `${H}
-     const t = strip().find((x) => /E2E load B/.test(x.textContent)); if (!t) return 'NO TAB';
-     t.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await __t.sleep(400);
+     if (strip().length !== 2) return 'TABS: ' + names();
      item('E2E load A').click(); await __t.sleep(600);
-     return names();`,
+     const active = strip().find((x) => x.getAttribute('aria-selected') === 'true')?.textContent.trim();
+     return names() + ' | shown: ' + active;`,
   ),
   step(
     'each-tab-its-own-edits',
@@ -109,7 +109,7 @@ const steps = [
   ),
   // saved prompts: the same tabs; the Model comparison has its own prompt
   step(
-    'prompts-preview-and-own-compare',
+    'prompts-own-tabs-and-own-compare',
     `${H}
      const pstrip = () => [...document.querySelectorAll('[role=tablist][aria-label="Open prompts"] [role=tab]')];
      const pnames = () => pstrip().map((t) => t.textContent.trim() + (t.hasAttribute('data-preview') ? '(preview)' : '')).join(', ');
@@ -134,7 +134,7 @@ const steps = [
      const nameField = () => [...document.querySelectorAll('main input')].find((i) => i.offsetParent && i.closest('label')?.textContent.startsWith('Name'));
      await __t.view('Environments'); await __t.sleep(800);
      if (!(await __t.waitFor(() => row('E2E staging'), 4000))) return 'NO ENV ROW';
-     // the first environment is open when the view opens; a click on another previews it, a double-click keeps it
+     // the first environment is open when the view opens; a click on another opens a tab of its own
      await __t.real.click(row('Public APIs')); await __t.sleep(500);
      const previewed = enames();
      await __t.real.dblclick(row('Public APIs')); await __t.sleep(500);
@@ -169,14 +169,14 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
-    'preview-replaced': /^E2E load A\(preview\) → E2E load B\(preview\)$/,
-    'double-click-keeps': /^E2E load B, E2E load A\(preview\)$/,
+    'each-click-opens-its-own-tab': /^E2E load A → E2E load A, E2E load B$/,
+    'clicking-an-open-one-shows-it': /^E2E load A, E2E load B \| shown: E2E load A$/,
     'each-tab-its-own-edits': /^A: http:\/\/127\.0\.0\.1:4010\/health\?a \| B: http:\/\/127\.0\.0\.1:4010\/health\?edited$/,
     'evaluations-has-tabs': /^strip: true$/,
     'last-tab-closes': /^empty: true, tabs: 0, new: true → tabs: 1, editor: true$/,
     'requests-open-in-tabs': /^Custom headers, GET with query parameters\* → Custom headers\*, GET with query parameters$/,
-    'prompts-preview-and-own-compare': /^Summarise a text\(preview\) \| compare has its own prompt: true$/,
-    'environments-tabs-keep-edits': /^E2E staging, Public APIs\(preview\) → E2E staging, Public APIs \| other tab: E2E staging \| kept edit: Public APIs edited$/,
+    'prompts-own-tabs-and-own-compare': /^Classify intent \(JSON\), Summarise a text \| compare has its own prompt: true$/,
+    'environments-tabs-keep-edits': /^E2E staging, Public APIs → E2E staging, Public APIs \| other tab: E2E staging \| kept edit: Public APIs edited$/,
     'debugger-session-tab': /^tabs: Live capture, e2e-session \| rows: true \| bar: true \| live untouched: true$/,
   },
   { prepare },
