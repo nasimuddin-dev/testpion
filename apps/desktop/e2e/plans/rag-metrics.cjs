@@ -67,10 +67,10 @@ const steps = [
   ),
   step(
     'a-ragas-name-finds-its-metric',
-    `await __t.real.click('[data-rag-picker-search]'); await __t.real.type('LLMContextRecall'); await __t.sleep(600);
+    `document.querySelector('[data-rag-picker-search]').scrollIntoView({ block: 'center' }); await __t.sleep(200); await __t.real.click('[data-rag-picker-search]'); await __t.real.type('LLMContextRecall'); await __t.sleep(600);
      const shown = vis('[data-rag-metric]').map((r) => r.getAttribute('data-rag-metric'));
      await __t.real.key('a', { ctrl: true }); await __t.real.key('Backspace'); await __t.sleep(300);
-     await __t.real.click('[data-rag-picker-search]'); await __t.real.key('a', { ctrl: true }); await __t.real.type('nv_context_relevance'); await __t.sleep(600);
+     document.querySelector('[data-rag-picker-search]').scrollIntoView({ block: 'center' }); await __t.sleep(200); await __t.real.click('[data-rag-picker-search]'); await __t.real.key('a', { ctrl: true }); await __t.real.type('nv_context_relevance'); await __t.sleep(600);
      const nv = vis('[data-rag-metric]').map((r) => r.getAttribute('data-rag-metric'));
      await __t.real.key('a', { ctrl: true }); await __t.real.key('Backspace'); await __t.sleep(300);
      return 'LLMContextRecall: ' + shown.join(',') + ' | nv_context_relevance: ' + nv.join(',') + ' | cleared: ' + (vis('[data-rag-metric]').length > 20);`,
