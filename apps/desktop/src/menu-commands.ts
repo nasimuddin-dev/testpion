@@ -154,7 +154,7 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
       case 'export-workspace': {
         const ws = s.workspace;
         if (!ws) return;
-        await exportWorkspace(ws.path);
+        await exportWorkspace(ws.path, { legacy: true }); // the menu entry says "older format"
         return;
       }
       // File ▸ Export ▸ Bundle…: everything in one file; File ▸ Import Bundle…: the picker, then the preview

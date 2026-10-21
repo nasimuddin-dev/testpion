@@ -690,24 +690,26 @@ testpion bundle inspect clinic.testpion.zip --json
 
 ## `workspace export`
 
-The earlier whole-workspace file (it stays for two more releases; `testpion export --all` writes a bundle instead). One file with everything a workspace defines, which `testpion import` (or **Import** in the app) opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
+A whole workspace as one [bundle](/getting-started/export-import) (the file `testpion export --all` writes): everything a workspace defines, which `testpion import` merges into a workspace and **Import** in the app opens as a new workspace. See [Export the whole workspace](/api-testing/collections#export-the-whole-workspace) for what it holds.
 
 ```bash
-testpion workspace export "Veterinary API (example)"     # writes "Veterinary API (example).testpion.json"
-testpion workspace export ./vet -o vet.testpion.json --json
+testpion workspace export "Veterinary API (example)"     # writes "Veterinary API (example).testpion.zip"
+testpion workspace export ./vet -o vet.testpion.zip --json
 ```
 
 ```text
-Exported to Veterinary API (example).testpion.json
-Included 1 collection, 2 environments, 16 test files and 3 files from specs/, datasets/, mocks/ and protos/.
-Replaced 1 secret with variables: environment Development variables.clientSecret → {{clientSecret}}.
+Exported to Veterinary API (example).testpion.zip
+Exported 24 items: 1 collection, 2 environments, 16 test files, 3 API definitions, 2 datasets.
+Replaced 1 secret with variables: {{clientSecret}}. Set them in the other workspace.
 ```
 
 | Option | Description |
 |---|---|
 | `<nameOrPath>` | The workspace's name or folder. |
-| `-o, --output <file>` | The file to write (default: `<workspace name>.testpion.json` in the current folder). |
-| `--json` | `{ path, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }`: each secret replaced by a `{{variable}}` (never its value) and each file left out (over 10 MB, or past 50 MB in all). |
+| `-o, --output <file>` | The file to write (default: `<workspace name>.testpion.zip`, or `.testpion.json` for a small bundle of text, in the current folder). |
+| `--format <zip\|json>` | The file form (default: a zip when the bundle has a binary file, is over 5 MB or has over 200 entries). |
+| `--legacy` | Write the one-file workspace export of 0.53 and earlier (`<name>.testpion.json`) for a TestPion that cannot read bundles; removed in a later release. |
+| `--json` | `{ path, format, size, counts, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }`: each secret replaced by a `{{variable}}` (never its value) and each dataset left out by reference (over 10 MB). |
 | `--dry-run` | Write nothing; list the file it would write. |
 
 ## `import-report` and `import-undo`

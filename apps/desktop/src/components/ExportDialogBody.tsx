@@ -75,7 +75,7 @@ export function ExportDialogBody({ collections, initial, onClose }: { collection
         </Field>
         {what === 'workspace' ? (
           <p className="text-sm text-muted">
-            One file (<code>{workspace ? `${workspace.name}.testpion.json` : '.testpion.json'}</code>) that Open workspace ▸ Import brings back: every collection, environment, test file, saved item, MCP server and setting, and the files in specs/, datasets/, mocks/ and protos/. Secret values are never exported: typed-in tokens, passwords and keys become {'{{variables}}'}, and the message after export lists each one. Files over 10 MB, run results, history and Recently deleted are left out, and the message names any file it left out.
+            One bundle file (<code>{workspace ? `${workspace.name}.testpion.zip` : '.testpion.zip'}</code>, or <code>.testpion.json</code> when it is small and all text) that Open workspace ▸ Import brings back: every collection, environment, test file, saved item, MCP server and setting, and the files in specs/, datasets/, mocks/ and protos/. Secret values are never exported: typed-in tokens, passwords and keys become {'{{variables}}'}, and the message after export lists each one. Datasets over 10 MB travel by reference; run results, history and Recently deleted are left out, and the message names any file it left out.
           </p>
         ) : (
           <Field label="Format" hint={hint}>
