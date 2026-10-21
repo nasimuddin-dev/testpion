@@ -311,6 +311,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     schema: req.schema ?? (req.context?.schema as Record<string, unknown> | undefined),
     signal: deps.signal,
     store: deps.store,
+    runDeps: deps,
   };
   /** The answer as proposal items, verified; cached per answer so the repair check and the result share the work. */
   let proposeNotes: string[] = [];

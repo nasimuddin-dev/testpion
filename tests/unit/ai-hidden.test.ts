@@ -189,6 +189,7 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'components/mcp/ToolsPanel.tsx': 'component',
   'components/mcp/ToolsetEditor.tsx': 'hook',
   'components/rag/CustomMetrics.tsx': 'component',
+  'components/rag/RagAuthorAction.tsx': 'component',
   'components/rag/RagConnectDialog.tsx': 'component',
   'components/rag/RagSampleDetail.tsx': 'component',
   'lib/problems.ts': 'store',

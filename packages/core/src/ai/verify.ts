@@ -19,6 +19,7 @@ import type { ProposalItem, VerificationBadge } from './proposal.js';
 import { explainYamlError } from './yaml-repair.js';
 import { explainCheckProblem } from './flow-format.js';
 import { loadScriptApi, scriptApiProblems } from './script-reference.js';
+import type { AiRunDeps } from './tasks/run.js';
 
 /** A response a proposal was made for (the one on screen, or the latest in the history). */
 export interface StoredResponse {
@@ -44,6 +45,8 @@ export interface VerifyContext {
   signal?: AbortSignal;
   /** The open workspace: verifiers that read it (a spec the tests are checked against). */
   store?: WorkspaceStore;
+  /** The task runner's own dependencies (models, settings, redactor): a verifier that prices or dry-runs a judge builds its judge host from them. */
+  runDeps?: AiRunDeps;
 }
 
 export type Verifier = (item: ProposalItem, ctx: VerifyContext) => Promise<VerificationBadge | undefined> | VerificationBadge | undefined;

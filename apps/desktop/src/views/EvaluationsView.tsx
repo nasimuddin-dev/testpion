@@ -25,6 +25,7 @@ import { RagMetricMatrix } from '../components/rag/RagMetricMatrix';
 import { RagColumnMapper } from '../components/rag/RagColumnMapper';
 import { RagImportDialog } from '../components/rag/RagImportDialog';
 import { RagJudgeOptions } from '../components/rag/RagJudgeOptions';
+import { RagAuthorAction } from '../components/rag/RagAuthorAction';
 import { useRpc } from '../lib/use-rpc';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
@@ -358,6 +359,7 @@ export function EvaluationsView() {
               </Button>
             </div>
           )}
+          {d.type === 'rag' && ragTarget && <RagAuthorAction target={ragTarget.name} />}
           {/* two rows, so the fields fit however narrow the pane is */}
           {ragTarget ? (
             <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0" data-rag-judge>
