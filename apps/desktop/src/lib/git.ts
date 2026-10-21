@@ -25,6 +25,8 @@ let signature = '';
 const listeners = new Set<() => void>();
 let users = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
+/** When the pending read was asked for to run: 0 at once (a git event), else the settle wait; meaningless while no timer is pending. */
+let readsAt = 0;
 let offs: Array<() => void> = [];
 
 /** The marks of a new read, with the very same object for a mark that did not change (a component of an unchanged mark does not render). */
@@ -83,13 +85,19 @@ export function refreshGit(): Promise<void> {
 /** A git event (a commit, a pull, a branch switch …): read at once (the next task: a burst is one read). */
 const now = () => {
   clearTimeout(timer);
-  timer = setTimeout(() => void refreshGit(), 0);
+  timer = setTimeout(() => ((timer = undefined), void refreshGit()), 0);
+  readsAt = 0;
 };
 /** A save or a change on disk: read once things settled (a run or an import saves many files in a row). */
 const SETTLE_MS = 2000;
 const later = () => {
+  // a read already asked for at once is not put off by a save that follows it (the watcher reports the app's own write a
+  // moment after the git event: that used to replace the immediate read with one two seconds later, and again for each
+  // report that came, so the Git view showed the state from before an Undo for as long as files kept being written)
+  if (timer !== undefined && readsAt === 0) return;
   clearTimeout(timer);
-  timer = setTimeout(() => void refreshGit(), SETTLE_MS);
+  readsAt = SETTLE_MS;
+  timer = setTimeout(() => ((timer = undefined), void refreshGit()), SETTLE_MS);
 };
 /** `data.changed` events that write no workspace file: a run's results, a connection; they never change git's status. */
 const NO_FILES = /^mcp\.(connect|disconnect)$/;
@@ -114,15 +122,18 @@ export const gitSnapshot = (): GitState => state;
 
 /** Keeps the state read and fresh while a component that shows it is on screen. */
 function useGitLive() {
-  useEffect(() => {
-    if (users++ === 0) {
-      void refreshGit();
-      offs = [on('git.changed', now), on('git.remoteChanged', now), on('data.changed', onDataChanged), on('workspace.changedOnDisk', later)];
-    }
-    return () => {
-      if (--users === 0) offs.forEach((o) => o());
-    };
-  }, []);
+  useEffect(() => startGitLive(), []);
+}
+
+/** Start keeping the state read (the first user starts the subscriptions); returns the stop (the last one ends them). Exported for the tests. */
+export function startGitLive(): () => void {
+  if (users++ === 0) {
+    void refreshGit();
+    offs = [on('git.changed', now), on('git.remoteChanged', now), on('data.changed', onDataChanged), on('workspace.changedOnDisk', later)];
+  }
+  return () => {
+    if (--users === 0) offs.forEach((o) => o());
+  };
 }
 
 /**
@@ -173,6 +184,11 @@ export const useGitBar = (): GitBar | undefined =>
 export function resetGitForTest() {
   state = { marks: new Map(), changes: [] };
   signature = '';
+  clearTimeout(timer);
+  timer = undefined;
+  users = 0;
+  offs.forEach((o) => o());
+  offs = [];
   running = undefined;
   rerun = false;
 }

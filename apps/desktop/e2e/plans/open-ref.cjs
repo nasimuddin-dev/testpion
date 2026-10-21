@@ -53,7 +53,7 @@ const steps = [
      document.querySelector('[data-search-trigger]')?.click();
      const input = await __t.waitFor(() => document.querySelector('[role=dialog][aria-label="Search"] input'), 3000);
      setVal(input, 'Custom headers');
-     const hit = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog][aria-label="Search"] [role=option]')].find((o) => o.textContent.includes('Custom headers')), 5000);
+     const hit = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog][aria-label="Search"] [role=option]')].find((o) => !/^Ask:/.test(o.textContent.trim()) && o.textContent.includes('Custom headers')), 8000); // not the always-present "Ask: “…”" row, which is there before the results load
      if (!hit) return 'NO ROW in the dialog';
      // deleted meanwhile (another window, a git pull …)
      const c = await window.aps.invoke('col.get', { id: h.ref.collectionId });

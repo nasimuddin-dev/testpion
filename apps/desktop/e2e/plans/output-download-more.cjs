@@ -64,6 +64,17 @@ const steps = [
      return await save('history');`,
   ),
   file('history-har-file', `const h = JSON.parse(text); return 'har ' + h.log.version + ' | entries: ' + (h.log.entries.length >= 1) + ' | key in a URL: ' + h.log.entries.some((e) => e.request.url.includes('${LEAK}'));`),
+  // the count row of History holds the count, RAG dataset, Redacted, Copy, Download and ▾: the ▾ must stay whole inside the
+  // pane at the default sidebar width and in compact density (the step's screenshot shows the row)
+  step(
+    'history-controls-reachable',
+    `await __t.view('History'); await __t.sleep(600);
+     const inside = () => { const pane = document.querySelector('[data-output="history"]'); const chev = vis('[data-output-formats="history"]')[0]; const dlb = dl('history'); if (!pane || !chev || !dlb) return 'MISSING'; const p = pane.getBoundingClientRect();
+       return [chev, dlb].every((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.left >= p.left && r.right <= p.right + 0.5 && r.top >= p.top && r.bottom <= p.bottom; }) ? 'inside' : 'OUT ' + JSON.stringify([chev, dlb].map((e) => e.getBoundingClientRect().right)) + ' pane ' + p.right; };
+     const comfortable = inside(); const was = document.documentElement.dataset.density; document.documentElement.dataset.density = 'compact'; await __t.sleep(300);
+     const compact = inside(); if (was === undefined) delete document.documentElement.dataset.density; else document.documentElement.dataset.density = was; await __t.sleep(200);
+     return 'comfortable: ' + comfortable + ' | compact: ' + compact + ' | rag icon only: ' + (vis('[data-history-rag-dataset]')[0]?.textContent.trim() === '');`,
+  ),
   step('history-csv', `return await save('history', 'List (CSV)');`),
   file('history-csv-file', `const l = text.split('\\r\\n'); return 'header: ' + l[0] + ' | rows: ' + (l.length > 2) + ' | key leaked: ' + text.includes('${LEAK}');`),
   step(
@@ -174,10 +185,10 @@ const steps = [
     'git-changes-patch',
     `await __t.view('Git'); await __t.sleep(1500);
      if (!(await __t.waitFor(() => vis('main [aria-label="Changes"] li').length, 8000))) return 'NO CHANGES LISTED';
-     return await save('git.diff');`,
+     return await save('git.diff', 'Patch');`,
   ),
   file('git-changes-patch-file', `return 'diff: ' + text.startsWith('diff --git') + ' | the change: ' + text.includes('+# changed by the e2e plan');`),
-  step('git-changes-markdown', `return await save('git.diff', 'What changed');`),
+  step('git-changes-markdown', `return await save('git.diff', 'Changes by item');`),
   file('git-changes-markdown-file', `return 'text: ' + (text.length > 0);`),
 
   // ---- an API report (the lint tab of an API definition)
@@ -225,17 +236,26 @@ const steps = [
   step(
     'chart-png',
     `const cards = vis('[data-output="chart"]'); if (!cards.length) return 'NO CHART';
-     const b = cards[0].querySelector('[data-output-download]'); await __t.real.click(b);
-     const seen = new Set(); const t = await newSaved(seen, 15000);
+     await clearToasts(); const seen = new Set(savedToasts()); // an older "saved" toast must not pass for this one
+     const b = cards[0].querySelector('[data-output-download]'); b.scrollIntoView({ block: 'center' }); await __t.sleep(300); await __t.real.click(b); // the charts are below the first screen of Home: a click needs them on screen
+     const t = await newSaved(seen, 15000);
      return t ? 'saved: ' + t.slice(0, 40) : 'NO TOAST';`,
   ),
   file('chart-png-file', `return 'png: ' + (buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG') + ' | size: ' + (buf.length > 500);`),
   step(
     'chart-svg',
-    `const card = vis('[data-output="chart"]').find((c) => c.querySelector('svg') && c.querySelector('[data-output-formats]')); if (!card) return 'NO CHART WITH A PLOT';
+    `// the charts that are a plot offer it as SVG (every card has icons that are SVG too, so ask each card's menu)
+     const cards = vis('[data-output="chart"]').filter((c) => c.querySelector('[data-output-formats]')); if (!cards.length) return 'NO CHART WITH A PLOT';
      await clearToasts(); const seen = new Set(savedToasts());
-     await __t.real.click(card.querySelector('[data-output-formats]'));
-     const item = await __t.waitFor(() => vis('[role=menuitem]').find((m) => m.textContent.trim().startsWith('Plot (SVG)')), 3000); if (!item) return 'NO FORMAT Plot (SVG)';
+     let item;
+     for (const c of cards) {
+       c.scrollIntoView({ block: 'center' }); await __t.sleep(300);
+       await __t.real.click(c.querySelector('[data-output-formats]'));
+       item = await __t.waitFor(() => vis('[role=menuitem]').find((m) => m.textContent.trim().startsWith('Plot (SVG)')), 1500);
+       if (item) break;
+       await __t.real.key('Escape'); await __t.sleep(250);
+     }
+     if (!item) return 'NO FORMAT Plot (SVG) in ' + cards.length + ' charts';
      await __t.real.click(item);
      const t = await newSaved(seen, 15000);
      return t ? 'saved: ' + t.slice(0, 40) : 'NO TOAST';`,
@@ -280,6 +300,7 @@ module.exports = withExpect(
   {
     'history-har': /^saved: History saved to …\/output\.out/,
     'history-har-file': /^har 1\.2 \| entries: true \| key in a URL: false$/,
+    'history-controls-reachable': /^comfortable: inside \| compact: inside \| rag icon only: true$/,
     'history-csv': /^saved: History saved/,
     'history-csv-file': /^header: time,kind,name,method,url,status,durationMs,size \| rows: true \| key leaked: false$/,
     'traces-otlp': /^saved: Traces saved/,

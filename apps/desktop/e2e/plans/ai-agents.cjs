@@ -2,6 +2,14 @@
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, allUnder } = require('../lib.cjs');
 const btn = (label) => `[...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === ${JSON.stringify(label)})`;
+// the number of prompts the MCP server offers: read from the built core, else any positive number
+const PROMPTS = (() => {
+  try {
+    return require('@testpion/core').AGENT_PROMPTS.length;
+  } catch {
+    return String.raw`[1-9]\d*`;
+  }
+})();
 const steps = [
   ['agents-panel', `(async () => { await __t.view('Settings'); await __t.sleep(600); await __t.tab('AI agents'); await __t.sleep(1000); return [...document.querySelectorAll('main pre')].filter((x) => x.offsetParent).map((x) => x.textContent).join(' || '); })()`],
   ['agents-test', `(async () => { ${btn('Test connection')}?.click(); for (let i = 0; i < 40; i++) { await __t.sleep(1000); const t = document.querySelector('main')?.innerText ?? ''; if (/started in|did not start/.test(t)) break; } const t = document.querySelector('main').innerText; return (t.match(/.*started in.*|.*did not start.*/) ?? ['NO RESULT'])[0]; })()`],
@@ -23,7 +31,8 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'agents-panel': /claude mcp add testpion -- /,
-  'agents-test': /started in [\d.]+ s: \d+ tools \(\d+ read-only\), \d+ resources, 5 prompts/,
+  // the prompt count is the server's own list (not a number copied here, which went stale when a prompt was added)
+  'agents-test': (r) => new RegExp(String.raw`started in [\d.]+ s: \d+ tools \(\d+ read-only\), \d+ resources, ${PROMPTS} prompts`).test(String(r)) || `expected ${PROMPTS} prompts: ${r}`,
   'agents-vscode': /"servers"/,
   'agents-md': /AGENTS\.md/,
   'agents-md-files': /^AGENTS\.md=unchanged CLAUDE\.md=created$/,

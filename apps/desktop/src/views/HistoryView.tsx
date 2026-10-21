@@ -10,7 +10,7 @@ import { DurationBar } from '../components/charts';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
 import { JsonTree } from '../components/JsonView';
-import { Badge, Button, Empty, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
+import { Badge, Button, Empty, IconButton, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
 import { NodeMenu, TreeBadge, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
@@ -251,17 +251,16 @@ export function HistoryView() {
         {/* the count and the download share a row: the filter bar above has no room for the control in a narrow list */}
         <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
           <span className="text-xs text-muted truncate min-w-0">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</span>
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<Database size={12} />}
+          {/* icon only (like Ask…): a text button here pushed the download control out of the row */}
+          <IconButton
+            label="RAG dataset… Make a RAG dataset of the HTTP calls listed: question, answer and retrieved contexts, with personal data masked"
+            className="shrink-0"
             disabled={!items.some((e) => e.kind === 'http')}
-            title="Make a RAG dataset of the HTTP calls listed: question, answer and retrieved contexts, with personal data masked"
             onClick={() => setDataset(items.filter((e) => e.kind === 'http').map((e) => e.id))}
             data-history-rag-dataset
           >
-            RAG dataset…
-          </Button>
+            <Database size={14} />
+          </IconButton>
           <OutputActions spec={spec} />
         </div>
         <StatusMix items={items} />

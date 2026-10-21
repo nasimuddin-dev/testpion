@@ -117,7 +117,7 @@ const steps = [
     `await __t.real.click(review().closest('[role=dialog]').querySelector('[data-proposal-accept]'));
      const a = await __t.waitFor(() => applied(), 8000); if (!a) return 'NOT APPLIED';
      const c = await window.aps.invoke('col.get', { id: 'e2e-triage' });
-     return 'applied: ' + short(a.textContent, 60) + ' | check: ' + JSON.stringify(c.items[0].assertions);`,
+     return 'applied: ' + short(a.textContent, 60) + ' | check: ' + JSON.stringify(c.items[0].assertions.map((x) => ({ type: x.type, path: x.path, expected: x.expected }))) + ' | keys: ' + Object.keys(c.items[0].assertions[0]).sort().join(',');`,
   ),
   step(
     'rerun-passes',
@@ -155,7 +155,7 @@ module.exports = withExpect(
     'explain-and-review':
       /^finding: stale-test Health answers "ok" now \| evidence: [1-9]\d* \| item: .*Health status: equals \$\.status = "up" → equals \$\.status = "ok".* \| verified: fix=pass \| ticked: true$/,
     'review-fits': /^fits: open true, 560px true, compact true$/,
-    'apply-the-fix': /^applied: Applied 1 fix\..* \| check: \[\{"type":"equals","path":"\$\.status","expected":"ok"\}\]$/,
+    'apply-the-fix': /^applied: Applied 1 fix\..* \| check: \[\{"type":"equals","path":"\$\.status","expected":"ok"\}\] \| keys: expected,path,type$/,
     'rerun-passes': /^rerun: 1\/1 passed · dialog closed: true$/,
     'home-attention-offers-it': /^dialog for: 1 failure ?in 1 group .*E2E Triage.* \| closed: true$/,
   },

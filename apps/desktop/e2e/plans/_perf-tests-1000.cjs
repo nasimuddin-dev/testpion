@@ -150,7 +150,7 @@ const steps = [
       const times = [];
       for (const ch of 'abcdefghijklmnop') { const t = performance.now(); ed.trigger('perf', 'type', { text: ch }); await new Promise((r) => requestAnimationFrame(r)); times.push(Math.round(performance.now() - t)); }
       ed.trigger('perf', 'undo', null);
-      return 'tree rows: ' + Number(document.querySelector('aside [data-tree-rows]')?.getAttribute('data-tree-rows')) + ' | drawn: ' + document.querySelectorAll('aside [data-tree-row]').length + ' | max keystroke ms: ' + Math.max(...times) + ' | keystroke ms: ' + times.join(',') + loaf();
+      return 'tree rows: ' + Number(document.querySelector('[role=tree][aria-label="Test files"][data-tree-rows]')?.getAttribute('data-tree-rows')) + ' | drawn: ' + document.querySelectorAll('[role=tree][aria-label="Test files"] [data-tree-row]').length + ' | max keystroke ms: ' + Math.max(...times) + ' | keystroke ms: ' + times.join(',') + loaf();
     })()`,
     true,
   ],

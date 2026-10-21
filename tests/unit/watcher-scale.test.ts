@@ -14,7 +14,8 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('workspace watcher at scale', () => {
-  it('opens a 20,000-file workspace in slices, and still reports a change to a file the walk has not reached', async () => {
+  // the 20,000 files are written before the clock starts (the open is the measured part); writing them can take minutes on a busy machine, hence the explicit timeout
+  it('opens a 20,000-file workspace in slices, and still reports a change to a file the walk has not reached', { timeout: 240_000 }, async () => {
     mkdirSync(join(root, 'tests', 'bulk'), { recursive: true });
     for (let i = 0; i < 20000; i++) writeFileSync(join(root, 'tests', 'bulk', `t${i}.yaml`), `name: t${i}\n`);
     let emit: (event: string, name: string | null) => void = () => undefined;

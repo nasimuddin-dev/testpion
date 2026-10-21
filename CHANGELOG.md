@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixes: History controls, Git
+
+- **History's download control is always reachable.** The count row of History (count, RAG dataset, Redacted, Copy, Download and the format arrow) could push the arrow out of view at the default sidebar width; RAG dataset is now an icon (like Ask…) and an output control with no tools of its own never shrinks.
+- **History says so when the repository is missing.** A workspace whose `.git` was moved or deleted showed "No commits changed this yet" for up to three seconds instead of the error with Try again: the remembered repository root is now believed only while its `.git` is still there.
+- **A commit no longer fails while the app reads Git in the background.** Reads (status, diff …) no longer take `.git/index.lock`, so a commit or a stage that came at that moment could fail with "Unable to create index.lock".
+- **The Git view shows the file again right after Undo** even when the file watcher reports the write a moment later (it used to put the refresh off by two seconds, again for every report).
+
 ### Faster start and big workspaces
 
 - **`testpion` starts in about half the time** (a command went from about 2.0 s to 0.9 s on a loaded machine): the build also writes the command line, the engine and the shared code as one file (`dist/bundle.js`), which `bin/testpion.js` loads while it is newer than the build; `TESTPION_UNBUNDLED=1` loads the files as before. `--version` and `--help` were already instant.

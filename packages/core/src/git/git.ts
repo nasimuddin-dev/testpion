@@ -77,7 +77,10 @@ function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts:
     const child = execFile(
       'git',
       args,
-      { cwd, maxBuffer: MAX_BUFFER, encoding, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', ...opts.env } },
+      // GIT_OPTIONAL_LOCKS=0: a read (status, diff …) never takes the index lock to refresh the index's stat cache. The app reads
+      // in the background after every save, and such a read holding .git/index.lock made a commit or a stage that came at that
+      // moment fail with "Unable to create index.lock: File exists". Writes (add, commit, checkout …) still lock, as they must.
+      { cwd, maxBuffer: MAX_BUFFER, encoding, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0', ...opts.env } },
       (err, stdout, stderr) => {
         if (!err) return done(stdout as Out);
         const text = String(stderr);
@@ -149,7 +152,12 @@ export function gitVersion(): Promise<string | undefined> {
 const roots = new Map<string, { root: string | undefined; at: number }>();
 export async function repoRoot(dir: string): Promise<string | undefined> {
   const known = roots.get(dir);
-  if (known && (known.root ? Date.now() - known.at < 3000 : !gitDirNear(dir))) return known.root;
+  if (known) {
+    // A remembered root is only believed while its `.git` (folder, or the file of a worktree / submodule) is still
+    // there: one stat, no git spawned. Without it a repository moved or deleted within the 3 s looked intact.
+    if (known.root ? Date.now() - known.at < 3000 && existsSync(join(known.root, '.git')) : !gitDirNear(dir)) return known.root;
+    if (known.root) roots.delete(dir);
+  }
   let root: string | undefined;
   try {
     root = resolve((await runGit(dir, ['rev-parse', '--show-toplevel'])).trim());

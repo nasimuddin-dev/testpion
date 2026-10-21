@@ -26,9 +26,12 @@ export function OutputActions({
   // min-w-0: a flex box's min-content is the sum of its children's, tools included, so without it the bar could never
   // shrink at all. What gives way before it is the bar's start (OutputBarStart shrinks 100 times faster) and, in a tab
   // strip, the tab list (Tabs lets this slot shrink, the tabs move into »).
+  const hasTools = children !== undefined && children !== null && children !== false;
+  // With no tools of its own there is nothing in here that can give way, so the box must not shrink: a shrinking box
+  // around an unshrinkable control only pushed the ▾ out of view (the History count row at the default sidebar width).
   return (
-    <div className={cx('ml-auto flex items-center gap-1 shrink min-w-0 pl-2', className)} data-output-actions>
-      {children !== undefined && children !== null && children !== false && (
+    <div className={cx('ml-auto flex items-center gap-1 min-w-0 pl-2', hasTools ? 'shrink' : 'shrink-0', className)} data-output-actions>
+      {hasTools && (
         <div className={cx('flex items-center justify-end gap-1 min-w-0 shrink', wrap ? 'flex-wrap' : 'overflow-clip [overflow-clip-margin:4px]')} data-output-tools>
           {children}
         </div>

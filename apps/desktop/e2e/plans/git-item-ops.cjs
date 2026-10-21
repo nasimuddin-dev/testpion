@@ -103,7 +103,7 @@ const steps = [
      const done = await __t.waitFor(() => toastText(/^Restored/), 8000);
      const restored = await __t.waitFor(() => nameOf() === 'DeepWiki', 8000);
      const undo = [...document.querySelectorAll('[data-sonner-toast] button')].find((b) => b.textContent.trim() === 'Undo'); if (!undo) return 'NO UNDO';
-     await __t.real.click(undo);
+     await __t.real.clickSettled(undo);
      const back = await __t.waitFor(() => nameOf() === 'DeepWiki v3', 8000);
      return 'preview names the part: ' + /Name/.test(preview) + ' | toast: ' + !!done + ' | restored to: ' + !!restored + ' | undone: ' + !!back;`,
   ),
@@ -119,7 +119,8 @@ const steps = [
     'discard-only-this-server',
     `await __t.waitFor(() => markText('mcp:extra') !== 'none', 15000);
      if ((await pick('mcp:deepwiki', 'Discard changes')) !== 'ok') return 'NO ITEM';
-     const ask = await __t.waitFor(() => top() && /Discard/.test(top().textContent) && top(), 6000); if (!ask) return 'NO PREVIEW';
+     // the dialog opens first and says what changes a moment later (the plan is read from git): wait for the text, not just the dialog
+     const ask = await __t.waitFor(() => top() && /Discard/.test(top().textContent) && /DeepWiki v3/.test(top().textContent) && top(), 8000); if (!ask) return 'NO PREVIEW: ' + short(top()?.textContent, 200);
      const preview = short(ask.textContent, 220);
      await __t.real.click(btn(ask, 'Discard'));
      const done = await __t.waitFor(() => toastText(/^Discarded/), 8000);
@@ -158,7 +159,7 @@ const steps = [
      const done = await __t.waitFor(() => toastText(/^Discarded the changes to mcp-servers\\.json/), 8000);
      const gone = await __t.waitFor(() => !vis('main [data-change-file="mcp-servers.json"]')[0], 10000);
      const undo = [...document.querySelectorAll('[data-sonner-toast]')].filter((t) => /^Discarded the changes to mcp-servers/.test(t.textContent.trim())).flatMap((t) => [...t.querySelectorAll('button')]).find((b) => b.textContent.trim() === 'Undo'); if (!undo) return 'NO UNDO';
-     await __t.real.click(undo);
+     await __t.real.clickSettled(undo); // the toasts stack spreads out under the pointer: the click is made where the button ends up
      const back = await __t.waitFor(() => vis('main [data-change-file="mcp-servers.json"]')[0], 10000);
      return 'confirm says undo: ' + saysUndo + ' | toast: ' + !!done + ' | change gone: ' + !!gone + ' | change back after Undo: ' + !!back;`,
   ),
@@ -194,7 +195,7 @@ const steps = [
     'resolving-can-be-undone',
     `await __t.sleep(400);
      const undo = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].filter((t) => /resolved/.test(t.textContent)).flatMap((t) => [...t.querySelectorAll('button')]).find((b) => b.textContent.trim() === 'Undo'), 6000); if (!undo) return 'NO UNDO';
-     await __t.real.click(undo);
+     await __t.real.clickSettled(undo);
      const back = await __t.waitFor(() => [...document.querySelectorAll('[role=alert]')].find((a) => /Conflicts/.test(a.textContent)), 10000);
      return 'conflict is back: ' + !!back;`,
   ),

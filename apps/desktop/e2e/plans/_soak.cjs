@@ -148,17 +148,23 @@ const r = (name, body) => [name, `(async () => { ${H} ${body} })()`, false];
 // (created minus collected); CDP's JSEventListeners is the authoritative listener count, these say which kind grows
 const INSTALL = `
   if (window.__soak) return 'already';
-  const S = (window.__soak = { win: {}, doc: {}, other: 0, intervals: new Set(), timeouts: new Set(), observers: {}, created: {} });
+  const S = (window.__soak = { win: {}, doc: {}, others: new Set(), intervals: new Set(), timeouts: new Set(), observers: {}, created: {} });
   const reg = new WeakMap();
+  const tracked = new WeakSet();
   const bucket = (t) => (t === window ? S.win : t === document ? S.doc : null);
+  // listeners on every other target, counted when asked and only on targets still alive and on the page (a detached
+  // element's listeners are garbage with it: counting add/remove calls made a series that grew by hundreds per cycle
+  // for elements nobody holds any more); the number is of live listeners, so a leak on the page shows and churn does not
+  S.others = new Set();
+  Object.defineProperty(S, 'other', { get() { let n = 0; for (const ref of S.others) { const t = ref.deref(); if (!t) { S.others.delete(ref); continue; } if (t instanceof Node && !t.isConnected) continue; for (const set of reg.get(t)?.values() ?? []) n += set.size; } return n; } });
   const add = EventTarget.prototype.addEventListener, rem = EventTarget.prototype.removeEventListener;
   EventTarget.prototype.addEventListener = function (type, fn, opts) {
-    if (fn) { let m = reg.get(this); if (!m) reg.set(this, (m = new Map())); const k = type + '|' + !!(typeof opts === 'object' ? opts?.capture : opts); let s = m.get(k); if (!s) m.set(k, (s = new Set())); if (!s.has(fn)) { s.add(fn); const b = bucket(this); if (b) b[type] = (b[type] ?? 0) + 1; else S.other++; } }
+    if (fn) { let m = reg.get(this); if (!m) reg.set(this, (m = new Map())); const k = type + '|' + !!(typeof opts === 'object' ? opts?.capture : opts); let s = m.get(k); if (!s) m.set(k, (s = new Set())); if (!s.has(fn)) { s.add(fn); const b = bucket(this); if (b) b[type] = (b[type] ?? 0) + 1; else if (!tracked.has(this)) { tracked.add(this); S.others.add(new WeakRef(this)); } } }
     return add.call(this, type, fn, opts);
   };
   EventTarget.prototype.removeEventListener = function (type, fn, opts) {
     const s = reg.get(this)?.get(type + '|' + !!(typeof opts === 'object' ? opts?.capture : opts));
-    if (s?.delete(fn)) { const b = bucket(this); if (b) b[type]--; else S.other--; }
+    if (s?.delete(fn)) { const b = bucket(this); if (b) b[type]--; }
     return rem.call(this, type, fn, opts);
   };
   const si = window.setInterval, ci = window.clearInterval, st = window.setTimeout, ct = window.clearTimeout;

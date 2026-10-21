@@ -135,6 +135,25 @@ const PAGE = `(() => {
     down: (t, o = {}) => run(() => { const p = pt(t, o); return [m('mouseMoved', p, o), wait(16), m('mousePressed', p, o, { button: btn(o), buttons: bits(btn(o)), clickCount: 1 })]; }),
     up: (t, o = {}) => run(() => [m('mouseReleased', pt(t, o), o, { button: btn(o), buttons: 0, clickCount: 1 })]),
     click: (t, o = {}) => click(t, o, 1),
+    /**
+     * A click on something that moves when the pointer arrives (a toast: the stack of toasts spreads out under the pointer): the
+     * pointer goes there first, the target is waited for until it stops moving, and the click is made where it is now. The press
+     * of a plain click lands on the place the target had before the pointer moved, so it hit the toast above or nothing.
+     */
+    clickSettled: async (t, o = {}) => {
+      const e = el(t);
+      if (!(e instanceof Element)) return click(t, o, 1);
+      await run(() => [m('mouseMoved', pt(e, o), o), wait(16)]);
+      let last = '';
+      for (let i = 0, same = 0; i < 40 && same < 3; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        const r = e.getBoundingClientRect();
+        const now = [r.x, r.y, r.width, r.height].map(Math.round).join(',');
+        same = now === last ? same + 1 : 0;
+        last = now;
+      }
+      return click(e, o, 1);
+    },
     dblclick: (t, o = {}) => click(t, o, 2),
     rightClick: (t, o = {}) => click(t, { ...o, button: 'right' }, 1),
     /** Press at \`from\`, move in \`steps\` steps to \`to\`, release there. */

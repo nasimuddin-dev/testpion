@@ -6,13 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * overlap: one runs at a time and requests that come meanwhile make one more run, not several.
  */
 const calls: Array<{ resolve: (v: unknown) => void }> = [];
+const handlers = new Map<string, (e?: unknown) => void>();
 vi.mock('../../apps/desktop/src/api', () => ({
   call: vi.fn(() => new Promise((resolve) => calls.push({ resolve }))),
-  on: vi.fn(() => () => undefined),
+  on: vi.fn((event: string, h: (e?: unknown) => void) => (handlers.set(event, h), () => handlers.delete(event))),
 }));
 
 import { call } from '../../apps/desktop/src/api';
-import { gitSnapshot, refreshGit, resetGitForTest } from '../../apps/desktop/src/lib/git';
+import { gitSnapshot, refreshGit, resetGitForTest, startGitLive } from '../../apps/desktop/src/lib/git';
 import { gitRefKey } from '@testpion/shared';
 
 const status = (over: object = {}) => ({ available: true, repository: true, branch: 'main', ahead: 0, behind: 0, files: [], conflicted: false, ...over });
@@ -36,6 +37,28 @@ beforeEach(() => {
 });
 
 describe('git store', () => {
+  it('reads at once after a git event, also when the watcher reports a file change right after it (Undo shows the file again without a wait)', async () => {
+    vi.useFakeTimers();
+    try {
+      const stop = startGitLive();
+      answer({ ...status(), changes: [] }); // the first read
+      await vi.advanceTimersByTimeAsync(0);
+      calls.length = 0;
+      // Undo: git.changed first, then the file watcher's report of the written file
+      handlers.get('git.changed')!();
+      handlers.get('workspace.changedOnDisk')!();
+      handlers.get('data.changed')!({ method: 'disk' });
+      await vi.advanceTimersByTimeAsync(5);
+      expect(calls.length, 'one read started at once, not two seconds later').toBe(1);
+      answer({ ...status(), changes: [change('r1')] });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(gitSnapshot().changes.length).toBe(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps the state (and renders nothing) when a read finds the same answer', async () => {
     const first = refreshGit();
     answer({ ...status(), changes: [change('r1')] });

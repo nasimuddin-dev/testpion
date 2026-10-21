@@ -13,7 +13,7 @@ const H = `
   const toastText = (re) => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => re.test(t));
   const typeMessage = (text) => { const ta = document.querySelector('textarea[aria-label="Commit message"]'); if (!ta) return false; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, text); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; };
   // a real click needs the element on screen: the Git view is longer than the window
-  const press = async (el) => { el.scrollIntoView({ block: 'center' }); await __t.sleep(200); await __t.real.click(el); };
+  const press = async (el) => { el.scrollIntoView({ block: 'center' }); await __t.sleep(200); await __t.real.clickSettled(el); }; // settled: the list above can still change height (a panel leaving) and move the button
   const changeItems = () => vis('main [data-change-item]');
   const itemRow = (re) => changeItems().find((i) => re.test(short(i.textContent)));
   const askText = async (what, text, okLabel) => {

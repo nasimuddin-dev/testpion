@@ -41,10 +41,13 @@ const steps = [
   ),
   step(
     'use-in-a-test-copies-the-yaml',
-    `button('Use in a test')?.click();
-     const t = await toast(/Copied/);
-     let text = '';
-     try { text = await navigator.clipboard.readText(); } catch { text = '(unreadable)'; }
+    `// the OS clipboard is shared with everything else on the machine: read it for up to 5 s after the toast, and copy once more if it stayed empty
+     const read = async () => { let text = ''; for (let i = 0; i < 25 && !text.trim(); i++) { try { text = await navigator.clipboard.readText(); } catch { text = ''; } if (!text.trim()) await __t.sleep(200); } return text; };
+     button('Use in a test')?.click();
+     let t = await toast(/Copied/);
+     let text = await read();
+     let retried = false;
+     if (!text.trim()) { retried = true; button('Use in a test')?.click(); t = (await toast(/Copied/)) || t; text = await read(); }
      return 'toast: ' + !!t + ' | yaml: ' + short(text, 60);`,
   ),
   step(
@@ -125,7 +128,7 @@ const steps = [
 module.exports = withExpect(steps, {
   'sidebar-lists-the-datasets': /^section: true \| row: JSONLintents\.jsonl7 rows$/,
   'a-dataset-opens-in-a-tab': /^counts: 7 rows · 3 columns \| columns: id:string,message:string,expected:string \| shown: 7 \| tab: .*intents\.jsonl/,
-  'use-in-a-test-copies-the-yaml': /^toast: true \| yaml: (dataset: path: datasets\/intents\.jsonl|\(unreadable\))$/,
+  'use-in-a-test-copies-the-yaml': /^toast: true \| yaml: dataset: path: datasets\/intents\.jsonl$/,
   'file-tab-edits-and-saves': /^save enabled: true \| saved: true \| counts: 8 rows · 3 columns \| sidebar: true \| ctrl\+s: true \| restored: 7 rows · 3 columns$/,
   'run-a-collection-with-this-dataset': /^tab: .*Run.* \| data: true \| rows: true$/,
   'new-csv-from-the-section-menu':

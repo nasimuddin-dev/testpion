@@ -41,7 +41,8 @@ describe('testTree', () => {
     ws.close();
   });
 
-  it('lists 20,000 files in a folder without a path.relative per file', () => {
+  // creating 20,000 files is not the measured part (that is the best of three listings below) but it can take long on a busy machine: the explicit timeout is for the creation only
+  it('lists 20,000 files in a folder without a path.relative per file', { timeout: 240_000 }, () => {
     const ws = WorkspaceStore.open(t.dir);
     for (let i = 0; i < 20000; i++) writeFileSync(join(ws.path('tests'), 'empty', `t${i}.yaml`), 'name: x\n');
     const ms = Math.min(...Array.from({ length: 3 }, () => { const s = performance.now(); ws.testTree(); return performance.now() - s; }));
