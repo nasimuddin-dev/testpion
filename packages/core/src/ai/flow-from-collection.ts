@@ -32,7 +32,7 @@ import type { AiSurface } from '../storage/ai-usage.js';
 import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
 import { flowVariableProblems, registerVerifier, verifyItems, type VerifyContext } from './verify.js';
-import { diffFlowSteps, flowDiffSummary } from './flow-diff.js';
+import { diffFlowSteps, flowDiffSummary } from './flow-step-review.js';
 
 export type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
 

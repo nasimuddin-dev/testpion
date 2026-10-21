@@ -1,5 +1,7 @@
+import { isRecord } from '@testpion/shared';
 import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { slugify } from '../util/ids.js';
+import { matchSteps, sameValue } from '../util/step-match.js';
 import type { SemanticChange } from './semantic.js';
 
 /**
@@ -9,8 +11,8 @@ import type { SemanticChange } from './semantic.js';
  */
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v);
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const isRec = isRecord;
+const same = sameValue;
 
 /** A test or flow file under tests/ (not a suite). */
 export const isFlowFile = (path: string) => /^tests\/.+\.(ya?ml|json)$/i.test(path) && !/\.suite\.(ya?ml|json)$/i.test(path);
@@ -144,21 +146,22 @@ export function flowChanges(file: string, beforeText: string | undefined, afterT
   // steps by id; a step that left and one that arrived with the same content is a rename
   const a = new Map(before.steps.map((s) => [s.id, s]));
   const b = new Map(after.steps.map((s) => [s.id, s]));
-  const added = after.steps.filter((s) => !a.has(s.id));
-  const removed = before.steps.filter((s) => !b.has(s.id));
+  let added = after.steps.filter((s) => !a.has(s.id));
+  let removed = before.steps.filter((s) => !b.has(s.id));
   const renamedTo = new Map<string, string>();
-  const body = (r: Rec) => {
-    const { id: _i, name: _n, dependsOn: _d, ...rest } = r;
+  const body = (s: { raw: Rec }) => {
+    const { id: _i, name: _n, dependsOn: _d, ...rest } = s.raw;
     return JSON.stringify(rest);
   };
-  for (const r of [...removed]) {
-    const match = added.find((x) => body(x.raw) === body(r.raw));
-    if (!match) continue;
+  const partner = matchSteps(removed, added, [{ seek: body, pool: body }]);
+  removed.forEach((r, i) => {
+    const match = added[partner[i]!];
+    if (!match) return;
     renamedTo.set(r.id, match.id);
-    added.splice(added.indexOf(match), 1);
-    removed.splice(removed.indexOf(r), 1);
     out.push({ ...base, change: 'renamed', title: `${title} ▸ ${stepTitle(match)}`, details: [`was ${r.id}`], itemId: match.id, itemKind: 'step' });
-  }
+  });
+  added = added.filter((_, k) => !partner.includes(k));
+  removed = removed.filter((_, i) => partner[i]! < 0);
   for (const s of after.steps) {
     const was = a.get(s.id);
     if (!was || same(was.raw, s.raw)) continue;

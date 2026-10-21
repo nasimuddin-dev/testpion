@@ -7,6 +7,7 @@
  */
 import { checkLabel } from '@testpion/shared';
 import { parseYaml } from '../util/lazy-yaml.js';
+import { matchSteps } from '../util/step-match.js';
 
 export interface StepFieldChange {
   field: 'name' | 'order' | 'dependsOn' | 'request' | 'body' | 'extract' | 'checks' | 'scripts' | 'other';
@@ -110,20 +111,11 @@ function changesOf(draft: Step, ai: Step, order?: { before: number; after: numbe
 export function diffFlowSteps(draftYaml: string, aiYaml: string): StepDiff[] {
   const draft = stepsOf(draftYaml);
   const ai = stepsOf(aiYaml);
-  const taken = new Set<number>();
-  const match = (by: (d: Step, i: number) => boolean, a: Step): number => {
-    const j = draft.findIndex((d, i) => !taken.has(i) && by(d, i));
-    if (j >= 0) taken.add(j);
-    return j;
-  };
-  const pairs = ai.map((a, i) => {
-    const id = idOf(a, i);
-    // the id first; a renamed step by its name, then by what it calls
-    let j = match((d, k) => idOf(d, k) === id, a);
-    if (j < 0 && str(a.name)) j = match((d) => str(d.name) === str(a.name), a);
-    if (j < 0) j = match((d) => endpointKey(d) === endpointKey(a), a);
-    return { a, i, j };
-  });
+  // the id first; a renamed step by its name, then by what it calls
+  const same = (key: (s: Step, i: number) => string | undefined) => ({ seek: key, pool: key });
+  const partner = matchSteps(ai, draft, [same(idOf), same((s) => str(s.name) || undefined), same(endpointKey)]);
+  const taken = new Set(partner.filter((j) => j >= 0));
+  const pairs = ai.map((a, i) => ({ a, i, j: partner[i]! }));
   // the draft's steps in the order the matched ones keep: a step whose position among the matched changed has moved
   const matched = pairs.filter((p) => p.j >= 0);
   const rankInDraft = new Map([...matched].sort((x, y) => x.j - y.j).map((p, r) => [p.i, r]));

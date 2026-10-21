@@ -141,3 +141,38 @@ describe('the app speaks TestPion', () => {
     expect(code.filter((c) => /\b(pm|postman)\./.test(c))).toEqual([]);
   });
 });
+
+describe('one mechanism per concern (B-41)', () => {
+  const core = files('packages/core/src');
+  const hosts = [...core, ...files('packages/shared/src'), ...files('packages/cli/src'), ...files('apps/desktop/backend')];
+  const src = (f: string) => readFileSync(f, 'utf8');
+
+  it('zip archives are parsed by one reader: the hardened one (transfer/zip.ts); the import reader sits on its structure parser', () => {
+    // anything that inflates a zip entry (raw deflate) is a reader; only these two may, and the import one asks the hardened parser for the structure
+    const inflaters = hosts.filter((f) => /\binflateRaw(Sync)?\b/.test(src(f))).map(rel);
+    expect(inflaters.sort()).toEqual(['packages/core/src/import/zip.ts', 'packages/core/src/transfer/zip.ts']);
+    expect(src(join(root, 'packages/core/src/import/zip.ts'))).toMatch(/from '\.\.\/transfer\/zip\.js'/);
+    // nothing else reads the end-of-central-directory (0x06054b50) or central-directory (0x02014b50) signature
+    const parsers = hosts
+      .filter((f) => /0x06054b50|0x02014b50/.test(src(f)))
+      .map(rel)
+      .filter((f) => f !== 'packages/core/src/transfer/zip.ts' && f !== 'packages/shared/src/output/formats.ts'); // formats.ts only WRITES (stored, streaming, browser-safe)
+    expect(parsers).toEqual([]);
+  });
+
+  it('zip archives are written by two writers only: the bundle one (deflates, core) and the streaming stored one (shared, browser-safe)', () => {
+    const writers = hosts.filter((f) => /writeUInt32LE\(0x04034b50|setUint32\(0, 0x04034b50/.test(src(f))).map(rel);
+    expect(writers.sort()).toEqual(['packages/core/src/transfer/zip.ts', 'packages/shared/src/output/formats.ts']);
+    expect(src(join(root, 'packages/shared/src/output/formats.ts'))).not.toMatch(/export function zipFiles/);
+  });
+
+  it('no two diff modules share a name, and the flow step differs share one matcher (util/step-match.ts)', () => {
+    const byName = new Map<string, string[]>();
+    for (const f of [...core, ...files('packages/cli/src'), ...files('apps/desktop/backend'), ...files('apps/desktop/src')]) {
+      const name = f.split(sep).pop()!;
+      if (/-diff\.tsx?$/.test(name)) byName.set(name, [...(byName.get(name) ?? []), rel(f)]);
+    }
+    expect([...byName.values()].filter((l) => l.length > 1)).toEqual([]);
+    for (const f of ['packages/core/src/git/flow-diff.ts', 'packages/core/src/ai/flow-step-review.ts']) expect(src(join(root, f)), f).toMatch(/util\/step-match\.js/);
+  });
+});
