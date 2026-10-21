@@ -68,6 +68,8 @@ export interface ItemAdapter {
   check(item: BundleItem, data: Buffer): string | undefined;
   /** What to look at before running the item (a script, a program an MCP server starts, a production environment). */
   review(item: BundleItem, data: Buffer): string[];
+  /** What importing over the workspace's `existingId` changes about trust (an address that moves); only for kinds that send things somewhere. */
+  reviewAgainst?(store: WorkspaceStore, existingId: string, item: BundleItem, data: Buffer): string[];
   /** The workspace's counterpart of an incoming item: the same id, or (kinds with unique names) the same name. */
   match(existing: readonly Listed[], incoming: { id: string; name: string }): Listed | undefined;
   /** A free id and name for "Keep both" (`taken`: ids and names already used, extended with the answer). */

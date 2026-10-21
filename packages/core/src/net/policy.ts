@@ -69,15 +69,49 @@ export function isPrivateAddress(ip: string): boolean {
     return V4_BLOCKS.some(([base, bits]) => ((n ^ ipv4ToInt(base)) >>> (32 - bits)) === 0);
   }
   if (v === 6) {
-    const x = ip.toLowerCase();
-    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(x);
-    if (mapped) return isPrivateAddress(mapped[1]!);
-    return x === '::' || x === '::1' || /^f[cd]/.test(x) || /^fe[89ab]/.test(x) || /^ff/.test(x);
+    const b = ipv6Bytes(ip);
+    if (!b) return true;
+    const embedded = (at: number) => `${b[at]}.${b[at + 1]}.${b[at + 2]}.${b[at + 3]}`;
+    const zeros = (n: number) => b.slice(0, n).every((x) => x === 0);
+    // the same IPv4 address in another costume is still that address: mapped (::ffff:a.b.c.d, also written ::ffff:7f00:1),
+    // compatible (::a.b.c.d), NAT64 (64:ff9b::/96) and 6to4 (2002:a.b.c.d::/16)
+    if (zeros(10) && b[10] === 0xff && b[11] === 0xff) return isPrivateAddress(embedded(12));
+    if (zeros(12) && b.slice(12).some((x) => x !== 0)) return isPrivateAddress(embedded(12));
+    if (b[0] === 0x00 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && b.slice(4, 12).every((x) => x === 0)) return isPrivateAddress(embedded(12));
+    if (b[0] === 0x20 && b[1] === 0x02) return isPrivateAddress(embedded(2));
+    // unspecified and loopback (::, ::1), unique local (fc00::/7), link-local (fe80::/10), multicast (ff00::/8)
+    return zeros(16) || (zeros(15) && b[15] === 1) || (b[0]! & 0xfe) === 0xfc || (b[0] === 0xfe && (b[1]! & 0xc0) === 0x80) || b[0] === 0xff;
   }
   return true; // not an IP: treat as unsafe
 }
 
+/** The 16 bytes of an IPv6 address (any notation `isIP` accepts, including a trailing IPv4 part and a %zone), or undefined. */
+function ipv6Bytes(ip: string): number[] | undefined {
+  let s = ip.toLowerCase().split('%')[0]!;
+  const v4 = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
+  if (v4) {
+    const o = v4[1]!.split('.').map(Number);
+    s = s.slice(0, -v4[1]!.length) + (((o[0]! << 8) | o[1]!).toString(16) + ':' + ((o[2]! << 8) | o[3]!).toString(16));
+  }
+  const halves = s.split('::');
+  if (halves.length > 2) return undefined;
+  const side = (t: string) => (t ? t.split(':') : []);
+  const head = side(halves[0]!);
+  const tail = halves.length === 2 ? side(halves[1]!) : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  const groups = [...head, ...Array<string>(Math.max(fill, 0)).fill('0'), ...tail];
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return undefined;
+  return groups.flatMap((g) => [parseInt(g, 16) >> 8, parseInt(g, 16) & 0xff]);
+}
+
 const allowed = (host: string) => current.allowHosts?.some((h) => h.toLowerCase() === host.toLowerCase()) ?? false;
+
+/** Whether a plain http:// link may be fetched on the server's behalf: always on the desktop; where private networks are blocked, only for hosts the administrator allowed (localhost included, by name). */
+export function isPlainHttpAllowed(url: string | URL): boolean {
+  if (!current.blockPrivateNetworks) return true;
+  const u = typeof url === 'string' ? new URL(url) : url;
+  return allowed(u.hostname.replace(/^\[|\]$/g, ''));
+}
 
 function blockedError(host: string, ip?: string): ApsError {
   return new ApsError('ConfigurationError', `Blocked by the network policy: ${host}${ip && ip !== host ? ` (${ip})` : ''} is a private or local address`, {

@@ -52,6 +52,15 @@ export interface TransferLimits {
 }
 export const TRANSFER_LIMITS: Readonly<TransferLimits> = { fileBytes: 1536 * 1024 * 1024, manifestBytes: 16 * 1024 * 1024, items: 20_000 };
 
+/**
+ * The bytes of a base64 text, refused by its length BEFORE anything is decoded (`Buffer.from` would allocate the whole
+ * answer first). Whitespace inside the text is ignored by the decoder, so the length is an upper bound.
+ */
+export function decodeBase64(text: string, maxBytes: number, what = 'The file'): Buffer {
+  if (Math.floor((text.length * 3) / 4) > maxBytes) throw new ApsError('ValidationError', `${what} is larger than ${Math.round(maxBytes / 1048576)} MB`, { suggestions: [] });
+  return Buffer.from(text, 'base64');
+}
+
 /** A dataset up to this size travels inside the bundle; a bigger one goes by reference unless `datasets: 'embed'` is asked for. */
 export const DATASET_EMBED_BYTES = 10 * 1024 * 1024;
 

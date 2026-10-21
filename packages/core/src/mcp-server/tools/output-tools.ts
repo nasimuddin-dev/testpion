@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync } from 'node:fs';
-import { basename, dirname, relative, sep } from 'node:path';
-import { LAUNCHER_EXTENSIONS, OUTPUT_FORMATS, fileExtension, isOutputFormatId, outputSurface } from '@testpion/shared';
+import { mkdirSync } from 'node:fs';
+import { dirname, relative, sep } from 'node:path';
+import { OUTPUT_FORMATS, isOutputFormatId, outputSurface } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
 import { OUTPUT_PARAMS, outputSourceFor, type OutputParams } from '../../output/params.js';
 import { collectBuilt, prepareSource, storeOutputDeps } from '../../output/prepare.js';
@@ -8,12 +8,11 @@ import { writeChunks } from '../../output/write.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { Redactor } from '../../util/redact.js';
 import { str, type Tool } from '../tool.js';
+import { exportTarget } from './export-target.js';
 
 /** What a call returns inline, by kind: more than this is cut and the call says to use `save_to` (the contract caps a string at 20,000 characters). */
 const INLINE_TEXT = 15_000;
 const INLINE_BINARY = 9_000;
-/** Where `save_to` may not write: the workspace's own definitions, its recorded data and the repository. */
-const PROTECTED = new Set(['.git', '.github', '.local', 'node_modules', 'collections', 'environments', 'tests', 'datasets', 'specs', 'packages', 'mcp', 'payloads', 'runs', 'workspace.json']);
 
 /**
  * `save_output`: any output of the app (the down arrow in the window, `testpion output` in the CLI) as an agent asks for
@@ -56,7 +55,7 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
           days: { type: 'number', description: 'workspace.report: days of activity (1 to 90)' },
           history_id: str('response.body, graphql.response: a History entry whose saved response body is the output'),
           save_to: str(
-            'Write a new file here instead of returning the content: a path inside the workspace (e.g. exports/run.csv). It must not exist, and must not be a definition (collections/, environments/, tests/ …) or a program/launcher file',
+            'Write a new file here instead of returning the content: a path under exports/ or .local/exports/ (e.g. exports/run.csv). It must not exist; no other folder, hidden name or program/launcher file is allowed. Needs confirm: true',
           ),
         },
         required: ['surface'],
@@ -90,14 +89,7 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
         };
         // the target is checked before anything is built
         let target: string | undefined;
-        if (typeof a.save_to === 'string' && a.save_to) {
-          target = store.safePath(a.save_to);
-          const rel = relative(store.root, target).split(sep);
-          if (!rel[0] || rel[0] === '..' || PROTECTED.has(rel[0].toLowerCase()))
-            throw new ApsError('ValidationError', `save_to cannot write into ${rel[0] || 'the workspace folder itself'}`, { suggestions: ['Use a new file in another folder, e.g. exports/<name>.'] });
-          if (LAUNCHER_EXTENSIONS.has(fileExtension(basename(target)))) throw new ApsError('ValidationError', `save_to cannot write a ${fileExtension(basename(target))} file`);
-          if (existsSync(target)) throw new ApsError('ValidationError', `${a.save_to} already exists: save_output never replaces a file`, { suggestions: ['Choose another name.'] });
-        }
+        if (typeof a.save_to === 'string' && a.save_to) target = exportTarget(store, a.save_to, { what: 'saved outputs', arg: 'save_to' });
         const source = outputSourceFor(store, surface, asked, params);
         const ac = new AbortController();
         const r = await prepareSource(storeOutputDeps(store, redactor), { surface, format: asked, source }, ac.signal, 'save_output');

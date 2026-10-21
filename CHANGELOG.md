@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Security hardening
+
+- **MCP `save_output` only writes under `exports/`.** `save_to` is an allow-list now: a new file under `exports/` or `.local/exports/`, never over a file, never in a hidden folder (`.husky/`, `.vscode/`) or as a program file, and it asks for confirmation (`confirm: true`). `export_bundle` follows the same rule (a numbered name instead of overwriting the default file).
+- **More MCP tools ask first**: `export_traces` (sends traces to an endpoint), `security_tests_run`, `import_definition` (when it updates) and `undo_definition_import`.
+- **Imported AI providers never bring secret references.** A bundle's provider or remote MCP server is imported without its `{{$secret…}}` / `{{$env…}}` key, headers and variables (you enter the key yourself) and with only the fields TestPion knows; Review says where it sends things and warns when Replace would move one of yours to another address.
+- **Importing from a link follows the network policy.** The link and every redirect hop are checked (https only where private networks are blocked, at most 5 hops); IPv6 spellings of private addresses (`::ffff:7f00:1`, NAT64, 6to4, IPv4-compatible) are recognised.
+- **The pre-commit hook no longer expands the workspace folder name** (`$(…)`, backticks, quotes, line breaks stay text).
+- **Git paths**: the `.git` folder is refused in any spelling (`.GIT`, `GIT~1`, trailing dots) and at any depth; a file name with a line break cannot be tracked by LFS or by reference; the secret scan's allowlist fingerprints are salted and slow (older allowlists keep working).
+- **Import limits**: at most 8 import previews are kept (30 minutes), uploads are measured before they are decoded, zip bombs are caught for entries of any size and as a whole, and a bundle holds at most 512 MB once unpacked.
+- **RPC parameter checks** for the RAG, bundle and large-file calls, and a test that fails when a new call has none.
+
 ### RAG R2: every judged metric, your own metrics, SQL, Ragas parity
 
 - **84 metrics** (was 30). New judged metrics on the judge service (cache, ledger, budget, jury and swap as before): `context-precision` and `context-recall` with the judged variants, `context-entity-recall`, `factual-correctness`, `answer-correctness`, `response-groundedness`, `hallucination`, `correctness`, `completeness`, `factuality`, `citation-accuracy`, `negative-rejection`, the claim-level family (`claim-faithfulness`, `claim-recall`, `claim-hallucination`, `noise-sensitivity-relevant` / `-irrelevant` …; one claim pass is shared between them), and the judge templates (pass/fail, simple criteria, rubric, instance rubric, checklist, prompt alignment, coherence, conciseness, helpfulness, comprehensiveness, harmfulness, maliciousness). Without a judge in a RAG target run they are n/a, never a guessed score.

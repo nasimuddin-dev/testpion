@@ -1,6 +1,7 @@
 /** RPC handlers: the import dialog's preview → import → undo, the reports it keeps, and the Postman API key. */
 import {
   ApsError,
+  decodeBase64,
   expandImportFiles,
   fetchImportText,
   fetchPostmanInputs,
@@ -25,13 +26,28 @@ import {
 import type { Backend, Handlers } from '../backend.js';
 
 /** What a preview read, kept for the import that follows (the window never sends the files twice). */
-interface Session {
+export interface Session {
   inputs: ImportInput[];
   skipped: SkippedFile[];
   at: number;
 }
 const SESSIONS = new Map<string, Session>();
 const TTL_MS = 30 * 60_000;
+/** Previews kept at once (each holds what was read, up to 200 MB of text): the oldest goes when a new one needs the room. */
+export const MAX_SESSIONS = 8;
+/** The most one picked or dropped file may be, and all files of one preview together, checked on the base64 text before it is decoded. */
+const MAX_FILE_BYTES = 256 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
+
+/** Keep a preview for the import that follows; expired ones are dropped first, then the oldest while there are too many. */
+export function rememberSession(id: string, s: Session, now = Date.now()): void {
+  for (const [k, v] of SESSIONS) if (now - v.at > TTL_MS) SESSIONS.delete(k);
+  SESSIONS.set(id, s);
+  // a Map keeps insertion order: the first key is the oldest
+  while (SESSIONS.size > MAX_SESSIONS) SESSIONS.delete(SESSIONS.keys().next().value as string);
+}
+/** For tests: how many previews are kept. */
+export const sessionCount = (): number => SESSIONS.size;
 
 const KEY = 'postman.apiKey';
 
@@ -86,7 +102,10 @@ export function importHandlers(be: Backend): Handlers {
       const inputs: ImportInput[] = [];
       const skipped: SkippedFile[] = [];
       if (p.files?.length) {
-        const raw: RawImportFile[] = p.files.map((f) => ({ path: f.path, data: f.base64 !== undefined ? Buffer.from(f.base64, 'base64') : f.text ?? '' }));
+        // sizes are checked on the base64 text, before any of it is decoded
+        const asked = p.files.reduce((n, f) => n + Math.floor(((f.base64?.length ?? 0) * 3) / 4), 0);
+        if (asked > MAX_UPLOAD_BYTES) throw new ApsError('ValidationError', `Those files are larger than ${MAX_UPLOAD_BYTES / 1048576} MB together`, { suggestions: [] });
+        const raw: RawImportFile[] = p.files.map((f) => ({ path: f.path, data: f.base64 !== undefined ? decodeBase64(f.base64, MAX_FILE_BYTES, f.path) : (f.text ?? '') }));
         const r = expandImportFiles(raw, { folderName: p.folderName });
         inputs.push(...r.inputs);
         skipped.push(...r.skipped);
@@ -109,7 +128,7 @@ export function importHandlers(be: Backend): Handlers {
       }
       if (!inputs.length) throw new ApsError('ValidationError', skipped.length ? `Nothing to import: ${skipped.slice(0, 3).map((s) => `${s.path} (${s.why})`).join(', ')}` : 'Choose a file or folder, paste a document, or give a link', { suggestions: [] });
       const sessionId = shortId('imps-');
-      SESSIONS.set(sessionId, { inputs, skipped, at: Date.now() });
+      rememberSession(sessionId, { inputs, skipped, at: Date.now() });
       // a copied request (cURL, fetch …) is saved by import.apply into the "Imported" collection: there is no tree to preview
       const snippets = inputs.filter((i) => isRequestSnippet(i.text)).length;
       return { sessionId, snippets, ...planInputs(be.ws, inputs.filter((i) => !isRequestSnippet(i.text)), skipped, { scripts: p.keepPm ? 'keep' : 'tp', liftTests: p.liftTests }) };

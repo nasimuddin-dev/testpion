@@ -8,6 +8,7 @@ import {
   MemorySecretStore,
   Redactor,
   addressOf,
+  allowSalt,
   allowSecret,
   attributesText,
   changeKind,
@@ -28,6 +29,8 @@ import {
   planCodeowners,
   readSecretsAllow,
   runGit,
+  scanFileText,
+  secretFingerprint,
   scanStagedSecrets,
   shareSession,
   stageItem,
@@ -284,6 +287,19 @@ describe('big files', () => {
     }
   });
 
+  it('a file name with a line break or another control character never reaches .gitattributes or .gitignore', async () => {
+    const r = await makeRepo();
+    try {
+      for (const name of ['datasets/x\n* filter=y', 'datasets/x\r\n* -text', 'datasets/a\u0000b', 'datasets/tab\tname', 'datasets/x y', 'datasets/del\u007fx']) {
+        await expect(trackWithLfs(r.ws, name, { dryRun: true }), JSON.stringify(name)).rejects.toThrow(/control character/);
+        await expect(trackByReference(r.ws, name, { dryRun: true }), JSON.stringify(name)).rejects.toThrow(/control character/);
+      }
+      expect(readFileSync(join(r.ws, '.gitattributes'), 'utf8')).not.toContain('filter=y');
+    } finally {
+      r.cleanup();
+    }
+  });
+
   it('Git LFS: says clearly when it is not installed, else writes the rule', async () => {
     const r = await makeRepo();
     try {
@@ -444,6 +460,13 @@ describe('the allowlist and the one-click fix of the staged secret scan', () => 
     const file = readFileSync(join(r.ws, '.testpion', 'secrets-allow.json'), 'utf8');
     expect(file).not.toContain('abcdef0123456789');
     expect(file).toContain('public test key from the docs');
+    // salted: the same value in the same place does not give the plain sha256 an offline table could hold, and the salt travels with the entries
+    const salt = (JSON.parse(file) as { salt?: string }).salt;
+    expect(salt).toMatch(/^[0-9a-f]{32}$/);
+    expect(f.hash).not.toBe(secretFingerprint(f.file, f.item, f.field, KEY.slice('Bearer '.length)));
+    expect(f.hash).not.toBe(secretFingerprint(f.file, f.item, f.field, KEY));
+    expect(secretFingerprint('a', 'b', 'c', 'v', salt)).not.toBe(secretFingerprint('a', 'b', 'c', 'v', 'f'.repeat(32)));
+    expect(secretFingerprint('a', 'b', 'c', 'v', salt)).toMatch(/^[0-9a-f]{32}$/);
     const after = await scanStagedSecrets(r.ws);
     expect(after.blocking).toEqual([]);
     expect(after.allowed).toHaveLength(1);
@@ -458,6 +481,22 @@ describe('the allowlist and the one-click fix of the staged secret scan', () => 
     // and the entry can be taken out again
     expect(disallowSecret(r.ws, f.hash).removed).toBe(1);
     expect(readSecretsAllow(r.ws).entries).toEqual([]);
+  });
+
+  it('an allowlist of an earlier version (entries, no salt) keeps working with its unsalted fingerprints', async () => {
+    r.write('mcp-servers.json', servers([weather, search('https://s.example.com/v1', { headers: [{ key: 'Authorization', value: KEY, enabled: true }] })]));
+    await gitStage(r.ws, ['mcp-servers.json']);
+    expect(allowSalt(r.ws)).toMatch(/^[0-9a-f]{32}$/);
+    const f = (await scanStagedSecrets(r.ws)).blocking[0]!;
+    // the same finding under the old scheme (no salt): what an earlier version stored
+    const old = scanFileText(f.file, readFileSync(join(r.ws, f.file), 'utf8'))[0]!;
+    expect(old.hash).not.toBe(f.hash);
+    writeFileSync(join(r.ws, '.testpion', 'secrets-allow.json'), JSON.stringify({ schemaVersion: '1.0', allow: [{ file: f.file, item: f.item, field: f.field, hash: old.hash, reason: 'from an earlier version' }] }));
+    expect(allowSalt(r.ws)).toBeUndefined();
+    const scan = await scanStagedSecrets(r.ws);
+    expect(scan.blocking).toEqual([]);
+    expect(scan.allowed).toHaveLength(1);
+    writeFileSync(join(r.ws, '.testpion', 'secrets-allow.json'), JSON.stringify({ schemaVersion: '1.0', allow: [] }));
   });
 
   it('an unreadable allowlist allows nothing and says so', async () => {

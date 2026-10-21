@@ -184,6 +184,17 @@ export function workspaceFile(ws: string, rel: string): string {
   while (!existsSync(d) && dirname(d) !== d) d = dirname(d);
   const r = relative(root, realpathSync.native(d));
   if (r.startsWith('..') || isAbsolute(r)) throw new ApsError('ValidationError', `${rel} is outside the workspace`);
-  if (relative(root, abs).split(sep)[0] === '.git') throw new ApsError('ValidationError', `${rel} is inside .git`);
+  if (relative(root, abs).split(sep).some(isGitFolderName)) throw new ApsError('ValidationError', `${rel} is inside .git`);
   return abs;
+}
+
+/**
+ * Whether a path segment names a git folder on any file system git runs on: `.git` in any case (Windows and macOS
+ * ignore it), with trailing dots or spaces (Windows drops them), as the 8.3 short name `GIT~1`, with a stream suffix
+ * (`.git::$INDEX_ALLOCATION`) or with invisible characters macOS ignores. Any segment of the path, not just the first
+ * (a nested repository's hooks run as well).
+ */
+export function isGitFolderName(segment: string): boolean {
+  const s = segment.replace(/[​-‏‪-‮⁠-⁯﻿]/g, '');
+  return /^(\.git|git~\d+)[. ]*(:.*)?$/i.test(s);
 }

@@ -86,6 +86,61 @@ describe('the shape of every tool', () => {
     expect([...Object.keys(LIST_TOOLS), ...BIG_TOOLS, ...Object.keys(CONFIRM_TOOLS), ...Object.keys(OUTPUT_SCHEMAS)].filter((n) => !names.has(n))).toEqual([]);
   });
 
+  // Every tool that changes something (readOnlyHint false) asks first, unless it is listed here with the reason it can
+  // not hurt: it only writes the person's own definitions the way the editor does (git brings the old version back), or
+  // sends a request the person named. A tool that sends requests or spends money for an agent's own choice of target,
+  // or writes a file outside the definitions, is in CONFIRM_TOOLS.
+  const SENDS = 'its job is to send the requests the person asked for to the target they named (production needs --allow-production and allowProduction, the environment is the person’s)';
+  const EDITS = 'edits a definition of the workspace the way the editor does: git brings the old version back and nothing leaves the computer';
+  const RAG = 'RAG evaluation tool: its confirmation / budget default comes with the RAG hardening (findings 1 and 10 of the security review), not with this list';
+  const NO_CONFIRM: Record<string, string> = {
+    ...Object.fromEntries(
+      ['send_request', 'grpc_call', 'realtime_exchange', 'graphql_operation', 'graphql_subscribe', 'run_collection', 'run_tests', 'run_monitor', 'compare_request_across_environments', 'flow_data_run', 'flow_env_matrix', 'mcp_server_tools', 'mcp_call_tool', 'run_evaluation'].map((n) => [n, SENDS]),
+    ),
+    // load_test and api_fuzz send many requests, but refuse an external target without their own explicit opt-in (checked in the tool)
+    load_test: 'sends traffic only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',
+    api_fuzz: 'sends requests only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',
+    ...Object.fromEntries(
+      [
+        'save_test',
+        'save_request',
+        'update_request',
+        'move_request',
+        'create_collection',
+        'create_folder',
+        'set_collection_variable',
+        'set_environment_variable',
+        'reorder_environments',
+        'review_result',
+        'add_dataset_row',
+        'convert_scripts',
+        'save_monitor',
+        'flow_add_step',
+        'flow_connect',
+        'flow_disconnect',
+        'flow_update_step',
+        'flow_set_output',
+        'flow_annotate',
+        'flow_from_exchanges',
+        'import_arazzo',
+        'debugger_capture',
+        'debugger_save_to_collection',
+        'git_propose_commit',
+        'git_stage_item',
+        'restore_item',
+      ].map((n) => [n, EDITS]),
+    ),
+    ...Object.fromEntries(['rag_probe', 'rag_import_dataset', 'rag_try_metric', 'rag_run', 'rag_rescore', 'rag_validate_metric'].map((n) => [n, RAG])),
+  };
+
+  it('every tool that changes something is in CONFIRM_TOOLS or listed with the reason it needs no confirmation', () => {
+    const writes = tools.filter((t) => t.annotations?.readOnlyHint === false).map((t) => t.name);
+    expect(writes.length).toBeGreaterThan(40);
+    expect(writes.filter((n) => !CONFIRM_TOOLS[n] && !NO_CONFIRM[n])).toEqual([]);
+    // a reason is a sentence, and a tool that has since got a confirmation is taken off the list
+    expect(Object.entries(NO_CONFIRM).filter(([n, why]) => why.length < 12 || CONFIRM_TOOLS[n] || !writes.includes(n))).toEqual([]);
+  });
+
   it('every tool that deletes or overwrites takes confirm', () => {
     const destructive = tools.filter(
       (t) => /^(delete|remove)_|_remove_|_resolve$|_sync$|_tidy$|^rename_|^replace_/.test(t.name) || t.inputSchema.properties?.overwrite || t.inputSchema.properties?.remove,
