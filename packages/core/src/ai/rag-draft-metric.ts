@@ -67,6 +67,4 @@ registerVerifier('metric-examples', async (item, ctx) => {
   return { verifier: 'metric-examples', status: 'pass', label: `valid, ${examples.length} examples`, detail: 'The examples run when you press Run examples.' };
 });
 
-/** The text a task shows as "what it started from" for a kind (Draft with AI in the editor passes it as context). */
-export const metricStarter = (kind: Parameters<typeof customMetricTemplate>[0], id: string): string => stringifyYaml(customMetricTemplate(kind, id));
 

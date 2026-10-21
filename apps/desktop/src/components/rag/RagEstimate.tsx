@@ -6,7 +6,7 @@ import { formatCost } from '../../lib/format';
 import { Badge, Callout, Spinner } from '../ui';
 
 /** The cost range of an estimate in one phrase ("$0.04 to $0.09"), or why there is none. */
-export function costRange(e: RunEstimate): string {
+function costRange(e: RunEstimate): string {
   if (e.costUsd) return `${formatCost(e.costUsd.low)} to ${formatCost(e.costUsd.high)}`;
   if (e.judge) return e.judge.local ? 'free (a local model)' : 'no price set for this model';
   return '';

@@ -53,7 +53,7 @@ function defaults(type: AuthConfig['type']): AuthConfig {
 }
 
 /** An auth in a few words: its type and the value that says which credential it is ({{variables}} as written). */
-export function describeAuth(a: AuthConfig): string {
+function describeAuth(a: AuthConfig): string {
   const label = TYPES.find((t) => t.id === a.type)?.label ?? a.type;
   const x = a as Record<string, unknown>;
   const what =

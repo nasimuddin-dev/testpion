@@ -281,7 +281,7 @@ const NO_ENVIRONMENTS: WorkspaceCurrent['environments'] = [];
 export const selectEnvironments = (s: { workspace?: WorkspaceCurrent }): WorkspaceCurrent['environments'] => s.workspace?.environments ?? NO_ENVIRONMENTS;
 
 /** The request editors: they use the Collections explorer as their (only) sidebar and aren't on the rail. */
-export const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
+const REQUEST_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections'];
 export const isRequestView = (v: ViewId) => REQUEST_VIEWS.includes(v);
 
 /** A place in the app: a view, and the item opened in it when there is one. */

@@ -313,5 +313,3 @@ export function recordProvenance(store: WorkspaceStore, doc: ImportDocument, imp
   for (const id of Object.keys(s.collections)) if (!live.has(id) && id !== saved.id) delete s.collections[id];
   write(store, s);
 }
-
-export const reimportRecordsExist = (store: WorkspaceStore): boolean => existsSync(file(store));

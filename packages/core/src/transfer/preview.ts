@@ -116,6 +116,3 @@ export function previewImport(store: WorkspaceStore, bundle: ParsedBundle): Impo
     missing: m.missing,
   };
 }
-
-/** The key a decision is given under: `kind:id`. */
-export const previewKey = (i: Pick<PreviewItem, 'kind' | 'id'>): string => itemKey(i.kind, i.id);

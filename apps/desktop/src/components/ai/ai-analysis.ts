@@ -1,15 +1,11 @@
 import { useApp, type AiAnalysisRequest } from '../../store';
 import type { MenuItem } from '../ui';
 import { aiMenuItems } from '../../lib/ai-menu';
-import { LABEL } from '../../lib/vocabulary';
 
 /** Open an AI analysis (AI-2 / AI-5 / AI-9): the one way, from every run view, the Problems list, the test history and the API definitions. */
 export function startAiAnalysis(req: AiAnalysisRequest): void {
   useApp.getState().set({ aiAnalysis: req });
 }
-
-export const TRIAGE_LABEL = LABEL.triageWithAi;
-export const FLAKY_LABEL = LABEL.whyFlaky;
 
 /** The ⋯ / right-click item of a failed run (run header, runs list, Problems, a monitor's failing run): the same label and icon everywhere; none while AI is hidden. */
 export function triageRunItems(runId: string, opts: { title?: string; separator?: boolean } = {}): MenuItem[] {

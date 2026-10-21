@@ -31,7 +31,7 @@ export const openExportBundle = (r: ExportRequest): void => useApp.getState().se
 export const openImportBundle = (r: ImportRequest = {}): void => useApp.getState().set({ importBundle: r });
 
 /** A bundle file dropped on the window (or chosen in a browser) → the Import dialog with its preview. */
-export async function importBundleFile(file: File): Promise<void> {
+async function importBundleFile(file: File): Promise<void> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));

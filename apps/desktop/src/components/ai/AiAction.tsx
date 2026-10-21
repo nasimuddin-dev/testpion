@@ -21,7 +21,7 @@ export function startAi(req: AssistantRequest): void {
 export const askAssistant = (): void => startAi({ task: 'free', title: 'Ask the assistant', context: {} });
 
 /** Whether a model is chosen for the AI features (else the panel shows how to set one up). */
-export const aiConfigured = (s = useApp.getState().settings) => !!(s?.assistantProvider || s?.ai?.small?.provider || s?.ai?.large?.provider);
+const aiConfigured = (s = useApp.getState().settings) => !!(s?.assistantProvider || s?.ai?.small?.provider || s?.ai?.large?.provider);
 
 /**
  * The one AI button (AIB-10): ✦ label, and beside it "What will be sent…" (the exact payload, the privacy level, the

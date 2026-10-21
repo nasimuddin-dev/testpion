@@ -143,9 +143,6 @@ export const LIBRARY_OF: Partial<Record<BundleKindId, string>> = {
   monitor: 'monitors',
 };
 
-/** Kinds stored as a file of their own that the bundle holds as bytes. */
-export const isRawKind = (k: BundleKindId): boolean => k in RAW_ROOT;
-
 export const itemKey = (kind: string, id: string): string => `${kind}:${id}`;
 
 /* ------------------------------------------------------------------ parsing JSON from outside */

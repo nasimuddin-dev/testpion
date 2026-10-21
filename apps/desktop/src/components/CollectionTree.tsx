@@ -36,7 +36,7 @@ export { CATEGORY_META } from './CollectionTreeRows';
 export type { ExtraGroup } from '../lib/tree-rows';
 
 /** The one name of "new request of this kind" in every menu and button: New HTTP request, New GraphQL request … */
-export const newRequestOf = (cat: RequestCategory) => (cat === 'rest' ? 'New HTTP request' : `New ${CATEGORY_META[cat].label} request`);
+const newRequestOf = (cat: RequestCategory) => (cat === 'rest' ? 'New HTTP request' : `New ${CATEGORY_META[cat].label} request`);
 
 /** Per collection: sent requests and how many are failing now; refreshed after requests and runs (debounced). */
 function useCollectionsHealth(): Record<string, { sent: number; failing: number }> {

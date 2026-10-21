@@ -171,6 +171,3 @@ const BY_ID = new Map<string, AiActionDef>(AI_ACTIONS.map((a) => [a.id, a]));
 
 /** An AI action by its menu action id. */
 export const aiActionOf = (id: string): AiActionDef | undefined => BY_ID.get(id);
-
-/** Whether a menu action id is one of the AI table's (a view cannot make up an AI item). */
-export const isAiAction = (id: string): boolean => BY_ID.has(id);
