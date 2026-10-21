@@ -212,6 +212,45 @@ const steps = [
      const cancel = footer('Cancel'); if (cancel) await __t.real.click(cancel);
      return 'error said: ' + said + ' | choose another: true | picker back: ' + !!picker;`,
   ),
+  // leftovers B: a folder or a request exports as a part of its collection, a collection or a folder takes a bundle's requests (Import here…)
+  s(
+    'folder-and-request-menus',
+    `await __t.requests(); const col = await __t.waitFor(() => node('httpbin'), 3000); if (!col) return 'NO ROW httpbin';
+     await unfold(col);
+     const folder = await __t.waitFor(() => node('httpbin:hb-basics'), 3000); if (!folder) return 'NO ROW folder';
+     if (!(await menuOf(folder))) return 'NO MENU (folder)';
+     const f = items(); await close();
+     await unfold(folder);
+     const req = await __t.waitFor(() => node('httpbin:hb-headers'), 3000); if (!req) return 'NO ROW request';
+     if (!(await menuOf(req))) return 'NO MENU (request)';
+     const r = items(); await close();
+     if (!(await menuOf(col))) return 'NO MENU (collection)';
+     const c = items(); await close();
+     const has = (l, re) => l.filter((x) => re.test(x)).join(',');
+     return 'folder: ' + has(f, /^(Export…|Import here…)$/) + ' | request: ' + has(r, /^(Export…|Import here…)$/) + ' | collection: ' + has(c, /^Import here…$/);`,
+  ),
+  s(
+    'export-a-folder-as-a-part',
+    `const folder = node('httpbin:hb-basics'); if (!(await menuOf(folder))) return 'NO MENU';
+     if (!(await pick('Export…'))) return 'NO ITEM Export…';
+     const d = await __t.waitFor(() => dialog('export-bundle'), 3000); if (!d) return 'NO DIALOG';
+     const sum = await __t.waitFor(() => dialog('export-bundle-summary'), 8000); if (!sum) return 'NO SUMMARY';
+     const t = sum.textContent.replace(/\\s+/g, ' ');
+     const tree =!!d.querySelector('[data-testid="export-bundle-tree"] input[type=checkbox]');
+     const globals = d.textContent.includes('Include the workspace variables (Globals)');
+     const cancel = footer('Cancel'); if (cancel) await __t.real.click(cancel);
+     return 'items: ' + (/(\\d+) items? ·/.exec(t)?.[1] ?? 'NO') + ' | a collection of its own: ' + (/1 Collection/.test(t) && t.includes(' / ')) + ' | tree: ' + tree + ' | globals switch: ' + globals;`,
+  ),
+  s(
+    'import-here-opens-the-import-dialog-for-that-folder',
+    `const folder = node('httpbin:hb-basics'); if (!(await menuOf(folder))) return 'NO MENU';
+     if (!(await pick('Import here…'))) return 'NO ITEM Import here…';
+     const d = await __t.waitFor(() => dialog('import-bundle'), 4000); if (!d) return 'NO DIALOG';
+     await __t.waitFor(() => dialog('import-bundle')?.querySelector('[data-action]'), 6000);
+     const title = document.querySelector('[role=dialog] h2, [role=dialog] [class*=Title]')?.textContent.trim();
+     const cancel = footer('Cancel'); if (cancel) await __t.real.click(cancel);
+     return 'title: ' + title;`,
+  ),
   s(
     'file-menu-and-palette-have-the-bundle-commands',
     `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
@@ -241,6 +280,9 @@ module.exports = withExpect(
     'a-bundle-to-drop': /^copied$/,
     'a-dropped-bundle-opens-one-dialog': /^dialogs: 1 \| generic import: false \| title: Import a bundle$/,
     'a-file-that-is-not-a-bundle-has-a-way-out': /^error said: true \| choose another: true \| picker back: true$/,
+    'folder-and-request-menus': /^folder: Export…,Import here… \| request: Export… \| collection: Import here…$/,
+    'export-a-folder-as-a-part': /^items: 1 \| a collection of its own: true \| tree: true \| globals switch: true$/,
+    'import-here-opens-the-import-dialog-for-that-folder': /^title: Import a bundle into “[^”]+”$/,
     'file-menu-and-palette-have-the-bundle-commands': /^import command: true \| export command: true$/,
   },
   { prepare, env: (out) => ({ E2E_STUB_SAVE: join(out, OUT_NAME), E2E_STUB_OPEN: join(out, OUT_NAME) }) },

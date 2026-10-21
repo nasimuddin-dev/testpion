@@ -50,7 +50,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
   // items (`kind:id`) that something picked uses and the person unticked; their names are kept so they can be added back
   const [excluded, setExcluded] = useState<Record<string, string>>({});
   const params = useMemo(
-    () => ({ selection: request.selection, section: request.section, folder: request.folder, all: request.all, title: request.title, uses, datasets, workspaceVariables: globals, exclude: Object.keys(excluded) }),
+    () => ({ selection: request.selection, section: request.section, folder: request.folder, all: request.all, title: request.title, uses, datasets, workspaceVariables: globals, exclude: uses ? Object.keys(excluded) : [] }),
     [request, uses, datasets, globals, excluded],
   );
 
@@ -195,7 +195,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
                 );
               })}
             </ul>
-            {Object.keys(excluded).length > 0 && (
+            {uses && Object.keys(excluded).length > 0 && (
               <div className="flex flex-wrap items-center gap-2" data-testid="export-bundle-left-out">
                 <span className="text-muted">Left out:</span>
                 {Object.entries(excluded).map(([key, name]) => (

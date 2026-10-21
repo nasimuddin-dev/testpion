@@ -93,7 +93,7 @@ describe('architecture', () => {
 
   it('a handler saves a file for the user through Backend.saveOrDownload (or saveText): a cancelled dialog must never fall back to a download', () => {
     const asks: string[] = [];
-    for (const f of files('apps/desktop/backend/handlers')) if (/saveDialog/.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')) && !/handlers\/app\.ts$/.test(rel(f))) asks.push(rel(f));
+    for (const f of files('apps/desktop/backend/handlers')) if (/\bsaveDialog\b/.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')) && !/handlers\/app\.ts$/.test(rel(f))) asks.push(rel(f));
     expect(asks).toEqual([]);
   });
 
@@ -151,11 +151,11 @@ describe('one mechanism per concern (B-41)', () => {
   const hosts = [...core, ...files('packages/shared/src'), ...files('packages/cli/src'), ...files('apps/desktop/backend')];
   const src = (f: string) => readFileSync(f, 'utf8');
 
-  it('zip archives are parsed by one reader: the hardened one (transfer/zip.ts); the import reader sits on its structure parser', () => {
-    // anything that inflates a zip entry (raw deflate) is a reader; only these two may, and the import one asks the hardened parser for the structure
+  it('zip archives are parsed by one reader: the hardened one (transfer/zip.ts); the import reader is a policy over it', () => {
+    // anything that inflates a zip entry (raw deflate) is a reader; only the hardened one may, and the import one is a policy over it
     const inflaters = hosts.filter((f) => /\binflateRaw(Sync)?\b/.test(src(f))).map(rel);
-    expect(inflaters.sort()).toEqual(['packages/core/src/import/zip.ts', 'packages/core/src/transfer/zip.ts']);
-    expect(src(join(root, 'packages/core/src/import/zip.ts'))).toMatch(/from '\.\.\/transfer\/zip\.js'/);
+    expect(inflaters.sort()).toEqual(['packages/core/src/transfer/zip.ts']);
+    expect(src(join(root, 'packages/core/src/import/zip.ts'))).toMatch(/readZip as readHardenedZip/);
     // nothing else reads the end-of-central-directory (0x06054b50) or central-directory (0x02014b50) signature
     const parsers = hosts
       .filter((f) => /0x06054b50|0x02014b50/.test(src(f)))

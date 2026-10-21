@@ -53,12 +53,13 @@ testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
 testpion export <collection>  Export a collection as Postman v2.1 (or TestPion JSON)
-testpion export <kind:id…> --out <file>   A TestPion bundle of any items (--section <kind>, --all, --uses for everything they use)
+testpion export <kind:id…> --out <file>   A TestPion bundle of any items (`folder:<collection>/<folder>` and `request:<collection>/<request>` for a part of a collection, --section <kind>, --folder <kind:name> for the items in a folder of a list, --all, --uses for everything they use, --exclude kind:id… to leave some of those out, --globals / --no-globals for the workspace variables)
+testpion export <collection> --format postman|bruno --extras --out <zip|folder>   A collection for another tool with what it uses (environments, workspace variables as Postman globals, API definitions, data files, .mcp.json); secret values never
 testpion bundle inspect <file>   Read a bundle without a workspace: what it holds, what it needs, what to review
 testpion export-environment <name>   Export an environment in Postman's format
 testpion mcp-server           Serve a workspace to AI agents over MCP (stdio)
 testpion load <url>           Safeguarded load test (--threshold "p95<500" "errors<1%" to pass/fail; --grpc <method> for a gRPC server; --collection, or --test-file <flow> for a whole flow per virtual user)
-testpion import <bundle> -w [--preview] [--on-conflict keep-both|replace|skip]   Preview or import a TestPion bundle; --undo <importId> takes an import back
+testpion import <bundle> -w [--preview] [--on-conflict keep-both|replace|skip] [--globals merge|replace|skip] [--into <collection[/folder]>]   Preview or import a TestPion bundle; --globals decides what happens to the workspace variables it carries, --into adds its collection's requests under a collection or folder, --undo <importId> takes an import back
 testpion import <input...> -w [--preview|--apply] [--report file]   Import OpenAPI/Swagger, Postman, Insomnia, Bruno (a collection folder too), Hoppscotch, OpenCollection YAML, WSDL (SOAP), a GraphQL schema, HAR, collections, Arazzo workflows (as flow files), or a copied cURL / fetch / PowerShell request; several files, a folder or a ZIP are previewed first. `import-report [id]` and `import-undo <id…>` read and take back an import
 testpion env list|order|diff -w  List environments; set their order; compare two
 testpion monitor list|add|remove|run|results|uptime|start -w  Collections or test files (flows) on a schedule (monitors; add --test-file <path>)

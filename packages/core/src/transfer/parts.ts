@@ -60,7 +60,7 @@ export function partialCollection(c: Collection, nodeIds: readonly string[]): Pa
   const names: string[] = [];
   const items = keep(c.items, want, found, names);
   const lost = [...want].filter((x) => !found.has(x));
-  if (lost.length) throw new ApsError('ValidationError', `No folder or request ${lost.slice(0, 3).map((x) => `"${x.slice(0, 60)}"`).join(', ')} in collection "${c.name}"`, { suggestions: ['Use the ids shown by `testpion collection show`, or the names of the folders and requests'] });
+  if (lost.length) throw new ApsError('ValidationError', `No folder or request ${lost.slice(0, 3).map((x) => `"${x.slice(0, 60)}"`).join(', ')} in collection "${c.name}"`, { suggestions: ['Use the id or the name of a folder or request (`testpion requests <collection>` lists them)'] });
   const tag = names.length === 1 ? names[0]! : `${names[0]} and ${names.length - 1} more`;
   const id = `${slugify(c.id)}-${slugify(names.length === 1 ? names[0]! : `${names[0]}-plus-${names.length - 1}`)}`.slice(0, 120);
   return { collection: { ...c, id, name: `${c.name} / ${tag}`.slice(0, 200), items }, names };

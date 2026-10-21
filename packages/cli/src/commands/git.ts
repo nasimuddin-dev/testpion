@@ -193,7 +193,7 @@ export function registerGitCommands(git: Command, program: Command): void {
       .argument('<file>', 'path inside the workspace, e.g. collections/payments.json')
       .option('--ours', 'keep your version of what conflicts')
       .option('--theirs', 'take their version of what conflicts')
-      .option('--pick <key=side...>', 'a choice per conflict (keys from `testpion git conflicts`), e.g. item:r1=theirs item:r1#request.url=ours hunk:0=ours; the rest keep --ours/--theirs (default ours)')
+      .option('--pick <key=side...>', 'a choice per conflict (keys from `testpion git conflicts`), e.g. item:r1=theirs item:r1#request.url=ours hunk:0=ours step:create-order=theirs (a step of a test or flow file); the rest keep --ours/--theirs (default ours)')
       .option('--edit <key=value...>', 'your own value for a conflict: JSON for an item or field key (item:r1#request.url="https://…"), plain text for a hunk key (hunk:0=the lines to keep)'),
   ).action((file: string, o) =>
     withWorkspace(o.workspace, async (s) => {
@@ -205,6 +205,7 @@ export function registerGitCommands(git: Command, program: Command): void {
       });
       const edits = ((o.edit as string[] | undefined) ?? []).map((kv) => {
         const [key, value] = splitKeyValue(kv, '--edit');
+        if (key.startsWith('step:')) throw new CliError(`--edit ${key}: a step is settled with --pick ${key}=ours|theirs; edit one of its hunks (hunk:<n>)`, EXIT.CONFIG_ERROR);
         if (!key.startsWith('hunk:')) {
           try {
             JSON.parse(value);
@@ -220,7 +221,7 @@ export function registerGitCommands(git: Command, program: Command): void {
       if (picks.length || edits.length) {
         // only the conflicts named get their own answer: the rest keep `side` (the core fills them in)
         const detail = await gitConflictDetail(s.root, file);
-        const keys = new Set([...detail.items.flatMap((i) => [i.key, ...(i.fields ?? []).map((f) => f.key)]), ...detail.hunks.map((h) => h.key)]);
+        const keys = new Set([...detail.items.flatMap((i) => [i.key, ...(i.fields ?? []).map((f) => f.key)]), ...detail.hunks.map((h) => h.key), ...(detail.steps ?? []).map((st) => st.key)]);
         for (const k of [...picks.map(([k]) => k), ...edits.map(([k]) => k)])
           if (!keys.has(k)) throw new CliError(`No conflict "${k}" in ${file}. Keys: ${[...keys].join(', ') || '(none)'}`, EXIT.CONFIG_ERROR);
         for (const [k, v] of picks) resolutions[k] = v;
@@ -262,6 +263,7 @@ export function registerGitCommands(git: Command, program: Command): void {
             if (i.fields?.length) for (const f of i.fields) console.log(`    ${yellow(f.key)}  ${dim(`mine ${JSON.stringify(f.ours ?? '(deleted)')} · theirs ${JSON.stringify(f.theirs ?? '(deleted)')}`)}`);
             else for (const p of i.parts.filter((x) => x.differs)) console.log(dim(`    ${p.part}: mine ${JSON.stringify(p.ours ?? '(deleted)')} · theirs ${JSON.stringify(p.theirs ?? '(deleted)')}`));
           }
+          for (const st of d.steps ?? []) console.log(`  ${yellow(st.key)}  step ${st.step} ${dim(`(settles ${st.hunks.join(', ')})`)}`);
           for (const h of d.hunks) {
             console.log(`  ${yellow(h.key)}  ${h.where}`);
             console.log(dim(`    mine:\n${h.ours.replace(/\n$/, '').replace(/^/gm, '      ')}\n    theirs:\n${h.theirs.replace(/\n$/, '').replace(/^/gm, '      ')}`));
