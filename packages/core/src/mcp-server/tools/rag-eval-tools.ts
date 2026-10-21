@@ -117,7 +117,8 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
         type: 'object',
         properties: {
           metric: str('A metric id, alias or Ragas name (rag_metrics)'),
-          options: { type: 'object', description: 'Metric options, e.g. { mode: "chunks" } or { k: 5 }' },
+          options: { type: 'object', description: 'Metric options, e.g. { mode: "chunks" } or { k: 5 }. A `database` here is ignored: a SQL metric uses the database of a saved evaluation (`evaluation`)' },
+          evaluation: str('A saved evaluation whose `database` the SQL metrics (datacompy-score, sql-equivalence) use. A PostgreSQL or MySQL connection also needs the person to have allowed it on this computer (`testpion rag trust-db`); an agent cannot allow it'),
           question: str('The question'),
           answer: str('The answer to score'),
           contexts: strList('The retrieved contexts (texts)'),
@@ -166,7 +167,8 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
             sample = { ...sample, answer: p.sample.answer, contexts: p.sample.contexts, latencyMs: p.latencyMs };
           }
           const j = a.judge || a.allow_images === true ? { ...(a.judge ? { provider: String(a.judge).split('/')[0], ...(String(a.judge).includes('/') ? { model: String(a.judge).split('/').slice(1).join('/') } : {}) } : {}), ...(a.allow_images === true ? { allowImages: true } : {}) } : undefined;
-          const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: store.root }, { metric: { ...((a.options as Record<string, unknown>) ?? {}), type: String(a.metric) }, sample, judge: j, dryRun: a.dry_run === true });
+          const database = a.evaluation ? findSavedEvaluation(store, String(a.evaluation)).database : undefined;
+          const r = await tryMetric({ providers: ctx.services.providers, ragJudge: ctx.services.ragJudge!, workspaceRoot: store.root }, { metric: { ...((a.options as Record<string, unknown>) ?? {}), type: String(a.metric) }, sample, judge: j, dryRun: a.dry_run === true, database });
           return { ...r, sample: { question: sample.question, answer: sample.answer?.slice(0, 1000), contexts: sample.contexts?.length } };
         } finally {
           await ctx.dispose();

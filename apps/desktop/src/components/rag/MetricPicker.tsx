@@ -7,7 +7,7 @@ import { useApp } from '../../store';
 import type { CheckConfig } from '../../types';
 import { AssertionEditor } from '../AssertionEditor';
 import { Badge, Button, Callout, Input, IconButton, Segmented, Select, Spinner, Toggle, cx } from '../ui';
-import { MetricEditor } from './CustomMetrics';
+import { MetricEditor, metricFilesChanged } from './CustomMetrics';
 import { metricResolver, type MetricCatalogue, type MetricRow } from './metric-resolver';
 
 type Row = MetricRow;
@@ -115,7 +115,7 @@ export function MetricPicker({
   onTry?(check: CheckConfig): void;
   footer?: ReactNode;
 }) {
-  const cat = useRpc<Catalogue>('rag.metrics', { columns, hasTarget }, { keep: true, reloadOn: ['data.changed'] });
+  const cat = useRpc<Catalogue>('rag.metrics', { columns, hasTarget }, { keep: true, reloadOn: ['data.changed'], reloadIf: metricFilesChanged });
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'free' | 'judged' | 'selected'>('all');
   const [open, setOpen] = useState<string>();

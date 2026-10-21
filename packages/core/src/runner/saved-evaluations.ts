@@ -56,7 +56,15 @@ export function judgeSetupOf(d: Pick<SavedEvaluation, 'judge' | 'maxJudgeCostUsd
 /** The evaluators of an evaluation as they run: Ragas' own options when `compat: ragas`, the evaluation's database for the SQL metrics. */
 export function evaluatorsOf(d: Pick<SavedEvaluation, 'evaluators' | 'compat' | 'database'>): CheckConfig[] {
   const list = d.compat === 'ragas' ? applyRagasCompat(d.evaluators ?? []) : (d.evaluators ?? []);
-  return d.database ? list.map((e) => (['datacompy-score', 'sql-equivalence', 'datacompy_score', 'DataCompyScore', 'sql_query_equivalence'].includes(e.type) && !e.database ? { ...e, database: d.database } : e)) : list;
+  return withEvaluationDatabase(list, d.database);
+}
+
+/**
+ * The evaluation's database given to its SQL metrics. A caller that takes evaluators from outside (an RPC from the window, a
+ * tool call) strips their `database` first (`stripCallerDatabase`) and passes the database of a SAVED evaluation here.
+ */
+export function withEvaluationDatabase(list: CheckConfig[], database: SavedEvaluation['database']): CheckConfig[] {
+  return database ? list.map((e) => (['datacompy-score', 'sql-equivalence', 'datacompy_score', 'DataCompyScore', 'sql_query_equivalence'].includes(e.type) && !e.database ? { ...e, database } : e)) : list;
 }
 
 export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Record<string, unknown> {

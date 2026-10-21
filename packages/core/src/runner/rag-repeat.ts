@@ -42,7 +42,7 @@ export async function scoreTargetRepeats(o: { n: number; configs: CheckConfig[];
     if (o.signal?.aborted) break;
     try {
       const r = await o.call();
-      const ctx: CheckContext = { ...r.ctx, services: o.first.ctx.services, judge: o.first.ctx.judge, workspaceRoot: o.first.ctx.workspaceRoot };
+      const ctx: CheckContext = { ...r.ctx, services: o.first.ctx.services, judge: o.first.ctx.judge, workspaceRoot: o.first.ctx.workspaceRoot ?? r.ctx.workspaceRoot };
       if (r.ctx.text !== o.first.ctx.text) differing++;
       repeats.push({ answer: (r.ctx.text ?? '').slice(0, 2000), ...(r.ctx.latencyMs !== undefined ? { latencyMs: r.ctx.latencyMs } : {}) });
       rounds.push((await scoreRagSample(o.configs, ctx)).checks);

@@ -7,7 +7,7 @@
 import type { CustomMetricExampleSample, CustomMetricFile } from '@testpion/shared';
 import type { CheckConfig, CheckResult } from '../../../model/types.js';
 import type { ProviderRegistry } from '../../../ai/index.js';
-import { listMetricFiles } from '../../../storage/metric-files.js';
+import { listMetricFiles, metricFilesStamp } from '../../../storage/metric-files.js';
 import type { WorkspaceStore } from '../../../storage/workspace.js';
 import { overrideCheck, unregisterCheck } from '../../checks.js';
 import type { RagJudgeSetup } from '@testpion/shared';
@@ -95,7 +95,10 @@ export function compileCustomMetric(f: CustomMetricFile): CompiledMetric {
 
 const registered = new Map<string, string>();
 
-export function registerCustomMetric(c: CompiledMetric): void {
+/** What the registry holds came from this folder in this state (set by `syncCustomMetrics`; any other change to the registry forgets it). */
+let lastSync: { dir: string; stamp: string; result: SyncResult } | undefined;
+
+function registerInternal(c: CompiledMetric): void {
   const old = getMetric(c.def.id);
   if (old) unregisterMetric(c.def.id);
   registerMetric(c.def);
@@ -103,10 +106,21 @@ export function registerCustomMetric(c: CompiledMetric): void {
   registered.set(c.def.id, c.hash);
 }
 
-export function unregisterCustomMetric(id: string): void {
+function unregisterInternal(id: string): void {
   unregisterMetric(id);
   unregisterCheck(id);
   registered.delete(id);
+}
+
+/** Register one compiled metric by hand (a draft, a test). The next sync reads the folder again. */
+export function registerCustomMetric(c: CompiledMetric): void {
+  lastSync = undefined;
+  registerInternal(c);
+}
+
+export function unregisterCustomMetric(id: string): void {
+  lastSync = undefined;
+  unregisterInternal(id);
 }
 
 export interface SyncResult {
@@ -114,6 +128,8 @@ export interface SyncResult {
   registered: string[];
   /** Files that could not be registered, with why. */
   files: Array<{ id: string; path: string; problems: MetricProblem[] }>;
+  /** Every file that parsed, by id (read by the lists, which would otherwise parse each file a second time). */
+  parsed?: Map<string, CustomMetricFile>;
 }
 
 /** Formula metrics that read each other in a circle cannot run: found over the whole set, since a file only knows its own text. */
@@ -138,6 +154,25 @@ function cycleProblems(all: Map<string, CustomMetricFile>): Map<string, MetricPr
 
 /** Registers the workspace's valid metric files and forgets the ones that are gone. */
 export function syncCustomMetrics(store: Pick<WorkspaceStore, 'path'>): SyncResult {
+  // the same folder in the same state as the last sync: the registry already holds exactly these files (no read, no parse)
+  const dir = store.path('metrics');
+  const stamp = metricFilesStamp(store);
+  if (lastSync && lastSync.dir === dir && lastSync.stamp === stamp) return lastSync.result;
+  const result = syncFiles(store);
+  lastSync = { dir, stamp, result };
+  return result;
+}
+
+/** Forget what the last sync registered (the next one reads the folder again). */
+export function forgetSyncedMetrics(): void {
+  lastSync = undefined;
+}
+
+/** Counts how many times the folder was really read, for tests and profiling. */
+export const syncStats = { reads: 0 };
+
+function syncFiles(store: Pick<WorkspaceStore, 'path'>): SyncResult {
+  syncStats.reads++;
   const files = listMetricFiles(store);
   const known = new Set(files.map((f) => f.id));
   const parsed = new Map<string, CustomMetricFile>();
@@ -160,15 +195,16 @@ export function syncCustomMetrics(store: Pick<WorkspaceStore, 'path'>): SyncResu
     progress = false;
     for (const f of [...pending]) {
       if (dependsOn(f).some((d) => !now.has(`custom/${d}`))) continue;
-      registerCustomMetric(compileCustomMetric(f));
+      registerInternal(compileCustomMetric(f));
       now.add(`custom/${f.id}`);
       pending = pending.filter((x) => x !== f);
       progress = true;
     }
   }
   for (const f of pending) problems.get(f.id)!.problems.push({ level: 'error', field: 'expression', message: `It reads a custom metric that has an error (${dependsOn(f).filter((d) => !now.has(`custom/${d}`)).join(', ')}).` });
-  for (const id of [...registered.keys()]) if (!now.has(id)) unregisterCustomMetric(id);
+  for (const id of [...registered.keys()]) if (!now.has(id)) unregisterInternal(id);
   return {
+    parsed: new Map([...parsed].map(([id, f]) => [id, f])),
     registered: [...now],
     files: [...problems.entries()].filter(([, v]) => v.problems.length).map(([id, v]) => ({ id, path: v.path, problems: v.problems })),
   };

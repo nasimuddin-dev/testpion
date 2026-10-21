@@ -135,6 +135,20 @@ function add(s: Scan, source: SearchSource, facts: Facts, row: Omit<SearchRow, '
   s.rows.push({ source, ...row, sortTime });
 }
 
+/** `add` for a source whose lazy facts cost an asynchronous file read: the event loop runs between the reads. */
+async function addAsync(s: Scan, source: SearchSource, facts: Facts, row: Omit<SearchRow, 'source'>, sortTime: number, lazy: () => Promise<Facts | undefined>): Promise<void> {
+  const stat = (s.perSource[source] ??= { scanned: 0, matched: 0 });
+  stat.scanned++;
+  const slow = s.q.where.filter((c) => LAZY.has(c.field));
+  if (!s.q.where.every((c) => slow.includes(c) || holds(c, facts, s.now))) return;
+  if (slow.length) {
+    const more = await lazy();
+    if (!more || !slow.every((c) => holds(c, more, s.now))) return;
+  }
+  stat.matched++;
+  s.rows.push({ source, ...row, sortTime });
+}
+
 function scanHistory(store: WorkspaceStore, s: Scan): void {
   const { q } = s;
   const kinds = q.where.filter((c) => c.field === 'kind' && c.op === 'eq');
@@ -295,7 +309,7 @@ async function scanResults(store: WorkspaceStore, s: Scan): Promise<void> {
   }
 }
 
-function scanTraces(store: WorkspaceStore, s: Scan): void {
+async function scanTraces(store: WorkspaceStore, s: Scan): Promise<void> {
   const { q } = s;
   const kinds = q.where.filter((c) => c.field === 'kind' && c.op === 'eq');
   const failedOnly = q.where.some((c) => c.field === 'failed' && c.value === true);
@@ -306,7 +320,7 @@ function scanTraces(store: WorkspaceStore, s: Scan): void {
     for (const t of page) {
       if (t.startTime < oldest) return;
       const failed = t.status !== 'ok';
-      add(
+      await addAsync(
         s,
         'traces',
         { text: [t.name, t.kind, t.status], time: t.startTime, name: [t.name], kind: [t.kind], failed, duration: t.durationMs, spans: t.spanCount },
@@ -320,15 +334,15 @@ function scanTraces(store: WorkspaceStore, s: Scan): void {
           ref: { kind: 'trace', traceId: t.id },
         },
         t.startTime,
-        () => {
+        async () => {
           if (loads >= SEARCH_SCAN.traceFiles) {
             s.capped.add('traces');
             return undefined;
           }
           loads++;
           try {
-            const trace = store.loadTrace(t.id);
-            const spans = trace?.spans ?? [];
+            // read without blocking the process: up to 300 files, each its own turn of the event loop
+            const spans = (await store.loadTraceAsync(t.id))?.spans ?? [];
             return { span: spans.map((x) => x.name), error: spans.flatMap((x) => (x.error ? [x.error] : [])) };
           } catch {
             return undefined;
@@ -353,7 +367,7 @@ export async function runSearchQuery(store: WorkspaceStore, query: SearchQuery, 
     if (source === 'history') scanHistory(store, s);
     else if (source === 'runs') scanRuns(store, s);
     else if (source === 'results') await scanResults(store, s);
-    else scanTraces(store, s);
+    else await scanTraces(store, s);
   }
   const dir = q.sort.dir === 'asc' ? 1 : -1;
   const key = (r: SearchRow & { sortTime: number }) => (q.sort.by === 'duration' ? r.durationMs : r.sortTime);

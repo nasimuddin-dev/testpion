@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { call, on } from '../api';
 
 /**
@@ -9,8 +9,10 @@ import { call, on } from '../api';
  * no call and answers `undefined`. `scope` is what the answer belongs to besides the params (e.g. the open workspace's
  * path): when it changes the call is made again, as for new params.
  */
-export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T; reloadOn?: string[]; enabled?: boolean; keep?: boolean; scope?: string } = {}): T | undefined {
+export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T; reloadOn?: string[]; /** Reload only for the events this accepts (a `data.changed` that touched files of the kinds the view lists). */ reloadIf?: (event: never) => boolean; enabled?: boolean; keep?: boolean; scope?: string } = {}): T | undefined {
   const [data, setData] = useState<T>();
+  const reloadIf = useRef(opts.reloadIf);
+  reloadIf.current = opts.reloadIf;
   const key = JSON.stringify(params ?? null);
   const scope = opts.scope;
   const enabled = opts.enabled ?? true;
@@ -28,7 +30,7 @@ export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T
         () => live && setData(opts.fallback),
       );
     load();
-    const offs = events ? events.split('\0').map((ch) => on(ch, load)) : [];
+    const offs = events ? events.split('\0').map((ch) => on(ch, (e) => (!reloadIf.current || reloadIf.current(e as never)) && load())) : [];
     return () => {
       live = false;
       offs.forEach((off) => off());

@@ -27,6 +27,7 @@ export function RagTryDialog({
   question,
   initial,
   judge,
+  evaluation,
   onClose,
 }: {
   /** The metric as a check config: { type, threshold?, mode? … }. */
@@ -39,6 +40,8 @@ export function RagTryDialog({
   initial?: TrySample;
   /** The evaluation's judge, started with and changeable here. */
   judge?: { provider?: string; model?: string; allowImages?: boolean };
+  /** The saved evaluation the metric belongs to: a SQL metric uses its database (the request never names one). */
+  evaluation?: string;
   onClose(): void;
 }) {
   const env = useApp((s) => s.environment);
@@ -87,7 +90,7 @@ export function RagTryDialog({
     if (!effective.answer && !effective.question) return;
     let live = true;
     const t = setTimeout(() => {
-      call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, sample: effective, fields, judge: judgeParam, dryRun: true, environment: env }).then(
+      call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, ...(evaluation ? { evaluation } : {}), sample: effective, fields, judge: judgeParam, dryRun: true, environment: env }).then(
         (r) => live && (setDry(r), setDryError(undefined)),
         (e) => live && (setDry(undefined), setDryError(asError(e).message)),
       );
@@ -104,7 +107,7 @@ export function RagTryDialog({
     setBusy('probe');
     setResult(undefined);
     try {
-      const r = await call<TryResult & { sample: TrySample }>('rag.metric.try', { metric, options: { ...check, type: undefined }, target, question: q, fields, judge: judgeParam, dryRun: true, environment: env });
+      const r = await call<TryResult & { sample: TrySample }>('rag.metric.try', { metric, options: { ...check, type: undefined }, ...(evaluation ? { evaluation } : {}), target, question: q, fields, judge: judgeParam, dryRun: true, environment: env });
       setSample({ ...r.sample, question: q });
       setDry(r);
     } catch (e) {
@@ -116,7 +119,7 @@ export function RagTryDialog({
   const run = async () => {
     setBusy('run');
     try {
-      setResult(await call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, sample: effective, fields, judge: judgeParam, environment: env }));
+      setResult(await call<TryResult>('rag.metric.try', { metric, options: { ...check, type: undefined }, ...(evaluation ? { evaluation } : {}), sample: effective, fields, judge: judgeParam, environment: env }));
     } catch (e) {
       toastError(e);
     } finally {

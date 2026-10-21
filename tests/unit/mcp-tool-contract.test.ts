@@ -92,7 +92,6 @@ describe('the shape of every tool', () => {
   // or writes a file outside the definitions, is in CONFIRM_TOOLS.
   const SENDS = 'its job is to send the requests the person asked for to the target they named (production needs --allow-production and allowProduction, the environment is the person’s)';
   const EDITS = 'edits a definition of the workspace the way the editor does: git brings the old version back and nothing leaves the computer';
-  const RAG = 'RAG evaluation tool: its confirmation / budget default comes with the RAG hardening (findings 1 and 10 of the security review), not with this list';
   const NO_CONFIRM: Record<string, string> = {
     ...Object.fromEntries(
       ['send_request', 'grpc_call', 'realtime_exchange', 'graphql_operation', 'graphql_subscribe', 'run_collection', 'run_tests', 'run_monitor', 'compare_request_across_environments', 'flow_data_run', 'flow_env_matrix', 'mcp_server_tools', 'mcp_call_tool', 'run_evaluation'].map((n) => [n, SENDS]),
@@ -131,7 +130,6 @@ describe('the shape of every tool', () => {
         'rag_probe_sets',
       ].map((n) => [n, EDITS]),
     ),
-    ...Object.fromEntries(['rag_probe', 'rag_import_dataset', 'rag_try_metric', 'rag_run', 'rag_rescore', 'rag_validate_metric'].map((n) => [n, RAG])),
   };
 
   it('every tool that changes something is in CONFIRM_TOOLS or listed with the reason it needs no confirmation', () => {
