@@ -11,6 +11,17 @@
 import type { Capability } from './item-kinds.js';
 import type { MenuGroup, MenuLabelKey, NodeKind } from './node-menu.js';
 
+/** Every AI task by id (packages/core/src/ai/tasks/registry.ts holds the definitions): a task is named by this union everywhere, so a typo is a compile error. */
+export const AI_TASK_IDS = [
+  'explain-error', 'explain-response', 'explain-exchange', 'explain-timing', 'explain-test-failure', 'explain-test-history', 'explain-monitor',
+  'explain-fuzz', 'explain-api-changes', 'fix-security', 'fix-openapi-lint', 'analyze', 'analyze-load', 'triage-attention', 'write-commit-message',
+  'generate-assertions', 'generate-pm-tests', 'generate-test', 'design-flow', 'flow-from-collection', 'tests-from-spec', 'security-tests',
+  'contract-drift', 'write-script', 'explain-script', 'tidy-import', 'import-leftovers', 'triage-run', 'analyze-flaky', 'suggest-coverage-tests',
+  'generate-request', 'generate-query', 'generate-args', 'generate-mock-data', 'design-toolset', 'rag-judge', 'rag-suggest-mapping',
+  'rag-explain-sample', 'rag-draft-metric', 'nl-search', 'free',
+] as const;
+export type AiTaskId = (typeof AI_TASK_IDS)[number];
+
 export interface AiActionDef {
   /** The menu action id: what a view's `on` names. */
   id: string;
@@ -20,7 +31,7 @@ export interface AiActionDef {
   icon: string;
   group: MenuGroup;
   /** The AI task it runs (packages/core/src/ai/tasks/registry.ts). */
-  task: string;
+  task: AiTaskId;
   /** Every item kind with this capability has it (flow: collections and folders) … */
   cap?: Capability;
   /** … or only these node kinds. */

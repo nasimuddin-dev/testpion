@@ -1,3 +1,4 @@
+import type { AiTaskId } from '@testpion/shared';
 import { NL_SEARCH_INSTRUCTION } from '../nl-search.js';
 import { RAG_DRAFT_METRIC_INSTRUCTION } from '../rag-draft-metric.js';
 import { RAG_EXPLAIN_INSTRUCTION } from '../../eval/rag/explain.js';
@@ -11,7 +12,7 @@ import { SUGGEST_MAPPING_INSTRUCTION } from '../../eval/rag/suggest-mapping.js';
  */
 import { RAG_JUDGE_INSTRUCTION } from '../../eval/rag/judge-prompts.js';
 
-export const TASK_INSTRUCTIONS: Readonly<Record<string, string>> = {
+export const TASK_INSTRUCTIONS: Readonly<Record<AiTaskId, string>> = {
   'explain-error': 'Explain what went wrong in plain language, the most likely cause, and concrete troubleshooting steps. Be concise. Use short headings: What happened, Why, How to fix.',
   'generate-assertions':
     'Propose checks for this response using the TestPion check types (status, exists, equals, contains, regex, type, length, json-schema, latency, header). Answer with one JSON object: {"checks": [{"type": …, "path": JSONPath into the body such as $.items[0].id, "expected": …, "pattern": regex for type regex}]}. Start with the status, then the important fields and their types. A check reads the status, the headers and the body (JSONPath); a latency check only when the context gives the response time (latencyMs or timeMs), with a generous limit (at least three times the observed time). Every check must pass on this exact response. Never pin a value the server makes up (ids, timestamps, tokens, random values): check that it exists, its type, or its format (regex) instead; use equals only for values that stay the same on every call. Output only the JSON object.',
