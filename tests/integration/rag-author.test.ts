@@ -74,7 +74,7 @@ describe('testpion rag author', () => {
     expect(r.status, r.err).toBe(0);
     const saved = ws.getLibrary<SavedEvaluation>('evaluations').items;
     expect(saved.map((i) => i.name)).toEqual(['Clinic nightly']);
-    expect(saved[0]!.data).toMatchObject({ type: 'rag', target: 'Clinic HTTP' });
+    expect(saved[0]!.data).toMatchObject({ type: 'rag', target: 'rag-1' });
     const est = await cli(['rag', 'run', 'Clinic nightly', '-w', ws.root, '--estimate', '--json']);
     expect(est.status, est.err).toBe(0);
   });
@@ -96,7 +96,7 @@ describe('MCP rag_author_evaluation', () => {
   it('is documented, proposes (an item with badges and an id) and saves nothing', async () => {
     const { store, tool: t1 } = tool();
     try {
-      expect(t1.description).toMatch(/Use it /);
+      expect(t1.description).toMatch(/When to use: Setting up the evaluation/);
       const r = (await t1.run({ target: 'Clinic HTTP', dataset: 'clinic.jsonl', goal: 'x' })) as { value: { proposal: { id: string; items: Array<{ kind: string; verification: Array<{ verifier: string }> }> }; next: string } };
       expect(r.value.proposal.items[0]).toMatchObject({ kind: 'evaluation' });
       expect(r.value.proposal.items[0]!.verification.map((b) => b.verifier)).toContain('rag-eval-dry-run');

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { asError, call } from '../api';
+import { asError, call, on } from '../api';
 import { useApp } from '../store';
 import type { Library, LibraryItem } from '../types';
 import { libraryOps, type FolderListOps } from '../components/FolderList';
@@ -17,6 +17,9 @@ export function useLibrary<T>(kind: string) {
   useEffect(() => {
     void reload();
   }, [reload, workspace]);
+  // the file changed outside this list (another editor, git, an accepted AI proposal): read it again. The list's own saves are
+  // reported as `write` and already hold what was saved.
+  useEffect(() => on<{ method?: string; paths?: string[] }>('data.changed', (e) => e?.method !== 'write' && !!e?.paths?.some((p) => p.replace(/\\/g, '/') === `library/${kind}.json`) && void reload()), [kind, reload]);
   const save = useCallback(
     async (next: Library<T>) => {
       setLib(next);

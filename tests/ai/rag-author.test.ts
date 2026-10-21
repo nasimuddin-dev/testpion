@@ -40,9 +40,10 @@ const plan = (over: Record<string, unknown> = {}) =>
     ...over,
   });
 
+let targetId = '';
 function setup(rules: MockRule[], dataset = true) {
   const h = harness({ rules });
-  saveRagTarget(h.store, { name: 'Clinic RAG', target: TARGET });
+  targetId = saveRagTarget(h.store, { name: 'Clinic RAG', target: TARGET }).id;
   if (dataset) {
     mkdirSync(join(h.store.root, 'datasets'), { recursive: true });
     writeFileSync(join(h.store.root, 'datasets', 'clinic.jsonl'), `${ROWS.map((r) => JSON.stringify(r)).join('\n')}\n`);
@@ -67,7 +68,7 @@ describe('the proposal', () => {
       const item = r.proposal!.items[0]!;
       expect(item).toMatchObject({ kind: 'evaluation', title: 'Evaluation: Clinic RAG check', language: 'yaml' });
       const ev = (item.data as { evaluation: SavedEvaluation; gates: Record<string, number>; gateFlags: string[]; records: { used: number; total: number } }).evaluation;
-      expect(ev).toMatchObject({ type: 'rag', target: 'Clinic RAG', maxJudgeCostUsd: 0.5, judge: { shortCircuit: true } });
+      expect(ev).toMatchObject({ type: 'rag', target: targetId, maxJudgeCostUsd: 0.5, judge: { shortCircuit: true } });
       expect(ev.evaluators.map((e) => e.type)).toEqual(['recall@k', 'token-f1', 'faithfulness']);
       expect(ev.evaluators[0]).toMatchObject({ k: 3, threshold: 0.8 });
       // the slice: two of the three records, stored inside the evaluation
@@ -216,7 +217,7 @@ describe('apply and undo', () => {
       expect(applied.applied[0]).toMatchObject({ kind: 'evaluation' });
       const items = h.store.getLibrary<SavedEvaluation>('evaluations').items;
       expect(items.map((i) => i.name)).toEqual(['Keep me', 'Clinic RAG check']);
-      expect(items[1]!.data).toMatchObject({ type: 'rag', target: 'Clinic RAG' });
+      expect(items[1]!.data).toMatchObject({ type: 'rag', target: targetId });
       expect(items[1]!.data.dataset.trim().split('\n')).toHaveLength(2);
       expect(undoProposal(h.store, r.proposal!.id).restored).toBe(1);
       expect(h.store.getLibrary('evaluations').items.map((i) => i.name)).toEqual(['Keep me']);

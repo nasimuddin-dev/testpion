@@ -141,7 +141,7 @@ export function buildEvaluation(plan: AuthorPlan, local: AuthorLocal, o: { suppl
     evaluators,
     concurrency: Math.max(1, Math.min(local.target.limits?.concurrency ?? 4, 16)),
     retries: 1,
-    target: local.target.name,
+    target: local.target.id,
     ...(Object.keys(judge).length ? { judge } : {}),
     ...(typeof j.maxCostUsd === 'number' && j.maxCostUsd >= 0 ? { maxJudgeCostUsd: j.maxCostUsd } : {}),
     ...(typeof j.maxCalls === 'number' && j.maxCalls >= 0 ? { maxJudgeCalls: Math.floor(j.maxCalls) } : {}),

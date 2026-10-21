@@ -5,6 +5,19 @@
 import { aiUsageSummary, applyProposal, askSearch, OP_LABEL, runQuerySpec, SEARCH_FIELDS, SEARCH_SOURCES, SOURCE_LABEL, discardProposal, draftFlowProposal, getProposal, listAiTasks, listProposals, reverifyProposal, undoProposal, AI_PRIVACY_LEVELS, type ItemRef, type Proposal, type ReverifyOptions } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
+/**
+ * A proposal that saves into a library (an authored RAG evaluation goes to library/evaluations.json) is a change the lists
+ * of the window have to hear of: the file watcher does not report the app's own writes, so it is announced here.
+ */
+function announceLibraryItems(be: Backend, id: string): void {
+  try {
+    const p = getProposal(be.ws, id);
+    if (p.items.some((i) => i.kind === 'evaluation')) be.host.emit('data.changed', { method: 'ai.proposal', paths: ['library/evaluations.json'] });
+  } catch {
+    /* an expired proposal has nothing to announce */
+  }
+}
+
 export function aiTaskHandlers(be: Backend): Handlers {
   return {
     /** The tasks (id, title, tier, output, whether they propose changes). */
@@ -41,12 +54,20 @@ export function aiTaskHandlers(be: Backend): Handlers {
     'ai.proposal': ({ id }: { id: string }) => getProposal(be.ws, id),
     'ai.proposals': ({ status }: { status?: Proposal['status'] }) => listProposals(be.ws, { status }),
     /** Apply the chosen items (test files, checks, scripts, requests) through the workspace's writers; Undo puts them back. */
-    'ai.applyProposal': ({ id, items, recordOnly }: { id: string; items?: string[]; recordOnly?: boolean }) => applyProposal(be.ws, id, { items, recordOnly }),
+    'ai.applyProposal': ({ id, items, recordOnly }: { id: string; items?: string[]; recordOnly?: boolean }) => {
+      const r = applyProposal(be.ws, id, { items, recordOnly });
+      announceLibraryItems(be, id);
+      return r;
+    },
     'ai.discardProposal': ({ id }: { id: string }) => {
       const p = discardProposal(be.ws, id);
       return { id: p.id, status: p.status };
     },
-    'ai.undoProposal': ({ id }: { id: string }) => undoProposal(be.ws, id),
+    'ai.undoProposal': ({ id }: { id: string }) => {
+      const r = undoProposal(be.ws, id);
+      announceLibraryItems(be, id);
+      return r;
+    },
     /**
      * The Ask box (AI-12): a question translated by the model into a validated search query and run by TestPion, the
      * query shown in words and as chips. No model, or a failure: the words are searched as typed (`mode: 'text'`, why in
