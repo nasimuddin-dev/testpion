@@ -95,7 +95,10 @@ export function previewImport(store: WorkspaceStore, bundle: ParsedBundle): Impo
       totals.identical++;
       continue;
     }
-    items.push({ ...base, action: 'conflict', existing: asTarget(match), proposed: a.fresh(listOf(it.kind), { id: it.id, name: it.name }, takenOf(it.kind)), review: rev });
+    // "Replace" over a provider or server at another address would send what the person's setup sends to a new place
+    const moves = a.reviewAgainst?.(store, match.id, it, data) ?? [];
+    for (const r of moves) review.add(r);
+    items.push({ ...base, action: 'conflict', existing: asTarget(match), proposed: a.fresh(listOf(it.kind), { id: it.id, name: it.name }, takenOf(it.kind)), review: [...rev, ...moves] });
     totals.conflict++;
   }
   const defined = new Set<string>([...(store.workspace.variables ?? []).map((v) => v.key), ...store.listEnvironments().flatMap((e) => e.variables.map((v) => v.key))]);

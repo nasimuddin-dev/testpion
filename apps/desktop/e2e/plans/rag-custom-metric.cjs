@@ -45,6 +45,17 @@ const steps = [
      ${EDITOR_IN('[data-rag-metric-yaml]')}.getModel().setValue(${JSON.stringify(FILE)}); await __t.sleep(900);
      return 'problems: ' + (document.querySelector('[data-rag-metric-problems]')?.querySelectorAll('li').length ?? 0) + ' | save enabled: ' + !document.querySelector('[data-rag-metric-save]').disabled;`,
   ),
+  // unsaved edits are never dropped silently: Discard (and Esc and the X) ask first; Keep editing goes back
+  step(
+    'closing-an-edited-metric-asks-first',
+    `const discard = vis('[role=dialog] button').find((b) => b.textContent.trim() === 'Discard'); if (!discard) return 'NO BUTTON Discard';
+     await __t.real.click(discard);
+     const ask = await __t.waitFor(() => vis('[role=alertdialog], [role=dialog]').find((d) => /Discard your changes/.test(d.textContent)), 4000); if (!ask) return 'NO CONFIRM';
+     const keep = [...ask.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Keep editing'); if (!keep) return 'NO BUTTON Keep editing';
+     await __t.real.click(keep);
+     await __t.sleep(400);
+     return 'asked: true | editor still open: ' + !!document.querySelector('[data-rag-metric-editor]') + ' | cost line: ' + document.querySelector('[data-rag-metric-cost]')?.textContent.trim();`,
+  ),
   step(
     'the-examples-agree',
     `await __t.real.click('[data-rag-metric-examples]');
@@ -94,6 +105,7 @@ const steps = [
 module.exports = withExpect(steps, {
   'the-metrics-side-lists-nothing-yet': /^rows: 0 \| new button: true$/,
   'new-metric-with-a-live-check': /^problems: 0 \| save enabled: true$/,
+  'closing-an-edited-metric-asks-first': /^asked: true \| editor still open: true \| cost line: Runs on this computer: free$/,
   'the-examples-agree': /^agree: agrees with 2\/2 examples \| rows: 2$/,
   'save-writes-the-file': /^listed: true \| delete offered: true \| save disabled: true$/,
   'the-metric-is-in-the-picker': /^shown: custom\/no-guarantee(,no-guarantee)?$/,

@@ -4,6 +4,7 @@ import { CUSTOM_METRIC_KINDS, type CustomMetricKind } from '@testpion/shared';
 import { call } from '../../api';
 import { confirmAction, promptText, toastError, useApp } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
+import { plural } from '../../lib/format';
 import { useDebounced } from '../ui';
 import { AiAction } from '../ai/AiAction';
 import { CodeEditor } from '../CodeEditor';
@@ -159,6 +160,8 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
   };
   const runExamples = async () => {
     if (text === undefined) return;
+    // a judged metric spends judge tokens: say how many calls, and what goes to the judge, before the first one
+    if (judged && !(await confirmAction({ title: 'Run the examples with your judge model?', message: `About ${plural(exampleCount || 1, 'judge call')}: one for each example${kind === 'checklist' ? ' and checklist item' : ''}.`, detail: 'Each example is sent to your judge model, with secrets, tokens and personal data masked, and the model is paid for it. Rule, formula and script metrics run on this computer for free.', confirmLabel: 'Run examples' }))) return;
     setRunning(true);
     try {
       setResults((await call<{ results: ExampleResult[] }>('rag.customMetric.examples', { text, id, environment: env })).results);
@@ -168,26 +171,59 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
       setRunning(false);
     }
   };
+  // Discard, Esc and the X all ask when there are unsaved edits: the YAML is gone once the editor closes
+  const close = async () => {
+    if (dirty && !(await confirmAction({ title: 'Discard your changes?', message: `The edits to ${id ? `metrics/${id}.yaml` : 'this new metric'} have not been saved.`, detail: 'Close the editor and lose them, or go back and Save.', confirmLabel: 'Discard', cancelLabel: 'Keep editing', danger: true }))) return;
+    onClose();
+  };
   const remove = async () => {
     const used = await call<{ evaluations: string[]; formulas: string[] }>('rag.customMetric.usedBy', { id }).catch(() => ({ evaluations: [], formulas: [] }));
+    // only a workspace that is a repository keeps the file's history; elsewhere the Undo of the toast is the way back
+    const inRepository = await call<{ repository: boolean }>('git.status').then((s) => s.repository, () => false);
     const where = [...used.evaluations.map((n) => `evaluation “${n}”`), ...used.formulas.map((n) => `formula metric ${n}`)];
-    const yes = await confirmAction({ title: `Delete ${id}?`, message: `metrics/${id}.yaml is deleted.${where.length ? ` It is used by ${where.join(', ')}; they will not find it.` : ''}`, detail: 'The file is in git: its history keeps it.', confirmLabel: 'Delete', danger: true });
+    const yes = await confirmAction({ title: `Delete ${id}?`, message: `metrics/${id}.yaml is deleted.${where.length ? ` It is used by ${where.join(', ')}; they will not find it.` : ''}`, detail: inRepository ? 'The file is in git: its history keeps it. Undo puts it back right away.' : 'Undo puts it back right away; after that the file is gone for good.', confirmLabel: 'Delete', danger: true });
     if (!yes) return;
     try {
+      const was = saved;
       await call('rag.customMetric.delete', { id });
       onSaved?.(id);
       onClose();
+      if (was)
+        useApp.getState().toast(`Deleted metrics/${id}.yaml`, 'info', undefined, {
+          undo: async () => {
+            await call('rag.customMetric.save', { id, text: was, overwrite: false });
+            onSaved?.(id);
+          },
+          restored: `metrics/${id}.yaml is back`,
+        });
     } catch (e) {
       toastError(e);
     }
   };
   const judged = kind === 'judge' || kind === 'checklist';
+  // how many examples the file holds: a judged metric asks the judge once for each (a checklist: once for each item), which spends tokens
+  const [exampleCount, setExampleCount] = useState(0);
+  useEffect(() => {
+    if (!judged || checked === undefined) return setExampleCount(0);
+    let live = true;
+    void import('yaml').then(({ parse }) => {
+      try {
+        const n = (parse(checked) as { examples?: unknown[] } | null)?.examples?.length ?? 0;
+        if (live) setExampleCount(n);
+      } catch {
+        if (live) setExampleCount(0);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [judged, checked]);
   const failing = useMemo(() => results?.filter((r) => !r.ok).length ?? 0, [results]);
   return (
     <>
       <Modal
         title={initial ? `Metric · ${id}` : 'New custom metric'}
-        onClose={onClose}
+        onClose={() => void close()}
         width={900}
         footer={
           <>
@@ -201,7 +237,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
                 Save as…
               </Button>
             )}
-            <Button onClick={onClose}>{dirty ? 'Discard' : 'Close'}</Button>
+            <Button onClick={() => void close()}>{dirty ? 'Discard' : 'Close'}</Button>
             <Button variant="primary" disabled={!validId || text === undefined || errors.length > 0 || !dirty} onClick={() => void save()} data-rag-metric-save>
               Save
             </Button>
@@ -214,7 +250,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
               <Field label="Id (the file name)" hint="lower-case letters, digits, hyphens">
                 <Input className="mono" value={id} onChange={(e) => setId(e.target.value.toLowerCase())} placeholder="clinic-tone" autoFocus data-rag-metric-id />
               </Field>
-              <Field label="Kind" hint={CUSTOM_METRIC_KINDS.find((k) => k.id === kind)?.summary}>
+              <Field label="Type of metric" hint={CUSTOM_METRIC_KINDS.find((k) => k.id === kind)?.summary}>
                 <Select value={kind} onChange={(e) => setKind(e.target.value as CustomMetricKind)} disabled={exists} data-rag-metric-kind>
                   {CUSTOM_METRIC_KINDS.map((k) => (
                     <option key={k.id} value={k.id}>
@@ -252,9 +288,12 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
             </ul>
           )}
           <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" icon={running ? <Spinner /> : <Play size={12} />} disabled={!validId || errors.length > 0 || text === undefined || running} onClick={() => void runExamples()} title={judged ? 'Each example is judged by your judge model (it spends tokens)' : 'Each example runs through the metric (free)'} data-rag-metric-examples>
+            <Button size="sm" icon={running ? <Spinner /> : <Play size={12} />} disabled={!validId || errors.length > 0 || text === undefined || running} onClick={() => void runExamples()} data-rag-metric-examples>
               Run examples
             </Button>
+            <span className="text-xs text-muted" role="status" aria-live="polite" data-rag-metric-cost>
+              {judged ? `About ${plural(exampleCount || 1, 'judge call')}${kind === 'checklist' ? ' or more' : ''}: spends tokens` : 'Runs on this computer: free'}
+            </span>
             <Button size="sm" icon={<FlaskConical size={12} />} disabled={!exists || dirty} onClick={() => setTrying(true)} title={exists && !dirty ? 'Try the saved metric on one sample' : 'Save the metric to try it on a sample'} data-rag-metric-try>
               Try on a sample
             </Button>

@@ -33,7 +33,7 @@ Three rules hold everywhere:
 | Anywhere | <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd>, **Ask AI Assistant** (<kbd>Ctrl</kbd>+<kbd>K</kbd>) | A free question about what is on screen ([the assistant](/ai-testing/overview#talking-to-the-assistant)). |
 | Git, Home | **Write message**, **What to fix first** | A commit message from the changes; the items of *Needs attention* in order. |
 
-Every AI button is the same control: ✦ and its label, and beside it the **eye** — **What will be sent…**. Hovering the button shows the model, whether it stays on this computer and the token estimate.
+Every AI button is the same control: ✦ and its label, and beside it the **eye** — **What will be sent…**. Pointing at the button, or putting the keyboard focus on it, shows the model, whether it stays on this computer and the token estimate beside it (a screen reader is told when it appears). An AI item of a **menu** (Suggest checks with AI…, Write, Fix or Explain a script with AI, What to do about a problem) has no button to point at, so the assistant opens on **Ready to send**: the same estimate, **What will be sent…**, and **Send**. Nothing is sent before Send. **Ask…** shows the estimate under its box and waits for **Ask**, also when it was opened with a question from the search box or the palette.
 
 ## Set up a model
 

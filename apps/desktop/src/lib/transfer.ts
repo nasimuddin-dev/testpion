@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { baseKind, can, type KindId } from '@testpion/shared';
 import type { Act, NodeKind, NodeMenuCtx } from './node-menu-actions';
 import { useApp } from '../store';
@@ -30,7 +29,10 @@ export interface ImportRequest {
 export const openExportBundle = (r: ExportRequest): void => useApp.getState().set({ exportBundle: r });
 export const openImportBundle = (r: ImportRequest = {}): void => useApp.getState().set({ importBundle: r });
 
-/** A bundle file dropped on the window (or chosen in a browser) → the Import dialog with its preview. */
+/**
+ * A bundle file dropped on the window (or chosen in the Import dialog) → the bundle Import with its preview. The window's one
+ * drop listener (components/ImportHost.tsx) calls this for a bundle and opens the general Import for anything else.
+ */
 export async function importBundleFile(file: File): Promise<void> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let bin = '';
@@ -38,25 +40,22 @@ export async function importBundleFile(file: File): Promise<void> {
   openImportBundle({ base64: btoa(bin), fileName: file.name });
 }
 
-/** A bundle file (.testpion.zip / .testpion.json) dropped anywhere on the window opens the Import dialog with its preview. */
-export function useBundleDrop(): void {
-  useEffect(() => {
-    const bundle = (e: DragEvent) => [...(e.dataTransfer?.items ?? [])].some((i) => i.kind === 'file') && !!e.dataTransfer;
-    const over = (e: DragEvent) => bundle(e) && e.preventDefault();
-    const drop = (e: DragEvent) => {
-      const f = [...(e.dataTransfer?.files ?? [])].find((x) => /\.testpion\.(zip|json)$/i.test(x.name));
-      if (!f) return;
-      e.preventDefault();
-      void importBundleFile(f);
-    };
-    window.addEventListener('dragover', over);
-    window.addEventListener('drop', drop);
-    return () => {
-      window.removeEventListener('dragover', over);
-      window.removeEventListener('drop', drop);
-    };
-  }, []);
+/** A picked or dropped source that is one bundle file → what the bundle Import starts with (so the one Import entry hands a bundle over to its preview). */
+export function bundleRequestOf(src: { files?: Array<{ path: string; text?: string; base64?: string }> }): ImportRequest | undefined {
+  const f = src.files?.length === 1 ? src.files[0] : undefined;
+  if (!f || !isBundleFile(f.path)) return undefined;
+  let base64 = f.base64;
+  if (!base64) {
+    const bytes = new TextEncoder().encode(f.text ?? '');
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    base64 = btoa(bin);
+  }
+  return { base64, fileName: f.path };
 }
+
+/** The name of a bundle file (.testpion.zip or .testpion.json): such a file goes to the bundle Import, whatever else is dropped with it. */
+export const isBundleFile = (name: string): boolean => /\.testpion\.(zip|json)$/i.test(name);
 
 /** Export… and Import… for a node, unless the view gave its own (a collection's Export is a submenu of formats). */
 export function transferActions(kind: NodeKind, c: NodeMenuCtx): Partial<Record<'export' | 'import', Act>> {

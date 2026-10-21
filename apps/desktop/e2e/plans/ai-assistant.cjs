@@ -209,6 +209,24 @@ const steps = [
     for (let i = 0; i < 60 && ${stopButton}; i++) await __t.sleep(150);
     return ${state} + ' | stopped shown: ' + /stopped/.test(p.textContent);
   })()`],
+  // an AI item of a menu has no button to show its cost: the assistant opens on the estimate and "What will be sent", and sends on Send
+  ['menu-item-waits-for-send-with-the-estimate', `(async () => {
+    await __t.requests(); await __t.expand('HTTP basics'); await __t.expand('Requests & responses');
+    const shown = await __t.menu('Custom headers');
+    const item = [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Suggest checks with AI/.test(m.textContent.trim()));
+    if (!item) return 'NO ITEM: ' + shown;
+    await __t.real.click(item);
+    const card = await __t.waitFor(() => ${panel}?.querySelector('[data-ai-preflight]'), 6000); if (!card) return 'NO PREFLIGHT';
+    const est = await __t.waitFor(() => /≈ [\\d,]+ tokens in/.test(card.querySelector('[data-ai-estimate]')?.textContent ?? '') && card.querySelector('[data-ai-estimate]').textContent, 8000);
+    await __t.sleep(1800);
+    const sentEarly = ${panel}.querySelectorAll('[data-turn=assistant]').length > 0 || !!${stopButton};
+    const live = card.querySelector('[data-ai-estimate]').getAttribute('role') === 'status';
+    const preview = [...card.querySelectorAll('button')].some((b) => /What will be sent/.test(b.textContent));
+    await __t.real.click(card.querySelector('[data-ai-send]'));
+    const gone = await __t.waitFor(() => !${panel}?.querySelector('[data-ai-preflight]'), 4000);
+    for (let i = 0; i < 80 && ${stopButton}; i++) await __t.sleep(150);
+    return 'estimate shown: ' + !!est + ' | announced (role status): ' + live + ' | what-will-be-sent offered: ' + preview + ' | sent before Send: ' + sentEarly + ' | card gone after Send: ' + !!gone;
+  })()`],
 ];
 
 module.exports = withExpect(
@@ -241,6 +259,7 @@ module.exports = withExpect(
     'restart-reruns-task': /^ran again: true \| questions: 0 \| answers: 1 \| .*last: Here it is: query Generated/,
     // the second New conversation lands while the first answer is being written: one fresh answer, nothing stopped
     'restart-during-answer': /^questions: 0 \| answers: 1 \| .*last: Here it is: query Generated.* \| stopped shown: false$/,
+    'menu-item-waits-for-send-with-the-estimate': /^estimate shown: true \| announced \(role status\): true \| what-will-be-sent offered: true \| sent before Send: false \| card gone after Send: true$/,
     'apply-graphql': /^button: Use this query \| editor: query Generated \{ countries \{ code name \} \} \| toast: .*Use this query: done/,
   },
   { settings: { assistantProvider: 'demo', assistantModel: 'demo' }, prepare: slowModel },

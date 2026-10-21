@@ -7,6 +7,7 @@
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { tmpdir } = require('node:os');
 const { withExpect, step } = require('../lib.cjs');
 
 // built from fragments so no file in the repository holds a string a secret scanner takes for a live key; none is real
@@ -14,8 +15,12 @@ const alnum = (n) => 'Ab3'.repeat(Math.ceil(n / 3)).slice(0, n);
 const PASSWORD = 'Pw' + alnum(14) + '9';
 const MCP_TOKEN = 'Bearer ' + alnum(14) + '7=' + alnum(10);
 const OUT_NAME = 'e2e-bundle.testpion.json';
+// files "dragged in from the OS": made by prepare (a fixed folder: the runner and the harness load this plan in different processes)
+const DROP = join(tmpdir(), 'tp-e2e-bundle-drop');
 
 function prepare(ws) {
+  mkdirSync(DROP, { recursive: true });
+  writeFileSync(join(DROP, 'broken.testpion.json'), 'this is not a bundle');
   mkdirSync(join(ws, 'datasets'), { recursive: true });
   writeFileSync(join(ws, 'datasets', 'e2e-people.csv'), `name,password\nann,${PASSWORD}\nbob,${PASSWORD}2\n`);
   const servers = JSON.parse(readFileSync(join(ws, 'mcp-servers.json'), 'utf8'));
@@ -127,8 +132,8 @@ const steps = [
     'import-previews-and-applies',
     `const row = node('section:datasets'); if (!(await menuOf(row))) return 'NO MENU';
      if (!(await pick('Import…'))) return 'NO ITEM Import…';
-     const d = await __t.waitFor(() => dialog('import-bundle') && dialog('import-bundle').querySelector('[role=row]'), 6000); if (!d) return 'NO PREVIEW';
-     const rows = [...dialog('import-bundle').querySelectorAll('[role=row]')].filter((r) => r.getAttribute('data-action'));
+     const d = await __t.waitFor(() => dialog('import-bundle') && dialog('import-bundle').querySelector('[data-action]'), 6000); if (!d) return 'NO PREVIEW';
+     const rows = [...dialog('import-bundle').querySelectorAll('[data-action]')].filter((r) => r.getAttribute('data-action'));
      const mine = rows.find((r) => r.textContent.includes('e2e-people.csv'));
      const b = footer('Import'); if (!b) return 'NO BUTTON Import';
      const label = b.textContent.trim();
@@ -148,14 +153,14 @@ const steps = [
     'import-again-then-already-here',
     `const row = node('section:datasets'); if (!(await menuOf(row))) return 'NO MENU';
      if (!(await pick('Import…'))) return 'NO ITEM Import…';
-     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[role=row]'), 6000))) return 'NO PREVIEW';
+     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[data-action]'), 6000))) return 'NO PREVIEW';
      await __t.real.click(footer('Import'));
      await __t.waitFor(() => node('datasets:e2e-people.csv'), 8000);
      // a second time: the same bundle is identical
      const row2 = node('section:datasets'); if (!(await menuOf(row2))) return 'NO MENU';
      if (!(await pick('Import…'))) return 'NO ITEM Import…';
-     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[role=row]'), 6000))) return 'NO PREVIEW';
-     const r = [...dialog('import-bundle').querySelectorAll('[role=row]')].find((x) => x.textContent.includes('e2e-people.csv'));
+     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[data-action]'), 6000))) return 'NO PREVIEW';
+     const r = [...dialog('import-bundle').querySelectorAll('[data-action]')].find((x) => x.textContent.includes('e2e-people.csv'));
      const label = footer('Nothing to import') ? 'Nothing to import' : footer('Import')?.textContent.trim();
      const cancel = footer('Cancel'); if (cancel) await __t.real.click(cancel);
      return 'second preview: ' + r?.getAttribute('data-action') + ' | button: ' + label;`,
@@ -166,14 +171,46 @@ const steps = [
      await __t.waitFor(() => node('datasets:e2e-people.csv'), 3000);
      const row = node('section:datasets'); if (!(await menuOf(row))) return 'NO MENU';
      if (!(await pick('Import…'))) return 'NO ITEM Import…';
-     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[role=row]'), 6000))) return 'NO PREVIEW';
-     const r = [...dialog('import-bundle').querySelectorAll('[role=row]')].find((x) => x.textContent.includes('e2e-people.csv'));
+     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[data-action]'), 6000))) return 'NO PREVIEW';
+     const r = [...dialog('import-bundle').querySelectorAll('[data-action]')].find((x) => x.textContent.includes('e2e-people.csv'));
      const action = r?.getAttribute('data-action');
      const shown = r?.textContent.replace(/\\s+/g, ' ');
      await __t.real.click(footer('Import'));
      const t = await __t.waitFor(() => toastText(/^Imported/), 10000); if (!t) return 'NO TOAST';
      const copy = await __t.waitFor(() => node('datasets:e2e-people-2.csv'), 5000);
      return 'action: ' + action + ' | proposed: ' + /e2e-people-2\\.csv/.test(shown) + ' | both kept: ' + !!(copy && node('datasets:e2e-people.csv'));`,
+  ),
+  [
+    'a-bundle-to-drop',
+    `main:
+      const { copyFileSync } = require('node:fs'); const { join } = require('node:path');
+      copyFileSync(process.env.E2E_STUB_SAVE, join(${JSON.stringify(DROP)}, 'dropped.testpion.json'));
+      return 'copied';`,
+    false,
+  ],
+  s(
+    'a-dropped-bundle-opens-one-dialog',
+    `const r = await __t.real.dropFiles('main', [${JSON.stringify(join(DROP, 'dropped.testpion.json'))}], { over: [{ x: 400, y: 300 }] });
+     if (r !== 'ok') return r;
+     if (!(await __t.waitFor(() => dialog('import-bundle')?.querySelector('[data-action]'), 8000))) return 'NO BUNDLE PREVIEW';
+     await __t.sleep(1000);
+     const open = [...document.querySelectorAll('[role=dialog]')].filter((x) => x.getClientRects().length);
+     const generic = !!document.querySelector('[data-import-preview], [data-import-done], [data-import-plan]');
+     const title = open[0]?.querySelector('h2')?.textContent.trim();
+     const cancel = footer('Cancel'); if (cancel) await __t.real.click(cancel);
+     await __t.sleep(300);
+     return 'dialogs: ' + open.length + ' | generic import: ' + generic + ' | title: ' + title;`,
+  ),
+  s(
+    'a-file-that-is-not-a-bundle-has-a-way-out',
+    `const r = await __t.real.dropFiles('main', [${JSON.stringify(join(DROP, 'broken.testpion.json'))}], { over: [{ x: 400, y: 300 }] });
+     if (r !== 'ok') return r;
+     const another = await __t.waitFor(() => dialog('import-bundle')?.querySelector('[data-bundle-choose-another]'), 8000); if (!another) return 'NO WAY OUT: ' + short(dialog('import-bundle')?.textContent, 200);
+     const said = !!dialog('import-bundle').querySelector('[role=alert]');
+     await __t.real.click(another);
+     const picker = await __t.waitFor(() => dialog('import-bundle')?.querySelector('input[type=file]'), 3000);
+     const cancel = footer('Cancel'); if (cancel) await __t.real.click(cancel);
+     return 'error said: ' + said + ' | choose another: true | picker back: ' + !!picker;`,
   ),
   s(
     'file-menu-and-palette-have-the-bundle-commands',
@@ -201,6 +238,9 @@ module.exports = withExpect(
     'undo-takes-the-import-back': /^dataset gone again: true \| said: true$/,
     'import-again-then-already-here': /^second preview: identical \| button: Nothing to import$/,
     'a-changed-dataset-is-a-conflict-and-keep-both-names-it': /^action: conflict \| proposed: true \| both kept: true$/,
+    'a-bundle-to-drop': /^copied$/,
+    'a-dropped-bundle-opens-one-dialog': /^dialogs: 1 \| generic import: false \| title: Import a bundle$/,
+    'a-file-that-is-not-a-bundle-has-a-way-out': /^error said: true \| choose another: true \| picker back: true$/,
     'file-menu-and-palette-have-the-bundle-commands': /^import command: true \| export command: true$/,
   },
   { prepare, env: (out) => ({ E2E_STUB_SAVE: join(out, OUT_NAME), E2E_STUB_OPEN: join(out, OUT_NAME) }) },

@@ -5,7 +5,7 @@ import { SecretStripper, type ReplacedSecret, type ReplacedSecretKind } from '..
 import { canonicalText } from '../storage/stable-files.js';
 import { isBinaryPath } from './item-changes.js';
 import { largeLevel, type LargeFile } from './large-files.js';
-import { isAllowed, readSecretsAllow, secretFingerprint } from './secrets-allow.js';
+import { allowSalt, isAllowed, readSecretsAllow, secretFingerprint } from './secrets-allow.js';
 import { requireRepo } from './item-ops.js';
 import { runGit, toRepoPath } from './git.js';
 
@@ -124,7 +124,7 @@ const parse = (text: string): unknown => {
 export function stripFileText(
   file: string,
   text: string,
-  o: { allow?: (item: string, field: string, value: string) => boolean; reserve?: Iterable<string> } = {},
+  o: { allow?: (item: string, field: string, value: string) => boolean; reserve?: Iterable<string>; salt?: string } = {},
 ): { findings: StagedSecret[]; text: string; values: string[]; replaced: ReplacedSecret[] } {
   const strip = new Scan();
   strip.allow = o.allow;
@@ -196,7 +196,7 @@ export function stripFileText(
       item: r.item,
       field: r.field,
       variable,
-      hash: secretFingerprint(file, r.item, r.field, strip.values[i] ?? ''),
+      hash: secretFingerprint(file, r.item, r.field, strip.values[i] ?? '', o.salt),
       confidence,
       message: `${r.item} (${file}) has a ${confidence === 'high' ? 'secret' : 'probable secret'} typed into ${r.field}: use ${variable} and keep the value as a secret variable.`,
       ...(ref ? { ref } : {}),
@@ -206,8 +206,8 @@ export function stripFileText(
 }
 
 /** What one staged file holds, scanned by its kind. */
-export function scanFileText(file: string, text: string): StagedSecret[] {
-  return stripFileText(file, text).findings;
+export function scanFileText(file: string, text: string, salt?: string): StagedSecret[] {
+  return stripFileText(file, text, { salt }).findings;
 }
 
 /** The files in the index that a commit would take (added, copied, modified, renamed), workspace-relative. */
@@ -223,6 +223,7 @@ export async function scanStagedSecrets(ws: string): Promise<StagedScan> {
   const staged = await stagedFiles(ws);
   const scan: StagedScan = { staged, blocking: [], confirm: [], skipped: [], allowed: [], large: [] };
   const allow = readSecretsAllow(ws);
+  const salt = allowSalt(ws);
   if (allow.problem) scan.allowProblem = allow.problem;
   for (const file of staged) {
     const inRepo = toRepoPath(repo, ws, file);
@@ -239,7 +240,7 @@ export async function scanStagedSecrets(ws: string): Promise<StagedScan> {
       scan.skipped.push(file);
       continue;
     }
-    for (const f of scanFileText(file, text)) {
+    for (const f of scanFileText(file, text, salt)) {
       if (isAllowed(allow.entries, { file: f.file, item: f.item, field: f.field, hash: f.hash })) scan.allowed.push(f);
       else (f.confidence === 'high' ? scan.blocking : scan.confirm).push(f);
     }

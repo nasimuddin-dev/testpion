@@ -5,6 +5,7 @@ import { asError, call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { formatCost } from '../../lib/format';
 import type { CheckConfig, ProviderConfig } from '../../types';
+import { AiEstimateLine, estimateText } from '../ai/AiEstimateLine';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { EvidenceList } from '../Results';
 import { Badge, Button, Callout, Field, Input, Modal, Segmented, Select, Spinner, Textarea } from '../ui';
@@ -211,9 +212,7 @@ export function RagTryDialog({
               {dry.willSend.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
                   <span className="mono">{c.version}</span>
-                  <span className="text-muted">
-                    ≈ {c.preview.estimate.inputTokens.toLocaleString()} tokens in{c.preview.estimate.priceKnown ? `, up to ${formatCost(c.preview.estimate.maxCostUsd ?? 0)}` : ''}
-                  </span>
+                  <AiEstimateLine className="text-muted" estimate={{ ok: true, text: estimateText(c.preview, { noModel: true }) }} />
                   {c.cached && <Badge tone="ok">verdict cached: no call</Badge>}
                   <Button size="sm" className="ml-auto" icon={<Eye size={12} />} onClick={() => setShown(i)} data-rag-try-show>
                     Show the prompt

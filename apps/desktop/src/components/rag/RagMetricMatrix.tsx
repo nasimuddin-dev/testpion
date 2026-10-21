@@ -27,6 +27,16 @@ function Spark({ bins }: { bins: number[] }) {
   );
 }
 
+/** What each statistic row means, in words (the rows are labelled with these, and the label's hover says what it measures). */
+const STAT: Record<string, { label: string; title: string }> = {
+  mean: { label: 'average', title: 'The average score of the samples that were scored' },
+  p10: { label: 'lowest 10%', title: 'The score that only the weakest 10% of the samples fall below: it shows how bad the bad cases are, which the average hides' },
+  pass: { label: 'pass rate', title: 'The share of scored samples that reached the pass mark' },
+  'n/a': { label: 'not scored', title: 'Samples this metric could not score (nothing to check, or the judge failed)' },
+  '95%': { label: '95% interval', title: 'The range the true average most likely lies in, given how many samples there are' },
+  spread: { label: 'spread (min to max)', title: 'How the scores are distributed from the lowest to the highest: ten bars, a taller bar means more samples' },
+};
+
 const cellClass = (c: MatrixCell | null) => (!c ? '' : c.failed ? 'bg-bad/10 text-bad' : c.na ? 'text-muted' : c.passed === false ? 'bg-bad/10 text-bad' : c.passed === true ? 'bg-ok/10 text-ok' : '');
 
 /**
@@ -196,8 +206,8 @@ export function RagMetricMatrix({
             <tr>
               {m.groups.map((g) =>
                 collapsed.has(g.id) ? (
-                  <th key={g.id} className="px-2 py-1 border-b border-l border-line text-right font-normal text-muted">
-                    mean
+                  <th key={g.id} className="px-2 py-1 border-b border-l border-line text-right font-normal text-muted" title={STAT.mean!.title}>
+                    average
                   </th>
                 ) : (
                   shownCols
@@ -224,7 +234,9 @@ export function RagMetricMatrix({
             </tr>
             {(['mean', 'p10', 'pass', 'n/a', '95%', 'spread'] as const).map((stat) => (
               <tr key={stat} className="bg-panel/60" data-rag-stat={stat}>
-                <th className="text-left px-2 py-0.5 font-normal text-muted border-b border-line/60">{stat === 'pass' ? 'pass rate' : stat === '95%' ? '95% interval' : stat}</th>
+                <th className="text-left px-2 py-0.5 font-normal text-muted border-b border-line/60" title={STAT[stat]!.title}>
+                  {STAT[stat]!.label}
+                </th>
                 {m.groups.map((g) =>
                   collapsed.has(g.id) ? (
                     <td key={g.id} className="px-2 py-0.5 border-l border-line/60" />
@@ -294,7 +306,12 @@ export function RagMetricMatrix({
                             onClick={() => cell && setDetail({ id: r.id, metric: c.key })}
                             data-rag-cell={`${r.id}|${c.key}`}
                           >
-                            {!cell ? '' : cell.score !== undefined ? cell.score : cell.na ? 'n/a' : '!'}
+                            {cell && (
+                              // a button inside the cell: the keyboard reaches it and Enter opens the sample (its click is the cell's); pass and fail are said in a mark and in words, not by colour alone
+                              <button type="button" className="w-full text-right" aria-label={`${r.name}, ${c.key}: ${cell.failed ? `error, ${cell.failed}` : cell.score !== undefined ? `${cell.score}, ${cell.passed === false ? 'failed' : cell.passed === true ? 'passed' : 'no pass mark'}` : 'not scored'}`}>
+                                {cell.failed ? 'error' : cell.score !== undefined ? <>{cell.passed === true ? <span aria-hidden>✓ </span> : cell.passed === false ? <span aria-hidden>✗ </span> : null}{cell.score}</> : 'n/a'}
+                              </button>
+                            )}
                           </td>
                         );
                       })

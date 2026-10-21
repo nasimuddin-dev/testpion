@@ -467,7 +467,7 @@ export const CollectionTree = memo(function CollectionTree({
         ...(n.kind === 'http' ? { copyAs: requestCopyItems(c, n) } : {}),
         monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id, selection: [n.id] } }),
         testFile: () => void saveAsTest({ ref, name: n.name }),
-        suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true }),
+        suggestChecks: () => startAi({ task: 'generate-assertions', title: `Suggested checks for ${n.name}`, context: {}, item: ref, autoReview: true, preflight: true }),
         rename: () => void renameNode(c, n),
         duplicate: () => change(c, (c) => ({ ...c, items: duplicateNode(c.items, n.id, (y) => ({ ...y, id: uid('req-'), name: `${y.name} copy` })) })),
         move: () => setMoving({ c, n }),

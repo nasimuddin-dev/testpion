@@ -128,15 +128,23 @@ describe('MCP save_output', () => {
       const call = async (a: Record<string, unknown>) => mcpResultBody(await s.callTool('save_output', a));
       const inline = await call({ surface: 'history', format: 'csv' });
       expect(JSON.parse(inline.text).text).toBe((await builder('history', 'csv', { kind: 'history' })).toString('utf8'));
-      const saved = JSON.parse((await call({ surface: 'history', format: 'json', save_to: 'exports/h.json' })).text);
+      // a write asks first: without confirm nothing is written and the answer says what would be
+      const asked = JSON.parse((await call({ surface: 'history', format: 'json', save_to: 'exports/h.json' })).text);
+      expect(asked).toMatchObject({ confirmationRequired: true, changed: false });
+      expect(existsSync(join(ws, 'exports', 'h.json'))).toBe(false);
+      const saved = JSON.parse((await call({ surface: 'history', format: 'json', save_to: 'exports/h.json', confirm: true })).text);
       expect(saved).toMatchObject({ saved: 'exports/h.json' });
       expect(readFileSync(join(ws, 'exports', 'h.json'), 'utf8')).toBe((await builder('history', 'json', { kind: 'history' })).toString('utf8'));
-      const again = await s.callTool('save_output', { surface: 'history', format: 'json', save_to: 'exports/h.json' });
-      expect(JSON.stringify(again)).toMatch(/already exists/);
+      const refused = async (save_to: string) => JSON.stringify(await s.callTool('save_output', { surface: 'history', format: 'json', save_to, confirm: true }));
+      expect(await refused('exports/h.json')).toMatch(/already exists/);
+      // an allow-list: only exports/ and .local/exports/, whatever the file is called
       mkdirSync(join(ws, 'collections'), { recursive: true });
-      const def = await s.callTool('save_output', { surface: 'history', format: 'json', save_to: 'collections/x.json' });
-      expect(JSON.stringify(def)).toMatch(/cannot write into collections/);
+      for (const bad of ['collections/x.json', '.husky/pre-commit', '.vscode/tasks.json', 'Makefile', 'package.json', 'metrics/evil.yaml', 'mcp-servers.json', '.gitattributes', 'exports/.hidden/x.json', 'exports/x.sh'])
+        expect(await refused(bad), bad).toMatch(/not allowed/);
       expect(existsSync(join(ws, 'collections', 'x.json'))).toBe(false);
+      expect(existsSync(join(ws, '.husky'))).toBe(false);
+      const local = JSON.parse((await call({ surface: 'history', format: 'json', save_to: '.local/exports/h.json', confirm: true })).text);
+      expect(local).toMatchObject({ saved: '.local/exports/h.json' });
     } finally {
       await s.close();
     }

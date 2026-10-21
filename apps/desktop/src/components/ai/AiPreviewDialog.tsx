@@ -5,7 +5,7 @@ import { asError, call } from '../../api';
 import type { AssistantRequest } from '../../store';
 import { useApp } from '../../store';
 import { aiSetupAction } from '../../lib/ai-errors';
-import { formatCost } from '../../lib/format';
+import { AiEstimateLine, estimateText } from './AiEstimateLine';
 import { Badge, Button, Modal, Segmented, Spinner } from '../ui';
 import { CodeBlock } from '../CodeBlock';
 
@@ -120,10 +120,7 @@ export function AiPreviewDialog({
               ) : (
                 <Badge tone="warn">sent to {preview.providerName}</Badge>
               )}
-              <span className="ml-auto tabular-nums" data-ai-estimate>
-                ≈ {preview.estimate.inputTokens.toLocaleString()} tokens in · up to {preview.estimate.maxOutputTokens.toLocaleString()} out
-                {preview.estimate.priceKnown ? ` · up to ${formatCost(preview.estimate.maxCostUsd ?? 0)}` : ' · no price set'}
-              </span>
+              <AiEstimateLine className="ml-auto tabular-nums" estimate={{ ok: true, text: estimateText(preview, { noModel: true, out: true }) }} data-ai-estimate="" />
             </div>
             <table className="w-full text-xs">
               <thead>

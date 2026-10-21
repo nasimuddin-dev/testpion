@@ -1,6 +1,7 @@
 import { GitItemHistory } from './components/GitItemHistory';
 import { AlarmClock, BarChart3, Bot, Code2, Keyboard, Columns2, CopyX, Disc, GitCompare, ScanSearch, TerminalSquare, Variable, Download, FileDown, FlaskConical, FolderOpen, FolderPlus, FolderTree, Gauge, GitBranch, History, KeyRound, Layers, ListChecks, ListX, Network, Play, Plug, Radio, RefreshCw, RotateCcw, Rows3, ScrollText, Search, Settings, Sparkles, SquareTerminal, Upload, Waypoints, Workflow, X, type LucideIcon } from 'lucide-react';
-import { ImportHost } from './components/ImportHost';
+import { ImportHost, openImport } from './components/ImportHost';
+import { pickAndShareSession } from './lib/git-share';
 import { askAssistant } from './components/ai/AiAction';
 import { useAiEnabled } from './lib/use-ai-enabled';
 import { RightPanel } from './components/RightPanel';
@@ -11,7 +12,6 @@ import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
 import { useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
-import { useBundleDrop } from './lib/transfer';
 import { focusedScriptEditor } from './lib/script-editor';
 import { focusedPaletteCommands } from './lib/palette-context';
 import { VarPopoverHost } from './components/VarPopoverHost';
@@ -211,7 +211,6 @@ export default function App() {
   // Settings ▸ AI assistant ▸ Hide all AI actions: no AI command, panel or dialog
   const aiOn = useAiEnabled();
   const openapiDiff = useApp((s) => s.openapiDiff);
-  useBundleDrop();
   const exportBundle = useApp((s) => s.exportBundle);
   const gitItem = useApp((s) => s.gitItem);
   const importBundle = useApp((s) => s.importBundle);
@@ -410,6 +409,8 @@ export default function App() {
       { id: 'git-fix', label: 'Fix Git Setup', hint: 'Workspace', run: () => void runMenuCommand('git-fix') },
       { id: 'git-clone', label: 'Clone Workspace from Git…', hint: 'Workspace', run: () => void runMenuCommand('git-clone') },
       { id: 'git-view', label: 'Git: Changes, Commit, Pull and Push', hint: 'Workspace', run: () => useApp.getState().setView('git') },
+      { id: 'git-codeowners', label: 'Create CODEOWNERS: Who Must Review Which Changes…', hint: 'Workspace', run: () => useApp.getState().openIntent('git', { codeowners: true }) },
+      { id: 'share-session', label: 'Share a Debugger Session with the Team…', hint: 'Debugger', run: () => void pickAndShareSession() },
       { id: 'layout-side', label: 'Response Layout: Side by Side', hint: 'View', run: () => setResponseLayout('side') },
       { id: 'layout-below', label: 'Response Layout: Response Below', hint: 'View', run: () => setResponseLayout('below') },
       { id: 'layout-auto', label: 'Response Layout: Auto', hint: 'View', run: () => setResponseLayout('auto') },
@@ -432,9 +433,10 @@ export default function App() {
       { id: 'm-import', label: 'Import (Postman, Insomnia, Bruno, OpenAPI, HAR, cURL …)', hint: 'File', run: () => void runMenuCommand('import') },
       { id: 'm-exp-col', label: 'Export Collection (Postman)', hint: 'File', run: () => void runMenuCommand('export-collection') },
       { id: 'm-exp-env', label: 'Export Current Environment', hint: 'File', run: () => void runMenuCommand('export-environment') },
-      { id: 'm-exp-ws', label: 'Export Workspace', hint: 'File', run: () => void runMenuCommand('export-workspace') },
+      { id: 'm-exp-ws', label: 'Export Workspace (older format)', hint: 'File', run: () => void runMenuCommand('export-workspace') },
       { id: 'm-exp-bundle', label: 'Export a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
       { id: 'm-import-bundle', label: 'Import a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
+      { id: 'm-migrate', label: 'Migrate from Another Tool (Postman, Insomnia, Bruno …)…', hint: 'File', run: () => openImport({ migrate: true }) },
     ];
     // every command has an icon: its own, or a generic one for a command added without
     for (const c of cmds) c.icon = createElement(PALETTE_ICONS[c.id] ?? TerminalSquare, { size: 16 });

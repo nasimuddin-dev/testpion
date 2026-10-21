@@ -1,8 +1,10 @@
 import { Check, GitMerge } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
-import { Badge, Button, Empty, Modal, Segmented, Textarea } from './ui';
+import { confirmAction, toastError } from '../store';
+import { toastWithUndo } from '../lib/git-items';
+import { plural } from '../lib/format';
+import { Badge, Button, Empty, Modal, Segmented, Textarea, Toggle } from './ui';
 import { PartsTable } from './PartsTable';
 
 /**
@@ -74,6 +76,12 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
   const [onlyDiffs, setOnlyDiffs] = useState(true);
   const [busy, setBusy] = useState(false);
   const [whole, setWhole] = useState<'ours' | 'theirs'>('ours');
+  // what the person actually chose: mine is where every conflict starts, so pressing the big button without choosing anything asks first
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const choose = (key: string, v: Choice) => {
+    setChoices((c) => ({ ...c, [key]: v }));
+    setPicked((p) => new Set(p).add(key));
+  };
   useEffect(() => {
     void call<Detail>('git.conflictDetail', { path }).then((d) => {
       setDetail(d);
@@ -87,6 +95,16 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
     return { ours: v.filter((x) => x === 'ours').length, theirs: v.filter((x) => x === 'theirs').length, edited: v.filter((x) => x === 'edit').length };
   }, [choices, keys]);
   const resolve = async () => {
+    if (!picked.size && (keys.length || detail?.mode === 'binary')) {
+      const what = detail?.mode === 'binary' ? 'this file' : plural(keys.length, 'conflict');
+      const ok = await confirmAction({
+        title: 'Keep all of mine?',
+        message: `You have not chosen anything yet. Resolving now keeps your version of ${what} and drops what your teammate changed there.`,
+        detail: 'Everything that did not clash stays, from both sides. You can undo this right after.',
+        confirmLabel: 'Keep mine',
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     try {
       let resolutions: Record<string, unknown> | undefined;
@@ -101,8 +119,8 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
         }
         for (const h of detail?.hunks ?? []) put(h.key, choices[h.key] ?? 'ours');
       }
-      await call('git.resolve', { path, side: detail?.mode === 'binary' ? whole : 'ours', ...(resolutions ? { resolutions } : {}) });
-      useApp.getState().toast(`${path} resolved${counts.ours + counts.theirs + counts.edited ? `: ${counts.ours} kept as mine, ${counts.theirs} taken from theirs${counts.edited ? `, ${counts.edited} edited` : ''}` : ''}`, 'success');
+      const r = await call<{ undoId?: string }>('git.resolve', { path, side: detail?.mode === 'binary' ? whole : 'ours', ...(resolutions ? { resolutions } : {}) });
+      toastWithUndo(`${path} resolved${counts.ours + counts.theirs + counts.edited ? `: ${counts.ours} kept as mine, ${counts.theirs} taken from theirs${counts.edited ? `, ${counts.edited} edited` : ''}` : ''}`, r.undoId);
       onResolved();
     } catch (e) {
       toastError(e);
@@ -110,7 +128,10 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
       setBusy(false);
     }
   };
-  const all = (side: 'ours' | 'theirs') => setChoices(Object.fromEntries(keys.map((k) => [k, side])));
+  const all = (side: 'ours' | 'theirs') => {
+    setChoices(Object.fromEntries(keys.map((k) => [k, side])));
+    setPicked(new Set(keys));
+  };
   const empty = detail && !detail.items.length && !detail.hunks.length && detail.mode !== 'binary';
   return (
     <Modal
@@ -123,8 +144,8 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
       width={1080}
       footer={
         <>
-          <span className="mr-auto text-xs text-muted self-center">
-            {detail?.mode === 'binary' ? 'A database or an image cannot be merged: one side is taken whole.' : `Every change that did not conflict, from both sides, stays. ${counts.ours} mine · ${counts.theirs} theirs${counts.edited ? ` · ${counts.edited} edited` : ''}.`}
+          <span className="mr-auto min-w-0 text-xs text-muted self-center" aria-live="polite" data-conflict-count="">
+            {detail?.mode === 'binary' ? 'A database or an image cannot be merged: one side is taken whole.' : `Every change that did not conflict, from both sides, stays. Your choices: ${counts.ours} mine · ${counts.theirs} theirs${counts.edited ? ` · ${counts.edited} edited` : ''}${picked.size ? '' : ' (nothing chosen yet: it starts with mine)'}.`}
           </span>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon={<Check size={13} />} loading={busy} disabled={!detail} onClick={() => void resolve()}>
@@ -140,7 +161,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
           <Segmented
             label="Which version"
             value={whole}
-            onChange={setWhole}
+            onChange={(v) => (setWhole(v), setPicked(new Set(['whole'])))}
             options={[
               { value: 'ours', label: `Keep mine${detail.sizes?.ours !== undefined ? ` (${detail.sizes.ours.toLocaleString()} bytes)` : ''}` },
               { value: 'theirs', label: `Keep theirs${detail.sizes?.theirs !== undefined ? ` (${detail.sizes.theirs.toLocaleString()} bytes)` : ''}` },
@@ -159,9 +180,9 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
             <Button size="sm" onClick={() => all('theirs')}>
               Keep all theirs
             </Button>
-            <label className="ml-auto flex items-center gap-1 text-muted">
-              <input type="checkbox" checked={onlyDiffs} onChange={(e) => setOnlyDiffs(e.target.checked)} /> Only the parts that differ
-            </label>
+            <span className="ml-auto text-muted">
+              <Toggle checked={onlyDiffs} onChange={setOnlyDiffs} label="Only the parts that differ" />
+            </span>
           </div>
           {detail.items.map((item) => {
             const choice = choices[item.key] ?? 'ours';
@@ -172,7 +193,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
                   <span className="font-medium text-sm truncate">{item.where}</span>
                   <Badge tone="warn">{KIND[item.kind]}</Badge>
                   <span className="ml-auto">
-                    <Segmented label={`Which version of ${item.where}`} value={choice} onChange={(v) => setChoices({ ...choices, [item.key]: v })} options={LABELS(item)} />
+                    <Segmented label={`Which version of ${item.where}`} value={choice} onChange={(v) => choose(item.key, v)} options={LABELS(item)} />
                   </span>
                 </header>
                 {choice === 'edit' ? (
@@ -187,7 +208,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
                           <div className="flex items-center gap-2 px-2 py-1 border-b border-line">
                             <span className="font-mono text-xs">{f.path}</span>
                             <span className="ml-auto">
-                              <Segmented label={`Which version of ${f.path}`} value={fc} onChange={(v) => setChoices({ ...choices, [f.key]: v })} options={LABELS()} />
+                              <Segmented label={`Which version of ${f.path}`} value={fc} onChange={(v) => choose(f.key, v)} options={LABELS()} />
                             </span>
                           </div>
                           {fc === 'edit' ? (
@@ -229,7 +250,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
                   <span className="font-medium text-sm truncate">{h.where}</span>
                   <Badge tone="warn">lines changed on both sides</Badge>
                   <span className="ml-auto">
-                    <Segmented label={`Which version of ${h.where}`} value={choice} onChange={(v) => setChoices({ ...choices, [h.key]: v })} options={LABELS()} />
+                    <Segmented label={`Which version of ${h.where}`} value={choice} onChange={(v) => choose(h.key, v)} options={LABELS()} />
                   </span>
                 </header>
                 {choice === 'edit' ? (

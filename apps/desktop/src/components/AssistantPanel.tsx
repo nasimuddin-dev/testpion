@@ -13,6 +13,7 @@ import { copyText } from '../lib/clipboard';
 import { aiSetupAction } from '../lib/ai-errors';
 import { offerUndo } from '../lib/undo';
 import { AiPreviewDialog, taskParams, type AiPrivacy } from './ai/AiPreviewDialog';
+import { AiEstimateLine, estimateOf, type EstimateState } from './ai/AiEstimateLine';
 import { ProposalReview, VerificationBadgeView } from './ai/ProposalReview';
 
 interface Turn {
@@ -39,6 +40,9 @@ export function AssistantPanel() {
   const [privacy, setPrivacy] = useState<AiPrivacy | undefined>(stored.privacy);
   const req = privacy === stored.privacy ? stored : { ...stored, privacy };
   const [previewing, setPreviewing] = useState(false);
+  // a request from a menu item waits for Send, with the estimate in view (see AssistantRequest.preflight)
+  const [waiting, setWaiting] = useState(!!stored.preflight);
+  const [estimate, setEstimate] = useState<EstimateState>();
   const set = useApp((s) => s.set);
   const env = useApp((s) => s.environment);
   const free = req.task === 'free';
@@ -98,9 +102,22 @@ export function AssistantPanel() {
   streamingRef.current = streaming;
 
   useEffect(() => {
+    if (waiting) return;
     if (!free || req.question) void ask(req.question);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [waiting]);
+  useEffect(() => {
+    if (!waiting) return;
+    let live = true;
+    call<AiTaskResult>('ai.preview', taskParams(free ? { ...req, context: viewCtx?.context ?? {} } : req, env)).then(
+      ({ preview: p }) => live && setEstimate(estimateOf(p)),
+      (e) => live && setEstimate({ ok: false, text: asError(e).message }),
+    );
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, privacy]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [turns.length, streaming]);
@@ -168,6 +185,21 @@ export function AssistantPanel() {
             />
           ),
         )}
+        {waiting && (
+          <div className="rounded-xl border border-line bg-panel p-4 flex flex-col gap-2" data-ai-preflight>
+            <div className="font-medium">Ready to send</div>
+            <p className="text-sm text-muted">Nothing has been sent yet. Secrets, tokens and personal data are masked. See exactly what goes to the model, and what it can cost, then send.</p>
+            <AiEstimateLine estimate={estimate} data-ai-estimate="" />
+            <div className="flex gap-2">
+              <Button variant="primary" size="sm" onClick={() => setWaiting(false)} data-ai-send>
+                Send
+              </Button>
+              <Button size="sm" icon={<Eye size={12} />} onClick={() => setPreviewing(true)}>
+                What will be sent…
+              </Button>
+            </div>
+          </div>
+        )}
         {busy && (streaming ? <Answer turn={{ role: 'assistant', content: streaming }} live /> : (
           <div className="flex items-center gap-2 text-muted">
             <Spinner /> Thinking…
@@ -218,7 +250,9 @@ export function AssistantPanel() {
             conversation.current++;
             setTurns([]);
             setError(undefined);
-            if (!free) setTimeout(() => void ask(undefined, true), 0);
+            // Send in "What will be sent" of a request that was waiting for it sends it
+            if (waiting) setWaiting(false);
+            else if (!free) setTimeout(() => void ask(undefined, true), 0);
           }}
         />
       )}

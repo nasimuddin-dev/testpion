@@ -143,6 +143,8 @@ async function isTracked(ws: string, file: string): Promise<boolean> {
 
 function checkFile(ws: string, file: string): { rel: string; bytes: number } {
   const rel = gitPathOf(file);
+  // a name with a line break or another control character would end the .gitattributes / .gitignore line it is written into and start a rule of its own
+  if ([...rel].some((c) => c.charCodeAt(0) < 0x20 || [0x7f, 0x85, 0x2028, 0x2029].includes(c.charCodeAt(0)))) throw new ApsError('ValidationError', `${JSON.stringify(rel)} has a control character in its name: rename the file first`);
   const abs = workspaceFile(ws, rel);
   if (!existsSync(abs) || !statSync(abs).isFile()) throw new ApsError('ValidationError', `${rel} is not a file of the workspace`);
   return { rel, bytes: statSync(abs).size };
