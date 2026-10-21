@@ -29,6 +29,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { exists, query } from '../util/jsonpath.js';
 import { stringifyYaml } from '../util/lazy-yaml.js';
+import { jsonClone } from '../util/json-clone.js';
 import { tryParseYaml } from '../util/yaml-doc.js';
 import { freePath, isValueSegment, requestContext, sameEndpoint, segmentsOf, sourceRequests, type Saved } from './flow-from-collection.js';
 import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
@@ -266,7 +267,7 @@ function deterministicProbes(requests: Array<{ node: Saved; auth?: AuthConfig }>
 
 /* ------------------------------------------------------------------ the file */
 
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const clone = jsonClone;
 
 type Principal = { var: string } | 'none' | 'invalid';
 

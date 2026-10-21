@@ -5,6 +5,7 @@
  * `ai_run_task`) and a cloud host all read this one table.
  */
 import type { AiTaskId, ItemRef } from '@testpion/shared';
+import { slugify } from '../../util/ids.js';
 import type { CheckConfig, Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { StoredResponse } from '../verify.js';
@@ -131,12 +132,7 @@ export interface ProposalDescription {
   notes?: string[];
 }
 
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'generated';
+const slug = (s: string) => slugify(s, { max: 48, fallback: 'generated' });
 
 /** The file a generated test goes to: the caller's path, else tests/ai/<what it is about>.yaml. */
 const filePath = (input: AiTaskInput, fallback: string) => (input.path ? input.path.replace(/^tests[\\/]/, '') : `ai/${slug(input.question || fallback)}.yaml`);

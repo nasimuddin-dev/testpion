@@ -14,6 +14,7 @@ import type { ItemRef } from '@testpion/shared';
 import { findOperation, type OpenApiDoc } from './contract.js';
 import { isRecord } from '@testpion/shared';
 import { sha1Hex } from '../util/hash.js';
+import { jsonClone } from '../util/json-clone.js';
 
 type Json = Record<string, unknown>;
 
@@ -89,7 +90,7 @@ export interface DriftReport {
 
 /* ------------------------------------------------------------------ schemas */
 
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const clone = jsonClone;
 
 /** A local `$ref` (#/components/…, #/definitions/…) followed to what it points at, and the path it was found at. */
 export function resolveRef(doc: OpenApiDoc, schema: unknown): { schema: Json; path?: string[] } | undefined {

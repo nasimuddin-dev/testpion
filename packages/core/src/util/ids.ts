@@ -43,12 +43,13 @@ export function uniqueId(used: Set<string>, base: string): string {
   return id;
 }
 
-export function slugify(name: string): string {
+/** Lower-case words joined by `-`: at most `max` characters (64), `fallback` ('item') when nothing is left. */
+export function slugify(name: string, o: { max?: number; fallback?: string } = {}): string {
   return (
     name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 64) || 'item'
+      .slice(0, o.max ?? 64) || (o.fallback ?? 'item')
   );
 }

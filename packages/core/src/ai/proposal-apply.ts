@@ -13,6 +13,7 @@ import type { CheckConfig, Collection, CollectionNode, SavedHttpRequest } from '
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId } from '../util/ids.js';
+import { jsonClone } from '../util/json-clone.js';
 import { noteProposalOutcome } from '../storage/ai-usage.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 import { getProposal, saveProposal, type Proposal, type ProposalItem, type ProposalUndo } from './proposal.js';
@@ -55,7 +56,7 @@ function locate(items: CollectionNode[], id: string, parentId?: string): Located
   return undefined;
 }
 
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const clone = jsonClone;
 
 function requestTarget(store: WorkspaceStore, item: ProposalItem): { c: Collection; at: Located } {
   const t = item.target;

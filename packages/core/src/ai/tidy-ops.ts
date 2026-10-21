@@ -2,10 +2,11 @@
 import { ApsError } from '../errors.js';
 import type { AuthConfig, Collection, CollectionFolder, CollectionNode, KeyValue, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { shortId } from '../util/ids.js';
+import { jsonClone } from '../util/json-clone.js';
 
 export type Saved = SavedHttpRequest | SavedGraphQLRequest;
 
-export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+export const clone = jsonClone;
 
 /** At most this many requests are described to the model (a bigger import is sampled: noise and duplicates first). */
 export const TIDY_MAX_REQUESTS = 120;
