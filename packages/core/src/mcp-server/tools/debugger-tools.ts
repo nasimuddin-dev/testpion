@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Redactor } from '../../util/redact.js';
 import { ApsError } from '../../errors.js';
-import { str, type Tool } from '../tool.js';
+import { str, type Tool, limitArg } from '../tool.js';
 
 /**
  * The HTTP Debugger for agents: start the proxy, point a program at it, read what it sent and got. The capture lives
@@ -131,7 +131,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           }
           return true;
         });
-        return { running: !!proxy, url: proxy?.url, total: session.length, exchanges: out.slice(-Math.min(Math.max(Number(a.limit) || 200, 1), 2000)).map((e) => ({ ...safe(e, false), ref: { kind: 'exchange', exchangeId: e.id } })) };
+        return { running: !!proxy, url: proxy?.url, total: session.length, exchanges: out.slice(-limitArg(a.limit, 200, 2000)).map((e) => ({ ...safe(e, false), ref: { kind: 'exchange', exchangeId: e.id } })) };
       },
     },
     {

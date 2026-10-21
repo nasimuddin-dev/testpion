@@ -3,7 +3,7 @@ import type { TestResult } from '../../model/types.js';
 import { monitorRequestStats } from '../../runner/monitor-requests.js';
 import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorStatus } from '../../runner/monitors.js';
 import type { RunEvent } from '../../runner/runner.js';
-import { str } from '../tool.js';
+import { str, limitArg } from '../tool.js';
 import type { Tool } from '../tool.js';
 import type { ModuleToolDeps } from './deps.js';
 
@@ -21,7 +21,7 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
       name: 'monitor_results',
       description: "A monitor's recent results, newest first: status, passed / failed / errors, duration, median response time, what started it and the run id. Use it to see when a check started failing.",
       inputSchema: { type: 'object', properties: { monitor: str('Monitor name or id'), limit: { type: 'number', description: 'How many (default 20, max 200)' } }, required: ['monitor'] },
-      run: (a) => monitorResults(store, findMonitor(store, String(a.monitor)).id, Math.min(Math.max(Number(a.limit) || 20, 1), 200)),
+      run: (a) => monitorResults(store, findMonitor(store, String(a.monitor)).id, limitArg(a.limit, 20, 200)),
     },
     {
       name: 'monitor_requests',

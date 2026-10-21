@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Faster start and big workspaces
+
+- **`testpion` starts in about half the time** (a command went from about 2.0 s to 0.9 s on a loaded machine): the build also writes the command line, the engine and the shared code as one file (`dist/bundle.js`), which `bin/testpion.js` loads while it is newer than the build; `TESTPION_UNBUNDLED=1` loads the files as before. `--version` and `--help` were already instant.
+- **Opening a workspace with tens of thousands of files no longer stalls.** The change watcher walked every file with a `stat` before returning (3 s for 50,000 files, all blocking); it now walks in 8 ms slices, a file that changes before the walk reaches it is still reported, and a long burst of changes (a build, a branch switch) is reported in batches at the latest 5 s after the first. The test-file tree of 50,000 files takes 54 ms (was 454 ms).
+
 ### RAG follow-ups: judges, test sets, capture, calibration, authoring
 
 - **138 metrics** (was 134). `answer-regex`, `answer-length` and `answer-json-schema` (DeepEval's JsonCorrectness) score the shape of an answer 1 or 0 with no model; `judge-cost` is what judging the other metrics of the sample cost, in dollars (lower is better, `max` gates it). `negative-rejection` takes `mode: judge` for a refusal the pattern does not know. Ragas' one `noise_sensitivity` takes `mode: relevant | irrelevant`. A jury now also votes on the claim-level metrics, claim by claim.

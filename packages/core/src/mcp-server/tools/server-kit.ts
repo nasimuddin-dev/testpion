@@ -28,7 +28,19 @@ export const findRequestIn = (c: Collection, ref: unknown): Flat => {
   return f;
 };
 
-export const clip = (t: string) => (t.length > BODY_CHARS ? `${t.slice(0, BODY_CHARS)}… [${t.length - BODY_CHARS} more characters]` : t);
+/** The id of the folder or request a tool's `folder` argument names (by id or name, anywhere in the collection), as a selection; undefined when none is given. */
+export const folderSelection = (c: Collection, folder: unknown): string[] | undefined => {
+  if (!folder) return undefined;
+  const r = String(folder).toLowerCase();
+  const all: CollectionNode[] = [];
+  const walk = (nodes: CollectionNode[]) => nodes.forEach((n) => (all.push(n), n.kind === 'folder' && walk(n.items)));
+  walk(c.items);
+  const n = all.find((x) => x.id.toLowerCase() === r) ?? all.find((x) => x.name.toLowerCase() === r);
+  if (!n) throw new ApsError('ConfigurationError', `No folder or request "${String(folder)}" in "${c.name}"`);
+  return [n.id];
+};
+
+export const clip =(t: string) => (t.length > BODY_CHARS ? `${t.slice(0, BODY_CHARS)}… [${t.length - BODY_CHARS} more characters]` : t);
 
 /** A request from `snippet` (cURL / fetch / PowerShell) or from method + url + headers + body. */
 export const requestFrom = (a: Record<string, unknown>): { request: HttpRequestSpec; format?: string } => {

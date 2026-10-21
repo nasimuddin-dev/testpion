@@ -31,6 +31,9 @@ export interface ToolDoc {
   narrow?: string;
 }
 
+/** A `limit` argument: a whole number from 1 to `max`, `fallback` when it is missing or not a number. */
+export const limitArg = (v: unknown, fallback: number, max: number): number => Math.min(Math.max(Number(v) || fallback, 1), max);
+
 /** A string property of an input schema. */
 export const str = (description: string) => ({ type: 'string', description });
 

@@ -5,7 +5,7 @@ import { templateVariables } from '@testpion/shared';
 import { WorkspaceSearch } from '../../storage/search.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { ApsError } from '../../errors.js';
-import type { Tool } from '../tool.js';
+import { limitArg, type Tool } from '../tool.js';
 
 /**
  * ItemRefs for agents: the `ref` that results carry (run_tests, recent_failures, what_needs_attention, git_status,
@@ -23,7 +23,7 @@ export function refTools({ store }: { store: WorkspaceStore }): Tool[] {
       inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'Words to find' }, limit: { type: 'number', description: 'At most this many hits (default 20, at most 100)' } }, required: ['query'] },
       run: (a) => {
         search ??= new WorkspaceSearch(store);
-        return search.search(String(a.query ?? ''), Math.min(Math.max(Number(a.limit) || 20, 1), 100));
+        return search.search(String(a.query ?? ''), limitArg(a.limit, 20, 100));
       },
     },
     {

@@ -3,7 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { createEngineContext } from '../../engine.js';
 import { ApsError } from '../../errors.js';
 import { assertEvaluationRunnable } from '../../eval/rag/preflight.js';
-import type { CollectionNode, TestResult } from '../../model/types.js';
+import type { TestResult } from '../../model/types.js';
 import { collectionRealtimeTests } from '../../runner/collection-realtime.js';
 import { runCollection } from '../../runner/collection-run.js';
 import { readDataset, type DatasetRecord } from '../../runner/datasets.js';
@@ -19,6 +19,7 @@ import { shortId } from '../../util/ids.js';
 import { planFlowRun } from './flow-graph-tools.js';
 import { str } from '../tool.js';
 import type { Tool } from '../tool.js';
+import { folderSelection } from './server-kit.js';
 import type { ModuleToolDeps } from './deps.js';
 
 /** Running collections, test files and evaluations, and reading runs. */
@@ -45,16 +46,7 @@ export function runTools(d: ModuleToolDeps): Tool[] {
       run: async (a) => {
         const environment = checkEnvironment(a.environment);
         const c = findCollection(a.collection);
-        let selection: string[] | undefined;
-        if (a.folder) {
-          const r = String(a.folder).toLowerCase();
-          const all: CollectionNode[] = [];
-          const walk = (nodes: CollectionNode[]) => nodes.forEach((n) => (all.push(n), n.kind === 'folder' && walk(n.items)));
-          walk(c.items);
-          const n = all.find((x) => x.id.toLowerCase() === r) ?? all.find((x) => x.name.toLowerCase() === r);
-          if (!n) throw new ApsError('ConfigurationError', `No folder or request "${String(a.folder)}" in "${c.name}"`);
-          selection = [n.id];
-        }
+        const selection = folderSelection(c, a.folder);
         // data files are read only from inside the workspace
         let data: DatasetRecord[] | undefined;
         if (a.data) {

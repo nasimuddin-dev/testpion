@@ -1,14 +1,13 @@
-import { withEngine } from './server-kit.js';
+import { withEngine, folderSelection } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import { collectionLoadTarget } from '../../load/collection-load.js';
 import { loadHistory, loadRunRecord, recordLoadRun } from '../../load/history.js';
 import { runLoadTest, type LoadTarget } from '../../load/load.js';
 import { evaluateThresholds, parseThreshold } from '../../load/thresholds.js';
-import type { CollectionNode } from '../../model/types.js';
 import { parseGrpcTarget } from '../../protocols/grpc/grpc.js';
 import { reflectServer } from '../../protocols/grpc/reflection.js';
 import { shortId } from '../../util/ids.js';
-import { str } from '../tool.js';
+import { str, limitArg } from '../tool.js';
 import type { Tool } from '../tool.js';
 import type { ModuleToolDeps } from './deps.js';
 
@@ -21,7 +20,7 @@ export function loadTools(d: ModuleToolDeps): Tool[] {
       description:
         'Earlier load tests of this workspace, newest first (from the app and from load_test): when, what was tested, virtual users, duration, requests, throughput (req/s), error rate, p50 / p95 / p99 in ms, status codes and pass/fail rules. Use it to see whether an API got slower or less reliable between runs.',
       inputSchema: { type: 'object', properties: { query: str('Only load tests whose name or target contains this'), limit: { type: 'number', description: 'How many (default 20, max 200)' } } },
-      run: (a) => loadHistory(store, { query: a.query ? String(a.query) : undefined, limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) }),
+      run: (a) => loadHistory(store, { query: a.query ? String(a.query) : undefined, limit: limitArg(a.limit, 20, 200) }),
     },
     {
       name: 'load_test',
@@ -56,16 +55,7 @@ export function loadTools(d: ModuleToolDeps): Tool[] {
           let target: LoadTarget;
           let prep: { requests: string[]; unresolved: string[] } | undefined;
           if (c) {
-            let selection: string[] | undefined;
-            if (a.folder) {
-              const r = String(a.folder).toLowerCase();
-              const all: CollectionNode[] = [];
-              const walk = (nodes: CollectionNode[]) => nodes.forEach((n) => (all.push(n), n.kind === 'folder' && walk(n.items)));
-              walk(c.items);
-              const n = all.find((x) => x.id.toLowerCase() === r) ?? all.find((x) => x.name.toLowerCase() === r);
-              if (!n) throw new ApsError('ConfigurationError', `No folder or request "${String(a.folder)}" in "${c.name}"`);
-              selection = [n.id];
-            }
+            const selection = folderSelection(c, a.folder);
             const t = await collectionLoadTarget({ collection: c, selection, services: ctx.services, warmUp: a.warmUp === true });
             target = t.target;
             prep = { requests: t.target.requests.map((x) => x.name), unresolved: t.unresolved };

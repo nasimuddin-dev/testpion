@@ -9,7 +9,7 @@ import type { Redactor } from '../../util/redact.js';
 import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../../git/semantic.js';
 import { commitVerdict, scanStagedSecrets } from '../../git/staged-secrets.js';
 import type { MergeResolutions } from '../../git/merge.js';
-import { str, type Tool } from '../tool.js';
+import { str, type Tool, limitArg } from '../tool.js';
 
 /** MCP tools for the workspace's git repository (GIT-402): status, the changes by meaning, history, a proposed commit. */
 export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown): Collection; redactor?: Redactor }): Tool[] {
@@ -124,7 +124,7 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
       run: (a) =>
         gitLog(store.root, {
           path: a.file ? String(a.file) : a.collection ? store.collectionFileOf(findCollection(a.collection).id) : undefined,
-          limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200),
+          limit: limitArg(a.limit, 20, 200),
         }),
     },
     {

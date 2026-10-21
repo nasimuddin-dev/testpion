@@ -19,7 +19,7 @@ import { compareHistory } from '../../storage/history-compare.js';
 import { exportOtlp } from '../../trace/otlp.js';
 import { shortId } from '../../util/ids.js';
 import { decodeJwt } from '../../util/jwt.js';
-import { str } from '../tool.js';
+import { str, limitArg } from '../tool.js';
 import { toItemRef } from '@testpion/shared';
 import type { Tool } from '../tool.js';
 import type { ModuleToolDeps } from './deps.js';
@@ -229,7 +229,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
       },
       run: async (a) => {
         return withEngine({ store, secrets, settings }, { environment: checkEnvironment(a.environment) }, async (ctx) => {
-          const limit = Math.min(Math.max(Number(a.limit) || 50, 1), 1000);
+          const limit = limitArg(a.limit, 50, 1000);
           const ids = store.meta.listTraces({ kind: a.kind ? String(a.kind) : undefined, limit }).items.map((t) => t.id);
           const traces = ids.map((id) => store.loadTrace(id)).filter((t): t is NonNullable<typeof t> => !!t);
           if (!traces.length) return { spans: 0, traces: 0, message: 'No traces yet' };

@@ -7,7 +7,7 @@ import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { Redactor } from '../../util/redact.js';
 import { ApsError } from '../../errors.js';
 import { HISTORY_KINDS, historyKindOf } from '../../model/history-kinds.js';
-import { str, type Tool } from '../tool.js';
+import { str, type Tool, limitArg } from '../tool.js';
 
 /**
  * MCP tools that read what happened in the workspace: a saved request's earlier responses and response times, the
@@ -34,7 +34,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       },
       run: (a) => {
         const { node } = findRequest(findCollection(a.collection), a.request);
-        const limit = Math.min(Math.max(Number(a.limit) || 20, 1), 100);
+        const limit = limitArg(a.limit, 20, 100);
         return store.meta
           .listHistory({ requestId: node.id, kind: 'http', limit })
           .items.map((h) => ({ id: h.id, timestamp: h.timestamp, status: h.status, durationMs: h.durationMs, size: h.size, url: h.url && redactor.redactUrl(h.url) }));
@@ -55,7 +55,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       },
       run: (a) =>
         store.meta
-          .listHistory({ kind: historyKindOf(a.kind), query: a.query ? String(a.query) : undefined, failed: a.failed === true || undefined, brief: true, limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) })
+          .listHistory({ kind: historyKindOf(a.kind), query: a.query ? String(a.query) : undefined, failed: a.failed === true || undefined, brief: true, limit: limitArg(a.limit, 20, 200) })
           .items.map((h) => ({
             id: h.id,
             ref: { kind: 'history', historyId: h.id },
@@ -95,7 +95,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       },
       run: async (a) => {
         if (!a.name && !a.id) throw new ApsError('ValidationError', 'Give the name or id of a test');
-        const points = await testHistory(store, { id: a.id ? String(a.id) : undefined, name: a.name ? String(a.name) : undefined }, { limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) });
+        const points = await testHistory(store, { id: a.id ? String(a.id) : undefined, name: a.name ? String(a.name) : undefined }, { limit: limitArg(a.limit, 20, 200) });
         return { summary: summarizeTestHistory(points), runs: points };
       },
     },
@@ -106,7 +106,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       inputSchema: { type: 'object', properties: { kind: str('Only this kind: http, graphql, grpc, mcp or llm'), limit: { type: 'number', description: 'How many (default 20, max 200)' } } },
       run: (a) =>
         store.meta
-          .listHistory({ failed: true, kind: historyKindOf(a.kind), limit: Math.min(Math.max(Number(a.limit) || 20, 1), 200) })
+          .listHistory({ failed: true, kind: historyKindOf(a.kind), limit: limitArg(a.limit, 20, 200) })
           .items.map((h) => ({ id: h.id, ref: { kind: 'history', historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, url: h.url && redactor.redactUrl(h.url), status: h.status, durationMs: h.durationMs })),
     },
     {
@@ -120,7 +120,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       },
       run: (a) => {
         const { node } = findRequest(findCollection(a.collection), a.request);
-        const limit = Math.min(Math.max(Number(a.limit) || 50, 1), 500);
+        const limit = limitArg(a.limit, 50, 500);
         return responseTimeStats(store.meta.listHistory({ requestId: node.id, kind: 'http', limit }).items);
       },
     },
