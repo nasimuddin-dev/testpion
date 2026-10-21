@@ -7,6 +7,7 @@ import { Command, Option } from 'commander';
 import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
+import { addPaging, pagedList, reportPage } from '../paging.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
 import { runPackageExport } from './export-package.js';
 
@@ -474,13 +475,18 @@ export function registerDataCommands(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option('-n, --limit <n>', 'how many rows (default 20, up to 10000)', '20')
     .option('-q, --query <sql>', 'SQLite: the SELECT whose rows are the records')
-    .option('--json', 'print as JSON: path, format, count, columns [{ name, type }], rows')
-    .action(async (name: string, o: { workspace?: string; limit: string; query?: string; json?: boolean }) => {
+    .option('--cursor <cursor>', 'where the page of rows starts: the nextCursor of the page before')
+    .option('--offset <n>', 'where the page of rows starts, as a number (the same as --cursor)')
+    .option('--json', 'print as JSON: path, format, count, columns [{ name, type }], rows, truncated, nextCursor')
+    .action(async (name: string, o: { workspace?: string; limit: string; query?: string; cursor?: string; offset?: string; json?: boolean }) => {
       // `datasets` takes --json and -w too: given after `show`, Commander hands them to the parent
       const parent = datasets.opts() as { workspace?: string; json?: boolean };
       return withWorkspace(o.workspace ?? parent.workspace, async (store) => {
-        const d = await readWorkspaceDataset(store, name, { limit: Number(o.limit) || 20, query: o.query });
-        if (o.json || parent.json) return printJson(d);
+        const d = await readWorkspaceDataset(store, name, { limit: Number(o.limit) || 20, query: o.query, ...(o.cursor ? { cursor: o.cursor } : { offset: Number(o.offset) || 0 }) });
+        if (o.json || parent.json) {
+          printJson(d);
+          return reportPage({ items: d.rows, total: d.count, limit: Number(o.limit) || 20, truncated: d.truncated, ...(d.nextCursor ? { nextCursor: d.nextCursor } : {}) }, o, 'rows');
+        }
         console.log(`${d.path}  ${dim(`${d.format}, ${(d.size / 1024).toFixed(1)} KB, ${d.count} record${d.count === 1 ? '' : 's'}, ${d.columns.length} column${d.columns.length === 1 ? '' : 's'}`)}`);
         if (d.tables && !d.query) return console.log(d.tables.length ? `Tables: ${d.tables.join(', ')}  ${dim('(add --query "SELECT * FROM <table>" to read rows)')}` : dim('No tables'));
         if (!d.columns.length) return console.log(dim('No records'));
@@ -490,22 +496,22 @@ export function registerDataCommands(program: Command): void {
         console.log(bold(line(d.columns.map((c) => c.name))));
         console.log(dim(line(d.columns.map((c) => c.type))));
         for (const r of d.rows) console.log(line(d.columns.map((c) => cell(r[c.name]))));
-        if (d.count > d.rows.length) console.log(dim(`… ${d.count - d.rows.length} more (--limit ${d.count} shows them all)`));
+        if (d.truncated) console.log(dim(`… ${d.count - (Number(o.offset) || 0) - d.rows.length} more (more: --cursor ${d.nextCursor})`));
       });
     });
-  program
-    .command('requests')
+  addPaging(program
+    .command('requests'), { limit: true })
     .description("list what a collection holds: its HTTP and GraphQL requests, then its gRPC calls and WebSocket / Socket.IO / MQTT connections (run-collection runs them all)")
     .argument('<collection>', 'collection name or id')
     .option(...WORKSPACE_OPTION)
     .option('--health', 'add how each HTTP and GraphQL request has been doing in the app: responses, failed, latest status, median time, whether it has checks')
     .option(...JSON_OPTION)
-    .action((ref: string, o: { workspace?: string; json?: boolean; health?: boolean }) => {
+    .action((ref: string, o: { workspace?: string; json?: boolean; health?: boolean; limit?: string; cursor?: string; offset?: string }) => {
       return withWorkspace(o.workspace, (store) => {
         const c = requireCollection(store, ref, { loadable: true });
         const redactor = new Redactor();
         const saved = collectionSavedItems(store, c.id);
-        const rows = [
+        const everything = [
           ...collectionRequests(c).map((r) => ({ id: r.id, kind: r.node.kind, name: r.name, folder: r.path.join(' / ') || undefined, method: r.node.kind === 'http' ? r.node.request.method : 'GQL', target: redactor.redactString(r.node.kind === 'http' ? r.node.request.url : r.node.request.endpoint) })),
           ...(saved?.grpc ?? []).map((i) => ({ id: i.id, kind: 'grpc', name: i.name, folder: i.folder, method: 'gRPC', target: `${(i.data as { target?: string }).target ?? ''} ${(i.data as { method?: string }).method ?? ''}`.trim() })),
           ...(saved?.websocket ?? []).map((i) => {
@@ -513,6 +519,9 @@ export function registerDataCommands(program: Command): void {
             return { id: i.id, kind: 'websocket', name: i.name, folder: i.folder, method: d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', target: redactor.redactString(d.url ?? '') };
           }),
         ];
+        // a long collection comes a page at a time (200 unless asked): `data` is the plain list, the envelope's `page` says the rest
+        const page = pagedList(everything, o);
+        const rows = page.items;
         if (o.health) {
           const stats = new Map(store.meta.requestStats(c.id).map((s) => [s.requestId, s]));
           const checks = new Map(collectionRequests(c).map((r) => [r.id, !!r.node.assertions?.length || !!r.node.testScript?.trim()]));
@@ -522,7 +531,10 @@ export function registerDataCommands(program: Command): void {
             Object.assign(r, { hasChecks: checks.get(r.id as string), responses: s?.count ?? 0, failed: s?.failed, lastStatus: s?.lastStatus, lastOk: s?.lastOk, medianMs: s?.medianMs });
           }
         }
-        if (o.json) return printJson(rows);
+        if (o.json) {
+          printJson(rows);
+          return reportPage(page, o, 'requests');
+        }
         for (const r of rows as Array<(typeof rows)[number] & { responses?: number; failed?: number; lastStatus?: number | string; lastOk?: boolean; medianMs?: number; hasChecks?: boolean }>) {
           const health =
             o.health && r.responses !== undefined
@@ -530,6 +542,7 @@ export function registerDataCommands(program: Command): void {
               : '';
           console.log(`${r.method.padEnd(6)} ${r.folder ? dim(`${r.folder} / `) : ''}${r.name}  ${dim(r.target)}${health}`);
         }
+        reportPage(page, o, 'requests');
       });
     });
   program
@@ -876,18 +889,20 @@ export function registerDataCommands(program: Command): void {
         console.log(v.value);
       });
     });
-  envCmd
-    .command('list')
+  addPaging(envCmd
+    .command('list'), { limit: true })
     .description('list environments in display order, with variable names (never values)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
         const all = store.listEnvironments();
-        const envs = all.map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
+        const page = pagedList(all, o);
+        const envs = page.items.map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
         if (o.json) printJson(envs);
         else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
         if (!o.json) warnProblems(all, 'environment');
+        reportPage(page, o, 'environments');
       });
     });
   envCmd

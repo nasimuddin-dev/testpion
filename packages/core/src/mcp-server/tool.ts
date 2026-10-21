@@ -34,6 +34,9 @@ export interface ToolDoc {
 /** A `limit` argument: a whole number from 1 to `max`, `fallback` when it is missing or not a number. */
 export const limitArg = (v: unknown, fallback: number, max: number): number => Math.min(Math.max(Number(v) || fallback, 1), max);
 
+/** An `offset` argument: a whole number from 0 (0 when it is missing or not a number). */
+export const offsetArg = (v: unknown): number => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.floor(Number(v)) : 0);
+
 /** A string property of an input schema. */
 export const str = (description: string) => ({ type: 'string', description });
 

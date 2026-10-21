@@ -30,7 +30,17 @@ export interface Envelope {
   metrics: { duration_ms: number; exit_code: number };
   /** With --dry-run: what the command would have changed (see dry-run.ts). */
   dry_run?: unknown;
+  /** A list that was cut: how many there are, and the cursor of the next page (see notePage). */
+  page?: PageNote;
   type?: 'result';
+}
+
+/** What the envelope says of a list command's page (the data stays the plain list). */
+export interface PageNote {
+  total: number;
+  limit: number;
+  truncated: boolean;
+  nextCursor?: string;
 }
 
 /** The command being run and what it asked for (set by the program's preAction hook). */
@@ -45,6 +55,7 @@ export const cli = {
   /** The data part was streamed (a long run's rows): only the envelope's tail is left to write. */
   streamed: false,
   dryRun: undefined as unknown,
+  page: undefined as PageNote | undefined,
   /** The command supports --json or --jsonl (a failure without it suggests it). */
   canJson: false,
   /** An error the command reported without throwing (it still printed its data, then set an error exit code). */
@@ -59,6 +70,7 @@ export function beginCommand(command: string, opts: { json?: unknown; jsonl?: un
   cli.canJson = canJson;
   cli.startedAt = Date.now();
   cli.error = undefined;
+  cli.page = undefined;
   // stdout is the JSON's alone: what a command prints for people goes to stderr
   if (cli.json || cli.jsonl) console.log = console.info = (...a: unknown[]) => console.error(...a);
 }
@@ -84,6 +96,11 @@ export function printJson(value: unknown): void {
 export function emitEvent(type: string, data: unknown): void {
   if (!cli.jsonl) return;
   write(`${JSON.stringify({ schema_version: SCHEMA_VERSION, command: cli.command, type, data })}\n`);
+}
+
+/** The page a list command printed: the envelope's `page` says how many there are and the cursor of the next page. */
+export function notePage(p: PageNote): void {
+  cli.page = p;
 }
 
 /** A warning: on stderr as always, and in the envelope's warnings. */
@@ -136,7 +153,7 @@ export function finishOutput(exitCode: number, error?: unknown): void {
         ? [{ code: exitCode === 2 ? 'ConfigurationError' : 'ExecutionError', message: `${cli.command || 'The command'} ended with exit code ${exitCode}`, retryable: false }]
         : [];
   const metrics = { duration_ms: Date.now() - cli.startedAt, exit_code: exitCode };
-  const rest = { status: statusOf(exitCode), errors, warnings: cli.warnings, metrics, ...(cli.dryRun !== undefined ? { dry_run: cli.dryRun } : {}) };
+  const rest = { status: statusOf(exitCode), errors, warnings: cli.warnings, metrics, ...(cli.dryRun !== undefined ? { dry_run: cli.dryRun } : {}), ...(cli.page ? { page: cli.page } : {}) };
   if (cli.streamed) {
     // the data was streamed: close the document with the rest of the envelope
     const tail = JSON.stringify(rest);

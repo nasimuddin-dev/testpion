@@ -275,7 +275,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: "Use it to find requests sent, runs, test results or traces from a question in plain words (\"failed payment calls last week over 2 s\", \"flaky tests\", \"traces where a tool timed out\"), or with a query of your own: TestPion's model only translates the question, TestPion runs the query, and the answer says how it was understood.",
     whenNot: 'To find a request, test, environment or variable by name, use `search_workspace`; to list one kind of history or runs with simple filters, use `history_list` or `list_runs`; to read failures of a run, use `recent_failures`.',
     example: { question: 'failed payment calls last week over 2 s', sources: ['history'] },
-    narrow: 'Name the `sources` and lower `limit` in a `query`.',
+    narrow: 'Name the `sources`, and set `limit` (1 to 200) and `offset`: the outcome says `truncated: true` and gives `nextOffset` / `nextCursor` when more matches follow; pass `cursor` (or `offset`) back for the next page.',
   },
   ai_triage_run: {
     when: "Use it when the user wants TestPion's own model to explain a failed run and propose fixes (their key or a local model): causes with evidence and verified fixes, as a proposal.",
@@ -398,6 +398,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { run_id: 'run-abc123' },
     narrow: 'Leave `response_format` at `concise`.',
   },
+  run_results: {
+    when: 'Use it to read the results of a finished run a page at a time: which tests failed and why, or every result of a long run.',
+    whenNot: 'For the numbers of the run, use `run_breakdown`; for one test across runs, use `test_history`; to read ratings only, use `run_reviews`.',
+    example: { run_id: 'run-abc123', status: 'failed', limit: 100 },
+    narrow: 'Filter with `status` or `query`, lower `limit`; the result says `truncated: true` and `nextCursor` when more follow: pass it back as `cursor` for the next page.',
+  },
   run_reviews: {
     when: 'Use it to read a person’s good / bad ratings on a run’s results and improve tests or evaluators from them.',
     whenNot: 'To rate a result yourself, use `review_result`; for the run’s numbers, use `run_breakdown`.',
@@ -446,7 +452,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to list earlier responses of a saved request and pick ids for `compare_responses`.',
     whenNot: 'For a latency summary, use `response_time_stats`; for failures across the workspace, use `recent_failures`.',
     example: { collection: 'Veterinary API', request: 'List patients', limit: 20 },
-    narrow: 'Lower `limit`, or page with `cursor`.',
+    narrow: 'Lower `limit`; a cut list comes with `nextCursor` (`truncated: true`): pass it back as `cursor` for the next page.',
   },
   score_trend: {
     when: 'Use it to see whether a model, prompt or pipeline gets better or worse: each evaluator’s mean score run by run.',
@@ -458,7 +464,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to find unreliable tests whose result flips across the latest runs or that pass only after a retry.',
     whenNot: 'For one test in detail, use `test_history`.',
     example: { runs: 20 },
-    narrow: 'Lower `runs` or `limit`, or page with `cursor`.',
+    narrow: 'Lower `runs` or `limit`; a cut list comes with `nextCursor` (`truncated: true`): pass it back as `cursor` for the next page.',
   },
   test_history: {
     when: 'Use it to follow one test or saved request across the latest runs: status, latency, attempts and failed checks.',
@@ -470,13 +476,13 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to see what broke recently across the workspace: the latest failed responses of every kind.',
     whenNot: 'For one request, use `request_history`; for a ranked to-do list, use `what_needs_attention`.',
     example: { kind: 'http', limit: 20 },
-    narrow: 'Filter with `kind`, lower `limit`, or page with `cursor`.',
+    narrow: 'Filter with `kind`, lower `limit`; a cut list comes with `nextCursor` (`truncated: true`): pass it back as `cursor` for the next page.',
   },
   history_list: {
     when: 'Use it to browse History by kind or text, and (kind `capture`) to find what was captured in the HTTP Debugger and where it went: the collection, flow or saved session, with a ref that opens it.',
     whenNot: 'For only the failures, use `recent_failures`; for one saved request, use `request_history`; for the live Debugger session, use `debugger_exchanges`.',
     example: { kind: 'capture', limit: 20 },
-    narrow: 'Filter with `kind` or `query`, lower `limit`, or page with `cursor`.',
+    narrow: 'Filter with `kind`, `query` or `failed`, lower `limit`; a cut list comes with `nextCursor` (`truncated: true`): pass it back as `cursor` for the next page.',
   },
   response_time_stats: {
     when: 'Use it to spot a slow or flaky endpoint from a saved request’s recent response times (p50, p95).',
@@ -499,7 +505,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to find a request, test, flow, environment, variable or other item by name or content.',
     whenNot: 'To find a tool, use `search_tools`; to look up a `ref` you already have, use `resolve_ref`.',
     example: { query: 'patients', limit: 20 },
-    narrow: 'Use a more specific `query`, lower `limit`, or page with `cursor`.',
+    narrow: 'Use a more specific `query`, lower `limit`; a cut list comes with `nextCursor` (`truncated: true`): pass it back as `cursor` for the next page.',
   },
   list_kinds: {
     when: 'Use it to learn what an item of a kind offers (rename, move, delete with undo, run, monitor, CI, export …) and how its ref looks, before acting on one.',
@@ -594,7 +600,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to see a dataset’s columns and first rows, i.e. the {{variables}} a run can use.',
     whenNot: 'To list datasets, use `list_datasets`; to add a row, use `add_dataset_row`.',
     example: { name: 'intents.jsonl', limit: 10 },
-    narrow: 'Lower `limit`, or give a narrower SQLite `query`.',
+    narrow: 'Lower `limit`, or give a narrower SQLite `query`; the result says `truncated: true` and `nextCursor` when more rows follow: pass it back as `cursor` (or give `offset`) for the next page.',
   },
   add_dataset_row: {
     when: 'Use it to add one record, such as an evaluation case, to a JSONL dataset.',

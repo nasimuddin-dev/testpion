@@ -24,6 +24,8 @@ interface ResultsPage {
   items: TestResult[];
   /** How many results match (before offset and limit). */
   total: number;
+  /** The page size used. */
+  limit: number;
   /** More results follow this page (ask again with `cursor: nextCursor`, or `offset` of the next position). */
   truncated: boolean;
   nextCursor?: string;
@@ -96,11 +98,11 @@ export function reviewCounts(reviews: Record<string, ResultReview>, total: numbe
  * A page of a run's results, filtered by status ('failed' means failed or error; 'reviewed' / 'unreviewed' by a
  * person's rating) and a name substring. Each result carries its review.
  */
-export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: { runId: string; offset?: number; cursor?: string; limit?: number; status?: string; query?: string }): Promise<ResultsPage> {
+export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: { runId: string; offset?: number; cursor?: string | number; limit?: number; status?: string; query?: string }): Promise<ResultsPage> {
   const file = runResultsFile(store, q.runId);
   const items: TestResult[] = [];
   let total = 0;
-  if (!existsSync(file)) return { items, total, truncated: false };
+  if (!existsSync(file)) return { items, total, limit: pageLimit(q.limit, RESULTS_PAGE), truncated: false };
   const reviews = runReviews(store, q.runId);
   const offset = q.cursor !== undefined ? offsetOfCursor(q.cursor) : Math.max(0, q.offset ?? 0);
   const limit = pageLimit(q.limit, RESULTS_PAGE);
@@ -122,7 +124,7 @@ export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: {
     total++;
   }
   const truncated = offset + items.length < total;
-  return { items, total, truncated, ...(truncated ? { nextCursor: cursorOf(offset + items.length) } : {}) };
+  return { items, total, limit, truncated, ...(truncated ? { nextCursor: cursorOf(offset + items.length) } : {}) };
 }
 
 /** Latency histogram, slowest results, results per type and most failed checks of a finished run. */

@@ -43,21 +43,26 @@ export function searchAskTools({ store, secrets, settings }: { store: WorkspaceS
             enum: ['full', 'metadata', 'names'],
             description: 'What the model may see of the question: full (masked, default), metadata, names. It never sees workspace data',
           },
+          limit: { type: 'number', description: 'How many matches per page (1 to 200; default 25). Overrides the limit of `query`' },
+          cursor: str('Where the page starts: the `nextCursor` of the outcome before (leave out for the first page)'),
+          offset: { type: 'number', description: 'Where the page starts, as a number (the same as cursor)' },
           noAi: { type: 'boolean', description: 'Do not call a model: search the words of `question` as typed' },
           dryRun: { type: 'boolean', description: 'Send nothing: return what would be sent to the model, with the token and cost estimate' },
         },
       },
       run: async (a) => {
         const scope = sourcesOf(a.sources);
+        const page = { ...(a.limit !== undefined ? { limit: Number(a.limit) } : {}), ...(a.cursor ? { cursor: String(a.cursor) } : a.offset !== undefined ? { offset: Number(a.offset) } : {}) };
         if (a.query !== undefined && a.question) throw new ApsError('ValidationError', 'Pass `question` or `query`, not both');
         if (a.query !== undefined) {
-          return await runQuerySpec(store, a.query, { scope });
+          return await runQuerySpec(store, a.query, { scope, page });
         }
         if (!a.question || !String(a.question).trim()) throw new ApsError('ValidationError', 'Pass `question` (plain words) or `query` (a search query)');
         return withEngine({ store, secrets, settings }, {}, async (ctx) => {
           return await askSearch(aiRunDeps({ ctx, settings, store, surface: 'mcp' }), {
             question: String(a.question),
             scope,
+            page,
             privacy: a.privacy ? String(a.privacy) : undefined,
             noAi: a.noAi === true,
             dryRun: a.dryRun === true,

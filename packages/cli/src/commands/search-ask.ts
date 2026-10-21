@@ -7,9 +7,22 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { formatUsd, itemRefUrl } from '@testpion/shared';
-import { ApsError, aiRunDeps, askSearch, runQuerySpec, SEARCH_SOURCES, SOURCE_LABEL, WorkspaceManager, type SearchAnswer, type SearchSource } from '@testpion/core';
+import { ApsError, aiRunDeps, askSearch, pageArgs, runQuerySpec, SEARCH_SOURCES, SOURCE_LABEL, WorkspaceManager, type SearchAnswer, type SearchSource } from '@testpion/core';
 import { cliContext, CliError, dim, EXIT, printJson, withWorkspace, yellow } from '../shared.js';
 import { printPreview } from './ai-print.js';
+import { reportPage } from '../paging.js';
+
+/** A cut list of matches says so (the envelope's `page`, and the hint line in text mode). */
+function reportSearchPage(a: SearchAnswer, o: SearchAskOptions): void {
+  const x = a.outcome;
+  if (x) reportPage({ items: x.rows, total: x.matched, limit: x.query.limit, truncated: x.truncated, ...(x.nextCursor ? { nextCursor: x.nextCursor } : {}) }, o, 'matches');
+}
+
+/** `--limit`, `--cursor` and `--offset` as the page of a query. */
+const pageOf = (o: SearchAskOptions) => {
+  const p = pageArgs(o);
+  return { ...(p.limit !== undefined ? { limit: p.limit } : {}), ...(p.cursor !== undefined ? { cursor: p.cursor } : {}) };
+};
 
 export interface SearchAskOptions {
   workspace?: string;
@@ -22,6 +35,9 @@ export interface SearchAskOptions {
   provider?: string;
   model?: string;
   json?: boolean;
+  limit?: string;
+  cursor?: string;
+  offset?: string;
 }
 
 /** `--in history,runs` as sources. */
@@ -69,14 +85,16 @@ export async function runSearchAsk(words: string[], o: SearchAskOptions): Promis
     if (o.queryJson !== undefined) {
       let a: SearchAnswer;
       try {
-        a = await runQuerySpec(store, queryInput(o.queryJson), { scope });
+        a = await runQuerySpec(store, queryInput(o.queryJson), { scope, page: pageOf(o) });
       } catch (e) {
         // the problems say what is allowed: a configuration error, not a crash
         const problems = e instanceof ApsError && e.kind === 'ValidationError' ? (e.details?.problems as string[] | undefined) : undefined;
         if (problems?.length) throw new CliError(`Invalid search query:\n${problems.map((x) => `  - ${x}`).join('\n')}`, EXIT.CONFIG_ERROR);
         throw e;
       }
-      return o.json ? printJson(a) : print(a);
+      if (o.json) printJson(a);
+      else print(a);
+      return reportSearchPage(a, o);
     }
     const question = [o.ask ?? '', ...words].join(' ').trim();
     const settings = new WorkspaceManager().loadSettings();
@@ -85,6 +103,7 @@ export async function runSearchAsk(words: string[], o: SearchAskOptions): Promis
       const a = await askSearch(aiRunDeps({ ctx, settings, store, surface: process.env.CI ? 'ci' : 'cli', env: process.env }), {
         question,
         scope,
+        page: pageOf(o),
         noAi: o.ai === false,
         dryRun: o.dryRun,
         privacy: o.privacy,
@@ -92,7 +111,9 @@ export async function runSearchAsk(words: string[], o: SearchAskOptions): Promis
         model: o.model,
       });
       if (a.dryRun) return o.json ? printJson(a) : printPreview({ preview: a.preview } as never);
-      return o.json ? printJson(a) : print(a);
+      if (o.json) printJson(a);
+      else print(a);
+      return reportSearchPage(a, o);
     } finally {
       await ctx.dispose();
     }

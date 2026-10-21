@@ -131,6 +131,17 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 `testpion agent-info` prints its JSON as before (it has no `--json`).
 
+## Paging {#paging}
+
+A command that lists something that can grow long comes a page at a time, the same way everywhere (and like the MCP tools): `-n/--limit` (how many; 200 unless the command says otherwise, at most 1,000), and `--cursor <c>` (the `nextCursor` of the page before) or `--offset <n>` (the same as a number). A list that was cut says so: in text mode a last line `200 of 2500 requests shown; more: --cursor o5k`, and with `--json` the envelope has `page` (`{ total, limit, truncated, nextCursor }`) and a warning with the same line, while `data` stays the plain list, so a script that reads `.data` is unchanged. A list that fits has no `page`. To read all of it, repeat the command with `nextCursor` until `page` is gone.
+
+```bash
+testpion history flaky -w my-workspace --json -l 500                       # page.nextCursor says where the next page starts
+testpion history flaky -w my-workspace --json -l 500 --cursor "$NEXT"
+```
+
+Paged: `history list` (default 20, at most 500), `history flaky`, `history results <runId>`, `search` (plain words, `--ask` and `--query-json`: the answer's `outcome` has `truncated` and `nextCursor` / `nextOffset`), `requests <collection>`, `env list` and `datasets show` (rows; `truncated` and `nextCursor` are in the data). Lists of what the user made by hand (collections, monitors, evaluations) are not cut.
+
 ## Results as files {#results-as-files}
 
 The commands that already write files: `test`, `run-collection` and `eval run` (`-o, --out <dir>` and `-r` for the JUnit, JSON, HTML and Markdown reports), `report` (reports from a `results.jsonl`), `load --json <file>`, `history export-har -o <file>`, `debug -o <file.har>`, `flow report <file> --html <out>`, `export` / `workspace export` and `docs -o`. Most commands that print a result now also take `--out <file>` and `--format`, and `testpion output` saves any output of the app: see [`output`](#output) below. Anything else prints to stdout, so `testpion send … > body.json` keeps a body.
@@ -210,8 +221,9 @@ testpion search --query-json @query.json --in history     # a query from a file 
 | `--ask <question>` | The question. Without a model, or when the model fails or its query is not valid, the words are searched as typed (`mode: "text"`, the reason in `fallback`; exit `0`). |
 | `--query-json <spec>` | Run a query directly, with no model: JSON, `@file` or `-`. `{"sources": ["history"], "where": [{"field", "op", "value"}], "sort": {"by": "time", "dir": "desc"}, "limit": 25}`. The fields and operators are in [Ask: search in your own words](/getting-started/finding-your-way#ask); an invalid query exits `2` and lists what is allowed. |
 | `--in <sources>` | Stay inside some sources: `history`, `runs`, `results`, `traces` (comma-separated). |
+| `-n/--limit`, `--cursor`, `--offset` | The page of matches (`--ask` / `--query-json`: 1 to 200, default 25; plain words: default 20); they replace the query's own `limit` and `offset`. A cut list says `more: --cursor …`: [Paging](#paging). |
 | `--no-ai`, `--dry-run`, `--privacy`, `--provider`, `--model` | As for [`ai run`](#ai). |
-| `--json` | `{ question, mode: "ai" \| "text" \| "query", query, explain, chips, assumptions, fallback?, outcome: { rows, matched, perSource, capped, notes, ms }, model?, usage?, costUsd? }`. |
+| `--json` | `{ question, mode: "ai" \| "text" \| "query", query, explain, chips, assumptions, fallback?, outcome: { rows, matched, truncated, nextOffset?, nextCursor?, perSource, capped, notes, ms }, model?, usage?, costUsd? }`. |
 
 The call is counted in `testpion ai usage` as the task `nl-search`.
 
@@ -1018,12 +1030,15 @@ testpion history diff h-abc h-def -w my-workspace --json                  # olde
 testpion history activity -w my-workspace --days 30 --json              # per-day requests, failures, runs
 testpion history test "Authentication / Basic auth" -w my-workspace     # one test across the latest runs; flags flaky ones
 testpion history flaky -w my-workspace                                  # every test that flips between runs (exit 1 if any)
+testpion history results run-abc -w my-workspace --status failed -n 100  # the results of a run, a page at a time
 testpion history scores -w my-workspace -q "Intent"                     # mean score per evaluator, run by run
 testpion history mcp-tools -w my-workspace --server weather            # MCP tool calls per tool: count, failures, median / p95
 testpion history llm -w my-workspace                                    # AI Lab prompts per model: tokens, estimated cost, median time
 ```
 
-`history list` shows recent responses of requests sent in the app (`--collection`, `--request`, `--failed`, `--kind`, `-q/--query`, `-n/--limit`); with `--json` each has its `ref` (`testpion open` opens it). `--kind capture` lists the HTTP Debugger's capture sessions: each Save to collection, Create flow and Save session, with `capture` (the result, `capture.ref` that opens it, the number of exchanges, `sources`: proxy or reverse, the hosts, `from` / `to`). `history stats` summarises the response times of a request's recent responses (`-n/--limit`, default 50): count, failed (no status or 400+), fastest, mean, median, p95 and slowest. `history diff` compares two of them: the status, timing, header changes (volatile ones such as `date` are flagged) and a field-by-field JSON body diff, or a line diff for text. Values of sensitive fields and headers are masked. `history activity` is the Home dashboard as data: per local day, requests sent and how many failed (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors), the median response time, test runs and failed tests; plus requests per type and the slowest requests on average (`-d/--days`, default 14, up to 90).
+`history list` shows recent responses of requests sent in the app (`--collection`, `--request`, `--failed`, `--kind`, `-q/--query`, `-n/--limit`, `--cursor`: see [Paging](#paging)); with `--json` each has its `ref` (`testpion open` opens it). `--kind capture` lists the HTTP Debugger's capture sessions: each Save to collection, Create flow and Save session, with `capture` (the result, `capture.ref` that opens it, the number of exchanges, `sources`: proxy or reverse, the hosts, `from` / `to`). `history stats` summarises the response times of a request's recent responses (`-n/--limit`, default 50): count, failed (no status or 400+), fastest, mean, median, p95 and slowest. `history diff` compares two of them: the status, timing, header changes (volatile ones such as `date` are flagged) and a field-by-field JSON body diff, or a line diff for text. Values of sensitive fields and headers are masked. `history activity` is the Home dashboard as data: per local day, requests sent and how many failed (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors), the median response time, test runs and failed tests; plus requests per type and the slowest requests on average (`-d/--days`, default 14, up to 90).
+
+`history flaky` lists the flaky tests most flips first (`-n/--runs`: how many of the latest runs, default 30; `-l/--limit`, `--cursor`: [Paging](#paging)); `history results <runId>` lists a finished run's results with `--status` (`failed` means failed or error), `-q/--query` and the same paging.
 
 ## `monitor`
 

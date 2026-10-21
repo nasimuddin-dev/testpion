@@ -18,13 +18,18 @@ import {
   llmUsage,
   testHistory,
   summarizeTestHistory,
-  flakyTests,
+  flakyTestsPage,
+  pageRunResults,
+  pageOfSlice,
+  pageArgs,
+  offsetOfCursor,
   scoreTrend,
   reviewResult,
   runReviewReport,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
+import { addPaging, reportPage } from '../paging.js';
 
 /** `testpion history …`: the response history of requests sent in the app, test and score history, comparing two responses. */
 export function registerHistoryCommands(program: Command): void {
@@ -57,7 +62,9 @@ export function registerHistoryCommands(program: Command): void {
       .option('--failed', 'only responses that failed (4xx/5xx, transport errors, non-OK gRPC codes)')
       .option('--kind <kind>', `only this kind: ${HISTORY_KINDS.join(', ')} (capture: Debugger capture sessions and what they became)`)
       .option('-q, --query <text>', 'only entries matching this text (name, URL, method, status)')
-      .option('-n, --limit <n>', 'how many', '20')
+      .option('-n, --limit <n>', 'how many (at most 500; more: --cursor)', '20')
+      .option('--cursor <cursor>', 'where the page starts: the nextCursor of the page before')
+      .option('--offset <n>', 'where the page starts, as a number (the same as --cursor)')
       .option(...JSON_OPTION),
     'history',
   ).action((o) => {
@@ -71,11 +78,16 @@ export function registerHistoryCommands(program: Command): void {
       return withWorkspace(o.workspace, (store) => {
         const requestId = o.request ? savedRequestId(store, o.request, o.collection) : undefined;
         const kind = requestId ? 'http' : historyKindOf(o.kind);
-        const items = store.meta.listHistory({ requestId, kind, query: o.query, failed: o.failed || undefined, brief: true, limit: Math.min(Number(o.limit) || 20, 500) }).items;
+        const limit = Math.min(Number(o.limit) || 20, 500);
+        const offset = offsetOfCursor(pageArgs(o).cursor);
+        const found = store.meta.listHistory({ requestId, kind, query: o.query, failed: o.failed || undefined, brief: true, limit, offset });
+        const items = found.items;
+        const page = pageOfSlice(items, found.total, { offset, limit });
         // a capture session also names what it became (`capture.ref`: the collection, the flow file, the saved session)
         const rows = items.map((h) => ({ id: h.id, ref: { kind: 'history' as const, historyId: h.id }, timestamp: h.timestamp, kind: h.kind, name: h.name, method: h.method, status: h.status, durationMs: h.durationMs, size: h.size, ...(h.capture ? { capture: h.capture } : {}) }));
         if (o.json) printJson(rows);
         else for (const r of rows) console.log(`${dim(r.id)}  ${r.timestamp}  ${String(r.status ?? '').padEnd(4)} ${r.method ?? r.kind} ${r.name}  ${dim(r.capture ? itemRefUrl(r.capture.ref) : formatDuration(r.durationMs ?? 0))}`);
+        reportPage(page, o, 'entries');
       });
     });
   histCmd
@@ -173,10 +185,14 @@ export function registerHistoryCommands(program: Command): void {
     .description('tests whose result keeps changing across the latest runs, or that passed only after a retry (exit 1 when there are any)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-n, --runs <n>', 'how many of the latest runs', '30')
+    .option('-l, --limit <n>', 'how many tests per page (default 200, at most 1000); more: --cursor')
+    .option('--cursor <cursor>', 'where the page starts: the nextCursor of the page before')
+    .option('--offset <n>', 'where the page starts, as a number (the same as --cursor)')
     .option(...JSON_OPTION)
-    .action(async (o: { workspace: string; runs: string; json?: boolean }) => {
+    .action(async (o: { workspace: string; runs: string; limit?: string; cursor?: string; offset?: string; json?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
-        const rows = await flakyTests(store, { runs: Number(o.runs) || 30 });
+        const page = await flakyTestsPage(store, { runs: Number(o.runs) || 30, ...pageArgs(o) });
+        const rows = page.items;
         if (o.json) printJson(rows);
         else if (!rows.length) console.log(green('No flaky tests in the latest runs.'));
         else
@@ -184,9 +200,30 @@ export function registerHistoryCommands(program: Command): void {
             console.log(
               `${t.recent.map((s) => (s === 'passed' ? green('█') : red('█'))).join('')}  ${bold(t.name)}  ${dim(`${t.passed}/${t.runs} passed · flipped ${t.flips}×${t.retried ? ` · ${t.retried} retried` : ''} · last ${t.lastStatus}`)}`,
             );
-        process.exitCode = rows.length ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
+        reportPage(page, o, 'flaky tests');
+        process.exitCode = page.total ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
       });
     });
+  addPaging(
+    histCmd
+      .command('results')
+      .description("the results of a finished run, a page at a time: status, name, time and the checks that failed (and a person's rating); filter by status or name")
+      .argument('<runId>', 'the run (from the app or `testpion history list`)')
+      .requiredOption('-w, --workspace <nameOrPath>')
+      .option('--status <status>', 'only this status: failed (failed or error), passed, skipped, reviewed, unreviewed, all')
+      .option('-q, --query <text>', 'only results whose name contains this')
+      .option('-n, --limit <n>', 'how many per page (default 100, at most 1000); more: --cursor')
+      .option(...JSON_OPTION),
+  ).action(async (runId: string, o: { workspace: string; status?: string; query?: string; limit?: string; cursor?: string; offset?: string; json?: boolean }) => {
+    return withWorkspace(o.workspace, async (store) => {
+      const page = await pageRunResults(store, { runId, status: o.status, query: o.query, ...pageArgs(o) });
+      const rows = page.items.map((r) => ({ id: r.id, name: r.name, status: r.status, latencyMs: r.latencyMs, ...(r.error ? { error: r.error.message } : {}), failedChecks: r.checks.filter((c) => !c.passed).map((c) => `${c.name ?? c.type}: ${c.message ?? 'failed'}`), ...(r.review ? { review: r.review } : {}) }));
+      if (o.json) printJson(rows);
+      else if (!rows.length) console.log(dim(page.total ? 'No results on this page.' : 'No results.'));
+      else for (const r of rows) console.log(`${r.status === 'passed' ? green('passed') : r.status === 'skipped' ? dim('skipped') : red(r.status)}  ${r.name}  ${dim(`${r.latencyMs !== undefined ? formatDuration(r.latencyMs) : ''} ${r.id}`)}${r.failedChecks.length ? red(`  ${r.failedChecks.join('; ')}`) : ''}`);
+      reportPage(page, o, 'results');
+    });
+  });
   histCmd
     .command('test')
     .description('one test (or saved request) across the latest runs, newest first: status, latency and the checks that failed, with how often the result flipped (flaky)')

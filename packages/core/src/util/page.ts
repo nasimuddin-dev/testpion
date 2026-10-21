@@ -35,6 +35,25 @@ export function pageLimit(asked: number | undefined, b: PageBounds = DEFAULT_PAG
   return Number.isFinite(asked) && asked! >= 1 ? Math.min(Math.floor(asked!), b.max) : b.limit;
 }
 
+/** The page a surface (the CLI, an MCP tool) gives when it is not told: 200, and never more than 1,000. */
+export const SURFACE_PAGE: PageBounds = { limit: 200, max: 1000 };
+
+/** `limit`, `cursor` and `offset` as a surface gets them (text from a shell, numbers from JSON), as `pageOf` takes them. */
+export function pageArgs(a: { limit?: unknown; cursor?: unknown; offset?: unknown }): { limit?: number; cursor?: string | number } {
+  const n = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+  const limit = n(a.limit);
+  const offset = n(a.offset);
+  const cursor = typeof a.cursor === 'string' && a.cursor ? a.cursor : offset !== undefined && Number.isFinite(offset) ? offset : undefined;
+  return { ...(limit !== undefined && Number.isFinite(limit) ? { limit } : {}), ...(cursor !== undefined ? { cursor } : {}) };
+}
+
+/** The page of a list that a source already cut (`total` of them in all; this slice starts at `offset`). */
+export function pageOfSlice<T>(items: T[], total: number, o: { offset?: number; limit: number }): ListPage<T> {
+  const offset = o.offset ?? 0;
+  const truncated = offset + items.length < total;
+  return { items, total, limit: o.limit, truncated, ...(truncated ? { nextCursor: cursorOf(offset + items.length) } : {}) };
+}
+
 /** A page of a list already in memory. */
 export function pageOf<T>(all: readonly T[], o: { limit?: number; cursor?: string | number } = {}, b: PageBounds = DEFAULT_PAGE): ListPage<T> {
   const limit = pageLimit(o.limit, b);

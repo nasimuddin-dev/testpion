@@ -8,6 +8,7 @@ import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
 import { dbKindOf, dbRecords } from './db-datasets.js';
 import { noteOwnChange } from '../storage/fsutil.js';
+import { cursorOf, offsetOfCursor } from '../util/page.js';
 
 export type DatasetRecord = Record<string, unknown>;
 
@@ -387,8 +388,11 @@ interface WorkspaceDatasetPreview {
   /** Records in the whole dataset (the rows of the query, for a database). */
   count: number;
   columns: DatasetColumn[];
-  /** The first `limit` records. */
+  /** The records of this page (the first `limit` unless an `offset` or `cursor` was given). */
   rows: DatasetRecord[];
+  /** More records follow this page: ask again with `cursor: nextCursor`. */
+  truncated: boolean;
+  nextCursor?: string;
   /** SQLite: its tables (rows need a `query`). */
   tables?: string[];
   query?: string;
@@ -400,7 +404,7 @@ interface WorkspaceDatasetPreview {
  * `name` is the file under datasets/ (with or without the folder). A SQLite database lists its tables and reads
  * rows only with `query`.
  */
-export async function readWorkspaceDataset(store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string }, name: string, opts: { limit?: number; query?: string } = {}): Promise<WorkspaceDatasetPreview> {
+export async function readWorkspaceDataset(store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string }, name: string, opts: { limit?: number; query?: string; cursor?: string | number; offset?: number } = {}): Promise<WorkspaceDatasetPreview> {
   const clean = String(name ?? '')
     .trim()
     .replace(/^datasets[\/]/, '');
@@ -410,6 +414,7 @@ export async function readWorkspaceDataset(store: { root: string; path(...p: str
   const st = statSync(file);
   const format = formatOf({ path: file });
   const limit = Math.max(0, Math.min(Number(opts.limit ?? 200) || 200, 10_000));
+  const offset = opts.cursor !== undefined ? offsetOfCursor(opts.cursor) : Math.max(0, Math.floor(opts.offset ?? 0));
   const base = { path: relative(store.root, file).split(sep).join('/'), name: clean.split('\\').join('/'), format: format === 'markdown' ? ('markdown' as const) : format, size: st.size, modified: st.mtime.toISOString() };
   if (format === 'sqlite') {
     let tables: string[] = [];
@@ -418,12 +423,14 @@ export async function readWorkspaceDataset(store: { root: string; path(...p: str
     } catch {
       /* unreadable database: no tables */
     }
-    if (!opts.query) return { ...base, count: 0, columns: [], rows: [], tables, query: '' };
+    if (!opts.query) return { ...base, count: 0, columns: [], rows: [], truncated: false, tables, query: '' };
   }
   const rows: DatasetRecord[] = [];
   let count = 0;
   for await (const r of readDataset({ path: file, query: opts.query })) {
-    if (count++ < limit) rows.push(r);
+    if (count >= offset && rows.length < limit) rows.push(r);
+    count++;
   }
-  return { ...base, count, columns: datasetColumns(rows), rows, ...(format === 'sqlite' ? { tables: sqliteTables(file), query: opts.query } : {}) };
+  const truncated = offset + rows.length < count;
+  return { ...base, count, columns: datasetColumns(rows), rows, truncated, ...(truncated ? { nextCursor: cursorOf(offset + rows.length) } : {}), ...(format === 'sqlite' ? { tables: sqliteTables(file), query: opts.query } : {}) };
 }
