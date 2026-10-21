@@ -111,6 +111,10 @@ describe('architecture', () => {
       'packages/cli/src/commands/data.ts': 1300,
       'packages/core/src/storage/workspace.ts': 900,
       'packages/core/src/model/types.ts': 900,
+      // split in B-41 (hooks and subcomponents next to them); they were 1171, 1136 and 976 lines
+      'apps/desktop/src/components/FlowDesigner.tsx': 800,
+      'apps/desktop/src/components/FlowDiagram.tsx': 850,
+      'packages/core/src/ai/spec-tests.ts': 600,
     };
     const over: string[] = [];
     for (const [f, max] of Object.entries(ceilings)) {
@@ -164,6 +168,19 @@ describe('one mechanism per concern (B-41)', () => {
     const writers = hosts.filter((f) => /writeUInt32LE\(0x04034b50|setUint32\(0, 0x04034b50/.test(src(f))).map(rel);
     expect(writers.sort()).toEqual(['packages/core/src/transfer/zip.ts', 'packages/shared/src/output/formats.ts']);
     expect(src(join(root, 'packages/shared/src/output/formats.ts'))).not.toMatch(/export function zipFiles/);
+  });
+
+  it('small helpers have one home: isRecord (shared), sha1Hex / sha256Hex (util/hash.ts); importAny is not an engine export', () => {
+    const copies: string[] = [];
+    for (const f of core) {
+      const r = rel(f);
+      if (r.startsWith('packages/core/src/eval/rag/') || r === 'packages/core/src/util/hash.ts') continue; // (the RAG engine is owned apart; its copies are on the backlog)
+      const text = src(f);
+      if (/^const isRec\w* = \(v: unknown\)[^\n]*typeof v === 'object'/m.test(text)) copies.push(`${r}: its own isRecord`);
+      if (/createHash\('sha(1|256)'\)\.update\([^()]*\)\.digest\('hex'\)/.test(text)) copies.push(`${r}: its own sha1Hex / sha256Hex`);
+      if (/export function importAny\b/.test(text)) copies.push(`${r}: importAny (the CLI reads imports through importDocument)`);
+    }
+    expect(copies).toEqual([]);
   });
 
   it('no two diff modules share a name, and the flow step differs share one matcher (util/step-match.ts)', () => {

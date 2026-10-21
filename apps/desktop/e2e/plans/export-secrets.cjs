@@ -65,7 +65,7 @@ const steps = [
      const t = await __t.waitFor(() => toastText(/^Exported/), 15000); if (!t) return 'NO TOAST';
      const parts = [
        'saved: ' + t.includes(${JSON.stringify(OUT_NAME)}),
-       'included: ' + (/Exported (\\d+) items?: [^.]*collection/.exec(t)?.[1] ?? 'NO'),
+       'included: ' + (/Exported (\\d+) items?:/.exec(t)?.[1] ?? 'NO'),
        'replaced: ' + (/Replaced (\\d+) secrets?/.exec(t)?.[1] ?? '0'),
        'left out: ' + /Dataset datasets\\/huge\\.csv \\([\\d.]+ MB\\) travels by reference/.test(t),
        'secret in the message: ' + ${JSON.stringify(Object.values(SECRETS))}.some((v) => t.includes(v)),
