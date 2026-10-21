@@ -58,10 +58,17 @@ export function findPii(text: string, kinds: readonly PiiKind[] = DEFAULT_PII_KI
     seen.add(`${kind}:${norm}`);
     out.push({ kind, masked: mask(value.trim()) });
   };
-  for (const m of text.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)) add('email', m[0]);
-  for (const m of text.matchAll(/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g)) if (ibanOk(m[0])) add('iban', m[0]);
   const used: Array<[number, number]> = [];
   const overlaps = (a: number, b: number) => used.some(([s, e]) => a < e && b > s);
+  for (const m of text.matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)) {
+    add('email', m[0]);
+    used.push([m.index!, m.index! + m[0].length]);
+  }
+  // an IBAN-shaped string is never also a phone number, whether or not its checksum holds
+  for (const m of text.matchAll(/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g)) {
+    if (ibanOk(m[0])) add('iban', m[0]);
+    used.push([m.index!, m.index! + m[0].length]);
+  }
   for (const m of text.matchAll(/(?<!\d)(?:\d[ -]?){13,19}(?!\d)/g)) {
     const digits = m[0].replace(/\D/g, '');
     if (digits.length >= 13 && digits.length <= 19 && luhn(digits)) {
@@ -71,10 +78,9 @@ export function findPii(text: string, kinds: readonly PiiKind[] = DEFAULT_PII_KI
   }
   for (const m of text.matchAll(/(?<!\d)(\d{3})-(\d{2})-(\d{4})(?!\d)/g)) {
     const [, a, g, s] = m;
-    if (a !== '000' && a !== '666' && !a!.startsWith('9') && g !== '00' && s !== '0000') {
-      add('ssn', m[0]);
-      used.push([m.index!, m.index! + m[0].length]);
-    }
+    if (a !== '000' && a !== '666' && !a!.startsWith('9') && g !== '00' && s !== '0000') add('ssn', m[0]);
+    // shaped like an SSN, valid or not: never also a phone number
+    used.push([m.index!, m.index! + m[0].length]);
   }
   for (const m of text.matchAll(/(?<![\w.])\+?\(?\d[\d\s().-]{7,18}\d(?!\w)/g)) {
     if (overlaps(m.index!, m.index! + m[0].length)) continue;

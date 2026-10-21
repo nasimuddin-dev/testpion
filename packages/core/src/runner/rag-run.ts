@@ -14,7 +14,7 @@ import type { SpanHandle } from '../trace/tracer.js';
 import type { CheckContext } from '../eval/checks.js';
 import { callTarget, type TargetCall, type TargetRunner } from '../eval/rag/run-target.js';
 import { pickRecord, type ConversationTurn } from '../eval/rag/record.js';
-import { runConversation, userMessages } from '../eval/rag/conversation.js';
+import { historyVars, runConversation, userMessages } from '../eval/rag/conversation.js';
 import { scrubDocImage, storableRecord } from '../eval/rag/images.js';
 import { normalizeTest } from './loader.js';
 
@@ -54,7 +54,7 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
       calls = conv.calls;
       turns = conv.turns;
       convToolCalls = conv.toolCalls;
-    } else calls = [await callTarget(test.target!, first, scope, runner, test.variables ?? {})];
+    } else calls = [await callTarget(test.target!, first, scope, runner, { ...historyVars([], first, '', 1), ...(test.variables ?? {}) })];
     const call = calls[calls.length - 1]!;
     const { sample } = call;
     const question = turns ? [...turns].reverse().find((t) => t.role === 'user')?.content ?? first : first;

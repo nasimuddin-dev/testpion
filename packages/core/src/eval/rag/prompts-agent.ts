@@ -155,4 +155,4 @@ export const MCP_TASK_COMPLETION: JudgedMetric = {
   empty: 'na',
 };
 
-export const AGENT_PROMPTS: readonly JudgedMetric[] = [GOAL_INFER, goalCompare(false), goalCompare(true), ARGUMENT_CORRECTNESS, toolSelection('selection'), toolSelection('invocation'), toolSelection('handling'), TASK_COMPLETION, STEP_EFFICIENCY, PLAN_ADHERENCE, PLAN_QUALITY, MCP_USE, MCP_TASK_COMPLETION];
+export const AGENT_METRIC_PROMPTS: readonly JudgedMetric[] = [GOAL_INFER, goalCompare(false), goalCompare(true), ARGUMENT_CORRECTNESS, toolSelection('selection'), toolSelection('invocation'), toolSelection('handling'), TASK_COMPLETION, STEP_EFFICIENCY, PLAN_ADHERENCE, PLAN_QUALITY, MCP_USE, MCP_TASK_COMPLETION];

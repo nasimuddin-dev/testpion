@@ -180,13 +180,15 @@ registerCheck('dag', async (cfg, ctx) => {
   const spec = dagOf(cfg.tree ?? cfg.dag);
   if (Array.isArray(spec)) return result(cfg, false, `dag has a problem: ${spec[0]}${spec.length > 1 ? ` (and ${spec.length - 1} more)` : ''}`, { source: 'ai-judge', explanation: spec.join('; ') });
   if (!ctx.text.trim()) return na(cfg, { id: 'dag', version: 'dag-v1' }, 'the answer is empty');
-  if (new Set(Array.isArray(cfg.inputs) ? cfg.inputs.map(String) : ['question']).has('question') && !ctx.question?.trim()) return needsField(cfg, 'dag', 'the question', 'the dataset needs a "question" column, or set "inputs: [answer]" on the check.');
+  const judgedNodes = Object.values(spec.nodes).some((n) => n.type !== 'rule');
+  if (judgedNodes && new Set(Array.isArray(cfg.inputs) ? cfg.inputs.map(String) : ['question']).has('question') && !ctx.question?.trim()) return needsField(cfg, 'dag', 'the question', 'the dataset needs a "question" column, or set "inputs: [answer]" on the check.');
   const m = { id: 'dag', version: 'dag-v1' };
   const body = async (): Promise<CheckResult> => {
     const t = num(cfg.threshold, 0.5);
     const r = await runDag(spec, cfg, ctx);
     const score = round3(r.score / 10);
-    return result(cfg, meets(score, t, 'higher'), `dag ${score}: ${r.steps.map((s) => s.node).join(' → ')} (threshold ${t})`, {
+    const path = r.steps.filter((s) => s.node !== '(leaf)').map((s) => s.node);
+    return result(cfg, meets(score, t, 'higher'), `dag ${score}: ${path.join(' → ')} (threshold ${t})`, {
       source: 'ai-judge',
       score,
       explanation: r.reasoning,
@@ -194,7 +196,7 @@ registerCheck('dag', async (cfg, ctx) => {
         metric: 'dag',
         promptVersion: m.version,
         threshold: t,
-        path: r.steps.map((s) => s.node),
+        path,
         items: r.steps.map((s) => ({ text: `${s.node}: ${s.text}`.slice(0, 300), ok: s.ok, evidence: s.evidence.slice(0, 300) })),
         itemLabels: ['yes / done', 'no'],
         ...(r.judge ? judgeMetaLite(r) : {}),
@@ -202,7 +204,7 @@ registerCheck('dag', async (cfg, ctx) => {
     });
   };
   // a tree of rules only needs no judge; one with a judged node needs the judge service (and says so when it is missing)
-  if (!Object.values(spec.nodes).some((n) => n.type !== 'rule')) return body();
+  if (!judgedNodes) return body();
   return guarded(cfg, ctx, m, body);
 });
 

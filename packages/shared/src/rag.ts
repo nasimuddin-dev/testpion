@@ -177,7 +177,11 @@ const listBase = (listPath: string) => wildcardPath(listPath).replace(/\[\*\]$/,
 export function relativeToList(listPath: string, clicked: string): string | undefined {
   const base = listBase(listPath);
   const c = wildcardPath(clicked);
-  if (!c.startsWith(`${base}[*]`)) return undefined;
+  if (!c.startsWith(`${base}[*]`)) {
+    // a list whose path ends in a field (`$.steps[*].action`): the items are the matches themselves, and a field is `$.field`
+    const own = wildcardPath(listPath);
+    return !own.endsWith('[*]') && c.startsWith(`${own}.`) ? `$${c.slice(own.length)}` : undefined;
+  }
   const rest = c.slice(base.length + 3);
   return rest ? `$${rest}` : '$';
 }
@@ -194,8 +198,9 @@ export function assignSlot(m: RagMapping, slot: RagMapSlot, clicked: string): { 
   if (slot === 'latencyMs') return { mapping: { ...m, latencyMs: path } };
   if (slot === 'conversationId') return { mapping: { ...m, conversationId: path } };
   if (slot === 'toolCalls') {
+    // the array itself (`$.tool_calls`) becomes its items; a field of items of another list (`$.steps[*].action`) already is the list
     const list = wildcardPath(path);
-    return { mapping: { ...m, toolCalls: list.endsWith('[*]') ? list : `${list}[*]` } };
+    return { mapping: { ...m, toolCalls: list.includes('[*]') ? list : `${list}[*]` } };
   }
   if (slot === 'toolCall.name' || slot === 'toolCall.arguments') {
     if (!m.toolCalls) return { problem: 'Choose the list of tool calls first (click the list, then "The list of tool calls"), then click the name or the arguments inside one item.' };
