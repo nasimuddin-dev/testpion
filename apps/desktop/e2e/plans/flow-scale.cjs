@@ -5,7 +5,7 @@
 // 10,000-row data run keeps the window responsive (the longest frame while it runs and the grid scrolls).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { join } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'scale/e2e-scale.yaml';
 const TEXT = [
@@ -43,7 +43,7 @@ const H = `
     return '';
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

@@ -3,7 +3,7 @@
 // (the save dialog answered by E2E_STUB_SAVE), and the export maps the steps to the same operations.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { join } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const ARAZZO = `arazzo: 1.0.1
 info: { title: Pet check, version: 1.0.0 }
@@ -32,7 +32,7 @@ const H = `
   const menuItem = (label) => vis('[role=menuitem]').find((m) => m.textContent.trim() === label);
   const toastText = (re) => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent.trim()).find((t) => re.test(t));
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

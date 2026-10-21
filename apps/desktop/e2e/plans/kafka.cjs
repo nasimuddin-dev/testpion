@@ -1,7 +1,7 @@
 // Kafka in the WebSocket editor: switch the protocol to Kafka, read the demo broker's clinic.events from the beginning,
 // connect, see its three events with keys and partition@offset, produce one with a key and read it back.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -10,7 +10,7 @@ const H = `
   const setInput = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const rows = () => vis('main .monaco-list-row, main button').filter((b) => /clinic\\.events|appointments/.test(b.textContent) && /p0@/.test(b.textContent));
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

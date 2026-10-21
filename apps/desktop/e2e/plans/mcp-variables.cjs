@@ -1,14 +1,14 @@
 // An MCP server's environment variables: a value can be typed before its name; {{ suggestions say where variables come
 // from (no collection here) and lead to copying a collection's variables into the environment.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.setSelectionRange(v.length, v.length); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const filter = async (v) => { const f = document.querySelector('aside input[placeholder^="Filter"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, v); f.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(800); };
   const envTable = () => [...document.querySelectorAll('main label, main div')].find((d) => d.offsetParent && d.textContent.trim().startsWith('Environment variables') && d.querySelector('table'))?.querySelector('table');
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

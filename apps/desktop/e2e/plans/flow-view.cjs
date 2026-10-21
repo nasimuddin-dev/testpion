@@ -3,7 +3,7 @@
 // The flow is written by the plan and calls the local demo server (127.0.0.1:4010, started by the e2e runner), so the
 // suite does not depend on a public service being up and fast.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/local-flow.yaml';
 const TEXT = [
@@ -55,7 +55,7 @@ const H = `
   const until = async (fn, ms = 5000) => { for (const end = Date.now() + ms; Date.now() < end; await __t.sleep(200)) { const v = await fn(); if (v) return v; } return undefined; };
   const flowTab = async () => { await __t.tab('Flow'); return __t.waitFor(() => nodes().length ? nodes().length : null, 8000); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

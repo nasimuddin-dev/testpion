@@ -1,6 +1,6 @@
 // Rename environments in place: the active one stays active; a name in use is refused.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, allUnder } = require('../lib.cjs');
+const { withExpect, allUnder, stepOf } = require('../lib.cjs');
 const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const visible = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.offsetParent);
@@ -12,7 +12,7 @@ const H = `
   const f2 = async (txt) => { const r = row(txt); if (!r) return null; r.focus(); key(r, 'F2'); await __t.sleep(400); return input(); };
   const menu = async (txt, label) => { row(txt).parentElement.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 })); await __t.sleep(600); [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim() === label)?.click(); await __t.sleep(900); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const steps = [
   step('envs', `await __t.view('Environments'); await __t.sleep(800); return names() + ' | active: ' + active();`),
   step('f2-active', `const i = await f2('Public APIs'); if (!i) return 'NO INPUT'; setVal(i, 'Public APIs 2'); key(i, 'Enter'); await __t.sleep(1200); return names() + ' | active: ' + active() + ' | name field: ' + visible('main input')[0]?.value;`),

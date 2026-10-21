@@ -2,7 +2,7 @@
 // Each step reports milliseconds (and the list's payload); the expectations are ceilings, loose enough for a busy
 // CI machine, so a regression that makes an interaction several times slower fails here.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const COUNT = 5000;
 /** A HAR of COUNT exchanges over 40 hosts, with headers and small JSON bodies, built in the page. */
@@ -31,7 +31,7 @@ const H = `
   const rows = () => vis('main [data-debugger-grid] [role=row][data-exchange]');
   const setInput = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

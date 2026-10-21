@@ -10,7 +10,7 @@
 // selection, pins, history), Deploy, Editor <-> canvas sync, keyboard focus, right-click menus, themes and a 200-step flow.
 // Steps marked KNOWN-FAIL in their comment assert the expected behaviour of a bug reported to the canvas owner.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const API = 'http://127.0.0.1:4010';
 const F_EMPTY = 'rest/qa-empty.yaml';
@@ -146,7 +146,7 @@ const H = `
   };
   const waitIdle = async () => { await until(() => !vis('[data-flow-toolbar] [data-flow-undo]')[0]?.disabled || true, 200); await sleep(250); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 const main = (name, code) => [name, `main:${code}`, false];
 const resize = (name, width) =>
   main(

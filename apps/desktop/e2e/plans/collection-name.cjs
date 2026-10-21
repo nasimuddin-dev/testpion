@@ -1,7 +1,7 @@
 // The collection's name in its settings reads like a request's name: plain text, renamed in place on a double-click
 // (Enter saves it, Escape keeps the old name), not a field that is always open.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -9,7 +9,7 @@ const H = `
   const key = (el, k) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
   const openTools = () => { vis('main button').find((x) => x.textContent.trim() === 'Tools')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return __t.waitFor(() => (vis('[role=menuitem]').length ? true : null), 2000); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

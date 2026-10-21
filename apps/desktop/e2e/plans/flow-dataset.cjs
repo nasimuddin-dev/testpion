@@ -5,7 +5,7 @@
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/dataset-flow.yaml';
 const TEXT = ['name: Echo each row', 'type: http', 'method: GET', 'url: "http://127.0.0.1:4010/echo?q={{word}}"', 'dataset:', '  path: ../datasets/words.jsonl', 'assertions:', '  - { type: status, expected: 200 }', ''].join('\n');
@@ -23,7 +23,7 @@ const H = `
     return __t.waitFor(() => nodes().length || null, 8000);
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const REAL = `const { BrowserWindow } = require('electron'); const wc = BrowserWindow.getAllWindows()[0].webContents;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));

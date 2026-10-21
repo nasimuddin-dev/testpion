@@ -1,6 +1,6 @@
 // The JSON tree's Expand all / Collapse all are one toggle: it offers Expand all until everything is open, then Collapse all.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const bar = () => [...document.querySelectorAll('[data-expand-collapse]')].filter((b) => b.offsetParent && !b.closest('aside'));
@@ -8,7 +8,7 @@ const H = `
   const state = () => bar().map((b) => b.getAttribute('data-expand-collapse')).join(',');
   const rows = () => document.querySelectorAll('main [role=treeitem], main [data-json-row]').length;
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

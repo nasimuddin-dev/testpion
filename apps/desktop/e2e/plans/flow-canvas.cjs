@@ -5,7 +5,7 @@
 // the canvas's actions first (Auto-arrange keeps the notes and frames); Align left lines two steps up; a narrow window
 // folds the toolbar's less used actions into its ⋯ menu.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const FILE = 'rest/canvas-flow.yaml';
 const API = 'http://127.0.0.1:4010';
@@ -66,7 +66,7 @@ const H = `
     item.click(); await __t.sleep(500); return 'menu';
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 /**
  * Real input: mouse and keys sent by the main process through Chromium (sendInputEvent), so hit-testing, pointer
  * capture, click and dblclick happen as for a person (a dispatched event would skip them and hide such bugs).

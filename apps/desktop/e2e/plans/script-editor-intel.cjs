@@ -2,7 +2,7 @@
 // and {{braces}} in a script are never flagged as missing variables (a visualizer template uses them for its own
 // fields), while a {{variable}} nobody defined still shows as missing in a URL or body.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const openRow = async (name) => { await __t.requests(); await __t.expand('HTTP basics (httpbin)'); await __t.expand('Requests & responses'); const r = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith(name)); if (!r) return false; r.click(); await __t.sleep(1200); return true; };
@@ -12,7 +12,7 @@ const H = `
   const missing = () => [...document.querySelectorAll('main .monaco-editor .editor-var-missing')].map((s) => s.textContent.trim());
   const defined = () => [...document.querySelectorAll('main .monaco-editor .editor-var')].map((s) => s.textContent.trim());
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

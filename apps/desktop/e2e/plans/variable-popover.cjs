@@ -1,7 +1,7 @@
 // The {{variable}} popover, the same everywhere: a click on a variable in the URL bar or a header, a double-click on a
 // variable in any text field (auth) and in a code editor (the body). It shows the value and where it comes from.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const pop = () => document.querySelector('[role=dialog][aria-label^="Variable "]');
@@ -17,7 +17,7 @@ const H = `
   /** A click on a {{variable}} in a field with highlighting: put the caret inside it and click. */
   const clickVar = async (input, name) => { const i = input.value.indexOf('{{' + name); input.focus(); input.setSelectionRange(i + 3, i + 3); input.click(); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step('url-bar-click', `await __t.requests(); if (!(await openRow('Custom headers'))) return 'NO ROW'; const url = [...document.querySelectorAll('main input[aria-label="Request URL"]')].find((x) => x.offsetParent); await clickVar(url, 'httpbin'); return await read();`),

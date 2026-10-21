@@ -5,7 +5,7 @@
 // opens the flow in the designer with its steps and edges, and Run flow passes with a fresh token and a fresh job.
 // Then the designer's empty state starts "Record a flow…": the Debugger records, Stop recording opens the dialog.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const API = 'http://127.0.0.1:4010';
 const H = `
@@ -18,7 +18,7 @@ const H = `
   const openMenu = (b) => { b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); b.click(); };
   const until = async (fn, ms = 5000) => { for (const end = Date.now() + ms; Date.now() < end; await __t.sleep(100)) { const v = await fn(); if (v) return v; } return undefined; };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

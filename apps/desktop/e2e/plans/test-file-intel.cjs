@@ -1,14 +1,14 @@
 // The test-file editor knows the format: a misspelt key or an unknown check type gets a marker a moment after typing
 // (the same lint as `testpion lint` and the lint_tests tool), keys complete with help, and a key's hover explains it.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const editor = () => (window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.offsetParent);
   const markers = () => { const m = editor()?.getModel(); return m ? window.__monaco.editor.getModelMarkers({ resource: m.uri }).map((x) => x.severity + ':' + x.startLineNumber + ':' + x.message.split(':')[0]) : []; };
   const openFile = async (name) => { await __t.view('Tests'); await __t.sleep(800); const r = [...document.querySelectorAll('[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith(name)); if (!r) return false; r.click(); await __t.sleep(1500); return !!editor(); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step(

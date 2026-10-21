@@ -8,11 +8,9 @@
 // Offline: the mock provider and a local server only; no key is used.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs');
-const { join, resolve } = require('node:path');
-const { pathToFileURL } = require('node:url');
-const { withExpect, step } = require('../lib.cjs');
+const { join } = require('node:path');
+const { withExpect, step, EDITOR_IN, setSelect, ensureRagServer } = require('../lib.cjs');
 
-const SERVER = resolve(__dirname, '..', '..', '..', '..', 'examples', 'servers', 'rag-server.mjs');
 const HTTP = 'http://127.0.0.1:4020';
 // a 1x1 PNG
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -35,17 +33,9 @@ async function prepare(ws) {
     join(ws, 'library', 'rag-targets.json'),
     JSON.stringify({ schemaVersion: '1.0', folders: [], items: [{ id: 'rag-clinic', name: 'Clinic bot', data: { protocol: 'http', step: { type: 'http', method: 'POST', url: `${HTTP}/query`, headers: { 'Content-Type': 'application/json' }, json: { question: '{{question}}' } }, mapping: { answer: '$.answer', contexts: '$.sources[*]', context: { text: '$.text', id: '$.id', score: '$.score' } } } }] }, null, 2),
   );
-  if (globalThis.__e2eRagServer) return;
-  try {
-    const m = await import(pathToFileURL(SERVER).href);
-    globalThis.__e2eRagServer = await m.startRagServer({ port: 4020, grpcPort: 4021 });
-  } catch (e) {
-    if (e.code !== 'EADDRINUSE') throw e;
-  }
+  await ensureRagServer('__e2eRagServer', 4020, 4021);
 }
 
-const EDITOR_IN = (sel) => `(window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.closest(${JSON.stringify(sel)}))`;
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 const row = (id) => `document.querySelector('[data-rag-metric="${id}"]')`;
 const runButton = `vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim()))`;
 const view = (label) => `{ const seg = vis('main [role=radio], main button').find((b) => b.textContent.trim() === ${JSON.stringify(label)}); if (!seg) return 'NO VIEW ${label}'; await __t.real.click(seg); await __t.sleep(700); }`;

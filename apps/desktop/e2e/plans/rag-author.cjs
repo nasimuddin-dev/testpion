@@ -6,7 +6,7 @@
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
-const { withExpect, step } = require('../lib.cjs');
+const { withExpect, step, setSelect } = require('../lib.cjs');
 
 const PLAN = {
   name: 'Clinic quality check',
@@ -44,7 +44,6 @@ function prepare(ws) {
   writeFileSync(join(ws, 'datasets', 'clinic-qa.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
 }
 
-const setSelect = (el, text) => `{ const sel = ${el}; const opt = [...sel.options].find((o) => o.textContent.trim().startsWith(${JSON.stringify(text)})); if (!opt) return 'NO OPTION ${text}'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value); sel.dispatchEvent(new Event('change', { bubbles: true })); }`;
 const panel = `document.querySelector('aside[aria-label="AI assistant"]')`;
 const library = `(await window.aps.invoke('lib.get', { kind: 'evaluations' })).items.map((i) => i.name).join(',')`;
 

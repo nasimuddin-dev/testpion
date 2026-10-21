@@ -2,7 +2,7 @@
 // over the editor on hover / click; inserting a snippet closes it; Ctrl+Shift+I picks a snippet by name; the pin is
 // remembered; a narrow Scripts tab shows Pre-request / Post-response as tabs; the Debugger's dock unpins and pins too.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
@@ -19,7 +19,7 @@ const H = `
   const setVal = (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
   const pickLayout = async (label) => { const b = document.querySelector('[aria-label^="Response layout"]'); if (!b) return; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); await __t.sleep(400); [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.includes(label))?.click(); await __t.sleep(900); };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 /** Real keys, sent to the window by Electron (so the app menu's accelerators see them too). */
 const keys = (name, keyCode, modifiers) => [
   name,

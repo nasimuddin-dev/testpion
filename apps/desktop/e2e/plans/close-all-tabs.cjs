@@ -1,6 +1,6 @@
 // "Close all tabs" closes every kind of tab (HTTP, GraphQL, WebSocket …), from whichever tab it is chosen on.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect } = require('../lib.cjs');
+const { withExpect, stepOf } = require('../lib.cjs');
 
 const H = `
   const tabs = () => [...document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]')];
@@ -21,7 +21,7 @@ const H = `
     return titles();
   };
 `;
-const step = (name, body) => [name, `(async () => { ${H} ${body} })()`];
+const step = stepOf(H);
 
 const steps = [
   step('open-mixed', `return await openMixed();`),
