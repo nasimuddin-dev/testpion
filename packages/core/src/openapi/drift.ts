@@ -37,8 +37,6 @@ export interface DriftExchange {
 
 export type DriftKind = 'undocumented-endpoint' | 'undocumented-status' | 'undocumented-content-type' | 'undocumented-field' | 'type-change' | 'missing-required' | 'nullable' | 'enum-value';
 
-export const DRIFT_KINDS: readonly DriftKind[] = ['undocumented-endpoint', 'undocumented-status', 'undocumented-content-type', 'undocumented-field', 'type-change', 'missing-required', 'nullable', 'enum-value'];
-
 /** A kind of drift in words (the report, the review). */
 export const DRIFT_TITLES: Record<DriftKind, string> = {
   'undocumented-endpoint': 'An endpoint the document does not have',

@@ -9,6 +9,7 @@
  * property), each problem saying what to write instead. Both are built once per process (`loadScriptApi`).
  */
 import { runScript } from '../scripts/sandbox.js';
+import { levenshtein } from '../util/text-distance.js';
 import { estimateTokens } from './types.js';
 
 export type MemberKind = 'method' | 'value' | 'object' | 'flag' | 'word' | 'modifier';
@@ -172,13 +173,7 @@ export const scriptReferenceTokens = (api: ScriptApi) => estimateTokens(scriptRe
 
 /* ------------------------------------------------------------------ the static check of a generated script */
 
-function distance(a: string, b: string): number {
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...new Array<number>(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0]![j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++) d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + (a[i - 1]!.toLowerCase() === b[j - 1]!.toLowerCase() ? 0 : 1));
-  return d[a.length]![b.length]!;
-}
+const distance = (a: string, b: string): number => levenshtein(a.toLowerCase(), b.toLowerCase());
 
 /** The closest real member, when one is close enough to be what was meant. */
 function closest(name: string, list: ScriptMember[]): ScriptMember | undefined {

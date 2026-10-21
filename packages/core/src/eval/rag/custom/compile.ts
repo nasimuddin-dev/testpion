@@ -119,17 +119,6 @@ function unregisterInternal(id: string): void {
   registered.delete(id);
 }
 
-/** Register one compiled metric by hand (a draft, a test). The next sync reads the folder again. */
-export function registerCustomMetric(c: CompiledMetric): void {
-  lastSync = undefined;
-  registerInternal(c);
-}
-
-export function unregisterCustomMetric(id: string): void {
-  lastSync = undefined;
-  unregisterInternal(id);
-}
-
 export interface SyncResult {
   /** The ids registered, `custom/<id>`. */
   registered: string[];

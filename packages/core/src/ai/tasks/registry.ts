@@ -4,8 +4,7 @@
  * and which verifiers check it. The app, the CLI (`testpion ai tasks|run`), the MCP server (`ai_list_tasks`,
  * `ai_run_task`) and a cloud host all read this one table.
  */
-import { parseYaml, stringifyYaml as toYaml } from '../../util/lazy-yaml.js';
-import { checkLabel, type AiTaskId, type ItemRef } from '@testpion/shared';
+import type { AiTaskId, ItemRef } from '@testpion/shared';
 import type { CheckConfig, Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { StoredResponse } from '../verify.js';
@@ -122,7 +121,14 @@ export interface AiTaskDef {
    */
   prepareContext?(store: WorkspaceStore, context: Record<string, unknown>, o: { privacy: AiPrivacy; signal?: AbortSignal }): Promise<PreparedItem> | PreparedItem;
   /** The summary, assumptions, notes and findings of a JSON task's proposal (what the review shows above the items). */
-  describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): { summary?: string; assumptions?: string[]; notes?: string[]; findings?: ProposalFinding[] };
+  describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): ProposalDescription & { findings?: ProposalFinding[] };
+}
+
+/** What the review shows above a proposal's items. */
+export interface ProposalDescription {
+  summary?: string;
+  assumptions?: string[];
+  notes?: string[];
 }
 
 const slug = (s: string) =>
@@ -134,19 +140,6 @@ const slug = (s: string) =>
 
 /** The file a generated test goes to: the caller's path, else tests/ai/<what it is about>.yaml. */
 const filePath = (input: AiTaskInput, fallback: string) => (input.path ? input.path.replace(/^tests[\\/]/, '') : `ai/${slug(input.question || fallback)}.yaml`);
-
-/** The checks of a YAML (or JSON) answer: a list, or `assertions:` / `checks:` of an object. */
-export function checksOfAnswer(code: string): CheckConfig[] {
-  let doc: unknown;
-  try {
-    doc = parseYaml(code);
-  } catch (e) {
-    throw new Error(`The checks are not valid YAML: ${(e as Error).message}`);
-  }
-  const list = Array.isArray(doc) ? doc : ((doc as { assertions?: unknown; checks?: unknown })?.assertions ?? (doc as { checks?: unknown })?.checks);
-  if (!Array.isArray(list)) throw new Error('The answer is not a list of checks');
-  return list.filter((c): c is CheckConfig => !!c && typeof c === 'object' && typeof (c as CheckConfig).type === 'string');
-}
 
 const requestOf = (input: AiTaskInput): ItemRef | undefined => (input.item?.kind === 'request' ? input.item : undefined);
 

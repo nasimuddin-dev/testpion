@@ -2,6 +2,7 @@ import type { IClientOptions, MqttClient } from 'mqtt';
 import { ApsError } from '../../errors.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { shortId } from '../../util/ids.js';
+import { SessionEvents } from '../session-events.js';
 
 /**
  * MQTT client session (MQTT 3.1.1 or 5): connect to a broker over TCP (mqtt://, mqtts://) or
@@ -44,33 +45,16 @@ const MAX_TEXT = 256 * 1024;
 let mqttMod: Promise<typeof import('mqtt')> | undefined;
 const mqttLib = () => (mqttMod ??= import('mqtt'));
 
-export class MqttSession {
+export class MqttSession extends SessionEvents<MqttMessage> {
   readonly id = shortId('mqtt-');
   private client?: MqttClient;
-  private messageListeners: Array<(m: MqttMessage) => void> = [];
-  private statusListeners: Array<(s: 'connecting' | 'open' | 'closed') => void> = [];
-  status: 'connecting' | 'open' | 'closed' = 'closed';
 
   /** `url`: mqtt://host:1883, mqtts://host:8883, ws://host:8080/mqtt or wss://… (a bare host means mqtt://). */
   constructor(
     readonly url: string,
     private readonly opts: MqttOptions = {},
-  ) {}
-
-  onMessage(l: (m: MqttMessage) => void): void {
-    this.messageListeners.push(l);
-  }
-  onStatus(l: (s: 'connecting' | 'open' | 'closed') => void): void {
-    this.statusListeners.push(l);
-  }
-
-  private emitMessage(direction: MqttMessage['direction'], data: string, extra: Partial<MqttMessage> = {}): void {
-    const m: MqttMessage = { id: shortId('m-'), time: Date.now(), direction, data: data.length > MAX_TEXT ? data.slice(0, MAX_TEXT) + '… [truncated]' : data, size: Buffer.byteLength(data), ...extra };
-    for (const l of this.messageListeners) l(m);
-  }
-  private setStatus(s: MqttSession['status']): void {
-    this.status = s;
-    for (const l of this.statusListeners) l(s);
+  ) {
+    super(MAX_TEXT);
   }
 
   async connect(): Promise<void> {

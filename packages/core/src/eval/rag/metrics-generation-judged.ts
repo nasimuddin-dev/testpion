@@ -11,7 +11,7 @@ import { sentences } from '../text.js';
 import { answerClaims, answerVsReference, envOf, referenceClaims, referenceVsAnswer, type PassEnv } from './claim-passes.js';
 import { embedTexts, cosine } from './embed-util.js';
 import { REFUSAL } from './failure.js';
-import { addUsage, assertJudgeUsable, contextsInput, describe, guarded, judgeMeta, judgePanel, judgedCheck, na, needContexts, needsField, noUsage, panelOf, referenceText, round3, strictOver, type JudgeHost, type PanelResult, type Usage } from './judged-kit.js';
+import { addUsage, assertJudgeUsable, contextsInput, guarded, judgeMeta, judgePanel, judgedCheck, na, needContexts, needsField, noUsage, panelOf, referenceText, round3, strictOver, type JudgeHost, type PanelResult, type Usage } from './judged-kit.js';
 import { REFUSAL_JUDGE } from './prompts-safety.js';
 import { ANSWER_ACCURACY, CITATION_ACCURACY, COMPLETENESS, CORRECTNESS, FACTUALITY, HALLUCINATION, RESPONSE_GROUNDEDNESS } from './prompts-r2.js';
 import { num, result } from './metric-util.js';

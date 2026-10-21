@@ -30,12 +30,10 @@ export async function executeUntil(test: TestCase, svc: ExecServices, opts: { tr
   const t0 = performance.now();
   let wait = u.everyMs;
   let tries = 0;
-  let last: ExecutionOutcome | undefined;
   for (;;) {
     if (opts.signal?.aborted) throw new ApsError('CancelledError', 'Run cancelled');
     tries++;
     const o = await executeTest(once, svc, opts);
-    last = o;
     const c = o.context;
     const response: StepResponse | undefined = c ? { status: c.status, headers: c.headers, body: c.body, text: c.text } : undefined;
     let met = false;

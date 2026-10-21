@@ -9,7 +9,7 @@ import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { CheckResult, ConditionTest, FlowTest, LogTest, RunSummary, ScriptTest, TestCase, TestResult, TestStatus } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { VariableScope } from '../vars/variables.js';
-import type { SpanHandle, Tracer } from '../trace/tracer.js';
+import type { SpanHandle } from '../trace/tracer.js';
 import type { CheckContext } from '../eval/checks.js';
 import { evaluateExpression, runScript, type ScriptInput, type ScriptRequestSender } from '../scripts/sandbox.js';
 import { applyScriptOutput, scriptScopes } from '../scripts/bridge.js';

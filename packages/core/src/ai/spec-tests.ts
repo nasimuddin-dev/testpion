@@ -30,8 +30,9 @@ import { deref, typeOf } from '../util/json-ref.js';
 import { slugify } from '../util/ids.js';
 import type { AiSurface } from '../storage/ai-usage.js';
 import type { AiPrivacy } from './ai-settings.js';
-import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
-import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
+import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import { registerVerifier, verifyItems, type VerifyContext } from './verify.js';
 import {
   MAX_CONTEXT_OPERATIONS,
@@ -455,7 +456,7 @@ export function proposeSpecTests(a: { value?: unknown }, input: AiTaskInput): { 
 }
 
 /** The summary, assumptions and notes of the proposal (registry `describe`). */
-export function describeSpecTests(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
+export function describeSpecTests(value: unknown, items: ProposalItem[]): ProposalDescription {
   const v = (value ?? {}) as SpecPlan;
   const data = items.map((i) => i.data as { tests?: number; categories?: Partial<Record<SpecCategory, number>>; coverage?: Coverage; notes?: string[] } | undefined);
   const total = data.reduce((n, d) => n + (d?.tests ?? 0), 0);
@@ -465,7 +466,7 @@ export function describeSpecTests(value: unknown, items: ProposalItem[]): { summ
   const line = `${total} test${total === 1 ? '' : 's'} (${Object.entries(cats).map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}).${coverage ? ` ${coverageLine(coverage)}` : ''}`;
   return {
     summary: `${typeof v.summary === 'string' && v.summary.trim() ? `${v.summary.trim()} ` : ''}${line}`.trim(),
-    assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String) : [],
+    assumptions: stringList(v.assumptions),
     notes: data[0]?.notes ?? [],
   };
 }
@@ -529,29 +530,18 @@ export async function draftSpecTestsProposal(store: WorkspaceStore, spec: string
   const notes = [o.reason ?? 'No AI model is set up: these are the tests TestPion builds from the document for the gaps. A model adds more negative, boundary and security ideas.'];
   const items: ProposalItem[] = itemsOf(files, local, notes, coverageAfter(doc, local, files)).map((d, i) => ({ ...d, id: `i${i + 1}`, verification: [], selected: true }));
   await verifyItems(items, SPEC_TEST_VERIFIERS, { store });
-  const now = Date.now();
   const data = items.map((i) => i.data as { tests?: number; categories?: Partial<Record<SpecCategory, number>>; coverage?: Coverage });
   const cov = data[0]?.coverage;
-  const p: Proposal = {
-    schemaVersion: 1,
-    id: newProposalId(),
+  return saveDraftProposal(store, {
     task: 'tests-from-spec',
-    taskVersion: 0,
     title: `Tests from ${spec} (no AI)`,
     summary: `${local.draft.length} test${local.draft.length === 1 ? '' : 's'} for the gaps in the tests of ${spec}, built from the document without a model.${cov ? ` ${coverageLine(cov)}` : ''}`,
-    assumptions: [],
     notes,
     items,
-    provider: 'TestPion',
     model: 'no AI (deterministic cases)',
     surface: o.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
-    usage: { inputTokens: 0, outputTokens: 0 },
     request: { item: { kind: 'spec', path: spec }, ...(local.path ? { path: local.path } : {}) },
-  };
-  return saveProposal(store, p);
+  });
 }
 
 /** The gap report for a spec file, with the tests TestPion could build for each category (counts only). */

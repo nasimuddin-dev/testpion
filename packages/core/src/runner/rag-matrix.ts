@@ -44,8 +44,3 @@ export async function ragMatrix(store: Pick<WorkspaceStore, 'runDir'>, runId: st
 export async function ragMatrixIntervals(store: Pick<WorkspaceStore, 'runDir'>, runId: string, keys: string[]): Promise<Record<string, [number, number]>> {
   return matrixIntervals(await ragMatrixBase(store, runId), keys.slice(0, 200));
 }
-
-/** For tests: forget every kept base. */
-export function forgetMatrixBases(): void {
-  bases.clear();
-}

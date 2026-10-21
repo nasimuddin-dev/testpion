@@ -5,7 +5,8 @@
  * up is a regression.
  */
 import type { TestResult } from '../../model/types.js';
-import { round } from '../../util/stats.js';
+import { mean, round } from '../../util/stats.js';
+import { mulberry32 } from '../../util/random.js';
 import { resolveMetric } from './metric-registry.js';
 
 export interface MetricChange {
@@ -48,13 +49,6 @@ async function scoresOf(results: AsyncIterable<TestResult>): Promise<{ scores: S
   return { scores, ids };
 }
 
-const rng = (seed: number) => () => {
-  seed = (seed + 0x6d2b79f5) | 0;
-  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-};
-
 export async function compareMetricRuns(current: AsyncIterable<TestResult>, baseline: AsyncIterable<TestResult>, o: { minDelta?: number } = {}): Promise<MetricComparison> {
   const minDelta = o.minDelta ?? 0.05;
   const [a, b] = [await scoresOf(current), await scoresOf(baseline)];
@@ -75,7 +69,7 @@ export async function compareMetricRuns(current: AsyncIterable<TestResult>, base
     const delta = diffs.length ? mean(diffs) : mean([...cur.byResult.values()]) - mean([...base.byResult.values()]);
     let ci: [number, number] | undefined;
     if (diffs.length >= 3) {
-      const rnd = rng(0xc0ffee + diffs.length);
+      const rnd = mulberry32(0xc0ffee + diffs.length);
       const means: number[] = [];
       const rounds = diffs.length > 2000 ? 200 : 1000;
       for (let i = 0; i < rounds; i++) {
@@ -110,4 +104,3 @@ export async function compareMetricRuns(current: AsyncIterable<TestResult>, base
   };
 }
 
-const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);

@@ -16,7 +16,7 @@ import type { WorkspaceStore } from '../../../storage/workspace.js';
 import { parseRagDatasetText } from '../dataset-formats.js';
 import type { JudgeRef } from '../judge.js';
 import { judgeOf, UNANSWERABLE_REFERENCE } from '../testset/task.js';
-import { MAX_DRAFTS, REFERENCES_INSTRUCTION, REFERENCES_SCHEMA, REFERENCES_VERSION } from './references-prompts.js';
+import { MAX_DRAFTS, REFERENCES_VERSION } from './references-prompts.js';
 import '../testset/verify.js';
 
 const PASSAGE_CHARS = 1800;

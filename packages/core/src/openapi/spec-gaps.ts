@@ -15,7 +15,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
-import { deref } from '../util/json-ref.js';
+import { deref, operationParameters } from '../util/json-ref.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
@@ -310,8 +310,7 @@ export function specOperations(doc: OpenApiDoc): SpecOperation[] {
     for (const m of METHODS) {
       const op = item[m] as Json | undefined;
       if (!op || typeof op !== 'object') continue;
-      const own = asList(op.parameters).map((p) => deref(d, p) as Json);
-      const params = [...own, ...asList(item.parameters).map((p) => deref(d, p) as Json).filter((p) => !own.some((o) => o?.name === p?.name && o?.in === p?.in))].filter((p) => p && p.in !== 'body' && p.name);
+      const params = operationParameters(d, item, op).filter((p) => p && p.in !== 'body' && p.name);
       const body = bodySchemaOf(d, op, item);
       const bodyProps = body ? propertiesOf(d, body.schema) : { properties: {}, required: [] as string[] };
       const security = (op.security ?? d.security ?? []) as Json[];
@@ -480,6 +479,3 @@ export function specGapMarkdown(r: SpecGapReport): string {
   }
   return lines.join('\n');
 }
-
-/** Constraint text of a schema, for the model's context. */
-export const schemaConstraints = (doc: Json, s: unknown): string[] => constraintsOf(doc, s);

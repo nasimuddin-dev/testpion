@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseYaml, stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { WorkspaceStore } from '../storage/workspace.js';

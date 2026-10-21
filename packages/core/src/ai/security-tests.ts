@@ -19,7 +19,7 @@
  * limit across the file); at most `max` probes; the steps are the collection's own requests with credentials changed,
  * nothing else; the probes refuse a production environment (see security-run.ts for the executor, which refuses too).
  */
-import { checkLabel, templatedText, templateVariables, type ItemRef } from '@testpion/shared';
+import { templatedText, templateVariables, type ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import type { AuthConfig, CheckConfig } from '../model/types.js';
 import { stepFromSavedRequest } from '../runner/flow-steps-from-requests.js';
@@ -30,8 +30,9 @@ import { slugify } from '../util/ids.js';
 import { exists, query } from '../util/jsonpath.js';
 import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { freePath, isValueSegment, requestContext, sameEndpoint, segmentsOf, sourceRequests, type Saved } from './flow-from-collection.js';
-import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
-import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
+import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import { registerVerifier, verifyItems, type VerifyContext } from './verify.js';
 
 export const SECURITY_PROBES = ['bola', 'auth', 'mass-assignment', 'bfla'] as const;
@@ -606,13 +607,13 @@ export function proposeSecurity(a: { value?: unknown }, input: AiTaskInput): { i
 }
 
 /** The summary, assumptions and notes of the proposal (registry `describe`). */
-export function describeSecurity(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
+export function describeSecurity(value: unknown, items: ProposalItem[]): ProposalDescription {
   const v = (value ?? {}) as SecurityPlan;
   const s = (items[0]?.data as { security?: { byKind: Partial<Record<SecurityProbe, number>>; probes: number } } | undefined)?.security;
   const counts = s ? Object.entries(s.byKind).map(([k, n]) => `${n} ${SECURITY_CATALOGUE[k as SecurityProbe].owasp} ${k}`) : [];
   return {
     summary: [typeof v.summary === 'string' ? v.summary : '', s ? `${s.probes} probes (${counts.join(', ')}). Verdicts are checks computed from the responses; run them against a test environment.` : ''].filter(Boolean).join(' '),
-    assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String).slice(0, 12) : [],
+    assumptions: stringList(v.assumptions, 12),
   };
 }
 
@@ -675,29 +676,16 @@ export async function draftSecurityProposal(store: WorkspaceStore, ref: ItemRef,
     /* a new file */
   }
   await verifyItems([item], SECURITY_VERIFIERS, {} as VerifyContext);
-  const now = Date.now();
-  return saveProposal(store, {
-    schemaVersion: 1,
-    id: newProposalId(),
+  return saveDraftProposal(store, {
     task: 'security-tests',
-    taskVersion: 0,
     title: `Security tests (no AI): ${local.label}`,
     summary: `${built.probes} probes TestPion makes without a model from ${local.label}: ${Object.entries(built.byKind)
       .map(([k, n]) => `${n} ${k}`)
       .join(', ')}.`,
-    assumptions: [],
     notes: [o.reason ?? 'No AI model is set up: these are the probes TestPion makes itself.', ...local.skipped, ...built.notes],
     items: [item],
-    provider: 'TestPion',
     model: 'no AI (deterministic probes)',
     surface: o.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
-    usage: { inputTokens: 0, outputTokens: 0 },
     request: { item: ref, path: local.path },
   });
 }
-
-/** `checkLabel` of the checks in a step (for reports). */
-export const stepCheckLabels = (step: Record<string, unknown>): string[] => (Array.isArray(step.assertions) ? step.assertions : []).map((c) => checkLabel(c as CheckConfig));

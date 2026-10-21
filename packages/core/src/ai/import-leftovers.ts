@@ -15,6 +15,7 @@ import type { ItemRef } from '@testpion/shared';
 import type { Collection, CollectionNode, SavedExample } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import { dryRunScript, type SampleRequest } from './write-script.js';
 import type { VerificationBadge } from './proposal.js';
 import { registerVerifier, type StoredResponse } from './verify.js';
@@ -138,7 +139,7 @@ export function proposeLeftovers(a: { value?: unknown }, input: AiTaskInput): { 
 
 export function describeLeftovers(value: unknown): { summary?: string; assumptions?: string[] } {
   const v = (value ?? {}) as { summary?: unknown; assumptions?: unknown };
-  return { summary: typeof v.summary === 'string' ? v.summary.slice(0, 1200) : undefined, assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String).slice(0, 10) : [] };
+  return { summary: typeof v.summary === 'string' ? v.summary.slice(0, 1200) : undefined, assumptions: stringList(v.assumptions, 10) };
 }
 
 /* ------------------------------------------------------------------ verification */

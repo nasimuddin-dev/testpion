@@ -88,15 +88,20 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
       data: redact(m.data).slice(0, 20_000),
     });
 
+  /** A connect that failed: the session may have logged the reason already; else add it. The exchange ends unconnected. */
+  const unconnected = (e: unknown): RealtimeResult => {
+    const msg = (e as Error).message;
+    if (!messages.some((m) => msg.includes(m.data.replace(/^Error: /, '')))) record({ direction: 'system', data: msg });
+    return { mode, connected: false, messages, durationMs: Date.now() - t0 };
+  };
+
   if (mode === 'kafka') {
     const s = new KafkaSession(x.url, { clientId: x.clientId, groupId: x.groupId, username: x.username, password: x.password, mechanism: x.mechanism });
     s.onMessage((m) => record({ direction: m.direction, data: m.data, topic: m.topic, key: m.key, partition: m.partition, offset: m.offset, headers: m.headers }));
     try {
       await s.connect();
     } catch (e) {
-      const msg = (e as Error).message;
-      if (!messages.some((m) => msg.includes(m.data.replace(/^Error: /, '')))) record({ direction: 'system', data: msg });
-      return { mode, connected: false, messages, durationMs: Date.now() - t0 };
+      return unconnected(e);
     }
     try {
       for (const sub of x.subscribe ?? []) {
@@ -107,8 +112,7 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
         if (opts.signal?.aborted) break;
         if (typeof item === 'string' || !('topic' in item)) throw new ApsError('ValidationError', 'Kafka messages are { topic, payload?, key?, headers?, partition? } objects');
         const k = item as KafkaProduce;
-        const value = k.payload === undefined ? '' : typeof k.payload === 'string' ? k.payload : JSON.stringify(k.payload);
-        await s.produce(k.topic, value, { key: k.key, headers: k.headers, partition: k.partition });
+        await s.produce(k.topic, payloadText(k.payload), { key: k.key, headers: k.headers, partition: k.partition });
       }
       await sleep(wait, opts.signal);
       return { mode, connected: true, messages, durationMs: Date.now() - t0 };
@@ -123,9 +127,7 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
     try {
       await s.connect();
     } catch (e) {
-      const msg = (e as Error).message;
-      if (!messages.some((m) => msg.includes(m.data.replace(/^Error: /, '')))) record({ direction: 'system', data: msg });
-      return { mode, connected: false, messages, durationMs: Date.now() - t0 };
+      return unconnected(e);
     }
     try {
       for (const sub of x.subscribe ?? []) {
@@ -136,8 +138,7 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
         if (opts.signal?.aborted) break;
         if (typeof item === 'string' || !('topic' in item)) throw new ApsError('ValidationError', 'MQTT messages are { topic, payload?, qos?, retain? } objects');
         const p = item as MqttPublish;
-        const payload = p.payload === undefined ? '' : typeof p.payload === 'string' ? p.payload : JSON.stringify(p.payload);
-        await s.publish(p.topic, payload, { qos: p.qos, retain: p.retain });
+        await s.publish(p.topic, payloadText(p.payload), { qos: p.qos, retain: p.retain });
       }
       await sleep(wait, opts.signal);
       return { mode, connected: true, messages, durationMs: Date.now() - t0 };
@@ -193,6 +194,8 @@ export async function runRealtimeExchange(x: RealtimeExchange, opts: { redactor?
     s.close();
   }
 }
+
+const payloadText = (payload: unknown): string => (payload === undefined ? '' : typeof payload === 'string' ? payload : JSON.stringify(payload));
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((ok) => {

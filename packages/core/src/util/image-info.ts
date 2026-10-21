@@ -8,7 +8,6 @@ import { sha256Hex } from './hash.js';
  */
 
 export type ImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp';
-export const IMAGE_MIMES: readonly ImageMime[] = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp'];
 
 export interface ImageInfo {
   mime: ImageMime;

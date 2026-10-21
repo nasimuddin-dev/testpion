@@ -509,14 +509,6 @@ const isFinally = (ctx: Ctx, id: string): boolean => {
   return v === true || v === 'true';
 };
 
-/** A name of a parallel group nobody in the flow uses yet: group-1, group-2 … */
-export function newGroupName(text: string): string {
-  const used = new Set([...text.matchAll(/^\s*-?\s*parallel:\s*["']?([^"'\s#]+)/gm)].map((m) => m[1]));
-  let n = 1;
-  while (used.has(`group-${n}`)) n++;
-  return `group-${n}`;
-}
-
 /**
  * Put steps in a parallel group or the Finally lane, or take them out. A finally step runs after every other step, so
  * steps that wait for one are refused; a step in the Finally lane leaves its parallel group (and the other way round).

@@ -218,6 +218,3 @@ for (const s of CLAIM_SPECS) {
       : run,
   );
 }
-
-/** The metrics that read the claim passes (the judged-check list of a run needs a judge for each). */
-export const CLAIM_METRIC_IDS: ReadonlySet<string> = new Set(CLAIM_SPECS.map((s) => s.id));

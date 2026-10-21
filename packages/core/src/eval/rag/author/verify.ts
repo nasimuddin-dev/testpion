@@ -6,6 +6,7 @@
  * with the existing run estimate. A threshold the samples already miss by a lot is a warning, not a failure: it may be what
  * the person wants to fix.
  */
+import { mean } from '../../../util/stats.js';
 import { registerVerifier } from '../../../ai/verify.js';
 import type { ProposalItem, VerificationBadge } from '../../../ai/proposal.js';
 import type { VerifyContext } from '../../../ai/verify.js';
@@ -22,7 +23,6 @@ import type { AuthoredData } from './propose.js';
 
 const SAMPLES = 5;
 const usd = (n: number) => `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
-const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
 export async function dryRunEvaluation(item: ProposalItem, ctx: VerifyContext): Promise<VerificationBadge | undefined> {
   if (item.kind !== 'evaluation') return undefined;

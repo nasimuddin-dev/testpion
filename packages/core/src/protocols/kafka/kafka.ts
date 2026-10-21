@@ -2,6 +2,7 @@ import type { Admin, Consumer, Kafka, Producer, SASLOptions } from 'kafkajs';
 import { ApsError } from '../../errors.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { shortId } from '../../util/ids.js';
+import { SessionEvents } from '../session-events.js';
 import { flattenHeaders } from '../../util/headers.js';
 
 /**
@@ -58,7 +59,7 @@ export function parseKafkaUrl(url: string): { brokers: string[]; tls: boolean } 
 let kafkaMod: Promise<typeof import('kafkajs')> | undefined;
 const kafkajs = () => (kafkaMod ??= import('kafkajs'));
 
-export class KafkaSession {
+export class KafkaSession extends SessionEvents<KafkaMessage> {
   readonly id = shortId('kafka-');
   private kafka?: Kafka;
   private producer?: Producer;
@@ -70,35 +71,12 @@ export class KafkaSession {
    * so "from the beginning" and "new messages" mean what they say every time a topic is added.
    */
   private consumers = new Map<string, Consumer>();
-  private messageListeners: Array<(m: KafkaMessage) => void> = [];
-  private statusListeners: Array<(s: 'connecting' | 'open' | 'closed') => void> = [];
-  status: 'connecting' | 'open' | 'closed' = 'closed';
 
   constructor(
     readonly url: string,
     private readonly opts: KafkaOptions = {},
-  ) {}
-
-  onMessage(l: (m: KafkaMessage) => void): void {
-    this.messageListeners.push(l);
-  }
-  onStatus(l: (s: 'connecting' | 'open' | 'closed') => void): void {
-    this.statusListeners.push(l);
-  }
-  private emitMessage(direction: KafkaMessage['direction'], data: string, extra: Partial<KafkaMessage> = {}): void {
-    const m: KafkaMessage = {
-      id: shortId('m-'),
-      time: Date.now(),
-      direction,
-      data: data.length > MAX_TEXT ? data.slice(0, MAX_TEXT) + '… [truncated]' : data,
-      size: Buffer.byteLength(data),
-      ...extra,
-    };
-    for (const l of this.messageListeners) l(m);
-  }
-  private setStatus(s: KafkaSession['status']): void {
-    this.status = s;
-    for (const l of this.statusListeners) l(s);
+  ) {
+    super(MAX_TEXT);
   }
 
   async connect(): Promise<void> {

@@ -21,6 +21,7 @@ import { watchSend } from './socket-timing.js';
 const MAX_SSE_EVENTS = 10_000;
 import type { Redactor } from '../../util/redact.js';
 import { shortId } from '../../util/ids.js';
+import { levenshtein } from '../../util/text-distance.js';
 import type { CookieJar } from '../../cookies/cookie-jar.js';
 
 export const DEFAULT_MAX_PREVIEW = 2 * 1024 * 1024;
@@ -123,20 +124,7 @@ function closestName(name: string, known: string[]): string | undefined {
   const lower = name.toLowerCase();
   const same = known.find((k) => k.toLowerCase() === lower);
   if (same) return same;
-  const distance = (a: string, b: string) => {
-    const d = Array.from({ length: b.length + 1 }, (_, i) => i);
-    for (let i = 1; i <= a.length; i++) {
-      let prev = d[0]!;
-      d[0] = i;
-      for (let j = 1; j <= b.length; j++) {
-        const cur = d[j]!;
-        d[j] = Math.min(d[j]! + 1, d[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-        prev = cur;
-      }
-    }
-    return d[b.length]!;
-  };
-  const best = known.map((k) => ({ k, d: distance(lower, k.toLowerCase()) })).sort((a, b) => a.d - b.d)[0];
+  const best = known.map((k) => ({ k, d: levenshtein(lower, k.toLowerCase()) })).sort((a, b) => a.d - b.d)[0];
   return best && best.d <= 2 && best.d < name.length / 2 ? best.k : undefined;
 }
 

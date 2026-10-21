@@ -246,7 +246,3 @@ setCheckResolver((cfg) => {
   return { check: def.check, options: r.options };
 });
 
-/** The inputs a metric is missing for a sample, with the message that says how to supply each. */
-export function missingInputs(def: MetricDef, has: Partial<Record<MetricInput, boolean>>): MetricInput[] {
-  return def.requires.filter((i) => !has[i]);
-}

@@ -17,6 +17,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { contextOfItem } from './item-context.js';
 import { loadScriptApi, scriptApiProblems } from './script-reference.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import type { VerificationBadge } from './proposal.js';
 import { registerVerifier, type StoredResponse } from './verify.js';
 
@@ -133,7 +134,7 @@ export function proposeScript(a: { value?: unknown }, input: AiTaskInput): Draft
 /** The summary and assumptions of the proposal (registry `describe`). */
 export function describeScript(value: unknown): { summary?: string; assumptions?: string[] } {
   const v = (value ?? {}) as { explanation?: unknown; assumptions?: unknown };
-  return { summary: typeof v.explanation === 'string' ? v.explanation.slice(0, 1200) : undefined, assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String).slice(0, 10) : [] };
+  return { summary: typeof v.explanation === 'string' ? v.explanation.slice(0, 1200) : undefined, assumptions: stringList(v.assumptions, 10) };
 }
 
 /* ------------------------------------------------------------------ verification */

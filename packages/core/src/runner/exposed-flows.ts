@@ -3,12 +3,12 @@
  * (`tool`), what it does (`description`) and the variables the flow reads as its arguments (`inputs`). The MCP server
  * registers one tool per exposed flow (mcp-server/tools/flow-tools.ts); `testpion flows` and the app list them.
  */
-import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join, relative, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { extname, relative, sep } from 'node:path';
 import type { Node, Pair } from 'yaml';
 import { isMap, isPair, isScalar, isSeq, parseDocument, parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
-import { isSuiteFile } from './suite-file.js';
+import { isSuiteFile, walkTestFiles } from './suite-file.js';
 
 /** One argument of the tool: a variable the flow reads as {{name}}. */
 export interface FlowInput {
@@ -86,29 +86,11 @@ export function readExposure(text: string, file?: string): FlowExposure | undefi
   return data && typeof data === 'object' && !Array.isArray(data) ? parseExpose(data.expose, file) : undefined;
 }
 
-const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
-
-function* walk(dir: string): Generator<string> {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  entries.sort((a, b) => a.name.localeCompare(b.name));
-  for (const e of entries) {
-    if (e.name.startsWith('.') || e.name === 'node_modules') continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) yield* walk(p);
-    else if (TEST_EXT.has(extname(e.name).toLowerCase())) yield p;
-  }
-}
-
 /** Every test file and suite under tests/ with an `expose:` block, in path order. Invalid blocks come back with `problem`. */
 export function exposedFlows(store: { path(...p: string[]): string }): ExposedFlow[] {
   const base = store.path('tests');
   const out: ExposedFlow[] = [];
-  for (const abs of walk(base)) {
+  for (const abs of walkTestFiles(base)) {
     let text: string;
     try {
       text = readFileSync(abs, 'utf8');

@@ -3,7 +3,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { importOpenApi } from '../import/importers.js';
 import type { CollectionNode, HttpRequestSpec } from '../model/types.js';
-import { deref } from '../util/json-ref.js';
+import { deref, operationParameters } from '../util/json-ref.js';
 
 /**
  * An OpenAPI 3 / Swagger 2 document as a reader sees it (the API definition's Preview, `testpion openapi-ops`, the
@@ -149,10 +149,7 @@ export function openApiOutline(text: string): ApiOutline {
       const op = item[method] as Json | undefined;
       if (!op || typeof op !== 'object') continue;
       count++;
-      const own = ((op.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json);
-      const params = [...own, ...((item.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json).filter((p) => !own.some((o) => o?.name === p?.name && o?.in === p?.in))].filter(
-        (p) => p && p.in !== 'body',
-      );
+      const params = operationParameters(doc, item, op).filter((p) => p && p.in !== 'body');
       let requestBody: OutlineOperation['requestBody'];
       if (v2) {
         const bp = ((op.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json).find((p) => p?.in === 'body');

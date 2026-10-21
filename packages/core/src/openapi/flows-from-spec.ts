@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { Collection, HttpRequestSpec } from '../model/types.js';

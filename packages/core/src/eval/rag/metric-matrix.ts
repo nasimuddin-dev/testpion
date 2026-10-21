@@ -7,6 +7,7 @@
  */
 import type { TestResult } from '../../model/types.js';
 import { percentile, round } from '../../util/stats.js';
+import { mulberry32 } from '../../util/random.js';
 import { FAILURE_CLASSES, type FailureClass } from './failure.js';
 import { METRIC_GROUPS, resolveMetric, type MetricGroup } from './metric-registry.js';
 import { matchExternal, type ExternalScores } from './ragas-io.js';
@@ -83,14 +84,6 @@ export interface MatrixColumnData extends MetricColumn {
   state: Uint8Array;
   reasons: Map<number, string>;
 }
-
-const mulberry32 = (seed: number) => () => {
-  seed |= 0;
-  seed = (seed + 0x6d2b79f5) | 0;
-  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-};
 
 const passes = (c: MetricColumn, score: number, thresholds: Record<string, number>): boolean | undefined => {
   const t = thresholds[c.key] ?? thresholds[c.metric] ?? c.threshold;
@@ -330,7 +323,6 @@ export function matrixIntervals(base: MatrixBase, keys: string[]): Record<string
 /** One cut of a base: the pass marks, the filter, the sort and the page applied. Cheap: nothing is read from disk or recomputed but what a pass mark changes. */
 export function cutMatrix(base: MatrixBase, q: MatrixQuery = {}): MetricMatrix {
   const { meta, order, columns, groups, failures } = base;
-  const n = base.n;
   const thresholds = q.thresholds ?? {};
   const cell = (c: MatrixColumnData, i: number): MatrixCell | null => {
     const s = c.state[i];

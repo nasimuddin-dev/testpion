@@ -134,14 +134,6 @@ const STATIC_EXT = /\.(png|jpe?g|gif|svg|ico|webp|avif|bmp|tiff?|css|js|mjs|cjs|
 const STATIC_TYPE = /^(image|font|video|audio)\/|^text\/css|javascript|ecmascript|^application\/(font|x-font|wasm)/i;
 const BROWSER_DEST = new Set(['document', 'image', 'style', 'script', 'font', 'iframe', 'frame', 'audio', 'video', 'manifest', 'worker', 'serviceworker', 'sharedworker', 'track', 'object', 'embed']);
 
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return '';
-  }
-}
-
 /** Why an exchange is not a step, or undefined when it is one. */
 export function noiseReason(e: FlowSourceExchange, opts: Pick<FlowFromExchangesOptions, 'noiseHosts' | 'extraNoiseHosts' | 'keepNoise'> = {}): string | undefined {
   if (e.kind === 'tunnel' || e.method === 'CONNECT') return 'an HTTPS tunnel (not decrypted)';

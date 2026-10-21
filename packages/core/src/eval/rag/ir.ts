@@ -4,6 +4,8 @@
  * Retrieved ids are used in rank order with repeats dropped (a chunk found twice is one document).
  */
 
+import { levenshtein } from '../../util/text-distance.js';
+
 const dedupe = (ids: string[]) => [...new Set(ids)];
 
 /** The top k retrieved ids (k defaults to all). */
@@ -73,19 +75,7 @@ export function rankedAveragePrecision(relevant: boolean[]): number {
 
 const MAX_CHARS = 4000;
 
-/** The Levenshtein edit distance (insert, delete, substitute), O(n·m) time and O(m) space. */
-export function levenshtein(a: string, b: string): number {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
-    prev = cur;
-  }
-  return prev[b.length]!;
-}
+export { levenshtein };
 
 /** 1 − distance / the longer length (1 for two empty texts); texts are cut at 4,000 characters so a long chunk cannot stall a run. */
 export function similarityRatio(a: string, b: string): number {

@@ -164,6 +164,20 @@ export function newProposalId(): string {
   return shortId('ai-');
 }
 
+/** A new open proposal: the fields of the task, with the id, the timestamps and the status every proposal starts with. */
+export function openProposal(f: Omit<Proposal, 'schemaVersion' | 'id' | 'createdAt' | 'expiresAt' | 'status'>, now = Date.now()): Proposal {
+  return { schemaVersion: 1, id: newProposalId(), ...f, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(), status: 'open' };
+}
+
+/** A proposal TestPion made without a model (none set up, or not asked for), saved: no assumptions, no usage. */
+export function saveDraftProposal(
+  store: WorkspaceStore,
+  f: { task: string; title: string; summary: string; notes: string[]; items: ProposalItem[]; findings?: ProposalFinding[]; model: string; surface: AiSurface; request: NonNullable<Proposal['request']> },
+): Proposal {
+  const { findings, ...rest } = f;
+  return saveProposal(store, openProposal({ ...rest, taskVersion: 0, assumptions: [], ...(findings ? { findings } : {}), provider: 'TestPion', usage: { inputTokens: 0, outputTokens: 0 } }));
+}
+
 export function saveProposal(store: WorkspaceStore, p: Proposal): Proposal {
   mkdirSync(dir(store), { recursive: true });
   atomicWrite(fileOf(store, p.id), JSON.stringify(p, null, 2));

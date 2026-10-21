@@ -4,12 +4,13 @@
  * This module reads, checks and finds the blocks; the server is flow-webhooks.ts. It has no runner imports, so the
  * loader and the lint can use it.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, relative, sep } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { extname, relative, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { parseExpose, type FlowInput } from './exposed-flows.js';
+import { walkTestFiles } from './suite-file.js';
 
 /** The `webhook:` block of a test file. */
 export interface FlowWebhook {
@@ -84,24 +85,7 @@ export function testsRelative(file: string): string {
   return i >= 0 ? p.slice(i + '/tests/'.length) : p.replace(/^tests\//, '');
 }
 
-const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
 const MENTIONS = /^\s*"?webhook"?\s*:/m;
-
-function* walk(dir: string): Generator<string> {
-  let entries;
-  try {
-    entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  entries.sort((a, b) => a.name.localeCompare(b.name));
-  for (const e of entries) {
-    if (e.name.startsWith('.') || e.name === 'node_modules') continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) yield* walk(p);
-    else if (TEST_EXT.has(extname(e.name).toLowerCase()) && !/\.suite\.(ya?ml|json)$/i.test(e.name)) yield p;
-  }
-}
 
 /** What a file says, by its size and time: a rescan only parses the files that changed. */
 type Cached = { key: string; flow: WebhookFlow | null };
@@ -140,7 +124,7 @@ export function webhookOfText(text: string, file: string): WebhookFlow | null {
 export function webhookFlows(testsDir: string): WebhookFlow[] {
   const out: WebhookFlow[] = [];
   const seen = new Map<string, string>();
-  for (const abs of walk(testsDir)) {
+  for (const abs of walkTestFiles(testsDir, { suites: false })) {
     let key: string;
     try {
       const st = statSync(abs);

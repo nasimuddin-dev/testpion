@@ -5,7 +5,7 @@
  * and the MCP tool, so a test set is made the same way everywhere.
  */
 import { ApsError, normalizeError } from '../errors.js';
-import { newProposalId, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from '../ai/proposal.js';
+import { openProposal, saveProposal, type Proposal, type ProposalItem } from '../ai/proposal.js';
 import { runAiTask, type AiRunDeps } from '../ai/tasks/run.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { JudgeRef, RagJudgeHost } from '../eval/rag/judge.js';
@@ -137,10 +137,7 @@ export async function generateTestset(deps: AiRunDeps, store: WorkspaceStore, o:
     tally.byType[t] = (tally.byType[t] ?? 0) + 1;
   }
   const dataset = (items[0]!.data as { dataset: string }).dataset;
-  const now = Date.now();
-  const proposal: Proposal = {
-    schemaVersion: 1,
-    id: newProposalId(),
+  const proposal: Proposal = openProposal({
     task: 'rag-generate-testset',
     taskVersion: 1,
     title: `Test set from ${corpus.docs.length} document${corpus.docs.length === 1 ? '' : 's'}`,
@@ -151,13 +148,10 @@ export async function generateTestset(deps: AiRunDeps, store: WorkspaceStore, o:
     provider,
     model,
     surface: deps.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
     usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, ...(cost !== undefined ? { costUsd: cost } : {}) },
     request: { question: `${r.count} questions (${r.types.join(', ')})`, ...(o.name ? { path: dataset } : {}) },
     ...(problems.length ? { problems: problems.slice(0, 10) } : {}),
-  };
+  });
   saveProposal(store, proposal);
   return { proposal, corpus: { documents: corpus.docs.length, passages: corpus.chunks.length, skipped: corpus.skipped }, tally, calls, costUsd: cost, usage };
 }

@@ -60,8 +60,6 @@ export function registerVerifier(name: string, v: Verifier): void {
   verifiers.set(name, v);
 }
 
-export const verifierNames = () => [...verifiers.keys()];
-
 /**
  * Run the named verifiers on every item: each adds its badge; an item with a failing badge is unticked (the review
  * shows why). A verifier that throws gives a `skip` badge with the error, never a crash.

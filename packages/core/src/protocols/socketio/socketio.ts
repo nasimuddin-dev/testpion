@@ -3,6 +3,7 @@ import { ApsError } from '../../errors.js';
 import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { shortId } from '../../util/ids.js';
+import { SessionEvents } from '../session-events.js';
 import { proxyAgentFor } from '../../net/proxy.js';
 
 /**
@@ -37,33 +38,16 @@ export interface SocketIoOptions {
 // the client library loads on the first connection (not at startup)
 let socketIoMod: Promise<typeof import('socket.io-client')> | undefined;
 
-export class SocketIoSession {
+export class SocketIoSession extends SessionEvents<SocketIoMessage> {
   readonly id = shortId('sio-');
   private socket?: Socket;
-  private messageListeners: Array<(m: SocketIoMessage) => void> = [];
-  private statusListeners: Array<(s: 'connecting' | 'open' | 'closed') => void> = [];
-  status: 'connecting' | 'open' | 'closed' = 'closed';
 
   /** `url` is the server and namespace, e.g. http://localhost:3000/chat (ws:// and wss:// work too). */
   constructor(
     readonly url: string,
     private readonly opts: SocketIoOptions = {},
-  ) {}
-
-  onMessage(l: (m: SocketIoMessage) => void): void {
-    this.messageListeners.push(l);
-  }
-  onStatus(l: (s: 'connecting' | 'open' | 'closed') => void): void {
-    this.statusListeners.push(l);
-  }
-
-  private emitMessage(direction: SocketIoMessage['direction'], data: string, extra: Partial<SocketIoMessage> = {}): void {
-    const m: SocketIoMessage = { id: shortId('m-'), time: Date.now(), direction, data, size: Buffer.byteLength(data), ...extra };
-    for (const l of this.messageListeners) l(m);
-  }
-  private setStatus(s: SocketIoSession['status']): void {
-    this.status = s;
-    for (const l of this.statusListeners) l(s);
+  ) {
+    super();
   }
 
   async connect(): Promise<void> {

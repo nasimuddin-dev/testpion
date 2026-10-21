@@ -18,7 +18,7 @@ import { maskSensitiveText, type Redaction, type Redactor } from '../../util/red
 import { aiHidden, aiLocalOnly, aiPrefersStable, aiPrivacyOf, assertLocalAllowed, resolveAiRoute, type AiPrivacy, type AiRoute, type AiSettingsSource } from '../ai-settings.js';
 import { buildAiContext, type AiContextSection } from '../context.js';
 import { estimateCost, type ProviderRegistry } from '../index.js';
-import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from '../proposal.js';
+import { openProposal, proposedTestFilePath, saveProposal, type Proposal, type ProposalItem } from '../proposal.js';
 import { chatStructured, chatText } from '../structured.js';
 import { estimateTokens, type ChatImage, type ChatMessage } from '../types.js';
 import { visionCapable } from '../vision.js';
@@ -474,10 +474,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
     }
     // an analysis is a proposal even when it changes nothing (its findings: the API regressed, a token expired)
     if (items.length || described.findings?.length) {
-      const now = Date.now();
-      proposal = {
-        schemaVersion: 1,
-        id: newProposalId(),
+      proposal = openProposal({
         task: def.id,
         taskVersion: def.version,
         title: label ? `${def.title}: ${label}` : req.question ? `${def.title}: ${req.question.slice(0, 80)}` : def.title,
@@ -496,13 +493,10 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
         provider: provider.config.name,
         model: modelUsed,
         surface: deps.surface,
-        createdAt: new Date(now).toISOString(),
-        expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-        status: 'open',
         usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, ...(cost !== undefined ? { costUsd: cost } : {}) },
         request: { question: req.question, item: req.item, hint: req.hint, privacy: preview.privacy, ...(req.path ? { path: req.path } : {}) },
         ...(problems.length ? { problems } : {}),
-      };
+      });
       if (deps.store && !req.noProposal) saveProposal(deps.store, proposal);
     }
     return { ...base, model: modelUsed, text, code, value, truncated, finishReason, problems, repairs, calls, usage, costUsd: cost, ms: Date.now() - started, proposal, preview: summary };

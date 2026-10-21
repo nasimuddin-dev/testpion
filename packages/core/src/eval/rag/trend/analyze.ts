@@ -3,7 +3,7 @@
  * runner/rag-trend.ts reads from the runs. A step in a line is only a regression when nothing about the measuring changed, so a
  * run whose judge model or metric versions differ from the run before is flagged `judgeChanged` and is never reported as a drop.
  */
-import { round } from '../../../util/stats.js';
+import { median, round } from '../../../util/stats.js';
 
 export interface TrendMetric {
   mean?: number;
@@ -45,11 +45,6 @@ export interface TrendFinding {
   text: string;
 }
 
-const median = (xs: number[]) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
-};
 
 /** The pass marks of a lower-is-better metric are read the other way: the caller names those. */
 export interface TrendOptions {

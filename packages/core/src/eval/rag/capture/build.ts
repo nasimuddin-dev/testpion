@@ -5,6 +5,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { RagTarget } from '@testpion/shared';
+import { mulberry32 } from '../../../util/random.js';
 import { maskSensitiveText, type Redactor } from '../../../util/redact.js';
 import { applyMapping, responseOf } from '../mapping.js';
 import { captureNote, describeLocator, matchesTarget, protocolOfTarget, questionLocator, readQuestion } from './question-path.js';
@@ -44,14 +45,7 @@ const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /** A small seeded generator (mulberry32) so a sample is the same every time. */
 function rng(seed: string | number): () => number {
-  let a = parseInt(hash(String(seed)).slice(0, 8), 16) >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  return mulberry32(parseInt(hash(String(seed)).slice(0, 8), 16));
 }
 
 const parseBody = (text: string | undefined): unknown => {

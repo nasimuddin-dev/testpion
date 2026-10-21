@@ -5,7 +5,7 @@ import { isLocalHost } from '../load/load.js';
 import type { AuthConfig, CollectionNode, HttpRequestSpec, KeyValue } from '../model/types.js';
 import { executeHttp, type HttpExecOptions } from '../protocols/http/client.js';
 import { slugify, uniqueId } from '../util/ids.js';
-import { deref, typeOf } from '../util/json-ref.js';
+import { deref, operationParameters, typeOf } from '../util/json-ref.js';
 import { loadOpenApi } from './contract.js';
 
 /**
@@ -153,8 +153,7 @@ export function fuzzCases(
       if (method === 'delete' && !opts.includeDelete) continue;
       if (wanted && !wanted.includes(label.toLowerCase()) && !wanted.includes(String(op.operationId ?? '').toLowerCase())) continue;
       operations++;
-      const own = ((op.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json);
-      const params = [...own, ...((item.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json).filter((p) => !own.some((o) => o?.name === p?.name && o?.in === p?.in))].filter(Boolean);
+      const params = operationParameters(doc, item, op).filter(Boolean);
       const pathParams = params.filter((p) => p.in === 'path');
       const query = params.filter((p) => p.in === 'query');
       const headerParams = params.filter((p) => p.in === 'header' && p.required);

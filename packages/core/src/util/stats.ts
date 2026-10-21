@@ -51,6 +51,25 @@ export function percentile(sorted: ArrayLike<number>, p: number): number | undef
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))];
 }
 
+/** The mean of the values (0 for none). */
+export function mean(xs: readonly number[]): number {
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+}
+
+/** The population standard deviation (0 for fewer than two values). */
+export function stdev(xs: readonly number[]): number {
+  if (xs.length < 2) return 0;
+  const m = mean(xs);
+  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
+}
+
+/** The median (the mean of the two middle values for an even count; NaN for none). */
+export function median(xs: readonly number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+}
+
 export function round(v: number, digits = 2): number {
   const f = 10 ** digits;
   return Math.round(v * f) / f;
