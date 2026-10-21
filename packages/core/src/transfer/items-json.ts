@@ -9,14 +9,14 @@ import { commandLine } from '../storage/trust.js';
 import { slugify, uniqueId } from '../util/ids.js';
 import { LIBRARY_OF, SAFE_ID, isPlainId, parseJsonSafe, type BundleKindId } from './format.js';
 import { canonicalJson, importedName, mapStrings, replacePaths, type CommitWrite, type ItemAdapter, type JournalSink, type Listed } from './items.js';
+import { isRecord } from '@testpion/shared';
 
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** The incoming item's JSON object, or why it is not one. */
 function parseObject(data: Buffer): Record<string, unknown> | string {
   try {
     const v = parseJsonSafe(data.toString('utf8'));
-    return isObject(v) ? v : 'its content is not a JSON object';
+    return isRecord(v) ? v : 'its content is not a JSON object';
   } catch {
     return 'its content is not valid JSON';
   }
@@ -37,13 +37,13 @@ function freshTarget(existing: readonly Listed[], x: { id: string; name: string 
 /** The text of every `*Script` field of a JSON value that is not empty: scripts that will run when requests are sent. */
 function countScripts(v: unknown): number {
   if (Array.isArray(v)) return v.reduce<number>((n, x) => n + countScripts(x), 0);
-  if (!isObject(v)) return 0;
+  if (!isRecord(v)) return 0;
   return Object.entries(v).reduce((n, [k, x]) => n + (/script$/i.test(k) && typeof x === 'string' && x.trim() ? 1 : countScripts(x)), 0);
 }
 
 function countRequests(items: unknown): number {
   if (!Array.isArray(items)) return 0;
-  return items.reduce<number>((n, x) => n + (isObject(x) && Array.isArray(x.items) ? countRequests(x.items) : 1), 0);
+  return items.reduce<number>((n, x) => n + (isRecord(x) && Array.isArray(x.items) ? countRequests(x.items) : 1), 0);
 }
 
 /* ------------------------------------------------------------------ collections */
@@ -123,7 +123,7 @@ const environment: ItemAdapter = {
     if (typeof o === 'string') return o;
     if (!SAFE_ID.test(item.id)) return `the id "${item.id.slice(0, 40)}" cannot be used as a file name`;
     if (o.id !== item.id) return 'its id does not match the manifest';
-    if (!Array.isArray(o.variables) || !o.variables.every(isObject)) return 'its variables are not a list of objects';
+    if (!Array.isArray(o.variables) || !o.variables.every(isRecord)) return 'its variables are not a list of objects';
     return undefined;
   },
   review(item, data) {

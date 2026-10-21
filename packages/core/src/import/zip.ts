@@ -1,11 +1,14 @@
 import { inflateRawSync } from 'node:zlib';
 import { ApsError } from '../errors.js';
+import { dataStart, findEndOfDirectory, readRecord } from '../transfer/zip.js';
 
 /**
  * A small, defensive ZIP reader for imports (a Postman data export, a zipped Bruno or OpenCollection folder). It reads
  * the central directory, inflates entries (stored or deflate) and refuses what a hostile archive does: too many entries,
  * too much data, an absurd compression ratio (a zip bomb), entry names that leave the archive (`../x`, absolute paths,
- * drive letters, NUL bytes) and encrypted or multi-disk archives. Directories and symlinks are skipped.
+ * drive letters, NUL bytes) and encrypted or multi-disk archives. Directories and symlinks are skipped. The structure
+ * (the end-of-directory record, the records, the local headers) is read by the one parser of transfer/zip.ts, the hardened
+ * reader of bundles; this file keeps the import's own limits, name rules and messages.
  */
 
 export interface ZipEntry {
@@ -44,13 +47,7 @@ export function safeEntryPath(name: string): string | undefined {
 
 export function readZip(buf: Buffer, limits: Partial<ZipLimits> = {}): ZipEntry[] {
   const lim = { ...DEFAULT_ZIP_LIMITS, ...limits };
-  // end of central directory: the last 22+ bytes
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--)
-    if (buf.readUInt32LE(i) === 0x06054b50) {
-      eocd = i;
-      break;
-    }
+  const eocd = findEndOfDirectory(buf);
   if (eocd < 0) throw bad('it is not a ZIP file (or is damaged)');
   const total = buf.readUInt16LE(eocd + 10);
   const cdSize = buf.readUInt32LE(eocd + 12);
@@ -60,28 +57,21 @@ export function readZip(buf: Buffer, limits: Partial<ZipLimits> = {}): ZipEntry[
   const out: ZipEntry[] = [];
   let bytes = 0;
   for (let n = 0; n < total; n++) {
-    if (off + 46 > buf.length || buf.readUInt32LE(off) !== 0x02014b50) throw bad('its directory is damaged');
-    const flags = buf.readUInt16LE(off + 8);
-    const method = buf.readUInt16LE(off + 10);
-    const csize = buf.readUInt32LE(off + 20);
-    const usize = buf.readUInt32LE(off + 24);
-    const nameLen = buf.readUInt16LE(off + 28);
-    const extraLen = buf.readUInt16LE(off + 30);
-    const commentLen = buf.readUInt16LE(off + 32);
-    const attrs = buf.readUInt32LE(off + 38);
-    const local = buf.readUInt32LE(off + 42);
-    const name = buf.subarray(off + 46, off + 46 + nameLen).toString(flags & 0x800 ? 'utf8' : 'latin1');
-    off += 46 + nameLen + extraLen + commentLen;
+    const rec = readRecord(buf, off);
+    if (!rec) throw bad('its directory is damaged');
+    const { flags, method, csize, usize } = rec;
+    const name = rec.nameBytes.toString(flags & 0x800 ? 'utf8' : 'latin1');
+    off = rec.next;
     const path = safeEntryPath(name);
     // a symlink (Unix mode 0120000 in the high attribute bits) is not followed
-    if (!path || ((attrs >>> 16) & 0xf000) === 0xa000) continue;
+    if (!path || ((rec.external >>> 16) & 0xf000) === 0xa000) continue;
     if (flags & 1) throw bad('it is encrypted');
     if (usize > lim.maxEntryBytes) throw bad(`the entry "${path}" is larger than ${Math.round(lim.maxEntryBytes / 1048576)} MB`);
     if (csize > 0 && usize / csize > lim.maxRatio) throw bad(`the entry "${path}" compresses ${Math.round(usize / csize)} times (a zip bomb?)`);
     bytes += usize;
     if (bytes > lim.maxBytes) throw bad(`it holds more than ${Math.round(lim.maxBytes / 1048576)} MB`);
-    if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) throw bad('its directory is damaged');
-    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const start = dataStart(buf, rec);
+    if (start < 0) throw bad('its directory is damaged');
     const raw = buf.subarray(start, start + csize);
     let data: Buffer;
     if (method === 0) data = Buffer.from(raw);

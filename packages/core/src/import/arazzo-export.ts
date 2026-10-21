@@ -5,6 +5,7 @@ import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { listSpecs } from '../openapi/spec-files.js';
 import { ARAZZO_SOURCE_MARK, ARAZZO_WORKFLOW_MARK, jsonPathToPointer, readSourceFile, type ArazzoSource, type ArazzoJson } from './arazzo.js';
+import { isRecord } from '@testpion/shared';
 
 /**
  * A flow file → an Arazzo 1.0 document (the reverse of arazzo.ts). Each HTTP step becomes a step whose operation is
@@ -53,7 +54,6 @@ export function arazzoMarks(text: string): { workflowId?: string; sources: Arazz
   return { workflowId, sources };
 }
 
-const isRecord = (v: unknown): v is ArazzoJson => !!v && typeof v === 'object' && !Array.isArray(v);
 const asList = (v: unknown): string[] => (v === undefined || v === null ? [] : Array.isArray(v) ? v.map(String) : [String(v)]);
 /** key/value maps or lists of { key, value } → entries. */
 const kv = (v: unknown): Array<[string, unknown]> =>

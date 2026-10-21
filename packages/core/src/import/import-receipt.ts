@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { sha1Hex } from '../util/hash.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Collection, Environment } from '../model/types.js';
@@ -46,7 +46,7 @@ export interface ImportReceipt extends Created {
 const dir = (store: WorkspaceStore) => join(store.root, '.local', 'import-reports');
 const KEEP = 30;
 
-const hashOf = (text: string) => createHash('sha1').update(text).digest('hex');
+const hashOf = sha1Hex;
 
 /** The result with its receipt (written to `.local/import-reports/`) and a report (built from the notes for formats that have no document, like Arazzo). */
 export function withReceipt(store: WorkspaceStore, out: WorkspaceImportResult, text: string, made?: Created): WorkspaceImportResult {

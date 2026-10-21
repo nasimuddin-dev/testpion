@@ -1,5 +1,6 @@
 /** How the MCP tools of a workspace's servers have been called from the app: calls, failures and timing per tool. */
 import type { WorkspaceStore } from './workspace.js';
+import { percentile } from '../util/stats.js';
 
 export interface McpToolUsage {
   /** Server name (as when the call was made). */
@@ -30,7 +31,10 @@ export function mcpToolUsage(store: WorkspaceStore, opts: { serverId?: string; l
     if (typeof h.durationMs === 'number') u.ms.push(h.durationMs);
     if (h.timestamp > u.lastAt) u.lastAt = h.timestamp;
   }
-  const pct = (sorted: number[], p: number) => (sorted.length ? Math.round(sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)]!) : undefined);
+  const pct = (sorted: number[], p: number) => {
+    const v = percentile(sorted, p);
+    return v === undefined ? undefined : Math.round(v);
+  };
   return [...by.values()]
     .map(({ ms, ...u }) => {
       const s = ms.sort((a, b) => a - b);

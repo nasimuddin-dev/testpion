@@ -1,3 +1,4 @@
+import { escapeRegex } from '@testpion/shared';
 import { DEFAULT_REDACT_FIELDS } from '../model/types.js';
 import { isSecretReference, matchSecretKey, replaceSecretValues, secretKeyFields, type SecretKeyFields } from '../security/secrets.js';
 
@@ -103,10 +104,7 @@ export class Redactor {
   }
 }
 
-/** A string as a literal for a RegExp source: every special character escaped. */
-export function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+export { escapeRegex } from '@testpion/shared';
 
 /* ------------------------------------------------------------ pattern detectors (AI context) */
 

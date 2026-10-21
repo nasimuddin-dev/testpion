@@ -16,6 +16,7 @@ import { atomicWrite } from './fsutil.js';
 import { adoptLooseRequests } from './loose-requests.js';
 import { SecretStripper, type ReplacedSecret } from './bundle-secrets.js';
 import { SCRIPT_PACKAGE_NAME, migrateWorkspace, type TestFileNode, type WorkspaceManager, type WorkspaceStore } from './workspace.js';
+import { isRecord } from '@testpion/shared';
 
 /** Size limits of an export, in one place: a file over `fileBytes`, or past `totalBytes` in all, is left out with a note. */
 export const BUNDLE_LIMITS = { fileBytes: 10 * 1024 * 1024, totalBytes: 50 * 1024 * 1024 } as const;
@@ -277,7 +278,6 @@ function writeBundleFile(store: WorkspaceStore, asked: unknown, content: unknown
   return true;
 }
 
-const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * The export's shape, checked before anything is written: each section is the type it must be (a list of objects, an
@@ -288,14 +288,14 @@ function checkBundleShape(bundle: WorkspaceBundle): void {
   const bad = (what: string) => {
     throw new ApsError('ValidationError', `Not a valid TestPion workspace export: ${what}`, { suggestions: ['Export the workspace again, or import its collections one by one'] });
   };
-  if (!isObject(b.workspace)) bad('"workspace" is not an object');
+  if (!isRecord(b.workspace)) bad('"workspace" is not an object');
   for (const k of ['collections', 'environments', 'providers', 'mcpServers'] as const) {
     if (b[k] === undefined || b[k] === null) continue;
     if (!Array.isArray(b[k])) bad(`"${k}" is not a list`);
-    if (!(b[k] as unknown[]).every(isObject)) bad(`"${k}" holds an entry that is not an object`);
+    if (!(b[k] as unknown[]).every(isRecord)) bad(`"${k}" holds an entry that is not an object`);
   }
   for (const k of ['files', 'notes', 'replaced'] as const) if (b[k] !== undefined && b[k] !== null && !Array.isArray(b[k])) bad(`"${k}" is not a list`);
-  for (const k of ['tests', 'library', 'packages'] as const) if (b[k] !== undefined && b[k] !== null && !isObject(b[k])) bad(`"${k}" is not an object`);
+  for (const k of ['tests', 'library', 'packages'] as const) if (b[k] !== undefined && b[k] !== null && !isRecord(b[k])) bad(`"${k}" is not an object`);
 }
 
 /** Import an export as a new workspace (its name gets a number when it is taken, unless `name` is given). */
@@ -335,7 +335,7 @@ function fillImportedWorkspace(store: WorkspaceStore, bundle: WorkspaceBundle, w
   // skipped is noted here, from what it did.
   const notes: string[] = [];
   for (const [kind, lib] of Object.entries(bundle.library ?? {})) {
-    if (!isObject(lib)) {
+    if (!isRecord(lib)) {
       notes.push(`Skipped the saved items of kind "${kind}": not an object.`);
       continue;
     }
@@ -347,7 +347,7 @@ function fillImportedWorkspace(store: WorkspaceStore, bundle: WorkspaceBundle, w
   for (const [rel, content] of Object.entries(bundle.tests ?? {})) writeBundleFile(store, `tests/${rel}`, content, 'utf8', ['tests'], notes);
   let files = 0;
   for (const f of bundle.files ?? []) {
-    if (!isObject(f)) notes.push('Skipped an entry of "files" that is not an object.');
+    if (!isRecord(f)) notes.push('Skipped an entry of "files" that is not an object.');
     else if (writeBundleFile(store, f.path, f.content, f.encoding, BUNDLE_FILE_FOLDERS, notes)) files++;
   }
   return { store, notes, valuesNeeded: valuesNeededOf(bundle), files };

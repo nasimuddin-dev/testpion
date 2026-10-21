@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { sha1Hex } from '../util/hash.js';
 import { join } from 'node:path';
 import type { Collection, CollectionFolder, CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -88,7 +88,7 @@ function stable(v: unknown): unknown {
   }
   return v;
 }
-const hashOf = (v: unknown) => createHash('sha1').update(JSON.stringify(stable(v))).digest('hex').slice(0, 16);
+const hashOf = (v: unknown) => sha1Hex(JSON.stringify(stable(v))).slice(0, 16);
 const rootOf = (c: Collection) => ({ description: c.description, variables: c.variables, auth: c.auth, headers: c.headers, settings: c.settings, preRequestScript: c.preRequestScript, testScript: c.testScript });
 
 /** The keys of an imported collection's nodes by node id (the source's own id, else the path of names; repeats get #2, #3 …). */

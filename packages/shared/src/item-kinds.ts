@@ -9,6 +9,7 @@
  * shown in docs and reports) or `{ planned: '0.5x' }` (not yet; the completeness test fails once that release is
  * reached). A missing capability is a compile error.
  */
+import { escapeRegex } from './guards.js';
 import type { ItemKind, ItemRef, RequestProtocol } from './item-ref.js';
 import { KIND_LIST } from './item-kind-list.js';
 
@@ -203,7 +204,6 @@ export function libraryOfPath(path: string, opts: { raw?: boolean } = {}): strin
   return /^library\/([a-z0-9-]+)\.json$/.exec(p)?.[1];
 }
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** A storage glob (`**\/*.{yaml,yml}`, `*.js`, `**\/*`) as a regular expression over a path inside the kind's folder. */
 function globRegExp(glob: string): RegExp {
@@ -219,10 +219,10 @@ function globRegExp(glob: string): RegExp {
       re += `(?:${glob
         .slice(i + 1, end)
         .split(',')
-        .map(escapeRe)
+        .map(escapeRegex)
         .join('|')})`;
       i = end;
-    } else re += escapeRe(c);
+    } else re += escapeRegex(c);
   }
   return new RegExp(`^${re}$`, 'i');
 }

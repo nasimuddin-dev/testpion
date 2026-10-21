@@ -6,7 +6,7 @@
  */
 import { SecretStripper } from '../storage/bundle-secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { itemKey, type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
+import { type BundleItem, type BundleKindId, type BundleManifest, type ParsedBundle } from './format.js';
 import { fingerprint, type Listed, type Target } from './items.js';
 import { adapter } from './registry.js';
 
