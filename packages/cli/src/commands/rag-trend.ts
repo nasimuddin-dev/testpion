@@ -32,7 +32,12 @@ export function registerRagTrendCommands(rag: Command): void {
           throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
         }
         if (!t.points.length) throw new CliError(`No scored runs of "${t.evaluation ?? evaluation}" yet: \`testpion rag run\` makes one.`, EXIT.CONFIG_ERROR);
-        const text = o.json || o.format === 'json' ? `${JSON.stringify(t, null, 2)}\n` : o.format === 'csv' ? trendCsv(t.points) : undefined;
+        if (o.json) {
+          printJson(t);
+          if (o.failOnDrop && t.findings.some((f) => f.worse)) process.exitCode = EXIT.TEST_FAILURE;
+          return;
+        }
+        const text = o.format === 'json' ? `${JSON.stringify(t, null, 2)}\n` : o.format === 'csv' ? trendCsv(t.points) : undefined;
         if (o.out) {
           writeFileSync(resolve(o.out), text ?? `${trendTable(t.points)}\n`);
           console.log(`${green('Wrote')} ${t.points.length} runs → ${o.out}`);
