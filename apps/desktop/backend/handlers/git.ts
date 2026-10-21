@@ -29,7 +29,6 @@ import {
   gitPull,
   gitPush,
   gitRemoteUrl,
-  gitShow,
   gitStage,
   gitStatus,
   gitSwitch,
@@ -116,8 +115,6 @@ export function gitHandlers(be: Backend): Handlers {
       return { ...(st as object), files, changes: files.length ? await describeGitChanges(ws(), files) : [] };
     },
     'git.diff': ({ path, staged }: { path: string; staged?: boolean }) => gitDiff(ws(), path, staged),
-    /** A file as it is in a commit (default HEAD). */
-    'git.show': ({ path, rev }: { path: string; rev?: string }) => gitShow(ws(), path, rev),
     'git.stage': async ({ paths }: { paths: string[] }) => changed(await gitStage(ws(), paths)),
     'git.unstage': async ({ paths }: { paths: string[] }) => changed(await gitUnstage(ws(), paths)),
     /** Throw away changes to files; the answer's `undoId` puts them back (git.undo), the new files that were deleted too. */

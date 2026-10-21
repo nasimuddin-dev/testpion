@@ -12,8 +12,6 @@ let current: string | undefined;
 const before = new Set<Hook>();
 const after = new Set<Hook>();
 
-export const draftScope = (): string | undefined => current;
-
 /** `key` inside the current workspace's scope, or undefined while no workspace is open. */
 export const scopedKey = (key: string): string | undefined => (current ? `ws:${current}:${key}` : undefined);
 

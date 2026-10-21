@@ -5,9 +5,7 @@ import {
   disallowSecret,
   findLargeFiles,
   fixGitSetup,
-  listSharedSessions,
   planCodeowners,
-  readSecretsAllow,
   shareSession,
   trackByReference,
   trackWithLfs,
@@ -72,7 +70,6 @@ export function gitSetupHandlers(be: Backend): Handlers {
       be.host.emit('data.changed', { method: 'git' });
       return r;
     },
-    'git.sharedSessions': () => listSharedSessions(be.ws),
     /** A starter CODEOWNERS (the text, and whether it can be written here); `git.codeownersWrite` writes it, never over one that exists. */
     'git.codeownersPlan': ({ owner }: { owner?: string }) => planCodeowners(ws(), { owner }),
     'git.codeownersWrite': async ({ owner }: { owner?: string }) => {
@@ -91,6 +88,5 @@ export function gitSetupHandlers(be: Backend): Handlers {
       be.host.emit('git.changed', {});
       return r;
     },
-    'git.allowedSecrets': () => readSecretsAllow(ws()),
   };
 }

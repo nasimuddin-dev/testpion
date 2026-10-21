@@ -74,6 +74,3 @@ export function useEnvironments(): Environment[] {
   }, []);
   return list;
 }
-
-/** The list as it is now, without subscribing (event handlers). */
-export const currentEnvironments = () => useStore.getState().list;

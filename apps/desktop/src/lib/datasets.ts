@@ -1,7 +1,5 @@
 /** What the app says about a dataset file (datasets/ in the workspace): its badge in lists and the YAML a test needs. */
 
-export type DatasetFormat = 'csv' | 'json' | 'jsonl' | 'markdown' | 'sqlite';
-
 /** The short badge of a dataset's format, as the sidebar and the tab show it. */
 export function datasetBadge(format: string): { text: string; cls: string } {
   switch (format) {

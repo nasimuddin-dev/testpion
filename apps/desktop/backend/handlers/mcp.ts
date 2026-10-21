@@ -23,7 +23,7 @@ import {
   removeItem,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
-import { commandLine, forgetTrustedCommands, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
+import { commandLine, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
 
 /** Requests an inspected server sent to the client (elicitation, sampling) that wait for the user. */
 interface PendingClientRequest {
@@ -76,7 +76,6 @@ export function mcpHandlers(be: Backend): Handlers {
     },
     /** Programs this workspace may start on this computer (stdio MCP servers the user allowed). */
     'mcp.trusted': () => trustedCommands(be.ws),
-    'mcp.forgetTrusted': () => forgetTrustedCommands(be.ws),
     'mcp.connect': async ({ serverId, environment, trust }: { serverId: string; environment?: string; trust?: 'once' | 'always' }) => {
       await be.mcpSessions.get(serverId)?.close();
       const cfg = be.ws.getMcpServers().find((s) => s.id === serverId);

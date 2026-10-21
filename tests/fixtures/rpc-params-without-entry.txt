@@ -9,7 +9,6 @@ ai.cancel
 ai.generateRequest
 ai.generateTests
 ai.providers
-ai.tasks
 ai.triageRun
 ai.usage
 app.clientError
@@ -22,8 +21,6 @@ baselines.list
 certificates.list
 ci.config
 ci.save
-col.importFile
-col.importUrl
 col.list
 col.pickDataFile
 col.rerunFailed
@@ -32,7 +29,6 @@ console.recent
 cookies.list
 currentValues.get
 currentValues.reset
-currentValues.summary
 datasets.delete
 datasets.duplicate
 datasets.generate
@@ -59,7 +55,6 @@ debug.moveRule
 debug.openBrowser
 debug.openTerminal
 debug.resetRuleHits
-debug.resumeAll
 debug.resumeBreakpoint
 debug.ruleCheck
 debug.rulePresets
@@ -79,7 +74,6 @@ env.reorder
 feedback.context
 feedback.save
 git.abortMerge
-git.allowedSecrets
 git.autoFetch
 git.branches
 git.changes
@@ -88,21 +82,17 @@ git.commitDetail
 git.commitDiff
 git.conflictDetail
 git.fetch
-git.fileLog
 git.itemDiff
 git.log
 git.proposal
 git.pull
 git.pullRequestUrl
 git.push
-git.sharedSessions
-git.show
 git.stagedScan
 git.stashList
 git.status
 git.suggestMessage
 git.sync
-git.undoList
 gql.buildOperation
 gql.mock.status
 gql.mock.stop
@@ -131,7 +121,6 @@ mcp.complete
 mcp.connect
 mcp.disconnect
 mcp.events
-mcp.forgetTrusted
 mcp.mock.save
 mcp.ping
 mcp.prompt
@@ -158,7 +147,6 @@ openapi.fuzzStop
 openapi.generateTests
 openapi.spec.get
 openapi.specs
-output.formats
 packages.get
 packages.list
 record.clear
@@ -179,7 +167,6 @@ settings.get
 settings.proxyInfo
 settings.save
 settings.setProxyPassword
-settings.tlsInfo
 sio.close
 sio.emit
 stats.activity

@@ -58,21 +58,6 @@ export async function saveAsTest(target: SaveTestTarget): Promise<string | undef
   }
 }
 
-/** The menu item, the same in every menu (its place: the test group, after run). `target` is read when it is chosen. */
-export function saveAsTestItem(target: SaveTestTarget | (() => SaveTestTarget | undefined), opts: { disabled?: boolean; separator?: boolean } = {}): MenuItem {
-  const peek = typeof target === 'function' ? undefined : target;
-  return {
-    label: saveAsTestLabel({ ref: peek && 'ref' in peek ? peek.ref : undefined }),
-    icon: createElement(FileCheck2, { size: 14 }),
-    disabled: opts.disabled,
-    separator: opts.separator,
-    onSelect: () => {
-      const t = typeof target === 'function' ? target() : target;
-      if (t) void saveAsTest(t);
-    },
-  };
-}
-
 /** The same item for an editor that saves what it holds itself (its tab menu, its breadcrumb ⋯). */
 export function saveAsTestMenuItem(run: (() => void) | undefined, opts: { separator?: boolean } = {}): MenuItem {
   return { label: saveAsTestLabel({}), icon: createElement(FileCheck2, { size: 14 }), disabled: !run, separator: opts.separator, onSelect: () => run?.() };

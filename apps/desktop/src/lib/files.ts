@@ -119,30 +119,6 @@ export function pickBinaryFile(accept: string): Promise<{ name: string; base64: 
   });
 }
 
-/**
- * Pick a folder and read the files in it that `keep` accepts (by path relative to the folder), e.g.
- * the .bru files of a Bruno collection. Works in the desktop app and in the browser / cloud alike.
- */
-export function pickFolderFiles(keep: (path: string) => boolean, maxBytes = 50 * 1024 * 1024): Promise<{ name: string; files: Array<{ path: string; text: string }> } | null> {
-  return new Promise((resolve, reject) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.webkitdirectory = true;
-    input.onchange = async () => {
-      const list = [...(input.files ?? [])];
-      if (!list.length) return resolve(null);
-      // webkitRelativePath is "<folder>/<path inside>"
-      const rel = (f: File) => f.webkitRelativePath.split('/').slice(1).join('/');
-      const name = list[0]!.webkitRelativePath.split('/')[0] ?? 'Folder';
-      const wanted = list.filter((f) => !/(^|\/)(node_modules|\.[^/]+)\//.test(rel(f)) && keep(rel(f)));
-      if (wanted.reduce((n, f) => n + f.size, 0) > maxBytes) return reject(new Error(`The folder's files are larger than ${Math.round(maxBytes / 1024 / 1024)} MB`));
-      resolve({ name, files: await Promise.all(wanted.map(async (f) => ({ path: rel(f), text: await f.text() }))) });
-    };
-    input.addEventListener('cancel', () => resolve(null));
-    input.click();
-  });
-}
-
 /** Whether this host has native open/save dialogs (desktop app); false in the browser / cloud. */
 export function hasNativeDialogs(): boolean {
   return !!(useApp.getState().info as { nativeDialogs?: boolean } | undefined)?.nativeDialogs;

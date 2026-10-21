@@ -51,13 +51,3 @@ export async function pickAndShareSession(): Promise<void> {
     toastError(e);
   }
 }
-
-/** Stop sharing: the tracked copy is deleted (the saved session stays). */
-export async function unshareDebuggerSession(name: string): Promise<void> {
-  try {
-    const r = await call<{ removed: boolean }>('git.unshareSession', { name });
-    useApp.getState().toast(r.removed ? `Stopped sharing ${name}: commit the removal` : `${name} is not shared`, 'info');
-  } catch (e) {
-    toastError(e);
-  }
-}

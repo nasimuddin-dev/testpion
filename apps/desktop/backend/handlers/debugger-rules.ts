@@ -272,10 +272,6 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       bp.resolve(abort ? { abort: true } : edits);
       return { held: state.breakpoints?.size ?? 0 };
     },
-    'debug.resumeAll': () => {
-      for (const bp of [...(state.breakpoints?.values() ?? [])]) bp.resolve(undefined);
-      return { held: 0 };
-    },
 
     /* ---- filter presets of the traffic grid */
 

@@ -2,10 +2,8 @@
 import {
   describeItemDiff,
   discardItem,
-  gitLog,
   itemBlame,
   itemHistory,
-  listJournal,
   resolveItemTarget,
   restoreItemVersion,
   stageItem,
@@ -60,9 +58,6 @@ export function gitItemHandlers(be: Backend): Handlers {
       if (conflict) await restoreConflict(ws(), conflict);
       return entry;
     },
-    'git.undoList': () => listJournal(ws()),
-    /** The workspace's recent commits touching one file (the timeline of a whole-file item). */
-    'git.fileLog': ({ file, limit }: { file: string; limit?: number }) => gitLog(ws(), { path: file, limit }),
     'git.stashList': () => stashList(ws()),
     'git.stashPush': async ({ name, dryRun }: { name: string; dryRun?: boolean }) => (dryRun ? stashPush(ws(), name, { dryRun: true }) : rewritten(() => stashPush(ws(), name))),
     'git.stashShow': (p: { index?: number; hash?: string }) => stashShow(ws(), p),

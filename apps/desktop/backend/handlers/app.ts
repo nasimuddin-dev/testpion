@@ -8,7 +8,6 @@ import {
   normalizeUiPrefs,
   getProxySettings,
   describeCertificates,
-  getTlsTrust,
   clearTokenCache,
   FEEDBACK_EMAIL,
   samePath,
@@ -68,7 +67,6 @@ export function appHandlers(be: Backend): Handlers {
     },
     /** What a PEM bundle holds (subject, issuer, expiry), to check extra CA certificates before saving them. */
     'settings.describeCertificates': ({ pem }: { pem: string }) => describeCertificates(pem),
-    'settings.tlsInfo': () => getTlsTrust(),
     'settings.proxyInfo': () => {
       // proxy URLs from the environment can carry credentials: never send those to the UI
       const clean = (v?: string) => v?.replace(/\/\/[^/@]*@/, '//•••@');

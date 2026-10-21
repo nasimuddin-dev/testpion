@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { importFileFilters, copyFolderEntry, moveFolderEntry, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, fetchImportText, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
+import { copyFolderEntry, moveFolderEntry, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -224,21 +224,11 @@ export function collectionsHandlers(be: Backend): Handlers {
       });
       return { report, sources, markdown: apiCoverageMarkdown(report) };
     },
-    /** Import from a link: an OpenAPI URL, a raw GitHub file, a Postman API link … (downloaded, then imported as text). */
-    'col.importUrl': async ({ url, keepPm }: { url: string; keepPm?: boolean }) => {
-      const f = await fetchImportText(url);
-      return { ...((await be.handlers['col.import']!({ text: f.text, fileName: f.fileName, keepPm })) as object), url: f.url };
-    },
     /** A Bruno collection folder, as the picked files (path inside the folder + text): bruno.json and .bru files. */
     'col.importBrunoFolder': ({ name, files }: { name?: string; files: Array<{ path: string; text: string }> }) => {
       if (!files?.some((f) => f.path.endsWith('.bru'))) throw new ApsError('ValidationError', 'That folder has no .bru files', { suggestions: ['Choose the folder that holds bruno.json.'] });
       const exported = bruFilesToBrunoExport(files, files.some((f) => f.path === 'bruno.json') ? undefined : name);
       return be.handlers['col.import']!({ text: JSON.stringify(exported), fileName: name });
-    },
-    'col.importFile': async ({ keepPm }: { keepPm?: boolean } = {}) => {
-      const f = await be.host.openDialog?.({ filters: importFileFilters('API definitions, collections, GraphQL schemas, .env and .http files') });
-      if (!f) return null;
-      return be.handlers['col.import']!({ text: readFileSync(f, 'utf8'), fileName: basename(f), keepPm });
     },
     'col.run': (p: CollectionRunParams) => be.startCollectionRun(p),
     /** Run again only the requests that failed in a collection run (one iteration). */
