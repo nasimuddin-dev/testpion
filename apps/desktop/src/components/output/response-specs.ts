@@ -43,6 +43,14 @@ export function responseBaseName(r: { url: string; status?: number | string }, m
   return outputFileName({ method, name, status: r.status, ext: '' });
 }
 
+function jsonOf(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 const header = (r: HttpResponseData, name: string) => r.headers.find(([k]) => k.toLowerCase() === name)?.[1];
 
 /** The body's formats: raw bytes (the server's file name when it gives one), pretty JSON, the table, HTML, XML, HAR. */
@@ -53,11 +61,19 @@ export function bodyFormats(r: HttpResponseData, ctx: ResponseContext): OutputFo
   // the server's name is kept, but never as something a double-click runs (report.cmd saves as report.cmd.txt)
   const rawName = disposition ? safeDownloadName(/\.\w{1,16}$/.test(disposition) ? disposition : `${disposition}.${ext}`, r.contentType) : `${base}.${ext}`;
   const spooled = r.payloadPath ? { kind: 'response' as const, payloadPath: r.payloadPath } : undefined;
-  const isJson = r.json !== undefined || (/json/i.test(r.contentType) && !!spooled);
+  // the body as the Pretty tab shows it (JSON of any content type indented, XML and HTML laid out); only when it differs from what was received
+  const pretty = !r.truncated && ctx.prettyText !== undefined && ctx.prettyText.trim() !== r.bodyPreview.trim() ? ctx.prettyText : undefined;
+  const prettyJson = pretty !== undefined && /^[[{]/.test(pretty.trimStart()) && jsonOf(pretty) !== undefined;
+  const isJson = r.json !== undefined || (/json/i.test(r.contentType) && !!spooled) || prettyJson;
   const isXml = /xml/i.test(r.contentType);
   const isHtml = /html/i.test(r.contentType);
   const out: OutputFormatSpec[] = [];
-  if (isJson)
+  if (isJson && r.json === undefined && !spooled && pretty !== undefined)
+    out.push(
+      { key: 'json', format: 'json', label: 'JSON (pretty)', default: true, build: () => pretty },
+      { key: 'json-min', format: 'json-min', build: () => jsonMin(jsonOf(pretty)) },
+    );
+  else if (isJson)
     out.push(
       {
         key: 'json',
@@ -80,9 +96,17 @@ export function bodyFormats(r: HttpResponseData, ctx: ResponseContext): OutputFo
       { key: 'csv', format: 'csv', label: 'Table as CSV', build: () => objectsToCsv(ctx.table!.rows) },
       { key: 'tsv', format: 'tsv', label: 'Table as TSV', build: () => objectsToTsv(ctx.table!.rows) },
     );
-  if (isHtml) out.push({ key: 'html', format: 'html', label: 'HTML page', ...(spooled ? { source: { ...spooled, part: 'body' as const } } : { build: () => r.bodyPreview }) });
+  if (isHtml) out.push({ key: 'html', format: 'html', label: 'HTML page (as received)', ...(spooled ? { source: { ...spooled, part: 'body' as const } } : { build: () => r.bodyPreview }) });
   if (isXml) out.push({ key: 'xml', format: 'xml', label: 'XML (pretty)', build: () => ctx.prettyText ?? r.bodyPreview });
   if (!isJson && !isXml && !isHtml && !/^<binary /.test(r.bodyPreview)) out.push({ key: 'text', format: 'text', build: () => ctx.prettyText ?? r.bodyPreview });
+  // a laid-out XML / HTML / text body is what a click saves, as the Pretty tab shows it
+  if (pretty !== undefined && !isJson) {
+    const key = isXml ? 'xml' : isHtml ? 'html' : 'text';
+    const i = out.findIndex((f) => f.key === key);
+    if (isHtml) out.unshift({ key: 'html-pretty', format: 'html', label: 'HTML (formatted)', default: true, build: () => pretty });
+    else if (i > 0) out.unshift({ ...out.splice(i, 1)[0]!, default: true });
+    else if (i === 0) out[0] = { ...out[0]!, default: true };
+  }
   out.push({ key: 'har', format: 'har', label: 'HAR (request + response)', build: () => jsonPretty(harOf(r, ctx)) });
   return out;
 }

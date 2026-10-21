@@ -119,6 +119,7 @@ const SURFACES = [
   s('debugger.session', 'HTTP Debugger session', ['har', 'json', 'csv'], 'redacted-default', { cli: 'debug', capturedRedacted: true, sources: ['debugger'] }),
   // history, traces and the rest (release B)
   s('history', 'History', ['har', 'csv', 'json'], 'redacted-default', { cli: 'history list', capturedRedacted: true, sources: ['history'] }),
+  s('trace.span', 'Trace span (payload, attributes, input, output, events)', ['json'], 'redacted-default', { capturedRedacted: true }),
   s('traces', 'Traces', ['json'], 'redacted-default', { cli: 'output', capturedRedacted: true, sources: ['traces'] }),
   s('debugger.exchange', 'Debugger exchange', ['text', 'har', 'raw'], 'redacted-default', { capturedRedacted: true }),
   s('mcp.resource', 'MCP resource', ['raw'], 'raw-notice'),

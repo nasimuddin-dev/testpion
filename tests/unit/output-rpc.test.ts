@@ -406,6 +406,7 @@ describe('output.save: the secrets policy of every surface', () => {
       'response.trace',
       'run.results',
       'settings.diagnostics',
+      'trace.span',
       'traces',
     ]);
     for (const id of captured) expect(OUTPUT_SURFACES.find((s) => s.id === id)!.redaction).toBe('redacted-default');

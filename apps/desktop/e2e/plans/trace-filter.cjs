@@ -42,8 +42,16 @@ const steps = [
      const inside = rows().filter((r) => /"errors"|"message"/.test(r.textContent)).length;
      return 'badge: ' + badge + ' | rows inside the text: ' + inside;`,
   ),
+  // the span tabs carry the same Copy / Download control as every other output
+  step(
+    'span-tabs-have-the-download-control',
+    `const out = [];
+     for (const t of ['Payload', 'Attributes', 'Input', 'Output', 'Events']) { tab(t)?.click(); await __t.sleep(300); out.push(t + ':' + vis('main [data-output="trace.span"] [data-output-actions] button[aria-label*="ownload"]').length); }
+     return out.join(' ');`,
+  ),
 ];
 module.exports = withExpect(steps, {
+  'span-tabs-have-the-download-control': /^Payload:[1-9] Attributes:[1-9] Input:[1-9] Output:[1-9] Events:[1-9]$/,
   'json-in-a-text-value-opens-as-a-tree': /^badge: true \| rows inside the text: [1-9]/,
   'open-a-trace': /^filters: 2$/,
   'try-0': /1 match .*"Cannot query field "patient""/,

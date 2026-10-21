@@ -4,6 +4,9 @@ import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
 import { Badge, cx, Segmented, Split, Tabs } from './ui';
+import { jsonPretty, outputFileName } from '@testpion/shared';
+import { OutputActions } from './output/OutputFrame';
+import type { OutputSpec } from './output/output-core';
 import { JsonTree, RawView } from './JsonView';
 import { useCopied } from '../lib/clipboard';
 import { RelatedRefs } from './RefLink';
@@ -45,6 +48,17 @@ export function spanRows(trace: Trace): Array<{ span: Span; depth: number }> {
   };
   walk(undefined, 0);
   return out;
+}
+
+/** What the span's tab shows, as a download: the tab's JSON, or the input and output on the Payload tab. */
+function spanSpec(trace: Trace, span: Span, tab: 'payload' | 'attributes' | 'input' | 'output' | 'events'): OutputSpec {
+  const data = tab === 'payload' ? { input: span.input ?? null, output: span.output ?? null } : tab === 'attributes' ? span.attributes : tab === 'input' ? span.input ?? null : tab === 'output' ? span.output ?? null : span.events ?? [];
+  return {
+    id: 'trace.span',
+    what: `span ${tab}`,
+    name: outputFileName({ name: `${trace.name}-${span.name}-${tab}`, ext: '' }),
+    formats: [{ format: 'json', build: () => jsonPretty(data) }],
+  };
 }
 
 /** Waterfall view of a normalised trace (spans for HTTP, GraphQL, LLM, tool, MCP and evaluation). */
@@ -95,7 +109,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
             );
           })}
         </div>
-        <div className="h-full flex flex-col min-h-0">
+        <div className="h-full flex flex-col min-h-0" data-output="trace.span">
           {span ? (
             <>
               <Tabs
@@ -109,9 +123,12 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                   { id: 'events', label: 'Events', badge: span.events?.length },
                 ]}
                 right={
-                  <span className="text-xs text-muted pr-2">
-                    {span.kind} · {formatMs(span.durationMs)} {span.error && <span className="text-bad">· {span.error}</span>}
-                  </span>
+                  <>
+                    <span className="text-xs text-muted pr-2">
+                      {span.kind} · {formatMs(span.durationMs)} {span.error && <span className="text-bad">· {span.error}</span>}
+                    </span>
+                    <OutputActions spec={spanSpec(trace, span, tab)} />
+                  </>
                 }
               />
               <div className="flex-1 min-h-0">
