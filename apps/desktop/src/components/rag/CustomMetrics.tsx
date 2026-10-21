@@ -1,8 +1,8 @@
-import { FlaskConical, Play, Plus, Trash2 } from 'lucide-react';
+import { Copy, FlaskConical, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CUSTOM_METRIC_KINDS, type CustomMetricKind } from '@testpion/shared';
 import { call } from '../../api';
-import { confirmAction, toastError, useApp } from '../../store';
+import { confirmAction, promptText, toastError, useApp } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
 import { useDebounced } from '../ui';
 import { AiAction } from '../ai/AiAction';
@@ -141,6 +141,22 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
       toastError(e);
     }
   };
+  // a copy under another id (the file name is the id evaluations name, so a rename is a copy and a delete)
+  const saveAs = async () => {
+    if (text === undefined) return;
+    const next = (await promptText('Save as', { message: 'Id of the copy (lower-case letters, digits, hyphens)', value: `${id}-copy`, okLabel: 'Save a copy' }))?.trim().toLowerCase();
+    if (!next || next === id) return;
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(next)) return void toastError(new Error(`"${next}" is not a metric id: lower-case letters, digits and hyphens`));
+    try {
+      const copy = /^id:.*$/m.test(text) ? text.replace(/^id:.*$/m, `id: ${next}`) : `id: ${next}\n${text}`;
+      await call('rag.customMetric.save', { id: next, text: copy, overwrite: false });
+      useApp.getState().toast(`Saved metrics/${next}.yaml`, 'success');
+      onSaved?.(next);
+      onClose();
+    } catch (e) {
+      toastError(e);
+    }
+  };
   const runExamples = async () => {
     if (text === undefined) return;
     setRunning(true);
@@ -178,6 +194,11 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
             {exists && (
               <Button variant="ghost" icon={<Trash2 size={13} />} className="mr-auto" onClick={() => void remove()} data-rag-metric-delete>
                 Delete
+              </Button>
+            )}
+            {exists && (
+              <Button icon={<Copy size={13} />} disabled={text === undefined || errors.length > 0} onClick={() => void saveAs()} title="Save the file as a copy under another id; this one stays" data-rag-metric-saveas>
+                Save as…
               </Button>
             )}
             <Button onClick={onClose}>{dirty ? 'Discard' : 'Close'}</Button>

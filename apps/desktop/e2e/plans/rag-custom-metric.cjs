@@ -70,6 +70,25 @@ const steps = [
      const shown = vis('[data-rag-metric]').map((r) => r.getAttribute('data-rag-metric'));
      return 'shown: ' + shown.join(',');`,
   ),
+  // the picker's Edit link of a custom row opens the metric's editor, and Save as makes a copy under another id
+  step(
+    'the-pickers-edit-link-opens-the-editor',
+    `const link = await __t.waitFor(() => document.querySelector('[data-rag-edit-metric="custom/no-guarantee"]'), 5000); if (!link) return 'NO EDIT LINK';
+     await __t.real.click(link);
+     const ed = await __t.waitFor(() => document.querySelector('[data-rag-metric-editor]'), 8000); if (!ed) return 'NO EDITOR';
+     await __t.sleep(600);
+     return 'editor open | delete offered: ' + !!document.querySelector('[data-rag-metric-delete]') + ' | save as offered: ' + !!document.querySelector('[data-rag-metric-saveas]');`,
+  ),
+  step(
+    'save-as-makes-a-copy',
+    `await __t.real.click('[data-rag-metric-saveas]');
+     const box = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] input')].find((i) => i.value === 'no-guarantee-copy'), 5000); if (!box) return 'NO PROMPT';
+     await __t.real.click(box); await __t.real.key('a', { ctrl: true }); await __t.real.type('no-guarantee-v2'); await __t.sleep(200);
+     const ok = [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Save a copy'); if (!ok) return 'NO BUTTON';
+     await __t.real.click(ok); await __t.sleep(1200);
+     const l = await window.aps.invoke('rag.customMetrics');
+     return 'metrics: ' + l.metrics.map((m) => m.id).sort().join(',');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
@@ -78,4 +97,6 @@ module.exports = withExpect(steps, {
   'the-examples-agree': /^agree: agrees with 2\/2 examples \| rows: 2$/,
   'save-writes-the-file': /^listed: true \| delete offered: true \| save disabled: true$/,
   'the-metric-is-in-the-picker': /^shown: custom\/no-guarantee(,no-guarantee)?$/,
+  'the-pickers-edit-link-opens-the-editor': /^editor open \| delete offered: true \| save as offered: true$/,
+  'save-as-makes-a-copy': /^metrics: no-guarantee,no-guarantee-v2$/,
 });
