@@ -397,7 +397,6 @@ export function EvaluationsView() {
           </div>
           )}
           {ragTarget && <RagJudgeOptions judge={d.judge ?? {}} maxCostUsd={d.maxJudgeCostUsd} maxCalls={d.maxJudgeCalls} providers={providers} onChange={set} />}
-          {ragTarget && <RagGatesField gates={d.gates} onChange={(gates) => set({ gates })} />}
           <div className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
             <Field label="Temp.">
               <Input type="number" step="0.1" value={d.temperature ?? ''} onChange={(e) => set({ temperature: e.target.value === '' ? undefined : Number(e.target.value) })} />
@@ -573,6 +572,12 @@ export function EvaluationsView() {
                 />
               ) : (
                 <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+              )}
+              {/* the gates belong to the metrics: under the picker, so the form above it keeps its height */}
+              {d.type === 'rag' && ragTarget && (
+                <div className="px-3 pb-3">
+                  <RagGatesField gates={d.gates} onChange={(gates) => set({ gates })} />
+                </div>
               )}
             </div>
           )}

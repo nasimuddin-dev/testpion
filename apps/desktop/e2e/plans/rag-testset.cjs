@@ -66,10 +66,10 @@ const steps = [
      const personas = dlg.querySelector('[data-rag-testset-personas]'); const styles = dlg.querySelectorAll('[data-rag-testset-styles] input[type=checkbox]');
      const sel = dlg.querySelector('[data-rag-testset-dedupe]'); if (!personas || !sel) return 'NO FIELDS';
      const before = !!dlg.querySelector('[data-rag-testset-embedder]');
-     ${setSelect('sel', 'By their words and meaning')}
+     ${setSelect(`dlg.querySelector('[data-rag-testset-dedupe]')`, 'By their words and meaning')}
      const embedder = await __t.waitFor(() => dlg.querySelector('[data-rag-testset-embedder]'), 3000);
      const est = await __t.waitFor(() => /dedupe-embedding/.test(dlg.querySelector('[data-rag-testset-estimate]')?.textContent ?? '') && dlg.querySelector('[data-rag-testset-estimate]'), 15000);
-     ${setSelect('sel', 'By their words')}
+     ${setSelect(`dlg.querySelector('[data-rag-testset-dedupe]')`, 'By their words')}
      await __t.sleep(400);
      return 'personas: true | styles: ' + styles.length + ' | embedder before: ' + before + ' | embedder shown: ' + !!embedder + ' | estimate line: ' + !!est + ' | embedder hidden again: ' + !dlg.querySelector('[data-rag-testset-embedder]');`,
   ),

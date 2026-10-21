@@ -103,7 +103,13 @@ const steps = [
   // the dag kind: a Decision tree panel above the YAML; every change is written back into the file
   step(
     'a-decision-tree-metric-has-a-tree-editor',
-    `await __t.real.click('[data-rag-metric-new]');
+    `await __t.view('AI Lab'); await __t.sleep(600);
+     const rag = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!rag) return 'NO TAB RAG';
+     await __t.real.click(rag); await __t.sleep(600);
+     const sw = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!sw) return 'NO SWITCH Metrics';
+     await __t.real.click(sw);
+     await __t.waitFor(() => document.querySelector('[data-rag-metric-new]'), 5000);
+     await __t.real.click('[data-rag-metric-new]');
      const ed = await __t.waitFor(() => document.querySelector('[data-rag-metric-editor]'), 5000); if (!ed) return 'NO EDITOR';
      await __t.real.click('[data-rag-metric-id]'); await __t.real.type('tone-tree');
      ${setSelect(`document.querySelector('[data-rag-metric-kind]')`, 'Decision tree')}
@@ -123,7 +129,7 @@ const steps = [
   step(
     'a-branch-can-lead-to-the-new-node',
     `const sel = document.querySelector('[data-dag-node="answers"] select[aria-label="Where no leads"]'); if (!sel) return 'NO BRANCH SELECT';
-     ${setSelect('sel', 'asks n3')}
+     ${setSelect(`document.querySelector('[data-dag-node="answers"] select[aria-label="Where no leads"]')`, 'asks n3')}
      await __t.sleep(600);
      const yaml = ${EDITOR_IN('[data-rag-metric-yaml]')}.getModel().getValue();
      const reached = !/not reached/.test(document.querySelector('[data-dag-node="n3"]')?.textContent ?? '');
