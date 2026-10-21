@@ -1,6 +1,7 @@
 import { Check, ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { cx, Menu } from './ui';
+import { cx } from '../lib/cx';
+import { Menu } from './Menu';
 
 /** One entry of the overflow menu: a tab, named and (when it is the active one) ticked. */
 export interface TabOverflowItem {

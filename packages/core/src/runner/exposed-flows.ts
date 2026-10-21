@@ -8,7 +8,7 @@ import { extname, join, relative, sep } from 'node:path';
 import type { Node, Pair } from 'yaml';
 import { isMap, isPair, isScalar, isSeq, parseDocument, parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
-import { isSuiteFile } from './loader.js';
+import { isSuiteFile } from './suite-file.js';
 
 /** One argument of the tool: a variable the flow reads as {{name}}. */
 export interface FlowInput {

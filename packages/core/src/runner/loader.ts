@@ -1,3 +1,4 @@
+import { isSuiteFile } from './suite-file.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
@@ -14,10 +15,6 @@ import { parseWebhook } from './flow-webhook-config.js';
 import { controlProblems, finallyOf, paceOf, parallelOf, setScopeOf, untilOf } from './control-keys.js';
 
 const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
-
-export function isSuiteFile(p: string): boolean {
-  return /\.suite\.(ya?ml|json)$/i.test(p);
-}
 
 async function parseFile(path: string, given?: string): Promise<unknown> {
   const text = given ?? (await readFile(path, 'utf8'));
@@ -527,3 +524,5 @@ export async function* streamTests(patterns: string[], cwd: string, filter?: { t
     }
   }
 }
+
+export { isSuiteFile };

@@ -9,7 +9,7 @@ import { formatUsd, plural } from '@testpion/shared';
 import { aiRunDeps, applyProposal, attemptFix, rerunCommand, triageMarkdown, triageRun, WorkspaceManager, type AiTaskResult } from '@testpion/core';
 import { bold, cliContext, dim, green, printJson, red, withWorkspace, yellow } from '../shared.js';
 import { machine } from '../output.js';
-import { printPreview, printProposal } from './ai.js';
+import { printPreview, printProposal } from './ai-print.js';
 
 const surface = () => (process.env.CI ? 'ci' : 'cli') as 'ci' | 'cli';
 

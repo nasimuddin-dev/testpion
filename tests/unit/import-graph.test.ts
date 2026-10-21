@@ -74,18 +74,14 @@ function cycles(dir: string): string[][] {
 }
 
 describe('import graph', () => {
-  it('the engine (packages/core) has no import cycle bigger than 5 files, and no more of them than today', () => {
+  it('the engine (packages/core) has one import cycle left: the runner running a sub-flow (flow-blocks -> runner -> flow-blocks)', () => {
     const found = cycles('packages/core/src');
-    expect(found.filter((c) => c.length > 5).map((c) => `${c.length} files: ${c.slice(0, 6).join(', ')}`)).toEqual([]);
-    // the small ones left; lower this number whenever one is broken, never raise it
-    expect(found.length).toBeLessThanOrEqual(6);
+    // a sub-flow step runs the whole runner again: execute.ts, flow-control.ts, flow-blocks.ts and runner.ts recurse by nature.
+    // Lower this when it is cut; never add another.
+    expect(found.map((c) => c.join(', '))).toEqual([['runner/execute.ts', 'runner/flow-blocks.ts', 'runner/flow-control.ts', 'runner/runner.ts'].join(', ')]);
   });
 
-  it('the CLI has no import cycle bigger than 5 files', () => {
-    expect(cycles('packages/cli/src').filter((c) => c.length > 5).map((c) => c.join(', '))).toEqual([]);
-  });
-
-  it('the shared package has no import cycle', () => {
-    expect(cycles('packages/shared/src').map((c) => c.join(', '))).toEqual([]);
+  it('the CLI, the shared package, the backend and the window have no import cycle', () => {
+    for (const dir of ['packages/cli/src', 'packages/shared/src', 'apps/desktop/backend', 'apps/desktop/src']) expect(cycles(dir).map((c) => c.join(', ')), dir).toEqual([]);
   });
 });

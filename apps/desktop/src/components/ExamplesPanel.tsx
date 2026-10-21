@@ -6,7 +6,8 @@ import { toastError } from '../store';
 import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import type { SavedExample } from '../types';
 import { CodeEditor } from './CodeEditor';
-import { Badge, cx, Empty, IconButton, PinnablePanel, statusTone } from './ui';
+import { Badge, cx, Empty, IconButton, statusTone } from './ui';
+import { PinnablePanel } from './PinnablePanel';
 import { focusRow, InlineRename } from './TreeParts';
 
 const languageOf = (ex: SavedExample) => {

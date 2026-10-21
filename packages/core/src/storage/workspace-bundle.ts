@@ -1,5 +1,7 @@
 /**
- * The workspace export (one JSON file, `<name>.testpion.json`) and its import as a new workspace.
+ * The workspace export (one JSON file, `<name>.testpion.json`) and its import
+ * as a new workspace. DEPRECATED: the bundle (`testpion bundle`, File ▸ Export ▸ Bundle…) replaces it; this stays for two more releases so old files and
+ * scripts keep working (transfer/legacy.ts reads these files as bundles).
  *
  * What it holds: the workspace's variables, collections, environments, providers, MCP servers, saved items (library),
  * script packages, test files, and the files under specs/, datasets/, mocks/ and protos/ (`files[]`: text as utf8,
@@ -7,6 +9,7 @@
  * for them), run results, history, traces and the trash. A file over the size limits is left out and named in
  * `notes[]`, never dropped silently.
  */
+import { WORKSPACE_FORMATS } from './workspace-formats.js';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Collection, Environment, Library, McpServerConfig, ProviderConfig, Workspace } from '../model/types.js';
@@ -15,7 +18,9 @@ import { ApsError } from '../errors.js';
 import { atomicWrite } from './fsutil.js';
 import { adoptLooseRequests } from './loose-requests.js';
 import { SecretStripper, type ReplacedSecret } from './bundle-secrets.js';
-import { SCRIPT_PACKAGE_NAME, migrateWorkspace, type TestFileNode, type WorkspaceManager, type WorkspaceStore } from './workspace.js';
+import { SCRIPT_PACKAGE_NAME } from './script-package-name.js';
+import { migrateWorkspace } from './workspace-migrate.js';
+import type { TestFileNode, WorkspaceManager, WorkspaceStore } from './workspace.js';
 import { isRecord } from '@testpion/shared';
 
 /** Size limits of an export, in one place: a file over `fileBytes`, or past `totalBytes` in all, is left out with a note. */
@@ -24,8 +29,7 @@ export const BUNDLE_LIMITS = { fileBytes: 10 * 1024 * 1024, totalBytes: 50 * 102
 /** The workspace folders whose files travel in `files[]` (tests/ has its own section). */
 export const BUNDLE_FILE_FOLDERS = ['specs', 'datasets', 'mocks', 'protos'] as const;
 
-/** Workspace export formats this version imports (the project's earlier names included). */
-export const WORKSPACE_FORMATS = new Set(['testpion-workspace', 'fluxpion-workspace', 'protopion-workspace', 'protolens-workspace']);
+export { WORKSPACE_FORMATS };
 
 /** One file of specs/, datasets/, mocks/ or protos/: its path from the workspace root with `/`, and its bytes. */
 export interface BundleFile {

@@ -59,7 +59,8 @@ import { FLOW_START, FlowDiagram, type FlowDiagramApi, type FlowMark, type FlowS
 import { FlowHistoryList, PausePanel, VariablesTimeline, type FlowPause, type FlowRunRow } from './FlowDebugParts';
 import { API_EXAMPLE, BlockPalette, blockPickerCommands, CollectionPicker, PALETTE, StepInspector, StepPreview } from './FlowDesignerParts';
 import { ResultDetail } from './RunPanel';
-import { Button, LinkButton, Menu, OverflowActions, PinnablePanel, SectionTitle, Segmented, Split, type MenuItem, type OverflowAction } from './ui';
+import { Button, LinkButton, Menu, OverflowActions, SectionTitle, Segmented, Split, type MenuItem, type OverflowAction } from './ui';
+import { PinnablePanel } from './PinnablePanel';
 import { aiButton } from '../lib/ai-menu';
 
 /** A test file as a flow, as the tests.flow RPC reads it for the designer (with each step as written). */

@@ -6,7 +6,7 @@
  */
 import { LIBRARY_OF, RAW_ROOT, isPlainId, plainName, type BundleKindId, type ParsedBundle } from './format.js';
 import { canonicalJson } from './items.js';
-import { assemble, type BundlePart } from './container.js';
+import { assemble, type BundlePart } from './assemble.js';
 import { ENGINE_VERSION } from '../version.js';
 import { isRecord } from '@testpion/shared';
 

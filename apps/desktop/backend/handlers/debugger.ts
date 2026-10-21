@@ -23,15 +23,10 @@ import {
   tryDecodeJwt,
   type BrowserName,
   type DebuggerExchange,
-  type DebuggerProxy,
-  type DebuggerRulesFile,
-  type LeafCertificate,
   type RootCertificate,
-  type SystemProxySnapshot,
   grpcDecoder,
   grpcMethodIndex,
   workspaceProtoRoots,
-  DebuggerSession,
   batcher,
   noteOwnChange,
   CAPTURE_SESSIONS_DIR,
@@ -41,7 +36,10 @@ import {
   writeOwned,
 } from '@testpion/core';
 import { networkInterfaces } from 'node:os';
-import { activeRules, holdBreakpoint, type PendingBreakpoint } from './debugger-rules.js';
+import { activeRules, holdBreakpoint } from './debugger-rules.js';
+import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
+
+export { newDebuggerState, type DebuggerState, type IncomingRequest };
 import type { Backend, Handlers } from '../backend.js';
 
 /** qrcode (with pngjs) loads when the phone-setup page first asks for its QR code, not at startup. */
@@ -53,37 +51,6 @@ import { rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
 import { connect as h2connect } from 'node:http2';
-
-/** A request one of the workspace's mock servers received. */
-export interface IncomingRequest {
-  id: string;
-  time: string;
-  collectionId: string;
-  server?: string;
-  method: string;
-  path: string;
-  status: number;
-  example?: string;
-  forwarded?: boolean;
-  /** The mock server's address (http://127.0.0.1:port). */
-  base?: string;
-  query?: string;
-  headers?: Record<string, string>;
-  body?: string;
-  responseHeaders?: Record<string, string>;
-  responseBody?: string;
-  ms?: number;
-}
-
-interface ListSync {
-  rev: number;
-  epoch: number;
-  nextSeq: number;
-  /** When the session's first request started (the grid's Offset counts from it). */
-  firstAt?: number;
-  seqs: WeakMap<DebuggerExchange, number>;
-  revs: WeakMap<DebuggerExchange, number>;
-}
 
 /** Epochs are unique across every session's list (the live one, saved ones shown in their tabs): a switch is a reset. */
 let epochSeq = 0;
@@ -160,51 +127,6 @@ export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'tim
     old.responseBody = old.responseBody === undefined ? undefined : '(not kept: only the latest 200 requests keep their bodies)';
   }
   be.host.emit('debug.incoming', item);
-}
-
-/** The state before anything was captured: an empty session. */
-export function newDebuggerState(): DebuggerState {
-  const session = new DebuggerSession();
-  return { session, exchanges: session.items };
-}
-
-export interface DebuggerState {
-  proxy?: DebuggerProxy;
-  /** Kept across stop / start, until cleared: the session, with its limits; `exchanges` is its array. */
-  session: DebuggerSession;
-  exchanges: DebuggerExchange[];
-  /** The system proxy as it was before TestPion switched it to ours (restored on stop, on clear and when the app quits). */
-  systemProxy?: SystemProxySnapshot;
-  /** AutoSave: the live session is written to debugger/autosave.har every minute while something changed. */
-  autosave?: ReturnType<typeof setInterval>;
-  dirty?: boolean;
-  /** The rules file (handlers/debugger-rules.ts), read once; the proxy asks for the active profile's rules on every request. */
-  rules?: DebuggerRulesFile;
-  /** Exchanges held at a breakpoint, waiting for the window. */
-  breakpoints?: Map<string, PendingBreakpoint>;
-  /** HTTPS decryption (DBG-4): on or off for the session; hosts kept opaque; the root and the per-host signer. */
-  decrypt?: boolean;
-  noDecrypt?: string[];
-  root?: RootCertificate;
-  leafFor?(host: string): LeafCertificate;
-  /** Listening on the local network (a phone, another computer), not only on this computer. */
-  lan?: boolean;
-  /** Requests TestPion's mock servers received (the Incoming tab): at most the last 2000. */
-  incoming?: IncomingRequest[];
-  /**
-   * The window's list stays in sync by changes, not by reloading it: every exchange has a place in the session (seq,
-   * the grid's #) and a revision; `rev` is the latest; `epoch` changes when the list is replaced or rows removed.
-   */
-  list?: ListSync;
-  /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
-  release?(): Promise<void>;
-  /** The exchanges of the session on screen (the live capture, or a saved session's tab): what selections refer to. */
-  view?(): DebuggerExchange[];
-  /**
-   * Add an exchange another capture mode made (the reverse proxy, handlers/debugger-reverse.ts) to the session, as the
-   * proxy's own are: the grid, AutoSave and the list's changes see it the same.
-   */
-  capture?(e: DebuggerExchange): void;
 }
 
 const SESSIONS_DIR = CAPTURE_SESSIONS_DIR;

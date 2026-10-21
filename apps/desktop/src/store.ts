@@ -1,5 +1,5 @@
 import { toast as sonner } from 'sonner';
-import { aiSetupAction } from './lib/ai-errors';
+import { aiSetupActionFor } from './lib/ai-setup';
 import type { ReactNode } from 'react';
 import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
@@ -495,7 +495,7 @@ export function notifySystem(title: string, body: string, opts: { ref?: ItemRef;
 export function toastError(e: unknown): void {
   const err = asError(e);
   // an AI setup problem (a key, no model, Local only) offers its fix (lib/ai-errors.ts, the one place that decides)
-  const setup = aiSetupAction(err);
+  const setup = aiSetupActionFor(err, () => useApp.getState());
   const behind = isPushRejected(err);
   useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined));
 }

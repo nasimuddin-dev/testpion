@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { ConvertTool } from '../DebuggerTools';
-import { PinnablePanel } from '../ui';
+import { PinnablePanel } from '../PinnablePanel';
 import type { Rule, RulesState } from '../DebuggerRules';
 import { AutoReplyPanel, FilterPanel, HighlightPanel, HighlightRuleEditor, ModifyPanel } from './DockRules';
 import { PerformancePanel, StructurePanel, SummaryPanel, TimelinePanel } from './DockInsights';
