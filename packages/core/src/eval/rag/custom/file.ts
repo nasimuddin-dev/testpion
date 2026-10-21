@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { parseYaml } from '../../../util/lazy-yaml.js';
 import { CUSTOM_METRIC_ID, CUSTOM_METRIC_KINDS, type CustomMetricFile, type CustomMetricKind } from '@testpion/shared';
 import { checkTypes } from '../../checks.js';
-import { getMetric, resolveMetric } from '../metric-registry.js';
+import { resolveMetric } from '../metric-registry.js';
 import { parseFormula } from './formula.js';
 
 export interface MetricProblem {
@@ -161,5 +161,3 @@ export function parseCustomMetric(text: string, o: { fileId?: string; known?: Se
   const f = raw as CustomMetricFile;
   return { metric: { ...f, version: f.version ?? 1 }, problems };
 }
-
-export const isBuiltinMetric = (id: string) => !!getMetric(id) && !getMetric(id)!.custom;
