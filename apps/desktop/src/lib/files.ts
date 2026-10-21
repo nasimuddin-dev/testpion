@@ -36,6 +36,15 @@ export function finishSave(r: SaveResult | null | undefined, what: string): void
   } else if (r.path) useApp.getState().toast(`${what} saved to ${r.path}`, 'success');
 }
 
+/**
+ * Hand over what a backend save returned: a browser host's content is downloaded here, a desktop host has written the file
+ * already. False when nothing was saved (the save dialog was cancelled): the caller says nothing then, and nothing is downloaded.
+ */
+export function deliverSave(r: SaveResult | null | undefined): boolean {
+  if (r?.download) downloadContent(r.download.name, r.download.content, { encoding: r.download.encoding, type: r.download.type });
+  return !!(r?.download || r?.path);
+}
+
 /** Show HTML or text returned by the backend in a new browser tab (where there is no desktop shell). */
 export function viewContent(v: { content: string; encoding: 'base64' | 'utf8'; type: string }): void {
   const bytes = v.encoding === 'base64' ? Uint8Array.from(atob(v.content), (c) => c.charCodeAt(0)) : new TextEncoder().encode(v.content);

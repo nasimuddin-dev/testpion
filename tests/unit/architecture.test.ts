@@ -91,6 +91,12 @@ describe('architecture', () => {
     ).toEqual([]);
   });
 
+  it('a handler saves a file for the user through Backend.saveOrDownload (or saveText): a cancelled dialog must never fall back to a download', () => {
+    const asks: string[] = [];
+    for (const f of files('apps/desktop/backend/handlers')) if (/saveDialog/.test(readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')) && !/handlers\/app\.ts$/.test(rel(f))) asks.push(rel(f));
+    expect(asks).toEqual([]);
+  });
+
   it('the big files do not grow: new tools, handlers and commands get their own module', () => {
     // the ceiling is a little above each file's size when this test was written; shrinking it is always welcome
     const ceilings: Record<string, number> = {
