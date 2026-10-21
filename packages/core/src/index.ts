@@ -175,6 +175,7 @@ export * from './runner/flow-from-exchanges.js';
 export * from './runner/collection-from-exchanges.js';
 export * from './runner/flow-blocks.js';
 export * from './runner/flow-control.js';
+export * from './runner/execute-step.js';
 export * from './runner/control-keys.js';
 export * from './runner/debug-hooks.js';
 export * from './runner/flow-history.js';
