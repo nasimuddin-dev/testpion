@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'text';
+export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'dataset-row' | 'evaluation' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {
@@ -88,6 +88,10 @@ export interface ProposalUndo {
   spec?: { path: string; before: string };
   /** metric: a custom metric file (metrics/<id>.yaml) before the change (null: it did not exist). */
   metric?: { id: string; before: string | null };
+  /** dataset-row: a dataset file (datasets/<name>.jsonl) before the rows were added (null: it did not exist). */
+  dataset?: { path: string; before: string | null };
+  /** evaluation: a saved evaluation (library `evaluations`) before the change (null: it did not exist). */
+  evaluation?: { id: string; before: unknown | null };
 }
 
 export interface Proposal {

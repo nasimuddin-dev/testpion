@@ -28,6 +28,8 @@ import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
 import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { responseOfContext, SUGGEST_MAPPING_SCHEMA, suggestedMappingProblems } from '../../eval/rag/suggest-mapping.js';
 import { proposeMetricDraft } from '../rag-draft-metric.js';
+import { ragTestsetTask } from './rag-testset-task.js';
+import { ragAuthorTask } from './rag-author-task.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
 export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
@@ -112,6 +114,12 @@ export interface AiTaskDef {
   stable?: boolean;
   /** Reads its own context for a workspace item (else the generic item context, item-context.ts). */
   prepare?(store: WorkspaceStore, item: ItemRef, o: { path?: string; privacy: AiPrivacy; context?: Record<string, unknown> }): Promise<PreparedItem> | PreparedItem;
+  /**
+   * For a task about no single item (a folder of documents, a target and a dataset): reads the workspace from the caller's
+   * choices (`context`) and builds what is sent and what stays on this computer. When it exists the caller's context is not
+   * sent as it is: only what this returns is.
+   */
+  prepareContext?(store: WorkspaceStore, context: Record<string, unknown>, o: { privacy: AiPrivacy; signal?: AbortSignal }): Promise<PreparedItem> | PreparedItem;
   /** The summary, assumptions, notes and findings of a JSON task's proposal (what the review shows above the items). */
   describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): { summary?: string; assumptions?: string[]; notes?: string[]; findings?: ProposalFinding[] };
 }
@@ -685,6 +693,8 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     maxRepairs: 2,
     propose: proposeMetricDraft,
   }),
+  ragTestsetTask(),
+  ragAuthorTask(),
   T('nl-search', {
     title: 'Ask about history, runs and traces',
     description:

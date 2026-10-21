@@ -23,6 +23,8 @@ import { applyPatchOps, isJsonSpec, type PatchOp } from '../openapi/spec-patch.j
 import { stepOfResult } from './run-evidence.js';
 import { readMetricFile, removeMetricFile, writeMetricFile } from '../storage/metric-files.js';
 import { parseCustomMetric } from '../eval/rag/custom/file.js';
+import { applyDatasetRowItem, undoDatasetRows } from '../eval/rag/testset/apply.js';
+import { applyEvaluationItem, undoEvaluation } from '../eval/rag/author/apply.js';
 
 /** The text a fix was made from (`data.fix.base`): a file or script that changed since is not overwritten. */
 function assertUnchanged(item: ProposalItem, current: string | null | undefined): void {
@@ -198,6 +200,10 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       writeMetricFile(store, id, item.after);
       return { item: item.id, metric: { id, before } };
     }
+    case 'dataset-row':
+      return applyDatasetRowItem(store, item);
+    case 'evaluation':
+      return applyEvaluationItem(store, item);
     case 'collection': {
       // a tidy: its operations on the collection as it is now (renames, moves, variables, chains, drops)
       const d = item.data as { collectionId?: string; ops?: TidyOp[] } | undefined;
@@ -264,6 +270,12 @@ export function undoProposal(store: WorkspaceStore, id: string): { id: string; r
     } else if (u.metric) {
       if (u.metric.before === null) removeMetricFile(store, u.metric.id);
       else writeMetricFile(store, u.metric.id, u.metric.before);
+      restored++;
+    } else if (u.dataset) {
+      undoDatasetRows(store, u.dataset);
+      restored++;
+    } else if (u.evaluation) {
+      undoEvaluation(store, u.evaluation);
       restored++;
     } else if (u.spec) {
       if (!/^specs\/[^/].*\.(json|ya?ml)$/i.test(u.spec.path) || u.spec.path.split('/').includes('..')) continue;

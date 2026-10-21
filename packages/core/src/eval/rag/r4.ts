@@ -7,3 +7,4 @@ export * from './calibrate/index.js';
 export * from './capture/index.js';
 export * from './testset/index.js';
 export * from './author/index.js';
+export * from './trend/index.js';

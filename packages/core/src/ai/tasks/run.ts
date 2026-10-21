@@ -97,6 +97,8 @@ export interface AiTaskRequest {
   schema?: Record<string, unknown>;
   /** Build everything, send nothing: the preview of what would be sent. */
   dryRun?: boolean;
+  /** The proposal is returned but not kept in `.local/ai/proposals` (a caller that merges several calls into one proposal saves that itself). */
+  noProposal?: boolean;
   /** Override the task's output limit. */
   maxTokens?: number;
   /** Prefer stable checks (types, formats, presence over literal ids, times, tokens); unset: the AI setting. */
@@ -274,6 +276,14 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
     local = 'local' in ic ? ic.local : undefined;
     req = { ...req, response: req.response ?? ic.response, previous: req.previous ?? ('previous' in ic ? (ic.previous as StoredResponse | undefined) : undefined), path: req.path ?? ('path' in ic ? (ic.path as string | undefined) : undefined) };
     if (ic.collection && !deps.collection) deps = { ...deps, collection: ic.collection };
+  } else if (own?.prepareContext && deps.store) {
+    // a task about no single item (documents, a target and a dataset) reads the workspace from the caller's choices; only what
+    // it returns is sent, never the choices themselves (paths …), and what it keeps (`local`) stays on this computer
+    const ic = await own.prepareContext(deps.store, req.context ?? {}, { privacy: aiPrivacyOf(deps.settings, req.privacy), signal: deps.signal });
+    itemContext = ic.context;
+    label = ic.label;
+    local = ic.local;
+    req = { ...req, context: undefined };
   }
   // the tp.* reference is read from the sandbox once per process (before the messages are composed)
   if (own && [own.format].flat().includes('script')) await loadScriptApi();
@@ -454,7 +464,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest): Promise<Ai
         request: { question: req.question, item: req.item, hint: req.hint, privacy: preview.privacy, ...(req.path ? { path: req.path } : {}) },
         ...(problems.length ? { problems } : {}),
       };
-      if (deps.store) saveProposal(deps.store, proposal);
+      if (deps.store && !req.noProposal) saveProposal(deps.store, proposal);
     }
     return { ...base, model: modelUsed, text, code, value, truncated, finishReason, problems, repairs, calls, usage, costUsd: cost, ms: Date.now() - started, proposal, preview: summary };
   } catch (e) {
