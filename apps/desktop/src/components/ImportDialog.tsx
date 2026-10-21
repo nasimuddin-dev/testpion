@@ -14,6 +14,7 @@ import { bundleRequestOf, openImportBundle } from '../lib/transfer';
 import { plural } from '../lib/format';
 import { Button, Field, Input, LinkButton, Modal, Segmented, Select, Spinner, Textarea, Toggle } from './ui';
 import { ImportReportView, ImportTree } from './ImportReport';
+import { DiffText } from './GitCommitPanel';
 
 export { MIGRATE_TOOLS, type MigrateTool } from '@testpion/shared';
 
@@ -394,15 +395,26 @@ function UpdateSection({ updates, newCopy, setNewCopy, decisions, setDecisions }
               {shown.length > 0 && (
                 <ul className="flex flex-col gap-1 max-h-48 overflow-auto" data-import-update-items>
                   {shown.slice(0, 300).map((i) => (
-                    <li key={i.key} className="flex items-center gap-2 text-xs" data-import-update-item={i.action}>
-                      <span className="mono truncate flex-1" title={i.reason}>
-                        {i.path.length ? i.path.join(' / ') : 'Collection settings'} <span className="text-muted">{i.reason}</span>
-                      </span>
-                      <Select aria-label={`Action for ${i.path.join(' / ') || 'the collection settings'}`} className="text-xs" value={decisions[i.key] ?? i.action} onChange={(e) => setDecisions({ ...decisions, [i.key]: e.target.value as ReimportAction })}>
-                        <option value="replace">Replace it</option>
-                        <option value="new">Add as new</option>
-                        <option value="skip">Leave it</option>
-                      </Select>
+                    <li key={i.key} className="flex flex-col gap-1 text-xs" data-import-update-item={i.action}>
+                      <div className="flex items-center gap-2">
+                        <span className="mono truncate flex-1" title={i.reason}>
+                          {i.path.length ? i.path.join(' / ') : 'Collection settings'} <span className="text-muted">{i.reason}</span>
+                        </span>
+                        <Select aria-label={`Action for ${i.path.join(' / ') || 'the collection settings'}`} className="text-xs" value={decisions[i.key] ?? i.action} onChange={(e) => setDecisions({ ...decisions, [i.key]: e.target.value as ReimportAction })}>
+                          <option value="replace">Replace it</option>
+                          <option value="new">Add as new</option>
+                          <option value="skip">Leave it</option>
+                        </Select>
+                      </div>
+                      {/* the script lines that differ: the choice is made on the lines, not on the whole item */}
+                      {i.scripts?.map((s) => (
+                        <details key={s.field} data-import-update-script={s.field}>
+                          <summary className="cursor-pointer text-muted">{s.field === 'testScript' ? 'Test script' : 'Pre-request script'}: show the lines that differ</summary>
+                          <div className="max-h-40 overflow-auto rounded border border-border">
+                            <DiffText text={s.diff} />
+                          </div>
+                        </details>
+                      ))}
                     </li>
                   ))}
                 </ul>

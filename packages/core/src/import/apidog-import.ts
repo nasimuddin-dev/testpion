@@ -4,7 +4,8 @@ import { mapForeignAuth } from './foreign-auth.js';
 import { normalizeTemplate } from './templates.js';
 import { sampleFromSchema } from './openapi-import.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
-import { collectionOf, type Any } from './import-helpers.js';
+import { collectionOf, encryptedValuesFinding, type Any } from './import-helpers.js';
+import { looksEncrypted } from './foreign-auth.js';
 
 /**
  * Apidog as an import document: its project export ("Apidog" format, `apidogProject`, also written by Apifox as
@@ -136,22 +137,30 @@ export function parseApidog(text: string): ImportDocument {
   if (usesBaseUrl) collection.variables = [{ key: 'baseUrl', value: '', enabled: true }];
 
   // environments: each with its own base URL and variables
+  // a value Apidog exported encrypted is left empty and named (TestPion has no key for it)
+  const encrypted: string[] = [];
+  const val = (v: Any): string => {
+    const raw = v.currentValue ?? v.value ?? v.initialValue ?? '';
+    return looksEncrypted(raw) ? (encrypted.push(String(v.name)), '') : n(raw);
+  };
   const envs: Environment[] = [];
   for (const e of Array.isArray(d.environments) ? d.environments : []) {
     const ename = String(e?.name ?? 'Environment');
     const variables: KeyValue[] = [];
     const base = e.baseUrl ?? e.servers?.[0]?.url ?? e.baseUrls?.default;
     if (typeof base === 'string' && base.trim()) variables.push({ key: 'baseUrl', value: n(base).replace(/\/$/, ''), enabled: true });
-    for (const v of Array.isArray(e.variables) ? e.variables : []) if (v?.name) variables.push({ key: String(v.name), value: n(v.currentValue ?? v.value ?? v.initialValue ?? ''), enabled: true });
+    for (const v of Array.isArray(e.variables) ? e.variables : []) if (v?.name) variables.push({ key: String(v.name), value: val(v), enabled: true });
     envs.push({ id: slugify(ename) || 'env', name: ename, variables });
   }
   const globals = (Array.isArray(d.globalVariables) ? d.globalVariables : []).filter((v: Any) => v?.name);
   if (globals.length) {
     // global variables are visible to every environment
-    for (const e of envs) for (const v of globals) if (!e.variables.some((x) => x.key === v.name)) e.variables.push({ key: String(v.name), value: n(v.currentValue ?? v.value ?? v.initialValue ?? ''), enabled: true });
-    if (!envs.length) envs.push({ id: 'apidog-globals', name: `${name} globals`, variables: globals.map((v: Any) => ({ key: String(v.name), value: n(v.currentValue ?? v.value ?? v.initialValue ?? ''), enabled: true })) });
+    for (const e of envs) for (const v of globals) if (!e.variables.some((x) => x.key === v.name)) e.variables.push({ key: String(v.name), value: val(v), enabled: true });
+    if (!envs.length) envs.push({ id: 'apidog-globals', name: `${name} globals`, variables: globals.map((v: Any) => ({ key: String(v.name), value: val(v), enabled: true })) });
   }
   doc.environments = envs;
+  const encryptedFinding = encryptedValuesFinding('Apidog', encrypted);
+  if (encryptedFinding) findings.add(encryptedFinding);
   if (usesBaseUrl && !envs.some((e) => e.variables.some((v) => v.key === 'baseUrl')))
     findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [], message: 'The endpoints are paths: set the collection variable {{baseUrl}} to the server (the export holds no server URL)' });
   doc.collections.push(collection);

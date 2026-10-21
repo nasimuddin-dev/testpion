@@ -8,6 +8,7 @@ import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, Wor
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
+import { runPackageExport } from './export-package.js';
 
 export function registerDataCommands(program: Command): void {
   program
@@ -544,12 +545,14 @@ export function registerDataCommands(program: Command): void {
     .option('--uses', 'a bundle: add everything the items use')
     .option('--datasets <mode>', 'a bundle: embed, reference or auto (embed up to 10 MB, bigger by reference; default)')
     .option('--providers', 'a bundle: include AI providers in a whole-workspace or section export')
+    .option('--extras', 'with --format postman (a .postman.zip) or --format bruno (a folder): add what the collection uses - environments, API definitions, data files, an .mcp.json - and the workspace variables as Postman globals')
     .option('--folder <kind:name>', 'a bundle: the items in one folder of a list, e.g. spec:pets (a test folder: test:smoke/api)')
     .option('--globals', "a bundle: carry the workspace's own variables (the Globals; secret values blank). With --all they travel by default")
     .option('--no-globals', 'a bundle: leave the Globals out of a whole-workspace export')
     .option('--exclude <items>', 'a bundle with --uses: kind:id items (comma separated) that something uses but that stay out; they are listed as left out')
     .option('--title <text>', 'a bundle: its title')
-    .action(async (refs: string[], o: { workspace?: string; folder?: string; globals?: boolean; exclude?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'bundle' | (typeof MORE_EXPORT_FORMATS)[number]; json?: boolean; out?: string; section?: string; all?: boolean; uses?: boolean; datasets?: 'auto' | 'embed' | 'reference'; providers?: boolean; title?: string }) => {
+    .action(async (refs: string[], o: { workspace?: string; extras?: boolean; folder?: string; globals?: boolean; exclude?: string; format: 'postman' | 'testpion' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'bundle' | (typeof MORE_EXPORT_FORMATS)[number]; json?: boolean; out?: string; section?: string; all?: boolean; uses?: boolean; datasets?: 'auto' | 'embed' | 'reference'; providers?: boolean; title?: string }) => {
+      if (o.extras) return runPackageExport(refs[0], o);
       if (wantsBundleExport(refs, o)) return runBundleExport(refs, o);
       if (refs.length !== 1) throw new CliError('Give one collection (name, id, file or link) to export in this format; several items go in a bundle (kind:id items, --format bundle)', EXIT.CONFIG_ERROR);
       const ref = refs[0]!;

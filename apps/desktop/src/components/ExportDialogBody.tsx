@@ -6,7 +6,7 @@ import { Button, Field, Modal, Select } from './ui';
 import { deliverSave, type SaveResult } from '../lib/files';
 import { exportWorkspace } from '../lib/workspace-export';
 
-type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi';
+type Format = 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi' | 'postman-package' | 'bruno-package';
 
 const FORMATS: Array<[Format, string, string]> = [
   ['testpion', 'TestPion collection (.json)', 'Everything: requests, scripts, examples, and its gRPC calls and connections. Imports back as it was.'],
@@ -15,6 +15,8 @@ const FORMATS: Array<[Format, string, string]> = [
   ['http', '.http file', 'One file of requests for VS Code REST Client and the JetBrains HTTP Client. HTTP requests only; scripts are left out.'],
   ['asyncapi', 'AsyncAPI 3.0 (.yaml)', "The collection's Kafka, MQTT, WebSocket and Socket.IO connections as channels, with their saved messages as examples."],
   ['bruno', 'Bruno collection folder', 'A folder of .bru files, with the environments (secret values never). Desktop app only.'],
+  ['postman-package', 'Postman package with what it uses (.zip)', 'The Postman collection, the environments it uses, the workspace variables as Postman globals, API definitions, data files and an .mcp.json. Secret values never. Test files, monitors and saved calls are listed as not included.'],
+  ['bruno-package', 'Bruno collection with what it uses (.zip)', 'The Bruno folder (extract it), with the API definitions, data files and an .mcp.json beside it. Secret values never.'],
 ];
 
 /**

@@ -212,10 +212,55 @@ function v3Item(y: Any, examples: Any[], findings: Findings, where: string): Any
 
 /** The files of a v3 collection folder (paths relative to its root) as a v2.1 collection object. */
 export function postmanV3ToV21(files: V3File[], name: string, findings: Findings): Any {
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  /**
+   * `{ $ref: "../shared/auth.yaml" }` (or `#/pointer` after the path): the value is the other file's content. The path is
+   * resolved against the file that holds the reference and must stay inside the folder that was given - the importer reads
+   * the files it was handed and nothing else. A reference to a file outside the folder, a missing one or a loop is reported
+   * and left out; the rest of the file is imported.
+   */
+  const resolveRefs = (v: unknown, from: string, seen: readonly string[], depth: number): unknown => {
+    if (Array.isArray(v)) return v.map((x) => resolveRefs(x, from, seen, depth + 1));
+    if (!v || typeof v !== 'object') return v;
+    const o = v as Any;
+    if (typeof o.$ref === 'string' && Object.keys(o).length === 1) {
+      const [rel, pointer = ''] = o.$ref.split('#') as [string, string?];
+      const parts = dirOf(from).split('/').filter(Boolean);
+      for (const seg of rel.split('/')) {
+        if (seg === '..') {
+          if (!parts.length) {
+            findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [from], message: `${from} refers to ${rel}, a file outside the collection folder: it was not imported (import the whole folder, with the shared files inside it)` });
+            return undefined;
+          }
+          parts.pop();
+        } else if (seg && seg !== '.') parts.push(seg);
+      }
+      const target = parts.join('/');
+      const file = byPath.get(target);
+      if (!file) {
+        findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [from], message: `${from} refers to ${rel}, which is not in the folder: it was not imported` });
+        return undefined;
+      }
+      if (seen.includes(target) || depth > 20) {
+        findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [from], message: `${from} refers to ${rel}, which refers back to it: the reference was not followed` });
+        return undefined;
+      }
+      let doc: unknown;
+      try {
+        doc = parseYaml(file.text);
+      } catch {
+        findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [from], message: `${target} is not valid YAML, so the reference to it in ${from} was not followed` });
+        return undefined;
+      }
+      for (const key of pointer.split('/').filter(Boolean)) doc = doc && typeof doc === 'object' ? (doc as Any)[key.replace(/~1/g, '/').replace(/~0/g, '~')] : undefined;
+      return resolveRefs(doc, target, [...seen, target], depth + 1);
+    }
+    return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, resolveRefs(x, from, seen, depth + 1)]));
+  };
   const yaml = (f: V3File): Any => {
     try {
       const y = parseYaml(f.text);
-      return y && typeof y === 'object' ? (y as Any) : {};
+      return y && typeof y === 'object' ? (resolveRefs(y, f.path, [f.path], 0) as Any) : {};
     } catch (e) {
       findings.add({ code: 'NOT_IMPORTED', severity: 'not-imported', where: [], message: `${f.path} is not valid YAML and was not imported: ${(e as Error).message.split('\n')[0]}` });
       return {};
@@ -252,6 +297,8 @@ export function postmanV3ToV21(files: V3File[], name: string, findings: Findings
       if (rest.includes('/') && !first.endsWith('.resources') && first !== '.resources') subdirs.add(dir ? `${dir}/${first}` : first);
     }
     for (const sub of subdirs) {
+      // a folder of shared files (what a `$ref` points to) is no folder of the collection: it needs a definition or a request below it
+      if (!defs.has(sub) && !requests.some((r) => r.path.startsWith(`${sub}/`))) continue;
       const def = defs.get(sub) ?? {};
       const auth = v3Auth(def.auth);
       here.push({

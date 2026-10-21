@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { Collection, CollectionFolder, CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { atomicWrite } from '../storage/fsutil.js';
+import { unifiedDiff } from '@testpion/shared';
 import type { ImportDocument } from './model.js';
 
 /**
@@ -31,6 +32,32 @@ export interface ReimportItem {
   reason: string;
   /** The source and this workspace both changed it. */
   conflict?: boolean;
+  /** The scripts that differ, line by line (a unified diff from what is here to what the source has): shown so the choice is made on the lines, not on the item. */
+  scripts?: ReimportScriptDiff[];
+}
+
+export interface ReimportScriptDiff {
+  field: 'preRequestScript' | 'testScript';
+  /** `--- a/…` `+++ b/…` hunks: `-` is what the workspace has now, `+` what the source has. */
+  diff: string;
+}
+
+const SCRIPT_FIELDS = ['preRequestScript', 'testScript'] as const;
+/** The longest diff kept for one script (a longer one is cut at a line and says so). */
+const MAX_SCRIPT_DIFF = 12_000;
+
+/** The scripts of a node (or the collection) that differ between what is here and what the source gives, as line diffs. */
+function scriptDiffs(here: { preRequestScript?: string; testScript?: string } | undefined, source: { preRequestScript?: string; testScript?: string }, name: string): ReimportScriptDiff[] | undefined {
+  const out: ReimportScriptDiff[] = [];
+  for (const field of SCRIPT_FIELDS) {
+    const before = here?.[field] ?? '';
+    const after = source[field] ?? '';
+    if (before === after) continue;
+    let diff = unifiedDiff(before, after, `${name} ${field === 'testScript' ? 'test script' : 'pre-request script'}`);
+    if (diff.length > MAX_SCRIPT_DIFF) diff = `${diff.slice(0, diff.lastIndexOf('\n', MAX_SCRIPT_DIFF))}\n… (the rest of the difference is not shown)`;
+    if (diff) out.push({ field, diff });
+  }
+  return out.length ? out : undefined;
 }
 
 export interface ReimportPlan {
@@ -165,7 +192,9 @@ export function planReimport(store: WorkspaceStore, doc: ImportDocument, c: Coll
       reason = 'changed in the source, but you edited it here too (choose Replace to take the source version)';
       conflict = true;
     }
-    items.push({ key, path, kind: node.kind, action, reason, ...(conflict ? { conflict } : {}) });
+    // the line-by-line script difference, for an item the source changed (a replace, or a conflict the person may decide to replace)
+    const scripts = found && (action === 'replace' || conflict) ? scriptDiffs(found.node as { preRequestScript?: string; testScript?: string }, node as { preRequestScript?: string; testScript?: string }, path.join(' / ')) : undefined;
+    items.push({ key, path, kind: node.kind, action, reason, ...(conflict ? { conflict } : {}), ...(scripts ? { scripts } : {}) });
   }
   const gone = Object.entries(record.nodes)
     .filter(([id, r]) => !seen.has(r.src) && locate(ex.items, id))
@@ -187,6 +216,10 @@ export function planReimport(store: WorkspaceStore, doc: ImportDocument, c: Coll
     if (hashOf(rootOf(ex)) === record.root.hash) return { key: 'collection', path: [], kind: 'folder' as const, action: 'replace' as const, reason: "the collection's variables, auth, headers or scripts changed in the source" };
     return { key: 'collection', path: [], kind: 'folder' as const, action: 'skip' as const, reason: 'changed in the source, but you edited the collection settings here too (choose Replace)', conflict: true };
   })();
+  if (rootAction.action === 'replace' || rootAction.conflict) {
+    const scripts = scriptDiffs(ex, c, c.name);
+    if (scripts) rootAction.scripts = scripts;
+  }
   const all = [rootAction, ...items];
   return {
     collectionId: ex.id,

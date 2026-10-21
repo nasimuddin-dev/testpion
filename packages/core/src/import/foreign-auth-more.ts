@@ -1,5 +1,5 @@
 import type { AuthConfig } from '../model/types.js';
-import { edgegrid, grant, hawk, jwt, ntlm, ok, unsupported, type ForeignAuth, type ForeignTool } from './foreign-auth.js';
+import { edgegrid, grant, hawk, jwt, noteEncrypted, ntlm, ok, unsupported, withoutEncrypted, type ForeignAuth, type ForeignTool } from './foreign-auth.js';
 
 /**
  * The auth of Thunder Client, Yaak and HTTPie requests (the tools with their own file shape; Apidog's follows
@@ -104,9 +104,12 @@ function yaak(type: string, a: Any, where: string, n: Norm): ForeignAuth {
     case 'hawk':
       return hawk({ id: n(a.id), key: n(a.key), algorithm: a.algorithm });
     case 'edgegrid':
+    case 'akamai-edgegrid':
+    case 'akamai':
       return edgegrid({ clientToken: n(a.clientToken), clientSecret: n(a.clientSecret), accessToken: n(a.accessToken) });
     default:
-      return unsupported('yaak', type, where);
+      // an auth type a Yaak plugin brings (Yaak loads plugins that add their own): TestPion cannot run a plugin, so it says so
+      return unsupported('yaak', type, where, ' (an auth type from a Yaak plugin: TestPion does not run Yaak plugins)');
   }
 }
 
@@ -142,9 +145,11 @@ export function mapMoreAuth(tool: 'thunder' | 'yaak' | 'httpie', raw: unknown, w
     if (!type) return { notes: [], headers: [] };
     return yaak(type, raw && typeof raw === 'object' ? (raw as Any) : {}, where, n);
   }
-  const a = raw && typeof raw === 'object' ? (raw as Any) : undefined;
+  // HTTPie can export credentials in encrypted form: they are left empty and named, never copied in as a credential
+  const { clean, fields } = withoutEncrypted(raw);
+  const a = clean && typeof clean === 'object' ? (clean as Any) : undefined;
   if (!a || !a.type) return { notes: [], headers: [] };
-  return tool === 'thunder' ? thunder(a, where, n) : httpie(a, where, n);
+  return noteEncrypted(tool === 'thunder' ? thunder(a, where, n) : httpie(a, where, n), tool, where, fields);
 }
 
 export type { AuthConfig };

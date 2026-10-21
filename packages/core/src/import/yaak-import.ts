@@ -2,7 +2,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import type { BodyConfig, CollectionFolder, CollectionNode, Environment, KeyValue, LibraryItem, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import { mapMoreAuth } from './foreign-auth-more.js';
-import { normalizeYaak, distinct } from './templates-more.js';
+import { normalizeYaak, distinct, splitYaakUnknown } from './templates-more.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
 import { collectionOf, type Any } from './import-helpers.js';
 
@@ -163,7 +163,9 @@ export function parseYaak(text: string): ImportDocument {
   if (grpc.length) findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [], message: `${grpc.length} Yaak gRPC request${grpc.length > 1 ? 's came' : ' came'} over as gRPC calls without their .proto files: choose the proto files again` });
 
   if (refs.length) findings.add({ code: 'TEMPLATE_TAG_UNSUPPORTED', severity: 'changed', where: [], message: `${distinct(refs).length} Yaak template${distinct(refs).length > 1 ? 's read' : ' reads'} another request's response (${distinct(refs).slice(0, 2).join(', ')}${distinct(refs).length > 2 ? ' …' : ''}) and stay as text: chain them with a script or a flow`, original: distinct(refs)[0] });
-  if (unknown.length) findings.add({ code: 'TEMPLATE_TAG_UNSUPPORTED', severity: 'changed', where: [], message: `${distinct(unknown).length} Yaak function${distinct(unknown).length > 1 ? 's have' : ' has'} no TestPion dynamic variable (${distinct(unknown).slice(0, 3).join(', ')}) and stay as text`, original: distinct(unknown)[0] });
+  const { builtIn, plugin } = splitYaakUnknown(unknown);
+  if (builtIn.length) findings.add({ code: 'TEMPLATE_TAG_UNSUPPORTED', severity: 'changed', where: [], message: `${builtIn.length} Yaak function${builtIn.length > 1 ? 's have' : ' has'} no TestPion dynamic variable (${builtIn.slice(0, 3).join(', ')}) and stay as text: compute the value in a pre-request script`, original: builtIn[0] });
+  if (plugin.length) findings.add({ code: 'TEMPLATE_TAG_UNSUPPORTED', severity: 'changed', where: [], message: `${plugin.length} template function${plugin.length > 1 ? 's come' : ' comes'} from a Yaak plugin (${plugin.slice(0, 3).join(', ')}) and stay as text: TestPion does not run Yaak plugins`, original: plugin[0] });
   doc.findings.push(...findings.list);
   return doc;
 }

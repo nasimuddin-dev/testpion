@@ -312,7 +312,7 @@ export { readZip, isZip } from './import/zip.js';
 export { readImportReport, listImportReceipts, undoImportReceipt, type ImportReceipt, type UndoResult } from './import/import-receipt.js';
 export { convertScript, type ScriptTool, type ScriptResult, type ScriptFinding } from './scripts/convert/index.js';
 export { liftTests, type LiftResult } from './scripts/convert/lift-tests.js';
-export { planReimport, applyReimport, type ReimportPlan, type ReimportItem, type ReimportAction } from './import/reimport.js';
+export { planReimport, applyReimport, type ReimportPlan, type ReimportItem, type ReimportScriptDiff, type ReimportAction } from './import/reimport.js';
 export { postmanV1ToV21, looksLikePostmanV3 } from './import/postman-versions.js';
 export { yaakFilesToExport } from './import/yaak-import.js';
 export { collectionToInsomniaV4, collectionToInsomniaV5, toInsomniaTemplate, type ExportResult } from './import/insomnia-export.js';

@@ -18,6 +18,18 @@ export const collectionOf = (name: string, items: CollectionNode[], extra: Parti
   ...extra,
 });
 
+/** The finding for values an export holds encrypted (they were left empty): one line, naming the first few, for the report. */
+export function encryptedValuesFinding(tool: string, names: readonly string[]): { code: 'NOT_IMPORTED'; severity: 'changed'; where: string[]; message: string } | undefined {
+  const all = [...new Set(names)];
+  if (!all.length) return undefined;
+  return {
+    code: 'NOT_IMPORTED',
+    severity: 'changed',
+    where: [],
+    message: `${all.length} value${all.length > 1 ? 's are' : ' is'} encrypted in the ${tool} export (${all.slice(0, 4).join(', ')}${all.length > 4 ? ' …' : ''}) and TestPion has no key for ${all.length > 1 ? 'them' : 'it'}: ${all.length > 1 ? 'they were' : 'it was'} left empty, enter ${all.length > 1 ? 'them' : 'it'} again`,
+  };
+}
+
 /** Nested variable objects become dotted keys: `{ api: { url } }` → `api.url`. */
 export function flattenVars(data: unknown, prefix = ''): KeyValue[] {
   if (!data || typeof data !== 'object') return [];

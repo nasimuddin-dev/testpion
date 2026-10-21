@@ -19,6 +19,8 @@ export { bundleRefOfItemRef } from '../kinds/transfer-refs.js';
 export type { BundleRef } from './types.js';
 export { partId, splitPartId, partialCollection, resolveNodeIds } from './parts.js';
 export type { ImportInto } from './into.js';
+export { exportCollectionPackage } from './foreign-package.js';
+export type { ForeignPackage, PackageFile, PackageTarget } from './foreign-package.js';
 export type { VariableChoice, WorkspaceVariablesOutcome, WorkspaceVariablesPreview } from './workspace-section.js';
 export type { BundleVariable, BundleWorkspaceSection } from './format.js';
 export { exportWholeWorkspace, importBundleAsWorkspace } from './whole-workspace.js';

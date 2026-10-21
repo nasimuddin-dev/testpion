@@ -396,10 +396,53 @@ function hoppscotch(a: Any, where: string): ForeignAuth {
 }
 
 /**
+ * Whether a value of an export looks like a field the tool encrypted: a CryptoJS `Salted__` text (base64 `U2FsdGVkX1…`),
+ * an `ENC[…]` / `enc:` / `encrypted:` marker, or an object that holds an initialisation vector with the cipher text. TestPion
+ * has no key for these, so it never copies one in as a credential: it says which fields to enter again.
+ */
+export function looksEncrypted(v: unknown): boolean {
+  if (typeof v === 'string') return /^(?:U2FsdGVkX1|ENC\[|enc:|encrypted:|\$ENCRYPTED\$)/.test(v.trim());
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const o = v as Any;
+  return (typeof o.iv === 'string' || typeof o.nonce === 'string') && ['data', 'ciphertext', 'cipher', 'content', 'encrypted'].some((k) => typeof o[k] === 'string');
+}
+
+/** The auth object with every encrypted field emptied, and the names (paths) of the fields that were. */
+export function withoutEncrypted(raw: unknown): { clean: unknown; fields: string[] } {
+  const fields: string[] = [];
+  const walk = (v: unknown, path: string, depth: number): unknown => {
+    if (looksEncrypted(v)) {
+      fields.push(path || 'value');
+      return '';
+    }
+    if (depth > 6 || !v || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map((x, i) => walk(x, `${path}[${i}]`, depth + 1));
+    return Object.fromEntries(Object.entries(v as Any).map(([k, x]) => [k, walk(x, path ? `${path}.${k}` : k, depth + 1)]));
+  };
+  return { clean: walk(raw, '', 0), fields };
+}
+
+/** The result with a note for the encrypted fields: they were left empty and must be entered again. */
+export function noteEncrypted(r: ForeignAuth, tool: ForeignTool, where: string, fields: string[]): ForeignAuth {
+  if (!fields.length) return r;
+  const names = fields.slice(0, 4).join(', ');
+  return { ...r, notes: [...r.notes, `"${where}": ${fields.length} credential field${fields.length > 1 ? 's' : ''} (${names}${fields.length > 4 ? ' …' : ''}) ${fields.length > 1 ? 'are' : 'is'} encrypted in the ${TOOL[tool]} export and TestPion has no key for ${fields.length > 1 ? 'them' : 'it'}: ${fields.length > 1 ? 'they were' : 'it was'} left empty, enter ${fields.length > 1 ? 'them' : 'it'} again`] };
+}
+
+/**
  * The auth of an imported request, folder or collection (`where` names it in the notes). `auth` is undefined when the
  * source has none (the item inherits); an unsupported scheme gives `none` + a disabled placeholder header + a note.
  */
 export function mapForeignAuth(tool: ForeignTool, raw: unknown, where: string): ForeignAuth {
+  // Apidog can export credentials in encrypted form: they are left empty and named, never copied in as a credential
+  if (tool === 'apidog') {
+    const { clean, fields } = withoutEncrypted(raw);
+    return noteEncrypted(mapForeignAuthPlain(tool, clean, where), tool, where, fields);
+  }
+  return mapForeignAuthPlain(tool, raw, where);
+}
+
+function mapForeignAuthPlain(tool: ForeignTool, raw: unknown, where: string): ForeignAuth {
   if (tool === 'opencollection' && (raw === 'inherit' || raw === 'none')) return ok({ type: raw });
   const a = raw && typeof raw === 'object' ? (raw as Any) : undefined;
   if (!a) return { notes: [], headers: [] };

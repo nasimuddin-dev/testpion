@@ -84,6 +84,9 @@ export function normalizeYaak(s: unknown): TemplateResult {
     if (to) return `{{${to}}}`;
     const env = /^env\.([A-Za-z_][\w.-]*)$/.exec(b);
     if (env) return `{{${env[1]}}}`;
+    // random.range(min, max) of Yaak's random function plugin: a whole number between the two
+    const range = /^random\.range\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)$/.exec(b);
+    if (range && Number(range[1]) <= Number(range[2])) return `{{$randomInt(${range[1]},${range[2]})}}`;
     unknown.push(all);
     return all;
   });
@@ -92,6 +95,21 @@ export function normalizeYaak(s: unknown): TemplateResult {
 
 export function normalizeHoppscotch(s: unknown): string {
   return normalizeTemplate(s).replace(/<<(\$?[\w.-]+)>>/g, '{{$1}}');
+}
+
+/**
+ * The namespaces of the template functions Yaak ships itself (its own plugins: hash, encode, json, regex, file,
+ * request/response/cookie readers, prompts, fake data). A function in one of them that has no TestPion variable is a Yaak
+ * function with no equivalent; any other namespace is a function a plugin brought, which TestPion cannot run.
+ */
+const YAAK_BUILT_IN = /^\$\{\[\s*(?:hash|encode|decode|json|xml|regex|fs|os|prompt|request|response|cookie|faker|timestamp|uuid|random|base64|url)\./;
+
+/** Unknown Yaak templates split into Yaak's own functions and plugin functions (for two plain findings). */
+export function splitYaakUnknown(unknown: readonly string[]): { builtIn: string[]; plugin: string[] } {
+  const builtIn: string[] = [];
+  const plugin: string[] = [];
+  for (const u of distinct([...unknown])) (YAAK_BUILT_IN.test(u) ? builtIn : plugin).push(u);
+  return { builtIn, plugin };
 }
 
 /** The distinct templates of a list, for one finding. */

@@ -8,6 +8,7 @@ import {
   applyImport,
   buildBundle,
   describeBundle,
+  exportCollectionPackage,
   folderRefs,
   listImports,
   parseSelector,
@@ -17,6 +18,7 @@ import {
   rememberBundle,
   sectionRefs,
   undoImport,
+  writeZip,
   type BundleRef,
   type ImportChoice,
   type ParsedBundle,
@@ -62,11 +64,26 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           uses: { type: 'boolean', description: 'Add everything the items use' },
           datasets: { type: 'string', enum: ['auto', 'embed', 'reference'], description: 'auto (default): embed up to 10 MB, bigger by reference' },
           providers: { type: 'boolean', description: 'Include AI providers in a whole-workspace or section export' },
+          package: { type: 'string', enum: ['postman', 'bruno'], description: 'Instead of a bundle: one collection (`items`: [collection:<id>]) as a zip another tool opens - `postman` (the v2.1 collection, environments, the workspace variables as globals, API definitions, data files, .mcp.json) or `bruno` (a Bruno collection folder with the same extras). What the tool cannot hold is listed in `notes`; secret values are never in it' },
           title: str('The bundle’s title (its file name)'),
           out: str('Where to write it, relative to the workspace: a new file under exports/ or .local/exports/ (.zip or .json; default .local/exports/<title>.testpion.zip)'),
         },
       },
       run: (a) => {
+        if (a.package === 'postman' || a.package === 'bruno') {
+          // one collection for another tool, with what it uses, as a zip (written like a bundle: new file, exports/ only)
+          const picked = Array.isArray(a.items) && a.items.length === 1 ? parseSelector(store, a.items[0]) : undefined;
+          if (!picked || picked.kind !== 'collection' || picked.id.includes('#')) throw new ApsError('ValidationError', '`package` takes one whole collection: items: ["collection:<id>"]');
+          const pkg = exportCollectionPackage(store, picked.id, a.package);
+          const zip = writeZip(pkg.files.map((f) => ({ name: f.path, data: f.data })));
+          const out = typeof a.out === 'string' && a.out ? a.out : undefined;
+          let name = `${pkg.name}.${a.package}.zip`;
+          for (let n = 2; !out && existsSync(store.path('.local', 'exports', name)); n++) name = `${pkg.name}.${a.package}-${n}.zip`;
+          const file = exportTarget(store, out ?? `.local/exports/${name}`, { what: 'bundle exports', arg: 'out' });
+          mkdirSync(dirname(file), { recursive: true });
+          writeFileSync(file, zip, { flag: 'wx' });
+          return { path: relative(store.root, file).split('\\').join('/'), absolutePath: file, format: 'zip', package: a.package, size: zip.length, files: pkg.files.map((f) => f.path), replaced: pkg.replaced, notes: pkg.notes };
+        }
         let refs: BundleRef[] | 'all';
         if (a.all === true) refs = 'all';
         else if (typeof a.section === 'string' && a.section) refs = sectionRefs(store, a.section);

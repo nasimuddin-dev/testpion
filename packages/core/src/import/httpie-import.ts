@@ -3,7 +3,8 @@ import { shortId, slugify } from '../util/ids.js';
 import { mapMoreAuth } from './foreign-auth-more.js';
 import { normalizeTemplate } from './templates.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
-import { collectionOf, type Any } from './import-helpers.js';
+import { collectionOf, encryptedValuesFinding, type Any } from './import-helpers.js';
+import { looksEncrypted } from './foreign-auth.js';
 
 /**
  * HTTPie for Desktop (and the web app) as an import document: its collection and environment exports
@@ -23,7 +24,14 @@ export function parseHttpie(text: string): ImportDocument {
   const findings = new Findings();
   const doc = newDocument('httpie', text, { tool: 'HTTPie', ...(d.meta?.version ? { version: String(d.meta.version) } : {}) });
   const n = (s: unknown) => normalizeTemplate(s);
-  const kv = (list: unknown): KeyValue[] => (Array.isArray(list) ? list : []).filter((x: Any) => x?.name).map((x: Any) => ({ key: n(x.name), value: n(x.value ?? ''), enabled: x.enabled !== false }));
+  // a value HTTPie exported encrypted is left empty and named (TestPion has no key for it)
+  const encrypted: string[] = [];
+  const val = (name: unknown, v: unknown): string => (looksEncrypted(v) ? (encrypted.push(String(name)), '') : n(v ?? ''));
+  const kv = (list: unknown): KeyValue[] => (Array.isArray(list) ? list : []).filter((x: Any) => x?.name).map((x: Any) => ({ key: n(x.name), value: val(x.name, x.value), enabled: x.enabled !== false }));
+  const flushEncrypted = () => {
+    const f = encryptedValuesFinding('HTTPie', encrypted);
+    if (f) findings.add(f);
+  };
 
   // ---- an environment export
   if (String(d.meta?.contentType ?? '') === 'environment' || (e.variables && !e.requests && !e.collections)) {
@@ -31,8 +39,9 @@ export function parseHttpie(text: string): ImportDocument {
     const vars = e.variables;
     const variables: KeyValue[] = Array.isArray(vars)
       ? kv(vars)
-      : Object.entries((vars && typeof vars === 'object' ? vars : {}) as Any).map(([key, v]) => ({ key, value: n(typeof v === 'object' && v ? (v as Any).value ?? '' : v ?? ''), enabled: !(typeof v === 'object' && v && (v as Any).enabled === false) }));
+      : Object.entries((vars && typeof vars === 'object' ? vars : {}) as Any).map(([key, v]) => ({ key, value: val(key, typeof v === 'object' && v && !looksEncrypted(v) ? (v as Any).value ?? '' : v), enabled: !(typeof v === 'object' && v && (v as Any).enabled === false) }));
     doc.environments.push({ id: slugify(name) || 'httpie', name, variables });
+    flushEncrypted();
     doc.findings.push(...findings.list);
     return doc;
   }
@@ -113,6 +122,7 @@ export function parseHttpie(text: string): ImportDocument {
   const rootAuth = authOf(e.auth, name);
   const collection: Collection = collectionOf(name, items(e), { ...(e.docs ? { description: String(e.docs) } : {}), ...(rootAuth ? { auth: rootAuth } : {}) });
   doc.collections.push(collection);
+  flushEncrypted();
   doc.findings.push(...findings.list);
   return doc;
 }
