@@ -3,12 +3,12 @@
  * (`tool`), what it does (`description`) and the variables the flow reads as its arguments (`inputs`). The MCP server
  * registers one tool per exposed flow (mcp-server/tools/flow-tools.ts); `testpion flows` and the app list them.
  */
-import { readFileSync } from 'node:fs';
-import { extname, relative, sep } from 'node:path';
+import { extname } from 'node:path';
 import type { Node, Pair } from 'yaml';
 import { isMap, isPair, isScalar, isSeq, parseDocument, parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
-import { isSuiteFile, walkTestFiles } from './suite-file.js';
+import { isSuiteFile } from './suite-file.js';
+import { TestFileScanner } from './test-file-scan.js';
 
 /** One argument of the tool: a variable the flow reads as {{name}}. */
 export interface FlowInput {
@@ -86,36 +86,35 @@ export function readExposure(text: string, file?: string): FlowExposure | undefi
   return data && typeof data === 'object' && !Array.isArray(data) ? parseExpose(data.expose, file) : undefined;
 }
 
-/** Every test file and suite under tests/ with an `expose:` block, in path order. Invalid blocks come back with `problem`. */
-export function exposedFlows(store: { path(...p: string[]): string }): ExposedFlow[] {
-  const base = store.path('tests');
-  const out: ExposedFlow[] = [];
-  for (const abs of walkTestFiles(base)) {
-    let text: string;
-    try {
-      text = readFileSync(abs, 'utf8');
-    } catch {
-      continue;
-    }
-    // cheap pre-check: only files that mention the key are parsed
-    if (!/^\s*"?expose"?\s*:/m.test(text)) continue;
-    const file = relative(base, abs).split(sep).join('/');
-    const kind = isSuiteFile(abs) ? 'suite' : 'file';
-    try {
-      const e = readExposure(text, file);
-      if (e) out.push({ ...e, inputs: e.inputs ?? [], file, kind });
-    } catch (e) {
-      const data = (() => {
-        try {
-          return parseYaml(text) as Record<string, unknown> | null;
-        } catch {
-          return null;
-        }
-      })();
-      const tool = data && typeof data.expose === 'object' && data.expose && typeof (data.expose as { tool?: unknown }).tool === 'string' ? String((data.expose as { tool: string }).tool) : '';
-      if (data && 'expose' in data) out.push({ tool, inputs: [], file, kind, problem: (e as Error).message });
-    }
+const MENTIONS = /^\s*"?expose"?\s*:/m;
+
+/** What one file says about being exposed (undefined when it has no `expose:` block). */
+function exposedOfText(text: string, file: string, kind: ExposedFlow['kind']): ExposedFlow | undefined {
+  // cheap pre-check: only files that mention the key are parsed
+  if (!MENTIONS.test(text)) return undefined;
+  try {
+    const e = readExposure(text, file);
+    return e ? { ...e, inputs: e.inputs ?? [], file, kind } : undefined;
+  } catch (e) {
+    const data = (() => {
+      try {
+        return parseYaml(text) as Record<string, unknown> | null;
+      } catch {
+        return null;
+      }
+    })();
+    const tool = data && typeof data.expose === 'object' && data.expose && typeof (data.expose as { tool?: unknown }).tool === 'string' ? String((data.expose as { tool: string }).tool) : '';
+    return data && 'expose' in data ? { tool, inputs: [], file, kind, problem: (e as Error).message } : undefined;
   }
+}
+
+/** Files are read once and remembered by size and time: the agent tools ask for the list on every request. */
+const scanner = new TestFileScanner<ExposedFlow | undefined>((text, file, abs) => exposedOfText(text, file, isSuiteFile(abs) ? 'suite' : 'file'));
+
+/** Every test file and suite under tests/ with an `expose:` block, in path order. Invalid blocks come back with `problem`. Only files that changed since the last call are read again. */
+export function exposedFlows(store: { path(...p: string[]): string }): ExposedFlow[] {
+  const out: ExposedFlow[] = [];
+  for (const { value } of scanner.scan(store.path('tests'))) if (value) out.push({ ...value, inputs: value.inputs.map((i) => ({ ...i })) });
   return out;
 }
 

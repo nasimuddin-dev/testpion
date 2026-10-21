@@ -4,13 +4,12 @@
  * This module reads, checks and finds the blocks; the server is flow-webhooks.ts. It has no runner imports, so the
  * loader and the lint can use it.
  */
-import { readFileSync, statSync } from 'node:fs';
-import { extname, relative, sep } from 'node:path';
+import { extname } from 'node:path';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { parseExpose, type FlowInput } from './exposed-flows.js';
-import { walkTestFiles } from './suite-file.js';
+import { TestFileScanner } from './test-file-scan.js';
 
 /** The `webhook:` block of a test file. */
 interface FlowWebhook {
@@ -87,9 +86,8 @@ export function testsRelative(file: string): string {
 
 const MENTIONS = /^\s*"?webhook"?\s*:/m;
 
-/** What a file says, by its size and time: a rescan only parses the files that changed. */
-type Cached = { key: string; flow: WebhookFlow | null };
-const cache = new Map<string, Cached>();
+/** What each file says, by its size and time: a rescan only parses the files that changed (up to 20,000 files are remembered). */
+const scanner = new TestFileScanner<WebhookFlow | null>((text, file) => webhookOfText(text, file));
 
 /** The webhook of one file's text (null when it has none); a bad block comes back with `problem`. */
 export function webhookOfText(text: string, file: string): WebhookFlow | null {
@@ -124,28 +122,9 @@ export function webhookOfText(text: string, file: string): WebhookFlow | null {
 export function webhookFlows(testsDir: string): WebhookFlow[] {
   const out: WebhookFlow[] = [];
   const seen = new Map<string, string>();
-  for (const abs of walkTestFiles(testsDir, { suites: false })) {
-    let key: string;
-    try {
-      const st = statSync(abs);
-      key = `${st.size}:${st.mtimeMs}`;
-    } catch {
-      continue;
-    }
-    let hit = cache.get(abs);
-    if (!hit || hit.key !== key) {
-      let text: string;
-      try {
-        text = readFileSync(abs, 'utf8');
-      } catch {
-        continue;
-      }
-      hit = { key, flow: webhookOfText(text, relative(testsDir, abs).split(sep).join('/')) };
-      if (cache.size > 5000) cache.clear();
-      cache.set(abs, hit);
-    }
-    if (!hit.flow) continue;
-    const f = { ...hit.flow };
+  for (const { value } of scanner.scan(testsDir, { suites: false })) {
+    if (!value) continue;
+    const f = { ...value };
     if (!f.problem) {
       const other = seen.get(f.path);
       if (other) f.problem = `The webhook path ${f.path} is already used by tests/${other}`;

@@ -11,6 +11,7 @@ export * from './util/concurrency.js';
 // yaml loaded at first use (keeps it off the app's startup path): use these instead of importing 'yaml'
 export { parseYaml, stringifyYaml } from './util/lazy-yaml.js';
 export * from './util/stats.js';
+export * from './util/page.js';
 export * from './util/redact.js';
 export * from './util/jsonpath.js';
 export * from './log/logger.js';

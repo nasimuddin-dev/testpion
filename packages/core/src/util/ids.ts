@@ -1,4 +1,4 @@
-import { randomBytes, randomFillSync, randomUUID } from 'node:crypto';
+import { randomFillSync, randomUUID } from 'node:crypto';
 
 /**
  * Random hex for ids that name things (runs, spans, messages, files), not for secrets: the bytes come from a pool refilled

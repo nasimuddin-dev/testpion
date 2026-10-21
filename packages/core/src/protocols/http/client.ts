@@ -65,6 +65,8 @@ export interface PreparedRequest {
 let undiciMod: Promise<typeof import('undici')> | undefined;
 const undici = () => (undiciMod ??= import('undici'));
 
+/** Connection pools by TLS / proxy settings: at most this many are kept, the least recently used is closed (a host that serves many users with different client certificates must not collect pools without end). */
+const DISPATCHERS_MAX = 32;
 const dispatchers = new Map<string, Dispatcher>();
 
 // the protocol each connection negotiated (ALPN), by origin: how an HTTP/2 response is recognised
@@ -86,6 +88,11 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): D
   if (!pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
   const key = JSON.stringify([proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
   let d = pool ? undefined : dispatchers.get(key);
+  if (d) {
+    // most recently used last
+    dispatchers.delete(key);
+    dispatchers.set(key, d);
+  }
   if (!d) {
     const connect: Record<string, unknown> = {};
     if (s.insecure) connect.rejectUnauthorized = false;
@@ -99,7 +106,16 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): D
       if (s.clientCert.passphrase) connect.passphrase = s.clientCert.passphrase;
     }
     d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...pool });
-    if (!pool) dispatchers.set(key, d);
+    if (!pool) {
+      dispatchers.set(key, d);
+      while (dispatchers.size > DISPATCHERS_MAX) {
+        const oldest = dispatchers.keys().next().value!;
+        const old = dispatchers.get(oldest);
+        dispatchers.delete(oldest);
+        // a graceful close: requests in flight on it finish first
+        void old?.close().catch(() => undefined);
+      }
+    }
   }
   return d;
 }

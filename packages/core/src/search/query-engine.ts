@@ -37,6 +37,10 @@ export interface SearchOutcome {
   rows: SearchRow[];
   /** How many of the entries scanned matched (more than `rows` when the limit cut the list). */
   matched: number;
+  /** More matches follow this page (ask again with `offset: nextOffset`). */
+  truncated: boolean;
+  /** The offset of the next page, when there is one. */
+  nextOffset?: number;
   /** Per source: entries looked at and matches. */
   perSource: Partial<Record<SearchSource, { scanned: number; matched: number }>>;
   /** Sources whose scan stopped at a cap: older entries were not looked at. */
@@ -379,14 +383,19 @@ export async function runSearchQuery(store: WorkspaceStore, query: SearchQuery, 
     return (ka - kb) * dir;
   });
   const matched = s.rows.length;
+  const offset = q.offset ?? 0;
+  const page = s.rows.slice(offset, offset + q.limit);
+  const truncated = offset + page.length < matched;
   for (const c of s.capped)
     s.notes.push(
       `${SOURCE_LABEL[c]}: only the newest ${c === 'history' ? SEARCH_SCAN.history : c === 'runs' ? SEARCH_SCAN.runs : c === 'traces' ? `${SEARCH_SCAN.traceFiles} traces' files (of ${SEARCH_SCAN.traces})` : `${SEARCH_SCAN.resultRuns} runs`} were searched.`,
     );
   return {
     query: q,
-    rows: s.rows.slice(0, q.limit).map(({ sortTime: _t, ...row }) => row),
+    rows: page.map(({ sortTime: _t, ...row }) => row),
     matched,
+    truncated,
+    ...(truncated ? { nextOffset: offset + page.length } : {}),
     perSource: s.perSource,
     capped: [...s.capped],
     notes: s.notes,

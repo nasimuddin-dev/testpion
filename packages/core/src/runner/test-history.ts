@@ -1,6 +1,7 @@
 /** One test across earlier runs: did it pass, how long it took, which checks failed. */
 import { join } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { pageOf, type ListPage } from '../util/page.js';
 import { jsonNeedle, readResultsFile } from './runner.js';
 
 interface TestHistoryPoint {
@@ -101,6 +102,11 @@ export async function flakyTests(store: WorkspaceStore, opts: { runs?: number } 
 }
 
 const flakyCache = new WeakMap<WorkspaceStore, { key: string; value: FlakyTest[] }>();
+
+/** A page of the flaky tests (most flips first): 200 unless asked, at most 1,000; `nextCursor` asks for the next. */
+export async function flakyTestsPage(store: WorkspaceStore, opts: { runs?: number; limit?: number; cursor?: string } = {}): Promise<ListPage<FlakyTest>> {
+  return pageOf(await flakyTests(store, { runs: opts.runs }), opts, { limit: 200, max: 1000 });
+}
 
 async function scanFlaky(store: WorkspaceStore, runs: Array<{ id: string; startedAt: string }>): Promise<FlakyTest[]> {
   const by = new Map<string, { id: string; name: string; statuses: string[]; retried: number; lastAt: string }>();

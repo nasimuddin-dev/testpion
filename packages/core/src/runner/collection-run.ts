@@ -126,7 +126,7 @@ interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concurrency' 
   data?: DatasetRecord[];
   /** Pause between requests. */
   delayMs?: number;
-  /** Safety limit on requests per iteration, so a `setNextRequest` loop can't run forever. Default 1000. */
+  /** Safety limit on requests per iteration, so a `setNextRequest` loop can't run forever. Default: 1000, or four times the requests of the collection when it has more than 250. */
   maxRequestsPerIteration?: number;
   /**
    * The collection's gRPC calls and WebSocket / MQTT connections (see `collectionRealtimeTests`): they run
@@ -153,7 +153,8 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
   const realtime = opts.realtime ?? [];
   if (!refs.length && !realtime.length) throw new ApsError('ValidationError', 'Nothing to run: the selection has no requests');
   const iterations = Math.max(1, opts.iterations ?? (data?.length || 1));
-  const maxSteps = opts.maxRequestsPerIteration ?? 1000;
+  // (a collection of thousands of requests runs them all once; only a loop takes it past four times that)
+  const maxSteps = opts.maxRequestsPerIteration ?? Math.max(1000, refs.length * 4);
 
   // the generator waits for each result before choosing the next request
   const waiters = new Map<string, (r: TestResult | undefined) => void>();
