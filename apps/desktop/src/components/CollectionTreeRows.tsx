@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight, Plus, Star } from 'lucide-react';
 import { memo, type DragEvent, type RefObject } from 'react';
-import { savedItemRef } from '@testpion/shared';
+import { savedItemRef, type NodeKind } from '@testpion/shared';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { categoryCounts, type RequestCategory } from '../lib/collection-filter';
@@ -232,7 +232,7 @@ export const ExtraFolderRow = memo(function ExtraFolderRow({ r, ctx }: { r: Extr
   const x = () => ctx.current;
   return (
     <TreeRowShell
-      kind={r.g.cat === 'websocket' ? 'folder:ws-connection' : 'folder:grpc-call'}
+      kind={`folder:${r.g.kind}` as NodeKind}
       nodeId={r.key}
       label={r.folder}
       depth={r.depth}
@@ -240,7 +240,7 @@ export const ExtraFolderRow = memo(function ExtraFolderRow({ r, ctx }: { r: Extr
       ctx={() => x().extraFolderMenu(r)}
       onClick={() => x().toggle(r.key, r.open)}
       style={indent(r.depth)}
-      git={{ folder: r.g.cat === 'websocket' ? 'ws-connection' : 'grpc-call', name: r.folder }}
+      git={{ folder: r.g.kind, name: r.folder }}
     >
       {r.open ? OPEN_ICON : CLOSED_ICON}
       {FOLDER_ICON}
@@ -255,7 +255,7 @@ export const ExtraFolderRow = memo(function ExtraFolderRow({ r, ctx }: { r: Extr
 /** A saved gRPC call or connection, shown under its collection. */
 export const ExtraItemRow = memo(function ExtraItemRow({ g, i, depth, from, id, active, renaming, ctx }: { g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string; id: string; active: boolean; renaming: boolean; ctx: Ctx }) {
   const x = () => ctx.current;
-  const kind = g.cat === 'grpc' ? 'grpc-call' : 'ws-connection';
+  const kind = g.kind;
   const rn = () => g.rename?.(i.id);
   return (
     <TreeRowShell

@@ -172,6 +172,17 @@ export function kindByName(name: string): ItemKindInfo | undefined {
 /** The kind of a library's items (grpc → grpc-call, monitors → monitor); live kinds only. */
 export const kindOfLibrary = (library: string): ItemKindInfo | undefined => liveKinds().find((k) => k.library === library);
 
+/**
+ * The libraries whose items are saved calls or connections shown inside a collection (gRPC calls; WebSocket, Socket.IO, MQTT and
+ * Kafka connections): the registry's library kinds with a collection as parent. A view asks these instead of comparing a
+ * kind or a library with a literal (a test keeps the two in step with the registry).
+ */
+export type CollectionCallLibrary = 'grpc' | 'websocket';
+export const COLLECTION_CALL_LIBRARIES: readonly CollectionCallLibrary[] = ['grpc', 'websocket'];
+export const isCollectionCallLibrary = (library: unknown): library is CollectionCallLibrary => library === 'grpc' || library === 'websocket';
+/** The item kind of such a library (grpc → grpc-call, websocket → ws-connection). */
+export const collectionCallKind = (library: CollectionCallLibrary): 'grpc-call' | 'ws-connection' => (library === 'grpc' ? 'grpc-call' : 'ws-connection');
+
 /** The registry kind of an ItemRef ('saved' by its library); undefined for a library this version doesn't know. */
 export function kindOfRef(ref: Pick<ItemRef, 'kind'> & { library?: string }): ItemKindInfo | undefined {
   if (ref.kind === 'saved') return kinds.find((k) => k.library === ref.library && (k.ref === 'saved' || k.ref === 'monitor'));

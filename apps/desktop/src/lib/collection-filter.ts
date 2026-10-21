@@ -1,4 +1,5 @@
 import type { CollectionNode } from '../types';
+import { isCollectionCallLibrary } from '@testpion/shared';
 
 /** Whether a tree node belongs in the current text/favorites view. */
 export function matchesCollectionNode(node: CollectionNode, filter = '', favoritesOnly = false): boolean {
@@ -95,7 +96,7 @@ export function hasCategory(nodes: CollectionNode[], cat: RequestCategory): bool
 
 /** Requests of this category in these nodes. */
 export function countCategory(nodes: CollectionNode[], cat: RequestCategory): number {
-  return cat === 'grpc' || cat === 'websocket' ? 0 : categoryCounts(nodes)[cat];
+  return isCollectionCallLibrary(cat) ? 0 : categoryCounts(nodes)[cat];
 }
 
 /** Folders with no requests at all (they show under the collection's first category). */
