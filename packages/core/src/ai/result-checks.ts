@@ -21,7 +21,7 @@ import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
 import { pinsGeneratedValue, saferChecks } from './verify.js';
 
 /** What `prepare` keeps on this computer for a result's checks. */
-export interface ResultChecksLocal {
+interface ResultChecksLocal {
   kind: 'result';
   runId: string;
   resultId: string;

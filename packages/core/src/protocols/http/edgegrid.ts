@@ -8,7 +8,7 @@ import { ApsError } from '../../errors.js';
  * https://techdocs.akamai.com/developer/docs/authenticate-with-edgegrid
  */
 
-export interface EdgeGridConfig {
+interface EdgeGridConfig {
   clientToken: string;
   clientSecret: string;
   accessToken: string;

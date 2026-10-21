@@ -13,7 +13,7 @@ import { needsJudgeService } from './metrics-judged.js';
 import { judgeCostResult } from './metrics-format.js';
 import { hasRoute, runRouted } from './route.js';
 
-export interface ScoredSample {
+interface ScoredSample {
   checks: CheckResult[];
   failure?: RagFailure;
 }

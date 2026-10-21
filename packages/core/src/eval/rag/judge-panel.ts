@@ -12,6 +12,7 @@
  *
  * Pure orchestration over `judgeCall`: the cache, the ledger, the caps and Local only are the judge service's.
  */
+import { mean, stdev as sd } from '../../util/stats.js';
 import { round3 } from './measures.js';
 import { judgeCall, type JudgeAnswer, type JudgeRef, type RagJudgeHost } from './judge.js';
 import type { JudgedMetric, Verdict } from './judge-prompts.js';
@@ -55,7 +56,7 @@ export interface PanelResult {
 }
 
 /** A verdict's score: the share of true verdicts, or the mean rating over its maximum. */
-export function scoreOf(v: Verdict, metric: JudgedMetric): number | undefined {
+function scoreOf(v: Verdict, metric: JudgedMetric): number | undefined {
   if (!v.items.length) return undefined;
   if (metric.scorer) return metric.scorer(v.items);
   // a weighted checklist: the weights belong to the items in the order they were asked; a verdict with another count is not weighted
@@ -75,12 +76,6 @@ const meets = (score: number, t: number, lower?: boolean) => (lower ? score <= t
 
 const toItems = (v: Verdict): PanelItem[] => v.items.map((i) => ({ text: i.text.slice(0, 500), ok: i.verdict, evidence: i.reason.slice(0, 300), ...(i.rating !== undefined ? { rating: i.rating } : {}) }));
 
-const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
-const sd = (xs: number[]) => {
-  if (xs.length < 2) return 0;
-  const m = mean(xs);
-  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
-};
 
 /** The share of items (matched by their text) whose verdict was not the same in every run. */
 function flipRate(runs: Verdict[]): number {

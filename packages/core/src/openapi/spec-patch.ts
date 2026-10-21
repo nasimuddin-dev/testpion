@@ -23,7 +23,7 @@ export type PatchOp =
   | { op: 'add-enum'; at: Array<string | number>; value: unknown }
   | { op: 'add-response'; at: Array<string | number>; status: string; description: string; media?: string; schema?: Json };
 
-export interface PlannedPatch {
+interface PlannedPatch {
   ops: PatchOp[];
   /** What the change says in words: "add `nickname` (string) to the schema of GET /patients/{id} 200". */
   summary: string;
@@ -32,7 +32,7 @@ export interface PlannedPatch {
 /* ------------------------------------------------------------------ inferring a schema from a value */
 
 /** A schema for an observed value: types and, for objects, their properties (three levels deep); formats for the obvious strings. */
-export function inferSchemaOf(v: unknown, depth = 0): Json {
+function inferSchemaOf(v: unknown, depth = 0): Json {
   const t = jsonType(v);
   if (t === 'string') {
     const s = String(v);

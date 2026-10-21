@@ -21,7 +21,7 @@ export function defaultLabelsName(store: Pick<WorkspaceStore, 'runDir'>, runId: 
   return safe || runId.replace(/[^A-Za-z0-9._-]+/g, '-');
 }
 
-export interface LabelInput {
+interface LabelInput {
   run: string;
   /** A result id of the run, or a dataset record id. */
   result: string;
@@ -65,7 +65,7 @@ export function unlabel(store: WorkspaceStore, o: { labels: string; record: stri
   return clearLabel(store, o.labels, recordOfResult(o.record), o.metric);
 }
 
-export interface CalibrateInput {
+interface CalibrateInput {
   run: string;
   labels?: string;
   metrics?: string[];
@@ -97,7 +97,7 @@ const setLine = (text: string, key: string, value: string): string => {
   return re.test(text) ? text.replace(re, `${key}: ${value}`) : `${text.replace(/\s*$/, '')}\n${key}: ${value}\n`;
 };
 
-export interface ApplyInput {
+interface ApplyInput {
   metric: string;
   threshold: number;
   /** The saved evaluation (id or name) whose evaluator gets the pass mark; a custom metric (`custom/<id>`) is edited in its file. */

@@ -4,6 +4,8 @@
  * truth, so TPR is how many of the answers a person passed the judge also passed. Cohen's kappa is reported (not only raw
  * agreement) because most RAG samples pass, and a judge that always says "pass" agrees with them most of the time.
  */
+import { mulberry32 } from '../../../util/random.js';
+import { round3 as r3 } from '../measures.js';
 
 export interface Pair {
   /** The judge's verdict at the metric's threshold. */
@@ -36,7 +38,6 @@ export interface Agreement {
   recall?: number;
 }
 
-const r3 = (x: number) => Math.round(x * 1000) / 1000;
 const div = (a: number, b: number): number | undefined => (b > 0 ? a / b : undefined);
 
 export function confusionOf(pairs: ReadonlyArray<Pair>): Confusion {
@@ -73,14 +74,6 @@ export function agreementOf(pairs: ReadonlyArray<Pair>): Agreement {
     ...(div(c.tp, c.tp + c.fp) !== undefined ? { precision: r3(div(c.tp, c.tp + c.fp)!) } : {}),
   };
 }
-
-export const mulberry32 = (seed: number) => () => {
-  seed |= 0;
-  seed = (seed + 0x6d2b79f5) | 0;
-  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-};
 
 const quantile = (sorted: number[], q: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1) + 1e-9)))]!;
 
@@ -119,7 +112,7 @@ export function bootstrapAgreement(pairs: ReadonlyArray<Pair>, o: { seed?: numbe
   };
 }
 
-export interface ScoredPair {
+interface ScoredPair {
   score: number;
   human: boolean;
 }

@@ -3,14 +3,14 @@ import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { importOpenApi } from '../import/importers.js';
 import type { CollectionNode, HttpRequestSpec } from '../model/types.js';
-import { deref } from '../util/json-ref.js';
+import { deref, operationParameters } from '../util/json-ref.js';
 
 /**
  * An OpenAPI 3 / Swagger 2 document as a reader sees it (the API definition's Preview, `testpion openapi-ops`, the
  * `openapi_outline` MCP tool): operations grouped by tag with their parameters, request body and responses, schemas
  * written as short type outlines, and a ready request per operation (the same one an import makes).
  */
-export interface OutlineParam {
+interface OutlineParam {
   name: string;
   in: string;
   required: boolean;
@@ -18,7 +18,7 @@ export interface OutlineParam {
   description?: string;
 }
 
-export interface OutlineResponse {
+interface OutlineResponse {
   code: string;
   description?: string;
   contentType?: string;
@@ -149,10 +149,7 @@ export function openApiOutline(text: string): ApiOutline {
       const op = item[method] as Json | undefined;
       if (!op || typeof op !== 'object') continue;
       count++;
-      const own = ((op.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json);
-      const params = [...own, ...((item.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json).filter((p) => !own.some((o) => o?.name === p?.name && o?.in === p?.in))].filter(
-        (p) => p && p.in !== 'body',
-      );
+      const params = operationParameters(doc, item, op).filter((p) => p && p.in !== 'body');
       let requestBody: OutlineOperation['requestBody'];
       if (v2) {
         const bp = ((op.parameters as unknown[]) ?? []).map((p) => deref(doc, p) as Json).find((p) => p?.in === 'body');

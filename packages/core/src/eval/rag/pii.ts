@@ -4,9 +4,11 @@
  * public IPv4 addresses. A finding is reported by its kind and a MASKED form (first and last two characters), so the personal
  * data an answer leaked is never copied into a result or a log. Checksums keep order numbers and dates from being flagged.
  */
+import { ibanValid, luhn } from '../../util/checksums.js';
+
 export type PiiKind = 'email' | 'phone' | 'ssn' | 'card' | 'iban' | 'ip';
 
-export interface PiiFinding {
+interface PiiFinding {
   kind: PiiKind;
   /** The match with its middle hidden: `jo****om`. */
   masked: string;
@@ -17,33 +19,6 @@ export const ALL_PII_KINDS: readonly PiiKind[] = ['email', 'phone', 'ssn', 'card
 export const DEFAULT_PII_KINDS: readonly PiiKind[] = ['email', 'phone', 'ssn', 'card', 'iban'];
 
 const mask = (s: string) => (s.length <= 4 ? '****' : `${s.slice(0, 2)}${'*'.repeat(Math.min(8, s.length - 4))}${s.slice(-2)}`);
-
-function luhn(digits: string): boolean {
-  let sum = 0;
-  let dbl = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let d = digits.charCodeAt(i) - 48;
-    if (dbl) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    dbl = !dbl;
-  }
-  return sum % 10 === 0;
-}
-
-function ibanOk(iban: string): boolean {
-  const s = iban.replace(/\s/g, '').toUpperCase();
-  if (s.length < 15 || s.length > 34) return false;
-  const moved = s.slice(4) + s.slice(0, 4);
-  let rem = 0;
-  for (const ch of moved) {
-    const v = /\d/.test(ch) ? ch : String(ch.charCodeAt(0) - 55);
-    for (const d of v) rem = (rem * 10 + (d.charCodeAt(0) - 48)) % 97;
-  }
-  return rem === 1;
-}
 
 const isPrivateIp = (ip: string) => /^(10\.|127\.|0\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
 
@@ -66,7 +41,7 @@ export function findPii(text: string, kinds: readonly PiiKind[] = DEFAULT_PII_KI
   }
   // an IBAN-shaped string is never also a phone number, whether or not its checksum holds
   for (const m of text.matchAll(/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g)) {
-    if (ibanOk(m[0])) add('iban', m[0]);
+    if (ibanValid(m[0])) add('iban', m[0]);
     used.push([m.index!, m.index! + m[0].length]);
   }
   for (const m of text.matchAll(/(?<!\d)(?:\d[ -]?){13,19}(?!\d)/g)) {

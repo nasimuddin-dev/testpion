@@ -35,7 +35,7 @@ function ledger(host: RagJudgeHost, task: string, provider: string, model: strin
 
 /* ------------------------------------------------------------------ a classifier over HTTP (HHEM) */
 
-export interface ClassifierConfig {
+interface ClassifierConfig {
   /** Where to POST. Local only requires an address on this computer. */
   url: string;
   /** The JSON field names of the premise and the hypothesis (default `premise` and `hypothesis`). */
@@ -93,7 +93,7 @@ export async function classify(host: RagJudgeHost, c: ClassifierConfig, premise:
 
 /* ------------------------------------------------------------------ a reward model through a provider */
 
-export interface RewardCall {
+interface RewardCall {
   text: string;
   provider: string;
   model: string;

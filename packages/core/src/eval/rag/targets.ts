@@ -8,7 +8,7 @@ import { shortId } from '../../util/ids.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { targetProblems } from './run-target.js';
 
-export const RAG_TARGETS_LIBRARY = 'rag-targets';
+const RAG_TARGETS_LIBRARY = 'rag-targets';
 
 export interface RagTargetInfo {
   id: string;

@@ -6,7 +6,7 @@
 import type { CheckConfig } from '../../model/types.js';
 import { metricToCheck, resolveMetric } from './metric-registry.js';
 
-export interface MetricPreset {
+interface MetricPreset {
   id: string;
   name: string;
   description: string;

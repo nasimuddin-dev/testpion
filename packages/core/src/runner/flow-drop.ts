@@ -29,13 +29,13 @@ export interface DropTarget {
   at?: [number, number];
 }
 
-export interface DropOptions {
+interface DropOptions {
   /** The Debugger's exchanges by id (they live in the app's session, not in the workspace). */
   exchanges?(ids: string[]): FlowSourceExchange[];
 }
 
 /** The steps a drop makes, before they are placed. */
-export interface DropSteps {
+interface DropSteps {
   steps: FlowStepInput[];
   /** Each waits for the one before it (false: recorded steps carry their own dependsOn). */
   chain: boolean;

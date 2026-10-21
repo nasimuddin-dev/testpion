@@ -74,14 +74,14 @@ export type FlowEditOp =
    */
   | { op: 'insertSteps'; steps: FlowStepInput[]; chain?: boolean; after?: string; when?: boolean; between?: { from: string; to: string }; at?: [number, number]; vars?: Record<string, unknown> };
 
-export interface FlowEditResult {
+interface FlowEditResult {
   text: string;
   /** The ids of the steps an add, duplicate or paste made (or of the note / frame addNote / addFrame made). */
   added?: string[];
 }
 
 /** One input of a flow (the Start node's rows): its name, the value a run starts with, what it is. */
-export interface FlowStartInput {
+interface FlowStartInput {
   name: string;
   default?: unknown;
   description?: string;
@@ -508,14 +508,6 @@ const isFinally = (ctx: Ctx, id: string): boolean => {
   const v = valueOf(items(ctx)[idsOf(ctx).indexOf(id)]!, 'finally');
   return v === true || v === 'true';
 };
-
-/** A name of a parallel group nobody in the flow uses yet: group-1, group-2 … */
-export function newGroupName(text: string): string {
-  const used = new Set([...text.matchAll(/^\s*-?\s*parallel:\s*["']?([^"'\s#]+)/gm)].map((m) => m[1]));
-  let n = 1;
-  while (used.has(`group-${n}`)) n++;
-  return `group-${n}`;
-}
 
 /**
  * Put steps in a parallel group or the Finally lane, or take them out. A finally step runs after every other step, so

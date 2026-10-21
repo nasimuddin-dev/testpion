@@ -4,7 +4,7 @@ import type { HistoryEntry, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { readResultsFile } from '../runner/runner.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
+import { coveragePct as pct, findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
 
 /**
  * API coverage: which operations of an OpenAPI document (and which of their documented response
@@ -13,7 +13,7 @@ import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
  */
 
 /** One request that was sent (from a test result or the history). */
-export interface ApiObservation {
+interface ApiObservation {
   method: string;
   url: string;
   status?: number;
@@ -44,7 +44,7 @@ export interface OperationCoverage {
   examples: string[];
 }
 
-export interface ApiCoverageReport {
+interface ApiCoverageReport {
   schemaVersion: '1';
   title?: string;
   version?: string;
@@ -65,7 +65,6 @@ export interface ApiCoverageReport {
 }
 
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
-const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : 100);
 
 /** Does an observed status match a documented response key (`200`, `2XX`, `2xx`)? */
 function statusMatches(key: string, status: number): boolean {
@@ -74,7 +73,7 @@ function statusMatches(key: string, status: number): boolean {
   return false;
 }
 
-export interface ApiCoverageOptions {
+interface ApiCoverageOptions {
   /**
    * Only count requests under this URL (e.g. `{{baseUrl}}` resolved); it's removed before matching.
    * Without it every observation is matched on its path, and requests to other APIs show as unmatched.
@@ -230,7 +229,7 @@ export function apiCoverageMarkdown(r: ApiCoverageReport): string {
 }
 
 /** Where a workspace coverage report took its requests from. */
-export interface CoverageSources {
+interface CoverageSources {
   runs: Array<{ id: string; name: string; startedAt: string }>;
   historyEntries: number;
 }

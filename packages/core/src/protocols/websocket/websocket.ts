@@ -179,7 +179,7 @@ export class WebSocketSession {
  * Why a WebSocket handshake failed, in words: the server's name doesn't resolve, nothing listens on
  * the port, TLS fails, or the server answered with HTTP instead of switching to WebSocket.
  */
-export async function diagnoseWebSocketFailure(url: string, hint = ''): Promise<ApsError> {
+async function diagnoseWebSocketFailure(url: string, hint = ''): Promise<ApsError> {
   let u: URL;
   try {
     u = new URL(url);

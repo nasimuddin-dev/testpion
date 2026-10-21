@@ -6,6 +6,11 @@
 
 - **`testpion` starts in about half the time** (a command went from about 2.0 s to 0.9 s on a loaded machine): the build also writes the command line, the engine and the shared code as one file (`dist/bundle.js`), which `bin/testpion.js` loads while it is newer than the build; `TESTPION_UNBUNDLED=1` loads the files as before. `--version` and `--help` were already instant.
 - **Opening a workspace with tens of thousands of files no longer stalls.** The change watcher walked every file with a `stat` before returning (3 s for 50,000 files, all blocking); it now walks in 8 ms slices, a file that changes before the walk reaches it is still reported, and a long burst of changes (a build, a branch switch) is reported in batches at the latest 5 s after the first. The test-file tree of 50,000 files takes 54 ms (was 454 ms).
+### Core engine: faster, bounded, paged
+- **Faster runs.** A run of HTTP tests spends about 13% less CPU per test; a run of 1,000 steps × 100 iterations takes 0.67 s instead of 1.3 s (ids come from a pool of random bytes, secret-key rules are remembered per name, the list of check types is cached, a JSON-path check evaluates its path once). Registering a thousand secrets takes 0.2 ms instead of 88 ms. The history of one test over 60 runs of 5,000 results is 2 to 3 times faster; test generation from a 4,000-operation OpenAPI document takes 1.6 s instead of 6.9 s, and its lint no longer scans the whole document for every problem.
+- **Long lists come in pages** (`limit`, `cursor`, `truncated`, `total`): a run's results (`runs.results`: at most 1,000 a page), the flaky tests (new `flakyTestsPage`), and a search (`offset` in the query, `truncated` and `nextOffset` in the answer).
+- **A collection of more than 1,000 requests runs to the end** (the guard against a `setNextRequest` loop counted requests per iteration with a fixed limit of 1,000; it is now four times the collection's size, at least 1,000).
+- **Scans remember files.** The exposed flows (MCP tools list), the webhook flows and the spec gap analysis read a test file again only when its size or time changed; connection pools, OAuth tokens and test-set verifier state are bounded.
 
 ### RAG follow-ups: judges, test sets, capture, calibration, authoring
 

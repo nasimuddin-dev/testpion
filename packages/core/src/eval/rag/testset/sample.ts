@@ -41,7 +41,7 @@ export function typeAt(types: TestsetType[], n: number): TestsetType {
 }
 
 /** The chunk that goes with `c` for a question across two passages. */
-export function partnerOf(c: Chunk, chunks: Chunk[]): Chunk | undefined {
+function partnerOf(c: Chunk, chunks: Chunk[]): Chunk | undefined {
   if (chunks.length < 2) return undefined;
   const df = new Map<string, number>();
   const sets = new Map<string, Set<string>>();
@@ -63,7 +63,7 @@ export function partnerOf(c: Chunk, chunks: Chunk[]): Chunk | undefined {
   return best && best.score > 0 ? best.c : chunks.find((x) => x.id !== c.id);
 }
 
-export interface BatchPlan {
+interface BatchPlan {
   slots: Slot[];
   /** The chunks the slots use, once each. */
   chunks: Chunk[];

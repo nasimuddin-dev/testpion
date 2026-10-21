@@ -3,7 +3,8 @@
  * gates, built from the plan by `buildEvaluation`.
  */
 import { ApsError } from '../../../errors.js';
-import type { AiTaskInput, DraftItem } from '../../../ai/tasks/registry.js';
+import type { AiTaskInput, DraftItem, ProposalDescription } from '../../../ai/tasks/registry.js';
+import { stringList } from '../../../util/collections.js';
 import type { ProposalItem } from '../../../ai/proposal.js';
 import { parseRagDatasetText } from '../dataset-formats.js';
 import { buildEvaluation, type BuiltEvaluation } from './build.js';
@@ -38,7 +39,7 @@ export function proposeEvaluation(a: { value?: unknown }, input: AiTaskInput): D
   return items;
 }
 
-export function describeEvaluation(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
+export function describeEvaluation(value: unknown, items: ProposalItem[]): ProposalDescription {
   const v = (value ?? {}) as AuthorPlan;
   const d = items[0]?.data as AuthoredData | undefined;
   const gates = d && Object.keys(d.gates).length ? `Gates: ${d.gateFlags.join(' ')} (saved in the evaluation: \`testpion rag run\`, a monitor of it and the CI step fail a run under one).` : '';
@@ -46,7 +47,7 @@ export function describeEvaluation(value: unknown, items: ProposalItem[]): { sum
   const slice = items.find((i) => (i.data as { slice?: boolean } | undefined)?.slice) ? `The same ${d?.records.used} records are also written to ${(items.find((i) => (i.data as { slice?: boolean }).slice)!.data as { dataset: string }).dataset}.` : '';
   return {
     summary: [typeof v.summary === 'string' ? v.summary : '', sample, slice, gates, d?.baseline === 'previous' ? 'Run it with a baseline: fail a run that is worse than the one before.' : ''].filter(Boolean).join(' ') || undefined,
-    assumptions: [...(Array.isArray(v.assumptions) ? v.assumptions.map(String) : []), ...(Array.isArray(v.risks) ? v.risks.map((r) => `Cannot tell: ${String(r)}`) : [])],
+    assumptions: [...stringList(v.assumptions), ...(Array.isArray(v.risks) ? v.risks.map((r) => `Cannot tell: ${String(r)}`) : [])],
     notes: d?.notes ?? [],
   };
 }

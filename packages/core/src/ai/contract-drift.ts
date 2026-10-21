@@ -26,7 +26,7 @@ import { finishedRun } from '../runner/result-source.js';
 import type { AiSurface } from '../storage/ai-usage.js';
 import { historyResponse } from '../storage/history-compare.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { newProposalId, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalFinding, type ProposalItem } from './proposal.js';
+import { saveDraftProposal, type Proposal, type ProposalFinding, type ProposalItem } from './proposal.js';
 import { requestOfResult, responseOfResult } from './run-evidence.js';
 import { loadSpec } from './spec-tests.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
@@ -140,7 +140,7 @@ export async function gatherExchanges(store: WorkspaceStore, source: DriftSource
 
 /* ------------------------------------------------------------------ the analysis of a spec against traffic */
 
-export interface DriftLocal {
+interface DriftLocal {
   spec: string;
   text: string;
   source: DriftSource;
@@ -153,7 +153,7 @@ export interface DriftLocal {
 }
 
 /** The drift of a spec file of the workspace against a source of traffic: deterministic, nothing is sent. */
-export async function driftOfSpec(store: WorkspaceStore, spec: string, source: DriftSource): Promise<{ local: DriftLocal; doc: OpenApiDoc; exchanges: DriftExchange[] }> {
+async function driftOfSpec(store: WorkspaceStore, spec: string, source: DriftSource): Promise<{ local: DriftLocal; doc: OpenApiDoc; exchanges: DriftExchange[] }> {
   const { text, doc } = loadSpec(store, spec);
   const exchanges = await gatherExchanges(store, source);
   if (!exchanges.length)
@@ -456,25 +456,15 @@ export async function draftDriftProposal(store: WorkspaceStore, spec: string, so
   const r = itemsOf(local, doc, exchanges, decisions);
   const items: ProposalItem[] = r.items.map((d, i) => ({ ...d, id: `i${i + 1}`, verification: [], selected: (d as { selected?: boolean }).selected ?? true }));
   await verifyItems(items, DRIFT_VERIFIERS, { store });
-  const now = Date.now();
-  return saveProposal(store, {
-    schemaVersion: 1,
-    id: newProposalId(),
+  return saveDraftProposal(store, {
     task: 'contract-drift',
-    taskVersion: 0,
     title: `Contract drift (no AI): ${spec}`,
     summary: `${local.report.findings.length} kinds of drift in ${local.report.exchanges} responses; ${items.length} patch${items.length === 1 ? '' : 'es'} TestPion can make from what was observed (the ones that only add to the document are ticked).`,
-    assumptions: [],
     notes: [o.reason ?? 'No AI model is set up: these are the patches TestPion makes itself.', ...r.notes],
     items,
     findings: r.findings,
-    provider: 'TestPion',
     model: 'no AI (deterministic patches)',
     surface: o.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
-    usage: { inputTokens: 0, outputTokens: 0 },
     request: { item: { kind: 'spec', path: spec } },
   });
 }

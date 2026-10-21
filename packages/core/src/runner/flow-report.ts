@@ -18,9 +18,9 @@ import { readRunSummary } from './run-records.js';
 import { flowRuns, type FlowRunRow } from './flow-history.js';
 
 /** The most steps a timeline shows (the first ones of the run). */
-export const MAX_TIMELINE_STEPS = 2000;
+const MAX_TIMELINE_STEPS = 2000;
 
-export interface FlowRunTimeline {
+interface FlowRunTimeline {
   /** The flow file (inside tests/) when the timeline is of one file. */
   file?: string;
   runId: string;

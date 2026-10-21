@@ -200,14 +200,14 @@ export interface SqlSource {
   production?: boolean;
 }
 
-export interface SqlLimits {
+interface SqlLimits {
   maxRows?: number;
   timeoutMs?: number;
   /** SQLite: stop the query when the process has grown by this many MB (default SQLITE_GUARDS.memoryGrowthMb). */
   memoryMb?: number;
 }
 
-export interface SqlResult {
+interface SqlResult {
   columns: string[];
   rows: unknown[][];
 }

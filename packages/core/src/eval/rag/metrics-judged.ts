@@ -17,7 +17,7 @@ import { cosine } from '../text.js';
 import { checkFn, overrideCheck, registerCheck, type CheckContext } from '../checks.js';
 import { ANSWER_RELEVANCE, FAITHFULNESS, type JudgedMetric } from './judge-prompts.js';
 import { ANSWER_RELEVANCE_ON_CLAIMS, CLAIMS, CONTEXT_RELEVANCE_CHUNKS, CONTEXT_RELEVANCE_NVIDIA, CONTEXT_RELEVANCE_SENTENCES, CONTEXT_RELEVANCE_STATEMENTS, FAITHFULNESS_ON_CLAIMS, REVERSE_QUESTIONS } from './judge-prompts-more.js';
-import { assertJudgeUsable, contextsInput, describe, guarded, judgeMeta, judgePanel, na, needContexts, panelOf, round3, strictOver, type PanelOptions, type PanelResult } from './judged-kit.js';
+import { addUsage, assertJudgeUsable, contextsInput, describe, guarded, judgeMeta, judgePanel, na, needContexts, noUsage, panelOf, round3, strictOver, type PanelOptions, type PanelResult } from './judged-kit.js';
 import { resolveMetric } from './metric-registry.js';
 import { num, result } from './metric-util.js';
 
@@ -36,9 +36,37 @@ const sharesClaims = (ctx: CheckContext, cfg: CheckConfig) => {
 };
 
 /** The shared pass: the answer's claims (asked once; a second metric of the same sample finds them cached). */
-async function claimsOf(host: NonNullable<NonNullable<CheckContext['services']>['ragJudge']>, ctx: CheckContext, panel: PanelOptions): Promise<{ claims: string[]; usage: PanelResult['usage'] }> {
+async function claimsOf(host: JudgeHost, ctx: CheckContext, panel: PanelOptions): Promise<{ claims: string[]; usage: PanelResult['usage'] }> {
   const r = await judgePanel(host, CLAIMS, { answer: ctx.text }, { ...panel, judges: panel.judges?.slice(0, 1), swap: false, repeat: 1 });
   return { claims: r.items.map((i) => i.text), usage: r.usage };
+}
+
+type JudgeHost = NonNullable<NonNullable<CheckContext['services']>['ragJudge']>;
+
+/**
+ * Judges with the standalone prompt, or (when the claims are shared with the other metrics of the sample) with the
+ * prompt on the answer's claims; an answer with no claims (a refusal) is judged by the standalone prompt.
+ */
+async function judgeSharingClaims(
+  host: JudgeHost,
+  cfg: CheckConfig,
+  ctx: CheckContext,
+  panel: PanelOptions,
+  plain: { m: JudgedMetric; input: Record<string, unknown> },
+  onClaims: { m: JudgedMetric; input: (claims: string[]) => Record<string, unknown> },
+) {
+  let { m, input } = plain;
+  let shared: { claims: number; usage: PanelResult['usage'] } | undefined;
+  if (sharesClaims(ctx, cfg)) {
+    const c = await claimsOf(host, ctx, panel);
+    if (c.claims.length) {
+      m = onClaims.m;
+      input = onClaims.input(c.claims);
+      shared = { claims: c.claims.length, usage: c.usage };
+    }
+  }
+  const r = await judgePanel(host, m, input, panel);
+  return { m, r, shared, usage: shared ? addUsage(r.usage, shared.usage) : r.usage };
 }
 
 /* ------------------------------------------------------------------ faithfulness */
@@ -51,20 +79,8 @@ const faithfulness = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult>
     const t = num(cfg.threshold, 0.8);
     const panel = panelOf(cfg, ctx, t);
     assertJudgeUsable(host, panel.judges?.[0] ?? panel.judge);
-    let m = FAITHFULNESS;
-    let input: Record<string, unknown> = { answer: ctx.text, contexts: docs };
-    let shared: { claims: number; usage: PanelResult['usage'] } | undefined;
-    if (sharesClaims(ctx, cfg)) {
-      const c = await claimsOf(host, ctx, panel);
-      if (c.claims.length) {
-        m = FAITHFULNESS_ON_CLAIMS;
-        input = { claims: c.claims, contexts: docs };
-        shared = { claims: c.claims.length, usage: c.usage };
-      }
-    }
-    const r = await judgePanel(host, m, input, panel);
+    const { m, r, shared, usage } = await judgeSharingClaims(host, cfg, ctx, panel, { m: FAITHFULNESS, input: { answer: ctx.text, contexts: docs } }, { m: FAITHFULNESS_ON_CLAIMS, input: (claims) => ({ claims, contexts: docs }) });
     if (r.score === undefined) return na(cfg, m, 'the answer makes no factual claims', { explanation: r.reasoning, metadata: judgeMeta(m, r, t) });
-    const usage = shared ? { ...r.usage, calls: r.usage.calls + shared.usage.calls, inputTokens: r.usage.inputTokens + shared.usage.inputTokens, outputTokens: r.usage.outputTokens + shared.usage.outputTokens, costUsd: r.usage.costUsd + shared.usage.costUsd, cached: r.usage.cached && shared.usage.cached } : r.usage;
     return result(cfg, r.passed, describe(m, r.score, r, t, 'faithfulness'), {
       source: 'ai-judge',
       score: r.score,
@@ -75,7 +91,7 @@ const faithfulness = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResult>
 
 /* ------------------------------------------------------------------ answer relevance */
 
-async function reverseQuestions(host: NonNullable<NonNullable<CheckContext['services']>['ragJudge']>, cfg: CheckConfig, ctx: CheckContext, panel: PanelOptions, t: number): Promise<CheckResult> {
+async function reverseQuestions(host: JudgeHost, cfg: CheckConfig, ctx: CheckContext, panel: PanelOptions, t: number): Promise<CheckResult> {
   const m = REVERSE_QUESTIONS;
   const r = await judgePanel(host, m, { answer: ctx.text }, { ...panel, judges: panel.judges?.slice(0, 1), swap: false });
   if (!r.items.length) return na(cfg, m, 'the judge wrote no question from the answer', { metadata: judgeMeta(m, r, t) });
@@ -106,21 +122,9 @@ const answerRelevance = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckResu
     const panel = panelOf(cfg, ctx, t);
     assertJudgeUsable(host, panel.judges?.[0] ?? panel.judge);
     if (String(cfg.mode ?? 'statements') === 'reverse-questions') return reverseQuestions(host, cfg, ctx, panel, t);
-    let m = ANSWER_RELEVANCE;
-    let input: Record<string, unknown> = { question: ctx.question, answer: ctx.text };
-    let shared: { claims: number; usage: PanelResult['usage'] } | undefined;
-    if (sharesClaims(ctx, cfg)) {
-      const c = await claimsOf(host, ctx, panel);
-      // an answer with no claims (a refusal) is judged by the standalone prompt, which scores it 0
-      if (c.claims.length) {
-        m = ANSWER_RELEVANCE_ON_CLAIMS;
-        input = { question: ctx.question, claims: c.claims };
-        shared = { claims: c.claims.length, usage: c.usage };
-      }
-    }
-    const r = await judgePanel(host, m, input, panel);
+    const question = ctx.question;
+    const { m, r, shared, usage } = await judgeSharingClaims(host, cfg, ctx, panel, { m: ANSWER_RELEVANCE, input: { question, answer: ctx.text } }, { m: ANSWER_RELEVANCE_ON_CLAIMS, input: (claims) => ({ question, claims }) });
     if (r.score === undefined) return na(cfg, m, 'the judge found nothing to judge in the answer', { explanation: r.reasoning, metadata: judgeMeta(m, r, t) });
-    const usage = shared ? { ...r.usage, calls: r.usage.calls + shared.usage.calls, inputTokens: r.usage.inputTokens + shared.usage.inputTokens, outputTokens: r.usage.outputTokens + shared.usage.outputTokens, costUsd: r.usage.costUsd + shared.usage.costUsd, cached: r.usage.cached && shared.usage.cached } : r.usage;
     return result(cfg, r.passed, describe(m, r.score, r, t, 'answer-relevance'), {
       source: 'ai-judge',
       score: r.score,
@@ -153,7 +157,7 @@ const contextRelevance = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckRes
     const first = rs[0]!;
     if (!scored.length) return na(cfg, m, 'the judge found nothing to judge in the retrieved text', { explanation: first.reasoning, metadata: judgeMeta(m, first, t, { mode }) });
     const score = round3(scored.reduce((a, r) => a + r.score!, 0) / scored.length);
-    const usage = rs.reduce((a, r) => ({ calls: a.calls + r.usage.calls, inputTokens: a.inputTokens + r.usage.inputTokens, outputTokens: a.outputTokens + r.usage.outputTokens, costUsd: a.costUsd + r.usage.costUsd, cached: a.cached && r.usage.cached }), { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, cached: true });
+    const usage = rs.reduce((a, r) => addUsage(a, r.usage), noUsage());
     const passed = score >= t && !rs.some((r) => r.panel?.swap?.tie);
     const merged: PanelResult = { ...first, usage, items: rs.flatMap((r) => r.items) };
     return result(cfg, passed, mode === 'nvidia' ? `context-relevance ${score}: ratings ${rs.map((r) => r.items[0]?.rating ?? '?').join(' and ')} of 2 (threshold ${t})` : describe(m, score, first, t, 'context-relevance'), {

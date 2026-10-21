@@ -5,6 +5,7 @@
  */
 import type { CheckConfig, CheckResult, RetrievedDoc } from '../model/types.js';
 import { query } from '../util/jsonpath.js';
+import { round3 } from './rag/measures.js';
 import { coverage, coverageIn, sentences, tokenF1, wordSet } from './text.js';
 import { asText, registerCheck, res, short, threshold, type CheckContext } from './check-registry.js';
 import { askJudge, judgeFailed, runJudge } from './check-judge.js';
@@ -60,7 +61,6 @@ function itemsSummary(items: EvidenceItem[], noun: string, verdict: string, badL
   return bad.length ? `${head}; ${badLabel}: ${bad.slice(0, 3).map((i) => `"${short(i.text, 80)}"`).join(', ')}${bad.length > 3 ? ` and ${bad.length - 3} more` : ''}` : head;
 }
 
-const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Rank-aware average precision: relevant documents ranked first score higher. */
 function averagePrecision(relevant: boolean[]): number {

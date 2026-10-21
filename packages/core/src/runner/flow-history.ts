@@ -146,13 +146,13 @@ function responseOfResult(r: TestResult): StepResponse | undefined {
 }
 
 /** In-memory data of a recent run (the app keeps the last few): each step's variables and response as they were, unredacted. */
-export type RunMemory = (runId: string) => Map<string, { vars?: Record<string, unknown>; response?: StepResponse }> | undefined;
+type RunMemory = (runId: string) => Map<string, { vars?: Record<string, unknown>; response?: StepResponse }> | undefined;
 
 /**
  * The seed of a run that starts after `before` steps of an earlier run: their variables (the last recorded set;
  * redacted or cut values are left to the environment), responses, conditions and branches not taken.
  */
-export function seedFromResults(results: TestResult[], before: Set<string>, memory?: ReturnType<RunMemory>): RunSeed {
+function seedFromResults(results: TestResult[], before: Set<string>, memory?: ReturnType<RunMemory>): RunSeed {
   const vars: Record<string, unknown> = {};
   const responses: Record<string, StepResponse> = {};
   const conditions: Record<string, boolean> = {};
@@ -261,7 +261,7 @@ export async function flowRunPlan(store: WorkspaceStore, file: string, o: { from
 /* ------------------------------------------------------------------ the designer's state: breakpoints and pins */
 
 /** The flow designer's state of a file: kept per computer in `.local/flows/` (git-ignored), never in the YAML. */
-export interface FlowDesignerState {
+interface FlowDesignerState {
   breakpoints: string[];
   pins: Record<string, PinnedResponse>;
 }

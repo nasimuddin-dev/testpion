@@ -1,5 +1,5 @@
 /** One way a response differs from its snapshot. */
-export interface SnapshotDifference {
+interface SnapshotDifference {
   /** JSONPath of the place, e.g. $.items[0].price */
   path: string;
   kind: 'missing' | 'extra' | 'type' | 'value' | 'length';
@@ -7,7 +7,7 @@ export interface SnapshotDifference {
   actual?: unknown;
 }
 
-export interface SnapshotOptions {
+interface SnapshotOptions {
   /**
    * shape (default): the same fields with the same types, values may change (good for live data);
    * values: the same values too (array lengths included).

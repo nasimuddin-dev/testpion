@@ -14,9 +14,9 @@ import { cosine } from '../../text.js';
 export const EMBED_DUPLICATE_AT = 0.92;
 export const EMBED_WARN_AT = 0.85;
 /** Most questions of the dataset compared with one new question (the newest first), so a big dataset costs one bounded call. */
-export const MAX_COMPARED = 400;
+const MAX_COMPARED = 400;
 
-export interface EmbedderSource {
+interface EmbedderSource {
   providers?: ProviderRegistry;
   settings?: AiSettingsSource;
   env?: Record<string, string | undefined>;
@@ -24,7 +24,7 @@ export interface EmbedderSource {
   signal?: AbortSignal;
 }
 
-export type Embedder = { name: string; embed(texts: string[]): Promise<number[][]> } | { problem: string };
+type Embedder = { name: string; embed(texts: string[]): Promise<number[][]> } | { problem: string };
 
 /** `provider/model` or a bare provider name. */
 const split = (spec: string): { provider: string; model?: string } => {
@@ -65,7 +65,7 @@ const vectors = new Map<string, number[]>();
 const keyOf = (embedder: string, text: string) => `${embedder}\u0000${text}`;
 
 /** The vectors of the texts, one embedding call for those not seen before. */
-export async function embedAll(e: { name: string; embed(texts: string[]): Promise<number[][]> }, texts: string[]): Promise<number[][]> {
+async function embedAll(e: { name: string; embed(texts: string[]): Promise<number[][]> }, texts: string[]): Promise<number[][]> {
   const missing = [...new Set(texts.filter((t) => !vectors.has(keyOf(e.name, t))))];
   if (missing.length) {
     const got = await e.embed(missing);

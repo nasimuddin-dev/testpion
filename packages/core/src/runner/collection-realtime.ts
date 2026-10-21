@@ -119,7 +119,7 @@ export function savedConnectionToTest(item: LibraryItem<SavedConnection>, collec
 }
 
 /** The libraries of a collection's own items: gRPC calls and connections. */
-export type CollectionItemLibrary = 'grpc' | 'websocket';
+type CollectionItemLibrary = 'grpc' | 'websocket';
 /** Library kinds whose items can belong to a collection: the registry's library kinds whose parent is a collection. */
 export const COLLECTION_ITEM_KINDS = liveKinds()
   .filter((k) => k.parent === 'collection' && k.storage.layout === 'library')

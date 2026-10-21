@@ -12,7 +12,7 @@ import { columnName, metricToCheck, resolveMetric, type MetricDef } from '../met
 import { listOf } from '../lists.js';
 import type { AuthorLocal, AuthorPlan } from './types.js';
 
-export const MAX_INLINE_RECORDS = 300;
+const MAX_INLINE_RECORDS = 300;
 
 export interface BuiltEvaluation {
   evaluation: SavedEvaluation;

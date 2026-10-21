@@ -37,7 +37,7 @@ export interface SearchAnswer {
   preview?: Omit<AiPreview, 'messages'> & { messages?: AiPreview['messages'] };
 }
 
-export interface AskOptions {
+interface AskOptions {
   question: string;
   /** Where the question is asked (History → ['history']): the search stays inside. */
   scope?: SearchSource[];
@@ -63,7 +63,7 @@ async function answerOf(store: WorkspaceStore, a: Omit<SearchAnswer, 'explain' |
 }
 
 /** A query that failed validation: every problem says what is allowed, so a caller can correct it. */
-export const invalidQuery = (problems: string[]): ApsError =>
+const invalidQuery = (problems: string[]): ApsError =>
   new ApsError('ValidationError', `Invalid search query: ${problems.join('; ')}`, { details: { problems }, suggestions: problems.slice(0, 5) });
 
 /** A query given directly (edited chips, `--query-json`, MCP `search_query`): validated, run, explained. No model. */
@@ -75,7 +75,7 @@ export async function runQuerySpec(store: WorkspaceStore, input: unknown, o: { q
 }
 
 /** A plain text search over the question (also what the box does with no model). */
-export const runTextSearch = (store: WorkspaceStore, text: string, o: { scope?: SearchSource[]; fallback?: string; now?: number } = {}): Promise<SearchAnswer> => {
+const runTextSearch = (store: WorkspaceStore, text: string, o: { scope?: SearchSource[]; fallback?: string; now?: number } = {}): Promise<SearchAnswer> => {
   const q = textQuery(text);
   const scoped = inScope(q, o.scope).query ?? q;
   return answerOf(store, { question: text, mode: 'text', query: scoped, assumptions: [], ...(o.fallback ? { fallback: o.fallback } : {}) }, o.now);

@@ -29,19 +29,20 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import type { AiSurface } from '../storage/ai-usage.js';
-import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
-import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
+import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import { flowVariableProblems, registerVerifier, verifyItems, type VerifyContext } from './verify.js';
-import { diffFlowSteps, flowDiffSummary } from './flow-step-review.js';
+import { diffFlowSteps, flowDiffSummary, yamlSteps } from './flow-step-review.js';
 
 export type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
 
 /** At most this many requests are sent; a bigger folder is sampled (the draft's requests first, then one per endpoint). */
-export const FLOW_MAX_REQUESTS = 60;
+const FLOW_MAX_REQUESTS = 60;
 const MAX_SPEC_BYTES = 1024 * 1024;
 
 /** A step of a flow plan: what the model answers (and what the deterministic draft is). */
-export interface FlowPlanStep {
+interface FlowPlanStep {
   id: string;
   /** The id of a saved request of the collection / folder. */
   request: string;
@@ -191,8 +192,8 @@ export function sourceRequests(c: Collection, folderId?: string): { label: strin
   return { label, folder: found, list };
 }
 
-export const bodyContent = (b: unknown): string | undefined => (b && typeof b === 'object' && typeof (b as { content?: unknown }).content === 'string' ? (b as { content: string }).content : undefined);
-export const jsonOrText = (s: string | undefined): unknown => {
+const bodyContent = (b: unknown): string | undefined => (b && typeof b === 'object' && typeof (b as { content?: unknown }).content === 'string' ? (b as { content: string }).content : undefined);
+const jsonOrText = (s: string | undefined): unknown => {
   if (s === undefined) return undefined;
   try {
     return JSON.parse(s);
@@ -545,32 +546,23 @@ function flowItem(local: FlowLocal, built: ReturnType<typeof buildFlowFile>, ext
 }
 
 /** The summary, assumptions and notes of the proposal (registry `describe`). */
-export function describeFlow(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
+export function describeFlow(value: unknown, items: ProposalItem[]): ProposalDescription {
   const v = (value ?? {}) as FlowPlan;
   const notes = items.flatMap((i) => ((i.data as { notes?: string[] } | undefined)?.notes ?? []).filter((n) => typeof n === 'string'));
   const vs = (items[0]?.data as { vsDraft?: Parameters<typeof flowDiffSummary>[0] } | undefined)?.vsDraft;
   return {
     summary: [typeof v.summary === 'string' ? v.summary : '', vs ? `Against TestPion's own draft: ${flowDiffSummary(vs)}.` : ''].filter(Boolean).join(' ') || undefined,
-    assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String) : [],
+    assumptions: stringList(v.assumptions),
     notes,
   };
 }
 
 /* ------------------------------------------------------------------ verification */
 
-const stepsOf = (text: string): Array<Record<string, unknown>> => {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
-  return (Array.isArray(doc) ? doc : ((doc as { tests?: unknown[] })?.tests ?? [])).filter((s): s is Record<string, unknown> => !!s && typeof s === 'object');
-};
 
 /** A step uses a value another step extracts without waiting for that step (dependsOn, directly or through others). */
 export function flowOrderProblems(text: string): string[] {
-  const steps = stepsOf(text);
+  const steps = yamlSteps(text);
   const idOf = (s: Record<string, unknown>) => String(s.id ?? s.name ?? '');
   const deps = new Map(steps.map((s) => [idOf(s), (Array.isArray(s.dependsOn) ? s.dependsOn : s.dependsOn ? [s.dependsOn] : []).map(String)]));
   const extractedBy = new Map<string, string>();
@@ -623,27 +615,16 @@ export async function draftFlowProposal(store: WorkspaceStore, ref: ItemRef, o: 
     /* a new file */
   }
   await verifyItems([item], FLOW_VERIFIERS, { ...o.verify, collection: o.verify?.collection ?? prepared.collection });
-  const now = Date.now();
-  const p: Proposal = {
-    schemaVersion: 1,
-    id: newProposalId(),
+  return saveDraftProposal(store, {
     task: 'flow-from-collection',
-    taskVersion: 0,
     title: `Integration flow (no AI): ${local.label}`,
     summary: `The flow TestPion builds without a model: ${built.steps} step${built.steps === 1 ? '' : 's'} from the saved requests of ${local.label}${local.draft.steps.some((s) => s.dependsOn?.length) ? ', chained' : ''}.`,
-    assumptions: [],
     notes: [o.reason ?? 'No AI model is set up: this is the deterministic draft. Set up a model to have it improved (order, extracts, checks, error cases).', ...built.notes],
     items: [item],
-    provider: 'TestPion',
     model: 'no AI (deterministic draft)',
     surface: o.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
-    usage: { inputTokens: 0, outputTokens: 0 },
     request: { item: ref, path: local.path },
-  };
-  return saveProposal(store, p);
+  });
 }
 
 /** An error that means "no model is set up" (no key, no provider): the callers then offer the draft. */

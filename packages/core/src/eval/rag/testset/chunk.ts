@@ -6,19 +6,13 @@
  */
 import { createHash } from 'node:crypto';
 import { estimateTokens } from '../../../ai/types.js';
+import { slugify } from '../../../util/ids.js';
 import type { Chunk, SourceDoc } from './types.js';
 
 export const CHUNK_TOKENS = 220;
 const MIN_TOKENS = 30;
 
-export const slugOf = (name: string): string =>
-  name
-    .replace(/^https?:\/\//i, '')
-    .replace(/\.[a-z0-9]{1,8}$/i, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'doc';
+export const slugOf = (name: string): string => slugify(name.replace(/^https?:\/\//i, '').replace(/\.[a-z0-9]{1,8}$/i, ''), { max: 48, fallback: 'doc' });
 
 export const normalizeText = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
 export const hashOf = (s: string): string => createHash('sha256').update(normalizeText(s)).digest('hex').slice(0, 8);

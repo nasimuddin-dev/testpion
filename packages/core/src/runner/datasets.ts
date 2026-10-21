@@ -267,7 +267,7 @@ export function sqliteTables(path: string): string[] {
   }
 }
 
-export interface WorkspaceDataset {
+interface WorkspaceDataset {
   /** Path inside the workspace, e.g. datasets/users.csv (what run_collection's `data` and `-d` take). */
   path: string;
   size: number;
@@ -350,7 +350,7 @@ export function listWorkspaceDatasets(store: { root: string; path(...p: string[]
 }
 
 /** A column of a dataset and the kind of value it holds (a hint from the rows read: CSV cells that are all numbers count as numbers). */
-export interface DatasetColumn {
+interface DatasetColumn {
   name: string;
   type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null' | 'mixed';
 }
@@ -376,7 +376,7 @@ export function datasetColumns(rows: DatasetRecord[]): DatasetColumn[] {
   });
 }
 
-export interface WorkspaceDatasetPreview {
+interface WorkspaceDatasetPreview {
   /** Path inside the workspace (datasets/users.csv). */
   path: string;
   /** The file under datasets/ (users.csv). */

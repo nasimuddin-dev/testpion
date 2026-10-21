@@ -25,7 +25,7 @@ import { loadTestsFromFile } from './loader.js';
 import { recordRun } from './run-records.js';
 import { runTests } from './runner.js';
 
-export interface FlowWebhookServerOptions {
+interface FlowWebhookServerOptions {
   /** The open workspace (the app's), or `workspaceRoot` to open one (closed with the server). */
   store?: WorkspaceStore;
   workspaceRoot?: string;
@@ -62,7 +62,7 @@ export interface FlowWebhookCall {
 }
 
 /** A served hook: the file, its path and full URL, whether it needs a secret; `problem` when it is not served. */
-export interface ServedHook {
+interface ServedHook {
   file: string;
   path: string;
   url: string;
@@ -81,7 +81,7 @@ export interface FlowWebhookServer {
 }
 
 /** One step of the answer. */
-export interface WebhookStep {
+interface WebhookStep {
   name: string;
   status: string;
   ms: number;
@@ -158,7 +158,7 @@ function parseInputs(text: string, contentType: string | undefined, query: URLSe
 }
 
 /** The variables a run starts with: the declared inputs (with their defaults; missing required ones refused), else every field. */
-export function webhookInputs(hook: Pick<WebhookFlow, 'inputs'>, given: Record<string, unknown>): Record<string, unknown> {
+function webhookInputs(hook: Pick<WebhookFlow, 'inputs'>, given: Record<string, unknown>): Record<string, unknown> {
   if (!hook.inputs?.length) return Object.fromEntries(Object.entries(given).filter(([k]) => /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(k)));
   const vars: Record<string, unknown> = {};
   const missing: string[] = [];

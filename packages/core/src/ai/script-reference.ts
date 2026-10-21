@@ -9,11 +9,13 @@
  * property), each problem saying what to write instead. Both are built once per process (`loadScriptApi`).
  */
 import { runScript } from '../scripts/sandbox.js';
+import { levenshtein } from '../util/text-distance.js';
+import type { VerificationBadge } from './proposal.js';
 import { estimateTokens } from './types.js';
 
-export type MemberKind = 'method' | 'value' | 'object' | 'flag' | 'word' | 'modifier';
+type MemberKind = 'method' | 'value' | 'object' | 'flag' | 'word' | 'modifier';
 
-export interface ScriptMember {
+interface ScriptMember {
   name: string;
   kind: MemberKind;
   /** A value's type on a sample response (number, string …). */
@@ -21,7 +23,7 @@ export interface ScriptMember {
 }
 
 /** What the sandbox exposes, by object. */
-export interface ScriptApi {
+interface ScriptApi {
   tp: ScriptMember[];
   response: ScriptMember[];
   /** tp.response.to (and .have / .be: the same chain). */
@@ -94,6 +96,24 @@ export function loadScriptApi(): Promise<ScriptApi> {
   cached.catch(() => (cached = undefined));
   return cached;
 }
+
+/** Names TestPion never writes: `pm.*` / `postman.*` run (Postman compatibility) but TestPion's own scripts use `tp.*`. */
+const POSTMAN_API = /(^|[^\w$.])(pm|postman)\s*\.\s*[A-Za-z_$]/;
+
+/** The failing badge of a script that misuses the tp.* API (each misuse says what to write instead), or undefined when it does not. */
+export async function scriptMisuseBadge(verifier: string, code: string): Promise<VerificationBadge | undefined> {
+  const misuse = scriptApiProblems(code, await loadScriptApi());
+  if (!misuse.length) return undefined;
+  return {
+    verifier,
+    status: 'fail',
+    label: POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')) ? 'uses pm.* / postman.*' : 'misuses the tp.* script API',
+    detail: misuse.slice(0, 6).join('\n'),
+  };
+}
+
+/** A stored response as the script sandbox takes it (the time is the response's latency). */
+export const sandboxResponse = (r: { status?: number; headers?: Array<[string, string]>; body?: string; latencyMs?: number } | undefined) => (r ? { status: r.status, headers: r.headers, body: r.body, time: r.latencyMs } : undefined);
 
 /** The API once it was read (undefined before the first `loadScriptApi()` finished). */
 export const scriptApiIfLoaded = (): ScriptApi | undefined => ready;
@@ -172,13 +192,7 @@ export const scriptReferenceTokens = (api: ScriptApi) => estimateTokens(scriptRe
 
 /* ------------------------------------------------------------------ the static check of a generated script */
 
-function distance(a: string, b: string): number {
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...new Array<number>(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0]![j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++) d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + (a[i - 1]!.toLowerCase() === b[j - 1]!.toLowerCase() ? 0 : 1));
-  return d[a.length]![b.length]!;
-}
+const distance = (a: string, b: string): number => levenshtein(a.toLowerCase(), b.toLowerCase());
 
 /** The closest real member, when one is close enough to be what was meant. */
 function closest(name: string, list: ScriptMember[]): ScriptMember | undefined {

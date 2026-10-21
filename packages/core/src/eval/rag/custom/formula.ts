@@ -179,7 +179,7 @@ class Parser {
   }
 }
 
-export interface ParsedFormula {
+interface ParsedFormula {
   ast?: Node;
   /** The metric names the expression reads, as written. */
   refs: string[];

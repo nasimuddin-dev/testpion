@@ -8,7 +8,7 @@ import type { CustomMetricFile } from '@testpion/shared';
 import type { CheckConfig, CheckResult } from '../../../model/types.js';
 import { checkFn, runChecks, type CheckContext } from '../../checks.js';
 import { runMetricScript } from '../../../scripts/sandbox.js';
-import { na } from '../judged-kit.js';
+import { addUsage, na, noUsage, type Usage } from '../judged-kit.js';
 import { runTemplate, type Template, type TemplateInput } from '../judge-templates.js';
 import { metricToCheck, resolveMetric } from '../metric-registry.js';
 import { num, result } from '../metric-util.js';
@@ -28,7 +28,7 @@ export const defaultThreshold = (f: CustomMetricFile): number => f.threshold ?? 
 /** The judge a file names, in the form the judged checks read. */
 const withJudge = (cfg: CheckConfig, f: CustomMetricFile): CheckConfig => (f.judge?.provider && !cfg.judge ? { ...cfg, judge: { provider: f.judge.provider, model: f.judge.model } } : cfg);
 
-export function templateOf(f: CustomMetricFile): Template {
+function templateOf(f: CustomMetricFile): Template {
   const id = `custom/${f.id}`;
   if (f.kind === 'checklist') return { id, kind: 'checklist', items: (f.items ?? []).map((i) => (typeof i === 'string' ? { text: i } : i)), inputs: inputsOf(f) };
   const scale = f.scale;
@@ -102,9 +102,9 @@ function formulaKind(f: CustomMetricFile): CustomCheck {
       const v = evalFormula(parsed.ast, (n) => values.get(n) ?? null);
       const t = num(cfg.threshold, defaultThreshold(f));
       const judgeUsage = sub.reduce((a, s) => {
-        const u = (s.res?.metadata as { judgeUsage?: { calls: number; inputTokens: number; outputTokens: number; costUsd: number; cached: boolean } } | undefined)?.judgeUsage;
-        return u ? { calls: a.calls + u.calls, inputTokens: a.inputTokens + u.inputTokens, outputTokens: a.outputTokens + u.outputTokens, costUsd: a.costUsd + u.costUsd, cached: a.cached && u.cached } : a;
-      }, { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, cached: true });
+        const u = (s.res?.metadata as { judgeUsage?: Usage } | undefined)?.judgeUsage;
+        return u ? addUsage(a, u) : a;
+      }, noUsage());
       if (v === null) {
         const missing = sub.filter((s) => values.get(s.name) === null).map((s) => s.name);
         return na(cfg, { id: me, version: `${f.id}-v${f.version ?? 1}` }, missing.length ? `${missing.join(', ')} had no score (use coalesce(x, fallback) to say what to use instead)` : 'the expression has no value', { metadata: { items, itemLabels: ['has a score', 'no score'], judgeUsage } });
@@ -126,7 +126,7 @@ function embeddingKind(f: CustomMetricFile): CustomCheck {
 }
 
 /** The sample a script sees. */
-export function scriptSample(ctx: CheckContext) {
+function scriptSample(ctx: CheckContext) {
   return {
     question: ctx.question ?? '',
     answer: ctx.text ?? '',

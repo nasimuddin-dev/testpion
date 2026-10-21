@@ -18,7 +18,7 @@ export function normalizeAnswer(s: string): string {
 /** Lower-case word tokens (letters and digits), nothing removed. */
 export const wordTokens = (s: string): string[] => s.toLowerCase().normalize('NFKC').match(/[\p{L}\p{N}]+/gu) ?? [];
 
-export interface Prf {
+interface Prf {
   precision: number;
   recall: number;
   f1: number;

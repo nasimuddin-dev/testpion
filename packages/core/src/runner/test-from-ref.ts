@@ -16,7 +16,7 @@ import { testObjectFromRequest, type TestSource } from './test-from.js';
  */
 
 /** What to save: a request as an editor holds it (`source`), or an item by its ref (read from the workspace). */
-export type SaveTestInput = { name?: string; source: TestSource; assertions?: CheckConfig[] } | { name?: string; ref: ItemRef };
+type SaveTestInput = { name?: string; source: TestSource; assertions?: CheckConfig[] } | { name?: string; ref: ItemRef };
 
 /** A test as written in a file: what the loader fills in (ids, locations) left out. */
 type TestObject = Record<string, unknown>;

@@ -14,7 +14,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ApsError } from '../errors.js';
-import { PRODUCTION_CONFIRMATION, isDataChangingMethod, productionAskText, type ProductionAsk } from '@testpion/shared';
+import { PRODUCTION_CONFIRMATION, productionAskText, type ProductionAsk } from '@testpion/shared';
 
 export { PRODUCTION_CONFIRMATION, isDataChangingMethod, productionAskOf, productionAskText, type ProductionAsk } from '@testpion/shared';
 

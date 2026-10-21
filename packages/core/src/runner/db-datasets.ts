@@ -10,7 +10,7 @@ import { assertUrlAllowed } from '../net/policy.js';
  */
 export type DbKind = 'postgres' | 'mysql';
 
-export interface DbRow {
+interface DbRow {
   [column: string]: unknown;
 }
 

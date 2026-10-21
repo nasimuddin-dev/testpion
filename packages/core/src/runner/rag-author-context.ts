@@ -29,7 +29,7 @@ const clip = (v: unknown, n = 400) => {
 };
 
 /** What the mapping reads, without the request: the model needs to know what the system returns, not how it is called. */
-export function targetShape(t: RagTarget & { name: string }) {
+function targetShape(t: RagTarget & { name: string }) {
   return {
     name: t.name,
     protocol: t.protocol,
@@ -47,7 +47,7 @@ export function targetShape(t: RagTarget & { name: string }) {
 }
 
 /** Titles and headings of documents (a file, or the files of a folder of the workspace), never their text. */
-export function docsOutline(store: WorkspaceStore, paths: string[]): Array<{ file: string; title?: string; headings: string[] }> {
+function docsOutline(store: WorkspaceStore, paths: string[]): Array<{ file: string; title?: string; headings: string[] }> {
   const out: Array<{ file: string; title?: string; headings: string[] }> = [];
   const add = (file: string) => {
     if (out.length >= 20 || !/\.(md|markdown|txt|html?)$/i.test(file)) return;
@@ -74,7 +74,7 @@ export function docsOutline(store: WorkspaceStore, paths: string[]): Array<{ fil
   return out;
 }
 
-export interface AuthorChoices {
+interface AuthorChoices {
   target: string;
   dataset?: string;
   docs?: string[];
@@ -96,7 +96,7 @@ function sliceFilePath(name: string, source?: string): string {
   return path;
 }
 
-export function choicesOf(c: Record<string, unknown>): AuthorChoices {
+function choicesOf(c: Record<string, unknown>): AuthorChoices {
   const target = strOf(c.target);
   if (!target) throw new ApsError('ValidationError', 'Name the RAG target to author an evaluation for', { suggestions: ['`testpion rag targets` lists them; connect one in AI Lab ▸ RAG first.'] });
   return {

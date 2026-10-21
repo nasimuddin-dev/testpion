@@ -32,10 +32,6 @@ export function getProtocol(id: string): ProtocolAdapter {
   return a;
 }
 
-export function listProtocols(): Array<{ id: string; name: string }> {
-  return [...adapters.values()].map(({ id, name }) => ({ id, name }));
-}
-
 registerProtocol({
   id: 'http',
   name: 'HTTP / REST',

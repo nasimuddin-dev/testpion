@@ -1,7 +1,7 @@
 import { compareSnapshot, describeDifference } from './snapshot.js';
 import { decodeJwt, describeExpiry, findJwts, type DecodedJwt } from '../util/jwt.js';
 import type { CheckConfig, CheckResult } from '../model/types.js';
-import { deepEqual, exists, inferSchema, query, tryParseJson } from '../util/jsonpath.js';
+import { deepEqual, exists, inferSchema, query, queryAll, tryParseJson } from '../util/jsonpath.js';
 import { cosine, lexicalCosine, tokenF1 } from './text.js';
 import { normalizeError } from '../errors.js';
 import { aliasCheck, documentCheck, registerCheck, resolveCheck, checkTypes, res, target, asText, short, threshold, validateSchema, type CheckContext, type CheckFn } from './check-registry.js';
@@ -30,8 +30,10 @@ registerCheck('status', (cfg, ctx) => {
 aliasCheck('http-status', 'status');
 
 registerCheck('exists', (cfg, ctx) => {
-  const ok = exists(ctx.body, String(cfg.path ?? '$'));
-  return res(cfg, ok, ok ? `${cfg.path} exists` : `${cfg.path} not found`, { actual: ok ? short(query(ctx.body, String(cfg.path))) : undefined });
+  const hits = queryAll(ctx.body, String(cfg.path ?? '$'));
+  const ok = hits.length > 0;
+  // one evaluation of the path (a check without a path asks for "undefined" as its actual value, as it always did)
+  return res(cfg, ok, ok ? `${cfg.path} exists` : `${cfg.path} not found`, { actual: ok ? short(cfg.path == null ? query(ctx.body, String(cfg.path)) : hits[0]) : undefined });
 });
 
 registerCheck('not-exists', (cfg, ctx) => {

@@ -2,7 +2,7 @@
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readRunSummary } from './run-records.js';
 
-export interface ScoreTrendPoint {
+interface ScoreTrendPoint {
   runId: string;
   name: string;
   startedAt: string;

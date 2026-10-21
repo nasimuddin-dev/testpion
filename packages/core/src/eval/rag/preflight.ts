@@ -13,7 +13,7 @@ import { routeProblems } from './route.js';
 import { assertSqlProduction } from './metrics-sql.js';
 import { resolveMetric } from './metric-registry.js';
 
-export interface EvaluationPlan {
+interface EvaluationPlan {
   /** The judged metrics among the evaluators. */
   judged: string[];
   /** The judge they will use (undefined when no metric needs one). */

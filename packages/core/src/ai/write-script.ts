@@ -15,12 +15,13 @@ import { runScript } from '../scripts/sandbox.js';
 import type { ItemRef } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { contextOfItem } from './item-context.js';
-import { loadScriptApi, scriptApiProblems } from './script-reference.js';
+import { sandboxResponse, scriptMisuseBadge } from './script-reference.js';
 import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import type { VerificationBadge } from './proposal.js';
 import { registerVerifier, type StoredResponse } from './verify.js';
 
-export type ScriptPhase = 'pre' | 'test';
+type ScriptPhase = 'pre' | 'test';
 
 export const SCRIPT_PLAN_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -59,7 +60,7 @@ function sampleRequest(v: unknown): SampleRequest | undefined {
 }
 
 /** What `prepare` keeps for building the item: where it goes, what it replaces. */
-export interface ScriptLocal {
+interface ScriptLocal {
   phase: ScriptPhase;
   mode: 'replace' | 'append';
   current: string;
@@ -98,7 +99,7 @@ export async function prepareScriptContext(store: WorkspaceStore, item: ItemRef,
 }
 
 /** The script of the model's answer: the code only (a fence the model added is removed). */
-export function scriptOfValue(v: unknown): string {
+function scriptOfValue(v: unknown): string {
   const raw = (v as { script?: unknown } | undefined)?.script;
   if (typeof raw !== 'string' || !raw.trim()) throw new ApsError('ValidationError', 'The answer has no script');
   const fenced = /^\s*```(?:javascript|js|typescript|ts)?\s*\n([\s\S]*?)\n```\s*$/.exec(raw);
@@ -133,12 +134,10 @@ export function proposeScript(a: { value?: unknown }, input: AiTaskInput): Draft
 /** The summary and assumptions of the proposal (registry `describe`). */
 export function describeScript(value: unknown): { summary?: string; assumptions?: string[] } {
   const v = (value ?? {}) as { explanation?: unknown; assumptions?: unknown };
-  return { summary: typeof v.explanation === 'string' ? v.explanation.slice(0, 1200) : undefined, assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String).slice(0, 10) : [] };
+  return { summary: typeof v.explanation === 'string' ? v.explanation.slice(0, 1200) : undefined, assumptions: stringList(v.assumptions, 10) };
 }
 
 /* ------------------------------------------------------------------ verification */
-
-const POSTMAN_API = /(^|[^\w$.])(pm|postman)\s*\.\s*[A-Za-z_$]/;
 
 /** What a script did in the sandbox, in words ("sets nonce; adds the X-Trace header; runs 3 tests"). */
 function effects(out: Awaited<ReturnType<typeof runScript>>, before?: SampleRequest): string[] {
@@ -162,19 +161,13 @@ function effects(out: Awaited<ReturnType<typeof runScript>>, before?: SampleRequ
  * current one: a test that passes now but failed then depends on a value that changes.
  */
 export async function dryRunScript(code: string, phase: ScriptPhase, o: { request?: SampleRequest; response?: StoredResponse; previous?: StoredResponse }): Promise<VerificationBadge> {
-  const misuse = scriptApiProblems(code, await loadScriptApi());
-  if (misuse.length)
-    return {
-      verifier: 'script-dry-run',
-      status: 'fail',
-      label: POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')) ? 'uses pm.* / postman.*' : 'misuses the tp.* script API',
-      detail: misuse.slice(0, 6).join('\n'),
-    };
+  const misuse = await scriptMisuseBadge('script-dry-run', code);
+  if (misuse) return misuse;
   if (/\b(async|await|import|fetch|XMLHttpRequest)\b|\brequire\s*\(\s*['"](?!crypto-js['"]|uuid['"])/.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '""')))
     return { verifier: 'script-dry-run', status: 'fail', label: 'uses something the sandbox does not have', detail: 'The sandbox is synchronous and has no network, imports or fetch: use tp.sendRequest for a request (it is not run here), tp.require("crypto-js") for hashing.' };
   const input = (r: StoredResponse | undefined) => ({
     variables: {},
-    ...(phase === 'pre' ? { request: o.request ?? { method: 'GET', url: 'https://example.test/', headers: [] } } : { response: r ? { status: r.status, headers: r.headers, body: r.body, time: r.latencyMs } : undefined, ...(o.request ? { request: o.request } : {}) }),
+    ...(phase === 'pre' ? { request: o.request ?? { method: 'GET', url: 'https://example.test/', headers: [] } } : { response: sandboxResponse(r), ...(o.request ? { request: o.request } : {}) }),
   });
   if (phase === 'test' && o.response && o.response.latencyMs === undefined && /\bresponseTime\b/.test(code))
     return { verifier: 'script-dry-run', status: 'fail', label: 'reads the response time, which the response it was written for does not have', detail: 'Leave the timing out, or send the request again and write the script for that response.' };

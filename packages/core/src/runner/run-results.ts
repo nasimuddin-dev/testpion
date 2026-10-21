@@ -5,6 +5,7 @@ import type { ResultReview, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readJson, writeJson } from '../storage/fsutil.js';
+import { cursorOf, offsetOfCursor, pageLimit, type PageBounds } from '../util/page.js';
 import { readResultsFile } from './runner.js';
 import { runBreakdown, type RunBreakdown } from './breakdown.js';
 
@@ -19,16 +20,22 @@ export async function* runResults(store: Pick<WorkspaceStore, 'runDir'>, runId: 
   for await (const r of await readResultsFile(file)) yield r;
 }
 
-export interface ResultsPage {
+interface ResultsPage {
   items: TestResult[];
   /** How many results match (before offset and limit). */
   total: number;
+  /** More results follow this page (ask again with `cursor: nextCursor`, or `offset` of the next position). */
+  truncated: boolean;
+  nextCursor?: string;
 }
+
+/** A page of results: 100 unless asked, at most 1,000 (the window asks for 50 to 500). */
+const RESULTS_PAGE: PageBounds = { limit: 100, max: 1000 };
 
 /* ------------------------------------------------------------------ human review */
 
 /** The reviews of a run's results, by result id (runs/<id>/reviews.json, beside the results, which stay as written). */
-export const runReviewsFile = (store: Pick<WorkspaceStore, 'runDir'>, runId: string) => join(store.runDir(runId), 'reviews.json');
+const runReviewsFile = (store: Pick<WorkspaceStore, 'runDir'>, runId: string) => join(store.runDir(runId), 'reviews.json');
 
 export function runReviews(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Record<string, ResultReview> {
   try {
@@ -89,14 +96,14 @@ export function reviewCounts(reviews: Record<string, ResultReview>, total: numbe
  * A page of a run's results, filtered by status ('failed' means failed or error; 'reviewed' / 'unreviewed' by a
  * person's rating) and a name substring. Each result carries its review.
  */
-export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: { runId: string; offset?: number; limit?: number; status?: string; query?: string }): Promise<ResultsPage> {
+export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: { runId: string; offset?: number; cursor?: string; limit?: number; status?: string; query?: string }): Promise<ResultsPage> {
   const file = runResultsFile(store, q.runId);
   const items: TestResult[] = [];
   let total = 0;
-  if (!existsSync(file)) return { items, total };
+  if (!existsSync(file)) return { items, total, truncated: false };
   const reviews = runReviews(store, q.runId);
-  const offset = q.offset ?? 0;
-  const limit = q.limit ?? 100;
+  const offset = q.cursor !== undefined ? offsetOfCursor(q.cursor) : Math.max(0, q.offset ?? 0);
+  const limit = pageLimit(q.limit, RESULTS_PAGE);
   const needle = q.query?.toLowerCase();
   const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
   for await (const line of rl) {
@@ -114,7 +121,8 @@ export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: {
     if (total >= offset && items.length < limit) items.push(review ? { ...r, review } : r);
     total++;
   }
-  return { items, total };
+  const truncated = offset + items.length < total;
+  return { items, total, truncated, ...(truncated ? { nextCursor: cursorOf(offset + items.length) } : {}) };
 }
 
 /** Latency histogram, slowest results, results per type and most failed checks of a finished run. */

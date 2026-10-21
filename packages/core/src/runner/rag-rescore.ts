@@ -34,7 +34,7 @@ export async function metricsOfRun(store: Pick<WorkspaceStore, 'runDir'>, runId:
   return [...names];
 }
 
-export interface RescoreOptions {
+interface RescoreOptions {
   runId: string;
   /** The metrics to score with (check configs); default: the ones the run had, with their defaults. */
   evaluators?: CheckConfig[];

@@ -11,7 +11,7 @@ import { runEvidence } from './run-evidence.js';
 import { deterministicFindings, reportOf, withEvidence, type TriageReport } from './triage.js';
 import { runAiTask, type AiPreview, type AiRunDeps } from './tasks/run.js';
 
-export interface TriageOptions {
+interface TriageOptions {
   /** A run id, or 'last' (the newest finished run with failures). */
   runId: string;
   privacy?: string;

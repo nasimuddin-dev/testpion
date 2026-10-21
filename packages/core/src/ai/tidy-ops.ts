@@ -2,10 +2,11 @@
 import { ApsError } from '../errors.js';
 import type { AuthConfig, Collection, CollectionFolder, CollectionNode, KeyValue, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { shortId } from '../util/ids.js';
+import { jsonClone } from '../util/json-clone.js';
 
 export type Saved = SavedHttpRequest | SavedGraphQLRequest;
 
-export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+export const clone = jsonClone;
 
 /** At most this many requests are described to the model (a bigger import is sampled: noise and duplicates first). */
 export const TIDY_MAX_REQUESTS = 120;
@@ -65,7 +66,7 @@ export function locate(items: CollectionNode[], id: string): { node: CollectionN
   return undefined;
 }
 
-export const ensureFolder = (c: Collection, path: string[]): CollectionNode[] => {
+const ensureFolder = (c: Collection, path: string[]): CollectionNode[] => {
   let list = c.items;
   for (const name of path) {
     let f = list.find((n): n is CollectionFolder => n.kind === 'folder' && n.name === name);
@@ -78,7 +79,7 @@ export const ensureFolder = (c: Collection, path: string[]): CollectionNode[] =>
   return list;
 };
 
-export const setVariable = (c: Collection, key: string, value: string): void => {
+const setVariable = (c: Collection, key: string, value: string): void => {
   const have = (c.variables ?? []).find((v) => v.key === key);
   if (have && have.value !== value) throw new ApsError('ValidationError', `The collection variable "${key}" already has another value`, { suggestions: ['Run the tidy again: it picks a free name.'] });
   if (!have) c.variables = [...(c.variables ?? []), { key, value }];
@@ -237,9 +238,9 @@ export function collectionProblems(c: Collection): string[] {
   return out;
 }
 
-export const TPL = /\{\{\s*([^{}\s]+)\s*\}\}/g;
+const TPL = /\{\{\s*([^{}\s]+)\s*\}\}/g;
 
-export const resolveString = (s: string, vars: Record<string, string>): string => {
+const resolveString = (s: string, vars: Record<string, string>): string => {
   let cur = s;
   for (let i = 0; i < 5; i++) {
     const next = cur.replace(TPL, (m, name: string) => (name in vars ? vars[name]! : m));
@@ -256,7 +257,7 @@ export const canon = (v: unknown): unknown => {
 };
 
 /** The collection's own variables (enabled ones) by name. */
-export const varsOf = (c: Collection): Record<string, string> => Object.fromEntries((c.variables ?? []).filter((v) => v.enabled !== false && v.key).map((v) => [v.key, v.value]));
+const varsOf = (c: Collection): Record<string, string> => Object.fromEntries((c.variables ?? []).filter((v) => v.enabled !== false && v.key).map((v) => [v.key, v.value]));
 
 /** What a request sends, with the collection's variables resolved: the thing a tidy must not change. */
 export function resolvedRequest(r: FlatRequest, vars: Record<string, string>): string {
@@ -284,7 +285,7 @@ export function sendDifferences(before: Collection, after: Collection, dropped: 
   return out;
 }
 
-export function diffField(b: FlatRequest, vb: Record<string, string>, a: FlatRequest, va: Record<string, string>): string {
+function diffField(b: FlatRequest, vb: Record<string, string>, a: FlatRequest, va: Record<string, string>): string {
   const x = JSON.parse(resolvedRequest(b, vb)) as Record<string, any>;
   const y = JSON.parse(resolvedRequest(a, va)) as Record<string, any>;
   const keys = new Set([...Object.keys(x.request ?? {}), ...Object.keys(y.request ?? {})]);

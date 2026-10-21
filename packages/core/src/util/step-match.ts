@@ -7,7 +7,7 @@
  */
 
 /** A key a step can be paired by (an id, a name, a method and path, a body…); undefined: this step has none of this kind. */
-export type StepKey<T> = (step: T, index: number) => string | undefined;
+type StepKey<T> = (step: T, index: number) => string | undefined;
 
 /**
  * For each of `seekers`, in order, the index of its partner in `pool`, or -1. A seeker tries the keys in order; for each key

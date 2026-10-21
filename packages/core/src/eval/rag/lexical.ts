@@ -32,7 +32,7 @@ const ngramCounts = (tokens: string[], n: number): Map<string, number> => {
   return m;
 };
 
-export interface BleuStats {
+interface BleuStats {
   correct: number[];
   total: number[];
   hypLen: number;
@@ -40,7 +40,7 @@ export interface BleuStats {
 }
 
 /** The sufficient statistics of one hypothesis/reference pair (clipped n-gram matches per order, lengths). */
-export function bleuStats(hyp: string, ref: string, maxOrder = 4): BleuStats {
+function bleuStats(hyp: string, ref: string, maxOrder = 4): BleuStats {
   const h = tokenize13a(hyp);
   const r = tokenize13a(ref);
   const correct: number[] = [];
@@ -61,7 +61,7 @@ export function bleuStats(hyp: string, ref: string, maxOrder = 4): BleuStats {
 }
 
 /** BLEU from summed statistics, with sacreBLEU's `exp` smoothing: 0..100. */
-export function bleuFromStats(st: BleuStats, maxOrder = 4): number {
+function bleuFromStats(st: BleuStats, maxOrder = 4): number {
   if (st.hypLen === 0) return 0;
   const precisions = new Array<number>(maxOrder).fill(0);
   let smooth = 1;
@@ -79,7 +79,7 @@ export function bleuFromStats(st: BleuStats, maxOrder = 4): number {
 }
 
 /** Ragas splits both texts on ". " and scores them as one corpus; `whole` scores each text as a single segment. */
-export function bleuSegments(text: string, mode: 'ragas' | 'whole'): string[] {
+function bleuSegments(text: string, mode: 'ragas' | 'whole'): string[] {
   if (mode === 'whole') return [text];
   const parts = text.split('. ').map((s) => s.trim()).filter(Boolean);
   return parts.length ? parts : [text];

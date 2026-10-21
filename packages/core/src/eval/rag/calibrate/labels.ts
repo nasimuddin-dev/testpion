@@ -10,7 +10,7 @@ import { ApsError } from '../../../errors.js';
 import { readJson, writeJson } from '../../../storage/fsutil.js';
 import type { WorkspaceStore } from '../../../storage/workspace.js';
 
-export const LABELS_DIR = 'labels';
+const LABELS_DIR = 'labels';
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/;
 
 export interface RagLabel {
@@ -33,7 +33,7 @@ export interface RagLabel {
   judge?: { provider?: string; model?: string; promptVersion?: string; score?: number };
 }
 
-export interface LabelsFile {
+interface LabelsFile {
   schemaVersion: 1;
   name: string;
   labels: RagLabel[];

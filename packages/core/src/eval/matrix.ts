@@ -11,14 +11,14 @@ import type { TestResult, TestStatus } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { round } from '../util/stats.js';
 
-export type EvalCellStatus = TestStatus;
-export type EvalChange = 'regressed' | 'improved' | 'unchanged' | 'new' | 'missing';
+type EvalCellStatus = TestStatus;
+type EvalChange = 'regressed' | 'improved' | 'unchanged' | 'new' | 'missing';
 
 /** The default score drop (and rise) that counts as a change: the regression report's scoreDrop. */
-export const DEFAULT_EVAL_THRESHOLD = 0.05;
+const DEFAULT_EVAL_THRESHOLD = 0.05;
 
 /** What a cell needs to be compared: whether it passed and its mean score (0 to 1) when it has scored checks. */
-export interface EvalCellValue {
+interface EvalCellValue {
   status: string;
   score?: number;
 }
@@ -485,7 +485,7 @@ export class EvalMatrix {
 }
 
 /** Limits: the matrix is for comparing variants, not for every run of a workspace. */
-export const EVAL_MATRIX_LIMITS = { columns: 40, runs: 20, casesPerRun: 200_000 };
+const EVAL_MATRIX_LIMITS = { columns: 40, runs: 20, casesPerRun: 200_000 };
 
 /** Check a threshold: a score difference from 0 to 1. */
 export function evalThreshold(v: unknown): number {

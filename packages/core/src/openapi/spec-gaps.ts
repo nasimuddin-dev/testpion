@@ -15,10 +15,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
-import { deref } from '../util/json-ref.js';
+import { BoundedMap } from '../util/collections.js';
+import { deref, operationParameters } from '../util/json-ref.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
+import { coveragePct as pct, findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
 
 type Json = Record<string, any>;
 
@@ -44,9 +45,9 @@ export interface ExistingRequest {
   tags: string[];
 }
 
-export type SpecGapKind = 'no-test' | 'status' | 'negative' | 'boundary' | 'security' | 'contract' | 'param';
+type SpecGapKind = 'no-test' | 'status' | 'negative' | 'boundary' | 'security' | 'contract' | 'param';
 
-export interface SpecGap {
+interface SpecGap {
   kind: SpecGapKind;
   message: string;
   /** The category of test that closes it. */
@@ -55,7 +56,7 @@ export interface SpecGap {
   status?: string;
 }
 
-export interface SpecParam {
+interface SpecParam {
   name: string;
   in: string;
   required: boolean;
@@ -63,7 +64,7 @@ export interface SpecParam {
   constraints: string[];
 }
 
-export interface SpecOperationGap {
+interface SpecOperationGap {
   operation: string;
   method: string;
   path: string;
@@ -114,7 +115,6 @@ export interface SpecGapReport {
 }
 
 const METHODS = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options'];
-const pct = (n: number, d: number) => (d ? Math.round((n / d) * 1000) / 10 : 100);
 
 /* ------------------------------------------------------------------ the requests that exist */
 
@@ -203,14 +203,27 @@ const walkFiles = (dir: string, out: string[] = [], depth = 0): string[] => {
   return out;
 };
 
+/** What a test file said, by its size and time: a second analysis reads only the files that changed (up to 20,000 files are remembered). */
+const requestsByFile = new BoundedMap<string, { key: string; rel: string; requests: ExistingRequest[] }>(20_000);
+
 /** Every HTTP request of the workspace that a gap analysis reads: test files and saved collection requests. */
 export function existingRequests(store: WorkspaceStore): ExistingRequest[] {
   const out: ExistingRequest[] = [];
   const root = store.path('tests');
   for (const f of walkFiles(root).sort()) {
     try {
-      if (statSync(f).size > 2 * 1024 * 1024) continue;
-      out.push(...requestsOfTestFile(f.slice(root.length + 1).replace(/\\/g, '/'), readFileSync(f, 'utf8')));
+      const st = statSync(f);
+      if (st.size > 2 * 1024 * 1024) continue;
+      const rel = f.slice(root.length + 1).replace(/\\/g, '/');
+      const key = `${st.size}:${st.mtimeMs}`;
+      let hit = requestsByFile.get(f);
+      if (!hit || hit.key !== key || hit.rel !== rel) {
+        hit = { key, rel, requests: requestsOfTestFile(rel, readFileSync(f, 'utf8')) };
+        requestsByFile.delete(f);
+        requestsByFile.set(f, hit);
+      }
+      // (copies: a caller may change what it gets)
+      for (const r of hit.requests) out.push({ ...r, query: [...r.query], headers: [...r.headers], bodyFields: [...r.bodyFields], statuses: [...r.statuses], tags: [...r.tags] });
     } catch {
       /* unreadable: skipped */
     }
@@ -310,8 +323,7 @@ export function specOperations(doc: OpenApiDoc): SpecOperation[] {
     for (const m of METHODS) {
       const op = item[m] as Json | undefined;
       if (!op || typeof op !== 'object') continue;
-      const own = asList(op.parameters).map((p) => deref(d, p) as Json);
-      const params = [...own, ...asList(item.parameters).map((p) => deref(d, p) as Json).filter((p) => !own.some((o) => o?.name === p?.name && o?.in === p?.in))].filter((p) => p && p.in !== 'body' && p.name);
+      const params = operationParameters(d, item, op).filter((p) => p && p.in !== 'body' && p.name);
       const body = bodySchemaOf(d, op, item);
       const bodyProps = body ? propertiesOf(d, body.schema) : { properties: {}, required: [] as string[] };
       const security = (op.security ?? d.security ?? []) as Json[];
@@ -348,7 +360,7 @@ const covers = (asserted: string, documented: string): boolean => {
 };
 
 /** What an existing request proves: positive (expects a 2xx), negative (a 4xx), security (401/403), boundary (tagged). */
-export function categoriesOf(r: ExistingRequest): SpecCategory[] {
+function categoriesOf(r: ExistingRequest): SpecCategory[] {
   const out = new Set<SpecCategory>();
   for (const t of r.tags) if ((SPEC_CATEGORIES as readonly string[]).includes(t)) out.add(t as SpecCategory);
   for (const s of r.statuses) {
@@ -480,6 +492,3 @@ export function specGapMarkdown(r: SpecGapReport): string {
   }
   return lines.join('\n');
 }
-
-/** Constraint text of a schema, for the model's context. */
-export const schemaConstraints = (doc: Json, s: unknown): string[] => constraintsOf(doc, s);

@@ -27,6 +27,17 @@ export function deref(doc: Json | undefined, node: any, seen: Set<string> = new 
 }
 
 /**
+ * The parameters of an operation, references resolved: its own, then those of its path item that it does not override
+ * (the same name and place). Entries that are not objects (a dangling reference) are kept for the caller to filter.
+ */
+export function operationParameters(doc: Json | undefined, pathItem: Json, op: Json): Json[] {
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : v === undefined || v === null ? [] : [v]);
+  const own = list(op.parameters).map((p) => deref(doc, p) as Json);
+  const inherited = list(pathItem.parameters).map((p) => deref(doc, p) as Json).filter((p) => !own.some((o) => o?.name === p?.name && o?.in === p?.in));
+  return [...own, ...inherited];
+}
+
+/**
  * The JSON type of a schema: its `type`, or the first non-null one of a type list (`all` joins them all with `|`).
  * With `infer`, a schema with `properties` is an object and one with `items` an array when it does not say.
  */

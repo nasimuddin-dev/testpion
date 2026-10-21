@@ -6,6 +6,7 @@
  * without network, flows only against a local mock server built from the collection's saved examples.
  */
 import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
+import { tryParseYaml } from '../util/yaml-doc.js';
 import { checkLabel, namesSetByScripts, templatedText, templateVariables } from '@testpion/shared';
 import type { CheckConfig, Collection } from '../model/types.js';
 import type { ExecServices } from '../runner/execute.js';
@@ -18,7 +19,7 @@ import { normalizeError } from '../errors.js';
 import type { ProposalItem, VerificationBadge } from './proposal.js';
 import { explainYamlError } from './yaml-repair.js';
 import { explainCheckProblem } from './flow-format.js';
-import { loadScriptApi, scriptApiProblems } from './script-reference.js';
+import { sandboxResponse, scriptMisuseBadge } from './script-reference.js';
 import type { AiRunDeps } from './tasks/run.js';
 
 /** A response a proposal was made for (the one on screen, or the latest in the history). */
@@ -59,8 +60,6 @@ const verifiers = new Map<string, Verifier>();
 export function registerVerifier(name: string, v: Verifier): void {
   verifiers.set(name, v);
 }
-
-export const verifierNames = () => [...verifiers.keys()];
 
 /**
  * Run the named verifiers on every item: each adds its badge; an item with a failing badge is unticked (the review
@@ -169,28 +168,19 @@ registerVerifier('checks', async (item, ctx) => {
   return badge;
 });
 
-/** Names TestPion never writes: `pm.*` / `postman.*` run (Postman compatibility) but TestPion's own scripts use `tp.*`. */
-const POSTMAN_API = /(^|[^\w$.])(pm|postman)\s*\.\s*[A-Za-z_$]/;
-
 /**
  * A tp script run once in the sandbox against the response (no network: tp.sendRequest is unavailable), and against the
  * previous response when there is one: a test that passes now but failed before depends on a value that changes.
  */
 export async function verifyScript(code: string, response: StoredResponse | undefined, previous?: StoredResponse): Promise<VerificationBadge> {
   // the API as the sandbox has it: each misuse with what to write instead (that is what a repair turn sends back)
-  const misuse = scriptApiProblems(code, await loadScriptApi());
-  if (misuse.length)
-    return {
-      verifier: 'script',
-      status: 'fail',
-      label: POSTMAN_API.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')) ? 'uses pm.* / postman.*' : 'misuses the tp.* script API',
-      detail: misuse.slice(0, 6).join('\n'),
-    };
+  const misuse = await scriptMisuseBadge('script', code);
+  if (misuse) return misuse;
   // the response time is there only when the response it was written for has one (the editor's, History's); else the test cannot be proven
   if (response && response.latencyMs === undefined && /\bresponseTime\b|\bto\.have\.responseTime\b/.test(code))
     return { verifier: 'script', status: 'fail', label: 'reads the response time, which the response it was written for does not have', detail: 'Leave the timing out, or send the request again and generate the tests from that response.' };
   const run = (r: StoredResponse | undefined) =>
-    runScript(code, { variables: {}, response: r ? { status: r.status, headers: r.headers, body: r.body, time: r.latencyMs } : undefined }, { timeoutMs: 3000, maxRequests: 0 });
+    runScript(code, { variables: {}, response: sandboxResponse(r) }, { timeoutMs: 3000, maxRequests: 0 });
   const out = await run(response);
   if (out.error) return { verifier: 'script', status: 'fail', label: 'the script throws', detail: out.error };
   const tests = out.tests.filter((t) => !t.skipped);
@@ -269,12 +259,9 @@ const DYNAMIC = /^\$|^(baseUrl|workspaceDir)$/;
  * not its scripts (a visualizer's `{{#each items}}…{{/each}}`, `{{total}}`), not its description, never block syntax.
  */
 export function flowVariableProblems(text: string, known: string[] = []): string[] {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
+  const parsed = tryParseYaml(text);
+  if (!parsed.ok) return [];
+  const doc = parsed.value;
   const steps = (Array.isArray(doc) ? doc : ((doc as { tests?: unknown[] })?.tests ?? [])) as Array<Record<string, unknown>>;
   const defined = new Set(known);
   for (const s of Array.isArray(steps) ? steps : []) {

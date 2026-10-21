@@ -13,7 +13,7 @@ import { findSavedEvaluation } from './saved-evaluations.js';
  * reports. Secret values never appear: the config names the CI secrets to create.
  */
 export type CiProvider = 'github' | 'gitlab' | 'azure' | 'jenkins';
-export const CI_PROVIDERS: CiProvider[] = ['github', 'gitlab', 'azure', 'jenkins'];
+const CI_PROVIDERS: CiProvider[] = ['github', 'gitlab', 'azure', 'jenkins'];
 
 export interface CiTarget {
   /** Run a suite (tests/<name>.suite.yaml). */
@@ -77,7 +77,7 @@ export interface CiConfigOptions extends CiTarget {
   waitSeconds?: number;
 }
 
-export interface CiSecret {
+interface CiSecret {
   /** Environment variable the CLI reads. */
   name: string;
   /** What it holds. */

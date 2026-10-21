@@ -9,7 +9,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { isSuiteFile, loadTestsFromFile } from './loader.js';
 
-export interface TestLocation {
+interface TestLocation {
   /** The file inside tests/, with forward slashes. */
   path: string;
   /** The test's id and name, and the 1-based line of its `name:` (when found). */

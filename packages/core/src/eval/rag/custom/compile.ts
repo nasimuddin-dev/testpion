@@ -20,7 +20,7 @@ import { parseFormula } from './formula.js';
 import { dagJudgedKinds, dagMaxJudgeCalls, dagOf } from '../dag.js';
 import { parseCustomMetric, scoringHash, type MetricProblem } from './file.js';
 
-export interface CompiledMetric {
+interface CompiledMetric {
   def: MetricDef;
   check: CustomCheck;
   file: CustomMetricFile;
@@ -38,7 +38,7 @@ const HOW: Record<CustomMetricFile['kind'], (f: CustomMetricFile) => string> = {
 };
 
 /** The definition a file compiles to. */
-export function defOf(f: CustomMetricFile, hash: string): MetricDef {
+function defOf(f: CustomMetricFile, hash: string): MetricDef {
   const id = `custom/${f.id}`;
   // a tree asks a judge at every node that is not a rule
   const tree = f.kind === 'dag' ? dagOf(f.tree) : undefined;
@@ -119,18 +119,7 @@ function unregisterInternal(id: string): void {
   registered.delete(id);
 }
 
-/** Register one compiled metric by hand (a draft, a test). The next sync reads the folder again. */
-export function registerCustomMetric(c: CompiledMetric): void {
-  lastSync = undefined;
-  registerInternal(c);
-}
-
-export function unregisterCustomMetric(id: string): void {
-  lastSync = undefined;
-  unregisterInternal(id);
-}
-
-export interface SyncResult {
+interface SyncResult {
   /** The ids registered, `custom/<id>`. */
   registered: string[];
   /** Files that could not be registered, with why. */
@@ -234,7 +223,7 @@ export interface ExampleResult {
 }
 
 /** The sample an example describes, in the form a check context is built from. */
-export function exampleSample(s: CustomMetricExampleSample) {
+function exampleSample(s: CustomMetricExampleSample) {
   return {
     question: s.question,
     answer: s.answer,

@@ -19,7 +19,7 @@
  * limit across the file); at most `max` probes; the steps are the collection's own requests with credentials changed,
  * nothing else; the probes refuse a production environment (see security-run.ts for the executor, which refuses too).
  */
-import { checkLabel, templatedText, templateVariables, type ItemRef } from '@testpion/shared';
+import { templatedText, templateVariables, type ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import type { AuthConfig, CheckConfig } from '../model/types.js';
 import { stepFromSavedRequest } from '../runner/flow-steps-from-requests.js';
@@ -28,10 +28,13 @@ import type { AiSurface } from '../storage/ai-usage.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { slugify } from '../util/ids.js';
 import { exists, query } from '../util/jsonpath.js';
-import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
+import { stringifyYaml } from '../util/lazy-yaml.js';
+import { jsonClone } from '../util/json-clone.js';
+import { tryParseYaml } from '../util/yaml-doc.js';
 import { freePath, isValueSegment, requestContext, sameEndpoint, segmentsOf, sourceRequests, type Saved } from './flow-from-collection.js';
-import { newProposalId, proposedTestFilePath, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
-import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { proposedTestFilePath, saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
+import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import { registerVerifier, verifyItems, type VerifyContext } from './verify.js';
 
 export const SECURITY_PROBES = ['bola', 'auth', 'mass-assignment', 'bfla'] as const;
@@ -52,22 +55,22 @@ export const SECURITY_CATALOGUE: Record<SecurityProbe, { owasp: string; title: s
 const KIND_NAME: Record<SecurityProbe, string> = { bola: 'BOLA', auth: 'broken authentication', 'mass-assignment': 'mass assignment', bfla: 'BFLA' };
 
 /** Statuses a refused request may carry: not authenticated, forbidden, or hidden as not found. */
-export const DENIED_OBJECT = [401, 403, 404];
-export const DENIED_FUNCTION = [401, 403];
+const DENIED_OBJECT = [401, 403, 404];
+const DENIED_FUNCTION = [401, 403];
 
 /** Defaults: a probe every 250 ms (four requests a second) and at most 40 probes (up to ~80 requests). */
-export const SECURITY_DEFAULTS = { rate: 4, max: 40 } as const;
+const SECURITY_DEFAULTS = { rate: 4, max: 40 } as const;
 /** An invalid token that is no secret: the API must refuse it. */
 const INVALID_TOKEN = 'tp-invalid-token';
 
-export interface SecurityIdentities {
+interface SecurityIdentities {
   /** The variable that holds the credentials the saved requests were written for (a token, an API key). */
   owner?: string;
   /** The variable of another user (BOLA) or a lower-privilege one (BFLA). */
   other?: string;
 }
 
-export interface SecurityOptions {
+interface SecurityOptions {
   probes?: SecurityProbe[];
   identities?: SecurityIdentities;
   /** POST / PUT / PATCH probes (mass assignment, writes of the other user); they change data. */
@@ -84,7 +87,7 @@ export interface SecurityOptions {
 }
 
 /** A probe as the model proposes it (and as the deterministic draft makes it). */
-export interface SecurityPlanProbe {
+interface SecurityPlanProbe {
   kind: SecurityProbe;
   /** The id of a saved request of the collection / folder. */
   request: string;
@@ -95,7 +98,7 @@ export interface SecurityPlanProbe {
   why?: string;
 }
 
-export interface SecurityPlan {
+interface SecurityPlan {
   summary?: string;
   assumptions?: string[];
   identities?: SecurityIdentities;
@@ -103,7 +106,7 @@ export interface SecurityPlan {
 }
 
 /** What `prepare` keeps on this computer. */
-export interface SecurityLocal {
+interface SecurityLocal {
   label: string;
   collectionId: string;
   folderId?: string;
@@ -145,7 +148,7 @@ const MASS_FIELDS: Array<{ name: RegExp; value: unknown }> = [
 const DEFAULT_MASS = ['role', 'isAdmin', 'verified', 'balance'];
 
 /** The value a privileged field name gets, or undefined when the name is not one the catalogue knows. */
-export function massFieldValue(name: string): unknown {
+function massFieldValue(name: string): unknown {
   if (!/^[A-Za-z_][\w]{0,40}$/.test(name)) return undefined;
   return MASS_FIELDS.find((f) => f.name.test(name))?.value;
 }
@@ -182,7 +185,7 @@ const hasCredentials = (n: Extract<Saved, { kind: 'http' }>, auth: AuthConfig | 
   (!!auth && auth.type !== 'none' && auth.type !== 'inherit') || (n.request.headers ?? []).some((h) => h.enabled !== false && CRED_HEADER.test(h.key));
 
 /** A JSONPath into a body that a marker may be read from: plain keys and indexes only. */
-export const MARKER_PATH = /^\$(\.[A-Za-z_][\w-]*|\[\d+\]|\['[^'\]]+'\])+$/;
+const MARKER_PATH = /^\$(\.[A-Za-z_][\w-]*|\[\d+\]|\['[^'\]]+'\])+$/;
 
 /** A value in the saved example's response that identifies the owner's data (an email, a name, a title), when there is one. */
 function exampleMarker(n: Extract<Saved, { kind: 'http' }>): string | undefined {
@@ -225,7 +228,7 @@ function markerHolds(n: Extract<Saved, { kind: 'http' }>, path: string): boolean
  * The probes TestPion makes without a model (see the module comment). A probe it cannot make is listed in `skipped` with
  * the reason (no two principals, a write verb not asked for …), so a short file is never a silent one.
  */
-export function deterministicProbes(requests: Array<{ node: Saved; auth?: AuthConfig }>, o: SecurityLocal['options']): { probes: SecurityPlanProbe[]; skipped: string[] } {
+function deterministicProbes(requests: Array<{ node: Saved; auth?: AuthConfig }>, o: SecurityLocal['options']): { probes: SecurityPlanProbe[]; skipped: string[] } {
   const probes: SecurityPlanProbe[] = [];
   const skipped: string[] = [];
   const seen = new Set<string>();
@@ -264,7 +267,7 @@ export function deterministicProbes(requests: Array<{ node: Saved; auth?: AuthCo
 
 /* ------------------------------------------------------------------ the file */
 
-const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+const clone = jsonClone;
 
 type Principal = { var: string } | 'none' | 'invalid';
 
@@ -292,11 +295,11 @@ function probeStep(node: Extract<Saved, { kind: 'http' }>, auth: AuthConfig | un
 const route = (n: Extract<Saved, { kind: 'http' }>) => `${n.request.method.toUpperCase()} ${segmentsOf(n.request.url).join('/') ? '/' + segmentsOf(n.request.url).join('/') : '/'}`;
 
 /** What a built file says it contains: the steps a verifier can compare the YAML with. */
-export interface SecurityExpected {
+interface SecurityExpected {
   steps: Array<{ id: string; method: string; url: string; probe: SecurityProbe }>;
 }
 
-export interface BuiltSecurity {
+interface BuiltSecurity {
   yaml: string;
   probes: number;
   steps: number;
@@ -306,7 +309,7 @@ export interface BuiltSecurity {
 }
 
 /** The test file of a plan, built from the saved requests and the catalogue (see the module comment). */
-export function buildSecurityFile(plan: SecurityPlan, local: SecurityLocal, o: { by: string; ai: boolean }): BuiltSecurity {
+function buildSecurityFile(plan: SecurityPlan, local: SecurityLocal, o: { by: string; ai: boolean }): BuiltSecurity {
   const notes: string[] = [];
   const ids = local.options.identities;
   const steps: Array<Record<string, unknown>> = [];
@@ -464,7 +467,7 @@ export const SECURITY_PLAN_SCHEMA: Record<string, unknown> = {
 const VAR_NAME = /^[A-Za-z_][\w.-]{0,80}$/;
 
 /** `owner=tokenA,other=tokenB` (or `tokenA,tokenB`): the principals' variables, from the CLI / MCP / RPC. */
-export function parseIdentities(v: unknown): SecurityIdentities | undefined {
+function parseIdentities(v: unknown): SecurityIdentities | undefined {
   if (!v) return undefined;
   let owner: string | undefined;
   let other: string | undefined;
@@ -487,7 +490,7 @@ export function parseIdentities(v: unknown): SecurityIdentities | undefined {
 }
 
 /** Options from the context a caller passes (`context.options`), checked. */
-export function securityOptions(raw: Record<string, unknown> | undefined): SecurityLocal['options'] & { allowProduction: boolean } {
+function securityOptions(raw: Record<string, unknown> | undefined): SecurityLocal['options'] & { allowProduction: boolean } {
   const o = (raw ?? {}) as Record<string, unknown>;
   const probes = (Array.isArray(o.probes) ? o.probes : typeof o.probes === 'string' ? o.probes.split(',') : [])
     .map((x) => String(x).trim())
@@ -606,13 +609,13 @@ export function proposeSecurity(a: { value?: unknown }, input: AiTaskInput): { i
 }
 
 /** The summary, assumptions and notes of the proposal (registry `describe`). */
-export function describeSecurity(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
+export function describeSecurity(value: unknown, items: ProposalItem[]): ProposalDescription {
   const v = (value ?? {}) as SecurityPlan;
   const s = (items[0]?.data as { security?: { byKind: Partial<Record<SecurityProbe, number>>; probes: number } } | undefined)?.security;
   const counts = s ? Object.entries(s.byKind).map(([k, n]) => `${n} ${SECURITY_CATALOGUE[k as SecurityProbe].owasp} ${k}`) : [];
   return {
     summary: [typeof v.summary === 'string' ? v.summary : '', s ? `${s.probes} probes (${counts.join(', ')}). Verdicts are checks computed from the responses; run them against a test environment.` : ''].filter(Boolean).join(' '),
-    assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String).slice(0, 12) : [],
+    assumptions: stringList(v.assumptions, 12),
   };
 }
 
@@ -627,13 +630,9 @@ registerVerifier('security-tests', (item) => {
   const sec = (item.data as { security?: { expected: SecurityExpected; options: SecurityLocal['options'] } } | undefined)?.security;
   if (!sec || (item.kind !== 'flow' && item.kind !== 'file')) return undefined;
   const problems: string[] = [];
-  let doc: unknown;
-  try {
-    doc = parseYaml(item.after);
-  } catch {
-    return undefined; // the test-file verifier says why
-  }
-  const d = doc as { defaults?: Record<string, unknown>; tests?: Array<Record<string, unknown>> } | null;
+  const parsed = tryParseYaml(item.after);
+  if (!parsed.ok) return undefined; // the test-file verifier says why
+  const d = parsed.value as { defaults?: Record<string, unknown>; tests?: Array<Record<string, unknown>> } | null;
   const tests = Array.isArray(d?.tests) ? d!.tests! : [];
   if (!tests.length) return undefined;
   const byId = new Map(sec.expected.steps.map((s) => [s.id, s]));
@@ -675,29 +674,16 @@ export async function draftSecurityProposal(store: WorkspaceStore, ref: ItemRef,
     /* a new file */
   }
   await verifyItems([item], SECURITY_VERIFIERS, {} as VerifyContext);
-  const now = Date.now();
-  return saveProposal(store, {
-    schemaVersion: 1,
-    id: newProposalId(),
+  return saveDraftProposal(store, {
     task: 'security-tests',
-    taskVersion: 0,
     title: `Security tests (no AI): ${local.label}`,
     summary: `${built.probes} probes TestPion makes without a model from ${local.label}: ${Object.entries(built.byKind)
       .map(([k, n]) => `${n} ${k}`)
       .join(', ')}.`,
-    assumptions: [],
     notes: [o.reason ?? 'No AI model is set up: these are the probes TestPion makes itself.', ...local.skipped, ...built.notes],
     items: [item],
-    provider: 'TestPion',
     model: 'no AI (deterministic probes)',
     surface: o.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
-    usage: { inputTokens: 0, outputTokens: 0 },
     request: { item: ref, path: local.path },
   });
 }
-
-/** `checkLabel` of the checks in a step (for reports). */
-export const stepCheckLabels = (step: Record<string, unknown>): string[] => (Array.isArray(step.assertions) ? step.assertions : []).map((c) => checkLabel(c as CheckConfig));

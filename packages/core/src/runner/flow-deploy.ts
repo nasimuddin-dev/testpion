@@ -11,7 +11,7 @@ import { readExposure } from './exposed-flows.js';
 import { webhookFlows, webhookOfText } from './flow-webhook-config.js';
 import { formatEvery, lastMonitorResult, listMonitors, monitorTestFile } from './monitors.js';
 
-export interface FlowDeployStatus {
+interface FlowDeployStatus {
   file: string;
   /** A monitor that runs this file on a schedule (its testFile). */
   schedule?: { monitorId: string; name: string; every: string; enabled: boolean; lastStatus?: string };
@@ -50,7 +50,7 @@ export function ciPipelineFiles(root: string): string[] {
 }
 
 /** Whether a pipeline's text runs this file: it names tests/<file>, or runs the whole tests folder (`testpion test tests …`). */
-export function ciRunsFile(text: string, file: string): boolean {
+function ciRunsFile(text: string, file: string): boolean {
   const rel = file.replace(/\\/g, '/').replace(/^tests\//, '');
   if (text.includes(`tests/${rel}`)) return true;
   return /\btest\s+"?(?:[^\s"]*\/)?tests\/?"?(?=\s|$)/m.test(text);

@@ -165,7 +165,7 @@ function rebuild(): void {
  * system's store (where corporate root certificates usually are, e.g. for a TLS-inspecting proxy) and
  * extra CA certificates (PEM). Applies wherever the proxy settings apply.
  */
-export interface TlsTrust {
+interface TlsTrust {
   /** Also trust the operating system's certificate store. */
   systemCa?: boolean;
   /** Extra CA certificates, PEM (one or more). */

@@ -26,7 +26,7 @@ const INPUTS = ['question', 'answer', 'reference', 'contexts', 'conversation'];
 const str = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
 
 /** Rule types that need a model or a database: a `rule` metric is deterministic. */
-export function ruleTypeProblem(type: string): string | undefined {
+function ruleTypeProblem(type: string): string | undefined {
   if (!checkTypes().includes(type)) {
     const r = resolveMetric(type);
     if (!r) return `"${type}" is not a check type`;
@@ -152,7 +152,7 @@ export function scoringHash(f: CustomMetricFile): string {
   return createHash('sha256').update(canon).digest('hex').slice(0, 12);
 }
 
-export interface ParsedMetricFile {
+interface ParsedMetricFile {
   metric?: CustomMetricFile;
   problems: MetricProblem[];
 }

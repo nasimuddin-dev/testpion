@@ -9,19 +9,15 @@ import type { CheckConfig, CheckResult } from '../model/types.js';
 import type { CheckContext } from '../eval/checks.js';
 import { getMetric, resolveMetric } from '../eval/rag/metric-registry.js';
 import { scoreRagSample } from '../eval/rag/score.js';
+import { mean, stdev as sd } from '../util/stats.js';
+import { addUsage, noUsage, type Usage } from '../eval/rag/judged-kit.js';
+import { round3 as r3 } from '../eval/rag/measures.js';
 import type { RagRunResult } from './rag-run.js';
 
-export const MAX_TARGET_REPEATS = 10;
+const MAX_TARGET_REPEATS = 10;
 
-const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-const sd = (xs: number[]) => {
-  if (xs.length < 2) return 0;
-  const m = mean(xs);
-  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
-};
-const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
-export interface RepeatOutcome {
+interface RepeatOutcome {
   checks: CheckResult[];
   /** The answers of the extra calls (bounded), so a rescore and the drill-down can show how they differed. */
   repeats: Array<{ answer: string; latencyMs?: number; error?: string }>;
@@ -65,13 +61,10 @@ export async function scoreTargetRepeats(o: { n: number; configs: CheckConfig[];
     const m = mean(scores);
     const t = (c.metadata as { threshold?: number } | undefined)?.threshold ?? def?.threshold;
     const passed = t === undefined ? all.every((x) => x.passed) : lower ? m <= t : m >= t;
-    const usageSum = all.reduce(
-      (a, x) => {
-        const u = (x.metadata as { judgeUsage?: { calls: number; inputTokens: number; outputTokens: number; costUsd: number; cached: boolean } } | undefined)?.judgeUsage;
-        return u ? { calls: a.calls + u.calls, inputTokens: a.inputTokens + u.inputTokens, outputTokens: a.outputTokens + u.outputTokens, costUsd: a.costUsd + u.costUsd, cached: a.cached && u.cached } : a;
-      },
-      { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, cached: true },
-    );
+    const usageSum = all.reduce((a, x) => {
+      const u = (x.metadata as { judgeUsage?: Usage } | undefined)?.judgeUsage;
+      return u ? addUsage(a, u) : a;
+    }, noUsage());
     const md = { ...(c.metadata ?? {}), targetRepeat: { ...meta, scores: scores.map(r3), mean: r3(m), sd: r3(sd(scores)), min: r3(Math.min(...scores)), max: r3(Math.max(...scores)) }, ...(usageSum.calls || (c.metadata as { judgeUsage?: unknown } | undefined)?.judgeUsage ? { judgeUsage: usageSum } : {}) };
     return { ...c, score: r3(m), passed, message: `${c.message} · mean of ${scores.length} calls ${r3(m)} ± ${r3(sd(scores))} (lowest ${r3(Math.min(...scores))}, highest ${r3(Math.max(...scores))})`, metadata: md };
   });

@@ -65,7 +65,7 @@ export async function analyzeFlaky(deps: AiRunDeps, o: { item: unknown; privacy?
 }
 
 /** The services of a run in an environment (the host's engine context), and how to let them go. */
-export type ServicesFor = (environment?: string) => Promise<{ services: ExecServices; dispose(): Promise<void> | void }>;
+type ServicesFor = (environment?: string) => Promise<{ services: ExecServices; dispose(): Promise<void> | void }>;
 
 /** Run the test once (its whole file: the steps it waits for run too); its result, or why it did not run. */
 async function runOnce(store: WorkspaceStore, rerun: FlakyRerun, services: ExecServices, name: string, signal?: AbortSignal): Promise<TestResult | undefined> {

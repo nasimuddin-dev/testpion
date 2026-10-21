@@ -8,7 +8,7 @@ import { flowFromExchanges, type FlowFromExchangesOptions, type FlowSourceExchan
 /** How saved requests are put in folders: one per host, one per first path segment, or none. */
 export type CaptureGrouping = 'host' | 'path' | 'none';
 
-export interface CollectionFromExchangesOptions extends Omit<FlowFromExchangesOptions, 'name'> {
+interface CollectionFromExchangesOptions extends Omit<FlowFromExchangesOptions, 'name'> {
   /** A folder per host (default), per first path segment, or the requests side by side. */
   group?: CaptureGrouping;
   /** Add to this collection (a top folder named `folder`, or its top level); without it a new collection named `name`. */
@@ -17,7 +17,7 @@ export interface CollectionFromExchangesOptions extends Omit<FlowFromExchangesOp
   name?: string;
 }
 
-export interface CollectionFromExchangesResult {
+interface CollectionFromExchangesResult {
   /** The collection to save (the given one with the requests added, or a new one). */
   collection: Collection;
   created: boolean;

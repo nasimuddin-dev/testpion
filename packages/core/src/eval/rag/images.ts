@@ -17,7 +17,7 @@ export const IMAGE_LIMITS = { perImageBytes: 5 * 1024 * 1024, perSample: 16, per
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)(\?[^\s]*)?$/i;
 
 /** Whether text is a reference to an image: a data URI, or a URL or path that ends with an image extension. */
-export function isImageRef(s: string | undefined): s is string {
+function isImageRef(s: string | undefined): s is string {
   if (!s) return false;
   const t = s.trim();
   if (t.length > 20_000_000 || /\s/.test(t.slice(0, 200)) && !t.startsWith('data:')) return false;
@@ -59,7 +59,7 @@ export function defaultImageSource(workspaceRoot?: string): ImageSource {
   };
 }
 
-export interface LoadedImage {
+interface LoadedImage {
   /** What the image was read from: the URL or path, or `data-uri` (never the bytes). */
   ref: string;
   /** The chunk it came from (`question` for the question's own). */
@@ -67,7 +67,7 @@ export interface LoadedImage {
   prepared: PreparedImage;
 }
 
-export interface ImageSet {
+interface ImageSet {
   images: LoadedImage[];
   /** Images over the per-sample count, left out (the top-ranked are kept): said in the result. */
   omitted: number;

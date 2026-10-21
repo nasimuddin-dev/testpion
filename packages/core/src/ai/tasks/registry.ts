@@ -4,8 +4,8 @@
  * and which verifiers check it. The app, the CLI (`testpion ai tasks|run`), the MCP server (`ai_list_tasks`,
  * `ai_run_task`) and a cloud host all read this one table.
  */
-import { parseYaml, stringifyYaml as toYaml } from '../../util/lazy-yaml.js';
-import { checkLabel, type AiTaskId, type ItemRef } from '@testpion/shared';
+import type { AiTaskId, ItemRef } from '@testpion/shared';
+import { slugify } from '../../util/ids.js';
 import type { CheckConfig, Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { StoredResponse } from '../verify.js';
@@ -33,7 +33,7 @@ import { ragReferencesTask } from './rag-references-task.js';
 import { ragAuthorTask } from './rag-author-task.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
-export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
+type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
 
 /** What a task was asked: what the proposal function sees. */
 export interface AiTaskInput {
@@ -122,31 +122,20 @@ export interface AiTaskDef {
    */
   prepareContext?(store: WorkspaceStore, context: Record<string, unknown>, o: { privacy: AiPrivacy; signal?: AbortSignal }): Promise<PreparedItem> | PreparedItem;
   /** The summary, assumptions, notes and findings of a JSON task's proposal (what the review shows above the items). */
-  describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): { summary?: string; assumptions?: string[]; notes?: string[]; findings?: ProposalFinding[] };
+  describe?(value: unknown, items: ProposalItem[], input: AiTaskInput): ProposalDescription & { findings?: ProposalFinding[] };
 }
 
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48) || 'generated';
+/** What the review shows above a proposal's items. */
+export interface ProposalDescription {
+  summary?: string;
+  assumptions?: string[];
+  notes?: string[];
+}
+
+const slug = (s: string) => slugify(s, { max: 48, fallback: 'generated' });
 
 /** The file a generated test goes to: the caller's path, else tests/ai/<what it is about>.yaml. */
 const filePath = (input: AiTaskInput, fallback: string) => (input.path ? input.path.replace(/^tests[\\/]/, '') : `ai/${slug(input.question || fallback)}.yaml`);
-
-/** The checks of a YAML (or JSON) answer: a list, or `assertions:` / `checks:` of an object. */
-export function checksOfAnswer(code: string): CheckConfig[] {
-  let doc: unknown;
-  try {
-    doc = parseYaml(code);
-  } catch (e) {
-    throw new Error(`The checks are not valid YAML: ${(e as Error).message}`);
-  }
-  const list = Array.isArray(doc) ? doc : ((doc as { assertions?: unknown; checks?: unknown })?.assertions ?? (doc as { checks?: unknown })?.checks);
-  if (!Array.isArray(list)) throw new Error('The answer is not a list of checks');
-  return list.filter((c): c is CheckConfig => !!c && typeof c === 'object' && typeof (c as CheckConfig).type === 'string');
-}
 
 const requestOf = (input: AiTaskInput): ItemRef | undefined => (input.item?.kind === 'request' ? input.item : undefined);
 
@@ -212,7 +201,7 @@ const TESTS_SCHEMA = {
 };
 
 /** The checks of a JSON answer ({ checks: [...] } or a list). */
-export function checksOfValue(v: unknown): CheckConfig[] {
+function checksOfValue(v: unknown): CheckConfig[] {
   const list = Array.isArray(v) ? v : (v as { checks?: unknown; assertions?: unknown } | undefined)?.checks ?? (v as { assertions?: unknown } | undefined)?.assertions;
   if (!Array.isArray(list)) throw new Error('The answer has no `checks` list');
   return list
@@ -221,7 +210,7 @@ export function checksOfValue(v: unknown): CheckConfig[] {
 }
 
 /** The tests of a JSON answer ({ tests: [{ name, code }] }). */
-export function testsOfValue(v: unknown): Array<{ name: string; code: string }> {
+function testsOfValue(v: unknown): Array<{ name: string; code: string }> {
   const list = (v as { tests?: unknown } | undefined)?.tests ?? v;
   if (!Array.isArray(list)) throw new Error('The answer has no `tests` list');
   return list
@@ -230,7 +219,7 @@ export function testsOfValue(v: unknown): Array<{ name: string; code: string }> 
 }
 
 /** One self-contained tp.test (a test the model already wrapped stays as it is), labelled as AI-generated. */
-export function tpTestScript(name: string, code: string, model: string): string {
+function tpTestScript(name: string, code: string, model: string): string {
   const body = code
     .split(/\r?\n/)
     // the sandbox only provides crypto-js and uuid: other imports could never run

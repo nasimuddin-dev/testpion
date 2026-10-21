@@ -23,7 +23,7 @@ import { resolveMetric } from '../eval/rag/metric-registry.js';
  * scheduler: the desktop app while it's open, `testpion monitor start` on a server, or cron with
  * `testpion monitor run --due`.
  */
-export interface MonitorData {
+interface MonitorData {
   /** The collection it runs (or `testFile`: exactly one of the two). */
   collectionId?: string;
   /** Folder and/or request ids; empty runs the whole collection. */
@@ -150,9 +150,9 @@ export interface MonitorResult {
 /** A problem with a monitor definition; the message says what to change (no response-oriented hints). */
 const invalid = (message: string) => new ApsError('ValidationError', message, { suggestions: [] });
 
-export const MONITORS_LIBRARY = 'monitors';
-export const MIN_EVERY_MINUTES = 1;
-export const MAX_EVERY_MINUTES = 7 * 24 * 60;
+const MONITORS_LIBRARY = 'monitors';
+const MIN_EVERY_MINUTES = 1;
+const MAX_EVERY_MINUTES = 7 * 24 * 60;
 const KEEP_RESULTS = 500;
 
 /** Parse "5m", "1h", "30", "1d" (minutes when there's no unit). */
@@ -223,7 +223,7 @@ export function monitorTestFile(file: string): string {
 }
 
 /** The absolute path of a monitor's test file; throws when it is outside tests/ or missing. */
-export function monitorTestPath(store: WorkspaceStore, file: string): string {
+function monitorTestPath(store: WorkspaceStore, file: string): string {
   const rel = monitorTestFile(file);
   if (!/\.(ya?ml|json)$/i.test(rel)) throw invalid(`"${file}" is not a test file (.yaml, .yml or .json under tests/)`);
   let abs: string;
@@ -349,7 +349,7 @@ export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now(
   };
 }
 
-export interface ExecuteMonitorOptions {
+interface ExecuteMonitorOptions {
   store: WorkspaceStore;
   monitor: Monitor;
   /** Engine services for the monitor's environment and collection (the host creates them, e.g. createEngineContext). */
@@ -503,7 +503,7 @@ async function soonestCertificate(file: string): Promise<{ host: string; daysLef
   return best;
 }
 
-export interface MonitorSchedulerOptions {
+interface MonitorSchedulerOptions {
   /** Resolve {{variables}} in a monitor's webhook URL (with its environment). */
   resolve?: (m: Monitor, text: string) => string;
   /** After a webhook call (for logs). */

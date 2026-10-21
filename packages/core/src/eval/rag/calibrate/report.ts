@@ -5,7 +5,7 @@
 import { agreementOf, bootstrapAgreement, tuneThreshold, type Agreement, type Interval, type Tuning } from './stats.js';
 import { OVERALL, type CalibrationSample, type Collected } from './collect.js';
 
-export interface JudgeAgreement {
+interface JudgeAgreement {
   judge: string;
   /** `member` of a jury: its own verdicts; `jury`: the verdict the jury gave together; `single`: a lone judge. */
   role?: 'member' | 'jury' | 'single';
@@ -14,7 +14,7 @@ export interface JudgeAgreement {
   interval: Interval;
 }
 
-export interface Disagreement {
+interface Disagreement {
   record: string;
   resultId: string;
   /** What the judge said and what the person said. */
@@ -60,7 +60,7 @@ export interface CalibrationReport {
 }
 
 /** Landis and Koch's bands, in the words the report uses: 0.6 and over is good, 0.4 to 0.6 fair, under that poor. */
-export function kappaVerdict(a: Agreement): MetricCalibration['verdict'] {
+function kappaVerdict(a: Agreement): MetricCalibration['verdict'] {
   if (a.kappa === undefined) return 'unknown';
   return a.kappa >= 0.6 ? 'good' : a.kappa >= 0.4 ? 'fair' : 'poor';
 }

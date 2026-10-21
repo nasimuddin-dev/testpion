@@ -26,7 +26,7 @@ export interface AiContextSection {
   notes: string[];
 }
 
-export interface AiContext {
+interface AiContext {
   /** The JSON text sent (pretty-printed). */
   text: string;
   tokens: number;
@@ -38,7 +38,7 @@ export interface AiContext {
   redactionCount: number;
 }
 
-export interface AiContextOptions {
+interface AiContextOptions {
   privacy: AiPrivacy;
   redactor: Redactor;
   /** Total tokens for the context (default 6000, about 24 000 characters). */
@@ -49,7 +49,7 @@ export interface AiContextOptions {
   maskPersonalData?: boolean;
 }
 
-export const DEFAULT_CONTEXT_TOKENS = 6000;
+const DEFAULT_CONTEXT_TOKENS = 6000;
 
 const tokensOf = (v: unknown) => estimateTokens(JSON.stringify(v, null, 2) ?? '');
 
@@ -223,18 +223,24 @@ function fit(v: unknown, lim: Limits, notes: Set<string>, depth = 0): unknown {
   return String(v);
 }
 
-/** A section fitted into `budget` tokens: lighter limits first, then heavier, then its shape alone. */
-export function fitSection(value: unknown, budget: number): { value: unknown; notes: string[] } {
-  if (tokensOf(value) <= budget) return { value, notes: [] };
+/**
+ * A section fitted into `budget` tokens: lighter limits first, then heavier, then its shape alone. `size` is the tokens of
+ * the section as it is (already measured by the caller); the answer says the tokens of what is sent, so nothing is measured twice.
+ */
+function fitSection(value: unknown, budget: number, size: number): { value: unknown; notes: string[]; tokens: number } {
+  if (size <= budget) return { value, notes: [], tokens: size };
   for (const lim of LEVELS) {
     const notes = new Set<string>();
     const out = fit(value, lim, notes);
-    if (tokensOf(out) <= budget) return { value: out, notes: [...notes] };
+    const tokens = tokensOf(out);
+    if (tokens <= budget) return { value: out, notes: [...notes], tokens };
   }
   const shape = shapeOf(value);
-  if (tokensOf(shape) <= budget) return { value: shape, notes: ['summarised to its shape (too large to send)'] };
+  const shapeTokens = tokensOf(shape);
+  if (shapeTokens <= budget) return { value: shape, notes: ['summarised to its shape (too large to send)'], tokens: shapeTokens };
   const notes = new Set<string>(['summarised to its shape (too large to send)']);
-  return { value: fit(shape, LEVELS[LEVELS.length - 1]!, notes), notes: [...notes] };
+  const last = fit(shape, LEVELS[LEVELS.length - 1]!, notes);
+  return { value: last, notes: [...notes], tokens: tokensOf(last) };
 }
 
 /** Shares `total` among sections: each named budget first, then equal shares, the unused part of small ones going to big ones. */
@@ -272,9 +278,9 @@ export function buildAiContext(input: Record<string, unknown> | undefined, o: Ai
   const value: Record<string, unknown> = {};
   const sections: AiContextSection[] = [];
   for (const k of keys) {
-    const f = fitSection(leveled[k], Math.max(20, shares[k]!));
+    const f = fitSection(leveled[k], Math.max(20, shares[k]!), sizes[k]!);
     value[k] = f.value;
-    sections.push({ name: k, tokens: tokensOf(f.value), originalTokens: sizes[k]!, notes: f.notes });
+    sections.push({ name: k, tokens: f.tokens, originalTokens: sizes[k]!, notes: f.notes });
   }
   const text = keys.length ? JSON.stringify(value, null, 2) : '';
   return { text, tokens: estimateTokens(text), budgetTokens: budget, privacy: o.privacy, sections, redactions: safe.redactions, redactionCount: safe.total };

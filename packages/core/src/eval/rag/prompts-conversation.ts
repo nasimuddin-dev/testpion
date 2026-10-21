@@ -95,7 +95,7 @@ export const TOPIC_EXTRACT: JudgedMetric = {
 };
 
 /** The Ragas arithmetic: TP = on topic and answered, FP = off topic and answered, FN = on topic and refused; zero denominators score 0. */
-export function topicScore(items: ReadonlyArray<{ verdict: boolean; rating?: number }>, mode: 'f1' | 'precision' | 'recall'): number | undefined {
+function topicScore(items: ReadonlyArray<{ verdict: boolean; rating?: number }>, mode: 'f1' | 'precision' | 'recall'): number | undefined {
   if (!items.length) return undefined;
   const tp = items.filter((i) => i.verdict && i.rating === 1).length;
   const fp = items.filter((i) => !i.verdict && i.rating === 1).length;

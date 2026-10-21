@@ -114,7 +114,7 @@ export async function prepareTestset(store: WorkspaceStore, context: Record<stri
 }
 
 /** The record a sample becomes (dataset-formats.ts canonical record). */
-export function recordOf(s: RawSample, local: TestsetLocal, chunkIds: string[], model: string | undefined, voice: { persona?: string; style?: string } = {}): TestsetRecord {
+function recordOf(s: RawSample, local: TestsetLocal, chunkIds: string[], model: string | undefined, voice: { persona?: string; style?: string } = {}): TestsetRecord {
   const byId = new Map(local.corpus.chunks.map((c) => [c.id, c]));
   const answerable = s.type !== 'unanswerable' && s.answerable !== false;
   const used = answerable ? chunkIds.map((id) => byId.get(id)!).filter(Boolean) : [];

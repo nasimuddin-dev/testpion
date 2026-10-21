@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import type { AuthConfig } from '../../model/types.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
+import { BoundedMap } from '../../util/collections.js';
 
 export interface AuthContext {
   redactor?: Redactor;
@@ -21,7 +22,8 @@ interface CachedToken {
   refreshToken?: string;
 }
 
-const tokenCache = new Map<string, CachedToken>();
+/** Cached OAuth 2.0 tokens: at most 500 (the oldest go first); an expired one is dropped when it is next asked for. */
+const tokenCache = new BoundedMap<string, CachedToken>(500);
 
 /** Forget cached OAuth 2.0 tokens, so the next request gets a new one. Returns how many were dropped. */
 export function clearTokenCache(): number {

@@ -204,7 +204,7 @@ function claimCheck(spec: Spec) {
     });
 }
 
-export const CLAIM_SPECS: readonly Spec[] = [...SPECS, noise('relevant'), noise('irrelevant')];
+const CLAIM_SPECS: readonly Spec[] = [...SPECS, noise('relevant'), noise('irrelevant')];
 for (const s of CLAIM_SPECS) {
   const run = claimCheck(s);
   // Ragas' one `noise_sensitivity` takes `mode: relevant | irrelevant`: either id answers to either mode
@@ -218,6 +218,3 @@ for (const s of CLAIM_SPECS) {
       : run,
   );
 }
-
-/** The metrics that read the claim passes (the judged-check list of a run needs a judge for each). */
-export const CLAIM_METRIC_IDS: ReadonlySet<string> = new Set(CLAIM_SPECS.map((s) => s.id));

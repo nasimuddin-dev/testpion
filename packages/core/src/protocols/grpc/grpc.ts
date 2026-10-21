@@ -24,7 +24,7 @@ export interface ProtoFile {
   text: string;
 }
 
-export interface GrpcMethodInfo {
+interface GrpcMethodInfo {
   /** `package.Service/Method` */
   name: string;
   service: string;
@@ -233,7 +233,7 @@ export function grpcChannel(address: string, tls: boolean, o?: GrpcTlsOptions): 
   return { credentials, options: secure && isIP(host.replace(/^\[|\]$/g, '')) ? { 'grpc.ssl_target_name_override': 'ip-address.invalid' } : {} };
 }
 
-export interface GrpcResponseData {
+interface GrpcResponseData {
   /** gRPC status (0 = OK). */
   code: number;
   codeName: string;
@@ -283,7 +283,23 @@ function parseMessage(text: string | undefined, what: string): unknown {
   }
 }
 
-/** Call a gRPC method. Stopping (signal) a streaming call keeps the messages received so far. */
+/** The method a request names (found in its protos), a client for its service and the request's metadata. */
+function methodClient(spec: GrpcRequestSpec, address: string, tls: boolean): { info: GrpcMethodInfo; client: grpc.Client; md: grpc.Metadata } {
+  const root = grpcRoot(spec);
+  const methods = describeRoot(root);
+  const name = spec.method.replace(/^\//, '');
+  const info = methods.find((m) => m.name === name || `${m.service.split('.').pop()}/${m.method}` === name);
+  if (!info) throw new ApsError('ValidationError', `Method "${spec.method}" is not in the proto files`, { suggestions: [`Available: ${methods.map((m) => m.name).slice(0, 10).join(', ') || 'none'}`] });
+  const pkg = grpcJs().loadPackageDefinition(protoLoaderLib().fromJSON(root.toJSON(), LOADER_OPTIONS));
+  const Ctor = info.service.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], pkg) as grpc.ServiceClientConstructor | undefined;
+  if (!Ctor) throw new ApsError('ValidationError', `Service ${info.service} could not be loaded`);
+  const channel = grpcChannel(address, tls, spec.tlsOptions);
+  const client = new Ctor(address, channel.credentials, channel.options);
+  const md = new (grpcJs().Metadata)();
+  for (const h of spec.metadata ?? []) if (h.enabled !== false && h.key) md.add(h.key.toLowerCase(), h.value);
+  return { info, client, md };
+}
+
 /**
  * A reusable caller for load tests: the protos are parsed and the client (one HTTP/2 connection) is
  * created once, then call() runs the method again and again. Unary and server-streaming methods
@@ -293,20 +309,13 @@ export async function prepareGrpcCall(spec: GrpcRequestSpec): Promise<{ method: 
   const { address, tls: tlsFromTarget } = parseGrpcTarget(spec.target, spec.tls);
   const tls = tlsFromTarget || !!spec.tlsOptions?.ca || !!spec.tlsOptions?.cert;
   await assertUrlAllowed(new URL(`${tls ? 'https' : 'http'}://${address}`));
-  const root = grpcRoot(spec);
-  const name = spec.method.replace(/^\//, '');
-  const info = describeRoot(root).find((m) => m.name === name || `${m.service.split('.').pop()}/${m.method}` === name);
-  if (!info) throw new ApsError('ValidationError', `Method "${spec.method}" is not in the proto files`);
-  if (info.clientStreaming) throw new ApsError('ValidationError', 'Load tests call unary and server-streaming methods');
-  const pkg = grpcJs().loadPackageDefinition(protoLoaderLib().fromJSON(root.toJSON(), LOADER_OPTIONS));
-  const Ctor = info.service.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], pkg) as grpc.ServiceClientConstructor | undefined;
-  if (!Ctor) throw new ApsError('ValidationError', `Service ${info.service} could not be loaded`);
-  const channel = grpcChannel(address, tls, spec.tlsOptions);
-  const client = new Ctor(address, channel.credentials, channel.options);
+  const { info, client, md } = methodClient(spec, address, tls);
+  if (info.clientStreaming) {
+    client.close();
+    throw new ApsError('ValidationError', 'Load tests call unary and server-streaming methods');
+  }
   const fn = (client as unknown as Record<string, (...a: unknown[]) => unknown>)[info.method]!.bind(client);
   const input = parseMessage(spec.message, 'request message');
-  const md = new (grpcJs().Metadata)();
-  for (const h of spec.metadata ?? []) if (h.enabled !== false && h.key) md.add(h.key.toLowerCase(), h.value);
   return {
     method: info.name,
     call: (signal) =>
@@ -334,20 +343,7 @@ export async function executeGrpc(spec: GrpcRequestSpec, opts: { signal?: AbortS
   const tls = tlsFromTarget || !!spec.tlsOptions?.ca || !!spec.tlsOptions?.cert;
   await assertUrlAllowed(new URL(`${tls ? 'https' : 'http'}://${address}`));
 
-  const root = grpcRoot(spec);
-  const methods = describeRoot(root);
-  const name = spec.method.replace(/^\//, '');
-  const info = methods.find((m) => m.name === name || `${m.service.split('.').pop()}/${m.method}` === name);
-  if (!info) throw new ApsError('ValidationError', `Method "${spec.method}" is not in the proto files`, { suggestions: [`Available: ${methods.map((m) => m.name).slice(0, 10).join(', ') || 'none'}`] });
-
-  const pkg = grpcJs().loadPackageDefinition(protoLoaderLib().fromJSON(root.toJSON(), LOADER_OPTIONS));
-  const Ctor = info.service.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], pkg) as grpc.ServiceClientConstructor | undefined;
-  if (!Ctor) throw new ApsError('ValidationError', `Service ${info.service} could not be loaded`);
-  const channel = grpcChannel(address, tls, spec.tlsOptions);
-  const client = new Ctor(address, channel.credentials, channel.options);
-
-  const md = new (grpcJs().Metadata)();
-  for (const h of spec.metadata ?? []) if (h.enabled !== false && h.key) md.add(h.key.toLowerCase(), h.value);
+  const { info, client, md } = methodClient(spec, address, tls);
   const callOpts: grpc.CallOptions = { deadline: new Date(Date.now() + (spec.timeoutMs ?? 30_000)) };
   const input = parseMessage(spec.message, info.clientStreaming ? 'list of messages' : 'request message');
   const outgoing = info.clientStreaming ? (Array.isArray(input) ? input : [input]) : [input];

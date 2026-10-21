@@ -87,7 +87,7 @@ export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Reco
   };
 }
 
-export interface SavedEvaluationInfo {
+interface SavedEvaluationInfo {
   id: string;
   name: string;
   folder?: string;

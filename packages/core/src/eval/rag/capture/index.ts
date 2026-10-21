@@ -23,10 +23,10 @@ export { callOfExchange, callOfHistory, callsOfHar, callsOfMessages, listCapture
 export type { CapturedCall, CapturedRecord, CaptureOptions, CaptureReport, CaptureResult, CaptureSourceSpec, QuestionLocator } from './types.js';
 
 /** The preview of a dry run: this many records. */
-export const CAPTURE_PREVIEW = 20;
+const CAPTURE_PREVIEW = 20;
 
 /** A dataset file name under datasets/: letters, digits, `.`, `_`, `-`; `.jsonl` is added. */
-export function captureDatasetPath(store: Pick<WorkspaceStore, 'path' | 'safePath'>, name: string | undefined): { rel: string; file: string } {
+function captureDatasetPath(store: Pick<WorkspaceStore, 'path' | 'safePath'>, name: string | undefined): { rel: string; file: string } {
   const base = basename((name ?? '').trim().replace(/\\/g, '/'))
     .replace(/\.(jsonl|ndjson)$/i, '')
     .replace(/[^\w.-]+/g, '_')

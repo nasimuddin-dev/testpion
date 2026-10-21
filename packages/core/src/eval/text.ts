@@ -10,7 +10,7 @@ export function tokenize(text: string): string[] {
   return (text.toLowerCase().normalize('NFKD').match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length > 1 || /\d/.test(w));
 }
 
-export function contentWords(text: string): string[] {
+function contentWords(text: string): string[] {
   return tokenize(text).filter((w) => !STOPWORDS.has(w));
 }
 

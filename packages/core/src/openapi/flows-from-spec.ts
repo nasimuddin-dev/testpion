@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { stringifyYaml as stringify } from '../util/lazy-yaml.js';
 import type { Collection, HttpRequestSpec } from '../model/types.js';
@@ -317,7 +317,7 @@ export function flowsFromCollection(collection: Collection): ReturnType<typeof f
   return flowsFromSpec(collectionToOpenApiText(collection, { format: 'yaml', serverUrl: '{{baseUrl}}' }), { title: collection.name });
 }
 
-export interface WrittenFlows {
+interface WrittenFlows {
   written: GeneratedTestFile[];
   skipped: string[];
   /** Environment variables the flows read (baseUrl, credentials, parent ids). */

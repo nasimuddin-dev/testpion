@@ -3,6 +3,7 @@ import { isMap, isSeq, isScalar, lineCounter, parseDocument } from '../util/lazy
 import { checkTypes } from '../eval/checks.js';
 import { delayMsOf, loopOf, normalizeTest, whenOf } from './loader.js';
 import { slugify } from '../util/ids.js';
+import { levenshtein } from '../util/text-distance.js';
 import { parseExpose } from './exposed-flows.js';
 import { parseWebhook, testsRelative, webhookPathOf } from './flow-webhook-config.js';
 import { controlProblems } from './control-keys.js';
@@ -265,7 +266,7 @@ const ASSERTION_KEYS: TestKeyDoc[] = [
   { key: 'channel', description: 'For asyncapi on plain WebSocket: the channel the messages belong to.', shape: 'text' },
 ];
 
-export type TestKeyContext = 'file' | 'suite' | 'test' | 'assertion';
+type TestKeyContext = 'file' | 'suite' | 'test' | 'assertion';
 
 /** The keys the editor offers at a place: a test (of a type, when known), the file, a suite, a check. */
 export function testKeys(context: TestKeyContext, type?: string): TestKeyDoc[] {
@@ -334,21 +335,15 @@ function nearest(key: string, known: string[]): string | undefined {
   const k = key.toLowerCase();
   const exact = known.find((x) => x.toLowerCase() === k);
   if (exact) return exact;
-  const dist = (a: string, b: string): number => {
-    const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
-    for (let j = 1; j <= b.length; j++) d[0]![j] = j;
-    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
-    return d[a.length]![b.length]!;
-  };
   let best: { key: string; d: number } | undefined;
   for (const x of known) {
-    const d = dist(k, x.toLowerCase());
+    const d = levenshtein(k, x.toLowerCase());
     if (d <= 2 && (!best || d < best.d)) best = { key: x, d };
   }
   return best?.key;
 }
 
-export interface TestLintProblem {
+interface TestLintProblem {
   severity: 'error' | 'warning' | 'info';
   message: string;
   /** 1-based. */

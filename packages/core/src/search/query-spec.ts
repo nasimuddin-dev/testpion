@@ -14,7 +14,7 @@ export type SearchSource = (typeof SEARCH_SOURCES)[number];
 
 export const SOURCE_LABEL: Readonly<Record<SearchSource, string>> = { history: 'History', runs: 'Runs', results: 'Test results', traces: 'Traces' };
 
-export type SearchOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'in' | 'within';
+type SearchOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'in' | 'within';
 
 export const OP_LABEL: Readonly<Record<SearchOp, string>> = {
   eq: 'is',
@@ -29,7 +29,7 @@ export const OP_LABEL: Readonly<Record<SearchOp, string>> = {
   within: 'within the last',
 };
 
-export type SearchField =
+type SearchField =
   | 'text'
   | 'time'
   | 'name'
@@ -51,7 +51,7 @@ export type SearchField =
   | 'attempts'
   | 'failures';
 
-export type SearchValueType = 'text' | 'word' | 'number' | 'bool' | 'time';
+type SearchValueType = 'text' | 'word' | 'number' | 'bool' | 'time';
 
 export interface SearchFieldDef {
   id: SearchField;
@@ -133,7 +133,7 @@ export const SEARCH_FIELDS: readonly SearchFieldDef[] = [
 const FIELD = new Map<string, SearchFieldDef>(SEARCH_FIELDS.map((f) => [f.id, f]));
 export const searchField = (id: string): SearchFieldDef | undefined => FIELD.get(id);
 
-export type SearchValue = string | number | boolean | Array<string | number>;
+type SearchValue = string | number | boolean | Array<string | number>;
 
 export interface SearchCondition {
   field: SearchField;
@@ -141,7 +141,7 @@ export interface SearchCondition {
   value: SearchValue;
 }
 
-export interface SearchSort {
+interface SearchSort {
   by: 'time' | 'duration';
   dir: 'asc' | 'desc';
 }
@@ -153,15 +153,19 @@ export interface SearchQuery {
   where: SearchCondition[];
   sort: SearchSort;
   limit: number;
+  /** How many matches to skip (the cursor of the next page: `nextOffset` of the answer); absent for the first page. */
+  offset?: number;
 }
 
 export const SEARCH_LIMIT_DEFAULT = 25;
 export const SEARCH_LIMIT_MAX = 200;
-export const SEARCH_CONDITIONS_MAX = 12;
+/** The furthest page of an answer (the scan caps already bound what can match; this bounds the question). */
+const SEARCH_OFFSET_MAX = 50_000;
+const SEARCH_CONDITIONS_MAX = 12;
 export const SEARCH_VALUE_MAX = 200;
-export const SEARCH_LIST_MAX = 20;
+const SEARCH_LIST_MAX = 20;
 /** The longest `within` (a year): a bound, not a promise that history reaches back that far. */
-export const SEARCH_WITHIN_MAX_MS = 366 * 86_400_000;
+const SEARCH_WITHIN_MAX_MS = 366 * 86_400_000;
 
 const WITHIN = /^(\d{1,6}(?:\.\d{1,3})?)\s*(m|h|d|w)$/i;
 const UNIT_MS = { m: 60_000, h: 3_600_000, d: 86_400_000, w: 7 * 86_400_000 } as const;
@@ -186,7 +190,7 @@ export function parseWhen(v: string): number | undefined {
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
-const KEYS = { query: ['sources', 'where', 'sort', 'limit'], condition: ['field', 'op', 'value'], sort: ['by', 'dir'] } as const;
+const KEYS = { query: ['sources', 'where', 'sort', 'limit', 'offset'], condition: ['field', 'op', 'value'], sort: ['by', 'dir'] } as const;
 
 const isPlain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v) && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
 
@@ -248,7 +252,7 @@ function checkValue(def: SearchFieldDef, op: SearchOp, raw: unknown, at: string)
  * limit filled in.
  */
 export function parseSearchQuery(input: unknown): { query?: SearchQuery; problems: string[] } {
-  if (!isPlain(input)) return { problems: ['the query is a JSON object: {"sources", "where", "sort", "limit"}'] };
+  if (!isPlain(input)) return { problems: ['the query is a JSON object: {"sources", "where", "sort", "limit", "offset"}'] };
   const problems = unknownKeys(input, KEYS.query, 'query');
   let sources: SearchSource[] | undefined;
   if (input.sources !== undefined) {
@@ -296,6 +300,11 @@ export function parseSearchQuery(input: unknown): { query?: SearchQuery; problem
     if (typeof input.limit !== 'number' || !Number.isInteger(input.limit) || input.limit < 1 || input.limit > SEARCH_LIMIT_MAX) problems.push(`limit is a whole number from 1 to ${SEARCH_LIMIT_MAX}`);
     else limit = input.limit;
   }
+  let offset = 0;
+  if (input.offset !== undefined) {
+    if (typeof input.offset !== 'number' || !Number.isInteger(input.offset) || input.offset < 0 || input.offset > SEARCH_OFFSET_MAX) problems.push(`offset is a whole number from 0 to ${SEARCH_OFFSET_MAX}`);
+    else offset = input.offset;
+  }
   if (problems.length) return { problems };
   // the sources that have every field the conditions use (a method is a History thing, a flaky test a result)
   const need = [...new Set(where.map((c) => c.field))];
@@ -309,7 +318,7 @@ export function parseSearchQuery(input: unknown): { query?: SearchQuery; problem
           .join('; ')}${sources ? ` — the sources asked for are ${sources.join(', ')}` : ''}`,
       ],
     };
-  return { query: { sources: usable, where, sort, limit }, problems: [] };
+  return { query: { sources: usable, where, sort, limit, ...(offset ? { offset } : {}) }, problems: [] };
 }
 
 /**
@@ -354,7 +363,7 @@ export function conditionText(c: SearchCondition): string {
 export function explainQuery(q: SearchQuery): string {
   const where = q.where.length ? ` where ${q.where.map(conditionText).join(' and ')}` : '';
   const order = q.sort.by === 'time' ? (q.sort.dir === 'desc' ? 'newest first' : 'oldest first') : q.sort.dir === 'desc' ? 'slowest first' : 'fastest first';
-  return `Looking in ${q.sources.map((s) => SOURCE_LABEL[s]).join(', ')}${where}; ${order}, at most ${q.limit}.`;
+  return `Looking in ${q.sources.map((s) => SOURCE_LABEL[s]).join(', ')}${where}; ${order}, at most ${q.limit}${q.offset ? ` after the first ${q.offset}` : ''}.`;
 }
 
 /** An editable piece of a query: the chips of the filter form. */

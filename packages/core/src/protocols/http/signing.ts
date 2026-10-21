@@ -13,7 +13,7 @@ const hmac = (key: string | Buffer, data: string) => createHmac('sha256', key).u
 /** RFC 3986 encoding, as AWS requires (encodeURIComponent leaves !'()* alone). */
 const rfc3986 = (s: string) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
-export interface AwsV4Config {
+interface AwsV4Config {
   accessKey: string;
   secretKey: string;
   sessionToken?: string;
@@ -111,7 +111,7 @@ export function digestAuthorization(
   return `Digest ${parts.join(', ')}`;
 }
 
-export interface OAuth1Config {
+interface OAuth1Config {
   consumerKey: string;
   consumerSecret: string;
   token?: string;

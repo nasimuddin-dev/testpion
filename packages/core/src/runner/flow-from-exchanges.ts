@@ -19,7 +19,7 @@ export type FlowSourceExchange = Pick<DebuggerExchange, 'id' | 'method' | 'url' 
   Partial<Pick<DebuggerExchange, 'requestBody' | 'status' | 'responseHeaders' | 'responseBody' | 'contentType' | 'kind' | 'error'>>;
 
 /** Hosts whose requests are telemetry, not the API under test (a host matches itself and its subdomains). */
-export const DEFAULT_NOISE_HOSTS = [
+const DEFAULT_NOISE_HOSTS = [
   'google-analytics.com',
   'analytics.google.com',
   'googletagmanager.com',
@@ -71,7 +71,7 @@ export interface FlowFromExchangesOptions {
 }
 
 /** A value that flowed from one step's response into a later step's request. */
-export interface FlowLink {
+interface FlowLink {
   variable: string;
   /** The producing step: its id and its place (1 is the first step). */
   from: string;
@@ -84,7 +84,7 @@ export interface FlowLink {
   target: string;
 }
 
-export interface FlowVariableNote {
+interface FlowVariableNote {
   name: string;
   kind: 'origin' | 'secret';
   /** An origin's value (written in the file's defaults unless the environment has it); never a secret's. */
@@ -97,14 +97,14 @@ export interface FlowVariableNote {
   what?: string;
 }
 
-export interface DroppedExchange {
+interface DroppedExchange {
   id: string;
   method: string;
   url: string;
   reason: string;
 }
 
-export interface RecordedStepSummary {
+interface RecordedStepSummary {
   id: string;
   name: string;
   method: string;
@@ -133,14 +133,6 @@ export interface FlowFromExchangesResult {
 const STATIC_EXT = /\.(png|jpe?g|gif|svg|ico|webp|avif|bmp|tiff?|css|js|mjs|cjs|map|woff2?|ttf|otf|eot|mp4|webm|ogg|mp3|wav|m4a|pdf|zip|wasm)$/i;
 const STATIC_TYPE = /^(image|font|video|audio)\/|^text\/css|javascript|ecmascript|^application\/(font|x-font|wasm)/i;
 const BROWSER_DEST = new Set(['document', 'image', 'style', 'script', 'font', 'iframe', 'frame', 'audio', 'video', 'manifest', 'worker', 'serviceworker', 'sharedworker', 'track', 'object', 'embed']);
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return '';
-  }
-}
 
 /** Why an exchange is not a step, or undefined when it is one. */
 export function noiseReason(e: FlowSourceExchange, opts: Pick<FlowFromExchangesOptions, 'noiseHosts' | 'extraNoiseHosts' | 'keepNoise'> = {}): string | undefined {

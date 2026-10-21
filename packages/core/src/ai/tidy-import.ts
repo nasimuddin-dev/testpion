@@ -28,15 +28,16 @@ import { slugify } from '../util/ids.js';
 import { query } from '../util/jsonpath.js';
 import { maskSensitiveText } from '../util/redact.js';
 import { buildFlowFile, cleanStepName, type FlowLocal, type FlowPlan } from './flow-from-collection.js';
-import { newProposalId, PROPOSAL_TTL_MS, saveProposal, type Proposal, type ProposalItem } from './proposal.js';
-import type { AiTaskInput, DraftItem, PreparedItem } from './tasks/registry.js';
+import { saveDraftProposal, type Proposal, type ProposalItem } from './proposal.js';
+import type { AiTaskInput, DraftItem, PreparedItem, ProposalDescription } from './tasks/registry.js';
+import { stringList } from '../util/collections.js';
 import { registerVerifier, verifyItems, type VerifyContext } from './verify.js';
 import { type Saved, TIDY_MAX_REQUESTS, type TidyGroup, type TidyOp, VAR_NAME, applyTidyOps, chainScript, collectionProblems, flatRequests, literalRe, pathAccessor, sendDifferences, urlOf } from './tidy-ops.js';
 import { camel, draftGroups, exampleBody, looksLikeUrlName, originOf, pathOf, singular } from './tidy-groups.js';
 export { type FlatRequest, TIDY_MAX_REQUESTS, type TidyGroup, type TidyOp, applyTidyOps, chainScript, collectionProblems, flatRequests, pathAccessor, resolvedRequest, sendDifferences } from './tidy-ops.js';
 export { type IdCandidate, draftGroups, idCandidates, importNoiseReason, pathsOfValue } from './tidy-groups.js';
 
-export interface TidyPlan {
+interface TidyPlan {
   summary?: string;
   assumptions?: string[];
   requests?: Array<{ id: string; name?: string; folder?: string }>;
@@ -108,7 +109,7 @@ const cleanRequestName = (s: unknown): string | undefined => {
 };
 
 /** The groups after the model's plan: its names, folders, host variable names, chains and drops, validated. */
-export function applyPlan(c: Collection, draft: ReturnType<typeof draftGroups>, plan: TidyPlan): { groups: TidyGroup[]; notes: string[] } {
+function applyPlan(c: Collection, draft: ReturnType<typeof draftGroups>, plan: TidyPlan): { groups: TidyGroup[]; notes: string[] } {
   const notes: string[] = [];
   const reqs = flatRequests(c);
   const byId = new Map(reqs.map((r) => [r.node.id, r]));
@@ -236,7 +237,7 @@ export function applyPlan(c: Collection, draft: ReturnType<typeof draftGroups>, 
 }
 
 /** Does a saved example of the request return `literal` at `path`? */
-export function chainEvidence(n: Saved, path: string, literal: string): NonNullable<TidyGroup['evidence']> {
+function chainEvidence(n: Saved, path: string, literal: string): NonNullable<TidyGroup['evidence']> {
   if (n.kind !== 'http') return { confirmed: false };
   for (const ex of n.examples ?? []) {
     if (ex.status >= 400) continue;
@@ -270,7 +271,7 @@ function touched(c: Collection, ops: TidyOp[]): Set<string> {
 }
 
 /** A readable outline of some requests (name with folder, method and URL, credentials, scripts): the diff the review shows. */
-export function outlineOf(c: Collection, ids: Set<string>): string {
+function outlineOf(c: Collection, ids: Set<string>): string {
   const lines: string[] = [];
   for (const r of flatRequests(c)) {
     if (!ids.has(r.node.id)) continue;
@@ -290,7 +291,7 @@ export function outlineOf(c: Collection, ids: Set<string>): string {
 /* ------------------------------------------------------------------ the task */
 
 /** What `prepare` keeps on this computer (never sent). */
-export interface TidyLocal {
+interface TidyLocal {
   collection: Collection;
   groups: TidyGroup[];
   draft: ReturnType<typeof draftGroups>;
@@ -450,10 +451,10 @@ export function proposeTidy(a: { value?: unknown }, input: AiTaskInput): { items
 }
 
 /** The summary, assumptions and notes of the proposal (registry `describe`). */
-export function describeTidy(value: unknown, items: ProposalItem[]): { summary?: string; assumptions?: string[]; notes?: string[] } {
+export function describeTidy(value: unknown, items: ProposalItem[]): ProposalDescription {
   const v = (value ?? {}) as TidyPlan;
   const n = items.filter((i) => i.kind === 'collection').length;
-  return { summary: `${typeof v.summary === 'string' && v.summary.trim() ? `${v.summary.trim()} ` : ''}${n} change${n === 1 ? '' : 's'} to review${items.some((i) => i.kind === 'flow') ? ', and a flow' : ''}.`.trim(), assumptions: Array.isArray(v.assumptions) ? v.assumptions.map(String) : [] };
+  return { summary: `${typeof v.summary === 'string' && v.summary.trim() ? `${v.summary.trim()} ` : ''}${n} change${n === 1 ? '' : 's'} to review${items.some((i) => i.kind === 'flow') ? ', and a flow' : ''}.`.trim(), assumptions: stringList(v.assumptions) };
 }
 
 /* ------------------------------------------------------------------ verification */
@@ -530,25 +531,14 @@ export async function draftTidyProposal(store: WorkspaceStore, ref: ItemRef, o: 
   items.forEach((it, i) => (it.id = `i${i + 1}`));
   if (!items.length) throw new ApsError('ConfigurationError', `${c.name} has nothing TestPion can tidy without a model`, { suggestions: ['A model can name requests, group them in folders and chain ids (set one up: testpion ai usage).'] });
   await verifyItems(items, TIDY_VERIFIERS, { store });
-  const now = Date.now();
-  const p: Proposal = {
-    schemaVersion: 1,
-    id: newProposalId(),
+  return saveDraftProposal(store, {
     task: 'tidy-import',
-    taskVersion: 0,
     title: `Tidy ${c.name} (no AI)`,
     summary: `${items.length} change${items.length === 1 ? '' : 's'} TestPion finds without a model: hosts and tokens typed into requests, tracking and duplicate requests, ids a saved response returns.`,
-    assumptions: [],
     notes: [o.reason ?? 'No AI model is set up: these are the clean-ups TestPion finds itself. A model adds names, folders and chains it cannot confirm.'],
     items,
-    provider: 'TestPion',
     model: 'no AI (deterministic findings)',
     surface: o.surface,
-    createdAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + PROPOSAL_TTL_MS).toISOString(),
-    status: 'open',
-    usage: { inputTokens: 0, outputTokens: 0 },
     request: { item: ref },
-  };
-  return saveProposal(store, p);
+  });
 }

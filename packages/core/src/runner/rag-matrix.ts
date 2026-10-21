@@ -13,7 +13,7 @@ const KEEP = 4;
 const bases = new Map<string, { stamp: string; base: Promise<MatrixBase> }>();
 
 /** The base of a run (built once while its results file stays as it is). */
-export function ragMatrixBase(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Promise<MatrixBase> {
+function ragMatrixBase(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Promise<MatrixBase> {
   const file = runResultsFile(store, runId);
   if (!existsSync(file)) return buildMatrixBase(runResults(store, runId));
   const st = statSync(file);
@@ -43,9 +43,4 @@ export async function ragMatrix(store: Pick<WorkspaceStore, 'runDir'>, runId: st
 /** The 95% intervals of some columns of a run's matrix (computed once each, then kept with the base). */
 export async function ragMatrixIntervals(store: Pick<WorkspaceStore, 'runDir'>, runId: string, keys: string[]): Promise<Record<string, [number, number]>> {
   return matrixIntervals(await ragMatrixBase(store, runId), keys.slice(0, 200));
-}
-
-/** For tests: forget every kept base. */
-export function forgetMatrixBases(): void {
-  bases.clear();
 }

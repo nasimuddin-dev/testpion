@@ -8,7 +8,7 @@ import { toCsv } from '@testpion/shared';
 import type { MetricMatrix } from './metric-matrix.js';
 import { ragasColumnName } from './ragas-io.js';
 
-export interface ExportOptions {
+interface ExportOptions {
   /** `ragas`: the score columns are named the way Ragas names them in its result table. */
   names?: 'testpion' | 'ragas';
   title?: string;
@@ -82,7 +82,7 @@ ${body}</tbody></table>${tags}</body></html>
 
 /* ------------------------------------------------------------------ the variant × metric pivot */
 
-export interface PivotRun {
+interface PivotRun {
   runId: string;
   label: string;
   matrix: Pick<MetricMatrix, 'columns' | 'aggregates'>;

@@ -1,4 +1,4 @@
-import { isSuiteFile } from './suite-file.js';
+import { isSuiteFile, TEST_EXT, visibleEntries } from './suite-file.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
@@ -15,7 +15,6 @@ import { parseExpose } from './exposed-flows.js';
 import { parseWebhook } from './flow-webhook-config.js';
 import { controlProblems, finallyOf, paceOf, parallelOf, setScopeOf, untilOf } from './control-keys.js';
 
-const TEST_EXT = new Set(['.yaml', '.yml', '.json']);
 
 async function parseFile(path: string, given?: string): Promise<unknown> {
   const text = given ?? (await readFile(path, 'utf8'));
@@ -65,7 +64,7 @@ function modelOf(v: unknown): ModelRef {
 }
 
 /** The longest a delay step may wait: ten minutes. */
-export const MAX_DELAY_MS = 600_000;
+const MAX_DELAY_MS = 600_000;
 
 /**
  * A delay step's wait in milliseconds, from `ms: 2000` (the canonical form) or `duration: 2s` / `500ms` / `1.5m`;
@@ -366,9 +365,7 @@ async function* walk(dir: string): AsyncGenerator<string> {
   } catch {
     return;
   }
-  entries.sort((a, b) => a.name.localeCompare(b.name));
-  for (const e of entries) {
-    if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+  for (const e of visibleEntries(entries)) {
     const p = join(dir, e.name);
     if (e.isDirectory()) yield* walk(p);
     else if (TEST_EXT.has(extname(e.name).toLowerCase())) yield p;
@@ -445,7 +442,7 @@ const stripDataset = (t: Record<string, unknown>): Record<string, unknown> => {
  * with millions of rows never need to be held in memory.
  */
 /** A dataset record's `tags`: a list or a comma-separated text, as trimmed non-empty strings (at most 20, 64 characters each). */
-export function recordTags(v: unknown): string[] {
+function recordTags(v: unknown): string[] {
   const raw = Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [];
   return [...new Set(raw.filter((x) => typeof x === 'string' || typeof x === 'number').map((x) => String(x).trim().slice(0, 64)).filter(Boolean))].slice(0, 20);
 }

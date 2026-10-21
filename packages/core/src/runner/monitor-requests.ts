@@ -8,7 +8,7 @@ import type { ItemRef } from '@testpion/shared';
 import type { RunOrigin } from '../model/types.js';
 import { readResultsFile } from './runner.js';
 
-export interface MonitorRequestStat {
+interface MonitorRequestStat {
   name: string;
   runs: number;
   failed: number;

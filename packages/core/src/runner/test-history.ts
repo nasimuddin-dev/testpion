@@ -1,9 +1,10 @@
 /** One test across earlier runs: did it pass, how long it took, which checks failed. */
 import { join } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { readResultsFile } from './runner.js';
+import { pageOf, type ListPage } from '../util/page.js';
+import { jsonNeedle, readResultsFile } from './runner.js';
 
-export interface TestHistoryPoint {
+interface TestHistoryPoint {
   runId: string;
   runName: string;
   startedAt: string;
@@ -24,9 +25,11 @@ export async function testHistory(store: WorkspaceStore, test: { id?: string; na
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 200);
   const runs = store.meta.listRuns({ limit: Math.min(Math.max(opts.runs ?? 60, 1), 500) }).items;
   const out: TestHistoryPoint[] = [];
+  // a line without the test's id (or name) cannot be its result: those lines are not parsed
+  const needle = jsonNeedle((test.id ? test.id : test.name)!);
   for (const run of runs) {
     if (out.length >= limit) break;
-    for await (const r of await readResultsFile(join(store.runDir(run.id), 'results.jsonl'))) {
+    for await (const r of await readResultsFile(join(store.runDir(run.id), 'results.jsonl'), { contains: needle })) {
       if (test.id ? r.id !== test.id : r.name !== test.name) continue;
       out.push({
         runId: run.id,
@@ -67,7 +70,7 @@ export function summarizeTestHistory(points: TestHistoryPoint[]): { runs: number
   };
 }
 
-export interface FlakyTest {
+interface FlakyTest {
   id: string;
   name: string;
   runs: number;
@@ -99,6 +102,11 @@ export async function flakyTests(store: WorkspaceStore, opts: { runs?: number } 
 }
 
 const flakyCache = new WeakMap<WorkspaceStore, { key: string; value: FlakyTest[] }>();
+
+/** A page of the flaky tests (most flips first): 200 unless asked, at most 1,000; `nextCursor` asks for the next. */
+export async function flakyTestsPage(store: WorkspaceStore, opts: { runs?: number; limit?: number; cursor?: string } = {}): Promise<ListPage<FlakyTest>> {
+  return pageOf(await flakyTests(store, { runs: opts.runs }), opts, { limit: 200, max: 1000 });
+}
 
 async function scanFlaky(store: WorkspaceStore, runs: Array<{ id: string; startedAt: string }>): Promise<FlakyTest[]> {
   const by = new Map<string, { id: string; name: string; statuses: string[]; retried: number; lastAt: string }>();

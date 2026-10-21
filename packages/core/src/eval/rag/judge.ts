@@ -34,7 +34,7 @@ export interface JudgeRef {
 }
 
 /** What a run has used of the judge so far (shared by every sample of the run). */
-export interface JudgeBudget {
+interface JudgeBudget {
   calls: number;
   cached: number;
   inputTokens: number;
@@ -52,7 +52,7 @@ export interface DryJudgeCall {
 }
 
 /** What an estimate needs of the dry calls, counted as they happen: a prompt is several KB, and 5,000 samples × 10 metrics are 50,000 of them. */
-export interface DryTally {
+interface DryTally {
   calls: number;
   /** Calls whose verdict the cache already holds. */
   cached: number;
@@ -85,7 +85,7 @@ export interface JudgeAnswer {
 }
 
 /** The two calls of the AI task service a judge call needs (`prepareAiTask`, `runAiTask`). */
-export interface RagTaskService {
+interface RagTaskService {
   prepare: typeof prepareAiTask;
   run: typeof runAiTask;
 }
@@ -109,7 +109,7 @@ export function dryHost(host: RagJudgeHost, o: { tally?: boolean } = {}): RagJud
 }
 
 /** What to configure for a judge: the one error a missing or refused judge gives, in every host. */
-export function judgeSetupError(why: string, extra: string[] = []): ApsError {
+function judgeSetupError(why: string, extra: string[] = []): ApsError {
   return new ApsError('ConfigurationError', 'This RAG evaluation needs a judge model, and none is set up', {
     why: `${why} TestPion never guesses a judge: a score from a model nobody chose could not be compared with another run.`,
     details: { setup: { assistant: true } },
@@ -161,7 +161,7 @@ export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provi
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
 /** The AI task request of a metric's judge call. */
-export function judgeRequest(metric: JudgedMetric, input: Record<string, unknown>, judge?: JudgeRef): AiTaskRequest {
+function judgeRequest(metric: JudgedMetric, input: Record<string, unknown>, judge?: JudgeRef): AiTaskRequest {
   // images ride beside the text fields (`__images`, from eval/rag/images.ts): they are data for a vision judge, never text in the context
   const { __images, __allowImages, ...context } = input as Record<string, unknown> & { __images?: ChatImage[]; __allowImages?: boolean };
   return { task: 'rag-judge', question: metric.instruction, context, provider: judge?.provider, model: judge?.model, ...(__images?.length ? { images: __images, allowImages: __allowImages === true } : {}) };

@@ -11,6 +11,7 @@
  *  - `testset-duplicate`: a question whose word set is 80% the same as an earlier one of the batch, or one already in the dataset.
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { BoundedMap } from '../../../util/collections.js';
 import { registerVerifier, type VerifyContext } from '../../../ai/verify.js';
 import type { ProposalItem, VerificationBadge } from '../../../ai/proposal.js';
 import { judgeCall, type JudgeRef } from '../judge.js';
@@ -21,12 +22,12 @@ import { bm25, copiedShare, coverage, jaccard, termSet } from './lexical.js';
 import { REFERENCE_SUPPORT } from './prompts.js';
 import type { TestsetRecord } from './types.js';
 
-export const SUPPORT_FAIL = 0.4;
-export const SUPPORT_WARN = 0.6;
-export const ANSWERABLE_FAIL = 0.7;
-export const ANSWERABLE_WARN = 0.55;
-export const DUPLICATE_AT = 0.8;
-export const COPY_AT = 0.8;
+const SUPPORT_FAIL = 0.4;
+const SUPPORT_WARN = 0.6;
+const ANSWERABLE_FAIL = 0.7;
+const ANSWERABLE_WARN = 0.55;
+const DUPLICATE_AT = 0.8;
+const COPY_AT = 0.8;
 
 interface RowData {
   dataset?: string;
@@ -87,8 +88,9 @@ export function verifyAnswerable(item: ProposalItem): VerificationBadge | undefi
 }
 
 /** Question word sets of earlier items of the same pass (a pass starts at the item `i1`), by corpus token and batch. */
-const seen = new Map<string, Array<{ id: string; terms: Set<string>; question: string }>>();
-const existing = new Map<string, { at: number; terms: Array<{ terms: Set<string>; question: string }> }>();
+const seen = new BoundedMap<string, Array<{ id: string; terms: Set<string>; question: string }>>(50);
+/** The questions of a dataset file already in the workspace, read at most every 5 s; at most 20 files are kept. */
+const existing = new BoundedMap<string, { at: number; terms: Array<{ terms: Set<string>; question: string }> }>(20);
 
 function datasetQuestions(ctx: VerifyContext, rel: string): Array<{ terms: Set<string>; question: string }> {
   if (!ctx.store) return [];

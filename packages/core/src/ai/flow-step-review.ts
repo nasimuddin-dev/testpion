@@ -6,10 +6,10 @@
  * moved Get order after Update" instead of two YAML files.
  */
 import { checkLabel } from '@testpion/shared';
-import { parseYaml } from '../util/lazy-yaml.js';
+import { tryParseYaml } from '../util/yaml-doc.js';
 import { matchSteps } from '../util/step-match.js';
 
-export interface StepFieldChange {
+interface StepFieldChange {
   field: 'name' | 'order' | 'dependsOn' | 'request' | 'body' | 'extract' | 'checks' | 'scripts' | 'other';
   /** Lines that are new in the model's step (`orderId = $.id`, `status = 201`). */
   added?: string[];
@@ -31,13 +31,11 @@ export interface StepDiff {
 
 type Step = Record<string, unknown>;
 
-const stepsOf = (text: string): Step[] => {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
+/** The steps of a test file's YAML text (a list, or `tests:` of a map); none when it does not parse. */
+export const yamlSteps = (text: string): Step[] => {
+  const parsed = tryParseYaml(text);
+  if (!parsed.ok) return [];
+  const doc = parsed.value;
   const list = Array.isArray(doc) ? doc : ((doc as { tests?: unknown[] } | null)?.tests ?? []);
   return (Array.isArray(list) ? list : []).filter((s): s is Step => !!s && typeof s === 'object' && !Array.isArray(s));
 };
@@ -109,8 +107,8 @@ function changesOf(draft: Step, ai: Step, order?: { before: number; after: numbe
  * with the fields that differ, in the model's order.
  */
 export function diffFlowSteps(draftYaml: string, aiYaml: string): StepDiff[] {
-  const draft = stepsOf(draftYaml);
-  const ai = stepsOf(aiYaml);
+  const draft = yamlSteps(draftYaml);
+  const ai = yamlSteps(aiYaml);
   // the id first; a renamed step by its name, then by what it calls
   const same = (key: (s: Step, i: number) => string | undefined) => ({ seek: key, pool: key });
   const partner = matchSteps(ai, draft, [same(idOf), same((s) => str(s.name) || undefined), same(endpointKey)]);

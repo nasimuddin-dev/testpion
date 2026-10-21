@@ -16,9 +16,9 @@
 import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { canonicalMetricId } from './metric-registry.js';
 
-export type RouteOp = 'lt' | 'lte' | 'gt' | 'gte' | 'eq' | 'ne';
+type RouteOp = 'lt' | 'lte' | 'gt' | 'gte' | 'eq' | 'ne';
 
-export interface RouteCondition {
+interface RouteCondition {
   metric: string;
   /** Compare the metric's score … */
   op?: RouteOp;
@@ -55,7 +55,7 @@ export function parseCondition(v: unknown): RouteCondition | string {
 const describeCondition = (c: RouteCondition) => (c.passed !== undefined ? `${c.metric} ${c.passed ? 'passes' : 'fails'}` : `${c.metric} ${SYMBOL[c.op!]} ${c.value}`);
 
 /** The route of a metric entry: its condition and whether it is negated (`unless`); undefined when it has none. */
-export function routeOf(cfg: CheckConfig): { cond: RouteCondition; negate: boolean } | undefined | string {
+function routeOf(cfg: CheckConfig): { cond: RouteCondition; negate: boolean } | undefined | string {
   const raw = cfg.when ?? cfg.unless;
   if (raw === undefined) return undefined;
   if (cfg.when !== undefined && cfg.unless !== undefined) return 'a metric has either "when" or "unless", not both';

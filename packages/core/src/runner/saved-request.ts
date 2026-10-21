@@ -27,6 +27,3 @@ export function savedRequestSpec(collection: Collection, ref: string): HttpReque
   const base = auth ?? (collection.auth && collection.auth.type !== 'inherit' ? collection.auth : undefined);
   return withFolderDefaults({ ...hit.request, auth: base ?? { type: 'none' } }, collection, folderChain(collection, hit.id));
 }
-
-/** The prefix a saved-request call carries through `tp.sendRequest`'s plumbing. */
-export const SAVED_REQUEST_PREFIX = 'tp-saved:';

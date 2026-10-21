@@ -15,7 +15,7 @@ import { DEFAULT_REDACT_FIELDS } from '../model/types.js';
 
 export type SecretConfidence = 'high' | 'medium' | 'low';
 
-export interface SecretValuePattern {
+interface SecretValuePattern {
   /** Stable id of the pattern (fixtures and tests name it). */
   id: string;
   /** The kind a mask writes (`[REDACTED:<kind>]`): the names logs and AI context have always used. */
@@ -88,7 +88,7 @@ const ANY_SHAPE_NOCASE = hintsOf(true);
 export const mayHoldSecretShape = (text: string): boolean => ANY_SHAPE_CASE.test(text) || ANY_SHAPE_NOCASE.test(text);
 
 /** A value shape found in a text: which pattern, where, and how sure. */
-export interface SecretValueMatch {
+interface SecretValueMatch {
   id: string;
   kind: string;
   confidence: SecretConfidence;
@@ -173,7 +173,7 @@ const normKey = (s: string): string => s.toLowerCase().replace(/[-_\s.]/g, '');
  * Header, variable and environment names known not to hold a secret: never a finding, whatever the value looks like.
  * (Compared without case, `-`, `_`, `.` or spaces: `Content-Type`, `content_type` and `CONTENT_TYPE` are one name.)
  */
-export const NON_SECRET_KEYS: ReadonlySet<string> = new Set(
+const NON_SECRET_KEYS: ReadonlySet<string> = new Set(
   [
     'Content-Type',
     'Content-Length',
@@ -241,8 +241,25 @@ const DEFAULT_FIELDS = secretKeyFields();
  * (ends with a field of 5+ characters: `accessToken`, `client_secret`; `totalTokens` and `maxTokens` do not), or
  * `none`. Allow-listed names (`Content-Type` …) are always `none`.
  */
-export function matchSecretKey(key: string, fields: SecretKeyFields = DEFAULT_FIELDS): 'exact' | 'suffix' | 'none' {
+export function matchSecretKey(key: string, fields: SecretKeyFields = DEFAULT_FIELDS): KeyMatch {
   if (typeof key !== 'string' || !key) return 'none';
+  // the same few names come back for every object of every result: the answer per (field list, name) is remembered
+  let memo = KEY_MEMO.get(fields);
+  if (!memo) KEY_MEMO.set(fields, (memo = new Map()));
+  const known = memo.get(key);
+  if (known) return known;
+  const answer = matchKey(key, fields);
+  if (memo.size >= KEY_MEMO_MAX) memo.clear();
+  memo.set(key, answer);
+  return answer;
+}
+
+type KeyMatch = 'exact' | 'suffix' | 'none';
+/** At most this many names are remembered per field list (an object with thousands of different keys must not grow it without end). */
+const KEY_MEMO_MAX = 2048;
+const KEY_MEMO = new WeakMap<SecretKeyFields, Map<string, KeyMatch>>();
+
+function matchKey(key: string, fields: SecretKeyFields): KeyMatch {
   const k = normKey(key);
   if (NON_SECRET_KEYS.has(k)) return 'none';
   if (fields.raw.has(key.toLowerCase()) || fields.norm.has(k)) return 'exact';
@@ -256,7 +273,7 @@ export const isSecretKey = (key: string, fields?: SecretKeyFields): boolean => m
 /* ------------------------------------------------------------------ one key/value pair */
 
 /** Why a key/value pair is a secret, and how sure: from its name, its value's shape, or both. */
-export interface SecretVerdict {
+interface SecretVerdict {
   confidence: SecretConfidence;
   reason: 'key' | 'value' | 'key+value';
   /** The value pattern that matched (`openai`, `jwt` …), when the value's shape counted. */

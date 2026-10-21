@@ -17,7 +17,7 @@ import { readResultsFile } from '../runner/runner.js';
 import { readRunSummary } from '../runner/run-records.js';
 import { flakyTests } from '../runner/test-history.js';
 import { requestIdOfResult } from '../runner/result-source.js';
-import { parseYaml } from '../util/lazy-yaml.js';
+import { testStepsOf, tryParseYaml } from '../util/yaml-doc.js';
 import { slugify } from '../util/ids.js';
 import type { AiPrivacy } from './ai-settings.js';
 import type { ProposalFinding, ProposalItem } from './proposal.js';
@@ -26,8 +26,8 @@ import { evidenceOf, responseOfResult, sourceOfResult, type FailureEvidence, typ
 import { fixItems, type FixSpec, type FixTarget } from './fix-items.js';
 import type { StoredResponse } from './verify.js';
 
-export const FLAKY_PATTERNS = ['timing', 'ordering', 'shared-state', 'time-dependent', 'external-dependency', 'rate-limit', 'data-collision', 'unknown'] as const;
-export type FlakyPattern = (typeof FLAKY_PATTERNS)[number];
+const FLAKY_PATTERNS = ['timing', 'ordering', 'shared-state', 'time-dependent', 'external-dependency', 'rate-limit', 'data-collision', 'unknown'] as const;
+type FlakyPattern = (typeof FLAKY_PATTERNS)[number];
 
 export const FLAKY_SCHEMA = {
   type: 'object',
@@ -58,7 +58,7 @@ export const FLAKY_SCHEMA = {
 };
 
 /** One run of the test (newest last). */
-export interface FlakyRun {
+interface FlakyRun {
   runId: string;
   startedAt: string;
   environment?: string;
@@ -108,15 +108,9 @@ const median = (xs: number[]) => {
 
 /** A test file's step ids as the loader makes them (explicit id, or <file>:<name>). */
 function stepIds(text: string, path: string): Array<{ id: string; ref: string }> {
-  let doc: unknown;
-  try {
-    doc = parseYaml(text);
-  } catch {
-    return [];
-  }
-  const steps = (Array.isArray(doc) ? doc : Array.isArray((doc as { tests?: unknown })?.tests) ? (doc as { tests: unknown[] }).tests : doc && typeof doc === 'object' ? [doc] : []) as Array<
-    Record<string, unknown>
-  >;
+  const parsed = tryParseYaml(text);
+  if (!parsed.ok) return [];
+  const steps = testStepsOf(parsed.value);
   const file = slugify(
     path
       .split('/')
@@ -324,7 +318,7 @@ function signatureOf(
 }
 
 /** What the model is sent (budgets and redaction come after). */
-export function flakyContext(ev: FlakyEvidence, privacy: AiPrivacy): Record<string, unknown> {
+function flakyContext(ev: FlakyEvidence, privacy: AiPrivacy): Record<string, unknown> {
   const values = privacy === 'full';
   const f = ev.failing;
   return {

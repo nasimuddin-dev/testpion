@@ -1,5 +1,6 @@
 import { escapeRegex } from '@testpion/shared';
 import { DEFAULT_REDACT_FIELDS } from '../model/types.js';
+import { ibanValid, luhn } from './checksums.js';
 import { isSecretReference, matchSecretKey, replaceSecretValues, secretKeyFields, type SecretKeyFields } from '../security/secrets.js';
 
 export const REDACTED = '[REDACTED]';
@@ -15,7 +16,9 @@ export const REDACTED = '[REDACTED]';
 export class Redactor {
   private fields: SecretKeyFields;
   private values = new Set<string>();
+  /** The one regex of every secret value, built when a string is first masked after a secret was added (not once per secret). */
   private valueRegex?: RegExp;
+  private valuesChanged = false;
 
   constructor(fields: string[] = DEFAULT_REDACT_FIELDS) {
     this.fields = secretKeyFields(fields);
@@ -29,8 +32,16 @@ export class Redactor {
   addSecret(value: string | undefined | null): void {
     if (!value || typeof value !== 'string' || value.length < 4 || this.values.has(value)) return;
     this.values.add(value);
-    const sorted = [...this.values].sort((a, b) => b.length - a.length).map(escapeRegex);
-    this.valueRegex = new RegExp(sorted.join('|'), 'g');
+    this.valuesChanged = true;
+  }
+
+  private regex(): RegExp | undefined {
+    if (this.valuesChanged) {
+      this.valuesChanged = false;
+      const sorted = [...this.values].sort((a, b) => b.length - a.length).map(escapeRegex);
+      this.valueRegex = new RegExp(sorted.join('|'), 'g');
+    }
+    return this.valueRegex;
   }
 
   /**
@@ -52,8 +63,9 @@ export class Redactor {
   }
 
   redactString(s: string): string {
-    if (!this.valueRegex || !s) return s;
-    return s.replace(this.valueRegex, REDACTED);
+    const re = this.regex();
+    if (!re || !s) return s;
+    return s.replace(re, REDACTED);
   }
 
   /** Deep-copy `data`, masking sensitive keys and known secret values. */
@@ -112,30 +124,6 @@ export { escapeRegex } from '@testpion/shared';
 export interface Redaction {
   path: string;
   kind: string;
-}
-
-/** Luhn checksum of a card number's digits. */
-function luhn(digits: string): boolean {
-  let sum = 0;
-  for (let i = 0; i < digits.length; i++) {
-    let d = digits.charCodeAt(digits.length - 1 - i) - 48;
-    if (i % 2 === 1) d = d * 2 > 9 ? d * 2 - 9 : d * 2;
-    sum += d;
-  }
-  return sum % 10 === 0;
-}
-
-/** ISO 13616 check of an IBAN (mod 97 = 1). */
-function ibanValid(raw: string): boolean {
-  const s = raw.replace(/\s+/g, '').toUpperCase();
-  if (s.length < 15 || s.length > 34) return false;
-  const moved = s.slice(4) + s.slice(0, 4);
-  let rem = 0;
-  for (const ch of moved) {
-    const v = ch >= 'A' && ch <= 'Z' ? String(ch.charCodeAt(0) - 55) : ch;
-    for (const d of v) rem = (rem * 10 + (d.charCodeAt(0) - 48)) % 97;
-  }
-  return rem === 1;
 }
 
 const PII_PATTERNS: Array<{ kind: string; re: RegExp; valid?: (m: string) => boolean }> = [

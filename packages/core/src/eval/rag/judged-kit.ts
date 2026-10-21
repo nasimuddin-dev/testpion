@@ -104,7 +104,7 @@ export async function claimsPass(host: RagJudgeHost, m: JudgedMetric, input: Rec
 export { assertJudgeUsable, round3, judgePanel };
 export type { PanelOptions, PanelResult, JudgeRef, RagJudgeHost, PanelItem };
 
-export interface JudgedSpec {
+interface JudgedSpec {
   /** The prompt (a function when it depends on the check's options). */
   metric: JudgedMetric | ((cfg: CheckConfig, ctx: CheckContext) => JudgedMetric);
   /** The metric’s id in the matrix and in messages. */

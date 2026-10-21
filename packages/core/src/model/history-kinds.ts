@@ -1,7 +1,7 @@
 import type { HistoryEntry } from './types.js';
 import { ApsError } from '../errors.js';
 
-export type HistoryKind = HistoryEntry['kind'];
+type HistoryKind = HistoryEntry['kind'];
 
 /**
  * Every kind of History entry, and whether it is a request sent (counted in request statistics: Home's activity, the
@@ -16,7 +16,7 @@ export const HISTORY_KINDS = Object.keys(KIND_IS_REQUEST) as HistoryKind[];
 /** The History kinds that are requests sent (all but capture sessions). */
 export const REQUEST_HISTORY_KINDS = HISTORY_KINDS.filter((k) => KIND_IS_REQUEST[k]);
 
-export const isHistoryKind = (kind: unknown): kind is HistoryKind => typeof kind === 'string' && Object.prototype.hasOwnProperty.call(KIND_IS_REQUEST, kind);
+const isHistoryKind = (kind: unknown): kind is HistoryKind => typeof kind === 'string' && Object.prototype.hasOwnProperty.call(KIND_IS_REQUEST, kind);
 
 /** Whether a History entry (or row with its kind) is a request sent, the only kind request statistics count. */
 export const isRequestEntry = (entry: { kind?: string }): boolean => isHistoryKind(entry.kind) && KIND_IS_REQUEST[entry.kind];
