@@ -71,6 +71,8 @@ export function runGitBytes(cwd: string, args: string[], opts: { input?: string;
 function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number; env?: Record<string, string> }, encoding: E): Promise<E extends 'buffer' ? Buffer : string> {
   type Out = E extends 'buffer' ? Buffer : string;
   gitSpawns.count++;
+  // a remote added, changed or removed (by the app or by anything that goes through here): the remembered URL is stale
+  if (args[0] === 'remote') remotes.clear();
   return new Promise<Out>((done, fail) => {
     const child = execFile(
       'git',
