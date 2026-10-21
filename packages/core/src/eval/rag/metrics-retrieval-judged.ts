@@ -6,7 +6,7 @@
  * their older heuristic-or-`judge:` implementation (checks.ts) under the same names.
  */
 import type { CheckConfig, CheckResult } from '../../model/types.js';
-import { checkFn, registerCheck, type CheckContext } from '../checks.js';
+import { checkFn, overrideCheck, registerCheck, type CheckContext } from '../checks.js';
 import { rankedAveragePrecision } from './ir.js';
 import { addUsage, assertJudgeUsable, contextsInput, describe, guarded, judgedCheck, judgeMeta, judgePanel, na, needContexts, needsField, noUsage, panelOf, referenceText, round3, strictOver, type Usage } from './judged-kit.js';
 import { CONTEXT_PRECISION, CONTEXT_PRECISION_ONE, CONTEXT_RECALL, CONTEXT_UTILIZATION, ENTITIES_OF_CONTEXTS, ENTITIES_OF_REFERENCE, RETRIEVAL_RELEVANCE } from './prompts-r2.js';
@@ -136,9 +136,9 @@ const retrievalRelevance = (cfg: CheckConfig, ctx: CheckContext): Promise<CheckR
 
 // the regex mode of entity recall stays in checks.ts; the model mode is this
 const legacyEntity = checkFn('context-entity-recall');
-registerCheck('context-entity-recall', (cfg, ctx) => (cfg.mode === 'llm' ? entityRecallLlm(cfg, ctx) : legacyEntity ? legacyEntity(cfg, ctx) : result(cfg, false, 'context-entity-recall is not available')));
-registerCheck('context-precision', strictOver(contextPrecision, checkFn('context-precision')));
-registerCheck('context-recall', strictOver(contextRecall, checkFn('context-recall')));
+overrideCheck('context-entity-recall', (cfg, ctx) => (cfg.mode === 'llm' ? entityRecallLlm(cfg, ctx) : legacyEntity ? legacyEntity(cfg, ctx) : result(cfg, false, 'context-entity-recall is not available')));
+overrideCheck('context-precision', strictOver(contextPrecision, checkFn('context-precision')));
+overrideCheck('context-recall', strictOver(contextRecall, checkFn('context-recall')));
 registerCheck('context-utilization', contextUtilization);
 registerCheck('retrieval-relevance', retrievalRelevance);
 

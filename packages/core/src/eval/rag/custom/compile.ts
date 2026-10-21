@@ -9,7 +9,7 @@ import type { CheckConfig, CheckResult } from '../../../model/types.js';
 import type { ProviderRegistry } from '../../../ai/index.js';
 import { listMetricFiles } from '../../../storage/metric-files.js';
 import type { WorkspaceStore } from '../../../storage/workspace.js';
-import { registerCheck, unregisterCheck } from '../../checks.js';
+import { overrideCheck, unregisterCheck } from '../../checks.js';
 import type { RagJudgeSetup } from '@testpion/shared';
 import type { RagJudgeHost } from '../judge.js';
 import { judgeEstimate } from '../metric-defs.js';
@@ -98,7 +98,7 @@ export function registerCustomMetric(c: CompiledMetric): void {
   const old = getMetric(c.def.id);
   if (old) unregisterMetric(c.def.id);
   registerMetric(c.def);
-  registerCheck(c.def.check, c.check);
+  overrideCheck(c.def.check, c.check); // a metric whose file changed registers again
   registered.set(c.def.id, c.hash);
 }
 
