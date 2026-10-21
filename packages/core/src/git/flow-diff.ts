@@ -1,5 +1,7 @@
+import { isRecord } from '@testpion/shared';
 import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { slugify } from '../util/ids.js';
+import { matchSteps, sameValue } from '../util/step-match.js';
 import type { SemanticChange } from './semantic.js';
 
 /**
@@ -9,8 +11,7 @@ import type { SemanticChange } from './semantic.js';
  */
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v);
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const same = sameValue;
 
 /** A test or flow file under tests/ (not a suite). */
 export const isFlowFile = (path: string) => /^tests\/.+\.(ya?ml|json)$/i.test(path) && !/\.suite\.(ya?ml|json)$/i.test(path);
@@ -64,7 +65,7 @@ const PARTS: Array<[string, string[]]> = [
 
 /** A step's keys grouped into parts (the `request:` map's keys count as the step's own). */
 function stepParts(raw: Rec): Record<string, Rec> {
-  const flat: Rec = { ...raw, ...(isRec(raw.request) ? raw.request : {}) };
+  const flat: Rec = { ...raw, ...(isRecord(raw.request) ? raw.request : {}) };
   delete flat.request;
   delete flat.id;
   const out: Record<string, Rec> = {};
@@ -87,9 +88,9 @@ function parseFlow(file: string, text: string | undefined): Flow | undefined {
   } catch {
     return undefined;
   }
-  if (!isRec(data)) return undefined;
+  if (!isRecord(data)) return undefined;
   const list = Array.isArray(data.tests) ? data.tests : data.tests === undefined && (data.type || data.url || data.request) ? [data] : undefined;
-  if (!list || list.some((t) => !isRec(t))) return undefined;
+  if (!list || list.some((t) => !isRecord(t))) return undefined;
   const seen = new Set<string>();
   const steps = (list as Rec[]).map((raw, i) => {
     let id = typeof raw.id === 'string' || typeof raw.id === 'number' ? String(raw.id) : raw.name ? slugify(String(raw.name)) : `step-${i + 1}`;
@@ -144,21 +145,22 @@ export function flowChanges(file: string, beforeText: string | undefined, afterT
   // steps by id; a step that left and one that arrived with the same content is a rename
   const a = new Map(before.steps.map((s) => [s.id, s]));
   const b = new Map(after.steps.map((s) => [s.id, s]));
-  const added = after.steps.filter((s) => !a.has(s.id));
-  const removed = before.steps.filter((s) => !b.has(s.id));
+  let added = after.steps.filter((s) => !a.has(s.id));
+  let removed = before.steps.filter((s) => !b.has(s.id));
   const renamedTo = new Map<string, string>();
-  const body = (r: Rec) => {
-    const { id: _i, name: _n, dependsOn: _d, ...rest } = r;
+  const body = (s: { raw: Rec }) => {
+    const { id: _i, name: _n, dependsOn: _d, ...rest } = s.raw;
     return JSON.stringify(rest);
   };
-  for (const r of [...removed]) {
-    const match = added.find((x) => body(x.raw) === body(r.raw));
-    if (!match) continue;
+  const partner = matchSteps(removed, added, [{ seek: body, pool: body }]);
+  removed.forEach((r, i) => {
+    const match = added[partner[i]!];
+    if (!match) return;
     renamedTo.set(r.id, match.id);
-    added.splice(added.indexOf(match), 1);
-    removed.splice(removed.indexOf(r), 1);
     out.push({ ...base, change: 'renamed', title: `${title} ▸ ${stepTitle(match)}`, details: [`was ${r.id}`], itemId: match.id, itemKind: 'step' });
-  }
+  });
+  added = added.filter((_, k) => !partner.includes(k));
+  removed = removed.filter((_, i) => partner[i]! < 0);
   for (const s of after.steps) {
     const was = a.get(s.id);
     if (!was || same(was.raw, s.raw)) continue;

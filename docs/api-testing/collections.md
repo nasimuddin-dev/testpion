@@ -188,18 +188,18 @@ The collection's **Export ▸ Export with everything it uses…** writes a TestP
 
 ### Export the whole workspace
 
-**Export** ▸ *The whole workspace* (also in the workspace switcher and the app menu) writes one file, `<workspace name>.testpion.json`, that **Import** opens as a new workspace on another computer:
+**Export** ▸ *The whole workspace* (also in the workspace switcher and the app menu) writes one [bundle](/getting-started/export-import), `<workspace name>.testpion.zip` (a small workspace of text only is `<workspace name>.testpion.json`), that **Import** opens as a new workspace on another computer, or merges into an open one with a preview, conflict choices and Undo:
 
-- **What it holds:** every collection, environment, test file, saved item (gRPC calls, connections, prompts …), MCP server, provider and script package, the workspace variables, and the files of `specs/`, `datasets/`, `mocks/` and `protos/`. Text files are kept as text, others (a SQLite dataset) as base64; they come back byte for byte.
-- **What it leaves out:** run results, history, traces and Recently deleted; and any file over 10 MB, or past 50 MB in all. A file left out is named in the message (and in `notes` with `--json`), never dropped silently: copy it by hand.
+- **What it holds:** every collection, environment, test file, saved item (gRPC calls, connections, prompts …), MCP server, provider and script package, and the files of `specs/`, `datasets/`, `mocks/` and `protos/`; they come back byte for byte. The workspace's own variables (the Globals) are not part of a bundle: the export says so when there are any.
+- **What it leaves out:** run results, history, traces and Recently deleted; and a dataset over 10 MB, which travels by reference (the file is not in the bundle). A dataset left out is named in the message (and in `notes` with `--json`), never dropped silently: copy it by hand.
 - **Secrets:** an export never holds a secret value. Secret variables are exported empty, and so is a variable that has a secret name or value but isn't marked secret (it is marked secret in the export). A typed-in secret becomes a `{{variable}}`: an auth token or password, a header with a secret name or a secret-shaped value, an MCP server's header or `env` value (every one, except names that never hold a secret such as `Content-Type` or `NODE_ENV`), a password in a connection string (`postgres://app:{{dbPassword}}@db/clinic`), a provider key. Request bodies are not changed. The message after export lists each replacement; on import, the message lists the **values needed**. Set them as secret variables of an environment. See [Privacy: exports](/security/privacy#exports).
 
 ```bash
-testpion workspace export "Veterinary API"                 # writes "Veterinary API.testpion.json"
-testpion workspace export "Veterinary API" -o vet.testpion.json --json   # { path, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }
+testpion workspace export "Veterinary API"                 # writes "Veterinary API.testpion.zip"
+testpion workspace export "Veterinary API" -o vet.testpion.zip --json   # { path, format, size, counts, collections, environments, tests, files, replaced: [{ kind, item, field, variable }], notes, lines }
 ```
 
-Exports of earlier versions (`.apsworkspace.json`) still import.
+It is the same file `testpion export --all` writes. Exports of earlier versions (`.testpion.json` of 0.53 and before, `.apsworkspace.json`) still import, as a bundle or as a new workspace; `testpion workspace export --legacy` still writes the older file for a TestPion that cannot read bundles (it is removed in a later release).
 
 <figure class="aps-screenshot">
   <img src="/images/export-workspace-toast.jpg" alt="The message after exporting the Veterinary API workspace: where the file went, what it includes, and the two secrets replaced by variables, an environment client secret and the Petstore MCP server Authorization header" width="1440" height="900" loading="lazy">

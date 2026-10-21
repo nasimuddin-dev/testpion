@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Redactor, WorkspaceStore, historyToHar, importAny, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { Redactor, WorkspaceStore, historyToHar, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 describe('history as HAR', () => {
   it('exports HTTP and GraphQL entries with bodies, masking secrets, and imports back', () => {

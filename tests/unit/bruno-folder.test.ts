@@ -5,7 +5,8 @@ import type { AddressInfo } from 'node:net';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bruFilesToBrunoExport, collectionToBru, detectFormat, importAny, parseBru, readBrunoFolder, runCollection, runScript, type CollectionFolder, type ExecServices, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
+import { bruFilesToBrunoExport, collectionToBru, detectFormat, parseBru, readBrunoFolder, runCollection, runScript, type CollectionFolder, type ExecServices, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const LOGIN = `meta {
   name: Log in

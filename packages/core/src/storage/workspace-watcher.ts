@@ -1,8 +1,8 @@
-import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync, watch } from 'node:fs';
 import { join, sep } from 'node:path';
 import { watchKindOfPath, type WatchKind } from '@testpion/shared';
 import { forgetOwnWrite, ownWrite } from './fsutil.js';
+import { sha1Hex } from '../util/hash.js';
 
 /**
  * Watch a workspace folder for changes made outside the app (GIT-103): `git pull`, a branch switch, another editor.
@@ -70,7 +70,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
       if (st.isDirectory()) return 'dir';
       // whole milliseconds: a tool that sets the time back (an access-time touch) gives it to the millisecond
       if (mode === 'stat' || st.size > 8 * 1024 * 1024) return `stat:${st.size}:${Math.round(st.mtimeMs)}`;
-      return `hash:${st.size}:${createHash('sha1').update(readFileSync(full)).digest('hex')}`;
+      return `hash:${st.size}:${sha1Hex(readFileSync(full))}`;
     } catch {
       return 'gone';
     }

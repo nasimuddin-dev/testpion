@@ -1,7 +1,7 @@
 import { toPostmanScript } from '../scripts/aliases.js';
-import { createHash } from 'node:crypto';
 import type { AuthConfig, BodyConfig, CheckConfig, Collection, CollectionNode, Environment, HttpSettings, KeyValue, SavedExample, SavedGraphQLRequest, SavedHttpRequest } from '../model/types.js';
 import { inheritedHeaders, withInheritedHeaders } from '../runner/folder-defaults.js';
+import { sha1Hex } from '../util/hash.js';
 
 /**
  * Export to the Postman v2.1 collection and environment formats, so collections move to and from
@@ -17,7 +17,7 @@ export const POSTMAN_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.
 
 /** Deterministic UUID-shaped id, so re-exporting the same collection gives the same ids. */
 export function stableUuid(seed: string): string {
-  const h = createHash('sha1').update(seed).digest('hex');
+  const h = sha1Hex(seed);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 

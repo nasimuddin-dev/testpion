@@ -15,6 +15,7 @@ import {
   gitSetupMergeDriver,
   isInGitRepository,
   exportSummary,
+  exportWholeWorkspace,
   workspaceExportFileName,
 } from '@testpion/core';
 import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, withWorkspace } from '../shared.js';
@@ -66,19 +67,33 @@ export function registerWorkspaceCommands(program: Command): void {
       s.close();
     });
   ws.command('export')
-    .description('one JSON file with everything a workspace defines (specs/, datasets/, mocks/ and protos/ too); secret values are replaced by {{variables}}, never exported. `testpion export --all` writes a bundle instead (preview, conflicts and Undo on import); this file stays for two more releases')
+    .description('a whole workspace as a bundle (the same file `testpion export --all` writes: every kind, previewed with conflict choices and Undo on import); secret values are replaced by {{variables}}, never exported')
     .argument('<nameOrPath>')
-    .option('-o, --output <file>', 'the file to write (default: <workspace name>.testpion.json)')
+    .option('-o, --output <file>', 'the file to write (default: <workspace name>.testpion.zip, or .testpion.json when it is small and all text)')
+    .option('--format <form>', 'zip or json (default: zip when the bundle has a binary file, is over 5 MB or has over 200 entries)')
+    .option('--legacy', 'write the one-file workspace export of TestPion 0.53 and earlier (<name>.testpion.json), for a TestPion that cannot read bundles; removed in a later release')
     .option('--json', 'print what was exported, replaced (replaced: [{kind, item, field, variable}]) and left out (notes) as JSON')
     .action((ref: string, o) =>
-      withWorkspace(ref, (store) => {
-        const bundle = store.exportBundle();
-        const output = o.output ?? workspaceExportFileName(store.workspace.name);
-        writeFileSync(output, JSON.stringify(bundle, null, 2));
-        const summary = exportSummary(bundle);
-        if (o.json) return printJson({ path: resolve(output), ...summary });
+      withWorkspace(ref, async (store) => {
+        if (o.format && o.format !== 'zip' && o.format !== 'json') throw new CliError(`--format is zip or json, not ${o.format}`, EXIT.CONFIG_ERROR);
+        if (o.legacy) {
+          const bundle = store.exportBundle();
+          const output = o.output ?? workspaceExportFileName(store.workspace.name);
+          writeFileSync(output, JSON.stringify(bundle, null, 2));
+          const summary = exportSummary(bundle);
+          if (o.json) return printJson({ path: resolve(output), legacy: true, ...summary });
+          console.log(green(`Exported to ${output}`));
+          const [included, ...rest] = summary.lines;
+          console.log(dim(included!));
+          for (const line of rest) console.log(yellow(line));
+          return;
+        }
+        const built = await exportWholeWorkspace(store, { format: o.format });
+        const output = o.output ?? built.fileName;
+        writeFileSync(output, built.bytes);
+        if (o.json) return printJson({ path: resolve(output), format: built.format, size: built.bytes.length, counts: built.counts, ...built.summary });
         console.log(green(`Exported to ${output}`));
-        const [included, ...rest] = summary.lines;
+        const [included, ...rest] = built.summary.lines;
         console.log(dim(included!));
         for (const line of rest) console.log(yellow(line));
       }),

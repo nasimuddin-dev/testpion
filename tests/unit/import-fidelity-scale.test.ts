@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { importAny } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 // Quality bar: a 10,000-request import (with the 0.50 mapping layers: unknown auth, Insomnia template tags and
 // chaining, Bruno bru.* → tp.* and .env) takes under 5 s. Measured, no sleeps.

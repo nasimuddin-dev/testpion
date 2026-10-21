@@ -6,7 +6,7 @@ import { deliverSave, type SaveResult } from './files';
 export interface WorkspaceExportResult extends SaveResult {
   cancelled?: boolean;
   name?: string;
-  /** `<workspace name>.testpion.json`. */
+  /** `<workspace name>.testpion.zip` (or `.json` for a small bundle of text). */
   fileName?: string;
   /** One line each: what is in it, the secrets replaced by {{variables}}, what was left out. */
   lines?: string[];
@@ -15,13 +15,13 @@ export interface WorkspaceExportResult extends SaveResult {
 }
 
 /**
- * Export a workspace to one `.testpion.json` file (the desktop app asks where; a browser downloads it) and say what was
+ * Export a workspace as a bundle, `.testpion.zip` or `.testpion.json` (`legacy`: the one-file export of earlier versions; the desktop app asks where, a browser downloads it) and say what was
  * done: what it holds, which secrets were replaced by {{variables}} and what was left out. Every Export workspace entry
  * (the workspace menu, the app menu, the Collections menu, the Export dialog) goes through here, so they all say the
  * same. Resolves to whether it was exported (false when the save dialog was cancelled); errors are thrown.
  */
-export async function exportWorkspace(ref?: string): Promise<boolean> {
-  const r = await call<WorkspaceExportResult>('ws.export', ref ? { ref } : {});
+export async function exportWorkspace(ref?: string, opts: { legacy?: boolean } = {}): Promise<boolean> {
+  const r = await call<WorkspaceExportResult>('ws.export', { ...(ref ? { ref } : {}), ...(opts.legacy ? { legacy: true } : {}) });
   if (r.cancelled || !deliverSave(r)) return false;
   const where = r.path ? ` to ${r.path}` : '';
   const lines = r.lines ?? [];

@@ -10,7 +10,7 @@ import type { Collection } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { getProposal, saveProposal, type Proposal } from './proposal.js';
 import { aiTask } from './tasks/registry.js';
-import { diffFlowSteps } from './flow-diff.js';
+import { diffFlowSteps } from './flow-step-review.js';
 import { verifyItems, type StoredResponse, type VerifyContext } from './verify.js';
 
 export interface ReverifyOptions {

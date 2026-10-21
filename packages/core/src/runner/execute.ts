@@ -1,6 +1,5 @@
 import type { HttpRequestSpec } from '../model/types.js';
 import { pathToFileURL } from 'node:url';
-import { createHash } from 'node:crypto';
 import type {
   AgentTest,
   AuthConfig,
@@ -52,10 +51,11 @@ import { query, tryParseJson } from '../util/jsonpath.js';
 import { sleep, withTimeout } from '../util/concurrency.js';
 import { applyCookieJarOps, type CookieJar } from '../cookies/cookie-jar.js';
 import { realtimeModeFor, runRealtimeExchange } from '../protocols/realtime.js';
-import { runCondition, runLog, runScriptStep, runSubFlow, type StepResponse } from './flow-blocks.js';
+import { runCondition, runLog, runScriptStep, runSubFlow, type RunSubflow, type StepResponse } from './flow-blocks.js';
 import { runAssert, runSet } from './flow-control.js';
 import type { PinnedResponse } from './debug-hooks.js';
 import { assertProductionStep, isDataChangingMethod, isGraphQLMutation, isGrpcReadMethod, type ProductionGate } from '../net/production-guard.js';
+import { sha256Hex } from '../util/hash.js';
 
 export interface ExecServices {
   /** Source of a workspace script package (tp.require), when there is one. */
@@ -90,6 +90,8 @@ export interface ExecServices {
   workspaceRoot?: string;
   /** The flow files being run, outermost first (sub-flows: a cycle or more than five levels is refused). */
   flowStack?: string[];
+  /** Runs a nested flow as a run of its own: the runner lends itself (runTests sets it), so sub-flow steps need not import the runner. */
+  runSubflow?: RunSubflow;
   /** A step's pinned response (the flow designer's pins, set by runTests' `pins`): the step is answered with it, the API is not called. */
   pinned?: (testId: string) => PinnedResponse | undefined;
   /** A production environment's gate: data-changing steps run only with consent (net/production-guard.ts). */
@@ -121,7 +123,7 @@ function summarize(v: unknown, n = OUTPUT_SUMMARY_CHARS): string {
 }
 
 function sha(s: string): string {
-  return createHash('sha256').update(s).digest('hex').slice(0, 12);
+  return sha256Hex(s).slice(0, 12);
 }
 
 /** What a step does to the API it calls, for the production guard: whether it may change data, and how to name it. */

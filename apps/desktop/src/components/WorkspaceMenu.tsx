@@ -3,7 +3,7 @@ import { runMenuCommand } from '../menu-commands';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
 import { promptText, toastError, useApp } from '../store';
-import { hasNativeDialogs, pickTextFile } from '../lib/files';
+import { hasNativeDialogs, pickBinaryFile } from '../lib/files';
 import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
 import { exportWorkspace as exportWorkspaceFile, toastWorkspaceImported } from '../lib/workspace-export';
 import { toastSpecKeptBoth } from '../lib/spec-import';
@@ -82,20 +82,20 @@ export function WorkspaceMenu() {
     }
   };
   const importFile = () => {
-    // a workspace export opens as a new workspace; Postman / Insomnia / Bruno / OpenAPI / HAR / .env files are added to this one
+    // a workspace export (a bundle) opens as a new workspace; Postman / Insomnia / Bruno / OpenAPI / HAR / .env files are added to this one
     if (hasNativeDialogs()) {
       let r: ImportResult = null;
       return void act(async () => (r = await call<ImportResult>('ws.importPick'))).then(() => imported(r));
     }
     // browser / cloud: pick the file in the page
-    void pickTextFile(IMPORT_FILE_ACCEPT).then(async (f) => {
+    void pickBinaryFile(`${IMPORT_FILE_ACCEPT},.zip`).then(async (f) => {
       if (!f) return;
       let r: ImportResult = null;
-      await act(async () => (r = await call<ImportResult>('ws.importFile', { text: f.text, fileName: f.name })));
+      await act(async () => (r = await call<ImportResult>('ws.importFile', { base64: f.base64, fileName: f.name })));
       imported(r);
     });
   };
-  /** Export a workspace to one .testpion.json file (asks where; in the browser it downloads); the message says what was replaced and left out. */
+  /** Export a workspace as a bundle, .testpion.zip or .testpion.json (asks where; in the browser it downloads); the message says what was replaced and left out. */
   const exportWorkspace = (w: { name: string; path: string }) => void exportWorkspaceFile(w.path).catch(toastError);
   const rowMenu = (w: WorkspaceInfo): MenuItem[] => [
     { label: isCurrent(w) ? 'Open (current)' : 'Open', icon: <Check size={14} />, disabled: isCurrent(w), onSelect: () => switchTo(w) },

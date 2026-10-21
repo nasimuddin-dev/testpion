@@ -17,3 +17,5 @@ export { adapter as bundleAdapter, bundleKindOf, normalizeId as normalizeBundleI
 export { everythingRefs, parseSelector, sectionRefs, uniqueRefs } from './selection.js';
 export { bundleRefOfItemRef } from '../kinds/transfer-refs.js';
 export type { BundleRef } from './types.js';
+export { exportWholeWorkspace, importBundleAsWorkspace } from './whole-workspace.js';
+export type { NewWorkspaceFromBundle, WorkspaceExport, WorkspaceExportSummary } from './whole-workspace.js';

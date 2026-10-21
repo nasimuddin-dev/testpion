@@ -1,12 +1,12 @@
 /**
  * The flow blocks beyond requests: conditions (`if:` on any step, `type: condition` with true/false branches), loops
  * (`repeat: N`, `forEach:` a list or a dataset), script steps, sub-flows (`type: flow`), log steps and a file's
- * `output:`. The runner (runner.ts) asks here whether a step runs and runs it through executeStep; execute.ts runs
- * the blocks' own types with the functions below. A file runs the same in the app, the CLI, CI, monitors and MCP.
+ * `output:`. The runner (runner.ts) asks here whether a step runs and runs it through executeStep (execute-step.ts); execute.ts
+ * runs the blocks' own types with the functions below. A file runs the same in the app, the CLI, CI, monitors and MCP.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
-import type { CheckResult, ConditionTest, FlowTest, LogTest, ScriptTest, TestCase, TestResult, TestStatus } from '../model/types.js';
+import type { CheckResult, ConditionTest, FlowTest, LogTest, RunSummary, ScriptTest, TestCase, TestResult, TestStatus } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { VariableScope } from '../vars/variables.js';
 import type { SpanHandle, Tracer } from '../trace/tracer.js';
@@ -14,12 +14,9 @@ import type { CheckContext } from '../eval/checks.js';
 import { evaluateExpression, runScript, type ScriptInput, type ScriptRequestSender } from '../scripts/sandbox.js';
 import { applyScriptOutput, scriptScopes } from '../scripts/bridge.js';
 import { parseYaml } from '../util/lazy-yaml.js';
-import { readDataset } from './datasets.js';
-import { dbKindOf } from './db-datasets.js';
-import { loadTestsFromFile, MAX_ITERATIONS } from './loader.js';
-import { executeTest, type ExecServices, type ExecutionOutcome } from './execute.js';
-import { runTests } from './runner.js';
-import { executeUntil } from './flow-control.js';
+import { loadTestsFromFile } from './loader.js';
+import type { ExecServices, ExecutionOutcome } from './execute.js';
+import type { RunOptions } from './runner.js';
 
 /** How deep sub-flows may nest (a flow running a flow running a flow …). */
 export const MAX_FLOW_DEPTH = 5;
@@ -33,6 +30,12 @@ export interface StepResponse {
   body?: unknown;
   text?: string;
 }
+
+/**
+ * Runs a nested flow as a run of its own: the runner (runner.ts `runTests`) lends itself to the steps through
+ * `ExecServices.runSubflow`, so a sub-flow step does not import the runner it is run by (that was the engine's last import cycle).
+ */
+export type RunSubflow = (opts: RunOptions) => Promise<RunSummary>;
 
 export type BlockRunner = Promise<{ ctx: CheckContext; partial: Partial<ExecutionOutcome>; metadata?: Record<string, unknown>; checks?: CheckResult[] }>;
 
@@ -160,7 +163,8 @@ export async function runSubFlow(test: FlowTest, scope: VariableScope, svc: Exec
   const before = vars.scopeValues('runtime');
   const steps: Array<{ name: string; status: TestStatus; durationMs: number; error?: string }> = [];
   const s = span.child(`flow ${shortName(target)}`, 'internal', { input: svc.redactor.redact(inputs) });
-  const summary = await runTests({
+  if (!svc.runSubflow) throw new ApsError('ConfigurationError', 'A sub-flow step needs the runner: this run was started without one (ExecServices.runSubflow)');
+  const summary = await svc.runSubflow({
     name: `sub-flow ${shortName(target)}`,
     tests: loadTestsFromFile(target),
     services: { ...svc, vars, flowStack: [...chain, target], pinned: undefined },
@@ -227,112 +231,10 @@ function stepOf(r: TestResult) {
 
 /* ------------------------------------------------------------------ loops */
 
-/** The rows of a loop: `repeat: N` gives N empty rows, `forEach:` the list or the dataset's records (streamed). */
-async function* loopRows(test: TestCase): AsyncGenerator<unknown> {
-  if (test.repeat !== undefined) {
-    for (let i = 0; i < test.repeat; i++) yield undefined;
-    return;
-  }
-  const fe = test.forEach;
-  if (Array.isArray(fe)) {
-    yield* fe;
-    return;
-  }
-  if (fe && typeof fe === 'object') {
-    const path = dbKindOf(fe.dataset) ? fe.dataset : test.file ? subFlowPath(fe.dataset, test.file) : resolve(fe.dataset);
-    if (!dbKindOf(path) && !existsSync(path)) throw new ApsError('ConfigurationError', `No such dataset: ${fe.dataset}`);
-    yield* readDataset({ path, ...(fe.limit !== undefined ? { limit: fe.limit } : {}) });
-  }
-}
-
 /** A label for the loop of a step: "× 3", "× each row of datasets/users.csv" (undefined without a loop). */
 export function loopLabel(t: Pick<TestCase, 'repeat' | 'forEach'>): string | undefined {
   if (t.repeat !== undefined) return `× ${t.repeat}`;
   if (Array.isArray(t.forEach)) return `× ${t.forEach.length}`;
   if (t.forEach && typeof t.forEach === 'object') return `× each row of ${t.forEach.dataset}`;
   return undefined;
-}
-
-/**
- * Run a step: once, or once per iteration of its `repeat:` / `forEach:` with the row's fields, `$index` and `$item` as
- * its variables. Iterations run in order; the run's cancel stops between them. What the last iteration extracts
- * flows on; the result lists each iteration (metadata.iterationResults) and says how many passed.
- */
-export async function executeStep(test: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; prev?: StepResponse }): Promise<ExecutionOutcome> {
-  if (test.until) return executeUntil(test, svc, opts);
-  if (test.repeat === undefined && test.forEach === undefined) return executeTest(test, svc, opts);
-  const iterations: Array<{ index: number; status: TestStatus; durationMs: number; error?: string; failedChecks?: string[] }> = [];
-  const failing: CheckResult[] = [];
-  let last: ExecutionOutcome | undefined;
-  let firstError: ExecutionOutcome['error'];
-  let latency = 0;
-  const tokens = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-  let cost = 0;
-  let tooMany = false;
-  let index = 0;
-  try {
-    for await (const row of loopRows(test)) {
-      if (index >= MAX_ITERATIONS) {
-        tooMany = true;
-        break;
-      }
-      if (opts.signal?.aborted) throw new ApsError('CancelledError', 'Run cancelled');
-      const fields = row && typeof row === 'object' && !Array.isArray(row) ? (row as Record<string, unknown>) : {};
-      const t0 = performance.now();
-      const o = await executeTest({ ...test, variables: { ...(test.variables ?? {}), ...fields, $index: index, $item: row ?? index } }, svc, opts);
-      const bad = o.checks.filter((c) => !c.passed);
-      iterations.push({
-        index,
-        status: o.status,
-        durationMs: Math.round(performance.now() - t0),
-        ...(o.error ? { error: o.error.message } : {}),
-        ...(bad.length ? { failedChecks: bad.slice(0, 5).map((c) => `${c.name}: ${c.message}`) } : {}),
-      });
-      for (const c of bad) if (failing.length < 200) failing.push({ ...c, name: `[#${index}] ${c.name}` });
-      firstError ??= o.error;
-      latency += o.latencyMs ?? 0;
-      if (o.tokens) {
-        tokens.inputTokens += o.tokens.inputTokens;
-        tokens.outputTokens += o.tokens.outputTokens;
-        tokens.totalTokens += o.tokens.totalTokens;
-      }
-      cost += o.costUsd ?? 0;
-      last = o;
-      index++;
-    }
-  } catch (e) {
-    if (e instanceof ApsError && e.kind === 'CancelledError') throw e;
-    if (opts.signal?.aborted) throw e;
-    const err =
-      e instanceof ApsError
-        ? e.toJSON()
-        : { kind: 'ConfigurationError' as const, message: (e as Error).message, what: (e as Error).message, why: 'The rows of the loop could not be read.', suggestions: [] };
-    return { status: 'error', checks: [], error: err, metadata: { iterations: iterations.length, iterationResults: iterations } };
-  }
-  const n = iterations.length;
-  if (!n) return { status: 'skipped', checks: [], metadata: { reason: test.repeat !== undefined ? 'repeat: 0 runs the step no times' : 'forEach: has no rows', iterations: 0 } };
-  const passed = iterations.filter((i) => i.status === 'passed').length;
-  const errors = iterations.filter((i) => i.status === 'error').length;
-  const failed = iterations.filter((i) => i.status === 'failed').length;
-  const summary: CheckResult = {
-    type: 'iterations',
-    name: 'iterations',
-    passed: !errors && !failed && !tooMany,
-    source: 'deterministic',
-    message: `${passed} of ${n} iterations passed${tooMany ? `; the loop stopped at ${MAX_ITERATIONS} iterations (the most a step runs)` : ''}`,
-  };
-  const status: TestStatus = errors ? 'error' : failed || tooMany ? 'failed' : passed ? 'passed' : 'skipped';
-  return {
-    status,
-    checks: [...(failing.length ? failing : (last?.checks ?? [])), summary],
-    error: errors ? firstError : undefined,
-    latencyMs: Math.round(latency),
-    tokens: tokens.totalTokens ? tokens : undefined,
-    costUsd: cost || undefined,
-    model: last?.model,
-    output: last?.output,
-    input: last?.input,
-    metadata: { ...(last?.metadata ?? {}), iterations: n, iterationResults: iterations.slice(0, 1000) },
-    context: last?.context,
-  };
 }

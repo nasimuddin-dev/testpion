@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { ValidateFunction } from 'ajv';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
@@ -6,6 +5,7 @@ import { registerCheck, type CheckContext } from '../eval/checks.js';
 import type { CheckConfig, CheckResult } from '../model/types.js';
 import { compileSchema } from '../util/json-schema.js';
 import { BoundedMap } from '../util/collections.js';
+import { sha1Hex } from '../util/hash.js';
 
 /**
  * Contract testing against an OpenAPI 3.x (or Swagger 2.0) document: the response of a request must
@@ -26,7 +26,7 @@ const docs = new BoundedMap<string, OpenApiDoc>(20);
 
 /** Parse an OpenAPI / Swagger document (YAML or JSON), cached by content. */
 export function loadOpenApi(text: string): OpenApiDoc {
-  const key = createHash('sha1').update(text).digest('hex');
+  const key = sha1Hex(text);
   let d = docs.get(key);
   if (!d) {
     let parsed: unknown;
@@ -128,7 +128,7 @@ function toJsonSchema(s: unknown): unknown {
 /** What is wrong with a value against a schema of the document (empty when it matches); for the linter's example checks. */
 export function schemaProblems(doc: OpenApiDoc, schema: unknown, value: unknown): string[] {
   // the schema's $refs resolve against the document's sections, so they are part of the key
-  const key = 'v:' + createHash('sha1').update(JSON.stringify([schema, doc.components ?? null, doc.definitions ?? null])).digest('hex');
+  const key = 'v:' + sha1Hex(JSON.stringify([schema, doc.components ?? null, doc.definitions ?? null]));
   const v = validator(doc, schema, key);
   if (v(value)) return [];
   return (v.errors ?? []).slice(0, 5).map((e) => `${e.instancePath || '(the value)'} ${e.message ?? 'is not valid'}`.trim());
@@ -189,7 +189,7 @@ export function validateAgainstOpenApi(
     }
   }
   const pointer = `${op.path}|${op.method}|${code}|${ct}`;
-  const v = validator(doc, schema, `${createHash('sha1').update(JSON.stringify(doc.info ?? {}) + JSON.stringify(schema)).digest('hex')}|${pointer}`);
+  const v = validator(doc, schema, `${sha1Hex(JSON.stringify(doc.info ?? {}) + JSON.stringify(schema))}|${pointer}`);
   const ok = v(data) as boolean;
   const errors = ok ? [] : (v.errors ?? []).map((e) => `${e.instancePath || '$'} ${e.message}${e.params && 'additionalProperty' in e.params ? ` (${String(e.params.additionalProperty)})` : ''}${e.params && 'allowedValues' in e.params ? `: ${(e.params.allowedValues as unknown[]).join(', ')}` : ''}`);
   return {

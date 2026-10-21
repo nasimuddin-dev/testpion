@@ -20,7 +20,7 @@ The engineering rules, in particular:
 packages/core        the engine, host-agnostic (Node): the same code runs in the CLI, the desktop app and a server later
   model/             the types of everything saved (types.ts) and the schema version
   storage/           workspaces on disk: collections, environments, tests, trash, git files, secrets, trust, watcher; the
-                     workspace export (workspace-bundle, bundle-secrets: files capped, secrets replaced) and unique node ids
+                     the older whole-workspace file (workspace-bundle: read for import, no longer written by default; bundle-secrets: secrets replaced) and unique node ids
   protocols/         http, graphql, grpc, websocket, socketio, mqtt, kafka, mcp: one client each, nothing shared between them
   runner/            test files, suites, the run loop, flows (edits, blocks, data runs, env matrices, webhooks, timelines), results, baselines, CI config
   eval/, load/       checks and evaluators, load tests

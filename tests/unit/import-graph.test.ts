@@ -5,7 +5,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 /**
  * The import graph of the engine and the apps, kept by a test: modules that import each other (a cycle) load in an order that
  * decides behaviour and cannot be loaded lazily. One 60-file cycle (runner, AI tasks, RAG metrics, import, OpenAPI) was cut at a
- * single edge (eval/rag/judge.ts -> ai/tasks/run.ts); what is left are small cycles, and none may grow or appear.
+ * single edge (eval/rag/judge.ts -> ai/tasks/run.ts), the small ones after it, and the last (the runner running a sub-flow) by
+ * lending the runner to the steps; none may appear.
  * Only value imports count (`import type` is erased).
  */
 const root = resolve(__dirname, '..', '..');
@@ -74,11 +75,8 @@ function cycles(dir: string): string[][] {
 }
 
 describe('import graph', () => {
-  it('the engine (packages/core) has one import cycle left: the runner running a sub-flow (flow-blocks -> runner -> flow-blocks)', () => {
-    const found = cycles('packages/core/src');
-    // a sub-flow step runs the whole runner again: execute.ts, flow-control.ts, flow-blocks.ts and runner.ts recurse by nature.
-    // Lower this when it is cut; never add another.
-    expect(found.map((c) => c.join(', '))).toEqual([['runner/execute.ts', 'runner/flow-blocks.ts', 'runner/flow-control.ts', 'runner/runner.ts'].join(', ')]);
+  it('the engine (packages/core) has no import cycle: a sub-flow step is handed the runner (ExecServices.runSubflow), it does not import it', () => {
+    expect(cycles('packages/core/src').map((c) => c.join(', '))).toEqual([]);
   });
 
   it('the CLI, the shared package, the backend and the window have no import cycle', () => {

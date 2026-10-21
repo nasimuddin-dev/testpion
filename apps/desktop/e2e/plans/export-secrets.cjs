@@ -2,7 +2,8 @@
 // server's Authorization header, a request's bearer token and API-key header, a dataset with a database password) and
 // files in specs/, datasets/, mocks/ and protos/, plus one dataset over the 10 MB limit. Export from the workspace menu
 // (the save dialog answered by E2E_STUB_SAVE): the message says what was replaced and what was left out, the file is
-// `<name>.testpion.json`, holds none of the secrets, and carries the four folders' files.
+// a bundle (`<name>.testpion.zip` or `.json`, B-41i), holds none of the secrets, and carries the four folders' files
+// (the dataset over 10 MB travels by reference).
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
@@ -64,11 +65,9 @@ const steps = [
      const t = await __t.waitFor(() => toastText(/^Exported/), 15000); if (!t) return 'NO TOAST';
      const parts = [
        'saved: ' + t.includes(${JSON.stringify(OUT_NAME)}),
-       'included: ' + (/Included (\\d+ collections?, \\d+ environments?, \\d+ test files?) and (\\d+) files?/.exec(t)?.slice(1).join(' + ') ?? 'NO'),
+       'included: ' + (/Exported (\\d+) items?:/.exec(t)?.[1] ?? 'NO'),
        'replaced: ' + (/Replaced (\\d+) secrets?/.exec(t)?.[1] ?? '0'),
-       'mcp header: ' + /E2E secret server headers\\.Authorization → \\{\\{/.test(t),
-       'request token: ' + /Typed-in token auth\\.token → \\{\\{/.test(t),
-       'left out: ' + /datasets\\/huge\\.csv \\([\\d.]+ MB\\) was left out/.test(t),
+       'left out: ' + /Dataset datasets\\/huge\\.csv \\([\\d.]+ MB\\) travels by reference/.test(t),
        'secret in the message: ' + ${JSON.stringify(Object.values(SECRETS))}.some((v) => t.includes(v)),
      ];
      return parts.join(' | ');`,
@@ -76,24 +75,28 @@ const steps = [
   [
     'the-file-holds-no-secret-and-every-folder',
     `main: const { readFileSync } = require('node:fs');
-     const text = readFileSync(process.env.E2E_STUB_SAVE, 'utf8');
-     const b = JSON.parse(text);
+     const { readBundle } = require('@testpion/core');
+     const b = readBundle(readFileSync(process.env.E2E_STUB_SAVE));
+     const text = JSON.stringify(b.manifest) + [...b.entries.values()].map((e) => e.toString('latin1')).join('\\n');
      const leaked = ${JSON.stringify(Object.entries(SECRETS))}.filter(([, v]) => text.includes(v)).map(([k]) => k);
-     const paths = (b.files ?? []).map((f) => f.path);
-     const has = (p) => paths.includes(p);
-     const col = b.collections.find((c) => c.id === 'e2e-secrets');
-     const req = col?.items?.[0]?.request;
+     const items = b.manifest.items;
+     const has = (p) => items.some((i) => i.id === p && i.mode !== 'reference');
+     const colItem = items.find((i) => i.kind === 'collection' && i.id === 'e2e-secrets');
+     const req = colItem ? JSON.parse(b.entries.get(colItem.entry).toString('utf8')).items?.[0]?.request : undefined;
+     const where = b.manifest.requires.secrets.map((x) => x.where).join(' ; ');
      return [
-       'default name: ' + (global.__e2eLastSaveOptions?.defaultPath ?? 'NONE'),
-       'format: ' + b.format,
+       'default name: ' + (/^TestPion Examples\\.testpion\\.(zip|json)$/.test(global.__e2eLastSaveOptions?.defaultPath ?? '') ? 'ok' : (global.__e2eLastSaveOptions?.defaultPath ?? 'NONE')),
+       'format: ' + b.manifest.format,
        'leaked: ' + (leaked.join(',') || 'none'),
        'specs: ' + has('specs/petstore.json'),
        'datasets: ' + (has('datasets/intents.jsonl') && has('datasets/connections.csv')),
        'mocks: ' + has('mocks/weather.mcp-mock.yaml'),
        'protos: ' + has('protos/clinic.proto'),
-       'huge left out: ' + (!has('datasets/huge.csv') && (b.notes ?? []).some((n) => n.startsWith('datasets/huge.csv'))),
+       'huge by reference: ' + items.some((i) => i.id === 'datasets/huge.csv' && i.mode === 'reference'),
+       'mcp header listed: ' + /E2E secret server/.test(where),
+       'request token listed: ' + /Typed-in token/.test(where),
        'token now: ' + (req?.auth?.token ?? 'NONE'),
-       'replaced listed: ' + (b.replaced ?? []).length,
+       'replaced listed: ' + b.manifest.requires.secrets.length,
      ].join(' | ');`,
     false,
   ],
@@ -103,9 +106,9 @@ module.exports = withExpect(
   steps,
   {
     'export-from-the-workspace-menu':
-      /^saved: true \| included: \d+ collections, \d+ environments?, \d+ test files? \+ (?:[4-9]|[1-9]\d+) \| replaced: (?:[3-9]|[1-9]\d+) \| mcp header: true \| request token: true \| left out: true \| secret in the message: false$/,
+      /^saved: true \| included: (?:[89]|[1-9]\d+) \| replaced: (?:[3-9]|[1-9]\d+) \| left out: true \| secret in the message: false$/,
     'the-file-holds-no-secret-and-every-folder':
-      /^default name: TestPion Examples\.testpion\.json \| format: testpion-workspace \| leaked: none \| specs: true \| datasets: true \| mocks: true \| protos: true \| huge left out: true \| token now: \{\{\w+\}\} \| replaced listed: (?:[3-9]|[1-9]\d+)$/,
+      /^default name: ok \| format: testpion-bundle \| leaked: none \| specs: true \| datasets: true \| mocks: true \| protos: true \| huge by reference: true \| mcp header listed: true \| request token listed: true \| token now: \{\{\w+\}\} \| replaced listed: (?:[3-9]|[1-9]\d+)$/,
   },
   { prepare, env: (out) => ({ E2E_STUB_SAVE: join(out, OUT_NAME) }) },
 );

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  importAny,
   importDocument,
   detectFormat,
   ocFilesToBundle,
@@ -11,6 +10,7 @@ import {
   type CollectionFolder,
   type SavedHttpRequest,
 } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 // Import compatibility, release A: OpenCollection YAML, Bruno and Insomnia gaps, the Postman API, the dynamic variables.
 

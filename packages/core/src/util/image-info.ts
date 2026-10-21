@@ -1,3 +1,4 @@
+import { sha256Hex } from './hash.js';
 /**
  * Reading what an image is from its first bytes (no dependency): the type (by the content, never by the name or the
  * declared MIME), the size in pixels, and a copy of a JPEG / PNG without its metadata. Used before an image is sent to a
@@ -5,7 +6,6 @@
  * content is not the image it claims is refused, and the camera and location data of a photo (EXIF, XMP, ICC text) is
  * removed from the copy that is sent.
  */
-import { createHash } from 'node:crypto';
 
 export type ImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp';
 export const IMAGE_MIMES: readonly ImageMime[] = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp'];
@@ -127,7 +127,7 @@ export function prepareImage(raw: Uint8Array): PreparedImage | { refused: string
     stripped = s.length !== bytes.length;
     bytes = s;
   }
-  return { ...info, bytes, originalBytes: raw.byteLength, sha256: createHash('sha256').update(bytes).digest('hex'), stripped };
+  return { ...info, bytes, originalBytes: raw.byteLength, sha256: sha256Hex(bytes), stripped };
 }
 
 /** Tokens an image costs a vision model, by each provider family's published rule (estimates for the "what will be sent" preview and the cost). */

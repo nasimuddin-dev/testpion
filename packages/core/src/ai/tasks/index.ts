@@ -11,7 +11,7 @@ export * from '../item-context.js';
 export * from '../flow-from-collection.js';
 export * from '../spec-tests.js';
 export * from '../tidy-import.js';
-export * from '../flow-diff.js';
+export * from '../flow-step-review.js';
 export * from '../result-checks.js';
 export * from '../security-tests.js';
 export * from '../security-run.js';

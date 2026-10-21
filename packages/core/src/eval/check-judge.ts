@@ -1,8 +1,8 @@
 /** The older single-prompt judge of the `llm-judge` check and of the claim-by-claim RAG checks (the strict judged metrics use eval/rag/judge.ts). */
-import { createHash } from 'node:crypto';
 import type { CheckConfig, ModelRef } from '../model/types.js';
 import { tryParseJson } from '../util/jsonpath.js';
 import { asText, res, short, type CheckContext } from './check-registry.js';
+import { sha256Hex } from '../util/hash.js';
 
 /* ------------------------------------------------------------------ LLM as judge */
 
@@ -32,7 +32,7 @@ export async function askJudge(cfg: CheckConfig, ctx: CheckContext, prompt: stri
     model,
     temperature: jref.temperature ?? 0,
     promptVersion: JUDGE_PROMPT_VERSION,
-    configHash: createHash('sha256').update(JSON.stringify({ jref, criteria: key, v: JUDGE_PROMPT_VERSION })).digest('hex').slice(0, 12),
+    configHash: sha256Hex(JSON.stringify({ jref, criteria: key, v: JUDGE_PROMPT_VERSION })).slice(0, 12),
   };
   const span = ctx.services?.span?.child(`judge ${model}`, 'llm', { attributes: judge, input: prompt });
   try {

@@ -1,3 +1,4 @@
+import { isRecord } from '@testpion/shared';
 import { classifySecret, secretKeyFields } from '../security/secrets.js';
 
 /**
@@ -7,7 +8,6 @@ import { classifySecret, secretKeyFields } from '../security/secrets.js';
  */
 
 type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => !!v && typeof v === 'object' && !Array.isArray(v);
 const HIDDEN = '•••• (hidden)';
 
 const fields = secretKeyFields();
@@ -21,10 +21,10 @@ const shown = (key: string, value: unknown): string => {
 function pairs(v: unknown): string {
   if (Array.isArray(v))
     return v
-      .filter(isRec)
+      .filter(isRecord)
       .map((p) => `${p.enabled === false ? '// ' : ''}${String(p.key ?? '')}: ${shown(String(p.key ?? ''), p.value)}`)
       .join('\n');
-  if (isRec(v))
+  if (isRecord(v))
     return Object.entries(v)
       .map(([k, x]) => `${k}: ${shown(k, x)}`)
       .join('\n');

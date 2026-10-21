@@ -35,7 +35,6 @@ import {
   sanitizeFileName,
   toCsv,
   uniqueFileName,
-  zipFiles,
 } from '../../packages/shared/src/index.js';
 
 // The builders of "Download" (the down arrow on every output): the same bytes wherever the output is saved.
@@ -245,6 +244,11 @@ describe('documents', () => {
     expect(t.split('\n')[1]!.split('\t')).toEqual(['.api.test', 'TRUE', '/', 'TRUE', '0', 'sid', 'x']);
   });
 });
+
+const zipFiles = (files: ReadonlyArray<{ name: string; data: Uint8Array | string; date?: Date }>): Uint8Array => {
+  const w = createZipWriter();
+  return Buffer.concat([...files.flatMap((f) => w.add(f.name, f.data, f.date)), w.end()]);
+};
 
 describe('ZIP', () => {
   it('stores the files with their names, sizes and CRC-32 (readable by any unzip)', () => {

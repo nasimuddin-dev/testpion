@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { importAny, runScript, type CollectionFolder, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { runScript, type CollectionFolder, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 import { jsonPathAccessor, tagArgs } from '../../packages/core/src/import/insomnia-tags.js';
 
 // IMP-FIX-2: Insomnia v5 request scripts are read; plain JavaScript stays runnable; template tags map to dynamic

@@ -3,7 +3,7 @@ import type { FindingSeverity, ImportDocument, ImportFinding } from './model.js'
 
 /**
  * The compatibility report of an import: per item "imported fully", "imported with changes" or "not imported" and why.
- * It replaces the loose list of notes (which `importAny` still returns, unchanged); it is what the preview and the
+ * It replaces the loose list of notes (which the older import result still carries, unchanged); it is what the preview and the
  * result dialog show, `testpion import --json` prints and MCP returns, and it is kept with the import so it can be
  * opened again.
  */

@@ -1,0 +1,1376 @@
+{
+  "identical": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "flow Orders",
+        "details": [
+          "formatting or comments"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "formatting only": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "flow Orders",
+        "details": [
+          "formatting or comments"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "layout only": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "flow Orders",
+        "details": [
+          "rearranged"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "body and extract changed, a check added": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "Orders ▸ Create order",
+        "details": [
+          "body",
+          "extract",
+          "checks (1 → 2)"
+        ],
+        "itemId": "create",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "body",
+            "before": "{\"item\":\"a\"}",
+            "after": "{\"item\":\"b\"}"
+          },
+          {
+            "field": "extract",
+            "added": [
+              "total = $.total"
+            ]
+          },
+          {
+            "field": "checks",
+            "added": [
+              "exists $.id"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "url and header changed": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "Orders ▸ Create order",
+        "details": [
+          "request line",
+          "headers"
+        ],
+        "itemId": "create",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "request",
+            "before": "POST {{baseUrl}}/orders",
+            "after": "POST {{baseUrl}}/v2/orders"
+          }
+        ]
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "step renamed by id, same content": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "renamed",
+        "title": "Orders ▸ Fetch order",
+        "details": [
+          "was get"
+        ],
+        "itemId": "fetch",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "fetch",
+        "name": "Fetch order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "name",
+            "before": "Get order",
+            "after": "Fetch order"
+          }
+        ]
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "dependsOn",
+            "added": [
+              "fetch"
+            ],
+            "removed": [
+              "get"
+            ]
+          }
+        ]
+      }
+    ],
+    "aiSummary": "2 steps changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": null
+  },
+  "step renamed by name only": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "renamed",
+        "title": "Orders ▸ Read order",
+        "details": [
+          "renamed from \"Get order\""
+        ],
+        "itemId": "get",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Read order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "name",
+            "before": "Get order",
+            "after": "Read order"
+          }
+        ]
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Read order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "step id changed, other content changed too": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "added",
+        "title": "Orders ▸ Get order",
+        "details": [
+          "step"
+        ],
+        "itemId": "read",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "removed",
+        "title": "Orders ▸ Get order",
+        "details": [
+          "step"
+        ],
+        "itemId": "get",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "read",
+        "name": "Get order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "request",
+            "before": "GET {{baseUrl}}/orders/{{orderId}}",
+            "after": "GET {{baseUrl}}/orders/{{orderId}}/full"
+          }
+        ]
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "dependsOn",
+            "added": [
+              "read"
+            ],
+            "removed": [
+              "get"
+            ]
+          }
+        ]
+      }
+    ],
+    "aiSummary": "2 steps changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": null
+  },
+  "step added and one removed": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "added",
+        "title": "Orders ▸ List orders",
+        "details": [
+          "step"
+        ],
+        "itemId": "list",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "removed",
+        "title": "Orders ▸ Delete order",
+        "details": [
+          "step"
+        ],
+        "itemId": "del",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "list",
+        "name": "List orders",
+        "status": "added",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "removed",
+        "changes": []
+      }
+    ],
+    "aiSummary": "1 added, 1 removed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "steps reordered": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "flow Orders",
+        "details": [
+          "steps reordered",
+          "rearranged"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "order",
+            "before": "2",
+            "after": "1"
+          }
+        ]
+      },
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "order",
+            "before": "1",
+            "after": "2"
+          }
+        ]
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "2 steps changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "connections changed": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "Orders ▸ connections",
+        "details": [
+          "added create → del",
+          "removed create → get"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "dependsOn",
+            "removed": [
+              "create"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "dependsOn",
+            "added": [
+              "create"
+            ]
+          }
+        ]
+      }
+    ],
+    "aiSummary": "2 steps changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "scripts, if, forEach and a setting": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "Orders ▸ Delete order",
+        "details": [
+          "if",
+          "forEach",
+          "scripts",
+          "retries"
+        ],
+        "itemId": "del",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "scripts",
+            "before": "the saved scripts",
+            "after": "different scripts"
+          },
+          {
+            "field": "other",
+            "added": [
+              "if",
+              "forEach",
+              "retries"
+            ]
+          }
+        ]
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "steps without ids (named, then positional)": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "f.yaml ▸ step-2",
+        "details": [
+          "request line"
+        ],
+        "itemId": "step-2",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "added",
+        "title": "f.yaml ▸ step-4",
+        "details": [
+          "step"
+        ],
+        "itemId": "step-4",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "First call",
+        "name": "First call",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "step-2",
+        "name": "step-2",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "request",
+            "before": "GET /b",
+            "after": "GET /b2"
+          }
+        ]
+      },
+      {
+        "id": "First call",
+        "name": "First call",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "step-4",
+        "name": "step-4",
+        "status": "added",
+        "changes": []
+      }
+    ],
+    "aiSummary": "1 step changed, 1 added",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "first-call\nstep-2\nfirst-call#3",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "renamed by endpoint, numeric ids in the path": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "added",
+        "title": "f.yaml ▸ Two",
+        "details": [
+          "step"
+        ],
+        "itemId": "b",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "removed",
+        "title": "f.yaml ▸ One",
+        "details": [
+          "step"
+        ],
+        "itemId": "a",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "b",
+        "name": "Two",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "name",
+            "before": "One",
+            "after": "Two"
+          },
+          {
+            "field": "request",
+            "before": "GET {{baseUrl}}/users/42/orders?x=1",
+            "after": "GET https://api.test/users/7/orders"
+          }
+        ]
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "a",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "graphql and mcp steps": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "f.yaml ▸ q",
+        "details": [
+          "body"
+        ],
+        "itemId": "q",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "f.yaml ▸ m",
+        "details": [
+          "request line"
+        ],
+        "itemId": "m",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "q",
+        "name": "q",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "m",
+        "name": "m",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "q\nm",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "request: block": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "f.yaml ▸ r",
+        "details": [
+          "request line",
+          "headers"
+        ],
+        "itemId": "r",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "r",
+        "name": "r",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "request",
+            "before": "GET /a",
+            "after": "GET /b"
+          }
+        ]
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "r",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "a file added": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "added",
+        "title": "flow Orders",
+        "details": [
+          "3 steps"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "added",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "added",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "added",
+        "changes": []
+      }
+    ],
+    "aiSummary": "3 added",
+    "partsA": null,
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "a file removed": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "removed",
+        "title": "flow Orders",
+        "details": [
+          "3 steps"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "removed",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "removed",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "removed",
+        "changes": []
+      }
+    ],
+    "aiSummary": "3 removed",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": null
+  },
+  "flow renamed, defaults and expose changed": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "flow Order flow",
+        "details": [
+          "renamed from Orders",
+          "description",
+          "defaults",
+          "expose (MCP tool)"
+        ]
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "Orders",
+      "Description": "the order lifecycle",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "create\nget ← create\ndel ← get",
+      "Layout": "create:\n  - 0\n  - 0\nget:\n  - 200\n  - 0"
+    },
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "a single-step document": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "f.yaml ▸ step-1",
+        "details": [
+          "request line"
+        ],
+        "itemId": "step-1",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "step-1",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "a bare list of steps": {
+    "git": null,
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "a",
+        "name": "a",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "request",
+            "before": "GET /a",
+            "after": "GET /b"
+          }
+        ]
+      },
+      {
+        "id": "c",
+        "name": "c",
+        "status": "added",
+        "changes": []
+      }
+    ],
+    "aiSummary": "1 step changed, 1 added",
+    "partsA": null,
+    "partsB": null
+  },
+  "not a flow": {
+    "git": null,
+    "gitJson": null,
+    "ai": [],
+    "aiSummary": "the same steps as the draft",
+    "partsA": null,
+    "partsB": null
+  },
+  "broken yaml": {
+    "git": null,
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "create",
+        "name": "Create order",
+        "status": "added",
+        "changes": []
+      },
+      {
+        "id": "get",
+        "name": "Get order",
+        "status": "added",
+        "changes": []
+      },
+      {
+        "id": "del",
+        "name": "Delete order",
+        "status": "added",
+        "changes": []
+      }
+    ],
+    "aiSummary": "3 added",
+    "partsA": null,
+    "partsB": {
+      "Name": "Get order",
+      "Depends on": "- create",
+      "Request line": "method: GET\nurl: \"{{baseUrl}}/orders/{{orderId}}\"",
+      "Checks": "- type: status\n  expected: 200"
+    }
+  },
+  "duplicate ids": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "changed",
+        "title": "f.yaml ▸ a#2",
+        "details": [
+          "request line"
+        ],
+        "itemId": "a#2",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "a",
+        "name": "a",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "a",
+        "name": "a",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "request",
+            "before": "GET /2",
+            "after": "GET /3"
+          }
+        ]
+      }
+    ],
+    "aiSummary": "1 step changed",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "a\na#2",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "same endpoint twice, matched in order": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "renamed",
+        "title": "f.yaml ▸ y2",
+        "details": [
+          "was x1"
+        ],
+        "itemId": "y2",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "renamed",
+        "title": "f.yaml ▸ y1",
+        "details": [
+          "was x2"
+        ],
+        "itemId": "y1",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "y1",
+        "name": "y1",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "extract",
+            "added": [
+              "b = $.b"
+            ],
+            "removed": [
+              "a = $.a"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "y2",
+        "name": "y2",
+        "status": "changed",
+        "changes": [
+          {
+            "field": "extract",
+            "added": [
+              "a = $.a"
+            ],
+            "removed": [
+              "b = $.b"
+            ]
+          }
+        ]
+      }
+    ],
+    "aiSummary": "2 steps changed",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "x1\nx2",
+      "Layout": ""
+    },
+    "partsB": null
+  },
+  "identical bodies swapped between removed and added": {
+    "git": [
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "renamed",
+        "title": "f.yaml ▸ b1",
+        "details": [
+          "was a1"
+        ],
+        "itemId": "b1",
+        "itemKind": "step"
+      },
+      {
+        "file": "tests/f.yaml",
+        "kind": "test",
+        "change": "renamed",
+        "title": "f.yaml ▸ b2",
+        "details": [
+          "was a2"
+        ],
+        "itemId": "b2",
+        "itemKind": "step"
+      }
+    ],
+    "gitJson": null,
+    "ai": [
+      {
+        "id": "b1",
+        "name": "b1",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "b2",
+        "name": "b2",
+        "status": "same",
+        "changes": []
+      },
+      {
+        "id": "keep",
+        "name": "keep",
+        "status": "same",
+        "changes": []
+      }
+    ],
+    "aiSummary": "the same steps as the draft",
+    "partsA": {
+      "Name": "",
+      "Description": "",
+      "Defaults": "",
+      "Expose (MCP tool)": "",
+      "Output": "",
+      "Steps": "a1\na2\nkeep",
+      "Layout": ""
+    },
+    "partsB": null
+  }
+}

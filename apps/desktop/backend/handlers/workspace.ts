@@ -1,6 +1,6 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
 import { describeVariables } from '../var-descriptions.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import {
   ApsError,
@@ -12,8 +12,14 @@ import {
   environmentMatrix,
   WorkspaceStore,
   WORKSPACE_FORMATS,
+  decodeBase64,
   exportSummary,
+  exportWholeWorkspace,
+  importBundleAsWorkspace,
   importWorkspaceBundle,
+  looksLikeBundle,
+  readBundle,
+  TRANSFER_LIMITS,
   workspaceExportFileName,
   exportPostmanEnvironment,
   DYNAMIC_VARIABLES,
@@ -48,6 +54,29 @@ import { takeOpenLinks } from '../open-links.js';
 import { saveText } from './save-text.js';
 
 export function workspaceHandlers(be: Backend): Handlers {
+  /** A new workspace was made from an export: open it and say what it skipped and which values are needed. */
+  const openedFrom = (r: { store: { root: string; close(): void }; notes: string[]; valuesNeeded: string[]; files: number }) => {
+    const root = r.store.root;
+    r.store.close();
+    be.openStore(root);
+    return { kind: 'workspace', name: be.ws.workspace.name, notes: r.notes, valuesNeeded: r.valuesNeeded, files: r.files };
+  };
+  /** The file Import… picked: a workspace export opens as a workspace, anything else is imported into the open one. */
+  const importFileBytes = (bytes: Buffer, fileName: string | undefined, keepPm: boolean | undefined) => {
+    const text = bytes.toString('utf8');
+    let data: { format?: string } | undefined;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      /* YAML (OpenAPI), a zip or not JSON: decided below */
+    }
+    // the one-file export of earlier versions, by its content (the name may be .testpion.json, or .apsworkspace.json from before 0.50)
+    if (data?.format && WORKSPACE_FORMATS.has(data.format)) return openedFrom(importWorkspaceBundle(be.manager, data as unknown as WorkspaceBundle));
+    // a bundle (a zip, or its JSON form): a whole workspace opens as a new one
+    if (looksLikeBundle(bytes)) return openedFrom(importBundleAsWorkspace(be.manager, readBundle(bytes)));
+    const r = be.handlers['col.import']!({ text, fileName, keepPm }) as { format: string; collection?: string; environment?: string };
+    return { kind: 'collection', ...r, workspace: be.ws.workspace.name };
+  };
   return {
     'ws.list': () => be.manager.list(),
     'ws.current': () =>
@@ -153,24 +182,38 @@ export function workspaceHandlers(be: Backend): Handlers {
       const r = be.manager.delete(p);
       return { ...r, switchedTo, list: be.manager.list() };
     },
-    'ws.export': async ({ ref }: { ref?: string } = {}) => {
+    'ws.export': async ({ ref, format, legacy }: { ref?: string; format?: 'zip' | 'json'; legacy?: boolean } = {}) => {
       // any workspace can be exported; one that isn't open is read without opening it in the app
       const p = ref ? be.manager.resolve(ref) : undefined;
       const other = p && be.store && !samePath(p, be.store.root) ? WorkspaceStore.open(p) : undefined; // the open one by any name is read as it is open
       try {
         const store = other ?? be.ws;
-        const bundle = store.exportBundle();
-        // what is in it, what was replaced by {{variables}} and what was left out (the toast says it, as the CLI does)
-        const summary = exportSummary(bundle);
-        const fileName = workspaceExportFileName(store.workspace.name);
+        if (legacy) {
+          // File ▸ Export ▸ Workspace (older format)…: the one-file export of earlier versions, for a TestPion that cannot read bundles (removed in a later release)
+          const old = store.exportBundle();
+          const oldName = workspaceExportFileName(store.workspace.name);
+          const savedOld = await saveText(be, oldName, [{ name: 'Workspace', extensions: ['json'] }], JSON.stringify(old, null, 2), 'application/json');
+          if (!savedOld.path && !savedOld.download) return { cancelled: true };
+          return { ...savedOld, name: store.workspace.name, fileName: oldName, ...exportSummary(old) };
+        }
+        // the whole workspace as a bundle (what `testpion export --all` writes); what is in it, what was replaced by {{variables}} and what was left out is the summary (the toast says it, as the CLI does)
+        const built = await exportWholeWorkspace(store, { format });
+        const { fileName } = built;
         // saved where the user chooses (desktop), or returned for the window to download (browser / cloud); a cancelled dialog is `cancelled`
-        const saved = await saveText(be, fileName, [{ name: 'Workspace', extensions: ['json'] }], JSON.stringify(bundle, null, 2), 'application/json');
+        const saved = await be.saveOrDownload(
+          fileName,
+          [{ name: 'TestPion bundle', extensions: [built.format] }],
+          (dest) => writeFileSync(dest, built.bytes),
+          () => built.bytes,
+          { type: built.format === 'zip' ? 'application/zip' : 'application/json' },
+        );
         if (!saved.path && !saved.download) return { cancelled: true };
-        return { ...saved, name: store.workspace.name, fileName, ...summary };
+        return { ...saved, name: store.workspace.name, fileName, format: built.format, size: built.bytes.length, counts: built.counts, ...built.summary };
       } finally {
         other?.close();
       }
     },
+    // (the one-file export of earlier versions; read for two more releases, no longer written)
     'ws.import': ({ bundle, name }: { bundle: WorkspaceBundle; name?: string }) => {
       const r = importWorkspaceBundle(be.manager, bundle, name);
       const root = r.store.root;
@@ -182,30 +225,19 @@ export function workspaceHandlers(be: Backend): Handlers {
      * "Import…" from the workspace menu: a TestPion workspace export becomes a new workspace; anything the
      * collection importer understands (Postman, OpenAPI, HAR, TestPion collections) is added to the open one.
      */
-    /** Import… with the native file dialog: a workspace export, or a collection / definition / .env added to this workspace. */
+    /** Import… with the native file dialog: a workspace export (a bundle, or the file of earlier versions), or a collection / definition / .env added to this workspace. */
     'ws.importPick': async ({ keepPm }: { keepPm?: boolean } = {}) => {
       const f = await be.host.openDialog?.({ filters: importFileFilters('Workspace exports, collections, API definitions, GraphQL schemas, .env, .http') });
       if (!f) return null;
-      return be.handlers['ws.importFile']!({ text: readFileSync(f, 'utf8'), fileName: basename(f), keepPm });
+      return importFileBytes(readFileSync(f), basename(f), keepPm);
     },
-    /** A workspace export opens as a workspace; anything else is imported into this one (Postman / Insomnia scripts become `tp.*` unless `keepPm`). */
-    'ws.importFile': ({ text, fileName, keepPm }: { text: string; fileName?: string; keepPm?: boolean }) => {
-      let data: { format?: string } | undefined;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        /* YAML (OpenAPI) or not JSON: the collection importer decides */
-      }
-      // a workspace export by its content (the name may be .testpion.json, or .apsworkspace.json from before 0.50)
-      if (data?.format && WORKSPACE_FORMATS.has(data.format)) {
-        const r = importWorkspaceBundle(be.manager, data as unknown as WorkspaceBundle);
-        const root = r.store.root;
-        r.store.close();
-        be.openStore(root);
-        return { kind: 'workspace', name: be.ws.workspace.name, notes: r.notes, valuesNeeded: r.valuesNeeded, files: r.files };
-      }
-      const r = be.handlers['col.import']!({ text, fileName, keepPm }) as { format: string; collection?: string; environment?: string };
-      return { kind: 'collection', ...r, workspace: be.ws.workspace.name };
+    /**
+     * A workspace export opens as a workspace; anything else is imported into this one (Postman / Insomnia scripts become `tp.*` unless `keepPm`).
+     * The file arrives as `text`, or as `base64` when it may be a zip (a bundle).
+     */
+    'ws.importFile': ({ text, base64, fileName, keepPm }: { text?: string; base64?: string; fileName?: string; keepPm?: boolean }) => {
+      if (base64 === undefined && text === undefined) throw new ApsError('ValidationError', 'ws.importFile needs the file: text or base64');
+      return importFileBytes(base64 !== undefined ? decodeBase64(base64, TRANSFER_LIMITS.fileBytes, 'That file') : Buffer.from(text ?? '', 'utf8'), fileName, keepPm);
     },
     'ws.search': ({ query }: { query: string }) => be.search?.search(query, 60) ?? [],
     /**

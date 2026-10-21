@@ -9,7 +9,8 @@ import { LatencyRecorder, round } from '../util/stats.js';
 import { Semaphore, sleep } from '../util/concurrency.js';
 import { shortId } from '../util/ids.js';
 import type { ExecServices } from './execute.js';
-import { evaluateCondition, executeStep, type StepResponse } from './flow-blocks.js';
+import { evaluateCondition, type StepResponse } from './flow-blocks.js';
+import { executeStep } from './execute-step.js';
 import { endAndClose } from '../storage/fsutil.js';
 import { VariableTracker, type PauseBefore, type PinnedResponse, type RunSeed } from './debug-hooks.js';
 
@@ -186,7 +187,8 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const only = opts.onlyIds ? new Set(opts.onlyIds) : undefined;
   // the designer's pins answer their steps (sub-flows never see them: their step ids are another file's)
   const pins = opts.pins && Object.keys(opts.pins).length ? opts.pins : undefined;
-  const services: ExecServices = pins ? { ...opts.services, pinned: (id) => (Object.hasOwn(pins, id) ? pins[id] : undefined) } : opts.services;
+  // the steps run nested flows through this very function (sub-flow steps are handed the runner instead of importing it)
+  const services: ExecServices = { ...opts.services, runSubflow: runTests, ...(pins ? { pinned: (id: string) => (Object.hasOwn(pins, id) ? pins[id] : undefined) } : {}) };
   if (opts.seed?.vars) for (const [k, v] of Object.entries(opts.seed.vars)) opts.services.vars.set(k, v, 'runtime');
   const tracker = new VariableTracker(opts.services.vars);
   const onAbort = () => ctrl.abort();

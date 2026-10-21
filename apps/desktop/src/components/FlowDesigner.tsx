@@ -1,65 +1,47 @@
 import { startFlowGenerate } from './ai/flow-generate';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import {
-  FileSpreadsheet,
-  GanttChart,
-  Layers,
   AlignCenterVertical,
-  Bot,
-  CalendarClock,
-  ChevronDown,
   Globe,
-  Webhook,
   AlignHorizontalJustifyCenter,
   AlignHorizontalSpaceAround,
   AlignStartHorizontal,
   AlignStartVertical,
   Bug,
-  ChevronsRight,
-  ClipboardPaste,
-  Copy,
-  CopyPlus,
-  FileCode2,
   FolderInput,
   Frame,
   Grid3x3,
-  History,
   LayoutGrid,
   Map as MapIcon,
   Play,
   Plus,
-  Redo2,
   Search,
-  StepForward,
   StickyNote,
-  Trash2,
-  Undo2,
   Workflow,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { FLOW_COLORS, flowChecks, flowGraph, freeSpot, STEP_SIZE, type FlowFrameDef, type FlowGroup, type FlowNote, type FlowStep } from '@testpion/shared';
-import { canvasItems, canvasKey, debugItems, edgeItems, frameItems, groupItems, noteItems, stepItems, type DesignerActions } from './FlowDesignerMenus';
+import { canvasItems, canvasKey, edgeItems, frameItems, groupItems, noteItems, stepItems, type DesignerActions } from './FlowDesignerMenus';
 import { setPaletteContext } from '../lib/palette-context';
-import { LABEL } from '../lib/vocabulary';
-import { openRef } from '../lib/open-ref';
-import { pref, savePref, useFlowFileFollow } from './flow-designer-lib';
+import { alignedPositions, GAP_X, getCopied, newGroup, pref, savePref, setCopied, useFlowFileFollow } from './flow-designer-lib';
+import { useDesignerRun } from './use-designer-run';
+import { useFlowDeploy } from './use-flow-deploy';
+import { FlowDesignerToolbar } from './FlowDesignerToolbar';
+import { FlowInspector } from './FlowInspector';
 import type { PaletteCommand } from './Shell';
-import { asError, call, on } from '../api';
+import { call } from '../api';
 import { promptText, toastError, useApp } from '../store';
-import type { TestResult } from '../types';
-import { FlowOutputEditor } from './FlowBlockFields';
-import { DeployPanel, triggerLabel, type DeployStatus } from './FlowDeploy';
+import { DeployPanel, triggerLabel } from './FlowDeploy';
 import { FlowRunDock, type FlowDock } from './FlowRunDock';
 import { RunWithDataDialog } from './RunWithDataDialog';
 import type { StartSpec } from './FlowCanvasParts';
 import { CommandPalette } from './Shell';
 import { useCollectionTree } from '../lib/collections-store';
 import type { FlowDropEvent } from './FlowDrop';
-import { FLOW_START, FlowDiagram, type FlowDiagramApi, type FlowMark, type FlowSelection } from './FlowDiagram';
-import { FlowHistoryList, PausePanel, VariablesTimeline, type FlowPause, type FlowRunRow } from './FlowDebugParts';
-import { API_EXAMPLE, BlockPalette, blockPickerCommands, CollectionPicker, PALETTE, StepInspector, StepPreview } from './FlowDesignerParts';
-import { ResultDetail } from './RunPanel';
-import { Button, LinkButton, Menu, OverflowActions, SectionTitle, Segmented, Split, type MenuItem, type OverflowAction } from './ui';
+import { FLOW_START, FlowDiagram, type FlowDiagramApi, type FlowSelection } from './FlowDiagram';
+import { FlowHistoryList } from './FlowDebugParts';
+import { API_EXAMPLE, BlockPalette, blockPickerCommands, CollectionPicker, PALETTE, StepPreview } from './FlowDesignerParts';
+import { Menu, Split, type MenuItem } from './ui';
 import { PinnablePanel } from './PinnablePanel';
 import { aiButton } from '../lib/ai-menu';
 
@@ -103,27 +85,9 @@ export interface FlowRunRequest {
   breakpoints?: string[];
 }
 
-/** The designer's state of a file (tests.flowState): breakpoints and pinned responses, kept per computer, never in the YAML. */
-interface DesignerState {
-  breakpoints: string[];
-  pins: Record<string, { status?: number; pinnedAt: string; fromRunId?: string; truncated?: boolean }>;
-}
-
-
-/** A parallel group name no step of the flow uses yet. */
-const newGroup = (steps: FlowStep[]) => {
-  const used = new Set(steps.map((s) => s.parallel));
-  let n = 1;
-  while (used.has(`group-${n}`)) n++;
-  return `group-${n}`;
-};
-
 /** Undo and redo per file: texts of the file before each canvas change (kept while the app runs, across tab switches). */
 const history = new Map<string, { undo: string[]; redo: string[] }>();
 const historyOf = (file: string) => history.get(file) ?? history.set(file, { undo: [], redo: [] }).get(file)!;
-/** Copied steps (Ctrl+C on the canvas), pasted into this or another flow with Ctrl+V. */
-let copied: { file: string; ids: string[] } | undefined;
-const GAP_X = 284;
 
 /** Where the block picker adds: after this step (on a condition's branch), at the Start node, or (undefined) after the selection. */
 type PickTarget = { from?: string; when?: boolean };
@@ -184,83 +148,8 @@ export function FlowDesigner({
   const canvasAt = useRef<[number, number] | undefined>(undefined);
   const h = historyOf(file);
 
-  // a run started here lights the steps up as their results come in
-  const [liveRun, setLiveRun] = useState<string>();
-  const [live, setLive] = useState<Record<string, { status: string; durationMs?: number; tries?: number }>>({});
-  // the live run's results in full (the hover card shows the response)
-  const liveResults = useRef(new Map<string, TestResult>());
-  useEffect(() => {
-    if (!liveRun) return;
-    liveResults.current = new Map();
-    return on<Array<{ type: string; runId: string; id?: string; result?: TestResult }>>('run.events', (evs) => {
-      const mine = evs.filter((e) => e.runId === liveRun);
-      if (!mine.length) return;
-      for (const e of mine) if (e.type === 'test-end' && e.result) liveResults.current.set(e.result.id, e.result);
-      setLive((l) => {
-        const next = { ...l };
-        for (const e of mine) {
-          if (e.type === 'test-start' && e.id) next[e.id] = { status: 'running' };
-          if (e.type === 'test-end' && e.result)
-            next[e.result.id] = { status: e.result.status, durationMs: e.result.durationMs, ...(typeof e.result.metadata?.tries === 'number' ? { tries: e.result.metadata.tries } : {}) };
-        }
-        return next;
-      });
-    });
-  }, [liveRun]);
-  // the finished run read back with the flow: its results are the steps' own now
-  useEffect(() => {
-    if (liveRun && flow.run?.runId === liveRun) setLiveRun(undefined);
-  }, [flow.run?.runId, liveRun]);
-  // the debugger: breakpoints and pins of the file, the run history, a run shown on the canvas, a paused run
-  const [state, setState] = useState<DesignerState>({ breakpoints: [], pins: {} });
-  useEffect(() => {
-    let mounted = true;
-    call<DesignerState>('tests.flowState', { file }).then(
-      (s) => mounted && setState(s),
-      () => undefined,
-    );
-    return () => {
-      mounted = false;
-    };
-  }, [file]);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [runs, setRuns] = useState<FlowRunRow[]>();
-  const loadRuns = useCallback(() => {
-    call<{ runs: FlowRunRow[] }>('tests.flowRuns', { file }).then((h) => setRuns(h.runs), toastError);
-  }, [file]);
-  useEffect(() => {
-    if (historyOpen) loadRuns();
-  }, [historyOpen, loadRuns, flow.run?.runId]);
-  const [viewRun, setViewRun] = useState<{ runId: string; results: TestResult[] }>();
-  const showRun = (runId: string | undefined) => {
-    if (!runId) return setViewRun(undefined);
-    call<{ results: TestResult[] }>('tests.flowRunResults', { file, runId }).then((r) => setViewRun({ runId, results: r.results }), toastError);
-  };
-  const [pause, setPause] = useState<FlowPause>();
-  useEffect(() => {
-    if (!liveRun) return;
-    const offs = [
-      on<FlowPause>('run.paused', (p) => p.runId === liveRun && setPause(p)),
-      on<{ runId: string }>('run.resumed', (p) => p.runId === liveRun && setPause(undefined)),
-      on<{ runId: string }>('run.finished', (p) => p.runId === liveRun && setPause(undefined)),
-    ];
-    // a pause before the first step can come before the run's id did
-    call<FlowPause | null>('runs.paused', { runId: liveRun }).then((p) => p && setPause((cur) => cur ?? p), () => undefined);
-    return () => offs.forEach((off) => off());
-  }, [liveRun]);
-  // paused: the steps that finished before the pause show their results (a result that came before the run's id did is read back)
-  useEffect(() => {
-    if (!pause) return;
-    call<{ items: TestResult[] } | TestResult[]>('runs.results', { runId: pause.runId, limit: 500 }).then(
-      (page) =>
-        setLive((l) => {
-          const next = { ...l };
-          for (const r of Array.isArray(page) ? page : page.items) next[r.id] ??= { status: r.status, durationMs: r.durationMs };
-          return next;
-        }),
-      () => undefined,
-    );
-  }, [pause]);
+  // the runs: the live run, the debugger's breakpoints and pins, the history, a past run on the canvas, a paused run
+  const { liveRun, state, historyOpen, setHistoryOpen, runs, viewRun, setViewRun, showRun, pause, viewed, shownSteps: steps, marks, begin, resultOf, toggleBreakpoint, pin, unpin, resume } = useDesignerRun(file, flow.steps, flow.run?.runId);
   const [menu, setMenu] = useState<{ step: FlowStep; x: number; y: number }>();
   // the canvas: notes and frames' menus, the double-click menu, the minimap and snapping, what the canvas offers (fit, find)
   const [noteMenu, setNoteMenu] = useState<{ x: number; y: number; items: MenuItem[]; id: string }>();
@@ -275,26 +164,6 @@ export function FlowDesigner({
   const root = useRef<HTMLDivElement>(null);
   const [inspectorMode, setInspectorMode] = useState<'result' | 'step'>('result');
 
-  const viewed = useMemo(() => (viewRun ? new Map(viewRun.results.map((r) => [r.id, r])) : undefined), [viewRun]);
-  const steps = useMemo(
-    () =>
-      liveRun
-        ? flow.steps.map((s) => ({ ...s, status: live[s.id]?.status, durationMs: live[s.id]?.durationMs, tries: live[s.id]?.tries }))
-        : viewed
-          ? flow.steps.map((s) => {
-              const r = viewed.get(s.id);
-              return { ...s, status: r?.status, durationMs: r?.durationMs, tries: typeof r?.metadata?.tries === 'number' ? r.metadata.tries : undefined };
-            })
-          : flow.steps,
-    [flow.steps, liveRun, live, viewed],
-  );
-  const marks = useMemo(() => {
-    const m: Record<string, FlowMark> = {};
-    for (const id of state.breakpoints) m[id] = { ...m[id], breakpoint: true };
-    for (const id of Object.keys(state.pins)) m[id] = { ...m[id], pinned: true };
-    if (pause) m[pause.stepId] = { ...m[pause.stepId], paused: true };
-    return m;
-  }, [state, pause]);
   const graph = useMemo(() => flowGraph(flow.steps), [flow.steps]);
   // a step asked for from outside: selected and revealed once, when the flow (with it) is there
   const focused = useRef(0);
@@ -466,11 +335,7 @@ export function FlowDesigner({
   };
   const run = async (o?: FlowRunRequest) => {
     const id = await onRun(o);
-    if (!id) return;
-    setLive({});
-    setPause(undefined);
-    setViewRun(undefined);
-    setLiveRun(id);
+    if (id) begin(id);
   };
   const debug = () => void run({ debug: true, breakpoints: state.breakpoints });
 
@@ -489,26 +354,9 @@ export function FlowDesigner({
   };
   /** Line the selected steps up (left edges, top edges or centres), or space them evenly along the axis they spread most on. */
   const arrange = (how: 'left' | 'top' | 'center' | 'distribute') => {
-    const nodes = graph.nodes.filter((n) => selSteps.includes(n.id));
-    if (nodes.length < 2) return useApp.getState().toast('Select two or more steps to align them (Shift+click adds a step to the selection)');
-    const out: Record<string, [number, number]> = {};
-    if (how === 'left') for (const n of nodes) out[n.id] = [Math.min(...nodes.map((x) => x.x)), n.y];
-    else if (how === 'top') for (const n of nodes) out[n.id] = [n.x, Math.min(...nodes.map((x) => x.y))];
-    else if (how === 'center') {
-      const c = nodes.reduce((sum, x) => sum + x.x + x.w / 2, 0) / nodes.length;
-      for (const n of nodes) out[n.id] = [c - n.w / 2, n.y];
-    } else {
-      if (nodes.length < 3) return useApp.getState().toast('Select three or more steps to space them evenly');
-      const spreadX = Math.max(...nodes.map((n) => n.x)) - Math.min(...nodes.map((n) => n.x));
-      const spreadY = Math.max(...nodes.map((n) => n.y)) - Math.min(...nodes.map((n) => n.y));
-      const horizontal = spreadX >= spreadY;
-      const sorted = [...nodes].sort((a, b) => (horizontal ? a.x - b.x : a.y - b.y));
-      const first = sorted[0]!;
-      const last = sorted[sorted.length - 1]!;
-      const step = ((horizontal ? last.x - first.x : last.y - first.y) as number) / (sorted.length - 1);
-      sorted.forEach((n, i) => (out[n.id] = horizontal ? [first.x + step * i, n.y] : [n.x, first.y + step * i]));
-    }
-    move(Object.fromEntries(Object.entries(out).map(([id, [x, y]]) => [id, [Math.round(x), Math.round(y)] as [number, number]])));
+    const r = alignedPositions(graph.nodes.filter((n) => selSteps.includes(n.id)), how);
+    if ('message' in r) return useApp.getState().toast(r.message);
+    move(r.positions);
   };
   const toggleMinimap = () =>
     setMinimap((v) => {
@@ -520,46 +368,9 @@ export function FlowDesigner({
       savePref('snap', !v);
       return !v;
     });
-  /** The latest result of a step for the hover card: the live run's, the run shown from the history, or the latest run's (read once). */
-  const resultOf = (s: FlowStep): { result?: TestResult; runId?: string } => {
-    if (liveRun) return { result: liveResults.current.get(s.id), runId: liveRun };
-    if (viewRun) return { result: viewed?.get(s.id), runId: viewRun.runId };
-    return { runId: flow.run?.runId };
-  };
-  const setBreakpoints = (ids: string[]) => {
-    setState((s) => ({ ...s, breakpoints: ids }));
-    call<DesignerState>('tests.flowBreakpoints', { file, ids }).then(setState, toastError);
-    // a debugged run takes the change at once
-    if (liveRun) void call('runs.setBreakpoints', { runId: liveRun, ids }).catch(() => undefined);
-  };
-  const toggleBreakpoint = (id: string) => setBreakpoints(state.breakpoints.includes(id) ? state.breakpoints.filter((x) => x !== id) : [...state.breakpoints, id]);
-  const pin = async (s: FlowStep) => {
-    try {
-      setState(await call<DesignerState>('tests.flowPin', { file, stepId: s.id }));
-      useApp.getState().toast(`"${s.name}" is pinned: runs from the designer use its response instead of calling the API`, 'info', { ref: { kind: 'flow', path: file, step: s.id }, label: 'Show the step' });
-    } catch (e) {
-      toastError(e);
-    }
-  };
-  const unpin = async (s: FlowStep) => {
-    try {
-      setState(await call<DesignerState>('tests.flowUnpin', { file, stepId: s.id }));
-    } catch (e) {
-      toastError(e);
-    }
-  };
-  const resume = async (action: 'continue' | 'step' | 'stop', vars: Record<string, unknown>) => {
-    if (!pause) return;
-    try {
-      await call('runs.resume', { runId: pause.runId, action, vars });
-      setPause(undefined);
-    } catch (e) {
-      toastError(e);
-    }
-  };
   /** What the menus and the keys act with (FlowDesignerMenus). */
   const copy = (list: string[]) => {
-    copied = { file, ids: list };
+    setCopied({ file, ids: list });
     useApp.getState().toast(`${list.length} step${list.length === 1 ? '' : 's'} copied: Ctrl+V pastes them into this or another flow`, 'info', { ref: { kind: 'flow', path: file } });
   };
   const actions: DesignerActions = {
@@ -576,8 +387,11 @@ export function FlowDesigner({
     frameSelection: () => void frameSelection(),
     copy,
     // (read when used: a copy made a moment ago, without a render since, pastes)
-    canPaste: () => !!copied,
-    paste: (at) => copied && void apply({ op: 'pasteSteps', from: copied.file, ids: copied.ids, ...(at && hasLayout ? { at } : placeNew()) }, { select: true }),
+    canPaste: () => !!getCopied(),
+    paste: (at) => {
+      const c = getCopied();
+      if (c) void apply({ op: 'pasteSteps', from: c.file, ids: c.ids, ...(at && hasLayout ? { at } : placeNew()) }, { select: true });
+    },
     remove,
     undo,
     redo,
@@ -711,29 +525,13 @@ export function FlowDesigner({
     });
 
   /* ---------------------------------------------------------------- the Start node and Deploy */
-  const [deploy, setDeploy] = useState<{ status?: DeployStatus; error?: string }>({});
-  const loadDeploy = useCallback(() => {
-    call<DeployStatus>('tests.deployStatus', { file }).then(
-      (status) => setDeploy({ status }),
-      (e) => setDeploy({ error: asError(e).message }),
-    );
-  }, [file]);
-  useEffect(() => loadDeploy(), [loadDeploy, flow.exposed]);
-  const setWebhook = async (on: boolean) => {
-    // enabled without a path: the engine gives it /hooks/<the file's name>
-    const r = await apply({ op: 'setWebhook', webhook: on ? {} : null });
-    if (r) loadDeploy();
-  };
-  // the monitor that runs this file (opened the one way, openRef), or a new one prefilled with it
-  const schedule = () =>
-    deploy.status?.schedule ? void openRef({ kind: 'monitor', monitorId: deploy.status.schedule.monitorId }) : useApp.getState().openIntent('monitors', { create: { testFile: file } });
-  const triggerItems: MenuItem[] = [
-    { label: 'Manual', icon: <Play size={14} />, onSelect: () => useApp.getState().toast('The flow runs when you click Run flow, or from the terminal: testpion test tests/' + file) },
-    { label: deploy.status?.schedule ? 'Schedule: open the monitor' : 'Schedule…', icon: <CalendarClock size={14} />, onSelect: schedule },
-    { label: deploy.status?.webhook ? 'Webhook (on)' : 'Webhook', icon: <Webhook size={14} />, onSelect: () => (deploy.status?.webhook ? useApp.getState().toast('Webhook: Deploy ▸ Webhook copies its URL and serves it') : void setWebhook(true)) },
-    { label: flow.exposed !== undefined ? 'MCP tool (exposed)…' : 'MCP tool…', icon: <Bot size={14} />, onSelect: () => onExpose?.(), disabled: !onExpose },
-    { label: 'CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: { tests: [file], environment: env } }) },
-  ];
+  const { deploy, loadDeploy, setWebhook, schedule, triggerItems } = useFlowDeploy({
+    file,
+    exposed: flow.exposed,
+    environment: env,
+    onExpose,
+    enableWebhook: (on) => apply({ op: 'setWebhook', webhook: on ? {} : null }),
+  });
   const startSpec: StartSpec = {
     trigger: triggerLabel(deploy.status, flow.exposed),
     triggerItems,
@@ -759,287 +557,79 @@ export function FlowDesigner({
           ...(aiOn ? [{ id: 'ai', ...aiButton('designFlow'), tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate }] : []),
         ],
   };
-  // the toolbar's less used actions: buttons on a wide canvas, the ⋯ menu on a narrow one
-  const moreActions: OverflowAction[] = [
-    { label: 'Undo', icon: <Undo2 size={12} />, onSelect: undo, disabled: !h.undo.length || busy, title: 'Undo the last change (Ctrl+Z)', data: { 'data-flow-undo': '' }, minWidth: 480 },
-    { label: 'Redo', icon: <Redo2 size={12} />, onSelect: redo, disabled: !h.redo.length || busy, title: 'Redo (Ctrl+Y)', data: { 'data-flow-redo': '' }, minWidth: 480 },
-    {
-      label: 'History',
-      icon: <History size={12} />,
-      // closed, it takes the run it showed on the canvas with it (as its own close button does)
-      onSelect: () => {
+  const toolbar: ReactNode = (
+    <FlowDesignerToolbar
+      one={one}
+      stepCount={flow.steps.length}
+      busy={busy}
+      hasLayout={hasLayout}
+      canUndo={!!h.undo.length}
+      canRedo={!!h.redo.length}
+      historyOpen={historyOpen}
+      minimap={minimap}
+      snap={snap}
+      paused={!!pause}
+      breakpoints={state.breakpoints.length}
+      runId={viewRun?.runId ?? liveRun ?? flow.run?.runId}
+      onBlock={(at) => openPicker({}, at)}
+      onNote={() => addNote()}
+      onRun={() => void run()}
+      onDebug={debug}
+      onRunFrom={() => one && void run({ from: one.id, seedRunId: viewRun?.runId })}
+      onRunStep={() => one && void run({ ids: withDependencies(one.id) })}
+      onRunWithData={() => setScaleDialog('data')}
+      onRunInEnvironments={() => setScaleDialog('matrix')}
+      onTimeline={() => {
+        const runId = viewRun?.runId ?? liveRun ?? flow.run?.runId;
+        if (runId) setDock({ kind: 'timeline', runId });
+      }}
+      onUndo={undo}
+      onRedo={redo}
+      // closed, History takes the run it showed on the canvas with it (as its own close button does)
+      onHistory={() => {
         if (historyOpen) setViewRun(undefined);
         setHistoryOpen(!historyOpen);
-      },
-      pressed: historyOpen,
-      data: { 'data-flow-history-toggle': '' },
-      minWidth: 560,
-      title: 'The runs of this flow: select one to see its results, requests, responses and variables on the canvas',
-    },
-    {
-      label: 'Auto-arrange',
-      icon: <LayoutGrid size={12} />,
-      onSelect: () => void apply({ op: 'setLayout', positions: null }),
-      disabled: !hasLayout || busy,
-      separator: true,
-      title: 'Lay the steps out in columns again (forget where they were dragged; notes and frames stay)',
-    },
-    { label: 'Find', icon: <Search size={12} />, onSelect: () => canvasApi.current?.find(), title: 'Find steps by name, URL, variable or type (Ctrl+F); Enter jumps to the next' },
-    {
-      label: 'Minimap',
-      icon: <MapIcon size={12} />,
-      onSelect: toggleMinimap,
-      pressed: minimap,
-      data: { 'data-flow-minimap-toggle': '' },
-      title: flow.steps.length > 8 ? 'Show or hide the overview in the corner' : 'Show or hide the overview in the corner (shown for flows of more than 8 steps)',
-    },
-    { label: 'Snap', icon: <Grid3x3 size={12} />, onSelect: toggleSnap, pressed: snap, data: { 'data-flow-snap-toggle': '' }, title: 'Snap dragged steps and notes to a 16 px grid; steps that line up with others show a guide either way' },
-  ];
-  const toolbar: ReactNode = (
-    <>
-      <Button
-        size="sm"
-        variant="primary"
-        icon={<Plus size={12} />}
-        data-flow-add
-        aria-label="Block"
-        title={one ? `Add a block after "${one.name}" (it waits for it)` : 'Add a block to the flow'}
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          openPicker({}, { x: r.left, y: r.bottom + 4 });
-        }}
-      >
-        <span className="hidden @[400px]:inline">Block</span>
-      </Button>
-      <Button size="sm" icon={<StickyNote size={12} />} onClick={() => addNote()} data-flow-add-note aria-label="Text" title="A sticky note (Markdown) in the middle of the view; double-click the empty canvas to put one there">
-        <span className="hidden @[720px]:inline">Text</span>
-      </Button>
-      <span className="inline-flex">
-        <Button size="sm" className="rounded-r-none" icon={<Play size={12} />} onClick={() => void run()} disabled={!flow.steps.length} title="Run every step of the flow; the steps light up as they finish" aria-label="Run flow" data-flow-run>
-          <span className="hidden @[560px]:inline">Run flow</span>
-        </Button>
-        <Menu
-          align="start"
-          width={250}
-          items={[
-            {
-              label: 'Run with breakpoints',
-              icon: <Bug size={14} />,
-              onSelect: debug,
-              disabled: !flow.steps.length || !!pause,
-              title: state.breakpoints.length
-                ? `Run the flow one step at a time, pausing before the ${state.breakpoints.length} breakpoint${state.breakpoints.length === 1 ? '' : 's'}: inspect and change variables, then Continue, Step over or Stop`
-                : 'Run the flow pausing before breakpoints: add one with F9 or a step\u2019s right-click menu',
-            },
-            { label: 'Run from selected', icon: <ChevronsRight size={14} />, onSelect: () => one && void run({ from: one.id, seedRunId: viewRun?.runId }), disabled: !one, title: 'The selected step and every step after it, seeded from the latest run' },
-            { label: 'Run selected step', icon: <StepForward size={14} />, onSelect: () => one && void run({ ids: withDependencies(one.id) }), disabled: !one, title: 'The selected step with the steps it waits for' },
-            { label: 'Run with data…', icon: <FileSpreadsheet size={14} />, separator: true, onSelect: () => setScaleDialog('data'), disabled: !flow.steps.length, title: 'Once per row of a data file, a dataset or a database query: a grid of rows × steps' },
-            { label: LABEL.runInEnvironments, icon: <Layers size={14} />, onSelect: () => setScaleDialog('matrix'), disabled: !flow.steps.length, title: 'The flow in each environment picked, compared step by step' },
-            {
-              label: 'Timeline of the run',
-              icon: <GanttChart size={14} />,
-              separator: true,
-              onSelect: () => {
-                const runId = viewRun?.runId ?? liveRun ?? flow.run?.runId;
-                if (runId) setDock({ kind: 'timeline', runId });
-              },
-              disabled: !(viewRun?.runId ?? liveRun ?? flow.run?.runId),
-              title: 'Each step of the run shown in History (or the latest) as a bar from its start to its end: what waited, what ran together, the critical path',
-            },
-          ]}
-          trigger={
-            <Button size="sm" className="rounded-l-none border-l-0 px-1.5" aria-label="More ways to run" data-flow-run-menu>
-              <ChevronDown size={12} />
-            </Button>
-          }
-        />
-      </span>
-      {/* (measured in the toolbar's left part: the view's buttons on the right keep their room) */}
-      <OverflowActions at={860} label="More canvas actions" items={moreActions} />
-    </>
+      }}
+      onAutoArrange={() => void apply({ op: 'setLayout', positions: null })}
+      onFind={() => canvasApi.current?.find()}
+      onMinimap={toggleMinimap}
+      onSnap={toggleSnap}
+    />
   );
 
-  const viewedResult = one && viewed ? viewed.get(one.id) : undefined;
-  const timelineIndex = viewRun ? Math.max(0, one ? viewRun.results.findIndex((r) => r.id === one.id) : viewRun.results.length - 1) : 0;
   const inspector = (
-    <div className="h-full overflow-auto text-sm" data-flow-inspector>
-      {pause && (
-        <PausePanel
-          key={`${pause.runId}:${pause.stepId}`}
-          pause={pause}
-          stepName={flow.steps.find((s) => s.id === pause.stepId)?.name ?? pause.stepId}
-          onResume={(a, v) => void resume(a, v)}
-        />
-      )}
-      {viewRun && (
-        <div className="grid gap-3 p-3 border-b border-line" data-flow-run-view={viewRun.runId}>
-          <div className="flex items-center gap-2 text-xs">
-            <History size={13} className="text-muted shrink-0" />
-            <span className="flex-1 truncate">
-              Run <span className="mono">{viewRun.runId}</span>
-            </span>
-            <LinkButton icon={<GanttChart size={12} />} onClick={() => setDock({ kind: 'timeline', runId: viewRun.runId })} data-flow-timeline-open>
-              Timeline
-            </LinkButton>
-            {one && (
-              <Segmented
-                label="Inspector"
-                value={inspectorMode}
-                onChange={setInspectorMode}
-                options={[
-                  { value: 'result', label: 'Run result' },
-                  { value: 'step', label: 'Edit step' },
-                ]}
-              />
-            )}
-          </div>
-          {(!one || inspectorMode === 'result') && (
-            <>
-              {one &&
-                (viewedResult ? (
-                  <div className="h-[380px] border border-line rounded-md overflow-hidden" data-flow-run-result={one.id}>
-                    <ResultDetail r={viewedResult} runId={viewRun.runId} initialTab="io" />
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted">&quot;{one.name}&quot; did not run in this run.</p>
-                ))}
-              <VariablesTimeline results={viewRun.results} index={timelineIndex} onIndex={(i) => setSel({ steps: [viewRun.results[i]!.id] })} />
-            </>
-          )}
-        </div>
-      )}
-      {(!viewRun || !one || inspectorMode === 'step') && (
-        one ? (
-          <StepInspector
-            key={`${one.id}:${version}`}
-            file={file}
-            step={one}
-            raw={flow.raw?.[one.id]}
-            inheritedAuth={flow.inheritedAuth?.[one.id]}
-            steps={flow.steps}
-            lastRunId={liveRun ?? flow.run?.runId}
-            update={(set) => apply({ op: 'updateStep', id: one.id, set })}
-            actions={
-              <>
-                <Button size="sm" icon={<StepForward size={12} />} onClick={() => void run({ ids: withDependencies(one.id) })}>
-                  Run step
-                </Button>
-                <Menu
-                  align="start"
-                  width={230}
-                  items={debugItems(actions, one)}
-                  trigger={
-                    <Button size="sm" icon={<Bug size={12} />} data-inspector-debug-menu title="Run from here, run to here, breakpoint, pin the response">
-                      Debug
-                    </Button>
-                  }
-                />
-                <Button size="sm" icon={<FileCode2 size={12} />} onClick={() => onOpenStep(one)} title="Show the step in the YAML editor">
-                  Open in editor
-                </Button>
-                <Button size="sm" icon={<CopyPlus size={12} />} onClick={() => void apply({ op: 'duplicateStep', id: one.id }, { select: true })} title="Ctrl+D">
-                  Duplicate
-                </Button>
-                <Button size="sm" variant="danger" icon={<Trash2 size={12} />} onClick={remove} title="Delete">
-                  Delete step
-                </Button>
-              </>
-            }
-          />
-        ) : selSteps.length > 1 ? (
-          <div className="p-3 grid gap-3">
-            <SectionTitle>{selSteps.length} steps selected</SectionTitle>
-            <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" icon={<CopyPlus size={12} />} onClick={() => void apply({ op: 'duplicateStep', id: selSteps }, { select: true })}>
-                Duplicate
-              </Button>
-              <Button
-                size="sm"
-                icon={<Copy size={12} />}
-                onClick={() => {
-                  copied = { file, ids: selSteps };
-                  useApp.getState().toast(`${selSteps.length} steps copied: Ctrl+V pastes them into this or another flow`, 'info', { ref: { kind: 'flow', path: file } });
-                }}
-              >
-                Copy
-              </Button>
-              <Button size="sm" variant="danger" icon={<Trash2 size={12} />} onClick={remove}>
-                Delete steps
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-1.5" data-flow-group-actions>
-              <Button
-                size="sm"
-                data-flow-make-parallel
-                onClick={() => group(selSteps, { kind: 'parallel', name: flow.steps.find((s) => selSteps.includes(s.id) && s.parallel)?.parallel ?? newGroup(flow.steps) })}
-                title="Put the selected steps in one parallel group: they may run at the same time (what they wait for still applies)"
-              >
-                Run together (parallel group)
-              </Button>
-              <Button size="sm" onClick={() => group(selSteps, { kind: 'parallel', name: null })} disabled={!flow.steps.some((s) => selSteps.includes(s.id) && s.parallel)}>
-                Leave the group
-              </Button>
-              <Button size="sm" onClick={() => group(selSteps, { kind: 'finally', name: 'finally' })} title="Clean-up: run these steps after every other step, whatever happened">
-                Make finally
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-1.5" data-flow-arrange-actions>
-              <Button size="sm" icon={<Frame size={12} />} onClick={() => void frameSelection()} data-flow-frame-selection title="A coloured frame with a title around the selected steps (only on the canvas)">
-                Frame selection
-              </Button>
-              <Button size="sm" icon={<AlignStartVertical size={12} />} onClick={() => arrange('left')} data-flow-align="left" title="Line the left edges up">
-                Align left
-              </Button>
-              <Button size="sm" icon={<AlignStartHorizontal size={12} />} onClick={() => arrange('top')} data-flow-align="top" title="Line the top edges up">
-                Align top
-              </Button>
-              <Button size="sm" icon={<AlignCenterVertical size={12} />} onClick={() => arrange('center')} data-flow-align="center" title="Line the centres up (one above the other)">
-                Align centres
-              </Button>
-              <Button size="sm" icon={<AlignHorizontalSpaceAround size={12} />} onClick={() => arrange('distribute')} disabled={selSteps.length < 3} data-flow-align="distribute" title="Space three or more steps evenly">
-                Distribute
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="p-3 grid gap-2 text-xs text-muted">
-            <SectionTitle>Flow</SectionTitle>
-            <p>
-              {flow.steps.length} step{flow.steps.length === 1 ? '' : 's'}, {graph.edges.length} connection{graph.edges.length === 1 ? '' : 's'}.{' '}
-              {sel.edge ? (
-                <>
-                  <b className="text-fg">{sel.edge.to}</b> waits for <b className="text-fg">{sel.edge.from}</b>: Delete removes the connection.
-                </>
-              ) : (
-                'Select a step to edit it.'
-              )}
-            </p>
-            <ul className="list-disc ml-4 grid gap-1">
-              <li>Drag the dot on a step's right edge onto another step: that step then waits for it and can use what it extracts.</li>
-              <li>A condition has a true and a false dot: the step you drop it on runs only on that branch; the other branch shows as skipped after a run.</li>
-              <li>Drag steps to arrange them; Shift+click selects several; Delete removes the selection; Ctrl+Z undoes.</li>
-              <li>Ctrl+C / Ctrl+V copy steps between flows; Ctrl+D duplicates.</li>
-              <li>
-                Steps that wait for nothing run side by side. A <b className="text-accent">parallel</b> frame marks steps that may run together: drop a step into it to add it, drag its label to
-                move it. The <b className="text-warn">Finally</b> lane runs last, whatever happened.
-              </li>
-              <li>
-                A <span className="text-warn font-bold">!</span> marks a step that reads a variable no earlier step extracts and the environment does not define; the problems under the canvas
-                list it and other mistakes (steps that never run, cycles): click one to select its step.
-              </li>
-              <li>Double-click empty canvas for a sticky note; select steps and Frame selection to group them in a coloured frame. Hover a step for its last response.</li>
-              <li>Ctrl+F finds steps; Ctrl+K lists the canvas's actions first; dragged steps line up with others (Snap puts them on a grid).</li>
-            </ul>
-            {copied && (
-              <LinkButton icon={<ClipboardPaste size={12} />} onClick={() => void apply({ op: 'pasteSteps', from: copied!.file, ids: copied!.ids, ...placeNew() }, { select: true })}>
-                Paste {copied.ids.length} copied step{copied.ids.length === 1 ? '' : 's'}
-              </LinkButton>
-            )}
-            <FlowOutputEditor key={`output:${version}`} output={flow.output} update={(output) => apply({ op: 'setOutput', output })} />
-          </div>
-        )
-      )}
-    </div>
+    <FlowInspector
+      file={file}
+      flow={flow}
+      sel={sel}
+      selSteps={selSteps}
+      one={one}
+      version={version}
+      mode={inspectorMode}
+      onMode={setInspectorMode}
+      pause={pause}
+      onResume={(a, v) => void resume(a, v)}
+      viewRun={viewRun}
+      viewedResult={one && viewed ? viewed.get(one.id) : undefined}
+      lastRunId={liveRun ?? flow.run?.runId}
+      edgeCount={graph.edges.length}
+      actions={actions}
+      update={(id, set) => apply({ op: 'updateStep', id, set })}
+      onRunStep={(id) => void run({ ids: withDependencies(id) })}
+      onOpenStep={onOpenStep}
+      onDuplicate={(ids) => void apply({ op: 'duplicateStep', id: ids }, { select: true })}
+      onRemove={remove}
+      onGroup={group}
+      onFrame={() => void frameSelection()}
+      onArrange={arrange}
+      onPaste={() => {
+        const c = getCopied();
+        if (c) void apply({ op: 'pasteSteps', from: c.file, ids: c.ids, ...placeNew() }, { select: true });
+      }}
+      onSetOutput={(output) => apply({ op: 'setOutput', output })}
+      onSelect={setSel}
+      onTimeline={(runId) => setDock({ kind: 'timeline', runId })}
+    />
   );
 
   return (

@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   exportPostmanCollection,
-  importAny,
   importInsomnia,
   importIntoWorkspace,
   importPostman,
@@ -13,6 +12,7 @@ import {
   type CollectionNode,
   type SavedHttpRequest,
 } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const ev = (listen: string, exec: string[]) => ({ listen, script: { type: 'text/javascript', exec } });
 

@@ -14,7 +14,7 @@ Click the workspace name at the top left (or right-click it) to open the switche
 - **Find a workspace:** type to filter by name or folder. **Enter** opens the first match.
 - Each workspace shows its folder. The open one is marked **current**.
 - Click a workspace to switch to it.
-- **New**, **Open folder**, **Import** and **Export** are at the bottom. **Open folder** adds an existing workspace folder, such as a git checkout. **Import** takes a TestPion workspace export (it opens as a new workspace named *… (imported)*, with exactly the export's environments), or a Postman, Insomnia, Bruno or Hoppscotch collection, OpenAPI, HAR or `.env` file (added to the open workspace). **Export** saves the open workspace (collections, environments, tests, providers, MCP servers and the files of specs/, datasets/, mocks/ and protos/) to one `<name>.testpion.json` file and says where, which secrets it replaced by variables and which files it left out; cancelling the save dialog does nothing. Secret values are never exported ([what an export holds](/api-testing/collections#export-the-whole-workspace)).
+- **New**, **Open folder**, **Import** and **Export** are at the bottom. **Open folder** adds an existing workspace folder, such as a git checkout. **Import** takes a TestPion workspace export, a bundle or the file of earlier versions (it opens as a new workspace named *… (imported)*, with exactly the export's environments), or a Postman, Insomnia, Bruno or Hoppscotch collection, OpenAPI, HAR or `.env` file (added to the open workspace). **Export** saves the open workspace (collections, environments, tests, providers, MCP servers and the files of specs/, datasets/, mocks/ and protos/) to one `<name>.testpion.zip` bundle (a small workspace of text only is `<name>.testpion.json`) and says where, which secrets it replaced by variables and what it left out; cancelling the save dialog does nothing. Secret values are never exported ([what an export holds](/api-testing/collections#export-the-whole-workspace)).
 
 ### Workspace actions
 
@@ -26,7 +26,7 @@ Hover a workspace and click **⋯**, or right-click it:
 | **Rename** | Rename it. This works for any workspace, not only the open one. |
 | **Duplicate…** | Copy collections, environments, tests and settings into a new workspace and open it. Run history, traces and secret values are not copied. |
 | **Show in folder** | Open the workspace folder in your file manager. |
-| **Export…** | Save the workspace to one `<name>.testpion.json` file, with the files of `specs/`, `datasets/`, `mocks/` and `protos/` ([what an export holds](/api-testing/collections#export-the-whole-workspace)). Secret values are never exported: typed-in tokens and passwords become variables, and the message lists each one. |
+| **Export…** | Save the workspace to one `<name>.testpion.zip` bundle, with the files of `specs/`, `datasets/`, `mocks/` and `protos/` ([what an export holds](/api-testing/collections#export-the-whole-workspace)). Secret values are never exported: typed-in tokens and passwords become variables, and the message lists each one. |
 | **Delete…** | See below. |
 
 ### Deleting a workspace
@@ -62,8 +62,8 @@ The same commands are in the command palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kb
 testpion workspace list --json
 testpion workspace create "Checkout API" --path ./api-tests    # a workspace inside a repo
 testpion workspace rename "Checkout API" "Checkout API v2" --json
-testpion workspace export "Checkout API v2"                     # writes "Checkout API v2.testpion.json"
-testpion workspace export "Checkout API v2" -o checkout.testpion.json --json   # what it replaced and left out
+testpion workspace export "Checkout API v2"                     # writes "Checkout API v2.testpion.zip"
+testpion workspace export "Checkout API v2" -o checkout.testpion.zip --json   # what it replaced and left out
 testpion workspace delete "Checkout API v2" --yes --json       # --yes is required
 ```
 

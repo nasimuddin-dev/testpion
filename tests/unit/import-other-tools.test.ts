@@ -2,7 +2,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, detectFormat, importAny, importIntoWorkspace, normalizeTemplate, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { WorkspaceStore, detectFormat, importIntoWorkspace, normalizeTemplate, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const flat = (nodes: CollectionNode[]): CollectionNode[] => nodes.flatMap((n) => (n.kind === 'folder' ? [n, ...flat(n.items)] : [n]));
 const req = (nodes: CollectionNode[], name: string) => flat(nodes).find((n) => n.name === name) as SavedHttpRequest;

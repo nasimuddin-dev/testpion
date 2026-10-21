@@ -11,7 +11,9 @@ import {
   createEngineContext,
   isWorkspaceDir,
   formatBytes,
-  importAny,
+  importDocument,
+  legacyResult,
+  type ImportAnyResult,
   fetchImportText,
   readResultsFile,
   readSpecRef,
@@ -152,10 +154,13 @@ export function requireEnvironment(store: WorkspaceStore, ref: string, opts: { h
   }
 }
 
-export function readImport<K extends 'collection' | 'environment'>(file: string, want: K): NonNullable<ReturnType<typeof importAny>[K]> {
-  let r: ReturnType<typeof importAny>;
+/** Any supported import document as the result the commands read (the format, the collection, the environment). */
+const readImportText = (text: string): ImportAnyResult => legacyResult(importDocument(text).document);
+
+export function readImport<K extends 'collection' | 'environment'>(file: string, want: K): NonNullable<ImportAnyResult[K]> {
+  let r: ImportAnyResult;
   try {
-    r = importAny(readFileSync(file, 'utf8'));
+    r = readImportText(readFileSync(file, 'utf8'));
   } catch (e) {
     throw new CliError(`Could not read ${want} file ${file}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
   }
@@ -168,9 +173,9 @@ export function readImport<K extends 'collection' | 'environment'>(file: string,
 export async function loadCollectionRef(ref: string, workspace: string | undefined): Promise<Collection> {
   if (/^https?:\/\//i.test(ref)) {
     const f = await fetchImportText(ref);
-    let r: ReturnType<typeof importAny>;
+    let r: ImportAnyResult;
     try {
-      r = importAny(f.text);
+      r = readImportText(f.text);
     } catch (e) {
       throw new CliError(`Could not read the collection at ${ref}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
     }

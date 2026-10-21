@@ -20,13 +20,13 @@ import { parseHttpie } from './httpie-import.js';
 import { parseApidog } from './apidog-import.js';
 import { parsePostmanV1, parsePostmanV3 } from './postman-versions.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
-import { finishDocument, legacyResult, type ImportAnyResult } from './pipeline.js';
+import { finishDocument } from './pipeline.js';
 import { buildReport, type ImportReport } from './report.js';
 
 /**
  * The import entry points. `parseImport` reads any supported text into an import document (model.ts), `finishDocument`
  * (pipeline.ts) converts its scripts and makes its ids unique, `buildReport` (report.ts) says what came over and what
- * did not. `importAny` is those three as the result the CLI, the app and MCP have always had.
+ * did not. `importDocument` is those three in one call.
  */
 
 export { detectFormat } from './detect.js';
@@ -143,13 +143,4 @@ function nested<T>(f: () => T): T {
     if (e instanceof RangeError && /call stack/i.test(e.message)) throw new ApsError('ValidationError', 'The file is nested too deeply to import (folders or objects thousands of levels deep)', { suggestions: ['Check the file: a real collection is a few levels deep. Export it again, or split it.'] });
     throw e;
   }
-}
-
-/**
- * Import any supported document into a collection (and optionally an environment). Node ids (folders, requests) are
- * made unique: against `takenIds` (the workspace's other collections, `workspaceNodeIds`) and within the file, so an
- * imported collection never shares ids with another one (a TestPion file imported twice, say); a note says how many changed.
- */
-export function importAny(text: string, opts: { name?: string; scripts?: ImportScriptsMode; takenIds?: Iterable<string>; liftTests?: boolean } = {}): ImportAnyResult {
-  return legacyResult(nested(() => finishDocument(parseImport(text, opts), opts)));
 }

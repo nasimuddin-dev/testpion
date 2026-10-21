@@ -4,7 +4,8 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
-import { bundleWsdl, detectFormat, fetchImportText, importAny, runCollection, type CollectionFolder, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
+import { bundleWsdl, detectFormat, fetchImportText, runCollection, type CollectionFolder, type SavedHttpRequest, type TestResult } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 const wsdl = readFileSync(join(__dirname, '../../examples/servers/patients.wsdl'), 'utf8');
 

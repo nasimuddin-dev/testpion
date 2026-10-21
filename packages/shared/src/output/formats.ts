@@ -370,7 +370,8 @@ export function crc32(data: Uint8Array, crc = 0): number {
 
 /**
  * A ZIP archive written entry by entry (stored, no compression: reports are small and this stays a few lines with no
- * dependency). `add` gives back the chunks to write for one file (its local header, then its bytes: the size and CRC
+ * dependency). It is the one zip writer that lives in shared, because shared must stay browser-safe and the bundle writer
+ * (core/transfer/zip.ts) deflates with Node's zlib; the one zip reader is transfer/zip.ts. `add` gives back the chunks to write for one file (its local header, then its bytes: the size and CRC
  * are known per file, so nothing waits for the whole archive); only the central directory is kept until `end`. Names
  * are UTF-8 (flag bit 11); a name is a relative path with forward slashes.
  */
@@ -436,20 +437,6 @@ export function createZipWriter(): { add(name: string, data: Uint8Array | string
       return out;
     },
   };
-}
-
-/** Files as one ZIP archive in memory (`createZipWriter` for one written as it is built). */
-export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array | string; date?: Date }>): Uint8Array {
-  const zip = createZipWriter();
-  const parts = files.flatMap((f) => zip.add(f.name, f.data, f.date));
-  parts.push(zip.end());
-  const out = new Uint8Array(parts.reduce((n, c) => n + c.length, 0));
-  let p = 0;
-  for (const part of parts) {
-    out.set(part, p);
-    p += part.length;
-  }
-  return out;
 }
 
 /** Bytes as base64 (to send a binary output over RPC). */

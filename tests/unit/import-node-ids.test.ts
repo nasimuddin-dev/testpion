@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, collectNodeIds, importAny, importIntoWorkspace, type Collection } from '../../packages/core/src/index.js';
+import { WorkspaceStore, collectNodeIds, importIntoWorkspace, type Collection } from '../../packages/core/src/index.js';
+import { importAny } from '../helpers-import.js';
 
 // An imported collection never shares folder / request ids with another collection of the workspace (shared ids made
 // the sidebar repeat rows): colliding ids are renamed, and a note says how many.

@@ -1,5 +1,5 @@
-import { AlertTriangle, ChevronDown, ChevronUp, CircleAlert, Maximize2, Minus, Plus, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { Maximize2 } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import {
   flowGraph,
   flowGroups,
@@ -11,8 +11,8 @@ import {
   type FlowNote,
   type FlowStep,
 } from '@testpion/shared';
-import { Button, Callout, cx, IconButton } from './ui';
-import { clearTextFit, fitText, textWidth, type TextFont } from '../lib/fit-text';
+import { Button, cx } from './ui';
+import { clearTextFit } from '../lib/fit-text';
 import {
   FlowMinimap,
   previewPlace,
@@ -33,6 +33,8 @@ import {
 export const FLOW_START = '__start';
 import { FlowEdgeView, FlowNodeView, portY } from './FlowNode';
 import { DropHintLayer, useFlowDrop, type FlowDropEvent } from './FlowDrop';
+import { findMatches, FlowFindBar, FlowFrame, FlowProblems, FlowToolbarFrame, GRID, groupKey, placeDragged } from './FlowDiagramParts';
+import { useCanvasView, viewTransform } from './use-canvas-view';
 
 /** What is selected on an editable diagram: steps and notes (several with Shift or a Shift-drag box), or one edge. */
 export interface FlowSelection {
@@ -72,15 +74,6 @@ function useStable<A extends unknown[], R>(fn: ((...a: A) => R) | undefined): ((
   return fn ? stable : undefined;
 }
 
-interface View {
-  x: number;
-  y: number;
-  k: number;
-}
-const viewTransform = (v: View) => `translate(${v.x} ${v.y}) scale(${v.k})`;
-/** A wheel or pan gesture is over when nothing moved for this long: then the canvas renders for the new view. */
-const SETTLE_MS = 140;
-
 /** Below this zoom the steps are drawn compact (their details would be a few pixels high). */
 const COMPACT_BELOW = 0.38;
 const NO_NOTES: FlowNote[] = [];
@@ -88,9 +81,6 @@ const NO_NOTES: FlowNote[] = [];
 /** How far (screen pixels) a press must move to become a drag; less, it is a click (or a double-click). */
 const DRAG_THRESHOLD = 3;
 
-/** Snap-to-grid step, and how close (in screen pixels) a dragged step must come to line up with another. */
-const GRID = 16;
-const GUIDE_TOLERANCE = 6;
 
 /**
  * A flow as a diagram: one node per step (name, type, method and URL, what it extracts, the latest result), an arrow
@@ -214,80 +204,7 @@ export function FlowDiagram({
       live = false;
     };
   }, []);
-  const box = useRef<HTMLDivElement>(null);
-  const svg = useRef<SVGSVGElement>(null);
-  // until the pane's size is known, the graph at its own size from the top left corner
-  const [committed, setCommitted] = useState<View>({ x: 32, y: 32, k: 1 });
-  /** The view as it is on screen now (ahead of `committed` while a wheel or pan gesture is in progress). */
-  const viewRef = useRef(committed);
-  const gesture = useRef<{ timer?: ReturnType<typeof setTimeout>; raf?: number; live?: boolean }>({});
-  /** Set the view now (fit, reveal, the minimap, the end of a gesture): it replaces a gesture in progress. */
-  const setView = useCallback((next: View | ((v: View) => View)) => {
-    const g = gesture.current;
-    clearTimeout(g.timer);
-    if (g.raf) cancelAnimationFrame(g.raf);
-    gesture.current = {};
-    const v = typeof next === 'function' ? next(viewRef.current) : next;
-    viewRef.current = v;
-    setCommitted(v);
-    // the same view again (a gesture that came back where it began): nothing renders, so drop the picture transform here
-    if (v.x === committedRef.current.x && v.y === committedRef.current.y && v.k === committedRef.current.k && svg.current) {
-      svg.current.style.transform = '';
-      svg.current.style.willChange = '';
-    }
-  }, []);
-  const committedRef = useRef(committed);
-  committedRef.current = committed;
-  /**
-   * A wheel or pan step. The drawing is not touched: the whole canvas is moved as one composited picture (a CSS
-   * transform from the committed view to the live one, on the GPU, once a frame), so neither React nor the browser's
-   * painting of hundreds of steps runs per frame. Once the gesture settles the view is committed: the canvas renders
-   * once for it (the steps on screen, compact or full, sharp at the new zoom) and the CSS transform is dropped.
-   */
-  const moveView = useCallback(
-    (v: View) => {
-      viewRef.current = v;
-      const g = gesture.current;
-      g.live = true;
-      if (!g.raf)
-        g.raf = requestAnimationFrame(() => {
-          g.raf = undefined;
-          const el = svg.current;
-          if (!el) return;
-          const c = committedRef.current;
-          const l = viewRef.current;
-          const k = l.k / c.k;
-          el.style.transformOrigin = '0 0';
-          el.style.willChange = 'transform';
-          el.style.transform = `translate(${l.x - k * c.x}px, ${l.y - k * c.y}px) scale(${k})`;
-        });
-      clearTimeout(g.timer);
-      g.timer = setTimeout(() => setView(viewRef.current), SETTLE_MS);
-    },
-    [setView],
-  );
-  // the committed view is drawn: the gesture's picture transform goes, in the same frame
-  useLayoutEffect(() => {
-    const el = svg.current;
-    if (el && el.style.transform) {
-      el.style.transform = '';
-      el.style.willChange = '';
-    }
-  }, [committed]);
-  useEffect(
-    () => () => {
-      clearTimeout(gesture.current.timer);
-      if (gesture.current.raf) cancelAnimationFrame(gesture.current.raf);
-    },
-    [],
-  );
-  // what is drawn follows the committed view; during a gesture the picture is moved on top of it (moveView)
-  const view = committed;
   const arrow = useId();
-  // the pane's size, from a ResizeObserver: reading clientWidth right after mounting hundreds of nodes forced a layout
-  const size = useRef<{ w: number; h: number }>(undefined);
-  /** The current graph has been fitted to a known size. */
-  const fitted = useRef(false);
 
   const boxes = useMemo(() => frameBoxes(graph.nodes, frames), [graph.nodes, frames]);
   // the Start node: left of the steps, level with the ones that wait for nothing (an empty flow: with its suggestions)
@@ -323,75 +240,13 @@ export function FlowDiagram({
       y1: Math.max(graph.height, ...rects.map((r) => r.y + r.h)),
     };
   }, [graph, boxes, notes, startBox, suggestionBoxes]);
-  const boundsRef = useRef(bounds);
-  boundsRef.current = bounds;
-  const minimapRef = useRef(false);
-  minimapRef.current = !!minimap && graph.nodes.length > 8;
-
-  const fit = useCallback(() => {
-    const s = size.current;
-    const b = boundsRef.current;
-    const w = b.x1 - b.x0;
-    const h = b.y1 - b.y0;
-    if (!s || !w || !h) return;
-    const pad = 32;
-    // the overview covers the top-right corner: the flow is fitted beside it or below it (whichever is bigger), so no
-    // step lies under it
-    const fits = (right: number, top: number) => ({ right, top, k: Math.min((s.w - pad * 2 - right) / w, (s.h - pad * 2 - top) / h, 1.4) });
-    const { right, top, k } = minimapRef.current ? [fits(MINIMAP_W + 16, 0), fits(0, MINIMAP_H + 16)].reduce((a, c) => (c.k > a.k ? c : a)) : fits(0, 0);
-    const z = Math.max(k, MIN_ZOOM);
-    // too big even at the smallest zoom: from its top-left corner (its start), not cut off on both sides
-    setView({ k: z, x: z > k ? pad - b.x0 * z : (s.w - right - w * z) / 2 - b.x0 * z, y: z > k && h * z > s.h - top - pad * 2 ? top + pad - b.y0 * z : top + (s.h - top - h * z) / 2 - b.y0 * z });
-    fitted.current = true;
-  }, []);
-  const fitNow = useRef(fit);
-  fitNow.current = fit;
-  // a new graph (another file, more steps) fits the pane; a run that only recolours the nodes keeps the view
-  // (in the designer, steps placed by hand keep the view too: it fits again for another file, or when steps are added or removed)
+  // the view: pan, zoom, fit (use-canvas-view.ts); the flow fits again for another file, or when steps are added or removed
   const placed = steps.some((s) => s.position);
-  const fitTrigger = fitKey === undefined ? fit : placed ? `${fitKey}|${graph.nodes.length}` : `${fitKey}|${graph.width}x${graph.height}`;
-  useLayoutEffect(() => {
-    fitted.current = false;
-    fitNow.current();
-  }, [fitTrigger]);
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      const { width: w, height: h } = entry!.contentRect;
-      if (!w || !h) return; // hidden: fit once it is shown
-      size.current = { w, h };
-      if (!fitted.current) fitNow.current();
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  // the wheel zooms around the pointer (a native listener: React's is passive and could not stop the page scrolling)
-  useEffect(() => {
-    const el = svg.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      // the pane's box, not the svg's: during a gesture the svg is moved by a CSS transform
-      const r = (box.current ?? el).getBoundingClientRect();
-      const px = e.clientX - r.left;
-      const py = e.clientY - r.top;
-      const v = viewRef.current;
-      // a trackpad scrolls in pixels, sideways too, in fractions: two fingers pan (a pinch arrives as Ctrl+wheel and zooms);
-      // Shift+wheel pans sideways. A mouse wheel's whole notches zoom around the pointer.
-      const trackpad = e.deltaMode === 0 && (e.deltaX !== 0 || !Number.isInteger(e.deltaY));
-      if (!e.ctrlKey && !e.metaKey && (trackpad || e.shiftKey)) {
-        const dx = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
-        const dy = e.shiftKey && !e.deltaX ? 0 : e.deltaY;
-        moveView({ ...v, x: v.x - dx, y: v.y - dy });
-        return;
-      }
-      const k = Math.min(4, Math.max(MIN_ZOOM, v.k * Math.exp(-e.deltaY * (e.ctrlKey && trackpad ? 0.01 : 0.0015))));
-      moveView({ k, x: px - ((px - v.x) * k) / v.k, y: py - ((py - v.y) * k) / v.k });
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [moveView]);
+  const { box, svg, view, viewRef, size, setView, moveView, fit, zoomTo } = useCanvasView({
+    bounds,
+    minimap: !!minimap && graph.nodes.length > 8,
+    fitSignature: fitKey === undefined ? undefined : placed ? `${fitKey}|${graph.nodes.length}` : `${fitKey}|${graph.width}x${graph.height}`,
+  });
 
   const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
   const chosen = useMemo(() => new Set(selection ? selection.steps : selected ? [selected] : []), [selection, selected]);
@@ -508,39 +363,7 @@ export function FlowDiagram({
     drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, marquee: !!editable && e.shiftKey, shift: e.shiftKey };
     capture(e);
   };
-  /** Where the dragged steps go: lined up with another step when one is within a few pixels (a guide shows it), else on the grid when snapping. */
-  const placeDrag = (n: NonNullable<typeof nodeDrag.current>, rawDx: number, rawDy: number) => {
-    const lead = byId.get(n.lead);
-    if (!lead) return { dx: rawDx, dy: rawDy, lines: [] };
-    const tol = GUIDE_TOLERANCE / viewRef.current.k;
-    const px = lead.x + rawDx;
-    const py = lead.y + rawDy;
-    // a frame's or a group's steps move as one: lining their first step up with some other step means nothing
-    const others = n.frame ? [] : graph.nodes.filter((o) => !n.ids.includes(o.id));
-    const anchors = (p: number, size: number) => [p, p + size / 2, p + size];
-    let bx: { d: number; at: number; o: (typeof others)[number] } | undefined;
-    let by: typeof bx;
-    for (const o of others) {
-      const mine = anchors(px, lead.w);
-      const theirs = anchors(o.x, o.w);
-      for (let i = 0; i < 3; i++) {
-        const d = theirs[i]! - mine[i]!;
-        if (Math.abs(d) < tol && (!bx || Math.abs(d) < Math.abs(bx.d))) bx = { d, at: theirs[i]!, o };
-      }
-      const mineY = anchors(py, lead.h);
-      const theirsY = anchors(o.y, o.h);
-      for (let i = 0; i < 3; i++) {
-        const d = theirsY[i]! - mineY[i]!;
-        if (Math.abs(d) < tol && (!by || Math.abs(d) < Math.abs(by.d))) by = { d, at: theirsY[i]!, o };
-      }
-    }
-    const x = bx ? px + bx.d : snapTo(px);
-    const y = by ? py + by.d : snapTo(py);
-    const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    if (bx) lines.push({ x1: bx.at, y1: Math.min(y, bx.o.y) - 12, x2: bx.at, y2: Math.max(y + lead.h, bx.o.y + bx.o.h) + 12 });
-    if (by) lines.push({ x1: Math.min(x, by.o.x) - 12, y1: by.at, x2: Math.max(x + lead.w, by.o.x + by.o.w) + 12, y2: by.at });
-    return { dx: x - lead.x, dy: y - lead.y, lines };
-  };
+  const placeDrag = (n: NonNullable<typeof nodeDrag.current>, rawDx: number, rawDy: number) => placeDragged(graph.nodes, byId, n, { dx: rawDx, dy: rawDy }, viewRef.current.k, snapTo);
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     // nothing moves until the press is a drag (a click stays a click)
     if (!dragging(e)) return;
@@ -717,20 +540,7 @@ export function FlowDiagram({
   // Ctrl+F: find steps by name, URL, variable or type; Enter jumps to the next match and selects it
   const [find, setFind] = useState<{ q: string; i: number }>();
   const findInput = useRef<HTMLInputElement>(null);
-  const matches = useMemo(() => {
-    const words = (find?.q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
-    if (!words.length) return [];
-    return graph.nodes
-      .filter((n) => {
-        const s = n.step;
-        const hay = [s.name, s.id, s.type, s.method, s.url, s.message, s.if, s.flow, ...(s.uses ?? []).map((v) => `{{${v}}} ${v}`), ...(s.extract ?? []), ...(s.set ?? [])]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return words.every((w) => hay.includes(w));
-      })
-      .map((n) => n.id);
-  }, [find?.q, graph.nodes]);
+  const matches = useMemo(() => findMatches(graph.nodes, find?.q ?? ''), [find?.q, graph.nodes]);
   const openFind = useCallback(() => {
     setFind((f) => f ?? { q: '', i: -1 });
     setTimeout(() => (findInput.current?.focus(), findInput.current?.select()), 0);
@@ -748,14 +558,6 @@ export function FlowDiagram({
     box.current?.focus({ preventScroll: true });
   };
 
-  /** The zoom buttons: in or out around the middle of the view. */
-  const zoomTo = (k: number) => {
-    const s = size.current ?? { w: 600, h: 400 };
-    setView((v) => {
-      const z = Math.min(4, Math.max(MIN_ZOOM, k));
-      return { k: z, x: s.w / 2 - ((s.w / 2 - v.x) * z) / v.k, y: s.h / 2 - ((s.h / 2 - v.y) * z) / v.k };
-    });
-  };
   if (apiRef)
     apiRef.current = {
       fit,
@@ -981,41 +783,7 @@ export function FlowDiagram({
           </Button>
         </div>
       )}
-      {find && (
-        <div className="absolute top-2 left-2 flex items-center gap-1 rounded-md border border-line bg-popover shadow-lg px-1.5 py-1 text-xs" data-flow-find>
-          <Search size={13} className="text-muted shrink-0" />
-          <input
-            ref={findInput}
-            aria-label="Find steps"
-            className="bg-transparent outline-none w-48"
-            placeholder="Find a step: name, URL, variable, type"
-            value={find.q}
-            onChange={(e) => setFind({ q: e.target.value, i: -1 })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                jump(e.shiftKey ? -1 : 1);
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                closeFind();
-              }
-            }}
-          />
-          <span className="text-muted tabular-nums whitespace-nowrap" data-flow-find-count>
-            {find.q.trim() ? `${current ? matches.indexOf(current) + 1 : 0} of ${matches.length}` : ''}
-          </span>
-          <IconButton label="Previous match (Shift+Enter)" className="h-6 w-6" onClick={() => jump(-1)} disabled={!matches.length}>
-            <ChevronUp size={13} />
-          </IconButton>
-          <IconButton label="Next match (Enter)" className="h-6 w-6" onClick={() => jump(1)} disabled={!matches.length}>
-            <ChevronDown size={13} />
-          </IconButton>
-          <IconButton label="Close (Esc)" className="h-6 w-6" onClick={closeFind}>
-            <X size={13} />
-          </IconButton>
-        </div>
-      )}
+      {find && <FlowFindBar query={find.q} inputRef={findInput} matches={matches} current={current} onQuery={(q) => setFind({ q, i: -1 })} onJump={jump} onClose={closeFind} />}
       {minimapShown && (
         <FlowMinimap
           bounds={bounds}
@@ -1037,100 +805,21 @@ export function FlowDiagram({
           {renderPreview(hovered.step)}
         </div>
       )}
-      {checks
-        ? checks.length + problems.length > 0 && (
-            <div className="absolute left-2 bottom-2 right-2 max-h-28 overflow-auto rounded-md border border-warn/40 bg-popover/95 shadow text-xs py-1" data-flow-checks role="list" aria-label="Problems">
-              {problems.map((p, i) => (
-                <div key={`p${i}`} className="flex items-center gap-2 px-2 py-0.5 text-warn">
-                  <AlertTriangle size={12} className="shrink-0" />
-                  <span>{p.message}</span>
-                </div>
-              ))}
-              {checks.map((c, i) => (
-                <button
-                  key={i}
-                  role="listitem"
-                  className="w-full flex items-center gap-2 px-2 py-0.5 text-left hover:bg-hover"
-                  data-flow-check={c.step}
-                  data-flow-check-kind={c.kind}
-                  title="Select the step"
-                  onClick={() => {
-                    reveal(c.step);
-                    if (editable) onSelectionChange?.({ steps: [c.step] });
-                    else if (byId.get(c.step)) onSelect?.(byId.get(c.step)!.step);
-                  }}
-                >
-                  {c.severity === 'error' ? <CircleAlert size={12} className="shrink-0 text-bad" /> : <AlertTriangle size={12} className="shrink-0 text-warn" />}
-                  <span className="truncate">{c.message}</span>
-                </button>
-              ))}
-            </div>
-          )
-        : problems.length > 0 && (
-            <Callout tone="warn" className="absolute left-2 bottom-2 right-2 rounded-md px-3 py-2 text-xs grid gap-0.5" data-flow-problems>
-              {problems.map((p, i) => (
-                <div key={i}>{p.message}</div>
-              ))}
-            </Callout>
-          )}
+      <FlowProblems
+        checks={checks}
+        problems={problems}
+        onPick={(step) => {
+          reveal(step);
+          if (editable) onSelectionChange?.({ steps: [step] });
+          else if (byId.get(step)) onSelect?.(byId.get(step)!.step);
+        }}
+      />
     </div>
   );
   if (!toolbar) return canvas;
   return (
-    <div className={cx('h-full w-full flex flex-col min-h-0', className)}>
-      <div className="@container flex items-center gap-1 px-2 py-1.5 border-b border-line flex-nowrap overflow-hidden whitespace-nowrap shrink-0" data-flow-toolbar>
-        {/* the designer's buttons take the room there is (they fold into their ⋯ menu); the view's own stay whole on the right */}
-        <div className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden">{toolbar}</div>
-        <div className="flex items-center gap-1 shrink-0">
-          {toolbarRight}
-          <span className="hidden @[760px]:inline-flex">
-            <IconButton label="Zoom out" className="h-7 w-7" onClick={() => zoomTo(view.k / 1.25)} data-flow-zoom="out">
-            <Minus size={13} />
-          </IconButton>
-          </span>
-          <button type="button" className="hidden @[480px]:block h-7 min-w-11 px-1 rounded text-xs tabular-nums text-muted hover:bg-hover hover:text-fg" onClick={() => zoomTo(1)} title="Zoom: click for 100%" aria-label="Zoom to 100%" data-flow-zoom-level>
-            {Math.round(view.k * 100)}%
-          </button>
-          <span className="hidden @[760px]:inline-flex">
-            <IconButton label="Zoom in" className="h-7 w-7" onClick={() => zoomTo(view.k * 1.25)} data-flow-zoom="in">
-            <Plus size={13} />
-          </IconButton>
-          </span>
-          <Button size="sm" icon={<Maximize2 size={12} />} onClick={fit} title="Show the whole flow" aria-label="Fit">
-            <span className="hidden @[760px]:inline">Fit</span>
-          </Button>
-        </div>
-      </div>
+    <FlowToolbarFrame className={className} toolbar={toolbar} toolbarRight={toolbarRight} zoom={view.k} onZoom={zoomTo} onFit={fit}>
       {canvas}
-    </div>
-  );
-}
-
-const groupKey = (g: FlowGroup) => `${g.kind}:${g.name}`;
-const F_LANE: TextFont = { size: 10, weight: 600 };
-/** The overview's width (FlowMinimap): Fit keeps the flow out of its corner. */
-const MINIMAP_W = 180;
-const MINIMAP_H = 120;
-/** The farthest out the view goes (Fit, the wheel, the zoom buttons): a long chain of steps still fits a narrow pane. */
-const MIN_ZOOM = 0.08;
-
-/** A frame around a parallel group's steps, or the Finally lane; in the designer its label drags its steps. */
-function FlowFrame({ group: g, editable }: { group: FlowGroup; editable?: boolean }) {
-  const fin = g.kind === 'finally';
-  const label = fin ? 'Finally · runs last, whatever happened' : `parallel · ${g.name}`;
-  // the pill as wide as its text, at most the frame's width; the text fitted inside it
-  const text = fitText(label, Math.max(0, g.w - 16 - 14), F_LANE);
-  const pill = Math.min(g.w - 16, textWidth(text, F_LANE) + 14);
-  return (
-    <g data-flow-group={groupKey(g)} data-flow-group-kind={g.kind}>
-      <title>{fin ? 'Clean-up steps: they run after every other step of the flow, also after failures and a stop' : `Steps of the group "${g.name}" may run at the same time (what they wait for still applies)`}</title>
-      <rect x={g.x} y={g.y} width={g.w} height={g.h} rx={12} className={cx(fin ? 'fill-warn/5 stroke-warn' : 'fill-accent/5 stroke-accent')} strokeWidth={1.25} strokeDasharray="6 4" />
-      <g data-flow-group-handle={editable ? groupKey(g) : undefined} className={editable ? 'cursor-move' : undefined}>
-        <rect x={g.x + 8} y={g.y + 3} width={Math.max(0, pill)} height={15} rx={7.5} className={fin ? 'fill-warn' : 'fill-accent'} />
-        <text x={g.x + 15} y={g.y + 14} className="fill-bg text-[10px] font-semibold" data-flow-group-title>
-          {text}
-        </text>
-      </g>
-    </g>
+    </FlowToolbarFrame>
   );
 }
