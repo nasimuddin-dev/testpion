@@ -4,6 +4,34 @@ import { clipConsole, consoleRefs } from './console-log.js';
 import type { GqlSendParams, HttpSendParams } from './params.js';
 import type { Backend } from './backend.js';
 
+type Ctx = ReturnType<Backend['context']>;
+type ScriptView = Pick<Parameters<typeof runScript>[1], 'request'> & Partial<Pick<Parameters<typeof runScript>[1], 'response' | 'cookies'>>;
+type ScriptResult = Awaited<ReturnType<typeof runScript>>;
+
+/**
+ * The scripts of one send (HTTP and GraphQL run them the same way): `run` executes one script with what it sees of the request
+ * (and response), hands its output to `collect` (the logs, the visualizer), then applies the variables and cookie-jar changes it made.
+ */
+function scriptHost(be: Backend, ctx: Ctx, signal: AbortSignal, info: { requestName?: string; requestId?: string; environmentName?: string }) {
+  const saved = ctx.services.savedRequest ? { find: ctx.services.savedRequest, resolve: (s: HttpRequestSpec) => ctx.vars.resolveDeep(s) } : undefined;
+  const sendRequest = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal, timeoutMs: be.settings.defaultTimeoutMs, production: ctx.services.production, saved });
+  return {
+    async run(script: string, view: ScriptView, collect: (out: ScriptResult) => void): Promise<ScriptResult> {
+      const out = await runScript(script, { ...scriptScopes(ctx.vars), ...view, jar: ctx.services.cookieJar?.list(), info }, { sendRequest, requirePackage: (n) => be.ws.readScriptPackage(n) });
+      collect(out);
+      applyScriptOutput(out, [ctx.vars], { redactor: ctx.redactor, persist: ctx.services.persistVariable });
+      if (ctx.services.cookieJar) applyCookieJarOps(ctx.services.cookieJar, out.jarOps);
+      return out;
+    },
+  };
+}
+
+/** The checks a test script reports: each tp.test, and the script's own failure. */
+const testChecks = (out: ScriptResult) => [
+  ...out.tests.map((t) => ({ type: 'script', name: t.name, passed: t.passed, source: 'deterministic' as const, message: t.message ?? (t.passed ? 'passed' : 'failed') })),
+  ...(out.error ? [{ type: 'script', name: 'test script', passed: false, source: 'deterministic' as const, message: out.error }] : []),
+];
+
 export async function httpSend(be: Backend, p: HttpSendParams) {
   // an environment that does not exist (or whose file cannot be read) is an error, never a silent send without its variables
   // (answered like any failed send: the response pane shows it with its why and suggestions)
@@ -23,9 +51,8 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
   const sseEvents = be.batched<unknown>('http.sse', 100);
   let scriptLogs: string[] = [];
   let preLogCount: number | undefined;
-  const saved = ctx.services.savedRequest ? { find: ctx.services.savedRequest, resolve: (s: HttpRequestSpec) => ctx.vars.resolveDeep(s) } : undefined;
-  const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: be.settings.defaultTimeoutMs, production: ctx.services.production, saved });
-  const sentLogs = (o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
+  const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name, requestId: p.requestId, environmentName: ctx.environment?.name });
+  const sentLogs =(o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
     (o.sentRequests ?? []).map((r) => `tp.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
   const logsOf = () => scriptLogs.map((message, i) => ({ phase: i < (preLogCount ?? scriptLogs.length) ? ('pre-request' as const) : ('test' as const), message: ctx.redactor.redactString(message) }));
   try {
@@ -41,15 +68,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
     for (const script of [ctx.collection?.preRequestScript, ...folders.map((f) => f.preRequestScript), p.preRequestScript]) {
       if (!script?.trim()) continue;
       const bodyText = request.body && 'content' in request.body ? request.body.content : undefined;
-      const out = await runScript(script, {
-        ...scriptScopes(ctx.vars),
-        request: { method: request.method, url: request.url, headers: request.headers ?? [], body: bodyText },
-        jar: ctx.services.cookieJar?.list(),
-        info: { requestName: p.name, requestId: p.requestId, environmentName: ctx.environment?.name },
-      }, { sendRequest: scriptSender, requirePackage: (n) => be.ws.readScriptPackage(n) });
-      scriptLogs.push(...out.logs, ...sentLogs(out));
-      applyScriptOutput(out, [ctx.vars], { redactor: ctx.redactor, persist: ctx.services.persistVariable });
-      if (ctx.services.cookieJar) applyCookieJarOps(ctx.services.cookieJar, out.jarOps);
+      const out = await scripts.run(script, { request: { method: request.method, url: request.url, headers: request.headers ?? [], body: bodyText } }, (o) => scriptLogs.push(...o.logs, ...sentLogs(o)));
       if (out.error) throw new ApsError('ScriptError', `Pre-request script failed: ${out.error}`);
       if (out.request) {
         request = { ...request, method: out.request.method, url: out.request.url, headers: out.request.headers };
@@ -104,20 +123,19 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
     let visual: { template: string; data: unknown } | null | undefined;
     for (const script of [ctx.collection?.testScript, ...folders.map((f) => f.testScript), p.testScript]) {
       if (!script?.trim()) continue;
-      const out = await runScript(script, {
-        ...scriptScopes(ctx.vars),
-        request: { method: spec.method, url: spec.url, headers: spec.headers ?? [] },
-        response: { status: response.status, headers: response.headers, body: response.bodyPreview, time: response.durationMs },
-        cookies: responseCookies(response.cookies, ctx.services.cookieJar, response.url),
-        jar: ctx.services.cookieJar?.list(),
-        info: { requestName: p.name, requestId: p.requestId, environmentName: ctx.environment?.name },
-      }, { sendRequest: scriptSender, requirePackage: (n) => be.ws.readScriptPackage(n) });
-      scriptLogs.push(...out.logs, ...sentLogs(out));
-      if (out.visualizer !== undefined) visual = out.visualizer;
-      applyScriptOutput(out, [ctx.vars], { redactor: ctx.redactor, persist: ctx.services.persistVariable });
-      if (ctx.services.cookieJar) applyCookieJarOps(ctx.services.cookieJar, out.jarOps);
-      for (const t of out.tests) checks.push({ type: 'script', name: t.name, passed: t.passed, source: 'deterministic', message: t.message ?? (t.passed ? 'passed' : 'failed') });
-      if (out.error) checks.push({ type: 'script', name: 'test script', passed: false, source: 'deterministic', message: out.error });
+      const out = await scripts.run(
+        script,
+        {
+          request: { method: spec.method, url: spec.url, headers: spec.headers ?? [] },
+          response: { status: response.status, headers: response.headers, body: response.bodyPreview, time: response.durationMs },
+          cookies: responseCookies(response.cookies, ctx.services.cookieJar, response.url),
+        },
+        (o) => {
+          scriptLogs.push(...o.logs, ...sentLogs(o));
+          if (o.visualizer !== undefined) visual = o.visualizer;
+        },
+      );
+      checks.push(...testChecks(out));
     }
     const trace = tracer.finish();
     be.ws.saveTrace(trace, 'http');
@@ -258,11 +276,9 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
   const ctx = be.context({ environment: p.environment, collectionId: p.collectionId });
   const tracer = new Tracer(p.operationName ?? 'GraphQL', ctx.redactor);
   const span = tracer.start('graphql', 'graphql', { input: { query: p.request.query, variables: p.request.variables } });
-  const saved = ctx.services.savedRequest ? { find: ctx.services.savedRequest, resolve: (s: HttpRequestSpec) => ctx.vars.resolveDeep(s) } : undefined;
-  const scriptSender = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal: ctrl.signal, timeoutMs: be.settings.defaultTimeoutMs, production: ctx.services.production, saved });
   const scriptLogs: Array<{ phase: 'pre-request' | 'test'; message: string }> = [];
   const folders = ctx.collection && p.requestId ? folderChain(ctx.collection, p.requestId) : [];
-  const info = { requestName: p.name ?? p.operationName, requestId: p.requestId, environmentName: ctx.environment?.name };
+  const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name ?? p.operationName, requestId: p.requestId, environmentName: ctx.environment?.name });
   try {
     // collection, folder (outer to inner) and request pre-request scripts, as for REST requests
     let request = p.request;
@@ -271,15 +287,11 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
     if (Object.keys(fv).length) ctx.vars.setScope('request', fv);
     for (const script of [ctx.collection?.preRequestScript, ...folders.map((f) => f.preRequestScript), p.preRequestScript]) {
       if (!script?.trim()) continue;
-      const out = await runScript(script, {
-        ...scriptScopes(ctx.vars),
-        request: { method: 'POST', url: request.endpoint, headers: request.headers ?? [], body: JSON.stringify({ query: request.query, variables: request.variables }) },
-        jar: ctx.services.cookieJar?.list(),
-        info,
-      }, { sendRequest: scriptSender, requirePackage: (n) => be.ws.readScriptPackage(n) });
-      scriptLogs.push(...out.logs.map((message) => ({ phase: 'pre-request' as const, message: ctx.redactor.redactString(message) })));
-      applyScriptOutput(out, [ctx.vars], { redactor: ctx.redactor, persist: ctx.services.persistVariable });
-      if (ctx.services.cookieJar) applyCookieJarOps(ctx.services.cookieJar, out.jarOps);
+      const out = await scripts.run(
+        script,
+        { request: { method: 'POST', url: request.endpoint, headers: request.headers ?? [], body: JSON.stringify({ query: request.query, variables: request.variables }) } },
+        (o) => scriptLogs.push(...o.logs.map((message) => ({ phase: 'pre-request' as const, message: ctx.redactor.redactString(message) }))),
+      );
       if (out.error) throw new ApsError('ScriptError', `Pre-request script failed: ${out.error}`);
       if (out.request) request = { ...request, endpoint: out.request.url, headers: out.request.headers };
     }
@@ -299,18 +311,15 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
     });
     for (const script of [ctx.collection?.testScript, ...folders.map((f) => f.testScript), p.testScript]) {
       if (!script?.trim()) continue;
-      const out = await runScript(script, {
-        ...scriptScopes(ctx.vars),
-        request: { method: 'POST', url: r.prepared.url, headers: spec.headers ?? [] },
-        response: { status: r.response.status, headers: r.response.headers, body: r.response.bodyPreview, time: r.response.durationMs },
-        jar: ctx.services.cookieJar?.list(),
-        info,
-      }, { sendRequest: scriptSender, requirePackage: (n) => be.ws.readScriptPackage(n) });
-      scriptLogs.push(...out.logs.map((message) => ({ phase: 'test' as const, message: ctx.redactor.redactString(message) })));
-      applyScriptOutput(out, [ctx.vars], { redactor: ctx.redactor, persist: ctx.services.persistVariable });
-      if (ctx.services.cookieJar) applyCookieJarOps(ctx.services.cookieJar, out.jarOps);
-      for (const t of out.tests) checks.push({ type: 'script', name: t.name, passed: t.passed, source: 'deterministic', message: t.message ?? (t.passed ? 'passed' : 'failed') });
-      if (out.error) checks.push({ type: 'script', name: 'test script', passed: false, source: 'deterministic', message: out.error });
+      const out = await scripts.run(
+        script,
+        {
+          request: { method: 'POST', url: r.prepared.url, headers: spec.headers ?? [] },
+          response: { status: r.response.status, headers: r.response.headers, body: r.response.bodyPreview, time: r.response.durationMs },
+        },
+        (o) => scriptLogs.push(...o.logs.map((message) => ({ phase: 'test' as const, message: ctx.redactor.redactString(message) }))),
+      );
+      checks.push(...testChecks(out));
     }
     const trace = tracer.finish();
     be.ws.saveTrace(trace, 'graphql');
