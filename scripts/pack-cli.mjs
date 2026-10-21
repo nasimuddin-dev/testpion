@@ -6,7 +6,7 @@
 //   node scripts/pack-cli.mjs --json     -> a summary for agents and CI
 //
 // The release workflow runs it with --tarball and publishes the tarball when the repository has an NPM_TOKEN secret.
-import { build } from 'esbuild';
+import { bundleCli, sourcePackages, thirdPartyRanges } from './cli-bundle.mjs';
 import { execSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
@@ -18,35 +18,16 @@ const args = process.argv.slice(2);
 const outIdx = args.indexOf('--out');
 const outRoot = outIdx >= 0 ? resolve(args[outIdx + 1]) : join(root, 'dist', 'npm');
 const pkgDir = join(outRoot, 'testpion');
-const read = (p) => JSON.parse(readFileSync(join(root, p), 'utf8'));
-
-const rootPkg = read('package.json');
-const sources = ['packages/shared/package.json', 'packages/core/package.json', 'packages/cli/package.json'].map(read);
-// every third-party module the engine may load, with the version range its package asks for
-const ranges = {};
-for (const p of sources) for (const [name, range] of Object.entries(p.dependencies ?? {})) if (!name.startsWith('@testpion/')) ranges[name] = range;
+const rootPkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const sources = sourcePackages(root);
+const ranges = thirdPartyRanges(root);
 
 rmSync(pkgDir, { recursive: true, force: true });
 mkdirSync(join(pkgDir, 'dist'), { recursive: true });
 mkdirSync(join(pkgDir, 'bin'), { recursive: true });
 
-const result = await build({
-  entryPoints: [join(root, 'packages/cli/src/index.ts')],
-  outfile: join(pkgDir, 'dist', 'testpion.js'),
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  target: 'node22',
-  sourcemap: false,
-  legalComments: 'none',
-  logLevel: 'warning',
-  metafile: true,
-  // the engine's own code is bundled from source; everything else stays a dependency
-  alias: { '@testpion/core': join(root, 'packages/core/src/index.ts'), '@testpion/shared': join(root, 'packages/shared/src/index.ts') },
-  external: Object.keys(ranges).flatMap((n) => [n, `${n}/*`]),
-  // CommonJS dependencies that call require() need it in an ES module bundle
-  banner: { js: "import { createRequire as __tpCreateRequire } from 'node:module'; const require = __tpCreateRequire(import.meta.url);" },
-});
+// the engine's own code is bundled from source; everything else stays a dependency (cli-bundle.mjs)
+const result = await bundleCli({ root, outfile: join(pkgDir, 'dist', 'testpion.js') });
 
 // the dependencies the bundle actually imports (static or dynamic), not the whole list
 const builtins = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);

@@ -37,8 +37,30 @@ async function answerQuickly() {
   return true;
 }
 
+// The command line is about 1,000 files of dist/ (cli, core, shared): loading them one by one is most of a command's
+// start (about 1.9 s, 0.5 s as one file). The build also writes dist/bundle.js (scripts/bundle.mjs); it is used while it
+// is newer than the last build of each of the three packages (tsc rewrites every output file, so any rebuild makes it
+// stale and the files load as before). TESTPION_UNBUNDLED=1 skips it. (the npm package copies this file and points the
+// one import of dist/index.js below at its own bundle, so that name appears once)
+async function loadMain() {
+  const entry = '../dist/index.js';
+  if (!process.env.TESTPION_UNBUNDLED) {
+    try {
+      const mtime = (p) => statSync(new URL(p, import.meta.url)).mtimeMs;
+      if (mtime('../dist/bundle.js') >= Math.max(mtime(entry), mtime('../../core/dist/index.js'), mtime('../../shared/dist/index.js'))) {
+        // V8's compile cache (Node 22.1+) keeps the compiled bundle between runs
+        (await import('node:module')).enableCompileCache?.();
+        return (await import('../dist/bundle.js')).main;
+      }
+    } catch {
+      // no bundle (a source checkout that was not built with it, the npm package): the files
+    }
+  }
+  return (await import(entry)).main;
+}
+
 if (!(await answerQuickly())) {
-  const { main } = await import('../dist/index.js');
+  const main = await loadMain();
 
   // Let the event loop drain instead of calling process.exit() right away: exiting while libuv is still
   // finishing file work aborts Node on Windows ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)").

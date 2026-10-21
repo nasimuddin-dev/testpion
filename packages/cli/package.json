@@ -15,7 +15,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/fast-index.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/bundle.mjs && node scripts/fast-index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
