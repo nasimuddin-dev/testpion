@@ -15,7 +15,7 @@ import { runResults } from '../runner/run-results.js';
 import { finishedRun } from '../runner/result-source.js';
 import type { StoredResponse } from './verify.js';
 
-export interface ItemContext {
+interface ItemContext {
   /** A short name of the item ("Orders / Create order"). */
   label: string;
   context: Record<string, unknown>;

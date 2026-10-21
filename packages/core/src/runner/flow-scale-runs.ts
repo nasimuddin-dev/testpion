@@ -19,11 +19,11 @@ import { scaleRunStatus, type FlowRunStatus } from '@testpion/shared';
 import type { FlowMatrixResult } from './flow-env-matrix.js';
 
 /** The newest scale runs kept. */
-export const KEEP_SCALE_RUNS = 50;
+const KEEP_SCALE_RUNS = 50;
 /** The most rows one page has. */
-export const MAX_ROWS_PAGE = 500;
+const MAX_ROWS_PAGE = 500;
 
-export type ScaleRunRecord =
+type ScaleRunRecord =
   ({ id: string; kind: 'data'; file: string; environment?: string } & Omit<FlowDataRunResult, 'file'>) | ({ id: string; kind: 'matrix'; file: string } & Omit<FlowMatrixResult, 'file'>);
 
 /** A scale run as lists show it. */

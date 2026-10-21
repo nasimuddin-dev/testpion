@@ -21,7 +21,7 @@ export function inheritedHeaders(collection: Pick<Collection, 'headers'> | undef
 }
 
 /** The settings of a collection and its folders (outermost first), merged: an inner level wins. */
-export function inheritedSettings(collection: Pick<Collection, 'settings'> | undefined, folders: Array<Pick<CollectionFolder, 'settings'>>): HttpSettings | undefined {
+function inheritedSettings(collection: Pick<Collection, 'settings'> | undefined, folders: Array<Pick<CollectionFolder, 'settings'>>): HttpSettings | undefined {
   const merged: HttpSettings = Object.assign({}, collection?.settings, ...folders.map((f) => f.settings));
   return Object.keys(merged).length ? merged : undefined;
 }

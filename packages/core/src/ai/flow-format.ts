@@ -16,7 +16,7 @@ import { scriptApiIfLoaded, scriptReference } from './script-reference.js';
 const STEP_KEYS = ['id', 'type', 'dependsOn', 'url', 'headers', 'auth', 'body', 'extract', 'if', 'when'];
 
 /** A value written as a YAML flow map: `{ type: status, expected: 201 }`. */
-export function flowMap(v: unknown): string {
+function flowMap(v: unknown): string {
   if (v === null || v === undefined) return 'null';
   if (Array.isArray(v)) return `[${v.map(flowMap).join(', ')}]`;
   if (typeof v === 'object')

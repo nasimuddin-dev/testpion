@@ -37,7 +37,7 @@ import { camel, draftGroups, exampleBody, looksLikeUrlName, originOf, pathOf, si
 export { type FlatRequest, TIDY_MAX_REQUESTS, type TidyGroup, type TidyOp, applyTidyOps, chainScript, collectionProblems, flatRequests, pathAccessor, resolvedRequest, sendDifferences } from './tidy-ops.js';
 export { type IdCandidate, draftGroups, idCandidates, importNoiseReason, pathsOfValue } from './tidy-groups.js';
 
-export interface TidyPlan {
+interface TidyPlan {
   summary?: string;
   assumptions?: string[];
   requests?: Array<{ id: string; name?: string; folder?: string }>;
@@ -109,7 +109,7 @@ const cleanRequestName = (s: unknown): string | undefined => {
 };
 
 /** The groups after the model's plan: its names, folders, host variable names, chains and drops, validated. */
-export function applyPlan(c: Collection, draft: ReturnType<typeof draftGroups>, plan: TidyPlan): { groups: TidyGroup[]; notes: string[] } {
+function applyPlan(c: Collection, draft: ReturnType<typeof draftGroups>, plan: TidyPlan): { groups: TidyGroup[]; notes: string[] } {
   const notes: string[] = [];
   const reqs = flatRequests(c);
   const byId = new Map(reqs.map((r) => [r.node.id, r]));
@@ -237,7 +237,7 @@ export function applyPlan(c: Collection, draft: ReturnType<typeof draftGroups>, 
 }
 
 /** Does a saved example of the request return `literal` at `path`? */
-export function chainEvidence(n: Saved, path: string, literal: string): NonNullable<TidyGroup['evidence']> {
+function chainEvidence(n: Saved, path: string, literal: string): NonNullable<TidyGroup['evidence']> {
   if (n.kind !== 'http') return { confirmed: false };
   for (const ex of n.examples ?? []) {
     if (ex.status >= 400) continue;
@@ -271,7 +271,7 @@ function touched(c: Collection, ops: TidyOp[]): Set<string> {
 }
 
 /** A readable outline of some requests (name with folder, method and URL, credentials, scripts): the diff the review shows. */
-export function outlineOf(c: Collection, ids: Set<string>): string {
+function outlineOf(c: Collection, ids: Set<string>): string {
   const lines: string[] = [];
   for (const r of flatRequests(c)) {
     if (!ids.has(r.node.id)) continue;
@@ -291,7 +291,7 @@ export function outlineOf(c: Collection, ids: Set<string>): string {
 /* ------------------------------------------------------------------ the task */
 
 /** What `prepare` keeps on this computer (never sent). */
-export interface TidyLocal {
+interface TidyLocal {
   collection: Collection;
   groups: TidyGroup[];
   draft: ReturnType<typeof draftGroups>;

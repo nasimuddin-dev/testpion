@@ -87,7 +87,7 @@ export interface EvalMatrixParams {
 }
 
 /** The matrix of these runs against the baseline: built once, then served from the cache while the runs are unchanged. */
-export async function openEvalMatrix(store: Store, p: EvalMatrixParams): Promise<EvalMatrix> {
+async function openEvalMatrix(store: Store, p: EvalMatrixParams): Promise<EvalMatrix> {
   if (!Array.isArray(p.runs) || !p.runs.length) throw new ApsError('ValidationError', 'Pick at least one run for the matrix');
   const runs = p.runs.map((r) => resolveRunRef(store, r));
   const seen = new Set<string>();
@@ -154,7 +154,7 @@ export interface EvalCompareItem {
   baselineResultId?: string;
 }
 
-export interface EvalCompareReport {
+interface EvalCompareReport {
   run: { id: string; name: string; columns: EvalMatrixColumn[] };
   baseline: { id: string; name: string };
   threshold: number;

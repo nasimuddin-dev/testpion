@@ -9,7 +9,7 @@ export interface AgentTool extends ToolDefinition {
   invoke(args: Record<string, unknown>, signal?: AbortSignal): Promise<{ text: string; isError?: boolean; raw?: unknown }>;
 }
 
-export interface AgentToolCallRecord {
+interface AgentToolCallRecord {
   step: number;
   id: string;
   name: string;
@@ -20,7 +20,7 @@ export interface AgentToolCallRecord {
   durationMs: number;
 }
 
-export interface AgentRunResult {
+interface AgentRunResult {
   finalText: string;
   steps: number;
   toolCalls: AgentToolCallRecord[];

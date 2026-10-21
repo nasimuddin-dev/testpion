@@ -65,7 +65,7 @@ export interface FixTarget {
   request?: { method?: string; url?: string };
 }
 
-export interface VerifyCase {
+interface VerifyCase {
   resultId: string;
   failing?: StoredResponse;
   lastPassing?: StoredResponse;
@@ -102,7 +102,7 @@ const sameCheck = (a: unknown, b: unknown): boolean => {
 };
 
 /** A check a model wrote, cleaned (no reasons, no empty values) and with a type. */
-export function cleanCheck(v: unknown): CheckConfig | undefined {
+function cleanCheck(v: unknown): CheckConfig | undefined {
   if (!v || typeof v !== 'object' || Array.isArray(v) || typeof (v as CheckConfig).type !== 'string') return undefined;
   return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k, x]) => x !== undefined && x !== null && k !== 'why' && k !== 'reason')) as CheckConfig;
 }
@@ -451,7 +451,7 @@ function verifyVariable(v: NonNullable<FixCheckData['variable']>): VerificationB
 }
 
 /** The `fix` verifier (see the module comment). */
-export async function verifyFixItem(item: ProposalItem): Promise<VerificationBadge | undefined> {
+async function verifyFixItem(item: ProposalItem): Promise<VerificationBadge | undefined> {
   const f = (item.data as { fix?: FixCheckData } | undefined)?.fix;
   if (!f) return undefined;
   if (f.evidence) return { verifier: 'fix', status: f.evidence.changed ? 'pass' : 'warn', label: f.evidence.label };

@@ -140,7 +140,7 @@ export async function gatherExchanges(store: WorkspaceStore, source: DriftSource
 
 /* ------------------------------------------------------------------ the analysis of a spec against traffic */
 
-export interface DriftLocal {
+interface DriftLocal {
   spec: string;
   text: string;
   source: DriftSource;
@@ -153,7 +153,7 @@ export interface DriftLocal {
 }
 
 /** The drift of a spec file of the workspace against a source of traffic: deterministic, nothing is sent. */
-export async function driftOfSpec(store: WorkspaceStore, spec: string, source: DriftSource): Promise<{ local: DriftLocal; doc: OpenApiDoc; exchanges: DriftExchange[] }> {
+async function driftOfSpec(store: WorkspaceStore, spec: string, source: DriftSource): Promise<{ local: DriftLocal; doc: OpenApiDoc; exchanges: DriftExchange[] }> {
   const { text, doc } = loadSpec(store, spec);
   const exchanges = await gatherExchanges(store, source);
   if (!exchanges.length)

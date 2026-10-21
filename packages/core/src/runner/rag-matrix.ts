@@ -13,7 +13,7 @@ const KEEP = 4;
 const bases = new Map<string, { stamp: string; base: Promise<MatrixBase> }>();
 
 /** The base of a run (built once while its results file stays as it is). */
-export function ragMatrixBase(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Promise<MatrixBase> {
+function ragMatrixBase(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Promise<MatrixBase> {
   const file = runResultsFile(store, runId);
   if (!existsSync(file)) return buildMatrixBase(runResults(store, runId));
   const st = statSync(file);

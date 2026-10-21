@@ -13,7 +13,7 @@ import { parseExpose, type FlowInput } from './exposed-flows.js';
 import { walkTestFiles } from './suite-file.js';
 
 /** The `webhook:` block of a test file. */
-export interface FlowWebhook {
+interface FlowWebhook {
   /** Where the flow listens, e.g. /hooks/new-order (default /hooks/<file slug>). */
   path?: string;
   /** Callers must send it (X-TestPion-Secret, or Authorization: Bearer); "{{VAR}}" reads it from the environment or the secrets. */
@@ -47,7 +47,7 @@ export function defaultWebhookPath(file: string): string {
 }
 
 /** A webhook path as it is compared: a leading /, no trailing / (except the root), no ./.. segments or //. Throws when it is not one. */
-export function normalizeWebhookPath(path: string, where = ''): string {
+function normalizeWebhookPath(path: string, where = ''): string {
   const p = path.trim();
   if (!PATH_RE.test(p) || p.split('/').some((s) => s === '.' || s === '..') || p.includes('//'))
     throw new ApsError('ConfigurationError', `webhook.path "${path}" must start with / and use only letters, digits and - _ . ~ / (e.g. /hooks/new-order)${where}`);

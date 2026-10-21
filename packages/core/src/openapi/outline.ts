@@ -10,7 +10,7 @@ import { deref, operationParameters } from '../util/json-ref.js';
  * `openapi_outline` MCP tool): operations grouped by tag with their parameters, request body and responses, schemas
  * written as short type outlines, and a ready request per operation (the same one an import makes).
  */
-export interface OutlineParam {
+interface OutlineParam {
   name: string;
   in: string;
   required: boolean;
@@ -18,7 +18,7 @@ export interface OutlineParam {
   description?: string;
 }
 
-export interface OutlineResponse {
+interface OutlineResponse {
   code: string;
   description?: string;
   contentType?: string;

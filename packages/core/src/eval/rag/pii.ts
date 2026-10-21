@@ -6,7 +6,7 @@
  */
 export type PiiKind = 'email' | 'phone' | 'ssn' | 'card' | 'iban' | 'ip';
 
-export interface PiiFinding {
+interface PiiFinding {
   kind: PiiKind;
   /** The match with its middle hidden: `jo****om`. */
   masked: string;

@@ -38,7 +38,7 @@ export const INPUT_LABELS: Record<MetricInput, string> = {
 };
 
 /** How a metric is computed: from numbers and text, by a judge model, by an embedding model, or by running SQL. */
-export type MetricKind = 'deterministic' | 'judged' | 'embedding' | 'sql';
+type MetricKind = 'deterministic' | 'judged' | 'embedding' | 'sql';
 
 export type MetricGroup = 'retrieval-judged' | 'retrieval-ir' | 'generation' | 'claims' | 'reference' | 'embedding' | 'judge-template' | 'safety' | 'conversation' | 'agent' | 'multimodal' | 'sql' | 'operational' | 'custom';
 
@@ -59,7 +59,7 @@ export const METRIC_GROUPS: ReadonlyArray<{ id: MetricGroup; label: string }> = 
   { id: 'custom', label: 'Custom (this workspace)' },
 ];
 
-export interface MetricOption {
+interface MetricOption {
   type: 'string' | 'number' | 'boolean';
   default?: string | number | boolean;
   values?: string[];
@@ -158,7 +158,7 @@ export const nameTaken = (name: string, id: string): boolean => {
   return !!hit && hit.def.id !== id;
 };
 
-export interface ResolvedMetric {
+interface ResolvedMetric {
   def: MetricDef;
   /** The options the spelling implies (a Ragas alias's parity options, `k` of `recall@5`), under the user's own. */
   options: Record<string, unknown>;
@@ -234,7 +234,7 @@ export function metricToCheck(name: string, extra: Record<string, unknown> = {})
 }
 
 /** The metric a `mode:` value stands for, when the metric routes modes (and the mode is not the metric's own). */
-export function routeByMode(def: MetricDef, mode: unknown): MetricDef | undefined {
+function routeByMode(def: MetricDef, mode: unknown): MetricDef | undefined {
   const to = typeof mode === 'string' ? def.modeRoutes?.[mode] : undefined;
   return to && to !== def.id ? registry.get(to) : undefined;
 }

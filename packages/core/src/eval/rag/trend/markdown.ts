@@ -4,7 +4,7 @@
  */
 import type { MetricComparison } from '../metric-compare.js';
 
-export interface RegressionInfo {
+interface RegressionInfo {
   /** What it was compared with ("run_2026-10-19_ab12", "the previous night"). */
   baseline: string;
   /** The judge that scored this run (`provider/model`). */

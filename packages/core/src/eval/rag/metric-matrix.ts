@@ -49,7 +49,7 @@ export interface MatrixRow {
   cells: Array<MatrixCell | null>;
 }
 
-export interface ColumnAggregate {
+interface ColumnAggregate {
   key: string;
   n: number;
   naCount: number;
@@ -78,7 +78,7 @@ export interface MetricMatrix {
   byTag: Array<{ tag: string; n: number; means: Array<number | null> }>;
 }
 
-export interface MatrixColumnData extends MetricColumn {
+interface MatrixColumnData extends MetricColumn {
   scores: Float32Array;
   /** 0 absent, 1 scored, 2 n/a, 3 failed without a score */
   state: Uint8Array;
@@ -436,7 +436,7 @@ export function mergeGates(base: Record<string, number> | undefined, over: Recor
   return out;
 }
 
-export interface GateResult {
+interface GateResult {
   metric: string;
   column?: string;
   min: number;

@@ -42,7 +42,7 @@ export function targetProblems(t: RagTarget | undefined): string[] {
 }
 
 /** The variables a request can use for the question: the text, as a JSON string literal and escaped for the inside of one. */
-export function questionVars(question: string): Record<string, string> {
+function questionVars(question: string): Record<string, string> {
   const lit = JSON.stringify(question);
   return { question, questionJson: lit, questionEscaped: lit.slice(1, -1) };
 }

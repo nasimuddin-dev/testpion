@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 
-export interface ProbeRecord {
+interface ProbeRecord {
   id: string;
   question: string;
   probe: string;
@@ -21,7 +21,7 @@ export interface ProbeRecord {
   tags: string[];
 }
 
-export interface ProbeSet {
+interface ProbeSet {
   id: string;
   title: string;
   /** What it tests and which metrics to run on it. */
@@ -145,10 +145,10 @@ export const PROBE_SETS: readonly ProbeSet[] = [
   },
 ];
 
-export const probeSet = (id: string): ProbeSet | undefined => PROBE_SETS.find((s) => s.id === id || `probes-${s.id}` === id);
+const probeSet = (id: string): ProbeSet | undefined => PROBE_SETS.find((s) => s.id === id || `probes-${s.id}` === id);
 
 /** Where a set lives in the workspace. */
-export const probeFile = (id: string) => `datasets/probes-${id}.jsonl`;
+const probeFile = (id: string) => `datasets/probes-${id}.jsonl`;
 
 export interface ProbeSetInfo {
   id: string;

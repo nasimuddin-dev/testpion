@@ -11,7 +11,7 @@ import type { StepResponse } from './flow-blocks.js';
 /** The most a recorded variable value keeps (characters of its text, or of its JSON). */
 export const VARIABLE_VALUE_LIMIT = 4096;
 /** The most variables recorded after one step. */
-export const MAX_RECORDED_VARIABLES = 200;
+const MAX_RECORDED_VARIABLES = 200;
 /** The most of a pinned response's body that is kept. */
 export const PIN_BODY_LIMIT = 1024 * 1024;
 
@@ -98,7 +98,7 @@ export class VariableTracker {
 }
 
 /** Where a debugged run is paused. */
-export interface DebugPause {
+interface DebugPause {
   stepId: string;
   vars: Record<string, unknown>;
 }

@@ -127,7 +127,7 @@ export class RateLimiter {
   }
 }
 
-export interface RetryOptions {
+interface RetryOptions {
   retries: number;
   baseDelayMs?: number;
   maxDelayMs?: number;

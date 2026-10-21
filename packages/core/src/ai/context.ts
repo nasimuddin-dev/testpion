@@ -26,7 +26,7 @@ export interface AiContextSection {
   notes: string[];
 }
 
-export interface AiContext {
+interface AiContext {
   /** The JSON text sent (pretty-printed). */
   text: string;
   tokens: number;
@@ -38,7 +38,7 @@ export interface AiContext {
   redactionCount: number;
 }
 
-export interface AiContextOptions {
+interface AiContextOptions {
   privacy: AiPrivacy;
   redactor: Redactor;
   /** Total tokens for the context (default 6000, about 24 000 characters). */
@@ -49,7 +49,7 @@ export interface AiContextOptions {
   maskPersonalData?: boolean;
 }
 
-export const DEFAULT_CONTEXT_TOKENS = 6000;
+const DEFAULT_CONTEXT_TOKENS = 6000;
 
 const tokensOf = (v: unknown) => estimateTokens(JSON.stringify(v, null, 2) ?? '');
 
@@ -224,7 +224,7 @@ function fit(v: unknown, lim: Limits, notes: Set<string>, depth = 0): unknown {
 }
 
 /** A section fitted into `budget` tokens: lighter limits first, then heavier, then its shape alone. */
-export function fitSection(value: unknown, budget: number): { value: unknown; notes: string[] } {
+function fitSection(value: unknown, budget: number): { value: unknown; notes: string[] } {
   if (tokensOf(value) <= budget) return { value, notes: [] };
   for (const lim of LEVELS) {
     const notes = new Set<string>();

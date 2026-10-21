@@ -44,9 +44,9 @@ export interface ExistingRequest {
   tags: string[];
 }
 
-export type SpecGapKind = 'no-test' | 'status' | 'negative' | 'boundary' | 'security' | 'contract' | 'param';
+type SpecGapKind = 'no-test' | 'status' | 'negative' | 'boundary' | 'security' | 'contract' | 'param';
 
-export interface SpecGap {
+interface SpecGap {
   kind: SpecGapKind;
   message: string;
   /** The category of test that closes it. */
@@ -55,7 +55,7 @@ export interface SpecGap {
   status?: string;
 }
 
-export interface SpecParam {
+interface SpecParam {
   name: string;
   in: string;
   required: boolean;
@@ -63,7 +63,7 @@ export interface SpecParam {
   constraints: string[];
 }
 
-export interface SpecOperationGap {
+interface SpecOperationGap {
   operation: string;
   method: string;
   path: string;
@@ -347,7 +347,7 @@ const covers = (asserted: string, documented: string): boolean => {
 };
 
 /** What an existing request proves: positive (expects a 2xx), negative (a 4xx), security (401/403), boundary (tagged). */
-export function categoriesOf(r: ExistingRequest): SpecCategory[] {
+function categoriesOf(r: ExistingRequest): SpecCategory[] {
   const out = new Set<SpecCategory>();
   for (const t of r.tags) if ((SPEC_CATEGORIES as readonly string[]).includes(t)) out.add(t as SpecCategory);
   for (const s of r.statuses) {

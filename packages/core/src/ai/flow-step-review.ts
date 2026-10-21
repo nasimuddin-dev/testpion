@@ -9,7 +9,7 @@ import { checkLabel } from '@testpion/shared';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { matchSteps } from '../util/step-match.js';
 
-export interface StepFieldChange {
+interface StepFieldChange {
   field: 'name' | 'order' | 'dependsOn' | 'request' | 'body' | 'extract' | 'checks' | 'scripts' | 'other';
   /** Lines that are new in the model's step (`orderId = $.id`, `status = 201`). */
   added?: string[];

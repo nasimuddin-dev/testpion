@@ -66,7 +66,7 @@ export function open(text: string, file?: string): Ctx {
 }
 
 /** A suite's tests: are paths (texts), not tests. */
-export function isSuiteLike(root: YAMLMap): boolean {
+function isSuiteLike(root: YAMLMap): boolean {
   const t = pairOf(root, 'tests')?.value;
   return isSeq(t) && t.items.length > 0 && t.items.every((x) => isScalar(x) && typeof x.value === 'string');
 }

@@ -7,7 +7,7 @@ import { ApsError } from '../../errors.js';
  * application data, so the server can tell the request was not changed on the way.
  */
 
-export interface HawkConfig {
+interface HawkConfig {
   id: string;
   key: string;
   algorithm?: 'sha256' | 'sha1';

@@ -7,9 +7,9 @@ import { sha256Hex } from './hash.js';
  * removed from the copy that is sent.
  */
 
-export type ImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp';
+type ImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | 'image/bmp';
 
-export interface ImageInfo {
+interface ImageInfo {
   mime: ImageMime;
   width?: number;
   height?: number;

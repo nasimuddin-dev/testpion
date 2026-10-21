@@ -7,7 +7,7 @@ import type { DatasetRecord } from './datasets.js';
 import { namesSetByScripts, scriptsOf, templatedText, templateVariables } from '@testpion/shared';
 
 /** A runnable request in a collection, with its folder path and effective auth. */
-export interface CollectionRequestRef {
+interface CollectionRequestRef {
   id: string;
   name: string;
   /** Folder names from the collection root to the request. */
@@ -116,7 +116,7 @@ export function collectionRequestToTest(collection: Collection, ref: CollectionR
   return { ...base, ...scripts, type: 'http', request: withFolderDefaults({ ...ref.node.request, auth: ref.auth ?? { type: 'none' } }, collection, ref.folders) };
 }
 
-export interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concurrency' | 'setup' | 'teardown' | 'resume'> {
+interface CollectionRunOptions extends Omit<RunOptions, 'tests' | 'concurrency' | 'setup' | 'teardown' | 'resume'> {
   collection: Collection;
   /** Folder and/or request ids; empty runs the whole collection. */
   selection?: string[];

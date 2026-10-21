@@ -26,8 +26,8 @@ import { evidenceOf, responseOfResult, sourceOfResult, type FailureEvidence, typ
 import { fixItems, type FixSpec, type FixTarget } from './fix-items.js';
 import type { StoredResponse } from './verify.js';
 
-export const FLAKY_PATTERNS = ['timing', 'ordering', 'shared-state', 'time-dependent', 'external-dependency', 'rate-limit', 'data-collision', 'unknown'] as const;
-export type FlakyPattern = (typeof FLAKY_PATTERNS)[number];
+const FLAKY_PATTERNS = ['timing', 'ordering', 'shared-state', 'time-dependent', 'external-dependency', 'rate-limit', 'data-collision', 'unknown'] as const;
+type FlakyPattern = (typeof FLAKY_PATTERNS)[number];
 
 export const FLAKY_SCHEMA = {
   type: 'object',
@@ -58,7 +58,7 @@ export const FLAKY_SCHEMA = {
 };
 
 /** One run of the test (newest last). */
-export interface FlakyRun {
+interface FlakyRun {
   runId: string;
   startedAt: string;
   environment?: string;
@@ -324,7 +324,7 @@ function signatureOf(
 }
 
 /** What the model is sent (budgets and redaction come after). */
-export function flakyContext(ev: FlakyEvidence, privacy: AiPrivacy): Record<string, unknown> {
+function flakyContext(ev: FlakyEvidence, privacy: AiPrivacy): Record<string, unknown> {
   const values = privacy === 'full';
   const f = ev.failing;
   return {

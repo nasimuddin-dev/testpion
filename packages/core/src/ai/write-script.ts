@@ -21,7 +21,7 @@ import { stringList } from '../util/collections.js';
 import type { VerificationBadge } from './proposal.js';
 import { registerVerifier, type StoredResponse } from './verify.js';
 
-export type ScriptPhase = 'pre' | 'test';
+type ScriptPhase = 'pre' | 'test';
 
 export const SCRIPT_PLAN_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -60,7 +60,7 @@ function sampleRequest(v: unknown): SampleRequest | undefined {
 }
 
 /** What `prepare` keeps for building the item: where it goes, what it replaces. */
-export interface ScriptLocal {
+interface ScriptLocal {
   phase: ScriptPhase;
   mode: 'replace' | 'append';
   current: string;
@@ -99,7 +99,7 @@ export async function prepareScriptContext(store: WorkspaceStore, item: ItemRef,
 }
 
 /** The script of the model's answer: the code only (a fence the model added is removed). */
-export function scriptOfValue(v: unknown): string {
+function scriptOfValue(v: unknown): string {
   const raw = (v as { script?: unknown } | undefined)?.script;
   if (typeof raw !== 'string' || !raw.trim()) throw new ApsError('ValidationError', 'The answer has no script');
   const fenced = /^\s*```(?:javascript|js|typescript|ts)?\s*\n([\s\S]*?)\n```\s*$/.exec(raw);

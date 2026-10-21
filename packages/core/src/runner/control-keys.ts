@@ -7,11 +7,11 @@
 import type { SetScope, UntilSpec } from '../model/types.js';
 
 /** The longest a Wait until polls: one hour. */
-export const MAX_UNTIL_MS = 3_600_000;
+const MAX_UNTIL_MS = 3_600_000;
 /** The longest wait between two tries: ten minutes. */
-export const MAX_EVERY_MS = 600_000;
-export const UNTIL_DEFAULTS = { everyMs: 2000, timeoutMs: 60_000, backoff: 1, maxEveryMs: 30_000 } as const;
-export const SET_SCOPES: SetScope[] = ['run', 'environment', 'collection', 'global'];
+const MAX_EVERY_MS = 600_000;
+const UNTIL_DEFAULTS = { everyMs: 2000, timeoutMs: 60_000, backoff: 1, maxEveryMs: 30_000 } as const;
+const SET_SCOPES: SetScope[] = ['run', 'environment', 'collection', 'global'];
 
 /** `2s`, `500ms`, `1.5m`, `1h` or a number of milliseconds: the milliseconds, or a text when it is not a duration. */
 export function durationMs(v: unknown, what: string): number | string {
@@ -64,7 +64,7 @@ export function parallelOf(raw: Record<string, unknown>): string | undefined | {
 }
 
 /** The longest `pace:` waits between two paced steps: one minute. */
-export const MAX_PACE_MS = 60_000;
+const MAX_PACE_MS = 60_000;
 
 /** `pace: 250ms`: the least time between the starts of two paced steps of a run (a rate limit: 250ms is four requests a second), in ms; undefined, or a text when it is not a duration. */
 export function paceOf(raw: Record<string, unknown>): number | string | undefined {

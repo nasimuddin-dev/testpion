@@ -32,7 +32,7 @@ import { ragReferencesTask } from './rag-references-task.js';
 import { ragAuthorTask } from './rag-author-task.js';
 import { describeFlow, FLOW_PLAN_SCHEMA, FLOW_VERIFIERS, prepareFlowContext, proposeFlow } from '../flow-from-collection.js';
 
-export type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
+type AiTaskOutput = { kind: 'markdown' } | { kind: 'code'; language: 'yaml' | 'json' | 'javascript' | 'graphql' | 'text' } | { kind: 'json'; schema: Record<string, unknown> };
 
 /** What a task was asked: what the proposal function sees. */
 export interface AiTaskInput {
@@ -205,7 +205,7 @@ const TESTS_SCHEMA = {
 };
 
 /** The checks of a JSON answer ({ checks: [...] } or a list). */
-export function checksOfValue(v: unknown): CheckConfig[] {
+function checksOfValue(v: unknown): CheckConfig[] {
   const list = Array.isArray(v) ? v : (v as { checks?: unknown; assertions?: unknown } | undefined)?.checks ?? (v as { assertions?: unknown } | undefined)?.assertions;
   if (!Array.isArray(list)) throw new Error('The answer has no `checks` list');
   return list
@@ -214,7 +214,7 @@ export function checksOfValue(v: unknown): CheckConfig[] {
 }
 
 /** The tests of a JSON answer ({ tests: [{ name, code }] }). */
-export function testsOfValue(v: unknown): Array<{ name: string; code: string }> {
+function testsOfValue(v: unknown): Array<{ name: string; code: string }> {
   const list = (v as { tests?: unknown } | undefined)?.tests ?? v;
   if (!Array.isArray(list)) throw new Error('The answer has no `tests` list');
   return list
@@ -223,7 +223,7 @@ export function testsOfValue(v: unknown): Array<{ name: string; code: string }> 
 }
 
 /** One self-contained tp.test (a test the model already wrapped stays as it is), labelled as AI-generated. */
-export function tpTestScript(name: string, code: string, model: string): string {
+function tpTestScript(name: string, code: string, model: string): string {
   const body = code
     .split(/\r?\n/)
     // the sandbox only provides crypto-js and uuid: other imports could never run

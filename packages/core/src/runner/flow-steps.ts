@@ -16,7 +16,7 @@ import { hasDataset, isSuiteFile, loadTestsFromFile } from './loader.js';
 import { readResultsFile } from './runner.js';
 import { loopLabel } from './flow-blocks.js';
 
-export interface FlowOfFile {
+interface FlowOfFile {
   /** The file inside tests/, with forward slashes. */
   file: string;
   steps: FlowStep[];
@@ -48,7 +48,7 @@ const SECRET_AUTH_KEY = /^(token|password|secret|clientSecret|consumerSecret|tok
  * The auth HTTP steps inherit from `defaults: auth:`: each step with no auth of its own (none at the step, none in its
  * `request:`) runs with it, as the loader merges it (loader.ts); a step's own auth (even `{ type: none }`) overrides it.
  */
-export function inheritedAuthOf(defaults: Record<string, unknown>, steps: FlowStep[], items: Array<Record<string, unknown>>, o: { redact?: boolean } = {}): FlowOfFile['inheritedAuth'] {
+function inheritedAuthOf(defaults: Record<string, unknown>, steps: FlowStep[], items: Array<Record<string, unknown>>, o: { redact?: boolean } = {}): FlowOfFile['inheritedAuth'] {
   const written = defaults.auth;
   if (!isMap(written) || typeof written.type !== 'string') return undefined;
   // for agents and the terminal: a credential typed into the file is not repeated ({{variables}} are kept)
@@ -67,13 +67,13 @@ export function inheritedAuthOf(defaults: Record<string, unknown>, steps: FlowSt
  * The {{variables}} a test reads in what it sends and checks (not its name or notes, and not its scripts: a {{name}} in
  * one, such as a visualizer template, is not a use — the shared `templatedText` definition).
  */
-export function variablesUsedBy(t: TestCase): string[] {
+function variablesUsedBy(t: TestCase): string[] {
   const { name: _n, id: _i, file: _f, extract: _e, ...rest } = t as TestCase & { file?: string };
   return templateVariables(templatedText(rest).replace(/\\"/g, '"'));
 }
 
 /** The variables a test makes for the tests after it: what it extracts and what its scripts set. */
-export function variablesSetBy(t: TestCase): string[] {
+function variablesSetBy(t: TestCase): string[] {
   const out = new Set(Object.keys(t.extract ?? {}));
   if (t.type === 'set') for (const k of Object.keys(t.set)) out.add(k);
   for (const s of [t.preRequestScript, t.testScript, t.type === 'script' ? t.script : undefined]) for (const n of namesSetByScripts(s ?? '')) out.add(n);
@@ -84,7 +84,7 @@ export function variablesSetBy(t: TestCase): string[] {
  * Mark on each step the variables it reads that nothing provides: not the environment (`known`), not its own vars,
  * not a step before it in the file or one it waits for. A hint for the designer: a script may still set them.
  */
-export function markUnresolved(steps: FlowStep[], tests: TestCase[], known: Iterable<string>): void {
+function markUnresolved(steps: FlowStep[], tests: TestCase[], known: Iterable<string>): void {
   const base = new Set(known);
   const byId = new Map(steps.map((s, i) => [s.id, i]));
   const setBy = tests.map(variablesSetBy);

@@ -6,7 +6,7 @@ import { connect, type PeerCertificate as TlsPeerCertificate } from 'node:tls';
 import { assertUrlAllowed } from './policy.js';
 import { trustedCa } from './proxy.js';
 
-export interface CertificateCheck {
+interface CertificateCheck {
   host: string;
   port: number;
   subject?: string;

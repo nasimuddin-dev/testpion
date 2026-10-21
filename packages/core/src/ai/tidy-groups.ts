@@ -5,10 +5,10 @@ import { FlatRequest, Saved, TidyGroup, TidyOp, VAR_NAME, flatRequests, urlOf } 
 
 
 /** Hosts whose requests are not the API's behaviour: analytics, ads, session recorders, error and performance beacons. */
-export const TRACKING_HOST =
+const TRACKING_HOST =
   /(^|\.)(google-analytics\.com|googletagmanager\.com|googletagservices\.com|doubleclick\.net|googlesyndication\.com|googleadservices\.com|facebook\.net|connect\.facebook\.com|hotjar\.(com|io)|segment\.(io|com)|mixpanel\.com|amplitude\.com|clarity\.ms|fullstory\.com|newrelic\.com|nr-data\.net|datadoghq\.com|browser-intake-datadoghq\.com|sentry\.io|bugsnag\.com|intercom\.(io|com)|hubspot\.com|hs-analytics\.net|optimizely\.com|scorecardresearch\.com|quantserve\.com|criteo\.(com|net)|taboola\.com|outbrain\.com|heap(analytics)?\.(com|io)|logrocket\.(com|io)|crazyegg\.com|mouseflow\.com|statcounter\.com|plausible\.io|cloudflareinsights\.com|adservice\.google\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)$/i;
 
-export const STATIC_PATH = /\.(js|mjs|css|map|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|otf|eot|mp4|webm|mp3|pdf)$/i;
+const STATIC_PATH = /\.(js|mjs|css|map|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|otf|eot|mp4|webm|mp3|pdf)$/i;
 
 /** Why a request is noise for an API collection, or undefined. */
 export function importNoiseReason(n: Saved): string | undefined {
@@ -39,7 +39,7 @@ export const pathOf = (url: string): string => {
 };
 
 /** An id-like path segment or value: a number, a UUID, a hash, or a short word with digits (`ord-1`, `job_42`). */
-export const ID_LIKE = /^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,}|(?=[A-Za-z_-]*\d)[A-Za-z0-9_-]{2,64})$/i;
+const ID_LIKE = /^(\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,}|(?=[A-Za-z_-]*\d)[A-Za-z0-9_-]{2,64})$/i;
 
 export const singular = (w: string) => (/ies$/i.test(w) ? w.slice(0, -3) + 'y' : /s$/i.test(w) && !/ss$/i.test(w) ? w.slice(0, -1) : w);
 
@@ -117,7 +117,7 @@ export function idCandidates(reqs: FlatRequest[]): IdCandidate[] {
 }
 
 /** Literal credentials typed into several requests: `Authorization: Bearer …` and bearer auth. */
-export function repeatedTokens(reqs: FlatRequest[]): Array<{ value: string; header: string; prefix: string; count: number }> {
+function repeatedTokens(reqs: FlatRequest[]): Array<{ value: string; header: string; prefix: string; count: number }> {
   const counts = new Map<string, { header: string; prefix: string; value: string; ids: Set<string> }>();
   const add = (id: string, header: string, prefix: string, value: string) => {
     if (!value || /\{\{/.test(value) || value.length < 8) return;

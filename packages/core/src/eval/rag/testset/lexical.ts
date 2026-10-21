@@ -55,7 +55,7 @@ export function copiedShare(a: string, b: string): number {
   return best / x.length;
 }
 
-export interface Ranked {
+interface Ranked {
   chunk: Chunk;
   score: number;
   /** Share of the query's content terms this chunk holds. */

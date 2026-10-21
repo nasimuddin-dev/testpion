@@ -41,7 +41,7 @@ export function suggestColumnMapping(columns: string[]): ColumnMapping {
   return out;
 }
 
-export interface MappedColumns {
+interface MappedColumns {
   records: Rec[];
   /** Columns that were not mapped (kept as extra fields: available as {{variables}}). */
   kept: string[];

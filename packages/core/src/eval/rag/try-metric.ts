@@ -53,7 +53,7 @@ export function sampleInputs(s: TrySample): Partial<Record<MetricInput, boolean>
   };
 }
 
-export function missingFor(def: MetricDef, s: TrySample): Array<{ input: MetricInput; message: string }> {
+function missingFor(def: MetricDef, s: TrySample): Array<{ input: MetricInput; message: string }> {
   const has = sampleInputs(s);
   return def.requires.filter((i) => !has[i]).map((input) => ({ input, message: `${def.id} needs ${INPUT_LABELS[input]}` }));
 }

@@ -110,7 +110,7 @@ export function ntlmNegotiate(o: { domain?: string; workstation?: string } = {})
   return Buffer.concat([head, domain, workstation]).toString('base64');
 }
 
-export interface NtlmChallenge {
+interface NtlmChallenge {
   serverChallenge: Buffer;
   flags: number;
   /** The server's AV pairs, sent back unchanged in the client's response (they include the server's timestamp, when it has one). */

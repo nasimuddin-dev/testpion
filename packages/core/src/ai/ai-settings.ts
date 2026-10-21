@@ -18,7 +18,7 @@ export const AI_PRIVACY_LEVELS: ReadonlyArray<{ id: AiPrivacy; label: string; te
 /** A task's tier: cheap and quick (explain, classify, a commit message) or generation (tests, flows, toolsets). */
 export type AiTier = 'small' | 'large';
 
-export interface AiModelChoice {
+interface AiModelChoice {
   /** A provider id or name (a workspace provider, `claude-app`, `ollama`, `mock`). */
   provider: string;
   model?: string;
@@ -55,7 +55,7 @@ export interface AiSettingsSource {
 }
 
 /** Where a task's model came from (shown with the answer and in --dry-run). */
-export type AiModelSource = 'override' | 'env' | 'tier' | 'assistant';
+type AiModelSource = 'override' | 'env' | 'tier' | 'assistant';
 
 export interface AiRoute {
   provider: string;
@@ -65,7 +65,7 @@ export interface AiRoute {
 }
 
 /** The AI assistant has no model: the one error every surface shows, with how to set it up (the app offers a button). */
-export function aiNotSetUpError(): ApsError {
+function aiNotSetUpError(): ApsError {
   return new ApsError('ConfigurationError', 'The AI assistant is off', {
     why: 'No model is chosen for the AI features, so nothing was sent.',
     details: { setup: { assistant: true } },

@@ -7,7 +7,7 @@ import type { CheckConfig } from '../../model/types.js';
 import type { CheckContext } from '../checks.js';
 import { cosine } from '../text.js';
 
-export function embedderOf(cfg: CheckConfig, ctx: CheckContext): { provider?: string; model?: string } {
+function embedderOf(cfg: CheckConfig, ctx: CheckContext): { provider?: string; model?: string } {
   const e = cfg.embedder as { provider?: string; model?: string } | string | undefined;
   if (typeof e === 'string') {
     const [provider, ...rest] = e.split('/');

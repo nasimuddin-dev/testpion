@@ -50,7 +50,7 @@ export interface ChatRequest {
   onDelta?: (text: string) => void;
 }
 
-export interface ChatTiming {
+interface ChatTiming {
   startedAt: number;
   /** Time to first token (streaming only). */
   firstTokenMs?: number;

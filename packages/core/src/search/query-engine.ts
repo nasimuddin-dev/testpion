@@ -17,7 +17,7 @@ import { readResultsFile } from '../runner/runner.js';
 import { flakyTests } from '../runner/test-history.js';
 import { parseSearchQuery, parseWhen, parseWithin, searchField, SOURCE_LABEL, type SearchCondition, type SearchQuery, type SearchSource } from './query-spec.js';
 
-export const SEARCH_SCAN = { history: 5000, runs: 1000, resultRuns: 100, results: 30_000, traces: 2000, traceFiles: 300 } as const;
+const SEARCH_SCAN = { history: 5000, runs: 1000, resultRuns: 100, results: 30_000, traces: 2000, traceFiles: 300 } as const;
 
 /** One hit: what it is, when, and the ItemRef that opens it. */
 export interface SearchRow {

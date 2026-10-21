@@ -63,7 +63,7 @@ export type { CaseIssue, CaseView, SpecCase, SpecLocal, SpecTestOptions } from '
 
 /* ------------------------------------------------------------------ a model's cases */
 
-export interface PlanCase {
+interface PlanCase {
   operation: string;
   category: string;
   name: string;
@@ -77,7 +77,7 @@ export interface PlanCase {
   noAuth?: boolean;
 }
 
-export interface SpecPlan {
+interface SpecPlan {
   summary?: string;
   assumptions?: string[];
   cases: PlanCase[];
@@ -137,7 +137,7 @@ const setPath = (target: Json, path: string, f: (obj: Json, key: string) => void
 };
 
 /** The cases of a model's plan: built from each operation's valid example, validated; what cannot be is dropped with a reason. */
-export function casesFromPlan(plan: SpecPlan, local: SpecLocal, doc: OpenApiDoc): { cases: SpecCase[]; notes: string[] } {
+function casesFromPlan(plan: SpecPlan, local: SpecLocal, doc: OpenApiDoc): { cases: SpecCase[]; notes: string[] } {
   const notes: string[] = [];
   const cases: SpecCase[] = [];
   const seen = new Set<string>();
@@ -306,7 +306,7 @@ export function coverageAfter(doc: OpenApiDoc, local: Pick<SpecLocal, 'spec' | '
   return { before: sum(local.report), after: sum(after) };
 }
 
-export const coverageLine = (c: Coverage): string =>
+const coverageLine = (c: Coverage): string =>
   `Coverage of the document: ${c.before.operationPct}% → ${c.after.operationPct}% of operations called, ${c.before.statusPct}% → ${c.after.statusPct}% of documented statuses asserted, ${c.before.gaps} → ${c.after.gaps} open gaps.`;
 
 /* ------------------------------------------------------------------ the task's reading of a spec */

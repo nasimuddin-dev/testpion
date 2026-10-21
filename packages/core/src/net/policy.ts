@@ -11,7 +11,7 @@ import { ApsError } from '../errors.js';
  * turns on `blockPrivateNetworks` so users can't reach internal services or cloud metadata
  * endpoints (SSRF), and `allowProcesses: false` so they can't start programs on the server.
  */
-export interface NetworkPolicy {
+interface NetworkPolicy {
   /** Refuse loopback, private (RFC 1918 / ULA), link-local (incl. 169.254.169.254), CGNAT and unspecified addresses. */
   blockPrivateNetworks: boolean;
   /** Host names or IPs that stay reachable even when private networks are blocked. */

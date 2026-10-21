@@ -266,7 +266,7 @@ const ASSERTION_KEYS: TestKeyDoc[] = [
   { key: 'channel', description: 'For asyncapi on plain WebSocket: the channel the messages belong to.', shape: 'text' },
 ];
 
-export type TestKeyContext = 'file' | 'suite' | 'test' | 'assertion';
+type TestKeyContext = 'file' | 'suite' | 'test' | 'assertion';
 
 /** The keys the editor offers at a place: a test (of a type, when known), the file, a suite, a check. */
 export function testKeys(context: TestKeyContext, type?: string): TestKeyDoc[] {
@@ -343,7 +343,7 @@ function nearest(key: string, known: string[]): string | undefined {
   return best?.key;
 }
 
-export interface TestLintProblem {
+interface TestLintProblem {
   severity: 'error' | 'warning' | 'info';
   message: string;
   /** 1-based. */

@@ -74,14 +74,14 @@ export type FlowEditOp =
    */
   | { op: 'insertSteps'; steps: FlowStepInput[]; chain?: boolean; after?: string; when?: boolean; between?: { from: string; to: string }; at?: [number, number]; vars?: Record<string, unknown> };
 
-export interface FlowEditResult {
+interface FlowEditResult {
   text: string;
   /** The ids of the steps an add, duplicate or paste made (or of the note / frame addNote / addFrame made). */
   added?: string[];
 }
 
 /** One input of a flow (the Start node's rows): its name, the value a run starts with, what it is. */
-export interface FlowStartInput {
+interface FlowStartInput {
   name: string;
   default?: unknown;
   description?: string;

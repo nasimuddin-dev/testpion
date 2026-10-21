@@ -64,7 +64,7 @@ export interface HttpSettings {
   ciphers?: string;
 }
 
-export type TlsVersion = 'TLSv1' | 'TLSv1.1' | 'TLSv1.2' | 'TLSv1.3';
+type TlsVersion = 'TLSv1' | 'TLSv1.1' | 'TLSv1.2' | 'TLSv1.3';
 
 export interface HttpRequestSpec {
   method: string;
@@ -143,7 +143,7 @@ export interface GraphQLRequestSpec {
 
 /* ------------------------------------------------------------------ mcp */
 
-export type McpTransportConfig =
+type McpTransportConfig =
   | { transport: 'stdio'; command: string; args?: string[]; env?: Record<string, string>; cwd?: string }
   | { transport: 'streamable-http'; url: string; headers?: KeyValue[] }
   | { transport: 'sse'; url: string; headers?: KeyValue[] }
@@ -156,7 +156,7 @@ export type McpServerConfig = { id: string; name: string; /** Folder in the MCP 
 
 export type ProviderKind = 'openai-compatible' | 'azure-openai' | 'anthropic' | 'gemini' | 'bedrock' | 'ollama' | 'mock';
 
-export interface RateLimitConfig {
+interface RateLimitConfig {
   requestsPerSecond?: number;
   requestsPerMinute?: number;
   tokensPerMinute?: number;

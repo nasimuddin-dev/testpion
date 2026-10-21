@@ -34,7 +34,7 @@ registerCheck('answer-regex', (cfg, ctx) => {
 });
 
 /** How long the answer is, in the unit asked for (tokens are about four characters). */
-export function answerSize(text: string, unit: string): number {
+function answerSize(text: string, unit: string): number {
   if (unit === 'words') return (text.match(/\S+/g) ?? []).length;
   if (unit === 'tokens') return Math.ceil(text.length / 4);
   return text.length;
@@ -52,7 +52,7 @@ registerCheck('answer-length', (cfg, ctx) => {
 });
 
 /** The JSON in an answer: the whole text, or what a code fence holds. */
-export function jsonOfAnswer(text: string): { ok: true; value: unknown } | { ok: false } {
+function jsonOfAnswer(text: string): { ok: true; value: unknown } | { ok: false } {
   const whole = tryParseJson(text.trim());
   if (whole.ok) return whole;
   const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
@@ -81,7 +81,7 @@ registerCheck('answer-json-schema', (cfg, ctx) => {
 });
 
 /** The USD the judge and the embedding models cost for the other metrics of a sample (their `judgeUsage`). */
-export function judgeSpend(results: CheckResult[]): { costUsd: number; calls: number; inputTokens: number; outputTokens: number } {
+function judgeSpend(results: CheckResult[]): { costUsd: number; calls: number; inputTokens: number; outputTokens: number } {
   let costUsd = 0;
   let calls = 0;
   let inputTokens = 0;

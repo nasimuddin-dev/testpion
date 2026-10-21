@@ -52,7 +52,7 @@ const judgeName = (j: unknown): string => {
   return x?.provider || x?.model ? `${x.provider ?? '?'}/${x.model ?? '?'}` : 'no judge recorded';
 };
 
-export interface CollectOptions {
+interface CollectOptions {
   labels?: RagLabel[];
   /** result id → rating, from `runReviews` */
   reviews?: Record<string, { rating?: 'good' | 'bad' }>;

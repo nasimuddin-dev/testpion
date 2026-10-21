@@ -13,11 +13,11 @@ import { mean, stdev as sd } from '../util/stats.js';
 import { addUsage, noUsage, type Usage } from '../eval/rag/judged-kit.js';
 import type { RagRunResult } from './rag-run.js';
 
-export const MAX_TARGET_REPEATS = 10;
+const MAX_TARGET_REPEATS = 10;
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
-export interface RepeatOutcome {
+interface RepeatOutcome {
   checks: CheckResult[];
   /** The answers of the extra calls (bounded), so a rescore and the drill-down can show how they differed. */
   repeats: Array<{ answer: string; latencyMs?: number; error?: string }>;

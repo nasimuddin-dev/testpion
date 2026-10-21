@@ -1,9 +1,9 @@
 import { shortId } from '../util/ids.js';
 
-export type SessionStatus = 'connecting' | 'open' | 'closed';
+type SessionStatus = 'connecting' | 'open' | 'closed';
 
 /** What every message of a real-time session carries. */
-export interface SessionMessage {
+interface SessionMessage {
   id: string;
   time: number;
   direction: 'sent' | 'received' | 'system';

@@ -12,7 +12,7 @@ import { fetchDocument, MAX_DOC_BYTES, MAX_URLS, type GuardDeps } from './url-gu
 import type { Corpus, SourceDoc } from './types.js';
 
 export const MAX_FILES = 500;
-export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 const TEXT = /\.(md|markdown|txt|text)$/i;
 const HTML = /\.(html?|xhtml)$/i;
 

@@ -19,7 +19,7 @@ export async function* runResults(store: Pick<WorkspaceStore, 'runDir'>, runId: 
   for await (const r of await readResultsFile(file)) yield r;
 }
 
-export interface ResultsPage {
+interface ResultsPage {
   items: TestResult[];
   /** How many results match (before offset and limit). */
   total: number;
@@ -28,7 +28,7 @@ export interface ResultsPage {
 /* ------------------------------------------------------------------ human review */
 
 /** The reviews of a run's results, by result id (runs/<id>/reviews.json, beside the results, which stay as written). */
-export const runReviewsFile = (store: Pick<WorkspaceStore, 'runDir'>, runId: string) => join(store.runDir(runId), 'reviews.json');
+const runReviewsFile = (store: Pick<WorkspaceStore, 'runDir'>, runId: string) => join(store.runDir(runId), 'reviews.json');
 
 export function runReviews(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Record<string, ResultReview> {
   try {

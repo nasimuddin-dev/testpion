@@ -25,7 +25,7 @@ export interface KafkaMessage {
   headers?: Record<string, string>;
 }
 
-export interface KafkaOptions {
+interface KafkaOptions {
   clientId?: string;
   /** Consumer group (default: one of its own per session, so it never takes messages from a real consumer). */
   groupId?: string;

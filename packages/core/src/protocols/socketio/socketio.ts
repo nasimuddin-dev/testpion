@@ -24,7 +24,7 @@ export interface SocketIoMessage {
   ack?: boolean;
 }
 
-export interface SocketIoOptions {
+interface SocketIoOptions {
   /** Path of the Socket.IO endpoint (default /socket.io). */
   path?: string;
   headers?: KeyValue[];

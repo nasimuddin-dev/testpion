@@ -22,21 +22,21 @@ import { flowRunStatus, type FlowRunStatus } from '@testpion/shared';
 import { dbKindOf } from './db-datasets.js';
 
 /** The most steps a flow file run at scale may have. */
-export const MAX_FLOW_STEPS = 1000;
+const MAX_FLOW_STEPS = 1000;
 /** The most rows a data-driven run reads (a `limit` may lower it). */
-export const MAX_DATA_ROWS = 100_000;
+const MAX_DATA_ROWS = 100_000;
 /** Full step results are kept for failing rows (up to this many) … */
-export const KEEP_FAILED_ROW_STEPS = 1000;
+const KEEP_FAILED_ROW_STEPS = 1000;
 /** The failing rows a run's result lists (all rows go to `onRow`). */
-export const LISTED_FAILED_ROWS = 100;
+const LISTED_FAILED_ROWS = 100;
 /** … and for the first passing rows. */
-export const KEEP_PASSED_ROW_STEPS = 100;
+const KEEP_PASSED_ROW_STEPS = 100;
 
 // how a run went (skipped when nothing ran), the same in the engine, the CLI, the MCP tools and the window
 export { flowRunStatus, scaleRunStatus, type FlowRunStatus } from '@testpion/shared';
 
 /** One run of a flow file. */
-export interface FlowIterationResult {
+interface FlowIterationResult {
   status: FlowRunStatus;
   durationMs: number;
   /** The steps' results (redacted), in file order. */
@@ -64,7 +64,7 @@ export async function loadFlowSteps(file: string): Promise<TestCase[]> {
 }
 
 /** A value as results keep it: secrets masked, long values cut. */
-export function shownValue(key: string, v: unknown, redactor: Redactor): unknown {
+function shownValue(key: string, v: unknown, redactor: Redactor): unknown {
   return redactor.isSensitiveKey(key) ? REDACTED : redactor.redact(boundValue(v));
 }
 
@@ -139,7 +139,7 @@ export async function runFlowOnce(o: {
 /* ------------------------------------------------------------------ data-driven runs */
 
 /** The rows of a data-driven run as a test file may give them in its header: a path, a dataset block or the records. */
-export type FlowDataSpec = string | DatasetRecord[] | DatasetSource;
+type FlowDataSpec = string | DatasetRecord[] | DatasetSource;
 
 /** The `data:` of a test file's header (undefined when it has none). */
 export function readFlowDataHeader(file: string): FlowDataSpec | undefined {
@@ -161,7 +161,7 @@ export function readFlowDataHeader(file: string): FlowDataSpec | undefined {
  * Where a data file named in a flow or on the command line is: absolute; a database URL or `env:NAME` as it is; else
  * the first that exists of: next to the flow file, each of `roots` (the workspace, its tests/, the current folder).
  */
-export function resolveDataPath(ref: string, o: { file?: string; roots?: string[] } = {}): string {
+function resolveDataPath(ref: string, o: { file?: string; roots?: string[] } = {}): string {
   if (dbKindOf(ref) || /^env:[A-Za-z_]\w*$/.test(ref) || isAbsolute(ref)) return ref;
   const candidates = [...(o.file ? [resolve(dirname(o.file), ref)] : []), ...(o.roots ?? []).map((r) => resolve(r, ref))];
   const hit = candidates.find((p) => existsSync(p));
@@ -181,7 +181,7 @@ export function flowDataSource(spec: FlowDataSpec, o: { file?: string; roots?: s
 }
 
 /** A short label of where the rows came from (for lists and reports; database passwords hidden). */
-export function dataLabel(src: DatasetSource): string {
+function dataLabel(src: DatasetSource): string {
   if (src.records) return `${src.records.length} inline rows`;
   const p = src.connectionEnv ? `env:${src.connectionEnv}` : (src.connection ?? src.path ?? src.url ?? '');
   const shown = dbKindOf(p) ? p.replace(/(\/\/[^:/@]+:)[^@]+@/, '$1***@') : p.replace(/\\/g, '/').split('/').slice(-2).join('/');
@@ -234,7 +234,7 @@ export interface FlowDataRunResult {
   averageRowMs: number;
 }
 
-export interface FlowDataRunOptions {
+interface FlowDataRunOptions {
   /** The flow file (absolute). */
   file: string;
   /** The rows: a source (readDataset), or records. */

@@ -1,9 +1,9 @@
 import type { TestResult } from '../model/types.js';
 
 /** Upper bounds (ms) of the latency histogram's buckets; the last bucket is open-ended. */
-export const LATENCY_BUCKETS = [50, 100, 250, 500, 1000, 2500, 5000] as const;
+const LATENCY_BUCKETS = [50, 100, 250, 500, 1000, 2500, 5000] as const;
 
-export interface LatencyBucket {
+interface LatencyBucket {
   /** Lower bound in ms (inclusive). */
   fromMs: number;
   /** Upper bound in ms (exclusive); absent for the last, open-ended bucket. */

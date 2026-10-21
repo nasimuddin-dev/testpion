@@ -28,7 +28,7 @@ export const defaultThreshold = (f: CustomMetricFile): number => f.threshold ?? 
 /** The judge a file names, in the form the judged checks read. */
 const withJudge = (cfg: CheckConfig, f: CustomMetricFile): CheckConfig => (f.judge?.provider && !cfg.judge ? { ...cfg, judge: { provider: f.judge.provider, model: f.judge.model } } : cfg);
 
-export function templateOf(f: CustomMetricFile): Template {
+function templateOf(f: CustomMetricFile): Template {
   const id = `custom/${f.id}`;
   if (f.kind === 'checklist') return { id, kind: 'checklist', items: (f.items ?? []).map((i) => (typeof i === 'string' ? { text: i } : i)), inputs: inputsOf(f) };
   const scale = f.scale;
@@ -126,7 +126,7 @@ function embeddingKind(f: CustomMetricFile): CustomCheck {
 }
 
 /** The sample a script sees. */
-export function scriptSample(ctx: CheckContext) {
+function scriptSample(ctx: CheckContext) {
   return {
     question: ctx.question ?? '',
     answer: ctx.text ?? '',

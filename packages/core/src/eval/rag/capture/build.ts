@@ -58,7 +58,7 @@ const parseBody = (text: string | undefined): unknown => {
   }
 };
 
-export interface BuildInput {
+interface BuildInput {
   calls: CapturedCall[];
   /** Absent only when every call is a run result (a sample already). */
   target?: Pick<RagTarget, 'step' | 'mapping' | 'protocol'>;

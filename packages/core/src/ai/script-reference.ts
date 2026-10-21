@@ -12,9 +12,9 @@ import { runScript } from '../scripts/sandbox.js';
 import { levenshtein } from '../util/text-distance.js';
 import { estimateTokens } from './types.js';
 
-export type MemberKind = 'method' | 'value' | 'object' | 'flag' | 'word' | 'modifier';
+type MemberKind = 'method' | 'value' | 'object' | 'flag' | 'word' | 'modifier';
 
-export interface ScriptMember {
+interface ScriptMember {
   name: string;
   kind: MemberKind;
   /** A value's type on a sample response (number, string …). */
@@ -22,7 +22,7 @@ export interface ScriptMember {
 }
 
 /** What the sandbox exposes, by object. */
-export interface ScriptApi {
+interface ScriptApi {
   tp: ScriptMember[];
   response: ScriptMember[];
   /** tp.response.to (and .have / .be: the same chain). */

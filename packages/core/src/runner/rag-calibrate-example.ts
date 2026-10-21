@@ -26,7 +26,7 @@ export interface MakeExampleInput {
   labels?: string;
 }
 
-export interface MadeExample {
+interface MadeExample {
   file: string;
   index: number;
   expect: 'pass' | 'fail';

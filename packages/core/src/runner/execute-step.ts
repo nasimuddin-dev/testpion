@@ -23,7 +23,7 @@ import { durationLabel } from './flow-control.js';
  * time is up the step fails with "condition not met within 60 s (n tries): last status …". The run's cancel stops the
  * wait at once. A pinned step is tried once (its response does not change).
  */
-export async function executeUntil(test: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; prev?: StepResponse }): Promise<ExecutionOutcome> {
+async function executeUntil(test: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; prev?: StepResponse }): Promise<ExecutionOutcome> {
   const u = test.until!;
   const once = { ...test, until: undefined };
   const pinned = !!svc.pinned?.(test.id ?? test.name);

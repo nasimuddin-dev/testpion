@@ -53,22 +53,22 @@ export const SECURITY_CATALOGUE: Record<SecurityProbe, { owasp: string; title: s
 const KIND_NAME: Record<SecurityProbe, string> = { bola: 'BOLA', auth: 'broken authentication', 'mass-assignment': 'mass assignment', bfla: 'BFLA' };
 
 /** Statuses a refused request may carry: not authenticated, forbidden, or hidden as not found. */
-export const DENIED_OBJECT = [401, 403, 404];
-export const DENIED_FUNCTION = [401, 403];
+const DENIED_OBJECT = [401, 403, 404];
+const DENIED_FUNCTION = [401, 403];
 
 /** Defaults: a probe every 250 ms (four requests a second) and at most 40 probes (up to ~80 requests). */
-export const SECURITY_DEFAULTS = { rate: 4, max: 40 } as const;
+const SECURITY_DEFAULTS = { rate: 4, max: 40 } as const;
 /** An invalid token that is no secret: the API must refuse it. */
 const INVALID_TOKEN = 'tp-invalid-token';
 
-export interface SecurityIdentities {
+interface SecurityIdentities {
   /** The variable that holds the credentials the saved requests were written for (a token, an API key). */
   owner?: string;
   /** The variable of another user (BOLA) or a lower-privilege one (BFLA). */
   other?: string;
 }
 
-export interface SecurityOptions {
+interface SecurityOptions {
   probes?: SecurityProbe[];
   identities?: SecurityIdentities;
   /** POST / PUT / PATCH probes (mass assignment, writes of the other user); they change data. */
@@ -85,7 +85,7 @@ export interface SecurityOptions {
 }
 
 /** A probe as the model proposes it (and as the deterministic draft makes it). */
-export interface SecurityPlanProbe {
+interface SecurityPlanProbe {
   kind: SecurityProbe;
   /** The id of a saved request of the collection / folder. */
   request: string;
@@ -96,7 +96,7 @@ export interface SecurityPlanProbe {
   why?: string;
 }
 
-export interface SecurityPlan {
+interface SecurityPlan {
   summary?: string;
   assumptions?: string[];
   identities?: SecurityIdentities;
@@ -104,7 +104,7 @@ export interface SecurityPlan {
 }
 
 /** What `prepare` keeps on this computer. */
-export interface SecurityLocal {
+interface SecurityLocal {
   label: string;
   collectionId: string;
   folderId?: string;
@@ -146,7 +146,7 @@ const MASS_FIELDS: Array<{ name: RegExp; value: unknown }> = [
 const DEFAULT_MASS = ['role', 'isAdmin', 'verified', 'balance'];
 
 /** The value a privileged field name gets, or undefined when the name is not one the catalogue knows. */
-export function massFieldValue(name: string): unknown {
+function massFieldValue(name: string): unknown {
   if (!/^[A-Za-z_][\w]{0,40}$/.test(name)) return undefined;
   return MASS_FIELDS.find((f) => f.name.test(name))?.value;
 }
@@ -183,7 +183,7 @@ const hasCredentials = (n: Extract<Saved, { kind: 'http' }>, auth: AuthConfig | 
   (!!auth && auth.type !== 'none' && auth.type !== 'inherit') || (n.request.headers ?? []).some((h) => h.enabled !== false && CRED_HEADER.test(h.key));
 
 /** A JSONPath into a body that a marker may be read from: plain keys and indexes only. */
-export const MARKER_PATH = /^\$(\.[A-Za-z_][\w-]*|\[\d+\]|\['[^'\]]+'\])+$/;
+const MARKER_PATH = /^\$(\.[A-Za-z_][\w-]*|\[\d+\]|\['[^'\]]+'\])+$/;
 
 /** A value in the saved example's response that identifies the owner's data (an email, a name, a title), when there is one. */
 function exampleMarker(n: Extract<Saved, { kind: 'http' }>): string | undefined {
@@ -226,7 +226,7 @@ function markerHolds(n: Extract<Saved, { kind: 'http' }>, path: string): boolean
  * The probes TestPion makes without a model (see the module comment). A probe it cannot make is listed in `skipped` with
  * the reason (no two principals, a write verb not asked for …), so a short file is never a silent one.
  */
-export function deterministicProbes(requests: Array<{ node: Saved; auth?: AuthConfig }>, o: SecurityLocal['options']): { probes: SecurityPlanProbe[]; skipped: string[] } {
+function deterministicProbes(requests: Array<{ node: Saved; auth?: AuthConfig }>, o: SecurityLocal['options']): { probes: SecurityPlanProbe[]; skipped: string[] } {
   const probes: SecurityPlanProbe[] = [];
   const skipped: string[] = [];
   const seen = new Set<string>();
@@ -293,11 +293,11 @@ function probeStep(node: Extract<Saved, { kind: 'http' }>, auth: AuthConfig | un
 const route = (n: Extract<Saved, { kind: 'http' }>) => `${n.request.method.toUpperCase()} ${segmentsOf(n.request.url).join('/') ? '/' + segmentsOf(n.request.url).join('/') : '/'}`;
 
 /** What a built file says it contains: the steps a verifier can compare the YAML with. */
-export interface SecurityExpected {
+interface SecurityExpected {
   steps: Array<{ id: string; method: string; url: string; probe: SecurityProbe }>;
 }
 
-export interface BuiltSecurity {
+interface BuiltSecurity {
   yaml: string;
   probes: number;
   steps: number;
@@ -307,7 +307,7 @@ export interface BuiltSecurity {
 }
 
 /** The test file of a plan, built from the saved requests and the catalogue (see the module comment). */
-export function buildSecurityFile(plan: SecurityPlan, local: SecurityLocal, o: { by: string; ai: boolean }): BuiltSecurity {
+function buildSecurityFile(plan: SecurityPlan, local: SecurityLocal, o: { by: string; ai: boolean }): BuiltSecurity {
   const notes: string[] = [];
   const ids = local.options.identities;
   const steps: Array<Record<string, unknown>> = [];
@@ -465,7 +465,7 @@ export const SECURITY_PLAN_SCHEMA: Record<string, unknown> = {
 const VAR_NAME = /^[A-Za-z_][\w.-]{0,80}$/;
 
 /** `owner=tokenA,other=tokenB` (or `tokenA,tokenB`): the principals' variables, from the CLI / MCP / RPC. */
-export function parseIdentities(v: unknown): SecurityIdentities | undefined {
+function parseIdentities(v: unknown): SecurityIdentities | undefined {
   if (!v) return undefined;
   let owner: string | undefined;
   let other: string | undefined;
@@ -488,7 +488,7 @@ export function parseIdentities(v: unknown): SecurityIdentities | undefined {
 }
 
 /** Options from the context a caller passes (`context.options`), checked. */
-export function securityOptions(raw: Record<string, unknown> | undefined): SecurityLocal['options'] & { allowProduction: boolean } {
+function securityOptions(raw: Record<string, unknown> | undefined): SecurityLocal['options'] & { allowProduction: boolean } {
   const o = (raw ?? {}) as Record<string, unknown>;
   const probes = (Array.isArray(o.probes) ? o.probes : typeof o.probes === 'string' ? o.probes.split(',') : [])
     .map((x) => String(x).trim())

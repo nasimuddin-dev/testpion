@@ -19,9 +19,9 @@ import type { ExecServices, ExecutionOutcome } from './execute.js';
 import type { RunOptions } from './runner.js';
 
 /** How deep sub-flows may nest (a flow running a flow running a flow …). */
-export const MAX_FLOW_DEPTH = 5;
+const MAX_FLOW_DEPTH = 5;
 /** The longest an `if:` expression may compute. */
-export const EXPRESSION_TIMEOUT_MS = 250;
+const EXPRESSION_TIMEOUT_MS = 250;
 
 /** A step's response as the next step's `if:` sees it. */
 export interface StepResponse {
@@ -47,7 +47,7 @@ const summarize = (v: unknown, n = 4000): string => {
 /* ------------------------------------------------------------------ if: and conditions */
 
 /** The expression with each {{variable}} replaced by its value as a JavaScript literal (undefined when it has none). */
-export function expressionWithVariables(expr: string, scope: VariableScope): string {
+function expressionWithVariables(expr: string, scope: VariableScope): string {
   return expr.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (whole) => {
     const v = scope.resolveDeep(whole);
     return v === whole ? 'undefined' : (JSON.stringify(v) ?? 'undefined');

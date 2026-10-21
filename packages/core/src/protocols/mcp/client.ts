@@ -31,7 +31,7 @@ export interface McpTraceEvent {
   metadata?: Record<string, unknown>;
 }
 
-export type McpEventListener = (e: McpTraceEvent) => void;
+type McpEventListener = (e: McpTraceEvent) => void;
 
 /**
  * Transport decorator that observes every JSON-RPC message without changing behaviour.
@@ -115,7 +115,7 @@ class TracingTransport implements Transport {
   }
 }
 
-export interface McpToolInfo {
+interface McpToolInfo {
   name: string;
   title?: string;
   description?: string;
@@ -135,7 +135,7 @@ export interface McpDiscovery {
   prompts: Array<{ name: string; description?: string; arguments?: Array<{ name: string; description?: string; required?: boolean }> }>;
 }
 
-export interface McpCallResult {
+interface McpCallResult {
   isError: boolean;
   content: unknown[];
   structuredContent?: unknown;
@@ -147,12 +147,12 @@ export interface McpCallResult {
  * Answers to requests the server sends to the client: its roots (folders it may work in), sampling
  * (the server asks for an LLM completion) and elicitation (the server asks the user for input).
  */
-export interface McpClientHandlers {
+interface McpClientHandlers {
   roots?: () => Array<{ uri: string; name?: string }>;
   sampling?: (params: CreateMessageRequest['params']) => Promise<CreateMessageResult>;
   elicitation?: (params: ElicitRequest['params']) => Promise<ElicitResult>;
 }
-export type McpClientFeature = 'roots' | 'sampling' | 'elicitation';
+type McpClientFeature = 'roots' | 'sampling' | 'elicitation';
 
 /** A live connection to one MCP server. */
 export class McpSession {

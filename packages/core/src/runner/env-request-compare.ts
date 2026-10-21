@@ -10,7 +10,7 @@ import type { ExecServices } from './execute.js';
  * come from the run's traces (bodies up to 16 KB, sensitive values redacted), so the result is safe to
  * give to AI agents.
  */
-export interface EnvRequestSide {
+interface EnvRequestSide {
   environment: string;
   status?: number | string;
   durationMs?: number;
@@ -18,7 +18,7 @@ export interface EnvRequestSide {
   error?: string;
 }
 
-export interface EnvRequestComparison {
+interface EnvRequestComparison {
   request: string;
   left: EnvRequestSide;
   right: EnvRequestSide;

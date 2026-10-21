@@ -35,7 +35,7 @@ export interface DriftExchange {
   ref?: ItemRef;
 }
 
-export type DriftKind = 'undocumented-endpoint' | 'undocumented-status' | 'undocumented-content-type' | 'undocumented-field' | 'type-change' | 'missing-required' | 'nullable' | 'enum-value';
+type DriftKind = 'undocumented-endpoint' | 'undocumented-status' | 'undocumented-content-type' | 'undocumented-field' | 'type-change' | 'missing-required' | 'nullable' | 'enum-value';
 
 /** A kind of drift in words (the report, the review). */
 export const DRIFT_TITLES: Record<DriftKind, string> = {
@@ -179,7 +179,7 @@ function mergeInto(a: ReturnType<typeof shapeOf>, b: ReturnType<typeof shapeOf>)
 }
 
 /** Walk a body against a schema, collecting what differs (see the module comment). Bounded: depth 8, 20 array elements, 200 findings. */
-export function walkBody(doc: OpenApiDoc, schema: unknown, value: unknown, pointer = '$', seen: Seen[] = [], depth = 0, onValue?: (pointer: string, type: string) => void): Seen[] {
+function walkBody(doc: OpenApiDoc, schema: unknown, value: unknown, pointer = '$', seen: Seen[] = [], depth = 0, onValue?: (pointer: string, type: string) => void): Seen[] {
   if (seen.length >= 200 || depth > 8 || !isRecord(schema)) return seen;
   const resolved = resolveRef(doc, schema);
   if (!resolved) return seen;
@@ -239,7 +239,7 @@ const responseFor = (op: Json, status: number): { key: string; response: Json } 
 };
 
 /** The schema documented for a response body of this content type (OpenAPI 3 content map; Swagger 2 schema), and the media type key it was found under. */
-export function schemaFor(doc: OpenApiDoc, response: Json, contentType: string | undefined): { schema?: unknown; media?: string; contentKnown: boolean } {
+function schemaFor(doc: OpenApiDoc, response: Json, contentType: string | undefined): { schema?: unknown; media?: string; contentKnown: boolean } {
   const ct = (contentType ?? '').split(';')[0]!.trim().toLowerCase();
   const content = response.content;
   if (isRecord(content) && Object.keys(content).length) {

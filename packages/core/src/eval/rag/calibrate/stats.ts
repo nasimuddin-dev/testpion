@@ -112,7 +112,7 @@ export function bootstrapAgreement(pairs: ReadonlyArray<Pair>, o: { seed?: numbe
   };
 }
 
-export interface ScoredPair {
+interface ScoredPair {
   score: number;
   human: boolean;
 }

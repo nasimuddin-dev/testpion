@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readResultsFile } from './runner.js';
 
-export interface TestHistoryPoint {
+interface TestHistoryPoint {
   runId: string;
   runName: string;
   startedAt: string;
@@ -67,7 +67,7 @@ export function summarizeTestHistory(points: TestHistoryPoint[]): { runs: number
   };
 }
 
-export interface FlakyTest {
+interface FlakyTest {
   id: string;
   name: string;
   runs: number;

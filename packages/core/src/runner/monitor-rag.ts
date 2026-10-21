@@ -47,7 +47,7 @@ export interface MonitorRagInfo {
   table?: string;
 }
 
-export interface RagMonitorOutcome {
+interface RagMonitorOutcome {
   summary: RunSummary;
   runId: string;
   gateReasons: string[];

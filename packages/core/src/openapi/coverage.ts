@@ -13,7 +13,7 @@ import { findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
  */
 
 /** One request that was sent (from a test result or the history). */
-export interface ApiObservation {
+interface ApiObservation {
   method: string;
   url: string;
   status?: number;
@@ -44,7 +44,7 @@ export interface OperationCoverage {
   examples: string[];
 }
 
-export interface ApiCoverageReport {
+interface ApiCoverageReport {
   schemaVersion: '1';
   title?: string;
   version?: string;
@@ -74,7 +74,7 @@ function statusMatches(key: string, status: number): boolean {
   return false;
 }
 
-export interface ApiCoverageOptions {
+interface ApiCoverageOptions {
   /**
    * Only count requests under this URL (e.g. `{{baseUrl}}` resolved); it's removed before matching.
    * Without it every observation is matched on its path, and requests to other APIs show as unmatched.
@@ -230,7 +230,7 @@ export function apiCoverageMarkdown(r: ApiCoverageReport): string {
 }
 
 /** Where a workspace coverage report took its requests from. */
-export interface CoverageSources {
+interface CoverageSources {
   runs: Array<{ id: string; name: string; startedAt: string }>;
   historyEntries: number;
 }

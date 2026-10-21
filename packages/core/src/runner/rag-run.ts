@@ -26,7 +26,7 @@ export interface RagRunResult {
 }
 
 /** Runs one protocol step of a target and gives its check context (execute.ts owns the clients). */
-export type StepRunner = (step: TestCase, scope: VariableScope) => Promise<CheckContext>;
+type StepRunner = (step: TestCase, scope: VariableScope) => Promise<CheckContext>;
 
 /** The sample kept in a result: bounded, and already redacted by the run's redactor when the result is written. */
 const KEEP_DOCS = 20;

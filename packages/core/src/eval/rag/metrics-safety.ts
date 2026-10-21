@@ -19,7 +19,7 @@ import { listOf } from './lists.js';
  * A refusal by its wording: declining, not "I don't know" (that is a missing answer, not a refusal). The typographic
  * apostrophe is read as the plain one, as chat models write it.
  */
-export const REFUSAL_WORDS = /\b(i can['’]?t (?:help|assist|provide|share|do|comply|give|answer)|i cannot|i am (?:not able|unable)|i['’]m (?:not able|unable)|i (?:won['’]?t|will not)|unable to (?:help|assist|provide|comply)|(?:not|never) (?:able|allowed|permitted) to|against (?:my|the|our) (?:policy|policies|guidelines|rules)|i must decline|i['’]m sorry,? but|i apologi[sz]e,? but|sorry,? (?:but )?i (?:can|cannot|won)|not something i can)\b/i;
+const REFUSAL_WORDS = /\b(i can['’]?t (?:help|assist|provide|share|do|comply|give|answer)|i cannot|i am (?:not able|unable)|i['’]m (?:not able|unable)|i (?:won['’]?t|will not)|unable to (?:help|assist|provide|comply)|(?:not|never) (?:able|allowed|permitted) to|against (?:my|the|our) (?:policy|policies|guidelines|rules)|i must decline|i['’]m sorry,? but|i apologi[sz]e,? but|sorry,? (?:but )?i (?:can|cannot|won)|not something i can)\b/i;
 
 const fail = (cfg: CheckConfig, msg: string): CheckResult => result(cfg, false, msg, { source: 'ai-judge', explanation: msg });
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(String).map((s) => s.trim()).filter(Boolean) : typeof v === 'string' && v.trim() ? v.split(/[;\n]/).map((s) => s.trim()).filter(Boolean) : []);

@@ -33,7 +33,7 @@ import './metrics-r3.js';
  * What each metric reads, for the docs and the editors. They are not registered as the check registry's documented
  * checks: that list goes into every AI call that writes a test file, and a flow author has no use for RAG metrics.
  */
-export const RAG_CHECK_DOCS: Record<string, CheckDoc> = {};
+const RAG_CHECK_DOCS: Record<string, CheckDoc> = {};
 const reg = (type: string, fn: Parameters<typeof registerCheck>[1], doc?: CheckDoc) => {
   registerCheck(type, fn);
   if (doc) RAG_CHECK_DOCS[type] = doc;

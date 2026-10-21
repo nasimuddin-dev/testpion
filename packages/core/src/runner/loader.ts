@@ -64,7 +64,7 @@ function modelOf(v: unknown): ModelRef {
 }
 
 /** The longest a delay step may wait: ten minutes. */
-export const MAX_DELAY_MS = 600_000;
+const MAX_DELAY_MS = 600_000;
 
 /**
  * A delay step's wait in milliseconds, from `ms: 2000` (the canonical form) or `duration: 2s` / `500ms` / `1.5m`;
@@ -442,7 +442,7 @@ const stripDataset = (t: Record<string, unknown>): Record<string, unknown> => {
  * with millions of rows never need to be held in memory.
  */
 /** A dataset record's `tags`: a list or a comma-separated text, as trimmed non-empty strings (at most 20, 64 characters each). */
-export function recordTags(v: unknown): string[] {
+function recordTags(v: unknown): string[] {
   const raw = Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : [];
   return [...new Set(raw.filter((x) => typeof x === 'string' || typeof x === 'number').map((x) => String(x).trim().slice(0, 64)).filter(Boolean))].slice(0, 20);
 }

@@ -38,11 +38,11 @@ import { diffFlowSteps, flowDiffSummary } from './flow-step-review.js';
 export type Saved = Exclude<CollectionNode, { kind: 'folder' }>;
 
 /** At most this many requests are sent; a bigger folder is sampled (the draft's requests first, then one per endpoint). */
-export const FLOW_MAX_REQUESTS = 60;
+const FLOW_MAX_REQUESTS = 60;
 const MAX_SPEC_BYTES = 1024 * 1024;
 
 /** A step of a flow plan: what the model answers (and what the deterministic draft is). */
-export interface FlowPlanStep {
+interface FlowPlanStep {
   id: string;
   /** The id of a saved request of the collection / folder. */
   request: string;
@@ -192,8 +192,8 @@ export function sourceRequests(c: Collection, folderId?: string): { label: strin
   return { label, folder: found, list };
 }
 
-export const bodyContent = (b: unknown): string | undefined => (b && typeof b === 'object' && typeof (b as { content?: unknown }).content === 'string' ? (b as { content: string }).content : undefined);
-export const jsonOrText = (s: string | undefined): unknown => {
+const bodyContent = (b: unknown): string | undefined => (b && typeof b === 'object' && typeof (b as { content?: unknown }).content === 'string' ? (b as { content: string }).content : undefined);
+const jsonOrText = (s: string | undefined): unknown => {
   if (s === undefined) return undefined;
   try {
     return JSON.parse(s);

@@ -15,7 +15,7 @@ import type { TokenUsage } from '../model/types.js';
 import { validateSchema } from '../eval/checks.js';
 import type { ChatMessage, ChatResponse, LlmProvider } from './types.js';
 
-export interface CallBase {
+interface CallBase {
   provider: LlmProvider;
   model: string;
   messages: ChatMessage[];
@@ -27,7 +27,7 @@ export interface CallBase {
   onCall?: (r: ChatResponse) => void;
 }
 
-export interface StructuredOptions extends CallBase {
+interface StructuredOptions extends CallBase {
   schema: Record<string, unknown>;
   schemaName?: string;
   /** Up to how many times a problem is sent back (default 2). */
@@ -38,7 +38,7 @@ export interface StructuredOptions extends CallBase {
   maxContinuations?: number;
 }
 
-export interface StructuredResult<T = unknown> {
+interface StructuredResult<T = unknown> {
   ok: boolean;
   /** The parsed value of the best attempt (absent when no attempt parsed). */
   value?: T;
@@ -55,7 +55,7 @@ export interface StructuredResult<T = unknown> {
   mode: 'json_schema' | 'prompt';
 }
 
-export interface TextResult {
+interface TextResult {
   text: string;
   calls: number;
   usage: TokenUsage;
@@ -72,7 +72,7 @@ const add = (a: TokenUsage, b: TokenUsage): TokenUsage => ({ inputTokens: a.inpu
 export const isTruncated = (finishReason: string | undefined): boolean => !!finishReason && /^(length|max_tokens|max_output_tokens|MAX_TOKENS)$/i.test(finishReason);
 
 /** The provider kinds whose API takes a JSON schema for the answer. */
-export const schemaModeOf = (provider: LlmProvider): 'json_schema' | 'prompt' => (['openai-compatible', 'azure-openai', 'ollama', 'gemini'].includes(provider.config.kind) ? 'json_schema' : 'prompt');
+const schemaModeOf = (provider: LlmProvider): 'json_schema' | 'prompt' => (['openai-compatible', 'azure-openai', 'ollama', 'gemini'].includes(provider.config.kind) ? 'json_schema' : 'prompt');
 
 /**
  * The JSON value in a model's answer: the whole text, a fenced block, or the first balanced object/array in it.

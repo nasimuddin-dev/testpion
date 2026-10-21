@@ -18,7 +18,7 @@ import { ConversationCookies } from './conversation-cookies.js';
 import { callTarget, type TargetCall, type TargetRunner } from './run-target.js';
 import type { ConversationTurn } from './record.js';
 
-export const MAX_USER_TURNS = 30;
+const MAX_USER_TURNS = 30;
 
 /** The user messages of a record's turns: what to send, in order. */
 export const userMessages = (turns: ConversationTurn[] | undefined): string[] => (turns ?? []).filter((t) => t.role === 'user' && t.content.trim()).map((t) => t.content).slice(0, MAX_USER_TURNS);
@@ -36,7 +36,7 @@ export function historyVars(history: ConversationTurn[], current: string, conver
   };
 }
 
-export interface ConversationRun {
+interface ConversationRun {
   /** The whole conversation: each user message and the system's answer to it. */
   turns: ConversationTurn[];
   calls: TargetCall[];

@@ -55,7 +55,7 @@ const UNFAITHFUL = new Set(['faithfulness', 'response-groundedness', 'claim-fait
 const REFERENCE = new Set(['factual-correctness', 'answer-correctness', 'answer-accuracy', 'correctness', 'factuality', 'claim-f1', 'claim-precision', 'claim-recall', 'completeness', 'token-f1', 'rouge', 'bleu', 'chrf', 'numeric-diff', 'json-diff', 'label-f1', 'normalized-match', 'exact-match', 'string-similarity', 'semantic-similarity', 'contains']);
 const OPERATIONAL = new Set(['latency', 'ttft', 'tokens', 'cost', 'context-size', 'throughput', 'error-rate']);
 
-export interface FailureInput {
+interface FailureInput {
   checks: CheckResult[];
   answer: string;
   contexts: number;

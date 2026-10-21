@@ -20,7 +20,7 @@ import { loadOpenApi } from './contract.js';
  */
 type Json = Record<string, any>;
 
-export type FuzzMutation =
+type FuzzMutation =
   'valid' | 'missing-required' | 'wrong-type' | 'enum' | 'too-long' | 'too-short' | 'out-of-range' | 'format' | 'not-json' | 'empty-body' | 'missing-query' | 'bad-query' | 'bad-path';
 
 export interface FuzzCase {

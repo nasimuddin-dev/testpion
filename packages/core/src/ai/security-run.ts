@@ -19,7 +19,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { assertNotProduction, SECURITY_CATALOGUE, SECURITY_PROBES, type SecurityProbe } from './security-tests.js';
 
-export type SecurityVerdict = 'pass' | 'finding' | 'inconclusive';
+type SecurityVerdict = 'pass' | 'finding' | 'inconclusive';
 
 export interface SecurityStepVerdict {
   step: string;
@@ -46,7 +46,7 @@ export interface SecurityRunReport {
 const probeOf = (id: string): SecurityProbe | undefined => SECURITY_PROBES.find((k) => new RegExp(`^sec-\\d+-${k}(-|$)`).test(id));
 
 /** A step result as a verdict (see the module comment). */
-export function verdictOf(r: TestResult): SecurityStepVerdict {
+function verdictOf(r: TestResult): SecurityStepVerdict {
   const id = r.id.replace(/@\d+(#\d+)?$/, '');
   const probe = probeOf(id);
   const status = (r.metadata as { status?: unknown } | undefined)?.status;

@@ -56,7 +56,7 @@ export interface PanelResult {
 }
 
 /** A verdict's score: the share of true verdicts, or the mean rating over its maximum. */
-export function scoreOf(v: Verdict, metric: JudgedMetric): number | undefined {
+function scoreOf(v: Verdict, metric: JudgedMetric): number | undefined {
   if (!v.items.length) return undefined;
   if (metric.scorer) return metric.scorer(v.items);
   // a weighted checklist: the weights belong to the items in the order they were asked; a verdict with another count is not weighted

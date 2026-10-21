@@ -46,7 +46,7 @@ export function suppliedInputs(records: Rec[], target?: Pick<RagTarget, 'mapping
   return out;
 }
 
-export interface CatalogueEntry {
+interface CatalogueEntry {
   id: string;
   group: string;
   kind: MetricDef['kind'];

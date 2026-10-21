@@ -19,7 +19,7 @@ import { listOf } from './lists.js';
 
 type Rec = Record<string, unknown>;
 
-export interface ImportedRecords {
+interface ImportedRecords {
   records: Rec[];
   notes: string[];
 }

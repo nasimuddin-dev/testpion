@@ -9,7 +9,7 @@ import { SessionEvents } from '../session-events.js';
  * WebSocket (ws://, wss://), subscribe to topic filters, publish messages. Messages are reported like
  * WebSocket messages, with the topic, so the same message log shows them.
  */
-export interface MqttMessage {
+interface MqttMessage {
   id: string;
   time: number;
   direction: 'sent' | 'received' | 'system';
@@ -22,7 +22,7 @@ export interface MqttMessage {
   retain?: boolean;
 }
 
-export interface MqttOptions {
+interface MqttOptions {
   clientId?: string;
   username?: string;
   password?: string;

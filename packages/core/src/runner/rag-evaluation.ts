@@ -136,7 +136,7 @@ export async function estimateRescore(store: WorkspaceStore, ctx: EngineContext,
   return estimateRagRunExact(ctx.services.ragJudge!, store, { evaluators, samples: stored.length, judge, stored });
 }
 
-export interface RagRunOptions {
+interface RagRunOptions {
   store: WorkspaceStore;
   /** A fresh engine context (the host's secrets, environment and surface); disposed here. */
   makeContext(): Pick<EngineContext, 'services' | 'dispose'>;
@@ -152,7 +152,7 @@ export interface RagRunOptions {
   onPhase?(p: 'run' | 'collect' | 'judge'): void;
 }
 
-export interface RagRunOutcome {
+interface RagRunOutcome {
   runId: string;
   summary: RunSummary;
   outDir: string;

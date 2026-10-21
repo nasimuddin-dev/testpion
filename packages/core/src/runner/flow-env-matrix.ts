@@ -44,7 +44,7 @@ export interface FlowMatrixResult {
   skipped: number;
 }
 
-export interface FlowMatrixOptions {
+interface FlowMatrixOptions {
   /** The flow file (absolute). */
   file: string;
   environments: string[];

@@ -26,7 +26,7 @@ export const ARGS_EQUIVALENT: JudgedMetric = {
   empty: 'na',
 };
 
-export interface ArgPair {
+interface ArgPair {
   id: string;
   tool: string;
   argument: string;
@@ -34,7 +34,7 @@ export interface ArgPair {
   actual: unknown;
 }
 
-export interface ArgVerdicts {
+interface ArgVerdicts {
   verdicts: Array<{ id: string; same: boolean }>;
   usage: Usage;
   judge: unknown;

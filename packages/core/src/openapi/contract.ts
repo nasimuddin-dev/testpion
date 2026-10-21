@@ -59,7 +59,7 @@ function basePaths(doc: OpenApiDoc): string[] {
   return [...out].sort((a, b) => b.length - a.length);
 }
 
-export interface OpenApiOperation {
+interface OpenApiOperation {
   path: string;
   method: string;
   operationId?: string;

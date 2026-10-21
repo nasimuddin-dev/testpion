@@ -81,7 +81,7 @@ async function session(pkg: string, address: string, channel: { credentials: grp
   };
 }
 
-export interface ReflectionResult {
+interface ReflectionResult {
   /** Services the server offers (the reflection service itself left out). */
   services: string[];
   /** FileDescriptorSet (base64) with every file the services need. */

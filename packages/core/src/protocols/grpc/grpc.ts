@@ -24,7 +24,7 @@ export interface ProtoFile {
   text: string;
 }
 
-export interface GrpcMethodInfo {
+interface GrpcMethodInfo {
   /** `package.Service/Method` */
   name: string;
   service: string;
@@ -233,7 +233,7 @@ export function grpcChannel(address: string, tls: boolean, o?: GrpcTlsOptions): 
   return { credentials, options: secure && isIP(host.replace(/^\[|\]$/g, '')) ? { 'grpc.ssl_target_name_override': 'ip-address.invalid' } : {} };
 }
 
-export interface GrpcResponseData {
+interface GrpcResponseData {
   /** gRPC status (0 = OK). */
   code: number;
   codeName: string;

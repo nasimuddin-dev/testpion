@@ -115,7 +115,7 @@ export interface AiTaskRequest {
 }
 
 /** An image of a preview: what it is, not the bytes (a small one carries a data URI to show a thumbnail). */
-export interface AiPreviewImage {
+interface AiPreviewImage {
   sha256: string;
   mime: string;
   bytes: number;

@@ -12,7 +12,7 @@ import { formatQuery } from './graphql.js';
  * argument (with a placeholder value of the right type), and a selection of the scalar fields down
  * to `depth` levels of objects. What Postman's and Insomnia's query builders make by clicking.
  */
-export interface BuiltOperation {
+interface BuiltOperation {
   operation: 'query' | 'mutation' | 'subscription';
   operationName: string;
   query: string;

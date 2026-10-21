@@ -20,7 +20,7 @@ import { dryRunScript, type SampleRequest } from './write-script.js';
 import type { VerificationBadge } from './proposal.js';
 import { registerVerifier, type StoredResponse } from './verify.js';
 
-export const LEFTOVER_MARK = /TODO\(import\)/;
+const LEFTOVER_MARK = /TODO\(import\)/;
 const MAX_SCRIPTS = 12;
 const MAX_SCRIPT = 3000;
 
@@ -48,7 +48,7 @@ export const LEFTOVERS_PLAN_SCHEMA: Record<string, unknown> = {
 type Phase = 'pre' | 'test';
 
 /** What `prepare` keeps (on this computer) to build the items and verify them. */
-export interface LeftoversLocal {
+interface LeftoversLocal {
   collectionId: string;
   items: Record<string, { requestId: string; name: string; phase: Phase; current: string; request: SampleRequest; example?: StoredResponse }>;
 }
@@ -150,7 +150,7 @@ const STAND_IN: StoredResponse = { status: 200, headers: [['content-type', 'appl
  * A rewritten script is trusted only after it ran: the static check and the sandbox run of `script-dry-run`, against the
  * request's saved example when there is one. On a stand-in response a failing test proves nothing, so it is only a warning.
  */
-export async function checkLeftoverScript(code: string, phase: Phase, o: { request?: SampleRequest; example?: StoredResponse }): Promise<VerificationBadge> {
+async function checkLeftoverScript(code: string, phase: Phase, o: { request?: SampleRequest; example?: StoredResponse }): Promise<VerificationBadge> {
   if (LEFTOVER_MARK.test(code)) return { verifier: 'import-leftovers', status: 'warn', label: 'still has a TODO(import) line', detail: 'The marked call has no TestPion equivalent and the model kept it: rewrite it by hand or leave it.' };
   if (/\b(pm|postman|bru|insomnia|pw|hopp|tc)\s*\.\s*[A-Za-z_$]/.test(code.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '""'))) return { verifier: 'import-leftovers', status: 'fail', label: "still uses another tool's script API", detail: 'Write tp.* only.' };
   const b = await dryRunScript(code, phase, { request: o.request, response: o.example ?? (phase === 'test' ? STAND_IN : undefined) });

@@ -26,7 +26,7 @@ export interface PeerCertificate {
 }
 
 /** What the request was sent over: when its headers were written and the socket's timings and peer. */
-export interface SentOver {
+interface SentOver {
   certificate?: PeerCertificate;
   sentAt: number;
   times?: SocketTimes;

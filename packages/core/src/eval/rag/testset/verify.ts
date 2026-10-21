@@ -21,12 +21,12 @@ import { bm25, copiedShare, coverage, jaccard, termSet } from './lexical.js';
 import { REFERENCE_SUPPORT } from './prompts.js';
 import type { TestsetRecord } from './types.js';
 
-export const SUPPORT_FAIL = 0.4;
-export const SUPPORT_WARN = 0.6;
-export const ANSWERABLE_FAIL = 0.7;
-export const ANSWERABLE_WARN = 0.55;
-export const DUPLICATE_AT = 0.8;
-export const COPY_AT = 0.8;
+const SUPPORT_FAIL = 0.4;
+const SUPPORT_WARN = 0.6;
+const ANSWERABLE_FAIL = 0.7;
+const ANSWERABLE_WARN = 0.55;
+const DUPLICATE_AT = 0.8;
+const COPY_AT = 0.8;
 
 interface RowData {
   dataset?: string;

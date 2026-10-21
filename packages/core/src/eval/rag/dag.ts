@@ -13,19 +13,19 @@ import { dagBinary, dagChoice, dagTask } from './prompts-extra.js';
 import { num, result } from './metric-util.js';
 import { listOf } from './lists.js';
 
-export type DagBranch = string | { score: number; reason?: string };
-export type DagNode =
+type DagBranch = string | { score: number; reason?: string };
+type DagNode =
   | { type: 'binary'; question: string; yes: DagBranch; no: DagBranch }
   | { type: 'choice'; question: string; options: Record<string, DagBranch> }
   | { type: 'task'; instruction: string; next: DagBranch }
   | { type: 'rule'; check: { type: string; [option: string]: unknown }; yes: DagBranch; no: DagBranch };
 
-export interface DagSpec {
+interface DagSpec {
   root: string;
   nodes: Record<string, DagNode>;
 }
 
-export const DAG_LIMITS = { nodes: 40, depth: 12, options: 8 } as const;
+const DAG_LIMITS = { nodes: 40, depth: 12, options: 8 } as const;
 
 const isLeaf = (b: unknown): b is { score: number; reason?: string } => !!b && typeof b === 'object' && typeof (b as { score?: unknown }).score === 'number';
 
@@ -133,7 +133,7 @@ interface Step {
 }
 
 /** Walks the tree for one sample; returns the leaf's score (0 to 10) with the path taken. */
-export async function runDag(spec: DagSpec, cfg: CheckConfig, ctx: CheckContext): Promise<{ score: number; steps: Step[]; usage: Usage; reasoning: string; judge?: unknown }> {
+async function runDag(spec: DagSpec, cfg: CheckConfig, ctx: CheckContext): Promise<{ score: number; steps: Step[]; usage: Usage; reasoning: string; judge?: unknown }> {
   const steps: Step[] = [];
   let usage = noUsage();
   let judge: unknown;

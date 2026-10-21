@@ -28,7 +28,7 @@ export interface GenerateOptions extends TestsetOptions, Pick<LoadOptions, 'allo
   typesText?: string;
 }
 
-export interface GenerateResult {
+interface GenerateResult {
   proposal: Proposal;
   corpus: { documents: number; passages: number; skipped: string[] };
   /** Samples by their worst verification status. */
@@ -49,7 +49,7 @@ export interface Resolved {
   embedder?: string;
 }
 
-export function resolveOptions(o: GenerateOptions): Resolved {
+function resolveOptions(o: GenerateOptions): Resolved {
   if (!(o.paths?.length || o.urls?.length)) throw new ApsError('ValidationError', 'Name the documents: files or folders of the workspace, or https URLs');
   const judge = judgeOf(o.judge);
   const embedder = o.embedder?.trim();

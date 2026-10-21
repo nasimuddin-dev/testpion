@@ -24,7 +24,7 @@ import { shortId } from '../../util/ids.js';
 import { levenshtein } from '../../util/text-distance.js';
 import type { CookieJar } from '../../cookies/cookie-jar.js';
 
-export const DEFAULT_MAX_PREVIEW = 2 * 1024 * 1024;
+const DEFAULT_MAX_PREVIEW = 2 * 1024 * 1024;
 
 export interface HttpExecOptions extends AuthContext {
   signal?: AbortSignal;
@@ -52,7 +52,7 @@ export interface HttpExecOptions extends AuthContext {
 }
 
 /** The timeout of a request that sets none (and whose caller passes none). */
-export const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
 
 export interface PreparedRequest {
   method: string;

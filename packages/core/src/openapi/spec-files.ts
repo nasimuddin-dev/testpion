@@ -16,7 +16,7 @@ export interface SpecRef {
 const SPEC_FILE = /\.(json|ya?ml)$/i;
 
 /** A string as agents give it: a link, something that looks like a file path, or else the document text. */
-export function specRefOf(ref: string): SpecRef {
+function specRefOf(ref: string): SpecRef {
   if (/^https?:\/\//i.test(ref)) return { url: ref };
   if (!/[\n{]/.test(ref) && SPEC_FILE.test(ref)) return { path: ref };
   return { text: ref };

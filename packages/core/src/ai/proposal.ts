@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-export type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'dataset-row' | 'evaluation' | 'text';
+type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'dataset-row' | 'evaluation' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {
@@ -137,10 +137,10 @@ export interface ProposalAttempt {
   failures?: string[];
 }
 
-export const PROPOSAL_STATUSES: ReadonlyArray<Proposal['status']> = ['open', 'applied', 'discarded'];
+const PROPOSAL_STATUSES: ReadonlyArray<Proposal['status']> = ['open', 'applied', 'discarded'];
 
 /** A proposal is kept a day. */
-export const PROPOSAL_TTL_MS = 24 * 3600_000;
+const PROPOSAL_TTL_MS = 24 * 3600_000;
 /** At most this many proposals per workspace (the oldest go first). */
 const MAX_PROPOSALS = 200;
 
@@ -160,7 +160,7 @@ export function proposedTestFilePath(store: WorkspaceStore, asked: string): stri
   return checkedTestFilePath(store.path('tests'), asked).rel;
 }
 
-export function newProposalId(): string {
+function newProposalId(): string {
   return shortId('ai-');
 }
 
@@ -205,7 +205,7 @@ export function getProposal(store: WorkspaceStore, id: string, now = Date.now())
   return p;
 }
 
-export interface ProposalSummary {
+interface ProposalSummary {
   id: string;
   task: string;
   title: string;
@@ -258,7 +258,7 @@ export function discardProposal(store: WorkspaceStore, id: string): Proposal {
 }
 
 /** Remove expired proposals (a day old, an applied one a week) and keep at most MAX_PROPOSALS. */
-export function pruneProposals(store: WorkspaceStore, now = Date.now()): void {
+function pruneProposals(store: WorkspaceStore, now = Date.now()): void {
   const d = dir(store);
   if (!existsSync(d)) return;
   const files = readdirSync(d)

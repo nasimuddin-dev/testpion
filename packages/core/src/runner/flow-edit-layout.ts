@@ -93,7 +93,7 @@ export function extras(ctx: Ctx, key: 'notes' | 'frames', create: boolean): YAML
 }
 
 /** Set a list of ids on a map, written on one line: steps: [a, b]. */
-export function setFlowList(ctx: Ctx, m: YAMLMap, key: string, list: string[]) {
+function setFlowList(ctx: Ctx, m: YAMLMap, key: string, list: string[]) {
   const node = ctx.doc.createNode(list) as YAMLSeq;
   node.flow = true;
   const p = pairOf(m, key);
@@ -102,7 +102,7 @@ export function setFlowList(ctx: Ctx, m: YAMLMap, key: string, list: string[]) {
 }
 
 /** The note or frame with this id (its list and index). */
-export function extraAt(ctx: Ctx, key: 'notes' | 'frames', id: string): { seq: YAMLSeq; i: number } {
+function extraAt(ctx: Ctx, key: 'notes' | 'frames', id: string): { seq: YAMLSeq; i: number } {
   const seq = extras(ctx, key, false);
   const i = seq ? seq.items.findIndex((x) => isMap(x) && String(valueOf(x, 'id')) === String(id)) : -1;
   const what = key === 'notes' ? 'note' : 'frame';
@@ -110,7 +110,7 @@ export function extraAt(ctx: Ctx, key: 'notes' | 'frames', id: string): { seq: Y
   return { seq: seq!, i };
 }
 
-export function newExtraId(ctx: Ctx, key: 'notes' | 'frames', wanted?: string): string {
+function newExtraId(ctx: Ctx, key: 'notes' | 'frames', wanted?: string): string {
   const taken = new Set((extras(ctx, key, false)?.items ?? []).map((x) => (isMap(x) ? String(valueOf(x, 'id')) : '')));
   if (wanted && !taken.has(wanted)) return wanted;
   const base = key === 'notes' ? 'note' : 'frame';
@@ -119,13 +119,13 @@ export function newExtraId(ctx: Ctx, key: 'notes' | 'frames', wanted?: string): 
   return `${base}-${n}`;
 }
 
-export const checkColor = (c: unknown) => {
+const checkColor = (c: unknown) => {
   if (c === undefined || c === null) return;
   if (!(FLOW_COLORS as readonly string[]).includes(String(c))) fail(`"${String(c)}" is not a colour of the canvas: ${FLOW_COLORS.join(', ')}`);
 };
 
 /** A note's keys, checked: numbers rounded (its size at least 80 × 48), a colour of the palette, text of at most 20000 characters. */
-export function noteValues(set: Record<string, unknown>): Record<string, unknown> {
+function noteValues(set: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(set)) {
     if (!['x', 'y', 'w', 'h', 'color', 'text'].includes(k)) fail(`A note has x, y, w, h, color and text, not "${k}"`);
@@ -146,13 +146,13 @@ export function noteValues(set: Record<string, unknown>): Record<string, unknown
 }
 
 /** Steps named by id or name, as their own ids (a step without an id of its own gets one, as connect does). */
-export function frameSteps(ctx: Ctx, refs: unknown): string[] {
+function frameSteps(ctx: Ctx, refs: unknown): string[] {
   if (!Array.isArray(refs) || !refs.length) fail('A frame needs steps: the ids of the steps it goes around');
   const at = (refs as unknown[]).map((r) => indexOf(ctx, String(r)));
   return [...new Set(at.map((i) => ensureId(ctx, i)))];
 }
 
-export type AnnotateOp = Extract<FlowEditOp, { op: 'addNote' | 'updateNote' | 'removeNote' | 'addFrame' | 'updateFrame' | 'removeFrame' }>;
+type AnnotateOp = Extract<FlowEditOp, { op: 'addNote' | 'updateNote' | 'removeNote' | 'addFrame' | 'updateFrame' | 'removeFrame' }>;
 
 /** Add, change or remove a note or a frame; returns the id of what was added. */
 export function annotate(ctx: Ctx, op: AnnotateOp): string | undefined {
@@ -262,7 +262,7 @@ export function placedBoxes(ctx: Ctx, except?: string): Array<{ x: number; y: nu
 }
 
 /** The notes' boxes, with their YAML nodes (to move them). */
-export function noteBoxes(ctx: Ctx): Array<{ node: YAMLMap; box: { x: number; y: number; w: number; h: number } }> {
+function noteBoxes(ctx: Ctx): Array<{ node: YAMLMap; box: { x: number; y: number; w: number; h: number } }> {
   const seq = extras(ctx, 'notes', false);
   const out: Array<{ node: YAMLMap; box: { x: number; y: number; w: number; h: number } }> = [];
   for (const n of seq?.items ?? []) {

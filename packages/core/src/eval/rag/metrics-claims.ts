@@ -204,7 +204,7 @@ function claimCheck(spec: Spec) {
     });
 }
 
-export const CLAIM_SPECS: readonly Spec[] = [...SPECS, noise('relevant'), noise('irrelevant')];
+const CLAIM_SPECS: readonly Spec[] = [...SPECS, noise('relevant'), noise('irrelevant')];
 for (const s of CLAIM_SPECS) {
   const run = claimCheck(s);
   // Ragas' one `noise_sensitivity` takes `mode: relevant | irrelevant`: either id answers to either mode

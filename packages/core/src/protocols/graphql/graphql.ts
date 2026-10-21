@@ -121,7 +121,7 @@ export function formatQuery(query: string): string {
 
 /* ------------------------------------------------------------------ schema explorer model */
 
-export interface SchemaFieldInfo {
+interface SchemaFieldInfo {
   name: string;
   type: string;
   description?: string;
@@ -129,7 +129,7 @@ export interface SchemaFieldInfo {
   args?: Array<{ name: string; type: string; description?: string; defaultValue?: unknown }>;
 }
 
-export interface SchemaTypeInfo {
+interface SchemaTypeInfo {
   name: string;
   kind: 'OBJECT' | 'INTERFACE' | 'INPUT_OBJECT' | 'ENUM' | 'UNION' | 'SCALAR';
   description?: string;

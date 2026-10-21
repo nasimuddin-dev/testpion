@@ -12,7 +12,7 @@ import { jsonPointerGet } from '../util/json-ref.js';
  */
 export type OpenApiLintSeverity = 'error' | 'warning' | 'info';
 
-export interface OpenApiLintProblem {
+interface OpenApiLintProblem {
   rule: string;
   severity: OpenApiLintSeverity;
   message: string;
@@ -31,7 +31,7 @@ export interface OpenApiLintResult {
   operations: number;
 }
 
-export interface OpenApiLintRule {
+interface OpenApiLintRule {
   id: string;
   severity: OpenApiLintSeverity;
   description: string;

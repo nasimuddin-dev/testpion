@@ -36,22 +36,22 @@ export interface RealtimeExchange {
   path?: string;
 }
 
-export type RealtimeMode = 'websocket' | 'socketio' | 'mqtt' | 'kafka';
-export interface KafkaProduce {
+type RealtimeMode = 'websocket' | 'socketio' | 'mqtt' | 'kafka';
+interface KafkaProduce {
   topic: string;
   payload?: unknown;
   key?: string;
   headers?: Record<string, string>;
   partition?: number;
 }
-export interface MqttPublish {
+interface MqttPublish {
   topic: string;
   payload?: unknown;
   qos?: MqttQos;
   retain?: boolean;
 }
 
-export interface RealtimeResult {
+interface RealtimeResult {
   mode: RealtimeMode;
   connected: boolean;
   messages: Array<{ atMs: number; direction: 'sent' | 'received' | 'system'; event?: string; topic?: string; ack?: boolean; data: string; key?: string; partition?: number; offset?: string; headers?: Record<string, string> }>;

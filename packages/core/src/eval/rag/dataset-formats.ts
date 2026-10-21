@@ -19,7 +19,7 @@ export type RagDatasetFormat = 'testpion' | 'ragas' | 'deepeval' | 'nvidia' | 'p
 /** The formats a dataset can be imported from (BEIR needs its queries, qrels and corpus files: see importBeir). */
 export const RAG_DATASET_FORMATS: readonly RagDatasetFormat[] = ['testpion', 'ragas', 'deepeval', 'nvidia', 'promptfoo', 'beir'];
 /** The formats a dataset can be exported to. */
-export const RAG_EXPORT_FORMATS: readonly RagDatasetFormat[] = ['ragas', 'deepeval'];
+const RAG_EXPORT_FORMATS: readonly RagDatasetFormat[] = ['ragas', 'deepeval'];
 
 type Rec = Record<string, unknown>;
 

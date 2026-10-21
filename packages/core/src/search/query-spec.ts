@@ -14,7 +14,7 @@ export type SearchSource = (typeof SEARCH_SOURCES)[number];
 
 export const SOURCE_LABEL: Readonly<Record<SearchSource, string>> = { history: 'History', runs: 'Runs', results: 'Test results', traces: 'Traces' };
 
-export type SearchOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'in' | 'within';
+type SearchOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'in' | 'within';
 
 export const OP_LABEL: Readonly<Record<SearchOp, string>> = {
   eq: 'is',
@@ -29,7 +29,7 @@ export const OP_LABEL: Readonly<Record<SearchOp, string>> = {
   within: 'within the last',
 };
 
-export type SearchField =
+type SearchField =
   | 'text'
   | 'time'
   | 'name'
@@ -51,7 +51,7 @@ export type SearchField =
   | 'attempts'
   | 'failures';
 
-export type SearchValueType = 'text' | 'word' | 'number' | 'bool' | 'time';
+type SearchValueType = 'text' | 'word' | 'number' | 'bool' | 'time';
 
 export interface SearchFieldDef {
   id: SearchField;
@@ -133,7 +133,7 @@ export const SEARCH_FIELDS: readonly SearchFieldDef[] = [
 const FIELD = new Map<string, SearchFieldDef>(SEARCH_FIELDS.map((f) => [f.id, f]));
 export const searchField = (id: string): SearchFieldDef | undefined => FIELD.get(id);
 
-export type SearchValue = string | number | boolean | Array<string | number>;
+type SearchValue = string | number | boolean | Array<string | number>;
 
 export interface SearchCondition {
   field: SearchField;
@@ -141,7 +141,7 @@ export interface SearchCondition {
   value: SearchValue;
 }
 
-export interface SearchSort {
+interface SearchSort {
   by: 'time' | 'duration';
   dir: 'asc' | 'desc';
 }
@@ -157,11 +157,11 @@ export interface SearchQuery {
 
 export const SEARCH_LIMIT_DEFAULT = 25;
 export const SEARCH_LIMIT_MAX = 200;
-export const SEARCH_CONDITIONS_MAX = 12;
+const SEARCH_CONDITIONS_MAX = 12;
 export const SEARCH_VALUE_MAX = 200;
-export const SEARCH_LIST_MAX = 20;
+const SEARCH_LIST_MAX = 20;
 /** The longest `within` (a year): a bound, not a promise that history reaches back that far. */
-export const SEARCH_WITHIN_MAX_MS = 366 * 86_400_000;
+const SEARCH_WITHIN_MAX_MS = 366 * 86_400_000;
 
 const WITHIN = /^(\d{1,6}(?:\.\d{1,3})?)\s*(m|h|d|w)$/i;
 const UNIT_MS = { m: 60_000, h: 3_600_000, d: 86_400_000, w: 7 * 86_400_000 } as const;

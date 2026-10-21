@@ -66,7 +66,7 @@ function num(n: number, epsilon: number): string {
   return `n:${Number(r.toPrecision(12))}`;
 }
 
-export interface CompareOptions {
+interface CompareOptions {
   mode?: 'rows' | 'columns';
   metric?: 'f1' | 'precision' | 'recall';
   /** Rows must come in the same order (the default compares them as a multiset). */

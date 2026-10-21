@@ -47,7 +47,7 @@ export interface TrendFinding {
 
 
 /** The pass marks of a lower-is-better metric are read the other way: the caller names those. */
-export interface TrendOptions {
+interface TrendOptions {
   /** The smallest move that counts, when the interval does not decide it (default 0.05). */
   minDelta?: number;
   /** Metrics where a lower mean is better (hallucination, latency, cost …). */
@@ -104,7 +104,7 @@ export function analyzeTrend(points: TrendPoint[], o: TrendOptions = {}): { poin
 }
 
 /** The metric keys in the points, the most-measured first (the chart's lines). */
-export function trendMetricKeys(points: TrendPoint[]): string[] {
+function trendMetricKeys(points: TrendPoint[]): string[] {
   const n = new Map<string, number>();
   for (const p of points) for (const [k, m] of Object.entries(p.metrics)) if (m.mean !== undefined) n.set(k, (n.get(k) ?? 0) + 1);
   return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);

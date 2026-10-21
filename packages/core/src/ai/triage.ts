@@ -4,7 +4,7 @@
  * may explain many groups (an expired token behind twelve endpoints) — each with its evidence, a confidence and a fix:
  * a check to change, a test file or script to edit, a variable of the environment to set, or none (the API regressed:
  * a bug report with the evidence). Every fix is a proposal item proven by the `fix` verifier (fix-items.ts) before it is
- * offered; nothing is applied here. Without a model the groups are the answer (`deterministicTriage`), with their
+ * offered; nothing is applied here. Without a model the groups are the answer (`deterministicFindings`), with their
  * likely cause said from the evidence (401 → auth, a 5xx that passed before → the API) — AI is an upgrade.
  *
  * Every host calls `triageRun`: the app (`ai.triageRun`), the CLI (`testpion ai triage`, `testpion test … --triage`),
@@ -93,7 +93,7 @@ function definitionOf(ev: RunEvidence, s: FailureEvidence): string | undefined {
 }
 
 /** What the model is sent (budgets and redaction come after): the groups, never every failure. */
-export function triageContext(ev: RunEvidence, privacy: AiPrivacy): Record<string, unknown> {
+function triageContext(ev: RunEvidence, privacy: AiPrivacy): Record<string, unknown> {
   const values = privacy === 'full';
   return {
     run: {
@@ -462,12 +462,6 @@ export interface TriageReport {
   /** Why there is no model's answer (none set up, or it failed). */
   fallback?: string;
   proposal?: Proposal;
-}
-
-/** The report of a run without a model (see `deterministicFindings`). */
-export async function deterministicTriage(store: WorkspaceStore, runId: string, fallback?: string): Promise<TriageReport> {
-  const ev = await runEvidence(store, runId);
-  return reportOf(ev, { findings: deterministicFindings(ev), ai: false, ...(fallback ? { fallback } : {}) });
 }
 
 export function reportOf(ev: RunEvidence, o: Pick<TriageReport, 'findings' | 'ai'> & Partial<TriageReport>): TriageReport {

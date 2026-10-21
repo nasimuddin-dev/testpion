@@ -19,7 +19,7 @@ export type FlowSourceExchange = Pick<DebuggerExchange, 'id' | 'method' | 'url' 
   Partial<Pick<DebuggerExchange, 'requestBody' | 'status' | 'responseHeaders' | 'responseBody' | 'contentType' | 'kind' | 'error'>>;
 
 /** Hosts whose requests are telemetry, not the API under test (a host matches itself and its subdomains). */
-export const DEFAULT_NOISE_HOSTS = [
+const DEFAULT_NOISE_HOSTS = [
   'google-analytics.com',
   'analytics.google.com',
   'googletagmanager.com',
@@ -71,7 +71,7 @@ export interface FlowFromExchangesOptions {
 }
 
 /** A value that flowed from one step's response into a later step's request. */
-export interface FlowLink {
+interface FlowLink {
   variable: string;
   /** The producing step: its id and its place (1 is the first step). */
   from: string;
@@ -84,7 +84,7 @@ export interface FlowLink {
   target: string;
 }
 
-export interface FlowVariableNote {
+interface FlowVariableNote {
   name: string;
   kind: 'origin' | 'secret';
   /** An origin's value (written in the file's defaults unless the environment has it); never a secret's. */
@@ -97,14 +97,14 @@ export interface FlowVariableNote {
   what?: string;
 }
 
-export interface DroppedExchange {
+interface DroppedExchange {
   id: string;
   method: string;
   url: string;
   reason: string;
 }
 
-export interface RecordedStepSummary {
+interface RecordedStepSummary {
   id: string;
   name: string;
   method: string;

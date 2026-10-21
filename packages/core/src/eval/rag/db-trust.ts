@@ -14,7 +14,7 @@ import { atomicWrite, readJson } from '../../storage/fsutil.js';
 import { defaultAppDir } from '../../storage/app-dir.js';
 import type { SqlSource, ResolvedSource } from '../../runner/sql-exec.js';
 
-export interface TrustedDatabase {
+interface TrustedDatabase {
   /** The workspace folder the decision is for. */
   workspace: string;
   /** What was allowed: `$NAME -> host/db` for a connection read from the environment, `url -> host/db` for one written in a file. */

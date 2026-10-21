@@ -39,7 +39,7 @@ export function resultSourceRefs(store: Pick<WorkspaceStore, 'path'>, result: { 
 }
 
 /** What running a run again starts: the same test files (or only some results), or the same collection run (or some of its requests). */
-export type RunAgainPlan =
+type RunAgainPlan =
   | { kind: 'tests'; paths: string[]; ids?: string[]; grep?: string; tags?: string[]; environment?: string; name: string }
   | { kind: 'collection'; collectionId: string; selection?: string[]; iterations?: number; rerun?: boolean; environment?: string; name: string };
 
@@ -100,7 +100,7 @@ export const MONITOR_RUN_PREFIX = 'Monitor · ';
 export const isMonitorRun = (s: Pick<RunSummary, 'name'>): boolean => s.name.startsWith(MONITOR_RUN_PREFIX);
 
 /** Whether a run says what it ran (its origin, or its files), so it can be run again or put in CI. */
-export function canRunAgain(s: RunSummary): boolean {
+function canRunAgain(s: RunSummary): boolean {
   return !!s.origin || !!s.files?.length;
 }
 
