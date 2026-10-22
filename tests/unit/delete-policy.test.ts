@@ -41,8 +41,6 @@ describe('the delete policy of every kind', () => {
  */
 const DELETE_CALL = /call(?:<[^>]*>)?\(\s*'([a-zA-Z]+(?:\.[a-zA-Z]+)*\.(?:delete\w*|clear\w*|deleteRule|deleteFilterPreset|deleteServer))'/g;
 const ALLOW: Record<string, string> = {
-  'views/TestsView.tsx:tests.delete:movePath': 'a rename or a move writes the file at its new path first, then removes the old one',
-  'views/TestsView.tsx:tests.delete:renameFolder': 'a folder rename: the files are written at the new path first, then the old folder goes',
   'components/ConsolePanel.tsx:console.clear': 'the Console is a log of this session, cleared like a terminal',
   'components/AuthEditor.tsx:auth.clearTokens': 'forgets cached tokens: the next request gets new ones, nothing is lost',
   'components/rag/RagLabelControl.tsx:rag.label.clear': 'clicking a label again takes it back (a toggle), not a delete',

@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkspaceStore } from './workspace.js';
 
@@ -35,11 +36,46 @@ function sizeOf(path: string): { bytes: number; files: number } {
   return { bytes, files };
 }
 
+/** The same, without blocking: a folder's entries are looked at a few dozen at a time, so the event loop runs in between. */
+async function sizeOfAsync(path: string): Promise<{ bytes: number; files: number }> {
+  let st;
+  try {
+    st = await stat(path);
+  } catch {
+    return { bytes: 0, files: 0 };
+  }
+  if (!st.isDirectory()) return { bytes: st.size, files: 1 };
+  let bytes = 0;
+  let files = 0;
+  const entries = await readdir(path).catch(() => [] as string[]);
+  for (let i = 0; i < entries.length; i += 64)
+    for (const s of await Promise.all(entries.slice(i, i + 64).map((e) => sizeOfAsync(join(path, e))))) {
+      bytes += s.bytes;
+      files += s.files;
+    }
+  return { bytes, files };
+}
+
+const DB_FILES = ['database.sqlite', 'database.sqlite-wal', 'database.sqlite-shm', 'metadata.jsonl'];
+const sum = (all: Array<{ bytes: number; files: number }>) => all.reduce((a, b) => ({ bytes: a.bytes + b.bytes, files: a.files + b.files }), { bytes: 0, files: 0 });
+
 /** How much the workspace keeps besides its definitions: runs, traces, response bodies, the history database. */
 export function workspaceStorage(store: Pick<WorkspaceStore, 'path' | 'meta' | 'root'>): StorageUsage {
   const parts = PARTS.map(([name, label]) => ({ name, label, ...sizeOf(store.path(name)) }));
+  return usageOf(store, parts, sum(DB_FILES.map((f) => sizeOf(join(store.root, f)))));
+}
+
+/**
+ * `workspaceStorage` for the app's backend, which serves the window from the same thread: the folders (up to tens of
+ * thousands of run and trace files) are walked without holding it up.
+ */
+export async function workspaceStorageAsync(store: Pick<WorkspaceStore, 'path' | 'meta' | 'root'>): Promise<StorageUsage> {
+  const parts = await Promise.all(PARTS.map(async ([name, label]) => ({ name, label, ...(await sizeOfAsync(store.path(name))) })));
+  return usageOf(store, parts, sum(await Promise.all(DB_FILES.map((f) => sizeOfAsync(join(store.root, f))))));
+}
+
+function usageOf(store: Pick<WorkspaceStore, 'meta'>, parts: StorageUsage['parts'], db: { bytes: number; files: number }): StorageUsage {
   // the history / runs / traces index (SQLite, with its write-ahead log)
-  const db = ['database.sqlite', 'database.sqlite-wal', 'database.sqlite-shm', 'metadata.jsonl'].map((f) => sizeOf(join(store.root, f))).reduce((a, b) => ({ bytes: a.bytes + b.bytes, files: a.files + b.files }), { bytes: 0, files: 0 });
   parts.push({ name: 'database', label: 'History and index', ...db });
   const runs = store.meta.listRuns({ limit: 1 });
   const oldest = runs.total ? store.meta.listRuns({ limit: 1, offset: runs.total - 1 }).items[0]?.startedAt : undefined;

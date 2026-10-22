@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, BarChart3, Copy, DatabaseZap, Table2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { plural } from '../lib/format';
 import { Button, cx, FilterInput, Segmented, Select } from './ui';
 import { ChartCard } from './charts';
@@ -75,6 +75,8 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
   const varied = useMemo(() => [...numeric].sort((a, b) => new Set(rows.slice(0, 100).map((r) => r[b])).size - new Set(rows.slice(0, 100).map((r) => r[a])).size), [numeric, rows]);
   const value = valueCol && numeric.includes(valueCol) ? valueCol : varied.find((c) => c !== label) ?? varied[0];
   const toggle = (key: string) => setSort((s) => (s?.key !== key ? { key, dir: 1 } : s.dir === 1 ? { key, dir: -1 } : undefined));
+  // a row's key is its place in the body: a sort or a filter moves rows, it does not draw them again
+  const place = useMemo(() => new Map(rows.map((r, i) => [r, i])), [rows]);
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
@@ -161,16 +163,7 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
           </thead>
           <tbody className="mono">
             {shown.slice(0, LIMIT).map((r, i) => (
-              <tr key={i} className="hover:bg-hover/60">
-                {columns.map((c) => {
-                  const v = r[c];
-                  return (
-                    <td key={c} title={cell(v)} className={cx('border-b border-r border-line/60 px-2 py-1 max-w-80 truncate', typeof v === 'number' && 'text-right tabular-nums', v === null || v === undefined ? 'text-muted' : typeof v === 'boolean' && 'text-accent')}>
-                      {cell(v)}
-                    </td>
-                  );
-                })}
-              </tr>
+              <TableRow key={place.get(r) ?? `at-${i}`} row={r} columns={columns} />
             ))}
           </tbody>
         </table>
@@ -180,6 +173,22 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
     </div>
   );
 }
+
+/** One row of the table; drawn again only when its row or the columns change. */
+const TableRow = memo(function TableRow({ row, columns }: { row: Row; columns: string[] }) {
+  return (
+    <tr className="hover:bg-hover/60">
+      {columns.map((c) => {
+        const v = row[c];
+        return (
+          <td key={c} title={cell(v)} className={cx('border-b border-r border-line/60 px-2 py-1 max-w-80 truncate', typeof v === 'number' && 'text-right tabular-nums', v === null || v === undefined ? 'text-muted' : typeof v === 'boolean' && 'text-accent')}>
+            {cell(v)}
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
 
 /** One horizontal bar per row (one hue: it is magnitude), the label left, the value right; negative values run left of the axis. */
 function RowBars({ rows, label, value }: { rows: Row[]; label: string; value: string }) {

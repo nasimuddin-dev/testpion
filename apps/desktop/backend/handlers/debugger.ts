@@ -133,6 +133,8 @@ const SESSIONS_DIR = CAPTURE_SESSIONS_DIR;
 const AUTOSAVE = 'autosave';
 /** The longest AutoSave works without letting the proxy serve what waits. */
 const AUTOSAVE_SLICE_MS = 10;
+/** The bodies all saved sessions open in tabs may hold together (the live capture's own budget, DebuggerSession). */
+const VIEWS_BODY_BUDGET = 200 * 1024 * 1024;
 
 /** The root certificate of this computer (in the data folder, never in a workspace) and the signer of host certificates. */
 function certificateOf(be: Backend, state: DebuggerState): RootCertificate {
@@ -269,7 +271,8 @@ export function debuggerHandlers(be: Backend): Handlers {
   /** A saved session's file in memory (read once; again after it was saved anew): at most 4 are kept. */
   const viewOf = (file: string): DebuggerState => {
     const had = views.get(file);
-    if (had) return had;
+    // the order of the map is the order they were last shown in
+    if (had) return views.delete(file), views.set(file, had), had;
     if (!existsSync(file)) throw new ApsError('ValidationError', `No saved session "${basename(file, '.har')}"`);
     let har: unknown;
     try {
@@ -280,7 +283,13 @@ export function debuggerHandlers(be: Backend): Handlers {
     const v = newDebuggerState();
     v.session.load(exchangesFromHar(har));
     views.set(file, v);
-    for (const k of [...views.keys()].slice(0, Math.max(0, views.size - 4))) if (k !== file) views.delete(k);
+    // the saved sessions in memory share one body budget (the live capture's): beyond it, or beyond 4 sessions, the
+    // longest unseen goes (it is read again from its file when its tab shows). Each kept its own before: 5 × 200 M.
+    const held = () => [...views.values()].reduce((n, x) => n + x.session.bodyBytes, 0);
+    for (const k of [...views.keys()]) {
+      if (views.size <= 4 && held() <= VIEWS_BODY_BUDGET) break;
+      if (k !== file) views.delete(k);
+    }
     return v;
   };
   const shown = (): DebuggerState => {

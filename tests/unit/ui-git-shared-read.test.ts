@@ -18,6 +18,8 @@ describe('the window reads git once', () => {
     const view = readFileSync(join(SRC, 'views', 'GitView.tsx'), 'utf8');
     expect(view).toMatch(/useGitFull\(\)/);
     expect(view).not.toMatch(/useState<SemanticChange\[\]>|setChanges\(|setStatus\(/);
-    expect(view).toMatch(/await refreshGit\(\)/);
+    // after its own operations it asks the shared store to read again; what follows HEAD and the files reads by itself
+    expect(view).toMatch(/=> refreshGit\(\)/);
+    expect(view).toMatch(/useWhenShown\(refsKey/);
   });
 });

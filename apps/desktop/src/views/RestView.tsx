@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePublishRequest } from '../lib/request-variables';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
+import { promptText, useApp, attempt } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
 import { openRef, reportIfGone } from '../lib/open-ref';
 import type { CheckConfig, Collection, CollectionNode, HttpRequestSpec, KeyValue, SavedExample, SavedHttpRequest, SseEvent } from '../types';
@@ -13,7 +13,7 @@ import { parseYaml } from '../lib/yaml';
 import { fromEngineRequest, paramsFromUrl, syncPathVariables, toEngineRequest, urlFromParams } from '../lib/url';
 import { CodeModal } from '../components/CodeModal';
 import { CookiesModal, hostOf } from '../components/CookiesModal';
-import { NEW_TAB_TITLE, NoOpenTabs, tabTitle, useEditorTabs } from '../components/EditorTabs';
+import { NoOpenTabs } from '../components/EditorTabs';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { plural, uid } from '../lib/format';
 
@@ -48,43 +48,22 @@ import { ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
 import { Button, cx, Empty, IconButton, Menu } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
-import { METHODS, RestTab, SendResult, blankRequest, drafts, savedSnapshot } from './rest/types';
+import { METHODS, RestTab, SendResult, blankRequest, savedSnapshot } from './rest/types';
+import { runRestTabCommand, saveRestTabAsTest, tabFromSaved, useRestTabs } from './rest/tabs-store';
 import { RequestEditor } from './rest/RequestEditor';
 import { SaveModal, ImportModal } from './rest/dialogs';
-import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
+import { saveAsTestMenuItem } from '../lib/save-test';
 import { RequestBreadcrumb } from '../components/RequestBreadcrumb';
 import { currentCollections, refreshCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
-import { useExternalChange } from '../lib/external-change';
-import { noteClosedTabs } from '../lib/closed-tabs';
 
-
-/** A tab's contents from a saved request (opening it, or taking the version on disk). */
-function tabFromSaved(n: SavedHttpRequest): RestTab {
-  return {
-    id: uid('tab-'),
-    name: n.name,
-    request: fromEngineRequest(structuredClone(n.request)),
-    preRequestScript: n.preRequestScript,
-    testScript: n.testScript,
-    assertions: n.assertions ?? [],
-    requestId: n.id,
-    examples: n.examples,
-    description: n.description,
-    dirty: false,
-    base: savedSnapshot(n),
-  };
-}
 
 export function RestView() {
-  const [tabs, setTabs] = useState<RestTab[]>(() => {
-    const d = drafts.load();
-    // drafts from before the URL/params sync kept the query only in the Params table
-    if (d.tabs.length) return d.tabs.map((t) => (t.request.url.includes('?') ? t : { ...t, request: fromEngineRequest(t.request) }));
-    // first launch gets a blank request; if the user closed every tab (active saved as ''), keep it that way
-    return d.active === '' ? [] : [blankRequest()];
-  });
-  const [active, setActive] = useState<string>(() => drafts.load().active ?? tabs[0]?.id ?? '');
-  const [results, setResults] = useState<Record<string, SendResult>>({});
+  // the tabs and their responses live in their store (views/rest/tabs-store.ts): the tab strip and Close all reach them
+  // whether or not this view is mounted
+  const tabs = useRestTabs((s) => s.tabs);
+  const active = useRestTabs((s) => s.active);
+  const results = useRestTabs((s) => s.results);
+  const { setTabs, setActive, setResults } = useRestTabs.getState();
   const [sending, setSending] = useState<Record<string, string>>({});
   // the outline (names, methods, folders): the sidebar and the save dialog; a request opens from its whole collection
   const collections = useCollectionTree();
@@ -103,7 +82,6 @@ export function RestView() {
   /** Server-Sent Events arriving for requests still being sent, by send id (shown live). */
   const [liveEvents, setLiveEvents] = useState<Record<string, SseEvent[]>>({});
 
-  useEffect(() => drafts.save({ tabs, active }), [tabs, active]);
   // the shared list (lib/collections-store): fetched once for the sidebar, this view and the breadcrumbs (useCollections)
   const loadCollections = refreshCollections;
   useEffect(
@@ -128,28 +106,8 @@ export function RestView() {
   // an edit keeps a preview tab (WF-19)
   const update = (patch: Partial<RestTab>) => setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, ...patch, dirty: true, preview: false } : t)));
 
-  // files changed outside the app (GIT-103 / GIT-302, WF-15): open requests follow their saved version; a tab with
-  // unsaved edits asks first, and only when that very request changed on disk (lib/external-change.ts)
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
-  useExternalChange<SavedHttpRequest>({
-    kinds: ['collections'],
-    items: () => tabsRef.current.filter((t) => t.collectionId && t.requestId).map((t) => ({ key: t.id, label: t.name, base: t.base, dirty: !!t.dirty })),
-    read: async (keys) => {
-      const open = tabsRef.current.filter((t) => keys.includes(t.id));
-      // the open requests' collections, read whole (the shared list refreshes itself from the same event)
-      const ids = [...new Set(open.map((t) => t.collectionId!))];
-      const cols = (await Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined)))).filter((c): c is Collection => !!c);
-      const out = new Map<string, { snapshot: string; value: SavedHttpRequest }>();
-      for (const t of open) {
-        const n = findNode(cols.find((c) => c.id === t.collectionId)?.items ?? [], t.requestId!);
-        if (n?.kind === 'http') out.set(t.id, { snapshot: savedSnapshot(n), value: n });
-      }
-      return out;
-    },
-    take: (id, n) => setTabs((ts) => ts.map((x) => (x.id === id ? { ...x, ...tabFromSaved(n), id: x.id, collectionId: x.collectionId, pinned: x.pinned } : x))),
-    keep: (id, snapshot) => setTabs((ts) => ts.map((x) => (x.id === id ? { ...x, base: snapshot } : x))),
-  });
+  // files changed outside the app (GIT-103 / GIT-302, WF-15): open requests follow their saved version (RestTabsFollower,
+  // mounted by the window)
   const setReq = (patch: Partial<HttpRequestSpec>) => update({ request: { ...tab.request, ...patch } });
   const setExamples = (examples: SavedExample[]) => setTabs((ts) => ts.map((t) => (t.requestId && t.requestId === tab.requestId ? { ...t, examples } : t)));
   /** URL bar edits update the Params table and path variables (Postman behaviour). */
@@ -213,7 +171,7 @@ export function RestView() {
   };
 
   useIntent('rest', async (p) => {
-    if (p?.tabCommand) return runTabCommand(p.tabCommand);
+    if (p?.tabCommand) return runRestTabCommand(p.tabCommand);
     // "Describe with AI" from an empty GraphQL, gRPC, WebSocket or MCP view
     if (p?.describe) return aiOn ? void describeRequest() : undefined;
     if (p?.newTab) {
@@ -322,74 +280,6 @@ export function RestView() {
 
   const quickSave = () => (noTabs ? undefined : tab.collectionId && tab.requestId ? saveTab(tab.collectionId, tab.name) : setSaving(true));
   useSaveShortcut('rest', () => void quickSave());
-
-  // pinned tabs first, in their own order
-  const ordered = [...tabs.filter((t) => t.pinned), ...tabs.filter((t) => !t.pinned)];
-  /** Close several tabs, asking once when any has unsaved changes. */
-  const closeTabs = async (ids: string[]) => {
-    const closing = tabs.filter((x) => ids.includes(x.id));
-    if (!closing.length) return;
-    const dirty = closing.filter((x) => x.dirty);
-    if (
-      dirty.length &&
-      !(await confirmAction({
-        title: 'Unsaved changes',
-        message: dirty.length === 1 ? `"${dirty[0]!.name}" has unsaved changes.` : `${dirty.length} of the tabs you are closing have unsaved changes.`,
-        detail: 'Close anyway and discard them? Save with Ctrl+S to keep them.',
-        confirmLabel: 'Discard changes',
-        danger: true,
-      }))
-    )
-      return;
-    // a saved request's tab can be reopened (Ctrl+Shift+T); a draft's cannot (its changes were discarded)
-    noteClosedTabs(closing.map((x) => (x.collectionId && x.requestId ? { ref: { kind: 'request', collectionId: x.collectionId, requestId: x.requestId }, label: x.name } : undefined)));
-    // closing the last tab leaves none (Postman-style), not a new blank request
-    const rest = tabs.filter((x) => !ids.includes(x.id));
-    setTabs(rest);
-    // a closed tab's response goes with it (kept, every response ever received stayed in memory: soak test)
-    const drop = <T,>(m: Record<string, T>) => (ids.some((id) => id in m) ? Object.fromEntries(Object.entries(m).filter(([k]) => !ids.includes(k))) : m);
-    setResults(drop);
-    if (ids.includes(active)) {
-      const i = ordered.findIndex((x) => x.id === active);
-      const after = ordered.slice(i + 1).find((x) => !ids.includes(x.id)) ?? [...ordered.slice(0, i)].reverse().find((x) => !ids.includes(x.id));
-      setActive(after?.id ?? rest[0]?.id ?? '');
-    }
-  };
-  const closeTab = (id: string) => closeTabs([id]);
-  /** File menu / command palette / tab bar ⋯: pinned tabs are kept by the bulk commands. */
-  const runTabCommand = (command: string) => {
-    const unpinned = ordered.filter((x) => !x.pinned).map((x) => x.id);
-    if (command === 'close') {
-      const cur = tabs.find((x) => x.id === active);
-      if (cur && !cur.pinned) closeTab(cur.id);
-    } else if (command === 'closeOthers') closeTabs(unpinned.filter((id) => id !== active));
-    else if (command === 'closeAll') closeTabs(unpinned);
-  };
-  const duplicateTab = (t: RestTab) => {
-    const copy: RestTab = { ...structuredClone(t), id: uid('tab-'), name: `${t.name} copy`, collectionId: undefined, requestId: undefined, examples: undefined, pinned: false, dirty: true };
-    setTabs((ts) => {
-      const i = ts.findIndex((x) => x.id === t.id);
-      return [...ts.slice(0, i + 1), copy, ...ts.slice(i + 1)];
-    });
-    setActive(copy.id);
-  };
-  /** Rename a tab (edited in place in the tab strip); a saved request is renamed in its collection too. */
-  const renameTabTo = async (t: RestTab, name: string) => {
-    if (!name || name === t.name) return;
-    setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, name } : x)));
-    if (!t.collectionId || !t.requestId) return;
-    try {
-      const c = await call<Collection>('col.get', { id: t.collectionId }).catch(() => undefined);
-      if (!c || !findNode(c.items, t.requestId)) return;
-      await saveCollection({ ...c, items: mapNodes(c.items, (x) => (x.id === t.requestId ? { ...x, name } : x)) });
-    } catch (e) {
-      toastError(e);
-    }
-  };
-
-  /** Save a tab's request as a YAML test file (tab menu). */
-  const saveTabAsTest = (t: RestTab) =>
-    void saveAsTestFile(t.name, { kind: 'http', request: toEngineRequest(t.request), preRequestScript: t.preRequestScript, testScript: t.testScript, status: results[t.id]?.response?.status }, t.assertions);
 
   const result = results[tab.id];
   // the environment switcher's badge of undefined {{variables}} (lib/request-variables.ts) follows the tab on screen
@@ -521,31 +411,7 @@ export function RestView() {
     ...(result?.response ? { response: aiResponseOf(result.response) } : {}),
   };
 
-  // REST's tabs are shown in the shared tab strip above every request editor (with the other editors' tabs)
-  useEditorTabs(
-    'rest',
-    ordered.map((t) => ({
-      key: `rest:${t.id}`,
-      view: 'rest' as const,
-      title: tabTitle(t.name, NEW_TAB_TITLE.rest),
-      badge: t.request.method,
-      badgeClass: `method-${t.request.method}`,
-      item: t.requestId,
-      dirty: t.dirty,
-      pinned: t.pinned,
-      preview: t.preview,
-      onKeep: () => setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, preview: false } : x))),
-      onSelect: () => setActive(t.id),
-      onClose: () => void closeTab(t.id),
-      closeMany: (keys: string[]) => void closeTabs(keys.map((k) => k.replace(/^rest:/, ''))),
-      // the tab menu itself is the shared one (EditorTabs), the same on every request tab
-      onRenameTo: (name: string) => renameTabTo(t, name),
-      onDuplicate: () => duplicateTab(t),
-      onSaveAsTest: () => saveTabAsTest(t),
-      onTogglePin: () => setTabs((ts) => ts.map((x) => (x.id === t.id ? { ...x, pinned: !x.pinned } : x))),
-    })),
-    noTabs ? undefined : `rest:${tab.id}`,
-  );
+  // REST's tabs are shown in the shared tab strip above every request editor: the store publishes them (tabs-store.ts)
   return (
     <>
     <div className="h-full flex flex-col min-w-0" data-collection-id={tab.collectionId}>
@@ -553,7 +419,7 @@ export function RestView() {
         <NoOpenTabs onDescribe={() => void describeRequest()} />
       ) : (
       <>
-      <RequestBreadcrumb collectionId={tab.collectionId} requestId={tab.requestId} name={tab.name} dirty={tab.dirty} onSave={() => void quickSave()} actions={[saveAsTestMenuItem(() => saveTabAsTest(tab))]} />
+      <RequestBreadcrumb collectionId={tab.collectionId} requestId={tab.requestId} name={tab.name} dirty={tab.dirty} onSave={() => void quickSave()} actions={[saveAsTestMenuItem(() => saveRestTabAsTest(tab))]} />
       <div className="flex items-center gap-2 p-2 border-b border-line shrink-0">
         {/* the app's own menu instead of a native <select>: the desktop app's native popup didn't let people pick a method */}
         <Menu

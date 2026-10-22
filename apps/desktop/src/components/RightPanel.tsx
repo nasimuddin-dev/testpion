@@ -4,6 +4,7 @@ import { useAiEnabled } from '../lib/use-ai-enabled';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { call } from '../api';
+import { gitSnapshot } from '../lib/git';
 import { isRequestView, toastError, useApp } from '../store';
 import { isDocView, useDocs } from '../lib/docs';
 import { refOfEditorItem, refOfPlace } from '../lib/open-ref';
@@ -69,11 +70,11 @@ function ContextInfo() {
       (i) => {
         if (!live) return;
         setInfo(i);
-        if (i.file)
-          void call<{ repository?: boolean; files: Array<{ path: string; state?: string; staged?: boolean }> }>('git.status').then(
-            (st) => live && setGit(!st.repository ? 'not in git' : (st.files.find((f) => f.path === i.file || f.path.endsWith(`/${i.file}`))?.state ?? 'unchanged')),
-            () => undefined,
-          );
+        // the shared status the status bar keeps read (lib/git): no git process per item opened
+        const said = (st: { repository?: boolean; files: Array<{ path: string; state?: string }> }) => setGit(!st.repository ? 'not in git' : (st.files.find((f) => f.path === i.file || f.path.endsWith(`/${i.file}`))?.state ?? 'unchanged'));
+        const known = gitSnapshot().status;
+        if (i.file && known) said(known);
+        else if (i.file) void call<{ repository?: boolean; files: Array<{ path: string; state?: string }> }>('git.status').then((st) => live && said(st), () => undefined);
       },
       () => live && setInfo(undefined),
     );

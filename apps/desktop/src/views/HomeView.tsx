@@ -6,6 +6,7 @@ import { useAiEnabled } from '../lib/use-ai-enabled';
 import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { asError, call, modKey, on } from '../api';
+import { sharedCall } from '../lib/shared-call';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
 import { promptText, useApp } from '../store';
@@ -237,7 +238,7 @@ export function HomeView() {
   const load = () => {
     stale.current = false;
     void refreshCollections();
-    void Promise.all(COLLECTION_CALL_LIBRARIES.map((kind) => call<{ items: Array<{ collectionId?: string }> }>('lib.get', { kind }).catch(() => ({ items: [] }))))
+    void Promise.all(COLLECTION_CALL_LIBRARIES.map((kind) => sharedCall<{ items: Array<{ collectionId?: string }> }>('lib.get', { kind }).catch(() => ({ items: [] }))))
       .then((libs) => {
         const n: Record<string, number> = {};
         for (const i of libs.flatMap((l) => l.items)) if (i.collectionId) n[i.collectionId] = (n[i.collectionId] ?? 0) + 1;
@@ -247,8 +248,9 @@ export function HomeView() {
     void call<HomeMonitor[]>('monitor.list').then(setMonitors, () => setMonitors([]));
     void call<{ items: HomeRun[] }>('runs.list', { limit: 6 }).then((r) => setRuns(r.items), () => setRuns([]));
     void call<OnboardingStep[]>('ws.onboarding').then(setLoop, () => setLoop([]));
-    void call<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
-    void call<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
+    // asked for by the explorer and the certificate reminder too as the window opens: one call (lib/shared-call)
+    void sharedCall<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
+    void sharedCall<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     loadActivity();
   };
   // Home stays mounted: coming back to it reloads only when something it shows has changed (a save, a workspace

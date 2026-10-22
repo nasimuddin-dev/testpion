@@ -488,6 +488,34 @@ export class WorkspaceStore {
     removeOwned(this.safePath(rel, this.path('tests')), { recursive: true });
   }
 
+  /**
+   * Move a test file, or a folder with everything in it, to another path inside tests/ in one call (the window made two
+   * calls per file): written at the new path first, then the old one removed, so a failure in between leaves a copy,
+   * never a loss. A folder never goes onto another folder. Returns the old and new path of each file.
+   */
+  moveTestPath(from: string, to: string): Array<{ from: string; to: string }> {
+    const base = this.path('tests');
+    const src = this.safePath(from, base);
+    const dst = this.safePath(to, base);
+    if (samePath(src, dst)) return [];
+    const files: string[] = [];
+    if (statSync(src).isDirectory()) {
+      if (existsSync(dst)) throw new ApsError('ValidationError', `tests/${to} exists already`);
+      const walk = (dir: string, rel: string) => {
+        for (const e of readdirSync(dir, { withFileTypes: true })) (e.isDirectory() ? walk(join(dir, e.name), `${rel}/${e.name}`) : files.push(`${rel}/${e.name}`));
+      };
+      walk(src, '');
+    } else files.push('');
+    const moved = files.map((f) => ({ from: `${from}${f}`, to: `${to}${f}` }));
+    // a test file through the writer (YAML text normalised); anything else in a folder byte for byte
+    for (const m of moved) {
+      if (TEST_FILE_EXT.test(m.from)) this.writeTestFile(m.to, this.readTestFile(m.from));
+      else atomicWrite(this.safePath(m.to, base), readFileSync(this.safePath(m.from, base)));
+    }
+    this.deleteTestFile(from);
+    return moved;
+  }
+
   /* traces */
   saveTrace(trace: Trace, kind: string, runId?: string): string {
     const day = new Date(trace.startTime).toISOString().slice(0, 10);

@@ -1,6 +1,7 @@
 import { Archive, ArchiveRestore, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
-import { call, on } from '../api';
+import { useCallback, useState } from 'react';
+import { call } from '../api';
+import { useGitRefs, useWhenShown } from '../lib/git';
 import { confirmAction, promptText, toastError, useApp } from '../store';
 import { plural } from '../lib/format';
 import { SET_ASIDE_HINT } from '../lib/vocabulary';
@@ -29,11 +30,9 @@ export function GitStash({ changed, afterChange }: { changed: boolean; afterChan
   const [shown, setShown] = useState<Record<string, Shown>>({});
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => void call<Stash[]>('git.stashList').then(setList, () => setList([])), []);
-  useEffect(() => {
-    load();
-    const off = on('git.changed', load);
-    return () => off();
-  }, [load]);
+  // what was set aside changes with the refs (refs/stash, in the stamp of git.status), here or in a terminal: read
+  // again then, while the Git view is on screen; after the list's own operations at once (run, below)
+  useWhenShown(useGitRefs(), load);
   const run = async (op: () => Promise<unknown>, done?: string) => {
     setBusy(true);
     try {

@@ -561,8 +561,7 @@ export function TestsView() {
   /** Move a test file to another path inside tests/ (a rename, or a move to another folder); its tab follows. */
   const movePath = async (path: string, to: string) => {
     await attempt(async () => {
-      await call('tests.write', { path: to, content: await call<string>('tests.read', { path }) });
-      await call('tests.delete', { path });
+      await call('tests.move', { from: path, to });
       renameOpen(path, to);
       await loadTree();
     });
@@ -675,9 +674,8 @@ export function TestsView() {
     const walk = (x: Node) => (x.kind === 'file' ? files.push(x.path) : (x.children ?? []).forEach(walk));
     walk(n);
     await attempt(async () => {
-      // the files first, then the old folder: a failure in between leaves a copy, never a loss
-      for (const p of files) await call('tests.write', { path: `${to}${p.slice(n.path.length)}`, content: await call<string>('tests.read', { path: p }) });
-      await call('tests.delete', { path: n.path });
+      // one call (the files first, then the old folder: a failure in between leaves a copy, never a loss)
+      await call('tests.move', { from: n.path, to });
       for (const p of files) renameOpen(p, `${to}${p.slice(n.path.length)}`);
       setOpen((o) => ({ ...o, [to]: o[n.path] ?? true }));
       await loadTree();

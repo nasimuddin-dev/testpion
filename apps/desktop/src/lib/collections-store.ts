@@ -69,7 +69,8 @@ function outlineNodes(nodes: CollectionNode[]): CollectionNode[] {
   });
 }
 const outline = makeList('col.tree', (ids) => call<Array<Collection | undefined>>('col.tree', { ids }), (c) => ({ ...c, items: outlineNodes(c.items ?? []) }));
-const whole = makeList('col.list', (ids) => Promise.all(ids.map((id) => call<Collection>('col.get', { id }).catch(() => undefined))));
+// one call for all of them (it was one per collection)
+const whole = makeList('col.list', (ids) => call<Array<Collection | undefined>>('col.getMany', { ids }));
 
 /** How many mounted views read the whole collections: none, and a change only marks the list stale. */
 let wholeUsers = 0;

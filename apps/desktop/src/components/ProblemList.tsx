@@ -46,22 +46,23 @@ function problemActions(p: Problem): MenuItem[] {
  * ⋯ and right-click. `grouped` shows the groups' headings; `limit` the first n.
  */
 export function ProblemList({ problems, grouped, limit }: { problems: Problem[]; grouped?: boolean; limit?: number }) {
-  const [menuFor, setMenuFor] = useState<number>();
+  const [menuFor, setMenuFor] = useState<string>();
   const shown = limit ? problems.slice(0, limit) : problems;
   // grouped: the groups in their most severe item's order
   const list = grouped ? [...new Set(shown.map((p) => p.group))].flatMap((g) => shown.filter((p) => p.group === g)) : shown;
+  const keys = problemKeys(list);
   return (
     <div role="list" aria-label="Problems" className="flex flex-col">
       {list.map((p, n) => (
-        <Fragment key={`${p.kind}:${JSON.stringify(p.ref)}:${n}`}>
+        <Fragment key={keys[n]}>
           {grouped && p.group !== list[n - 1]?.group && <SectionTitle size="sm" className="px-3 pt-2 pb-0.5">{p.group}</SectionTitle>}
           <div
             role="listitem"
             data-problem={p.kind}
-            className={cx('group flex items-center gap-2 pl-2 pr-1 rounded-md text-sm', menuFor === n ? 'bg-hover' : 'hover:bg-hover')}
+            className={cx('group flex items-center gap-2 pl-2 pr-1 rounded-md text-sm', menuFor === keys[n] ? 'bg-hover' : 'hover:bg-hover')}
             onContextMenu={(e) => {
               e.preventDefault();
-              setMenuFor(n);
+              setMenuFor(keys[n]);
             }}
           >
             <button className="flex-1 min-w-0 flex items-center gap-2 py-1.5 text-left" onClick={() => void openRef(p.ref)} title={p.message}>
@@ -72,10 +73,24 @@ export function ProblemList({ problems, grouped, limit }: { problems: Problem[];
               <span className="flex-1 min-w-0 truncate">{p.message}</span>
               {p.at && <span className="text-xs text-muted shrink-0">{timeAgo(p.at)}</span>}
             </button>
-            <RowMenu label={p.message} items={menuFor === n ? problemActions(p) : []} open={menuFor === n} onOpenChange={(o) => setMenuFor(o ? n : undefined)} />
+            <RowMenu label={p.message} items={menuFor === keys[n] ? problemActions(p) : []} open={menuFor === keys[n]} onOpenChange={(o) => setMenuFor(o ? keys[n] : undefined)} />
           </div>
         </Fragment>
       ))}
     </div>
   );
+}
+
+/**
+ * A key per problem from what it is about (its kind, what it names, its message), not its place: a problem fixed above
+ * another does not draw the rows below it again, and an open menu stays on its row. The same problem twice gets `#2`.
+ */
+export function problemKeys(list: Problem[]): string[] {
+  const seen = new Map<string, number>();
+  return list.map((p) => {
+    const base = `${p.kind}:${JSON.stringify(p.ref)}:${p.message}`;
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    return n === 1 ? base : `${base}#${n}`;
+  });
 }

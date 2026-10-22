@@ -50,6 +50,33 @@ describe('workspace watcher', () => {
     }
   });
 
+  it('an event that names no file (the system buffer overflowed: a merge while the app was busy) looks at every file again', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-watch-overflow-'));
+    try {
+      mkdirSync(join(dir, 'collections'), { recursive: true });
+      writeFileSync(join(dir, 'collections', 'a.json'), '{"a":1}');
+      writeFileSync(join(dir, 'collections', 'b.json'), '{"b":1}');
+      writeFileSync(join(dir, 'mcp-servers.json'), '{"servers":[]}');
+      let emit!: (name: string | null) => void;
+      const batches: WorkspaceChange[][] = [];
+      const stop = watchWorkspace(dir, (b) => batches.push(b), { debounceMs: 50, watch: (_r, l) => ((emit = (n) => l('change', n)), { close: () => undefined }) });
+      try {
+        await sleep(50);
+        // the merge: one file rewritten, one gone, one new; the only event is the one without a name
+        writeFileSync(join(dir, 'mcp-servers.json'), '<<<<<<< HEAD\n{"servers":[1]}\n=======\n{"servers":[2]}\n>>>>>>> theirs\n');
+        rmSync(join(dir, 'collections', 'b.json'));
+        writeFileSync(join(dir, 'collections', 'c.json'), '{"c":1}');
+        emit(null);
+        await sleep(300);
+        expect(batches.flat().map((c) => c.path).sort()).toEqual(['collections/b.json', 'collections/c.json', 'mcp-servers.json']);
+      } finally {
+        stop();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports a change another program makes right after the app saved the same file', async () => {
     mkdirSync(join(root, 'tests'), { recursive: true });
     const batches: WorkspaceChange[][] = [];

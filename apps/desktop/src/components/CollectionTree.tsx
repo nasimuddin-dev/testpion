@@ -4,6 +4,7 @@ import { Download, FilePlus2, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import { asError, call, on } from '../api';
+import { sharedCall } from '../lib/shared-call';
 import { VirtualList } from './ui';
 import { focusRow } from './TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
@@ -44,7 +45,7 @@ function useCollectionsHealth(): Record<string, { sent: number; failing: number 
   const [health, setHealth] = useState<Record<string, { sent: number; failing: number }>>({});
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const load = () => void call<Record<string, { sent: number; failing: number }>>('stats.collectionsHealth').then(setHealth, () => undefined);
+    const load = () => void sharedCall<Record<string, { sent: number; failing: number }>>('stats.collectionsHealth').then(setHealth, () => undefined);
     const soon = () => {
       clearTimeout(timer);
       timer = setTimeout(load, 1500);

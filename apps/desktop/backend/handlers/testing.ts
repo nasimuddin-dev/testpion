@@ -93,6 +93,8 @@ export function testingHandlers(be: Backend): Handlers {
       return { ...r, ref: { kind: 'test', path: r.path } };
     },
     'tests.delete': ({ path }: { path: string }) => be.ws.deleteTestFile(path),
+    /** Move (rename) a test file or a folder of them inside tests/ in one call; the old and new path of each file. */
+    'tests.move': ({ from, to }: { from: string; to: string }) => be.ws.moveTestPath(from, to),
     /** The expose: block of a test file or suite (the flow as an MCP tool), if any; a proposed tool name otherwise. */
     'tests.exposure': ({ path }: { path: string }) => {
       const text = be.ws.readTestFile(path);

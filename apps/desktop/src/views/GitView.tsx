@@ -1,8 +1,7 @@
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { ArrowDown, ArrowDownUp, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2, Users, Wrench } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useDoc } from '../lib/docs';
+import { useCallback, useEffect, useState } from 'react';
+import { asError, call } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
@@ -23,7 +22,7 @@ import { GitFixDialog } from '../components/GitFixDialog';
 import { GitLargeFiles } from '../components/GitLargeFiles';
 import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
 import { toastWithUndo } from '../lib/git-items';
-import { gitSnapshot, refreshGit, useGitFull } from '../lib/git';
+import { gitSnapshot, refreshGit, useGitFull, useWhenShown } from '../lib/git';
 
 export interface GitFile {
   path: string;
@@ -48,6 +47,10 @@ export interface GitStatusInfo {
   behind: number;
   files: GitFile[];
   conflicted: boolean;
+  /** The commit HEAD points at. */
+  head?: string;
+  /** A stamp of the branches (backend git.status): changes when one is made, deleted or moved, here or outside the app. */
+  refs?: string;
 }
 
 export interface SemanticChange {
@@ -121,50 +124,35 @@ export function GitView() {
   const [toFix, setToFix] = useState(0);
   const refreshToFix = useCallback(() => void call<{ steps: Array<{ state: string }> }>('git.fixPlan', {}).then((p) => setToFix(p.steps.filter((x) => x.state === 'todo').length), () => setToFix(0)), []);
 
-  // the rest (branches, the log, the pull request link, a proposal) is read while the view is on screen: an event that
-  // comes while it is hidden is answered when it shows again, not with git processes behind another view
-  const { active } = useDoc();
-  const activeRef = useRef(active);
-  activeRef.current = active;
-  const stale = useRef(false);
-  const load = useCallback(async () => {
-    if (!activeRef.current) return void (stale.current = true);
-    stale.current = false;
-    try {
-      await refreshGit();
-      if (!gitSnapshot().status?.repository) return;
-      const [br, lg, pr] = await Promise.all([
-        call<typeof branches>('git.branches'),
-        call<typeof log>('git.log', { limit: 30 }),
-        call<{ url?: string }>('git.pullRequestUrl').catch(() => ({ url: undefined })),
-      ]);
-      // a commit an AI agent proposed: its message, for the user to review
-      const proposal = await call<{ message: string } | null>('git.proposal').catch(() => null);
-      if (proposal?.message) setMessage((m) => m || proposal.message);
+  // The status and the changes are the one shared read (lib/git): a git event reads it at once and once things settled,
+  // a save or an edit outside the app once the files settled (one read per burst). Everything else is read only when what
+  // it depends on moved, and only while the view is on screen (a change that comes while it is hidden is read when it
+  // shows again): no git process of this view runs for a save that moved nothing.
+  /** After the view's own git operation: the shared read now (what depends on HEAD, the branches or the staged files follows by itself). */
+  const load = useCallback(() => refreshGit(), []);
+  // the branches, the log and the pull request link: they change only when HEAD, a branch or the remote moved (a commit,
+  // a merge, a pull, a push, a switch, a branch made or deleted, here or in a terminal: `head` and `refs` of the status)
+  const refsKey = status?.repository ? [status.head, status.refs, status.branch, status.upstream, status.remote, status.ahead, status.behind].join('|') : '';
+  useWhenShown(refsKey, () => {
+    if (!gitSnapshot().status?.repository) return;
+    void Promise.all([call<typeof branches>('git.branches'), call<typeof log>('git.log', { limit: 30 }), call<{ url?: string }>('git.pullRequestUrl').catch(() => ({ url: undefined }))]).then(([br, lg, pr]) => {
       setBranches(br);
       setLog(lg);
       setPrUrl(pr.url);
-    } catch (e) {
-      toastError(e);
-    }
-  }, []);
+    }, toastError);
+  });
+  // a commit an AI agent proposed (it stages the files it proposes): its message, for the user to review
+  const stagedKey = (status?.files ?? [])
+    .filter((f) => f.staged)
+    .map((f) => f.path)
+    .join('\n');
+  useWhenShown(stagedKey, () => void call<{ message: string } | null>('git.proposal').then((p) => p?.message && setMessage((m) => m || p.message), () => undefined));
 
   useEffect(() => {
-    void load();
     refreshToFix();
-    // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reloads)
+    // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reads the status again)
     void call('git.autoFetch').catch(() => undefined);
-    // a save, or an edit outside the app: read again at once and once the files settled (a merge writes several).
-    // While the view is hidden `load` only notes that it is out of date; it reads when the view shows again (below)
-    let settle: ReturnType<typeof setTimeout> | undefined;
-    const later = () => (clearTimeout(settle), (settle = setTimeout(() => void load(), 2200)));
-    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => (void load(), later())), on('workspace.changedOnDisk', later)];
-    return () => (clearTimeout(settle), offs.forEach((o) => o()));
-  }, [load, refreshToFix]);
-  // shown again after an event it skipped while hidden: read once
-  useEffect(() => {
-    if (active && stale.current) void load();
-  }, [active, load]);
+  }, [refreshToFix]);
   // what a sync that stopped on conflicts said, shown with the Conflicts list
   const [syncNote, setSyncNote] = useState<string>();
   useEffect(() => {

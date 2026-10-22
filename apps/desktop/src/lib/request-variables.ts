@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { useApp, type ViewId } from '../store';
 import { useDebounced } from '../components/ui';
@@ -33,14 +33,34 @@ export function requestVariables(request: object): { template: string; setByScri
   return { template: [...new Set(refs)].join(' '), setByScripts: [...namesSetByScripts(scriptsOf(request).join('\n'))] };
 }
 
+/** How long after the last edit the request on screen is reduced to its variables. */
+const SETTLE_MS = 300;
+function reduce(request: object | undefined): { template: string; setKey: string } | undefined {
+  if (request === undefined) return undefined;
+  const v = requestVariables(request);
+  return { template: v.template, setKey: v.setByScripts.join(' ') };
+}
+
 /**
  * An editor says which request it shows (`request`: the saved request's shape, `{ request, preRequestScript, testScript }`;
  * `undefined`: none); only the editor on screen (`active`) is heard. It is reduced to its variables here, once per change.
  */
 export function usePublishRequest(view: ViewId, request: object | undefined, collectionId: string | undefined, active = true): void {
-  const vars = useMemo(() => (request === undefined ? undefined : requestVariables(request)), [request]);
+  // reduced once typing paused (a keystroke in a 2 MB body no longer stringifies and scans the whole request), and the
+  // editor renders again only when its variables changed
+  const [vars, setVars] = useState(() => reduce(request));
+  useEffect(() => {
+    const t = setTimeout(
+      () => {
+        const next = reduce(request);
+        setVars((cur) => (next?.template === cur?.template && next?.setKey === cur?.setKey ? cur : next));
+      },
+      request === undefined ? 0 : SETTLE_MS,
+    );
+    return () => clearTimeout(t);
+  }, [request]);
   const template = vars?.template;
-  const setKey = vars?.setByScripts.join(' ');
+  const setKey = vars?.setKey;
   useEffect(() => {
     if (!active) return;
     const request = template === undefined ? undefined : { view, template, setByScripts: setKey ? setKey.split(' ') : [], collectionId };
@@ -69,7 +89,8 @@ export function useUndefinedVariables(): { names: string[]; collectionId?: strin
   const envsVersion = useApp((s) => s.envsVersion);
   const request = useOnScreen((s) => s.request);
   const shown = request && request.view === view ? request : undefined;
-  const text = useDebounced(shown?.template ?? '', 400);
+  // the editor publishes its variables once typing paused (usePublishRequest, 300 ms): a short wait more for switches
+  const text = useDebounced(shown?.template ?? '', 100);
   const setByScripts = shown?.setByScripts;
   const collectionId = shown?.collectionId;
   const [names, setNames] = useState<string[]>([]);
