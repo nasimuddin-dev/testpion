@@ -22,8 +22,9 @@ on:
         description: "Release tag to build and upload to, e.g. v0.1.0"
         required: true
 
+# the build jobs only read; the publish job below asks for what it needs
 permissions:
-  contents: write
+  contents: read
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
@@ -47,7 +48,7 @@ jobs:
             target: --linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TAG }}
       - name: Check the tag matches the version
@@ -58,7 +59,7 @@ jobs:
       - name: Install Linux packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -93,7 +94,7 @@ jobs:
           # blockmaps are only used for differential Windows/AppImage updates
           find out -name '*.blockmap' ! -name '*-setup.exe.blockmap' ! -name '*.AppImage.blockmap' -delete
           ls -l out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: installers-${{ runner.os }}
           path: out/*
@@ -103,11 +104,15 @@ jobs:
     name: Publish release
     needs: build
     runs-on: ubuntu-latest
+    # the only job that writes to the release; id-token: the keyless signature of the checksums (Sigstore)
+    permissions:
+      contents: write
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: out
           pattern: installers-*
@@ -115,6 +120,13 @@ jobs:
       - name: Checksums
         working-directory: out
         run: ls TestPion-* | grep -v '.blockmap$' | xargs sha256sum > SHA256SUMS.txt && cat SHA256SUMS.txt
+      # SHA256SUMS.txt is signed keyless with this workflow's identity (Sigstore): the signature proves the list was made by this
+      # repository's release workflow, not by whoever can upload files to the release. Verify with:
+      #   cosign verify-blob --bundle SHA256SUMS.txt.sigstore.json --certificate-identity-regexp 'https://github.com/nasimuddin-dev/testpion/.github/workflows/release.yml@.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS.txt
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign the checksums
+        working-directory: out
+        run: cosign sign-blob --yes --bundle SHA256SUMS.txt.sigstore.json SHA256SUMS.txt
       - name: Release notes from CHANGELOG.md
         shell: bash
         run: |
@@ -151,11 +163,11 @@ jobs:
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         if: env.NPM_TOKEN != ''
         with:
           ref: ${{ env.TAG }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: env.NPM_TOKEN != ''
         with:
           node-version: 24

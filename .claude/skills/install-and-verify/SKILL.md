@@ -7,8 +7,10 @@ description: Download a TestPion release, verify its checksums, install it silen
 
 1. **Download and verify:**
    ```bash
-   d=$(mktemp -d) && gh release download vX.Y.Z -D "$d" -p '*-windows-x64-setup.exe' -p SHA256SUMS.txt
+   d=$(mktemp -d) && gh release download vX.Y.Z -D "$d" -p '*-windows-x64-setup.exe' -p SHA256SUMS.txt -p SHA256SUMS.txt.sigstore.json
    cd "$d" && sha256sum -c SHA256SUMS.txt --ignore-missing
+   # the checksum list is signed by the release workflow (Sigstore); with cosign installed:
+   cosign verify-blob --bundle SHA256SUMS.txt.sigstore.json --certificate-identity-regexp 'https://github.com/nasimuddin-dev/testpion/.github/workflows/release.yml@.*' --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS.txt
    ```
    Must print `OK` for the installer. A mismatch: stop, do not install, tell the owner.
 2. **Install silently from PowerShell** (Git Bash turns `/S` into a path). Installing closes the running TestPion; say so to the owner first if they may be using it.

@@ -44,6 +44,14 @@ sha256sum TestPion-*
 
 :::
 
+`SHA256SUMS.txt` is signed by the release workflow itself (Sigstore, keyless), so the list can be trusted even if someone could upload files to the release. With [cosign](https://docs.sigstore.dev/cosign/installation/) installed, download `SHA256SUMS.txt.sigstore.json` next to it and run:
+
+```bash
+cosign verify-blob --bundle SHA256SUMS.txt.sigstore.json \
+  --certificate-identity-regexp 'https://github.com/nasimuddin-dev/testpion/.github/workflows/release.yml@.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS.txt
+```
+
 ## Installation guides
 
 - [Install on Windows](/installation/windows)

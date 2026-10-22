@@ -6,7 +6,7 @@ description: Cut a TestPion release (version bump, changelog, tests, UI regressi
 # Release
 
 Releases are built by GitHub Actions from a `vX.Y.Z` tag (Windows setup and portable, macOS dmg ×2, Linux deb/rpm/AppImage,
-update feeds and `SHA256SUMS.txt`; 11 assets). Commits go straight to `main` as the owner (the rulesets let the admin bypass; the push prints
+update feeds, `SHA256SUMS.txt` and its Sigstore signature `SHA256SUMS.txt.sigstore.json`; 12 assets). Commits go straight to `main` as the owner (the rulesets let the admin bypass; the push prints
 "Bypassed rule violations", which is expected). Never loosen the rulesets; if a push is rejected for another reason
 (secret detection, …) stop and tell the owner.
 
