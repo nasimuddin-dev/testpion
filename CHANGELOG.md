@@ -4,6 +4,23 @@
 
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
+### Faster engine
+
+Measured on the owner's (busy) Windows box; before to after.
+
+- **Load tests no longer sort every sample every second**: live percentiles come from a log-bucket histogram past 20,000 samples (within 0.55 %), exact below. Ten snapshots of 5 million samples: 1,859 ms to 0 ms, constant memory.
+- **Trace batches no longer block the app**: files are written through the thread pool and rows go in transactions of 50 (a 500-trace batch was one 259-327 ms synchronous block; now 5 ms), and derived files are no longer hashed.
+- **Git**: describing a 9,000-item list file 888 ms to 15 ms; merging two 5,000-item folders keeps the predecessor instead of rescanning (70 ms to 37 ms); `git-perf` honours `TESTPION_PERF_SLACK`.
+- **A request on a pooled connection the server had closed is sent once more on a new connection** (GET, HEAD, PUT, DELETE ...): the likely cause of the one lost request of 2,600 under load.
+- **Variables set by scripts are written once** per burst, run and close instead of one fsync per `tp.environment.set`.
+- **Big bodies are cut before they are parsed**: the console entry for a 2.2 MB body 124 ms to 0 ms; a result row for a 1 MB response is under 2.5 KB (was about 5.4 KB per row, 4,000 characters of output; now 1,500).
+- **Per send**: the environment check uses the shared view (no parse of every environment file), a payload file is written only for bodies that do not fit the preview (or small binary ones), GraphQL payload files are tracked in history (they were never pruned).
+- **Desktop bundle**: Kafka, MQTT, Socket.IO, MySQL, node-forge, the HTML parser and Handlebars load on first use from `dist-electron/lazy`: `main.cjs` 17.4 MB to 12.2 MB, `cli.cjs` 16.5 to 11.3 MB, with a size budget in the build.
+- **CLI**: `node:http` and `node:dns` load at first use in the bundle: `testpion collections --json` 281-365 ms to 160 ms (bare Node 46 ms). A stale bundle now says so instead of silently loading 1,000 files; the compile cache is written 4 s after start so a killed `mcp-server` still fills it.
+- **MCP**: the flow scan waits for the first request (construction with 3,000 test files 284 ms to 7 ms); `tools/list` drops repeated notes and titles (335 KB to 314 KB; minimal 36 KB).
+- **Debugger**: a 50 MB WebSocket frame in 64 KB chunks 8,834 ms to 17 ms; a 10 MB SSE line 2,195 ms to 77 ms (client parser 940 ms to 18 ms); decompression capped at 64 MB; bodies held up to 64 MB and sent on beyond it; held binary responses keep their bytes; the session budget counts frames, events and gRPC messages; deep search no longer lowercases every body.
+- **Other**: deleting old runs is async and batched; SQL metric queries share pooled workers (100 queries 17,272 ms to 532 ms); a promise per result is gone from the runner (50,000 steps: heap +15 MB to +5 MB); Quick Open lowercases documents once (10 queries over 300 x 100 KB files 973 ms to 429 ms); re-import finds nodes through one map (10k plan 1,177 ms to 644 ms, apply 3,980 ms to 1,086 ms).
+
 ### Friendlier everywhere
 
 - **Dialogs open with the cursor in their first field**, never on the Close button, so you can type at once; a field that asked for the focus itself keeps it. **Enter saves, moves, runs or imports**: in any dialog, Enter in a single-line field (Ctrl+Enter in a multi-line one) is the dialog's main button, and does nothing while that button is disabled. Fifty dialogs, one mechanism (`Modal onSubmit`).
