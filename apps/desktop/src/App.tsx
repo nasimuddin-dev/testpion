@@ -9,7 +9,7 @@ import { openReverseProxyCapture } from './lib/capture';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { call, modKey, on } from './api';
 import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
-import { useApp, type ViewId } from './store';
+import { toastError, useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
 import { focusedScriptEditor } from './lib/script-editor';
@@ -243,13 +243,13 @@ export default function App() {
         // certificates that expire within 7 days: a reminder once a day
         setTimeout(remindExpiringCertificates, 4000);
       } catch (error) {
-        useApp.getState().toast(`Could not finish starting TestPion: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        toastError(error, 'Could not finish starting TestPion');
       } finally {
         // The shell remains usable if a workspace service is temporarily down.
         setReady(true);
       }
     })();
-    const off = on('run.error', (p: { error: { message: string } }) => useApp.getState().toast(`Run failed: ${p.error.message}`, 'error'));
+    const off = on('run.error', (p: { error: { message: string } }) => toastError(p.error, 'Run failed'));
     const offMonitors = watchMonitorAlerts();
     const offRuns = watchRunNotifications();
     const offSecrets = watchSecretRefs();

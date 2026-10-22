@@ -175,7 +175,7 @@ export function RestView() {
       }
       useApp.getState().toast(`Imported ${SNIPPET_LABEL[format ?? 'curl'] ?? 'request'}`, 'success');
     } catch (e) {
-      useApp.getState().toast(`Couldn't import the pasted request: ${asError(e).message}`, 'error');
+      toastError(e, "Couldn't import the pasted request");
     }
   };
   const importSnippetRef = useRef(importSnippet);

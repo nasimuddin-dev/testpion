@@ -206,7 +206,7 @@ export function WebSocketView() {
       const line: WsMessage = { id: `err-${Date.now()}`, time: Date.now(), direction: 'system', data: text, size: text.length };
       setMessages((m) => [...m, line]);
       setSelected(line);
-      useApp.getState().toast(`Could not connect: ${err.message || 'the connection failed'}`, 'error');
+      toastError(e, 'Could not connect');
     }
   };
   // saved messages: pick one into the editor, save the current one under a name, delete one

@@ -5,8 +5,8 @@ import { CountPill, treeKeys, withRefDefaults } from '../../components/TreeParts
 import { TreeRowShell } from '../../components/TreeRowShell';
 import { buildNodeMenu, type NodeMenuCtx } from '../../lib/node-menu';
 import { deleteWithUndo } from '../../lib/undo-delete';
-import { asError, call } from '../../api';
-import { useApp, attempt } from '../../store';
+import { call } from '../../api';
+import { useApp, attempt, toastError } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { uid } from '../../lib/format';
 import { Badge, Button, Empty, Field, Input, PageHeader, Select, Split } from '../../components/ui';
@@ -100,7 +100,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
       const models = await call<string[]>('ai.models', { providerId: p.id, environment: env });
       useApp.getState().toast(`Connected — ${models.length} models available`, 'success');
     } catch (e) {
-      useApp.getState().toast(`Connection failed: ${asError(e).message}`, 'error');
+      toastError(e, 'Connection failed');
     } finally {
       setTesting(false);
     }

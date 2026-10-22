@@ -69,3 +69,40 @@ describe('collection settings drafts survive refreshes (P0)', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('errors say what to do (P1)', () => {
+  it('a refused connection and a missing file are said in words; the code moves to details', async () => {
+    const { normalizeError } = await import('../../packages/core/src/errors');
+    const refused = normalizeError(Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:3000'), { code: 'ECONNREFUSED', address: '127.0.0.1', port: 3000 }) }));
+    expect(refused.message).toBe('Nothing is listening at 127.0.0.1:3000');
+    expect(refused.message).not.toMatch(/E[A-Z]{4,}/);
+    expect(refused.details).toMatchObject({ code: 'ECONNREFUSED' });
+    expect(refused.suggestions[0]).toMatch(/Start the server/);
+    const bare = normalizeError({ code: 'ECONNREFUSED', message: 'fetch failed' });
+    expect(bare.message).not.toMatch(/E[A-Z]{4,}/);
+    const missing = normalizeError(Object.assign(new Error("ENOENT: no such file or directory, open 'C:\\data\\rows.csv'"), { code: 'ENOENT' }));
+    expect(missing.message).toBe('"C:\\data\\rows.csv" was not found');
+    expect(missing.message).not.toMatch(/ENOENT/);
+    expect(normalizeError({ code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND api.nope.test' }).message).toBe('The host name "api.nope.test" could not be found');
+  });
+
+  it('a failure toast shows why and the first thing to try (errorNextStep)', async () => {
+    const { ApsError } = await import('../../packages/core/src/errors');
+    const { errorNextStep } = await import('../../apps/desktop/src/lib/error-text');
+    const e = new ApsError('NetworkError', 'Could not reach api.test').toJSON();
+    const next = errorNextStep(e);
+    expect(next).toContain(e.suggestions[0]!);
+    expect(errorNextStep({ message: 'x', why: 'An unexpected error occurred while executing the operation.', suggestions: [] })).toBeUndefined();
+  });
+
+  it('no handler builds an error toast from the engine message by hand: toastError adds why and the next step', () => {
+    const offenders: string[] = [];
+    // updates.ts writes its own second sentence for the update check
+    const ALLOWED = new Set(['updates.ts']);
+    for (const f of files(SRC)) {
+      const text = readFileSync(f, 'utf8');
+      for (const m of text.matchAll(/toast\(\s*`[^`]*\$\{[^}]*(?:\.message|String\(e)[^}]*\}[^`]*`\s*,\s*'error'/g)) if (!ALLOWED.has(rel(f))) offenders.push(`${rel(f)}: ${m[0].slice(0, 80)}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+});

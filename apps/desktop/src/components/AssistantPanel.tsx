@@ -374,7 +374,7 @@ const Answer = memo(function Answer({
       else if (r) toast(r.done, 'success', r.action);
       else toast(`${apply.label}: done`, 'success');
     } catch (e) {
-      toast(`Couldn't use the answer: ${asError(e).message}`, 'error');
+      toastError(e, "Couldn't use the answer");
     }
   };
   const box = useRef<HTMLDivElement>(null);

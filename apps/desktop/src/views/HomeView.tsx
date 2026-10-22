@@ -5,10 +5,10 @@ import { askAssistant } from '../components/ai/AiAction';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, Gauge, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { asError, call, modKey, on } from '../api';
+import { call, modKey, on } from '../api';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
-import { promptText, useApp } from '../store';
+import { promptText, toastError, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
 import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
@@ -498,7 +498,7 @@ export function HomeView() {
                         useApp.getState().toast(`${c.host}: ${r.daysLeft ?? '?'} days left${r.trusted ? '' : `, not trusted (${r.trustError})`}`, r.trusted && (r.daysLeft ?? 0) >= 14 ? 'success' : 'error');
                         void call<typeof certs>('certificates.list').then(setCerts, () => undefined);
                       },
-                      (e) => useApp.getState().toast(`${c.host}: ${asError(e).message}`, 'error'),
+                      (e) => toastError(e, c.host),
                     )
                   }
                 >

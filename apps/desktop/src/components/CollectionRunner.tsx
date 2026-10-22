@@ -1,6 +1,6 @@
 import { Database, FileSpreadsheet, History, ListChecks, Play, Wand2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { asError, call, on } from '../api';
+import { call, on } from '../api';
 import { promptText, toastError, useApp, attempt } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { timeAgo, plural } from '../lib/format';
@@ -145,7 +145,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
         setData(d);
         setIterations('');
       },
-      (e) => live && useApp.getState().toast(`Could not read the data file: ${asError(e).message}`, 'error'),
+      (e) => live && toastError(e, 'Could not read the data file'),
     );
     return () => {
       live = false;
@@ -216,7 +216,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
         setIterations('');
       }
     } catch (e) {
-      useApp.getState().toast(`Could not read the data file: ${asError(e).message}`, 'error');
+      toastError(e, 'Could not read the data file');
     }
   };
 
@@ -312,7 +312,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                           setData(await call<DataFile>('col.previewDataFile', { path: ds.path }));
                           setIterations('');
                         } catch (err) {
-                          useApp.getState().toast(`Could not read the data file: ${asError(err).message}`, 'error');
+                          toastError(err, 'Could not read the data file');
                         }
                       }}
                     >

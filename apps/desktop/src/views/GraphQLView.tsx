@@ -137,7 +137,7 @@ export function GraphQLView() {
       await navigator.clipboard.writeText(r.url).catch(() => undefined);
       useApp.getState().toast(`GraphQL mock running at ${r.url} (copied). Every valid query gets fake, correctly typed data.`, 'success');
     } catch (e) {
-      useApp.getState().toast(`Couldn't start the mock: ${asError(e).message}`, 'error');
+      toastError(e, "Couldn't start the mock");
     }
   };
   const [running, setRunning] = useState<string>();
@@ -403,7 +403,7 @@ export function GraphQLView() {
     try {
       set({ query: print(parse(d.query)) });
     } catch (e) {
-      useApp.getState().toast(`Cannot format: ${(e as Error).message}`, 'error');
+      toastError(e, 'Cannot format');
     }
   };
 

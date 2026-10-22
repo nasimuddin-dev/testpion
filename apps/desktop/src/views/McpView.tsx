@@ -512,7 +512,7 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
                 onChange({ ...(JSON.parse(jsonText) as McpServerConfig), id: s.id });
                 setJson(false);
               } catch (e) {
-                useApp.getState().toast(`Invalid JSON: ${(e as Error).message}`, 'error');
+                toastError(e, 'Invalid JSON');
               }
             }}
           >

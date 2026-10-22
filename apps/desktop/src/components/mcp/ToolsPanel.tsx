@@ -57,7 +57,7 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
       try {
         a = JSON.parse(rawText || '{}');
       } catch (e) {
-        return useApp.getState().toast(`Invalid JSON: ${(e as Error).message}`, 'error');
+        return toastError(e, 'Invalid JSON');
       }
     }
     // required arguments left empty: say which (sending them anyway is useful to test the server's validation)
