@@ -11,7 +11,7 @@ import { extractCodeBlock, type ItemRef } from '@testpion/shared';
 import { ApsError, normalizeError } from '../../errors.js';
 import type { Collection, PriceEntry, TokenUsage } from '../../model/types.js';
 import type { ExecServices } from '../../runner/execute.js';
-import { checkAiCaps, type AiSurface } from '../../storage/ai-usage.js';
+import { aiSettingsForSurface, checkAiCaps, type AiSurface } from '../../storage/ai-usage.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { shortId } from '../../util/ids.js';
 import { maskSensitiveText, type Redaction, type Redactor } from '../../util/redact.js';
@@ -328,7 +328,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
   // a dry run's messages go to the window: the pictures are in `preview.images` (thumbnails), not twice in the messages
   if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, ms: 0, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, dryRun: true };
-  checkAiCaps(deps.store, deps.settings.ai, { tokens: preview.estimate.inputTokens + maxOutputTokens, costUsd: preview.estimate.maxCostUsd });
+  checkAiCaps(deps.store, aiSettingsForSurface(deps.settings.ai, deps.surface), { tokens: preview.estimate.inputTokens + maxOutputTokens, costUsd: preview.estimate.maxCostUsd });
 
   const started = Date.now();
   const at = new Date().toISOString();

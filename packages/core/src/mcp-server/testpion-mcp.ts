@@ -10,7 +10,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
-import { contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
+import { ConfirmCodes, contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
 import { TOOL_DOCS } from './tool-docs.js';
 import type { DebuggerExchange } from '../debugger/proxy.js';
 import { withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
@@ -49,6 +49,14 @@ interface TestPionMcpOptions {
   /** Allow sending to environments marked as production (off by default). */
   allowProduction?: boolean;
   version?: string;
+  /**
+   * Confirmation codes for clients that cannot ask the person (no MCP elicitation): a tool that deletes, overwrites or spends needs
+   * the one-time code `announce` showed the person, passed as `confirm`, not just `confirm: true` (see ConfirmCodes). Unset: `true` is enough
+   * (tests, a trusted pipeline); `serveTestPionMcp` turns it on and announces on stderr.
+   */
+  confirmCodes?: { announce(i: { code: string; tool: string; what: string }): void } | false;
+  /** Calls of the send family (send_request, run_collection …) per session before the person's yes is needed again (default 300). */
+  sendBudget?: number;
 }
 
 export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
@@ -91,7 +99,13 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title));
   // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
   let confirmer: Confirmer | undefined;
-  const tools = withToolContract(base, { docs: TOOL_DOCS, confirmer: () => confirmer });
+  const envBudget = Number(process.env.TESTPION_MCP_SEND_BUDGET);
+  const tools = withToolContract(base, {
+    docs: TOOL_DOCS,
+    confirmer: () => confirmer,
+    confirmCodes: opts.confirmCodes ? new ConfirmCodes(opts.confirmCodes.announce) : undefined,
+    sendBudget: opts.sendBudget ?? (Number.isFinite(envBudget) && envBudget > 0 ? envBudget : undefined),
+  });
   const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
 
   const server = new (mcpServer().Server)(
@@ -109,7 +123,11 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   }));
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
   const json = (uri: string, data: unknown) => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] });
-  const runTool = (name: string, args: Record<string, unknown> = {}) => all.find((t) => t.name === name)!.run(args);
+  // a resource read goes through the same contract as a tool call (size caps and named cuts), never to the raw tool
+  const runTool = async (name: string, args: Record<string, unknown> = {}) => {
+    const r = await tools.find((t) => t.name === name)!.run(args);
+    return isContractResult(r) ? r.value : r;
+  };
   server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({
     resources: [
       { uri: 'testpion://guide', name: 'guide', title: 'TestPion guide for agents', description: 'Which tool to use for what, variables, check types and the test file format', mimeType: 'text/markdown' },
@@ -176,7 +194,10 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
  * desktop app passes streams on file descriptors 0 and 1: Electron's process.stdin reads nothing on Windows).
  */
 export async function serveTestPionMcp(opts: TestPionMcpOptions & { stdio?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream } }): Promise<void> {
-  const server = createTestPionMcpServer(opts);
+  // the person sees the confirmation codes here (stderr: the terminal or the host's log), the agent does not read them
+  const announce = (i: { code: string; tool: string; what: string }) => process.stderr.write(`[testpion mcp] Confirmation needed: ${i.tool} will ${i.what}\n[testpion mcp] If you approve, give your agent this code: ${i.code}\n`);
+  const codesOff = opts.confirmCodes === false || process.env.TESTPION_MCP_CONFIRM_CODES === '0';
+  const server = createTestPionMcpServer({ ...opts, confirmCodes: codesOff ? false : (opts.confirmCodes ?? { announce }) });
   const transport = new (mcpServerStdio().StdioServerTransport)(opts.stdio?.input as never, opts.stdio?.output as never);
   const closed = new Promise<void>((resolve) => (server.onclose = () => resolve()));
   await server.connect(transport);
