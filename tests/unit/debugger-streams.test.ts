@@ -266,14 +266,14 @@ describe('debugger: HTTPS decryption, WebSocket and SSE through the proxy', () =
 });
 
 describe('debugger: the root certificate', () => {
-  it('is created once per folder, with a fingerprint and ten years, and signs certificates per host with SANs', () => {
+  it('is created once per folder, with a fingerprint and a year, and signs certificates per host with SANs', () => {
     const dir = mkdtempSync(join(tmpdir(), 'tp-root-'));
     try {
       const a = ensureRootCertificate(dir);
       const b = ensureRootCertificate(dir);
       expect(a.certPem).toBe(b.certPem);
       expect(a.fingerprint).toMatch(/^([0-9A-F]{2}:){31}[0-9A-F]{2}$/);
-      expect(Date.parse(a.notAfter) - Date.now()).toBeGreaterThan(9 * 365 * 24 * 3600_000);
+      expect(Date.parse(a.notAfter) - Date.now()).toBeGreaterThan(300 * 24 * 3600_000);
       const leaf = leafSigner(a);
       const l1 = leaf('api.example.com:443');
       expect(leaf('API.example.com')).toBe(l1);

@@ -391,7 +391,7 @@ export function hostPathsOf(method: string, params: unknown): string[] {
   return out;
 }
 
-const NAMES: Record<string, string> = { wp: 'a path in the workspace', wpa: 'a list of paths in the workspace', p: 'a path', pn: 'a name or a path', s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
+const NAMES: Record<string, string> = { wp: 'a string', wpa: 'a list of strings', p: 'a path', pn: 'a name or a path', s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
 
 function isType(v: unknown, t: string): boolean {
   switch (t) {
