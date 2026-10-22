@@ -1,4 +1,4 @@
-import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
+import dnsModule, { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { isIP } from 'node:net';
 import { isAbsolute, resolve } from 'node:path';
 import { ApsError } from '../errors.js';
@@ -70,7 +70,36 @@ export function looksLikeHostPath(text: string): boolean {
 
 export function setNetworkPolicy(p: Partial<NetworkPolicy>): NetworkPolicy {
   current = { ...current, ...p };
+  syncDnsGuard();
   return current;
+}
+
+/*
+ * `assertUrlAllowed` resolves a name and checks the answers; the connection that follows resolves it again, and a name that
+ * answers differently the second time (DNS rebinding) would reach a private address. So while private networks are blocked,
+ * the process's own `dns.lookup` (what net.connect, tls, undici and every client use when no `lookup` is given) refuses private
+ * answers too: the address that is connected to is the one that was checked, whatever resolved first.
+ */
+let originalLookup: typeof dnsModule.lookup | undefined;
+function syncDnsGuard(): void {
+  if (current.blockPrivateNetworks && !originalLookup) {
+    const orig = (originalLookup = dnsModule.lookup);
+    const guarded = function (this: unknown, hostname: string, options: unknown, callback?: unknown) {
+      const cb = (typeof options === 'function' ? options : callback) as (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void;
+      const opts = typeof options === 'function' ? {} : options;
+      (orig as unknown as (h: string, o: unknown, c: unknown) => void).call(dnsModule, hostname, opts, (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => {
+        if (err || !current.blockPrivateNetworks || allowed(hostname)) return cb(err, address, family);
+        const list = Array.isArray(address) ? address : [{ address, family: family ?? 4 }];
+        const bad = list.find((a) => isPrivateAddress(a.address));
+        if (bad) return cb(Object.assign(blockedError(hostname, bad.address), { code: 'EACCES' }) as unknown as NodeJS.ErrnoException, address, family);
+        cb(null, address, family);
+      });
+    };
+    (dnsModule as unknown as { lookup: unknown }).lookup = guarded;
+  } else if (!current.blockPrivateNetworks && originalLookup) {
+    (dnsModule as unknown as { lookup: unknown }).lookup = originalLookup;
+    originalLookup = undefined;
+  }
 }
 
 export function getNetworkPolicy(): NetworkPolicy {
@@ -213,3 +242,6 @@ export function policyLookup(hostname: string, options: object, callback: (err: 
 export function assertProcessesAllowed(what: string): void {
   if (!current.allowProcesses) throw new ApsError('ConfigurationError', `Blocked by the network policy: starting local programs (${what}) is disabled on this server`, { suggestions: ['Use an MCP server over Streamable HTTP or SSE instead of stdio.'] });
 }
+
+// a policy set by the environment (TESTPION_BLOCK_PRIVATE_NETWORKS) guards name lookups from the start
+syncDnsGuard();

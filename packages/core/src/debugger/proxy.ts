@@ -2,6 +2,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, isIP, type Socket } from 'node:net';
 import { lookup as dnsLookupAll } from 'node:dns/promises';
+import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { isLocalOnlyAddress } from '../net/policy.js';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
@@ -159,7 +160,25 @@ interface DebuggerProxyOptions {
 }
 
 /** A tunnel whose requests are read: where they go, who sent them, how many came, its connection id. */
+/**
+ * A `lookup` for the connections made on behalf of a device on the network: the name is resolved once, by the connection
+ * itself, and refused when it points at this computer (loopback, link-local). Checking first and connecting after would
+ * resolve twice, and a name that answers differently the second time (DNS rebinding) would get through.
+ */
+function guardedLookup(hostname: string, options: object, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void): void {
+  dnsLookup(hostname, options as never, ((err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => {
+    if (err) return callback(err, address, family);
+    const list = Array.isArray(address) ? address : [{ address, family: family ?? 4 }];
+    if (list.some((a) => isLocalOnlyAddress(a.address))) return callback(Object.assign(new Error(`${hostname} points at this computer`), { code: 'EACCES' }) as NodeJS.ErrnoException, address, family);
+    callback(null, address, family);
+  }) as never);
+}
+/** Exchanges of devices on the network: their connections use guardedLookup. */
+const remoteExchanges = new WeakSet<object>();
+
 interface TunnelOrigin {
+  /** The tunnel was opened by a device on the network. */
+  remote?: boolean;
   scheme: 'http' | 'https';
   host: string;
   port: number;
@@ -421,6 +440,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       ...(h2 ? { streamId: (res as unknown as Http2ServerResponse).stream.id } : {}),
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
+    if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
     // gRPC: forwarded over HTTP/2 as it streams (messages both ways, then trailers); rules may ignore or highlight it
     if (h2 && /^application\/grpc/i.test(String(req.headers['content-type'] ?? ''))) {
       void application(e.clientPort).then((a) => {
@@ -568,7 +588,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     const key = target.origin;
     let session = h2Sessions.get(key);
     if (!session || session.closed || session.destroyed) {
-      session = h2connect(key, target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {});
+      session = h2connect(key, { ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {}) });
       session.on('error', () => undefined);
       session.on('close', () => h2Sessions.delete(key));
       h2Sessions.set(key, session);
@@ -663,7 +683,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     if (e.redirectedTo) h.host = target.host;
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(secure ? upstreamTls() : {}) }, async (ures) => {
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamTls() : {}) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -805,6 +825,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       frames: [],
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
+    if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
     void application(e.clientPort).then((a) => {
       setApp(e, a);
     });
@@ -825,7 +846,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     delete h['proxy-connection'];
     if (e.redirectedTo) h.host = target.host;
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(secure ? upstreamTls() : {}) });
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamTls() : {}) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -915,6 +936,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       requestBodyBytes: 0,
       responseBodyBytes: 0,
     };
+    if (pairingSecret && !isOwnAddress(socket.remoteAddress)) remoteExchanges.add(e);
     void application(e.clientPort).then((a) => {
       setApp(e, a);
     });
@@ -952,7 +974,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
 
     /** Read the requests inside the tunnel: TLS to the program first (https), then HTTP/1.1 or HTTP/2 as it chose. */
     function readTunnel(scheme: 'http' | 'https', h2cPreface = false) {
-      const origin: TunnelOrigin = { scheme, host: host!, port, clientPort: e.clientPort, requests: 0, id: shortId('conn-') };
+      const origin: TunnelOrigin = { remote: remoteExchanges.has(e), scheme, host: host!, port, clientPort: e.clientPort, requests: 0, id: shortId('conn-') };
       let reported = false;
       // the program did not accept our certificate (an alert, or it hung up without a request): a tunnel that failed, with what to do
       const failed = (why?: string) => {
@@ -1037,7 +1059,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       if (decision?.redirect) e.redirectedTo = `https://${to.host}:${to.port}`;
       e.connectionId = connectionOf(socket);
       if (listed) record(e, 'request');
-      const upstream = tcpConnect(to.port, to.host!, () => {
+      const upstream = tcpConnect({ port: to.port, host: to.host!, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}) }, () => {
         upstream.pipe(socket);
         socket.pipe(upstream);
         socket.resume();
