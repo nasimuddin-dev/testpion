@@ -51,7 +51,13 @@ import type { Backend, Handlers } from '../backend.js';
 import { journalFiles, journalResolve, gitHelpers } from './git-undoable.js';
 
 export function gitHandlers(be: Backend): Handlers {
-  const { ws, rewritten, changed } = gitHelpers(be);
+  const { ws, rewritten, changed: changedBase } = gitHelpers(be);
+  let changesInFlight: { key: string; promise: Promise<unknown> } | undefined;
+  /** After a change nobody may be handed an answer that began before it. */
+  const changed: typeof changedBase = (...args) => {
+    changesInFlight = undefined;
+    return changedBase(...args);
+  };
   const mergeDriverChecked = new Set<string>();
   const proposalFile = () => join(ws(), '.local', 'git-proposal.json');
 
@@ -96,10 +102,22 @@ export function gitHandlers(be: Backend): Handlers {
       return { available: true, version, remote, ...st, refs: st.repository ? await gitRefsStamp(ws()) : undefined };
     },
     /** The changes said by what they mean (requests, environments …), for the Git panel and the commit message. */
-    'git.changes': async () => {
-      const st = await be.handlers['git.status']!({});
-      const files = (st as { files: GitFile[] }).files;
-      return { ...(st as object), files, changes: files.length ? await describeGitChanges(ws(), files) : [] };
+    // a call that arrives while one is running gets that one's answer (the window asks twice after a save: two git runs, one answer)
+    'git.changes': () => {
+      const key = ws();
+      if (changesInFlight?.key === key) return changesInFlight.promise;
+      const promise = (async () => {
+        const st = await be.handlers['git.status']!({});
+        const files = (st as { files: GitFile[] }).files;
+        return { ...(st as object), files, changes: files.length ? await describeGitChanges(ws(), files) : [] };
+      })();
+      const slot = { key, promise };
+      changesInFlight = slot;
+      const clear = () => {
+        if (changesInFlight === slot) changesInFlight = undefined;
+      };
+      promise.then(clear, clear);
+      return promise;
     },
     'git.diff': ({ path, staged }: { path: string; staged?: boolean }) => gitDiff(ws(), path, staged),
     'git.stage': async ({ paths }: { paths: string[] }) => changed(await gitStage(ws(), paths)),
