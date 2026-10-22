@@ -55,6 +55,21 @@ describe('RPC parameter tables', () => {
     expect(missing).toEqual([]);
   });
 
+  it('numbers that size work or time are bounded wherever a method takes them', async () => {
+    const calls: Array<[string, Record<string, unknown>]> = [
+      ['col.run', { collectionId: 'c', iterations: 1e9 }],
+      ['col.run', { collectionId: 'c', delayMs: 1e12 }],
+      ['tests.flowRun', { file: 'f.yaml', concurrency: 1e6 }],
+      ['tests.flowRun', { file: 'f.yaml', retries: 1e6 }],
+      ['mock.start', { collectionId: 'c', port: 70_000 }],
+      ['history.list', { limit: 1e12 }],
+      ['monitor.requests', { id: 'm', runs: 1e9 }],
+    ];
+    for (const [m, p] of calls) await expect(be.invoke(m, p), `${m} ${JSON.stringify(p)}`).rejects.toThrow(/must be from/);
+    // inside the range the call reaches its handler (which may fail for its own reasons, not this one)
+    await expect(be.invoke('history.list', { limit: 50 })).resolves.toBeDefined();
+  });
+
   it('hostPathsOf lists the values of p parameters, and the values of pn parameters only when they look like a path', () => {
     expect(hostPathsOf('git.clone', { url: 'u', dest: '/tmp/x' })).toEqual(['/tmp/x']);
     expect(hostPathsOf('git.clone', { url: 'u' })).toEqual([]);

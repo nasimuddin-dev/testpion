@@ -2,6 +2,7 @@ import type AjvModule from 'ajv';
 import type { ValidateFunction } from 'ajv';
 import { BoundedMap } from './collections.js';
 import { nodeRequire } from './lazy-require.js';
+import { compileUserRegex, safeTest } from './safe-regex.js';
 
 type Ajv = InstanceType<typeof AjvModule.default>;
 let instance: Ajv | undefined;
@@ -16,7 +17,15 @@ function ajv(): Ajv {
   // ajv ships CJS; normalise its default export
   const Ctor = (ajvModule.default ?? ajvModule) as typeof AjvModule.default;
   const addFormats = (formatsModule.default ?? formatsModule) as (a: unknown) => void;
-  const a = new Ctor({ allErrors: true, strict: false, logger: false });
+  // a `pattern` in a schema is a regular expression from a spec, a workspace or an agent: refused when it can freeze the app, deadline when slow
+  const regExp = Object.assign(
+    (pattern: string, flags: string) => {
+      const re = compileUserRegex(pattern, flags.replace(/[gy]/g, ''), 'The schema pattern');
+      return { test: (s: string) => safeTest(re, s).matched };
+    },
+    { code: 'new RegExp' },
+  );
+  const a = new Ctor({ allErrors: true, strict: false, logger: false, code: { regExp } });
   addFormats(a);
   // OpenAPI's own formats (numbers and strings of any content): accepted, like most validators do
   for (const f of ['int32', 'int64', 'float', 'double', 'byte', 'binary', 'password']) a.addFormat(f, true);

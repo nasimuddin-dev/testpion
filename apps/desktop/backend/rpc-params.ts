@@ -351,6 +351,22 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'wsock.connect': { url: 's', protocols: 'sa?', headers: 'a?' },
 };
 
+/**
+ * The range of the numbers that size work or time, wherever a method takes them: a call from a bridge client, an agent or a
+ * mis-click with `iterations: 1e9` or `concurrency: 1e6` is refused instead of starting it. Generous: nothing a person sets is near them.
+ */
+export const RPC_RANGES: Record<string, readonly [number, number]> = {
+  iterations: [0, 100_000],
+  concurrency: [0, 256],
+  retries: [0, 50],
+  delayMs: [0, 3_600_000],
+  days: [0, 3650],
+  runs: [0, 10_000],
+  limit: [0, 1_000_000],
+  port: [0, 65_535],
+  count: [0, 10_000],
+};
+
 /** Parameters that take one of a fixed list of values (an unknown one is a mistake, not an empty answer). */
 export const RPC_VALUES: Record<string, Record<string, readonly string[]>> = {
   'history.list': { kind: HISTORY_KINDS },
@@ -423,6 +439,8 @@ export function checkRpcParams(method: string, params: unknown): Record<string, 
       continue;
     }
     if (!types.some((t) => isType(v, t))) throw new ApsError('ValidationError', `${method}: ${key} must be ${types.map((t) => NAMES[t] ?? t).join(' or ')}`, { details: { method, param: key } });
+    const range = RPC_RANGES[key];
+    if (range && typeof v === 'number' && (v < range[0] || v > range[1])) throw new ApsError('ValidationError', `${method}: ${key} must be from ${range[0]} to ${range[1].toLocaleString('en-US')}`, { details: { method, param: key, min: range[0], max: range[1] } });
     const allowed = RPC_VALUES[method]?.[key];
     if (allowed && v !== '' && !allowed.includes(v as string))
       throw new ApsError('ValidationError', `${method}: unknown ${key} "${String(v)}"`, { suggestions: [`Use one of: ${allowed.join(', ')}`], details: { method, param: key, valid: allowed } });

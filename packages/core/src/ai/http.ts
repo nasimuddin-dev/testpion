@@ -1,6 +1,6 @@
 import { assertUrlAllowed } from '../net/policy.js';
 import { ApsError, errorKindForStatus } from '../errors.js';
-import type { Redactor } from '../util/redact.js';
+import { maskSensitiveText, type Redactor } from '../util/redact.js';
 import type { ToolCall } from './types.js';
 
 /** POST JSON and return parsed JSON, mapping HTTP failures to normalised errors. */
@@ -52,7 +52,8 @@ export async function doFetch(
     } catch {
       /* keep text */
     }
-    const err = new ApsError(kind, `${opts.provider} returned HTTP ${res.status}: ${(opts.redactor?.redactString(msg) ?? msg).slice(0, 500)}`, {
+    // a provider may echo the key it was sent (some do for a malformed one): known values by the redactor, keys and tokens by their shape
+    const err = new ApsError(kind, `${opts.provider} returned HTTP ${res.status}: ${maskSensitiveText(opts.redactor?.redactString(msg) ?? msg, { pii: true }).slice(0, 500)}`, {
       details: { status: res.status },
       ...(providerAdvice(opts.provider, res.status, msg) ?? (kind === 'ValidationError' ? { suggestions: ['Read the provider\'s message above for the field it rejected.', 'Compare the request with the provider\'s API documentation.'] } : {})),
     });

@@ -117,6 +117,8 @@ export function assertGitRev(rev: string): string {
 export function assertRemoteUrl(url: string): string {
   const u = String(url ?? '').trim();
   if (!u || u.startsWith('-') || /[\s\x00-\x1f]/.test(u)) throw new ApsError('ValidationError', `Not a valid repository URL: ${u || '(empty)'}`);
+  // git's `ext::` transport runs a command named in the URL
+  if (/^ext::/i.test(u)) throw new ApsError('ValidationError', 'The ext:: transport runs a program and is not allowed', { suggestions: ['Use an https:// or ssh address.'] });
   return u;
 }
 
@@ -600,7 +602,8 @@ export async function gitInit(ws: string, opts: { remote?: string; branch?: stri
 /** Clone a repository into `dest` (which must not exist or be empty). */
 export async function gitClone(url: string, dest: string, opts: { branch?: string } = {}): Promise<void> {
   if (existsSync(dest) && (await import('node:fs')).readdirSync(dest).length) throw new ApsError('ValidationError', `The folder ${dest} is not empty`, { suggestions: ['Choose a new or empty folder to clone into.'] });
-  await runGit(process.cwd(), ['clone', ...(opts.branch ? ['--branch', assertGitRef(opts.branch)] : []), '--', assertRemoteUrl(url), dest], { timeoutMs: 600_000 });
+  // defence in depth: `ext::<command>` runs a program (off by default in git, refused here too), and a repository's submodules cannot use local paths
+  await runGit(process.cwd(), ['-c', 'protocol.ext.allow=never', '-c', 'protocol.file.allow=user', 'clone', '--no-recurse-submodules', ...(opts.branch ? ['--branch', assertGitRef(opts.branch)] : []), '--', assertRemoteUrl(url), dest], { timeoutMs: 600_000 });
 }
 
 /** The remote's URL (origin), if any: a link to open pull requests with. Remembered for a few seconds (the status asks after every save). */
