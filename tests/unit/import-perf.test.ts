@@ -79,3 +79,30 @@ describe(`importing ${N} requests in ${FOLDERS} folders`, () => {
     });
   }
 });
+
+// I-1: a re-import looked every node up by walking the whole tree (six call sites): tens of millions of node visits for 10,000 nodes
+describe(`re-importing ${N} requests`, () => {
+  it(`plans and applies the update of the 10,000-request Postman file under ${APPLY_MS} ms each`, { timeout: 120_000 }, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-perf-re-'));
+    try {
+      const store = WorkspaceStore.create(join(dir, 'ws'), 'Perf');
+      const text = postman();
+      importIntoWorkspace(store, text);
+      const planned = time(() => planImport(store, text));
+      expect(planned.value.reimport).toHaveLength(1);
+      console.log(`re-import plan of ${N}: ${planned.ms.toFixed(0)} ms`);
+      expect(planned.ms, `plan took ${Math.round(planned.ms)} ms`).toBeLessThan(APPLY_MS);
+      const applied = time(() => importIntoWorkspace(store, text, { update: true }));
+      console.log(`re-import apply of ${N}: ${applied.ms.toFixed(0)} ms`);
+      expect(applied.value.updated).toHaveLength(1);
+      expect(applied.ms, `apply took ${Math.round(applied.ms)} ms`).toBeLessThan(APPLY_MS);
+      store.close();
+    } finally {
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+      } catch {
+        /* temp */
+      }
+    }
+  });
+});
