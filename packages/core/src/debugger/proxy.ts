@@ -15,7 +15,7 @@ import { duplexPair } from 'node:stream';
 import { applicationOfPort, ownerOfProcess, type ProgramInfo } from './programs.js';
 import { DebuggerSession } from './session.js';
 export { applicationOfPort, ownerOfProcess, type ProgramInfo };
-import type { Duplex } from 'node:stream';
+import { PassThrough, type Duplex, type Readable } from 'node:stream';
 import { ApsError } from '../errors.js';
 import { randomBytes } from 'node:crypto';
 import { sleep } from '../util/concurrency.js';
@@ -131,6 +131,8 @@ interface DebuggerProxyOptions {
   /** Listen on every interface (a phone, another computer), not only this one. */
   lan?: boolean;
   maxBodyBytes?: number;
+  /** The most a body is held in memory so that rules and breakpoints can change it (default 64 MB); a bigger one is sent on as it arrives, unchanged. */
+  holdLimitBytes?: number;
   /** `update`: something learned later changed a listed exchange (its program, found after the response). */
   onExchange?(e: DebuggerExchange, phase: 'request' | 'response' | 'update'): void;
   /** Which program owns a client port (see applicationOfPort); replaceable in tests. */
@@ -203,13 +205,41 @@ function collect(stream: NodeJS.ReadableStream, max: number, keep: boolean): Pro
   });
 }
 
-/** A request body whole (it is forwarded after the rules, which may change it). */
-const collectWhole = (stream: NodeJS.ReadableStream) =>
-  new Promise<Buffer>((resolve) => {
+/**
+ * The most a request or response body is held in memory so that rules and breakpoints can change it. A body over it is not held:
+ * what has arrived is sent on and the rest follows as it comes (rules that change the body, and body breakpoints, do not apply to it).
+ */
+const HOLD_LIMIT = 64 * 1024 * 1024;
+
+/**
+ * A body whole (it is forwarded after the rules, which may change it), as the bytes it has: no text conversion. Over `limit` the
+ * stream is paused with what has arrived so far, for the caller to send on (`over`).
+ */
+const holdBody = (stream: NodeJS.ReadableStream, limit = HOLD_LIMIT) =>
+  new Promise<{ body: Buffer; over?: false } | { chunks: Buffer[]; bytes: number; over: true }>((resolve) => {
     const chunks: Buffer[] = [];
-    stream.on('data', (c: Buffer) => chunks.push(c));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', () => resolve(Buffer.concat(chunks)));
+    let bytes = 0;
+    const settle = () => {
+      stream.off('data', onData);
+      stream.off('end', onEnd);
+      stream.off('error', onEnd);
+    };
+    const onData = (c: Buffer) => {
+      chunks.push(c);
+      bytes += c.length;
+      if (bytes > limit) {
+        settle();
+        stream.pause();
+        resolve({ chunks, bytes, over: true });
+      }
+    };
+    const onEnd = () => {
+      settle();
+      resolve({ body: Buffer.concat(chunks, bytes) });
+    };
+    stream.on('data', onData);
+    stream.on('end', onEnd);
+    stream.on('error', onEnd);
   });
 
 /** The program that owns a local TCP port, best effort, per platform; undefined when unknown. */
@@ -379,11 +409,28 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       setApp(e, a);
     });
     // the request body whole, before the rules: a breakpoint or a modify rule may change it
-    const reqBody = await collectWhole(req as NodeJS.ReadableStream);
-    e.requestBodyBytes = reqBody.length;
-    e.requestBodyTruncated = reqBody.length > maxBody;
-    if (reqBody.length && textLike(req.headers['content-type'])) e.requestBody = reqBody.subarray(0, maxBody).toString('utf8');
-    let bodyToSend: Buffer | undefined = reqBody.length ? reqBody : undefined;
+    const held = await holdBody(req as NodeJS.ReadableStream, opts.holdLimitBytes);
+    let bodyToSend: Buffer | Readable | undefined;
+    let streamed = false;
+    if (held.over) {
+      // too big to hold: sent on as it arrives (counted, the first part kept for the list), rules do not change this body
+      streamed = true;
+      const head = Buffer.concat(held.chunks, Math.min(held.bytes, maxBody)).subarray(0, maxBody);
+      e.requestBodyBytes = held.bytes;
+      e.requestBodyTruncated = true;
+      if (textLike(req.headers['content-type'])) e.requestBody = head.toString('utf8');
+      const pass = new PassThrough();
+      for (const c of held.chunks) pass.write(c);
+      (req as NodeJS.ReadableStream).on('data', (c: Buffer) => (e.requestBodyBytes += c.length));
+      (req as NodeJS.ReadableStream).pipe(pass);
+      bodyToSend = pass;
+    } else {
+      const reqBody = held.body;
+      e.requestBodyBytes = reqBody.length;
+      e.requestBodyTruncated = reqBody.length > maxBody;
+      if (reqBody.length && textLike(req.headers['content-type'])) e.requestBody = reqBody.subarray(0, maxBody).toString('utf8');
+      bodyToSend = reqBody.length ? reqBody : undefined;
+    }
 
     const rules = rulesNow();
     await programFirst(appPromise, rules);
@@ -397,7 +444,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (decision.highlight) e.highlight = decision.highlight;
       if (decision.applied.length) e.rules = decision.applied;
       if (decision.requestHeaders) e.requestHeaders = applyHeaderEdits(e.requestHeaders, decision.requestHeaders);
-      if (decision.requestBody !== undefined) {
+      if (decision.requestBody !== undefined && !streamed) {
         e.requestBody = decision.requestBody;
         bodyToSend = Buffer.from(decision.requestBody, 'utf8');
         e.requestBodyBytes = bodyToSend.length;
@@ -434,7 +481,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           }
         }
         if (edits.headers) e.requestHeaders = edits.headers;
-        if (edits.body !== undefined) {
+        if (edits.body !== undefined && !streamed) {
           e.requestBody = edits.body;
           bodyToSend = Buffer.from(edits.body, 'utf8');
           e.requestBodyBytes = bodyToSend.length;
@@ -589,7 +636,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     target: URL,
     method: string,
     headers: Record<string, string | string[] | undefined>,
-    body: Buffer | undefined,
+    body: Buffer | Readable | undefined,
     res: ServerResponse,
     e: DebuggerExchange,
     decision: ReturnType<typeof decideRequest> | undefined,
@@ -655,9 +702,31 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
         return;
       }
       // held: the whole body, then the rules' edits, then the breakpoint, then the client
-      const whole = await collect(ures, Number.MAX_SAFE_INTEGER, true);
-      e.responseBodyBytes = whole.bytes;
-      let outBody: Buffer = Buffer.from(whole.text ?? '', 'utf8');
+      const heldResponse = await holdBody(ures, opts.holdLimitBytes);
+      if (heldResponse.over) {
+        // too big to hold for edits: what has arrived goes on, then the rest as it comes (headers and body rules do not change it)
+        res.writeHead(e.status ?? 502, isH2(res) ? forH2(ures.headers) : ures.headers);
+        e.responseBodyBytes = heldResponse.bytes;
+        e.responseBodyTruncated = true;
+        for (const c of heldResponse.chunks) res.write(c);
+        ures.on('data', (c: Buffer) => {
+          e.responseBodyBytes += c.length;
+          res.write(c);
+        });
+        ures.on('end', () => {
+          res.end();
+          done();
+        });
+        ures.on('error', (err) => {
+          e.error = err.message;
+          res.end();
+          done();
+        });
+        ures.resume();
+        return;
+      }
+      e.responseBodyBytes = heldResponse.body.length;
+      let outBody: Buffer = heldResponse.body;
       let outHeaders = applyHeaderEdits(e.responseHeaders, decision?.responseHeaders);
       if (decision?.responseBody !== undefined) outBody = Buffer.from(decision.responseBody, 'utf8');
       if (keep) e.responseBody = outBody.subarray(0, maxBody).toString('utf8');
@@ -710,7 +779,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     });
     // the request is sent whole when the last byte has gone out
     up.once('finish', () => (e.sendMs = Date.now() - t0));
-    up.end(body);
+    if (body && !Buffer.isBuffer(body)) body.pipe(up);
+    else up.end(body);
   }
 
   // WebSocket: the upgrade goes to the server; both directions are read frame by frame on the way
