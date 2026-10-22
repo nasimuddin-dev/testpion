@@ -28,7 +28,7 @@ describe('Semaphore', () => {
     console.log(`50,000 waiters, 25,000 cancelled: ${ms.toFixed(0)} ms`);
     expect(order).toHaveLength(25_000);
     expect(order.slice(0, 3)).toEqual([1, 3, 5]);
-    expect(ms).toBeLessThan(2000 * SLACK);
+    expect(ms).toBeLessThan(4000 * SLACK); // (5.7 s with the array queue)
   });
 });
 

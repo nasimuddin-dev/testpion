@@ -348,8 +348,12 @@ class SqliteMetaStore implements MetaStore {
   private root: string;
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
-  // (1, not 0: the first insert of a process - every CLI command - does not count the table; the 200th does)
-  private inserts = { history: 1, traces: 1, ai: 1, judge: 1 };
+  private inserts = { history: 0, traces: 0, ai: 0, judge: 0 };
+  /** Every PRUNE_EVERY inserts - but not at the first of a process (every CLI command), which would count the table for nothing. */
+  private pruneDue(k: keyof SqliteMetaStore['inserts']): boolean {
+    const n = this.inserts[k]++;
+    return n > 0 && n % PRUNE_EVERY === 0;
+  }
   private batchDepth = 0;
 
   private stmt(sql: string) {
@@ -435,7 +439,7 @@ class SqliteMetaStore implements MetaStore {
   /** Bound a table to `max` rows: counted first (the common case is "nothing to do"), then the oldest by `order` go, by rowid, with their files. */
   addAiCall(c: AiCallRecord): void {
     this.stmt('INSERT OR REPLACE INTO ai_calls (id, at, doc) VALUES (?,?,?)').run(c.id, c.at, JSON.stringify(c));
-    if (this.inserts.ai++ % PRUNE_EVERY === 0) this.prune('ai_calls', 'at', 'NULL', MAX_AI_CALLS);
+    if (this.pruneDue('ai')) this.prune('ai_calls', 'at', 'NULL', MAX_AI_CALLS);
   }
 
   listAiCalls(q: { since?: string; limit?: number } = {}): AiCallRecord[] {
@@ -458,7 +462,7 @@ class SqliteMetaStore implements MetaStore {
 
   putJudgeCache(key: string, doc: string): void {
     this.stmt('INSERT OR REPLACE INTO judge_cache (key, at, doc) VALUES (?,?,?)').run(key, new Date().toISOString(), doc);
-    if (this.inserts.judge++ % PRUNE_EVERY === 0) this.prune('judge_cache', 'at', 'NULL', MAX_JUDGE_CACHE);
+    if (this.pruneDue('judge')) this.prune('judge_cache', 'at', 'NULL', MAX_JUDGE_CACHE);
   }
 
   clearJudgeCache(): number {
@@ -507,7 +511,7 @@ class SqliteMetaStore implements MetaStore {
       historyOk(e.status) ? 1 : 0,
     );
     // bound history size (and delete the saved response bodies of what goes)
-    if (this.inserts.history++ % PRUNE_EVERY === 0) this.prune('history', 'ts', 'payload', MAX_HISTORY);
+    if (this.pruneDue('history')) this.prune('history', 'ts', 'payload', MAX_HISTORY);
   }
 
   private where(q: ListQuery, cols: string[]): { sql: string; args: unknown[] } {
@@ -643,7 +647,7 @@ class SqliteMetaStore implements MetaStore {
 
   addTrace(t: TraceMeta): void {
     this.stmt('INSERT OR REPLACE INTO traces (id, name, kind, status, start, duration, spans, run_id, path) VALUES (?,?,?,?,?,?,?,?,?)').run(t.id, t.name, t.kind, t.status, t.startTime, t.durationMs, t.spanCount, t.runId ?? null, t.path);
-    if (this.inserts.traces++ % PRUNE_EVERY === 0) this.prune('traces', 'start', 'path', MAX_TRACES);
+    if (this.pruneDue('traces')) this.prune('traces', 'start', 'path', MAX_TRACES);
   }
 
   listTraces(q: ListQuery = {}): Page<TraceMeta> {
