@@ -142,7 +142,7 @@ const steps = [
      const has = async () => (await window.aps.invoke('debug.rules')).rules.some((r) => r.id === id);
      await __t.view('Debugger'); await __t.sleep(800);
      tab('Rules')?.click(); await __t.sleep(800);
-     const bin = await __t.waitFor(() => vis('main tr[data-rule="' + id + '"] button[title="Remove the rule"]')[0], 4000); if (!bin) return 'NO BIN';
+     const bin = await __t.waitFor(() => vis('main tr[data-rule="' + id + '"] button[aria-label="Remove the rule"]')[0], 4000); if (!bin) return 'NO BIN';
      await __t.real.click(bin); await __t.sleep(1000);
      const gone = !(await has());
      const b = await __t.waitFor(() => toastButton(/Deleted the rule "E2E rule"/, 'Undo'), 3000); if (!b) return 'NO UNDO | dialogs: ' + dialogs();
