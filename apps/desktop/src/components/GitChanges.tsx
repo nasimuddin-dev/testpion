@@ -18,6 +18,18 @@ import { RowMenu } from './TreeParts';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 import { Badge, Button, LinkButton, SectionTitle, cx } from './ui';
+import { VirtualList } from './VirtualList';
+
+/** Up to this many lines (files and items) the changes are drawn whole, each file a card; above, a virtual list of lines. */
+const DRAW_ALL = 300;
+const ROW_HEIGHT = 36;
+interface ChangeRow {
+  g: ChangeGroup;
+  /** An item of a file with several (absent: the file's own line). */
+  c?: SemanticChange;
+}
+/** An item's key among its file's items (its id, else its name; the change tells a rename's two sides apart). */
+const itemKey = (c: SemanticChange) => `${c.itemId ?? c.title}:${c.change}`;
 
 /**
  * The changes of the workspace, by item (planning/git-everything.md §4c): each row names what changed ("MCP server
@@ -63,6 +75,8 @@ export function GitChanges({
         : allGroups,
     [allGroups, active],
   );
+  // one line per file, and per item of a file with several: what a long list draws a window of
+  const rows = useMemo(() => groups.flatMap((g): ChangeRow[] => [{ g }, ...(g.single ? [] : g.items.map((c) => ({ g, c })))]), [groups]);
   // a changed file's menu (right-click or ⋯): open · show the line diff (Stage and Discard are the buttons on the row, not repeated here)
   const [menu, setMenu] = useState<string>();
   const showDiff = (f: GitFile) => void call<string>('git.diff', { path: f.path, staged: f.staged }).then((text) => setDiff(diff?.path === f.path ? undefined : { path: f.path, text }), toastError);
@@ -143,6 +157,36 @@ export function GitChanges({
       )}
       {!files.length ? (
         <div className="text-sm text-muted py-3">Nothing changed since the last commit.</div>
+      ) : rows.length > DRAW_ALL ? (
+        // a bulk change (an import, a branch switch: thousands of files): one line per file and per item, only those on
+        // screen drawn; it scrolls with the view, and the line diff of a file opens under the list
+        <>
+          <VirtualList
+            name="GitChanges"
+            label="Changes"
+            items={rows}
+            rowHeight={ROW_HEIGHT}
+            scrollParent
+            keyOf={(r) => (r.c ? `item:${r.g.file.path}:${itemKey(r.c)}` : `file:${r.g.file.path}`)}
+            render={(r) =>
+              r.c ? (
+                <div className="h-full flex items-center gap-x-2 pl-8 pr-2 text-xs overflow-hidden whitespace-nowrap" data-change-item={r.c.title} data-item-staged={r.c.staged ? '' : undefined}>
+                  <ItemName c={r.c} onCompare={onCompare} run={run} stageable={r.g.file.state !== 'conflicted'} />
+                </div>
+              ) : (
+                <div data-change-file={r.g.file.path} className={cx('h-full overflow-hidden whitespace-nowrap border-t border-line', menu === r.g.file.path && 'bg-hover')}>
+                  <FileRow g={r.g} menu={menu} setMenu={setMenu} showDiff={showDiff} discard={discard} run={run} onCompare={onCompare} />
+                </div>
+              )
+            }
+          />
+          {diff && (
+            <div className="mt-2 rounded-md border border-line max-h-80 overflow-auto text-[0.9em]" data-change-diff={diff.path}>
+              <div className="px-2 py-1 border-b border-line font-mono text-xs text-muted">{diff.path}</div>
+              <DiffText text={diff.text} line={diff.line} />
+            </div>
+          )}
+        </>
       ) : (
         <ul className="grid gap-1" aria-label="Changes">
           {groups.map((g) => (
@@ -150,8 +194,8 @@ export function GitChanges({
               <FileRow g={g} menu={menu} setMenu={setMenu} showDiff={showDiff} discard={discard} run={run} onCompare={onCompare} />
               {!g.single && g.items.length > 0 && (
                 <ul className="border-t border-line px-3 py-1.5 grid gap-0.5">
-                  {g.items.map((c, i) => (
-                    <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs" data-change-item={c.title} data-item-staged={c.staged ? '' : undefined}>
+                  {g.items.map((c) => (
+                    <li key={itemKey(c)} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs" data-change-item={c.title} data-item-staged={c.staged ? '' : undefined}>
                       <ItemName c={c} onCompare={onCompare} run={run} stageable={g.file.state !== 'conflicted'} />
                     </li>
                   ))}

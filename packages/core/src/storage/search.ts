@@ -1,7 +1,9 @@
 import { readdirSync, statSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { kindOfLibrary, type ItemRef } from '@testpion/shared';
-import type { CollectionNode } from '../model/types.js';
+import type { Collection, CollectionNode } from '../model/types.js';
+import { readJson } from './fsutil.js';
+import { normalizeCollection } from './normalize.js';
 import type { TestFileNode, WorkspaceStore } from './workspace.js';
 import { listSpecs } from '../openapi/spec-files.js';
 import { pageOf, type ListPage } from '../util/page.js';
@@ -69,30 +71,63 @@ export class WorkspaceSearch {
     return docs;
   }
 
-  private definitionDocs(): IndexedDoc[] {
-    const docs: IndexedDoc[] = [];
-    for (const c of this.store.listCollections()) {
-      docs.push(
-        ...this.cached(this.store.path('collections', `${c.id}.json`), () => {
-          const out: IndexedDoc[] = [{ hit: { kind: 'collection', id: c.id, title: c.name, subtitle: 'Collection', ref: { kind: 'collection', collectionId: c.id } }, text: `${c.name} ${c.description ?? ''}` }];
-          const walk = (nodes: CollectionNode[], path: string[]) => {
-            for (const n of nodes) {
-              if (n.kind === 'folder') walk(n.items, [...path, n.name]);
-              else if (n.kind === 'http') {
-                // every request under its own protocol: a SOAP call says so (it opens in the HTTP editor, as in the explorer)
-                const soap = isSoap(n.request);
-                const ref = { kind: 'request' as const, collectionId: c.id, requestId: n.id, protocol: soap ? ('soap' as const) : ('http' as const) };
-                out.push({ hit: { kind: 'request', id: n.id, title: n.name, subtitle: `${soap ? 'SOAP ' : ''}${n.request.method} ${n.request.url} · ${[c.name, ...path].join(' / ')}`, ref }, text: `${n.name} ${n.request.method} ${n.request.url}${soap ? ' soap' : ''}` });
-              } else if (n.kind === 'graphql')
-                out.push({ hit: { kind: 'graphql', id: n.id, title: n.name, subtitle: `GraphQL · ${[c.name, ...path].join(' / ')}`, ref: { kind: 'request', collectionId: c.id, requestId: n.id, protocol: 'graphql' } }, text: `${n.name} ${n.request.query}` });
-              // a node of a kind this version doesn't know (a newer app's, a hand edit) is not listed as something it isn't
-            }
-          };
-          walk(c.items, []);
-          return out;
-        }),
-      );
+  /**
+   * The collections' entries, by file: a file whose time did not change is not read (Quick Open parsed every collection
+   * before it looked at this cache). A file named otherwise than its id is indexed too; two files with the same id: the
+   * second goes by its file name, as the collection list does.
+   */
+  private collectionDocs(): IndexedDoc[] {
+    const dir = this.store.path('collections');
+    let files: string[] = [];
+    try {
+      files = readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .sort();
+    } catch {
+      return [];
     }
+    const docs: IndexedDoc[] = [];
+    const seen = new Set<string>();
+    for (const f of files) {
+      const path = join(dir, f);
+      const base = f.slice(0, -'.json'.length);
+      let mine = this.cached(path, () => this.docsOfCollectionFile(path, base));
+      const id = mine[0]?.hit.id;
+      if (id && seen.has(id)) mine = this.docsOfCollectionFile(path, base, true);
+      if (mine[0]) seen.add(mine[0].hit.id);
+      docs.push(...mine);
+    }
+    return docs;
+  }
+
+  private docsOfCollectionFile(path: string, base: string, byFileName = false): IndexedDoc[] {
+    let c: Collection;
+    try {
+      c = normalizeCollection(readJson<Collection>(path));
+    } catch {
+      return []; // unreadable: the explorer lists it, with why
+    }
+    if (byFileName || !c.id) c = { ...c, id: base };
+    const out: IndexedDoc[] = [{ hit: { kind: 'collection', id: c.id, title: c.name, subtitle: 'Collection', ref: { kind: 'collection', collectionId: c.id } }, text: `${c.name} ${c.description ?? ''}` }];
+    const walk = (nodes: CollectionNode[], path: string[]) => {
+      for (const n of nodes) {
+        if (n.kind === 'folder') walk(n.items, [...path, n.name]);
+        else if (n.kind === 'http') {
+          // every request under its own protocol: a SOAP call says so (it opens in the HTTP editor, as in the explorer)
+          const soap = isSoap(n.request);
+          const ref = { kind: 'request' as const, collectionId: c.id, requestId: n.id, protocol: soap ? ('soap' as const) : ('http' as const) };
+          out.push({ hit: { kind: 'request', id: n.id, title: n.name, subtitle: `${soap ? 'SOAP ' : ''}${n.request.method} ${n.request.url} · ${[c.name, ...path].join(' / ')}`, ref }, text: `${n.name} ${n.request.method} ${n.request.url}${soap ? ' soap' : ''}` });
+        } else if (n.kind === 'graphql')
+          out.push({ hit: { kind: 'graphql', id: n.id, title: n.name, subtitle: `GraphQL · ${[c.name, ...path].join(' / ')}`, ref: { kind: 'request', collectionId: c.id, requestId: n.id, protocol: 'graphql' } }, text: `${n.name} ${n.request.query}` });
+        // a node of a kind this version doesn't know (a newer app's, a hand edit) is not listed as something it isn't
+      }
+    };
+    walk(c.items, []);
+    return out;
+  }
+
+  private definitionDocs(): IndexedDoc[] {
+    const docs: IndexedDoc[] = this.collectionDocs();
     for (const e of this.store.listEnvironments()) {
       docs.push({ hit: { kind: 'environment', id: e.id, title: e.name, subtitle: `Environment · ${e.variables.length} variable${e.variables.length === 1 ? '' : 's'}`, ref: { kind: 'environment', environmentId: e.id } }, text: `${e.name} environment` });
       for (const v of e.variables)

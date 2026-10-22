@@ -1,6 +1,7 @@
 import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { call, on } from '../api';
+import { sharedCall } from '../lib/shared-call';
 import { touchesFiles, type DataChangedEvent, type FileKind } from '../lib/data-changed';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
@@ -214,7 +215,7 @@ export function Explorer() {
   const load = useCallback(async (withCollections = true, what: ReadonlySet<ListPart> = ALL_PARTS) => {
     const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     const empty: Library<unknown> = { folders: [], items: [] };
-    const lib = (kind: string, when: ListPart) => (what.has(when) ? quiet(call<Library<unknown>>('lib.get', { kind }), empty) : undefined);
+    const lib = (kind: string, when: ListPart) => (what.has(when) ? quiet(sharedCall<Library<unknown>>('lib.get', { kind }), empty) : undefined);
     const [, g, w, s, sp, mf, sf, ds, df] = await Promise.all([
       withCollections ? refreshCollections() : undefined,
       lib('grpc', 'library'),

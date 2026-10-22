@@ -29,6 +29,11 @@ export class DebuggerSession {
     return this.items.length;
   }
 
+  /** How much of the body budget the kept bodies use (characters, as `maxBodyBytes` counts them). */
+  get bodyBytes(): number {
+    return this.keptBytes;
+  }
+
   /** A captured or loaded exchange, newest. */
   add(e: DebuggerExchange): void {
     this.items.push(e);

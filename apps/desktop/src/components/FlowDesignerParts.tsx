@@ -3,7 +3,7 @@
  * the picker that adds steps from a collection, and the blocks a flow is built from. The canvas and the toolbar are in
  * FlowDesigner.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bot, CheckCheck, Code2, Columns2, Cpu, Eraser, FolderInput, GitBranch, Globe, Hourglass, LogOut, Radio, Repeat, ScrollText, Share2, Sparkles, Timer, Variable, Workflow } from 'lucide-react';
 import { aiButton } from '../lib/ai-menu';
 import { setDragBlock } from '../lib/drag-ref';
@@ -51,6 +51,9 @@ export function StepPreview({ step, result, runId }: { step: FlowStep; result?: 
     };
   }, [key, result, runId, step.id, step.name]);
   const r = result ?? read ?? undefined;
+  // the first lines of the response, pretty: made once per response (a hover card renders again on every canvas move)
+  const output = r?.output;
+  const body = useMemo(() => (output ? prettyBody(output).split('\n', 14).join('\n') : ''), [output]);
   if (!runId || (read === null && !result))
     return (
       <div className="p-3 text-xs text-muted" data-flow-preview-empty>
@@ -66,7 +69,6 @@ export function StepPreview({ step, result, runId }: { step: FlowStep; result?: 
       </div>
     );
   const code = r.checks.find((c) => c.type === 'status')?.actual;
-  const body = r.output ? prettyBody(r.output).split('\n').slice(0, 14).join('\n') : '';
   return (
     <div className="text-xs" data-flow-preview-result={r.status}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-line">

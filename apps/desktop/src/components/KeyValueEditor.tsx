@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Lock, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { KeyValue } from '../types';
 import { LinkButton, cx, Textarea } from './ui';
 import { VarInput } from './VarInput';
@@ -36,13 +36,26 @@ export function KeyValueEditor({
   /** Suggested values by key (case-insensitive), e.g. Content-Type → application/json. */
   valueSuggestions?: Record<string, string[]>;
 }) {
-  const [reveal, setReveal] = useState<Record<number, boolean>>({});
+  const [reveal, setReveal] = useState<Record<string, boolean>>({});
   const [bulk, setBulk] = useState(false);
+  const ids = useRowIds(rows);
   if (bulk) return <BulkEditor rows={rows} onChange={onChange} onDone={() => setBulk(false)} />;
   const all = fixedKeys ? rows : [...rows, { key: '', value: '', enabled: true }];
+  const allIds = [...ids.of, ids.blank];
   const update = (i: number, patch: Partial<KeyValue>) => {
-    const next = all.map((r, j) => (j === i ? { ...r, ...patch } : r)).filter((r, j) => j < rows.length || r.key || r.value);
-    onChange(next);
+    const kept = all.map((r, j) => ({ r: j === i ? { ...r, ...patch } : r, id: allIds[j]! })).filter(({ r }, j) => j < rows.length || r.key || r.value);
+    ids.expect(
+      kept.map((x) => x.r),
+      kept.map((x) => x.id),
+    );
+    onChange(kept.map((x) => x.r));
+  };
+  const remove = (i: number) => {
+    ids.expect(
+      rows.filter((_, j) => j !== i),
+      ids.of.filter((_, j) => j !== i),
+    );
+    onChange(rows.filter((_, j) => j !== i));
   };
   const listId = suggestions ? `kv-suggest-${suggestions.length}` : undefined;
   const valueLists = Object.fromEntries(Object.entries(valueSuggestions ?? {}).map(([k, v]) => [k.toLowerCase(), { id: `kv-values-${k.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, values: v }]));
@@ -76,9 +89,10 @@ export function KeyValueEditor({
         <tbody>
           {all.map((r, i) => {
             const isNew = i === rows.length;
-            const masked = r.secret && !reveal[i];
+            const id = allIds[i]!;
+            const masked = r.secret && !reveal[id];
             return (
-              <tr key={i} className={cx('border-t border-line group', r.enabled === false && 'opacity-50')}>
+              <tr key={id} className={cx('border-t border-line group', r.enabled === false && 'opacity-50')}>
                 <td className="text-center">
                   {!isNew && <input type="checkbox" aria-label="Enabled" checked={r.enabled !== false} onChange={(e) => update(i, { enabled: e.target.checked })} />}
                 </td>
@@ -101,7 +115,7 @@ export function KeyValueEditor({
                       <VarInput cell className="flex-1 min-w-0" ariaLabel={r.key ? `Value of ${r.key}` : valuePlaceholder} placeholder={isNew ? valuePlaceholder : ''} value={r.value} list={valueLists[r.key.toLowerCase()]?.id} onChange={(value) => update(i, { value })} />
                     )}
                     {r.secret && (
-                      <button className="px-1 text-muted hover:text-fg" aria-label={masked ? 'Reveal' : 'Hide'} onClick={() => setReveal({ ...reveal, [i]: !reveal[i] })}>
+                      <button className="px-1 text-muted hover:text-fg" aria-label={masked ? 'Reveal' : 'Hide'} onClick={() => setReveal({ ...reveal, [id]: !reveal[id] })}>
                         {masked ? <Eye size={13} /> : <EyeOff size={13} />}
                       </button>
                     )}
@@ -133,7 +147,7 @@ export function KeyValueEditor({
                 )}
                 <td className="text-center">
                   {!isNew && !fixedKeys && (
-                    <button className="p-1 text-muted opacity-0 group-hover:opacity-100 hover:text-bad" aria-label="Remove" onClick={() => onChange(rows.filter((_, j) => j !== i))}>
+                    <button className="p-1 text-muted opacity-0 group-hover:opacity-100 hover:text-bad" aria-label="Remove" onClick={() => remove(i)}>
                       <Trash2 size={13} />
                     </button>
                   )}
@@ -150,6 +164,31 @@ export function KeyValueEditor({
       )}
     </div>
   );
+}
+
+/**
+ * A stable id for each row (the rows have none): a row keeps its id, so its fields (focus, a revealed secret, a field's own
+ * state) stay with it when a row above it is removed; the empty row at the end keeps its id when typing makes it a row.
+ * Rows changed elsewhere keep their ids when their number is the same, else get new ones.
+ */
+function useRowIds(rows: KeyValue[]): { of: string[]; blank: string; expect(rows: KeyValue[], ids: string[]): void } {
+  const seq = useRef(0);
+  const fresh = () => `kv-${++seq.current}`;
+  const known = useRef<{ rows: KeyValue[]; ids: string[] } | undefined>(undefined);
+  const blank = useRef<string | undefined>(undefined);
+  blank.current ??= fresh();
+  let k = known.current;
+  if (!k || (k.rows !== rows && k.ids.length !== rows.length)) k = known.current = { rows, ids: rows.map(fresh) };
+  else if (k.rows !== rows) k = known.current = { rows, ids: k.ids };
+  return {
+    of: k.ids,
+    blank: blank.current,
+    expect: (next, ids) => {
+      known.current = { rows: next, ids };
+      // the empty row became a row: the next empty row is a new one
+      if (ids.includes(blank.current!)) blank.current = fresh();
+    },
+  };
 }
 
 /** Text mode: one `key:value` per line; lines starting with // are disabled. */

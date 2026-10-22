@@ -29,6 +29,23 @@ export function collectionsHandlers(be: Backend): Handlers {
     for (let i = 2; existsSync(dest); i++) dest = join(dir, `${base}-${i}.${ext}`);
     return dest;
   };
+  /** Each dataset's record count while the file is unchanged (by time and size): the explorer lists them after every change. */
+  const counted = new Map<string, { at: string; rows?: number }>();
+  const recordsOf = (d: { path: string; size: number; modified: string }): number | undefined => {
+    const fmt = datasetFormatOfName(d.path);
+    if (!fmt || d.size > 5 * 1024 * 1024) return undefined;
+    const at = `${d.modified}|${d.size}`;
+    const hit = counted.get(d.path);
+    if (hit?.at === at) return hit.rows;
+    let rows: number | undefined;
+    try {
+      rows = countDatasetRecords(readFileSync(join(be.ws.root, d.path), 'utf8'), fmt);
+    } catch {
+      /* unreadable: no count */
+    }
+    counted.set(d.path, { at, rows });
+    return rows;
+  };
   return {
     'col.list': () => be.ws.listCollections(),
     /** Every collection as a tree (ids, names, methods, folders; no bodies, headers or scripts): what the explorer lists. */
@@ -44,6 +61,15 @@ export function collectionsHandlers(be: Backend): Handlers {
         : be.ws.listCollections().map(collectionTreeOf),
     /** One collection (a view that needs one does not read them all). */
     'col.get': ({ id }: { id: string }) => be.ws.getCollection(id),
+    /** Several whole collections in one call (the window's list of them), undefined for one that is gone. */
+    'col.getMany': ({ ids }: { ids: string[] }) =>
+      ids.map((id) => {
+        try {
+          return be.ws.getCollection(id);
+        } catch {
+          return undefined;
+        }
+      }),
     'col.save': (c: Collection) => {
       // a tree (col.tree) saved as a collection would drop every body and script: never
       if ((c as { slim?: boolean }).slim) throw new ApsError('ValidationError', 'That is the outline of the collection, not the collection: read it (col.get) before saving it');
@@ -251,18 +277,13 @@ export function collectionsHandlers(be: Backend): Handlers {
       return collectionVariableFlow(be.ws.getCollection(collectionId), definedVariableNames(be.ws, be.settings));
     },
     /** Data files in the workspace's datasets/ folder (for the Collection Runner and tests), newest first; `rows` for text files up to 5 MB (the sidebar's count). */
-    'datasets.list': () =>
-      listWorkspaceDatasets(be.ws).map((d) => {
-        const fmt = datasetFormatOfName(d.path);
-        let rows: number | undefined;
-        if (fmt && d.size <= 5 * 1024 * 1024)
-          try {
-            rows = countDatasetRecords(readFileSync(join(be.ws.root, d.path), 'utf8'), fmt);
-          } catch {
-            /* unreadable: no count */
-          }
-        return { path: join(be.ws.root, d.path), name: d.path.replace(/^datasets\//, ''), size: d.size, modified: d.modified, format: d.format, tables: d.tables, rows };
-      }),
+    'datasets.list': () => {
+      const list = listWorkspaceDatasets(be.ws);
+      // forget the files that are gone (another workspace, a delete)
+      const now = new Set(list.map((d) => d.path));
+      for (const k of counted.keys()) if (!now.has(k)) counted.delete(k);
+      return list.map((d) => ({ path: join(be.ws.root, d.path), name: d.path.replace(/^datasets\//, ''), size: d.size, modified: d.modified, format: d.format, tables: d.tables, rows: recordsOf(d) }));
+    },
     /** A dataset by its name under datasets/ (the tab): its text (CSV, JSON, JSONL, Markdown; up to 20 MB) and what it is. */
     'datasets.open': ({ name }: { name: string }) => {
       const file = datasetFile(name);

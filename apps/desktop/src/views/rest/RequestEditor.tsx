@@ -13,7 +13,7 @@ import { AuthEditor } from '../../components/AuthEditor';
 import { CodeEditor } from '../../components/CodeEditor';
 import { call } from '../../api';
 import { COMMON_HEADERS, HEADER_VALUES, KeyValueEditor } from '../../components/KeyValueEditor';
-import { LinkButton, Field, Input, Tabs, Textarea } from '../../components/ui';
+import { LinkButton, Field, Input, Tabs, Textarea, useDebounced } from '../../components/ui';
 import { RequestSettings } from '../../components/RequestSettings';
 import { RestTab } from './types';
 import { switchBodyType, type BodyStash } from '../../lib/body';
@@ -150,10 +150,12 @@ function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { bod
       clearTimeout(t);
     };
   }, [body.type, method, url, environment]);
-  // a body typed as text that is really JSON or XML: offer the right editor (completion, checks, beautify)
+  // a body typed as text that is really JSON or XML: offer the right editor (completion, checks, beautify). Looked at
+  // once typing paused, not parsed on every keystroke
+  const textBody = useDebounced(body.type === 'text' && 'content' in body ? body.content : '', 300);
   const looksLike = useMemo((): 'json' | 'xml' | 'html' | undefined => {
-    if (body.type !== 'text' || !('content' in body) || !body.content.trim()) return undefined;
-    const t = body.content.trim();
+    if (body.type !== 'text' || !textBody.trim()) return undefined;
+    const t = textBody.trim();
     if (/^[{[]/.test(t)) {
       try {
         JSON.parse(t);
@@ -164,7 +166,7 @@ function BodyEditor({ body, onChange, stashKey = 'default', method, url }: { bod
     }
     if (/^<\?xml|^<[a-zA-Z][\w:-]*[\s>]/.test(t)) return /<html|<!doctype html/i.test(t) ? 'html' : 'xml';
     return undefined;
-  }, [body]);
+  }, [body.type, textBody]);
   const types: Array<[BodyConfig['type'], string]> = [
     ['none', 'None'],
     ['json', 'JSON'],

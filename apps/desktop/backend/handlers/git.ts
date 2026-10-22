@@ -29,6 +29,7 @@ import {
   gitPull,
   gitPush,
   gitRemoteUrl,
+  gitRefsStamp,
   gitStage,
   gitStatus,
   gitSwitch,
@@ -91,7 +92,8 @@ export function gitHandlers(be: Backend): Handlers {
         mergeDriverChecked.add(ws());
         await setupMergeDriver();
       }
-      return { available: true, version, remote, ...st };
+      // `refs`: a stamp of the branches (no git run) — the Git view reads the branches, the log and the pull request again only when it or `head` moved
+      return { available: true, version, remote, ...st, refs: st.repository ? await gitRefsStamp(ws()) : undefined };
     },
     /** The changes said by what they mean (requests, environments …), for the Git panel and the commit message. */
     'git.changes': async () => {

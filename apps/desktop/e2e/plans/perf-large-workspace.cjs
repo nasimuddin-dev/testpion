@@ -66,6 +66,15 @@ const ms = (t0) => `Math.round(performance.now() - ${t0})`;
 
 const steps = [
   [
+    // F-24: the HTTP editor (its view, response viewer and their libraries) mounts the first time it is shown, not at
+    // startup; its tabs are in the tab strip's store all along (the Send button is only in the mounted editor)
+    'startup-mounts-no-http-editor',
+    `(async () => {
+      await __t.sleep(1500);
+      return 'http editor mounted at startup: ' + !!document.querySelector('[data-tour="send"]');
+    })()`,
+  ],
+  [
     'open-and-expand',
     `(async () => {
       const t0 = performance.now();
@@ -185,6 +194,7 @@ const num = (s, key) => Number((new RegExp(key + ' ms: (\\d+)').exec(s) || [])[1
 module.exports = withExpect(
   steps,
   {
+    'startup-mounts-no-http-editor': /^http editor mounted at startup: false$/,
     'open-and-expand': (r) => (SCALE > 1 || /^rows: 5\d\d \|/.test(r)) && num(r, 'expand') < 1500 ? undefined : 'slow or wrong: ' + r,
     // the two-frame floor is 33 ms (memory ui-perf-profiling): the menu itself must be in the page within it
     'open-a-menu': (r) => num(r, 'menu open') <= 33 && num(r, 'painted') < 100 ? undefined : 'slow: ' + r,

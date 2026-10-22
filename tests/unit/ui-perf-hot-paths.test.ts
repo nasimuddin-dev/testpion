@@ -1,8 +1,11 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WorkspaceStore, pageRunResults, saveMonitor, type Collection } from '../../packages/core/src/index.js';
+import { WorkspaceStore, gitRefsStamp, gitStatus, pageRunResults, saveMonitor, type Collection } from '../../packages/core/src/index.js';
 import { readJsonShared, readJson } from '../../packages/core/src/storage/fsutil.js';
+import { openMetaStore } from '../../packages/core/src/storage/metastore.js';
+import { WorkspaceSearch } from '../../packages/core/src/storage/search.js';
 import { cachedAttention, filesSignature } from '../../apps/desktop/backend/stats-cache.js';
 import { mergeEventBatch, mergeEvents, MAX_MCP_EVENTS, type McpEvent } from '../../apps/desktop/src/lib/mcp-events.js';
 import { appendCapped } from '../../apps/desktop/src/lib/capped.js';
@@ -146,5 +149,87 @@ describe('the window merges event batches in linear time (F-5, F-16)', () => {
     expect(next[0]).toBe(list[2]);
     expect(next[497]).toBe(list[499]);
     expect(appendCapped([], Array.from({ length: 700 }, (_, i) => i), 500)[0]).toBe(200);
+  });
+});
+
+describe('the second pass (F-25, F-32, F-35)', () => {
+  it('git.status carries the commit HEAD points at, and a stamp of the branches that moves with them, also outside the app', async () => {
+    const dir = join(tmp.dir, 'repo');
+    mkdirSync(dir, { recursive: true });
+    const git = (...a: string[]) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' });
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'e2e@example.com');
+    git('config', 'user.name', 'e2e');
+    writeFileSync(join(dir, 'a.txt'), 'a');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'one');
+    const st = await gitStatus(dir);
+    expect(st.head).toBe(git('rev-parse', 'HEAD').trim());
+    const before = await gitRefsStamp(dir);
+    expect(await gitRefsStamp(dir)).toBe(before); // nothing moved: the same stamp
+    // a branch made in a terminal: another stamp, the same HEAD
+    await new Promise((r) => setTimeout(r, 30));
+    git('branch', 'feature');
+    expect(await gitRefsStamp(dir)).not.toBe(before);
+    expect((await gitStatus(dir)).head).toBe(st.head);
+    // a commit (as a merge made outside the app): HEAD moves
+    writeFileSync(join(dir, 'a.txt'), 'b');
+    git('commit', '-qam', 'two');
+    expect((await gitStatus(dir)).head).not.toBe(st.head);
+  });
+
+  it('a folder of test files moves in one call (written first, then the old folder removed)', () => {
+    const store = WorkspaceStore.create(join(tmp.dir, 'moves'), 'Moves');
+    for (let i = 0; i < 50; i++) store.writeTestFile(`old/sub/t${i}.yaml`, `name: t${i}\n`);
+    writeFileSync(store.path('tests', 'old', 'data.bin'), Buffer.from([0, 1, 2, 255]));
+    const moved = store.moveTestPath('old', 'new/place');
+    expect(moved).toHaveLength(51);
+    expect(store.readTestFile('new/place/sub/t7.yaml')).toBe('name: t7\n');
+    expect([...readFileSync(store.path('tests', 'new', 'place', 'data.bin'))]).toEqual([0, 1, 2, 255]);
+    expect(existsSync(store.path('tests', 'old'))).toBe(false);
+    // never onto another folder; a single file renames
+    store.writeTestFile('x/a.yaml', 'a: 1\n');
+    expect(() => store.moveTestPath('x', 'new')).toThrow(/exists already/);
+    expect(store.moveTestPath('x/a.yaml', 'x/b.yaml')).toEqual([{ from: 'x/a.yaml', to: 'x/b.yaml' }]);
+    expect(store.readTestFile('x/b.yaml')).toBe('a: 1\n');
+  });
+
+  it('Quick Open reads only the collection files that changed, and finds one whose file is named otherwise', () => {
+    const store = WorkspaceStore.create(join(tmp.dir, 'search'), 'Search');
+    for (let i = 0; i < 30; i++) store.saveCollection(bigCollection(`c${i}`, 300));
+    // a file named otherwise than the id it holds (by hand, an older version)
+    writeFileSync(store.path('collections', 'by-hand.json'), JSON.stringify({ ...bigCollection('handmade', 2), name: 'Handmade' }));
+    const index = new WorkspaceSearch(store);
+    expect(index.search('Handmade').some((h) => h.kind === 'collection' && h.id === 'handmade')).toBe(true);
+    const t0 = performance.now();
+    for (let i = 0; i < 20; i++) index.search('Request 7');
+    const ms = performance.now() - t0;
+    // 30 × 300 requests were parsed for every search; now a stat per file
+    expect(ms, `20 searches took ${Math.round(ms)} ms`).toBeLessThan(1500);
+  });
+
+  it('the JSON-lines fallback store keeps the database limits, loads in one pass and pages from its end', () => {
+    const dir = join(tmp.dir, 'jsonl');
+    mkdirSync(join(dir, 'database.sqlite'), { recursive: true }); // the database cannot open: the fallback store
+    const meta = openMetaStore(dir);
+    expect(meta.backend).toBe('jsonl');
+    const at = (i: number) => new Date(1_700_000_000_000 + i * 1000).toISOString();
+    for (let i = 0; i < 20_500; i++) meta.addHistory({ id: `h${i}`, timestamp: at(i), kind: 'http', name: `R${i}`, method: 'GET', url: `https://x/${i}`, status: 200 });
+    // one out of order goes in its place
+    meta.addHistory({ id: 'late', timestamp: at(10_000), kind: 'http', name: 'late', status: 200 });
+    expect(meta.listHistory({ limit: 1 }).total).toBe(20_000);
+    expect(meta.listHistory({ limit: 3 }).items.map((h) => h.id)).toEqual(['h20499', 'h20498', 'h20497']);
+    // a page is read from the end of the list kept in order (it sorted all 20,000 per page before)
+    const t0 = performance.now();
+    for (let i = 0; i < 50; i++) meta.listHistory({ limit: 100, offset: i * 100 });
+    expect(performance.now() - t0, '50 pages').toBeLessThan(250);
+    meta.close();
+    // read again: one pass, the same newest first
+    const l0 = performance.now();
+    const again = openMetaStore(dir);
+    expect(performance.now() - l0, 'load').toBeLessThan(2000);
+    expect(again.listHistory({ limit: 1 }).items[0]!.id).toBe('h20499');
+    expect(again.listHistory({ limit: 1 }).total).toBe(20_000);
+    again.close();
   });
 });

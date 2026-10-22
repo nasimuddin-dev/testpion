@@ -700,10 +700,35 @@ function traceRow(r: Record<string, unknown>): TraceMeta {
   };
 }
 
-/** Fallback when `node:sqlite` is unavailable: append-only JSON-lines files with periodic compaction. */
+/** Insert keeping `arr` in ascending `key` order; an equal key goes after those already there (the later added is the newer). */
+function insertByKey<T>(arr: T[], v: T, key: (x: T) => string | number): void {
+  const k = key(v);
+  // the common case: the newest comes last
+  if (!arr.length || key(arr[arr.length - 1]!) <= k) return void arr.push(v);
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (key(arr[mid]!) <= k) lo = mid + 1;
+    else hi = mid;
+  }
+  arr.splice(lo, 0, v);
+}
+
+/** Sort by a key, ascending; a stable sort, so equal keys stay in the order they were added. */
+const byKey = <T>(arr: T[], key: (x: T) => string | number): T[] => arr.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+const historyKey = (h: HistoryEntry) => h.timestamp;
+const runKey = (r: RunMeta) => r.startedAt;
+const traceKey = (t: TraceMeta) => t.startTime;
+
+/**
+ * Fallback when `node:sqlite` is unavailable: append-only JSON-lines files with periodic compaction. It keeps what the
+ * database keeps (history and traces capped, the oldest dropped with their files), loads in one pass (entries indexed by
+ * id) and keeps history, runs and traces in time order, so a page is read from the end instead of sorting everything.
+ */
 class JsonlMetaStore implements MetaStore {
   readonly backend = 'jsonl' as const;
-  private data: { history: HistoryEntry[]; runs: RunMeta[]; traces: TraceMeta[]; ai: AiCallRecord[]; judge: Array<{ id: string; doc: string }> } = { history: [], runs: [], traces: [], ai: [], judge: [] };
+  private data: { history: HistoryEntry[]; runs: RunMeta[]; traces: TraceMeta[]; ai: AiCallRecord[]; judge: Map<string, string> } = { history: [], runs: [], traces: [], ai: [], judge: new Map() };
 
   private root: string;
 
@@ -711,51 +736,62 @@ class JsonlMetaStore implements MetaStore {
     mkdirSync(dirname(path), { recursive: true });
     this.root = dirname(path);
     if (existsSync(path)) {
+      // by id, in the order first written (a later put replaces in place, as before)
+      const byId: Record<'history' | 'runs' | 'traces' | 'ai' | 'judge', Map<string, unknown>> = { history: new Map(), runs: new Map(), traces: new Map(), ai: new Map(), judge: new Map() };
       for (const line of readFileSync(path, 'utf8').split('\n')) {
         if (!line.trim()) continue;
         try {
           const { t, v, op } = JSON.parse(line);
-          const arr = this.data[t as keyof typeof this.data] as Array<{ id: string }>;
-          const i = arr.findIndex((x) => x.id === (op === 'del' ? v : v.id));
-          if (op === 'del') {
-            if (i >= 0) arr.splice(i, 1);
-          } else if (op === 'clear') arr.length = 0;
-          else if (i >= 0) arr[i] = v;
-          else arr.push(v);
+          const m = byId[t as keyof typeof byId];
+          if (!m) continue;
+          if (op === 'del') m.delete(v);
+          else if (op === 'clear') m.clear();
+          else m.set(v.id, v);
         } catch {
           /* skip corrupt line */
         }
       }
+      this.data.history = byKey([...byId.history.values()] as HistoryEntry[], historyKey);
+      this.data.runs = byKey([...byId.runs.values()] as RunMeta[], runKey);
+      this.data.traces = byKey([...byId.traces.values()] as TraceMeta[], traceKey);
+      this.data.ai = [...byId.ai.values()] as AiCallRecord[];
+      for (const j of byId.judge.values() as Iterable<{ id: string; doc: string }>) if (j.id) this.data.judge.set(j.id, j.doc);
+      this.cap();
     }
+  }
+
+  /** The database's limits: the oldest history entries and traces beyond them go, with their files. */
+  private cap(): void {
+    const { history, traces } = this.data;
+    if (history.length > MAX_HISTORY) removeFiles(this.root, history.splice(0, history.length - MAX_HISTORY).map((h) => h.payloadPath));
+    if (traces.length > MAX_TRACES) removeFiles(this.root, traces.splice(0, traces.length - MAX_TRACES).map((t) => t.path));
   }
 
   private log(t: string, v: unknown, op = 'put'): void {
     appendFileSync(this.path, JSON.stringify({ t, v, op }) + '\n');
   }
 
-  private page<T>(arr: T[], q: ListQuery, match: (x: T, s: string) => boolean, sortKey: (x: T) => string | number): Page<T> {
+  /** A page of a list kept in time order: newest first; equal times the later added first, as the database does (rowid). */
+  private page<T>(arr: T[], q: ListQuery, match: (x: T, s: string) => boolean): Page<T> {
     let items = q.query ? arr.filter((x) => match(x, q.query!.toLowerCase())) : arr;
     if (q.kind) items = items.filter((x) => (x as { kind?: string }).kind === q.kind);
-    // newest first; equal keys (two in the same millisecond) the later added first, as the database does (rowid)
-    const at = new Map(items.map((x, i) => [x, i]));
-    items = [...items].sort((a, b) => {
-      const ka = sortKey(a);
-      const kb = sortKey(b);
-      return ka < kb ? 1 : ka > kb ? -1 : at.get(b)! - at.get(a)!;
-    });
-    return { total: items.length, items: items.slice(q.offset ?? 0, (q.offset ?? 0) + (q.limit ?? 100)) };
+    const out: T[] = [];
+    const limit = q.limit ?? 100;
+    for (let i = items.length - 1 - (q.offset ?? 0); i >= 0 && out.length < limit; i--) out.push(items[i]!);
+    return { total: items.length, items: out };
   }
 
   addHistory(e: HistoryEntry) {
     const req = capHistoryRequest(e.request);
     if (req.cut) e = { ...e, request: req.value, requestPreview: true };
-    this.data.history.push(e);
+    insertByKey(this.data.history, e, historyKey);
     this.log('history', e);
+    this.cap();
   }
   listHistory(q: ListQuery = {}) {
     const all = q.requests ? this.data.history.filter(isRequestEntry) : this.data.history;
     const base = q.requestId ? all.filter((h) => h.requestId === q.requestId) : all;
-    return this.page(q.failed ? base.filter((h) => !historyOk(h.status)) : base, q, (h, s) => `${h.name} ${h.url} ${h.method} ${h.status}`.toLowerCase().includes(s), (h) => h.timestamp);
+    return this.page(q.failed ? base.filter((h) => !historyOk(h.status)) : base, q, (h, s) => `${h.name} ${h.url} ${h.method} ${h.status}`.toLowerCase().includes(s));
   }
   getHistory(id: string) {
     return this.data.history.find((h) => h.id === id);
@@ -775,11 +811,11 @@ class JsonlMetaStore implements MetaStore {
   }
   addRun(s: RunSummary, dir: string) {
     const r: RunMeta = { id: s.runId, name: s.name, startedAt: s.startedAt, durationMs: s.durationMs, total: s.total, passed: s.passed, failed: s.failed, skipped: s.skipped, errors: s.errors, environment: s.environment, dir };
-    this.data.runs.push(r);
+    insertByKey(this.data.runs, r, runKey);
     this.log('runs', r);
   }
   listRuns(q: ListQuery = {}) {
-    return this.page(this.data.runs, q, (r, s) => r.name.toLowerCase().includes(s), (r) => r.startedAt);
+    return this.page(this.data.runs, q, (r, s) => r.name.toLowerCase().includes(s));
   }
   deleteRun(id: string) {
     this.data.runs = this.data.runs.filter((r) => r.id !== id);
@@ -815,11 +851,12 @@ class JsonlMetaStore implements MetaStore {
     return fn();
   }
   addTrace(t: TraceMeta) {
-    this.data.traces.push(t);
+    insertByKey(this.data.traces, t, traceKey);
     this.log('traces', t);
+    this.cap();
   }
   listTraces(q: ListQuery = {}) {
-    return this.page(q.failed ? this.data.traces.filter((t) => t.status !== 'ok') : this.data.traces, q, (t, s) => `${t.name} ${t.status}`.toLowerCase().includes(s), (t) => t.startTime);
+    return this.page(q.failed ? this.data.traces.filter((t) => t.status !== 'ok') : this.data.traces, q, (t, s) => `${t.name} ${t.status}`.toLowerCase().includes(s));
   }
   getTrace(id: string) {
     return this.data.traces.find((t) => t.id === id);
@@ -834,19 +871,21 @@ class JsonlMetaStore implements MetaStore {
     return [...rows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, Math.min(Math.max(q.limit ?? 1000, 1), MAX_AI_CALLS));
   }
   getJudgeCache(key: string) {
-    return this.data.judge.find((x) => x.id === key)?.doc;
+    return this.data.judge.get(key);
   }
   putJudgeCache(key: string, doc: string) {
-    const v = { id: key, doc };
-    const i = this.data.judge.findIndex((x) => x.id === key);
-    if (i >= 0) this.data.judge[i] = v;
-    else this.data.judge.push(v);
-    if (this.data.judge.length > 20_000) this.data.judge.splice(0, this.data.judge.length - 20_000);
-    this.log('judge', v);
+    const judge = this.data.judge;
+    judge.set(key, doc);
+    // the oldest go first (a Map keeps the order its keys were first set)
+    for (const k of judge.keys()) {
+      if (judge.size <= 20_000) break;
+      judge.delete(k);
+    }
+    this.log('judge', { id: key, doc });
   }
   clearJudgeCache() {
-    const n = this.data.judge.length;
-    this.data.judge.length = 0;
+    const n = this.data.judge.size;
+    this.data.judge.clear();
     this.log('judge', { id: '' }, 'clear');
     return n;
   }
@@ -857,7 +896,7 @@ class JsonlMetaStore implements MetaStore {
       ...this.data.runs.map((v) => ({ t: 'runs', v })),
       ...this.data.traces.map((v) => ({ t: 'traces', v })),
       ...this.data.ai.map((v) => ({ t: 'ai', v })),
-      ...this.data.judge.map((v) => ({ t: 'judge', v })),
+      ...[...this.data.judge].map(([id, doc]) => ({ t: 'judge', v: { id, doc } })),
     ];
     atomicWrite(this.path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
   }

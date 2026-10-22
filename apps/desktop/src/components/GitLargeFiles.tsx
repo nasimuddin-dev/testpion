@@ -1,7 +1,8 @@
 import { Database, FileArchive } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { LargeFile, LargeResult } from '@testpion/core';
-import { call, on } from '../api';
+import { call } from '../api';
+import { useGitVersion, useWhenShown } from '../lib/git';
 import { confirmAction, promptText, toastError } from '../store';
 import { plural } from '../lib/format';
 import { toastWithUndo } from '../lib/git-items';
@@ -19,17 +20,9 @@ export function GitLargeFiles({ afterChange }: { afterChange(): void }) {
   const [files, setFiles] = useState<LargeFile[]>([]);
   const [busy, setBusy] = useState<string>();
   const load = useCallback(() => void call<LargeFile[]>('git.large').then(setFiles, () => setFiles([])), []);
-  useEffect(() => {
-    load();
-    // a file that grew or arrived (a run wrote data, another editor, a pull): read again once things settled
-    let settle: ReturnType<typeof setTimeout> | undefined;
-    const later = () => {
-      clearTimeout(settle);
-      settle = setTimeout(load, 1500);
-    };
-    const offs = [on('git.changed', load), on('data.changed', later), on('workspace.changedOnDisk', later)];
-    return () => (clearTimeout(settle), offs.forEach((o) => o()));
-  }, [load]);
+  // a file that grew or arrived (a run wrote data, another editor, a pull) changes git's state: read again when it changed,
+  // while the Git view is on screen (lib/git's shared read settles saves and edits outside the app)
+  useWhenShown(String(useGitVersion()), load);
   const offer = files.filter((f) => f.level !== 'warn');
   const warn = files.filter((f) => f.level === 'warn');
   if (!offer.length && !warn.length) return null;

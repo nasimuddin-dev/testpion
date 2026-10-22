@@ -153,9 +153,40 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     slice();
   };
   snapshotSliced();
+  /**
+   * The system could not say which files changed: its buffer of events overflowed (a checkout or a merge while the app's
+   * thread was busy writes thousands of entries in .git), and the one event left names no file. Every file is looked at
+   * again instead (a stat each; only those that differ are read), so a change in that burst is still reported.
+   */
+  let rescanAll = false;
+  const queueEverything = () => {
+    const walkAll = (dir: string, depth: number) => {
+      if (depth > 8) return;
+      let entries: import('node:fs').Dirent[] = [];
+      try {
+        entries = readdirSync(join(root, dir), { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        const path = dir ? `${dir}/${e.name}` : e.name;
+        const kind = changeKind(path);
+        if (!kind) continue;
+        if (e.isDirectory()) walkAll(path, depth + 1);
+        else pending.set(path, { path, kind });
+      }
+    };
+    walkAll('', 0);
+    // and those that are gone
+    for (const path of seen.keys()) if (!pending.has(path)) pending.set(path, { path, kind: changeKind(path)! });
+  };
   const flush = () => {
     timer = undefined;
     firstEventAt = 0;
+    if (rescanAll) {
+      rescanAll = false;
+      queueEverything();
+    }
     if (!pending.size) return;
     const batch = [...pending.values()].filter((c) => {
       const { now, same } = compare(c.path);
@@ -167,8 +198,16 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     pending.clear();
     if (batch.length) onChange(batch);
   };
+  const arm = () => {
+    // one timer per burst (not a clearTimeout / setTimeout per event: a branch switch is tens of thousands), re-armed
+    // while events keep coming, but never later than MAX_WAIT_MS after the first: a build that writes for minutes
+    // is reported in batches instead of when it ends (and `pending` stays one entry per file)
+    lastEventAt = Date.now();
+    if (!firstEventAt) firstEventAt = lastEventAt;
+    if (!timer) timer = setTimeout(check, debounce);
+  };
   const onEvent = (name: string | null) => {
-    if (!name) return;
+    if (!name) return void ((rescanAll = true), arm());
     const path = String(name).split(sep).join('/');
     const kind = changeKind(path);
     if (!kind) return;
@@ -187,18 +226,13 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     }
     // a just-written temp file renamed into place reports the final name too: one entry per path
     pending.set(path, { path, kind });
-    // one timer per burst (not a clearTimeout / setTimeout per event: a branch switch is tens of thousands), re-armed
-    // while events keep coming, but never later than MAX_WAIT_MS after the first: a build that writes for minutes
-    // is reported in batches instead of when it ends (and `pending` stays one entry per file)
-    lastEventAt = Date.now();
-    if (!firstEventAt) firstEventAt = lastEventAt;
-    if (!timer) timer = setTimeout(check, debounce);
+    arm();
   };
   const check = () => {
     timer = undefined;
     const now = Date.now();
     const wait = Math.min(debounce - (now - lastEventAt), (opts.maxWaitMs ?? MAX_WAIT_MS) - (now - firstEventAt));
-    if (wait > 0 && pending.size) timer = setTimeout(check, wait);
+    if (wait > 0 && (pending.size || rescanAll)) timer = setTimeout(check, wait);
     else flush();
   };
   try {

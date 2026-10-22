@@ -95,7 +95,7 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
                       )}
                     </td>
                     {r.cells.map((c, i) => (
-                      <td key={i} className="px-2 py-1 text-center">
+                      <td key={m.environments[i]} className="px-2 py-1 text-center">
                         <span
                           className={cx('inline-flex items-center gap-1 px-1.5 rounded', CELL[c.state].className)}
                           title={`${r.key} in ${m.environments[i]}: ${c.state}${c.secret ? ' (secret)' : ''}`}

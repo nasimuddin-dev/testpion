@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { gitMarksOf, type GitMarkInfo } from '@testpion/shared';
 import { call, on } from '../api';
+import { useDoc } from './docs';
 import type { GitStatusInfo, SemanticChange } from '../views/GitView';
 
 /**
@@ -24,9 +25,9 @@ let state: GitState = { marks: new Map(), changes: [] };
 let signature = '';
 const listeners = new Set<() => void>();
 let users = 0;
-let timer: ReturnType<typeof setTimeout> | undefined;
-/** When the pending read was asked for to run: 0 at once (a git event), else the settle wait; meaningless while no timer is pending. */
-let readsAt = 0;
+/** The read asked for at once (a git event), and the one once things settled (a save, a change on disk, after a git event). */
+let soon: ReturnType<typeof setTimeout> | undefined;
+let settled: ReturnType<typeof setTimeout> | undefined;
 let offs: Array<() => void> = [];
 
 /** The marks of a new read, with the very same object for a mark that did not change (a component of an unchanged mark does not render). */
@@ -56,6 +57,7 @@ async function readOnce() {
   }
   signature = sig;
   state = next;
+  version++;
   listeners.forEach((l) => l());
 }
 
@@ -82,22 +84,22 @@ export function refreshGit(): Promise<void> {
   return running;
 }
 
-/** A git event (a commit, a pull, a branch switch …): read at once (the next task: a burst is one read). */
-const now = () => {
-  clearTimeout(timer);
-  timer = setTimeout(() => ((timer = undefined), void refreshGit()), 0);
-  readsAt = 0;
-};
-/** A save or a change on disk: read once things settled (a run or an import saves many files in a row). */
+/** A save or a change on disk: read once things settled (a run or an import saves many files in a row): one read per burst. */
 const SETTLE_MS = 2000;
 const later = () => {
-  // a read already asked for at once is not put off by a save that follows it (the watcher reports the app's own write a
-  // moment after the git event: that used to replace the immediate read with one two seconds later, and again for each
-  // report that came, so the Git view showed the state from before an Undo for as long as files kept being written)
-  if (timer !== undefined && readsAt === 0) return;
-  clearTimeout(timer);
-  readsAt = SETTLE_MS;
-  timer = setTimeout(() => ((timer = undefined), void refreshGit()), SETTLE_MS);
+  clearTimeout(settled);
+  settled = setTimeout(() => ((settled = undefined), void refreshGit()), SETTLE_MS);
+};
+/**
+ * A git event (a commit, a pull, a branch switch, the window coming back to the front …): read at once (the next task: a
+ * burst is one read), and once more when things settled. Git run outside the app writes nothing the workspace watcher
+ * reports (a merge or a commit in a terminal changes .git): what it did right after one of the app's own operations, or
+ * before the window is brought back, is read then. A save that follows never puts the immediate read off (it used to
+ * replace it with one two seconds later, so the Git view showed the state from before an Undo while files were written).
+ */
+const now = () => {
+  soon ??= setTimeout(() => ((soon = undefined), void refreshGit()), 0);
+  later();
 };
 /** `data.changed` events that write no workspace file: a run's results, a connection; they never change git's status. */
 const NO_FILES = /^mcp\.(connect|disconnect)$/;
@@ -108,6 +110,30 @@ function onDataChanged(e?: { method?: string; kind?: string }) {
   // not in git (and git can't be asked): a save changes nothing here; `git init` arrives as git.changed
   if (state.status && (!state.status.available || !state.status.repository)) return;
   later();
+}
+
+/** How many times the state changed: a key for what is read again only when git's state changed (big files, …). */
+let version = 0;
+export const useGitVersion = (): number => useGitValue(() => version);
+
+/** The stamp of the repository's refs (branches, remotes, what was set aside: git.status `refs`) with HEAD: what moves when one of them does. */
+export const useGitRefs = (): string => useGitValue((s) => (s.status?.repository ? `${s.status.head ?? ''}|${s.status.refs ?? ''}` : ''));
+
+/**
+ * Run `read` when `key` changed, while the view is on screen; a change that comes while it is hidden is read once when it
+ * shows again. The Git view's reads that depend on HEAD and the branches (log, branches, pull request link), on what is
+ * staged (an agent's proposed commit) or on the state (big files) use it: a save that changes none of these reads none.
+ */
+export function useWhenShown(key: string, read: () => void): void {
+  const { active } = useDoc();
+  const seen = useRef<string | undefined>(undefined);
+  const r = useRef(read);
+  r.current = read;
+  useEffect(() => {
+    if (!active || seen.current === key) return;
+    seen.current = key;
+    r.current();
+  }, [active, key]);
 }
 
 const subscribe = (l: () => void) => (listeners.add(l), () => listeners.delete(l));
@@ -129,7 +155,10 @@ function useGitLive() {
 export function startGitLive(): () => void {
   if (users++ === 0) {
     void refreshGit();
-    offs = [on('git.changed', now), on('git.remoteChanged', now), on('data.changed', onDataChanged), on('workspace.changedOnDisk', later)];
+    // back to the window: git may have been run in a terminal meanwhile
+    const onFocus = () => now();
+    globalThis.addEventListener?.('focus', onFocus);
+    offs = [on('git.changed', now), on('git.remoteChanged', now), on('data.changed', onDataChanged), on('workspace.changedOnDisk', later), () => globalThis.removeEventListener?.('focus', onFocus)];
   }
   return () => {
     if (--users === 0) offs.forEach((o) => o());
@@ -184,8 +213,9 @@ export const useGitBar = (): GitBar | undefined =>
 export function resetGitForTest() {
   state = { marks: new Map(), changes: [] };
   signature = '';
-  clearTimeout(timer);
-  timer = undefined;
+  clearTimeout(soon);
+  clearTimeout(settled);
+  soon = settled = undefined;
   users = 0;
   offs.forEach((o) => o());
   offs = [];

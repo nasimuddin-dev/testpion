@@ -1,6 +1,7 @@
-import { call, on } from '../api';
+import { on } from '../api';
 import type { ItemRef } from '@testpion/shared';
 import { notifySystem, useApp } from '../store';
+import { sharedCall } from './shared-call';
 
 /** Mirrors core's Monitor / MonitorResult (runner/monitors.ts). */
 export interface MonitorResult {
@@ -37,7 +38,7 @@ export function remindExpiringCertificates(): void {
   } catch {
     /* no storage: remind every start */
   }
-  void call<Array<{ host: string; daysLeft?: number }>>('certificates.list').then(
+  void sharedCall<Array<{ host: string; daysLeft?: number }>>('certificates.list').then(
     (list) => {
       const soon = list.filter((c) => c.daysLeft !== undefined && c.daysLeft < 7);
       if (!soon.length) return;

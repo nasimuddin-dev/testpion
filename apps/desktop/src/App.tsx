@@ -24,6 +24,7 @@ import { ViewBoundary } from './components/ViewBoundary';
 import { isRequestView } from './store';
 import { Explorer } from './components/Explorer';
 import { EditorTabStrip, NoOpenTabs, useEditorTabsStore } from './components/EditorTabs';
+import { RestTabsFollower } from './views/rest/tabs-store';
 import { DOC_VIEWS, DocScope, isDocView, useDocs } from './lib/docs';
 import { watchRunNotifications } from './lib/run-notifications';
 import { remindExpiringCertificates, watchMonitorAlerts } from './lib/monitor-alerts';
@@ -315,13 +316,16 @@ export default function App() {
     };
   }, []);
 
-  // editors with an open tab stay mounted (their tabs, drafts and live connections), REST always (it owns the tab
-  // commands: Close all from any editor closes its tabs too)
+  // editors with an open tab stay mounted (their tabs, drafts and live connections). REST's tabs live in their own store
+  // (views/rest/tabs-store.ts: the strip, Close all and outside edits reach them without the view), so the view loads the
+  // first time it is shown and then stays (its responses and the requests being sent)
   const openEditors = useEditorTabsStore((s) => s.openViews);
   const docs = useDocs((s) => s.docs);
   const activeDocs = useDocs((s) => s.active);
   const docViews = DOC_VIEWS.filter((v) => (docs[v] ?? []).length);
-  const mounted = useMemo(() => [...new Set<ViewId>([...visited, 'rest', ...openEditors, ...docViews])], [visited, openEditors, docViews.join()]);
+  const [restShown, setRestShown] = useState(false);
+  if (view === 'rest' && !restShown) setRestShown(true);
+  const mounted = useMemo(() => [...new Set<ViewId>([...visited, ...(restShown ? ['rest' as const] : []), ...openEditors, ...docViews])], [visited, restShown, openEditors, docViews.join()]);
   // the code editor (Monaco, a long task to parse) is warmed in idle time once a view that shows one opened
   const warmed = useRef(false);
   useEffect(() => {
@@ -367,7 +371,7 @@ export default function App() {
     });
   }, [view]);
   // re-mount views when the workspace changes
-  useEffect(() => setVisited([useApp.getState().view]), [workspace?.id]);
+  useEffect(() => (setVisited([useApp.getState().view]), setRestShown(useApp.getState().view === 'rest')), [workspace?.id]);
 
   useEffect(() => {
     // every app-wide shortcut, with the person's bindings (Settings ▸ Keyboard; lib/key-commands.ts)
@@ -499,6 +503,7 @@ export default function App() {
     <TooltipProvider delayDuration={350} skipDelayDuration={150}>
     <div className="h-full flex flex-col">
       <ImportHost />
+      <RestTabsFollower />
       <ViewBoundary view="topbar" variant="bar" label="top bar" className="h-12 border-b">
         <TopBar />
       </ViewBoundary>

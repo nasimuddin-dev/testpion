@@ -257,13 +257,14 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                         {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
                       </button>
                     }
-                    items={[
+                    // built when the menu opens, not for every key on screen at every render
+                    items={() => [
                       { label: 'Copy JSONPath', icon: <Copy size={14} />, onSelect: () => void copyText(r.path, 'the JSONPath') },
                       ...(onSaveVariable
                         ? [{ label: 'Save to variable…', icon: <Variable size={14} />, onSelect: () => onSaveVariable({ name: variableName(r.key!), access: r.access ?? '', value: r.value }) }]
                         : []),
                       ...(onAssert ? assertionItems(r, onAssert).map((it, i) => (i === 0 ? { ...it, separator: true } : it)) : []),
-                      ...(pickItems ? pickItems({ path: r.path, key: r.key, value: r.value }).map((it, i) => (i === 0 ? { ...it, separator: true } : it)) : []),
+                      ...(pickItems ? pickItems({ path: r.path, key: r.key!, value: r.value }).map((it, i) => (i === 0 ? { ...it, separator: true } : it)) : []),
                     ]}
                   />
                 ) : r.embedded ? (

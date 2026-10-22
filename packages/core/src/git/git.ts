@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
@@ -31,6 +31,8 @@ interface GitStatus {
   folder?: string;
   branch?: string;
   upstream?: string;
+  /** The commit HEAD points at (undefined before the first commit): it moves with a commit, merge, pull, reset or switch, also one made outside the app. */
+  head?: string;
   ahead: number;
   behind: number;
   files: GitFile[];
@@ -217,7 +219,8 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
   for (let i = 0; i < parts.length; i++) {
     const line = parts[i]!;
     if (!line) continue;
-    if (line.startsWith('# branch.head ')) st.branch = line.slice(14) === '(detached)' ? undefined : line.slice(14);
+    if (line.startsWith('# branch.oid ')) st.head = /^[0-9a-f]{40,64}$/.test(line.slice(13)) ? line.slice(13) : undefined;
+    else if (line.startsWith('# branch.head ')) st.branch = line.slice(14) === '(detached)' ? undefined : line.slice(14);
     else if (line.startsWith('# branch.upstream ')) st.upstream = line.slice(18);
     else if (line.startsWith('# branch.ab ')) {
       const m = /\+(\d+) -(\d+)/.exec(line);
@@ -239,6 +242,45 @@ export async function gitStatus(ws: string): Promise<GitStatus> {
   }
   st.files = st.files.filter((f) => !f.path.startsWith('..'));
   return st;
+}
+
+/**
+ * A stamp of the repository's branches, without running git: the times and sizes of HEAD, packed-refs, the stash
+ * and the folders of local and remote branches. A branch made, deleted, renamed or moved (git writes `<ref>.lock` beside the
+ * ref, so its folder's time changes), by the app or by git run anywhere else, gives another stamp. '' outside a repository.
+ */
+export async function gitRefsStamp(ws: string): Promise<string> {
+  const repo = await repoRoot(ws);
+  if (!repo) return '';
+  const stamp = (p: string) => {
+    try {
+      const s = statSync(p);
+      return `${s.mtimeMs}:${s.size}`;
+    } catch {
+      return '-';
+    }
+  };
+  // a worktree or submodule has a `.git` file naming its folder; branches live in the common folder
+  let dir = join(repo, '.git');
+  try {
+    if (statSync(dir).isFile()) dir = resolve(repo, /^gitdir:\s*(.+)$/m.exec(readFileSync(dir, 'utf8'))?.[1]?.trim() ?? '.git');
+  } catch {
+    return '';
+  }
+  let common = dir;
+  try {
+    common = resolve(dir, readFileSync(join(dir, 'commondir'), 'utf8').trim());
+  } catch {
+    /* not a linked worktree */
+  }
+  const remotes = join(common, 'refs', 'remotes');
+  let perRemote: string[] = [];
+  try {
+    perRemote = readdirSync(remotes).map((r) => join(remotes, r));
+  } catch {
+    /* no remote yet */
+  }
+  return [join(dir, 'HEAD'), join(common, 'packed-refs'), join(common, 'refs', 'heads'), join(common, 'refs', 'stash'), remotes, ...perRemote].map(stamp).join('|');
 }
 
 /** A file as it is in a commit (default HEAD); undefined when it does not exist there. */

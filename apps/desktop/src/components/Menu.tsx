@@ -50,7 +50,8 @@ export function Menu({
   onOpenChange,
 }: {
   trigger: ReactNode;
-  items: MenuItem[];
+  /** The items, or what builds them: a function is called only while the menu is open (a row of a long list builds nothing while closed). */
+  items: MenuItem[] | (() => MenuItem[]);
   align?: 'start' | 'center' | 'end';
   width?: number;
   open?: boolean;
@@ -136,7 +137,7 @@ export function Menu({
           style={{ minWidth: width }}
           className="z-[70] rounded-xl border border-line bg-popover p-1 shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150"
         >
-          <MenuItems items={items} />
+          <MenuItems items={typeof items === 'function' ? items() : items} />
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
     </MenuPrimitive.Root>

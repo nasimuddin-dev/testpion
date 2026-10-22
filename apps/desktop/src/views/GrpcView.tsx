@@ -80,6 +80,14 @@ const kind = (m: MethodInfo) => (m.clientStreaming && m.serverStreaming ? 'bidi 
 /** The most messages of a live stream kept in the window (the same cap as the WebSocket log). */
 const LIVE_CAP = 20_000;
 
+/** A message's one-line text in the stream list: made once per message (not per row per render) and cut to what a row can show. */
+const messageLines = new WeakMap<object, string>();
+function messageLine(m: { data: unknown }): string {
+  let s = messageLines.get(m);
+  if (s === undefined) messageLines.set(m, (s = (JSON.stringify(m.data) ?? String(m.data)).slice(0, 400)));
+  return s;
+}
+
 /** gRPC client: pick a method from .proto files, send a message (or a list, for client streams), see the response live. */
 export function GrpcView() {
   // this document's draft (each tab of this editor is its own document)
@@ -605,7 +613,7 @@ export function GrpcView() {
                           render={(m, i) => (
                             <button type="button" onClick={() => setSelected(i)} className={cx('w-full h-full flex items-center gap-3 px-3 text-xs border-b border-line/60 text-left hover:bg-hover', i === selected && 'bg-accent-soft')}>
                               <span className="tabular-nums text-muted w-16 shrink-0">{(m.atMs / 1000).toFixed(2)} s</span>
-                              <span className="truncate mono">{JSON.stringify(m.data)}</span>
+                              <span className="truncate mono">{messageLine(m)}</span>
                             </button>
                           )}
                         />
