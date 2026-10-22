@@ -49,7 +49,11 @@ async function loadMain() {
       const mtime = (p) => statSync(new URL(p, import.meta.url)).mtimeMs;
       if (mtime('../dist/bundle.js') >= Math.max(mtime(entry), mtime('../../core/dist/index.js'), mtime('../../shared/dist/index.js'))) {
         // V8's compile cache (Node 22.1+) keeps the compiled bundle between runs
-        (await import('node:module')).enableCompileCache?.();
+        const mod = await import('node:module');
+        mod.enableCompileCache?.();
+        // the cache is written when the process exits - which a long-running command (mcp-server, serve, monitor) never does: its host
+        // kills it, and every start compiled the MCP SDK and the rest again (about 300 ms). Written once the start-up is over instead.
+        setTimeout(() => mod.flushCompileCache?.(), 4000).unref();
         return (await import('../dist/bundle.js')).main;
       }
       // a bundle older than a package build (tsc rewrote core or shared): the ~1,000 files load instead - 1.4 s with a warm disk
