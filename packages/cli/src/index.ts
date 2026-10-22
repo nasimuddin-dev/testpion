@@ -51,6 +51,8 @@ import { registerRagCommands } from './commands/rag.js';
 import { registerItemCommand } from './commands/item.js';
 import { registerOutputCommand } from './commands/output.js';
 import { registerBundleCommands } from './commands/bundle.js';
+import { registerSettingsCommands } from './commands/settings.js';
+import { registerAuthCommands } from './commands/auth.js';
 
 /** The commands that send to APIs with an environment (by their path): they take --allow-production. */
 const SENDING_COMMANDS = new Set(['test', 'run', 'run-collection', 'load', 'send', 'monitor add', 'monitor run', 'monitor start', 'eval run', 'serve flows', 'ai attempt-fix', 'rag probe', 'security generate', 'security run']);
@@ -97,6 +99,8 @@ export function buildProgram(): Command {
   registerRagCommands(program);
   registerItemCommand(program);
   registerOutputCommand(program);
+  registerSettingsCommands(program);
+  registerAuthCommands(program);
 
   // WF-06: the commands that send take --allow-production; without it the engine refuses data-changing requests to an
   // environment marked as production (GETs still run, so a smoke run against production works as before)

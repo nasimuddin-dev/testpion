@@ -56,6 +56,23 @@ On the command line: `testpion import <file|folder|zip|link> -w <workspace>` (se
 - `{{vault:name}}` secrets (a value to enter), mock servers, monitors and Flows (Postman does not export them)
 - Settings with no equivalent (`insecureHTTPParser`, `tlsCipherSelection` …)
 
+## Postman's words in TestPion
+
+Where to find what you know. In the command palette (Ctrl+K), typing the Postman word finds the row.
+
+| In Postman | In TestPion |
+|---|---|
+| Collection Runner | **Run collection**: a collection ▸ Run (also its ⋯ menu in the explorer) |
+| Newman | **testpion run-collection**: the command line: `testpion run-collection <collection>` |
+| Mock servers | **Mock server**: a collection ▸ Mock (serves its saved examples) |
+| Flows | **Test files (flows)**: Tests ▸ a test file or flow; the flow designer |
+| Globals | **Globals**: Environments ▸ Globals |
+| Vault | **Secret variables**: Environments: a variable marked secret is kept in the operating system's secret store |
+| Interceptor and Proxy | **HTTP Debugger**: More… ▸ Debugger (capture through a proxy) |
+| Monitors | **Monitors**: More… ▸ Monitors |
+| Environments | **Environments**: Environments |
+| Collection variables | **Collection variables**: a collection ▸ Variables |
+
 ## Scripts (`pm.*`, `postman.*` and the legacy globals)
 
 Scripts become TestPion's `tp.*`; anything the table does not list is left as written and still runs where the sandbox can run it.

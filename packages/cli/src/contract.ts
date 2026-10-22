@@ -83,6 +83,8 @@ export const WRITE_COMMANDS = new Set([
   'git disallow-secret',
   'git fix-secrets',
   'git undo',
+  'settings set',
+  'settings reset',
 ]);
 
 /** The commands that call the user's AI model: each takes `--max-cost <usd>`, refused before anything is sent when one call could cost more. */

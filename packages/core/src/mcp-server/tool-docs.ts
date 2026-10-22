@@ -517,6 +517,21 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To find items by text, use `search_workspace`.',
     example: { ref: 'run:run-abc123' },
   },
+  auth_token: {
+    when: 'Use it to check that the OAuth 2.0 auth of a collection or request works: it runs the grant now and says when the token ends, its scope and the token masked.',
+    whenNot: 'To send a request, use `send_request` (it gets the token itself); the token is never returned in full.',
+    example: { collection: 'Veterinary API', request: 'List patients', environment: 'staging' },
+  },
+  get_settings: {
+    when: 'Use it to read how the app is set up on this computer: timeout, preview size, proxy mode, redaction field names, load-test limits, AI caps.',
+    whenNot: 'For a workspace\'s own configuration (environments, collections), use their tools; secrets are never in the answer.',
+    example: { key: 'defaultTimeoutMs', describe: true },
+  },
+  set_settings: {
+    when: 'Use it, after the user agrees, to change an app setting (or put one back to its default) for every workspace on this computer.',
+    whenNot: 'To change one request\'s timeout or proxy, use `update_request`; a workspace has no settings of its own here.',
+    example: { settings: { defaultTimeoutMs: 60000 }, confirm: true },
+  },
   delete_item: {
     when: 'Use it to delete a collection, environment, dataset, API definition or MCP server the user no longer wants; it goes to Recently deleted, and `restore_item` brings it back.',
     whenNot: 'For a request or folder of a collection, use `delete_request`; `list_kinds` says which kinds have the `trash` capability.',

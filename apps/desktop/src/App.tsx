@@ -9,6 +9,9 @@ import { openReverseProxyCapture } from './lib/capture';
 import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { call, modKey, on } from './api';
 import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
+import { openRef } from './lib/open-ref';
+import { LABEL } from './lib/vocabulary';
+import { POSTMAN_WORDS } from '@testpion/shared';
 import { toastError, useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
@@ -370,9 +373,10 @@ export default function App() {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
       { id: 'new-graphql', label: 'New GraphQL Request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
-      { id: 'new-ai', label: 'New AI Test', hint: 'AI Lab', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'new-ai', label: LABEL.newAiPrompt, hint: 'AI Lab: prompts and model comparison', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'new-ai-test', label: 'New AI Test File', hint: 'Tests: an AI test that passes or fails, for CI', run: () => s.openIntent('tests', { newFile: 'llm' }) },
       { id: 'run-test', label: 'Run Test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
-      { id: 'run-suite', label: 'Run Suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
+      { id: 'run-suite', label: 'Run All Tests', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
       { id: 'rerun-last', label: 'Rerun Last Run', hint: keyLabel('rerun-last', bindings), run: () => void runAgain('last') },
       { id: 'reopen-tab', label: 'Reopen Closed Tab', hint: keyLabel('reopen-tab', bindings), run: () => void reopenClosedTab() },
       // the format menu of the output nearest to the focus (Ctrl+Shift+S saves its default format at once)
@@ -391,8 +395,8 @@ export default function App() {
       { id: 'toggle-logs', label: 'Show Application Logs', run: () => s.set({ logsOpen: true, bottomTab: 'logs' }) },
       ...(shellCapable
         ? [
-            { id: 'terminal-new', label: 'Terminal: New', hint: keyLabel('new-terminal', bindings), run: newTerminal },
-            { id: 'terminal-focus', label: 'Terminal: Focus', hint: keyLabel('terminal', bindings), run: focusTerminal },
+            { id: 'terminal-new', label: 'New terminal', hint: keyLabel('new-terminal', bindings), run: newTerminal },
+            { id: 'terminal-focus', label: 'Focus the terminal', hint: keyLabel('terminal', bindings), run: focusTerminal },
           ]
         : []),
       ...(aiOn ? [{ id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() }] : []),
@@ -423,7 +427,7 @@ export default function App() {
       { id: 'm-new-env', label: 'New Environment', hint: 'File', run: () => void runMenuCommand('new-environment') },
       { id: 'm-open-examples', label: 'Open Examples Workspace', hint: 'Help', run: () => void runMenuCommand('open-examples') },
       { id: 'm-ci', label: 'Run in CI (GitHub Actions, GitLab, Azure, Jenkins)…', hint: 'Tests', run: () => useApp.getState().set({ ci: {} }) },
-      { id: 'm-record', label: 'Capture: Reverse Proxy for One API…', hint: 'Debugger', run: () => openReverseProxyCapture() },
+      { id: 'm-record', label: LABEL.captureReverseProxy, hint: 'Debugger: a reverse proxy in front of one API', run: () => openReverseProxyCapture() },
       { id: 'm-var-usages', label: 'Find variable usages / rename a variable everywhere…', hint: 'Environments', run: () => useApp.getState().set({ variableUsages: true }) },
       { id: 'm-openapi-diff', label: 'Compare OpenAPI versions (breaking changes)…', hint: 'Tests', run: () => useApp.getState().set({ openapiDiff: true }) },
       { id: 'm-api-coverage', label: 'API coverage (OpenAPI operations tested)…', hint: 'Tests', run: () => useApp.getState().set({ apiCoverage: {} }) },
@@ -436,6 +440,9 @@ export default function App() {
       { id: 'm-exp-ws', label: 'Export Workspace (older format)', hint: 'File', run: () => void runMenuCommand('export-workspace') },
       { id: 'm-exp-bundle', label: 'Export a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
       { id: 'm-import-bundle', label: 'Import a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
+      { id: 'run-collection', label: 'Run a Collection…', hint: 'Collections', run: () => s.openIntent('collections', { run: true }) },
+      { id: 'mock-server', label: 'Start a Mock Server for a Collection…', hint: 'Collections', run: () => s.openIntent('collections', { mock: true }) },
+      { id: 'open-globals', label: 'Open Globals', hint: 'Environments', run: () => void openRef({ kind: 'environment', scope: 'globals' } as never) },
       { id: 'm-migrate', label: 'Migrate from Another Tool (Postman, Insomnia, Bruno …)…', hint: 'File', run: () => openImport({ migrate: true }) },
     ];
     // every command has an icon: its own, or a generic one for a command added without
@@ -447,6 +454,11 @@ export default function App() {
     cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the Default Views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
+    // Postman's words find the row they map to (shared/postman-words.ts)
+    for (const c of cmds) {
+      const aliases = POSTMAN_WORDS.filter((w) => w.paletteId === c.id).flatMap((w) => [w.theirs.toLowerCase(), ...w.aliases]);
+      if (aliases.length) c.aliases = aliases;
+    }
     return cmds;
   }, [workspace, shellCapable, rail, bindings, aiOn]);
   // what is on screen offers its own commands (Quick Open's @, and first among the > commands): a request's script

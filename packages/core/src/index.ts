@@ -23,6 +23,7 @@ export * from './trace/otlp.js';
 
 export * from './protocols/http/client.js';
 export * from './protocols/http/auth.js';
+export * from './protocols/http/auth-token.js';
 export * from './protocols/http/signing.js';
 export * from './protocols/http/sse.js';
 export * from './openapi/contract.js';
@@ -235,6 +236,7 @@ export * from './mock/graphql-mock.js';
 export * from './mcp-server/testpion-mcp.js';
 export { MINIMAL_TOOLS } from './mcp-server/tools/search-tools.js';
 export { CONFIRM_TOOLS } from './mcp-server/tool-contract.js';
+export * from './storage/settings-access.js';
 export { flowInputSchema, flowTools, runFlow, type FlowRunResult, type FlowToolDeps } from './mcp-server/tools/flow-tools.js';
 export { agentGuide, AGENT_PROMPTS } from './mcp-server/agent-kit.js';
 export * from './agents/agent-facts.js';

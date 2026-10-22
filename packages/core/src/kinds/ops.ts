@@ -77,7 +77,7 @@ export function removeItem(store: WorkspaceStore, value: unknown): RemovedItem {
 export function restoreItem(store: WorkspaceStore, trashId: string): RestoredItem {
   const id = String(trashId ?? '');
   const def = kindInfoOf(id.slice(0, id.indexOf('/'))) ? kind(id.slice(0, id.indexOf('/')) as KindId) : undefined;
-  if (!def?.ops) throw new ApsError('ValidationError', `Not a trash entry: ${id}`, { suggestions: ['`testpion trash list` / RPC trash.list print the entries with their ids.'] });
+  if (!def?.ops) throw new ApsError('ValidationError', `Not an entry of Recently deleted: ${id}`, { suggestions: ['`testpion trash list` (Recently deleted) prints the entries with their ids.'] });
   const back = def.ops.restore(store, id);
   const ref = refOfId(def.info.id, back.id);
   return { kind: def.info.id, ...back, ...(ref ? { ref } : {}) };

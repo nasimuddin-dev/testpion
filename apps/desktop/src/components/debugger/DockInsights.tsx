@@ -374,7 +374,7 @@ export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id
       </p>
       {title('Slowest responses')}
       {top(stats.slowest, (e) => formatMs(e.durationMs))}
-      {title('Largest payloads')}
+      {title('Largest bodies')}
       {top(stats.largest, (e) => formatBytes(e.responseBodyBytes))}
       {title('Slowest transfers (KB/s)')}
       {top(stats.slowTransfers, (e) => stats.speedOf.get(e.id) ?? '')}

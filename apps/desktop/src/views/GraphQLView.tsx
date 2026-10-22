@@ -532,7 +532,7 @@ export function GraphQLView() {
                       {sub === 'auth' && <GraphQLAuth collectionId={d.collectionId} requestId={d.requestId} auth={d.auth} onChange={(auth) => set({ auth })} />}
                       {sub === 'connection' && (
                         <div className="h-full flex flex-col">
-                          <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Payload of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
+                          <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Data of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
                           <div className="flex-1 min-h-0">
                             <CodeEditor language="json" value={d.connectionParams ?? ''} onChange={(connectionParams) => set({ connectionParams })} minimal />
                           </div>

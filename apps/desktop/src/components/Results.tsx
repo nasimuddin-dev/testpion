@@ -158,7 +158,7 @@ function SourceBadge({ source }: { source: CheckResult['source'] }) {
 }
 
 export function CheckList({ checks, compact, actions }: { checks: CheckResult[]; compact?: boolean; actions?(c: CheckResult): ReactNode }) {
-  if (!checks.length) return <div className="p-4 text-sm text-muted">No assertions. Add some in the Tests tab.</div>;
+  if (!checks.length) return <div className="p-4 text-sm text-muted">No checks. Add some in the Tests tab.</div>;
   const passed = checks.filter((c) => c.passed).length;
   return (
     <div className="text-sm">

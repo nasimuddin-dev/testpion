@@ -157,7 +157,7 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
               tabs={[
                 { id: 'form', label: 'Arguments' },
                 { id: 'schema', label: 'Input schema' },
-                { id: 'tests', label: 'Assertions', badge: assertions.length },
+                { id: 'tests', label: 'Checks', badge: assertions.length },
               ]}
             />
             <div className="flex-1 min-h-0 overflow-auto">
@@ -249,7 +249,7 @@ export function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown
         tabs={[
           { id: 'content', label: 'Content', badge: r.content.length },
           ...(r.structuredContent !== undefined ? [{ id: 'structured' as const, label: 'Structured' }] : []),
-          { id: 'tests', label: 'Assertions', badge: r.checks.length },
+          { id: 'tests', label: 'Checks', badge: r.checks.length },
         ]}
       />
       <div className="flex-1 min-h-0 overflow-auto flex flex-col">

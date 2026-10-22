@@ -54,7 +54,7 @@ const HELP_GROUPS: Record<string, string[]> = {
   'Run and test:': ['test', 'run', 'run-collection', 'load', 'send', 'report', 'eval', 'rag', 'record', 'monitor', 'flow', 'flows', 'serve', 'wait-for', 'ci', 'security', 'generate', 'tests-from-spec', 'integration-suite', 'generate-data'],
   'Servers and protocols:': ['mock', 'mcp', 'mcp-server', 'graphql-subscribe', 'graphql-op', 'debug', 'ws', 'mqtt', 'kafka', 'grpc'],
   'Check and review:': ['lint', 'openapi', 'vars', 'variable-flow', 'secrets', 'certificates', 'attention', 'tidy', 'replace', 'doctor', 'jwt'],
-  'Workspace and data:': ['workspace', 'env', 'import', 'import-report', 'import-undo', 'export', 'export-environment', 'docs', 'bundle', 'scripts', 'collections', 'requests', 'datasets', 'storage', 'trash', 'item', 'open', 'search', 'kinds', 'output'],
+  'Workspace and data:': ['workspace', 'env', 'import', 'import-report', 'import-undo', 'export', 'export-environment', 'docs', 'bundle', 'scripts', 'collections', 'requests', 'datasets', 'storage', 'trash', 'item', 'open', 'search', 'kinds', 'output', 'settings', 'auth'],
   'History and reports:': ['history', 'load-history', 'workspace-report', 'diff'],
   'Git:': ['git'],
   'For AI agents:': ['ai', 'agent-info', 'agents', 'agents-md', 'feedback'],

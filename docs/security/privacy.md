@@ -66,8 +66,14 @@ On your desktop TestPion can call anything, including `localhost` and your priva
 
 Turn it on with environment variables (`TESTPION_BLOCK_PRIVATE_NETWORKS=1`, `TESTPION_ALLOW_HOSTS=api.internal,10.0.0.5`, `TESTPION_ALLOW_PROCESSES=0`) or with `testpion mcp-server --block-private-networks [--allow-host api.internal]`.
 
-## Telemetry
+## What leaves your computer
 
-Telemetry is not implemented. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call.
+There is no telemetry and no account. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call. Besides your requests, TestPion makes these calls (Settings ▸ Privacy & security lists them):
+
+| What | Where to | What it carries | When | How to turn it off |
+|---|---|---|---|---|
+| Check for updates | `api.github.com` and `github.com` (the TestPion releases) | The question "what is the newest release?" and the TestPion version in the user agent; no workspace data | A few seconds after the app starts and every 6 hours while it runs; on by default | Settings ▸ About ▸ Check for updates when the app starts |
+| AI actions | The AI provider you set up, or a model on this computer | The context of the action you started, secrets and personal data masked (see "What will be sent") | Only when you use an AI action | Settings ▸ AI assistant ▸ Hide all AI actions, or Local only |
+| Send feedback | Nowhere by itself: it builds a report and a link to a pre-filled GitHub issue that you open | What you typed and the diagnostics you ticked | Only when you open the link | Do not use it |
 
 :::

@@ -19,7 +19,12 @@ description: "API key, Basic, Bearer, JWT, OAuth 1.0, OAuth 2.0 (client credenti
 | Digest | HTTP Digest (RFC 7616): TestPion sends the request, answers the server's `401` challenge and sends it again. MD5, SHA-256 and their `-sess` variants with `qop=auth`. |
 | Custom headers | Any set of headers. |
 | mTLS | Configured in request **Settings** (certificate, key, optional CA). |
-| Inherit | Uses the auth from the nearest folder or collection. |
+| NTLM | Windows challenge-response (NTLMv2): user name, password, domain and workstation. |
+| Hawk | Hawk request signing: id, key and algorithm. |
+| Akamai EdgeGrid | Akamai API signing: client token, client secret, access token and host. |
+| Inherit | Uses the auth from the nearest folder or collection. The Authorization tab says which one and what it is (for example *Bearer token {{accessToken}}, from folder "Admin"*), with **Override** to give the request its own. |
+
+**Get token** (OAuth 2.0): runs the grant now, with the active environment, and shows whether the token call works, when the token ends, its scope and the token masked, with the token endpoint's own error when it fails. From a terminal: `testpion auth token <collection> [request] --json`; agents: the `auth_token` MCP tool.
 
 A copied cURL command with `--digest -u user:password` or `--aws-sigv4 "aws:amz:<region>:<service>" -u <access key>:<secret key>` imports as Digest or AWS Signature auth, and both round-trip through Postman collections.
 

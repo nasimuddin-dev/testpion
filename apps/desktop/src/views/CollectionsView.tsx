@@ -228,7 +228,7 @@ export function CollectionsView() {
                 <Button size="sm" variant="ghost" icon={<FolderPlus size={12} />} onClick={() => void newCollection()}>
                   New
                 </Button>
-                <IconButton label="Capture traffic into a collection (the Debugger's reverse proxy for one API)" onClick={() => openReverseProxyCapture()}>
+                <IconButton label="Capture traffic for one API into a collection" onClick={() => openReverseProxyCapture()}>
                   <Radio size={13} />
                 </IconButton>
                 <IconButton label="Recently deleted" onClick={() => setTrashOpen(true)}>
@@ -431,7 +431,7 @@ export function CollectionsView() {
                   <div className="p-2">
                     <div className="flex items-center gap-2 px-1 pb-2">
                       <p className="text-xs text-muted">
-                        Collection variables override environment variables (so they are the same in every environment) and are overridden by request and runtime variables.
+                        Collection variables override environment variables (so they are the same in every environment) and are overridden by request variables and by variables a script sets while a run is going.
                       </p>
                       {draft.variables.length > 0 && (
                         <Button size="sm" className="ml-auto shrink-0" icon={<ArrowRightLeft size={12} />} title="So each environment can set its own value" onClick={() => setMoveVarsOpen(true)}>

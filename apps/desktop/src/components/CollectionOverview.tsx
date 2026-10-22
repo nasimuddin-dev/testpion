@@ -245,7 +245,7 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
                   </div>
                 )}
                 {mode === 'unsent' && <p className="text-xs text-muted">Never sent from the app: open one and send it, or run the collection.</p>}
-                {mode === 'unchecked' && <p className="text-xs text-muted">No assertions or test script: a response passes whatever it is. Open one and add checks in its Tests tab.</p>}
+                {mode === 'unchecked' && <p className="text-xs text-muted">No checks or test script: a response passes whatever it is. Open one and add checks in its Tests tab.</p>}
                 <div className="flex flex-col">
                   {shown.map((r) => (
                     <button
@@ -262,7 +262,7 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
                       {mode === 'sent' && r.stat && (
                         <>
                           {!hasChecks(r.node) && (
-                            <span className="text-muted shrink-0" title="No assertions or tests">
+                            <span className="text-muted shrink-0" title="No checks or tests">
                               no checks
                             </span>
                           )}

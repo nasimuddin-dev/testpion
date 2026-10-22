@@ -123,8 +123,46 @@ export function signJwt(payloadJson: string, secret: string, alg: 'HS256' | 'HS3
   return `${header}.${body}.${sig}`;
 }
 
+const oauth2Key = (auth: Extract<AuthConfig, { type: 'oauth2' }>) => [auth.grantType, auth.tokenUrl, auth.clientId, auth.scope ?? '', auth.username ?? '', auth.audience ?? ''].join('|');
+
+/** What "Get token" shows: whether the token call works, when the token ends, its scope, and the token itself masked. */
+export interface OAuth2TokenInfo {
+  tokenType: string;
+  /** `Bearer 1a2b…9z8y` */
+  tokenMasked: string;
+  expiresAt: string;
+  expiresInSeconds: number;
+  scope?: string;
+  grantType: string;
+  tokenUrl: string;
+  hasRefreshToken: boolean;
+}
+
+/**
+ * Run the OAuth 2.0 grant now (what the first send would do) and say what came back, the secret masked. `fresh` (the default)
+ * asks the server for a new token even when one is cached; the new one is cached for the next send. An error is the
+ * token endpoint's own, with its body (redacted).
+ */
+export async function fetchOAuth2Token(auth: AuthConfig, ctx: AuthContext, o: { fresh?: boolean } = {}): Promise<OAuth2TokenInfo> {
+  if (auth.type !== 'oauth2') throw new ApsError('ValidationError', 'Get token is for OAuth 2.0 auth', { suggestions: ['Choose the OAuth 2.0 type in the Authorization tab.'] });
+  if (!auth.tokenUrl) throw new ApsError('ConfigurationError', 'The token URL is empty', { suggestions: ['Fill in the access token URL of the OAuth 2.0 auth.'] });
+  if (o.fresh !== false) tokenCache.delete(oauth2Key(auth));
+  const t = await getOAuth2Token(auth, ctx);
+  const tok = t.accessToken;
+  return {
+    tokenType: t.tokenType,
+    tokenMasked: `${t.tokenType} ${tok.length > 12 ? `${tok.slice(0, 4)}…${tok.slice(-4)}` : '••••'}`,
+    expiresAt: new Date(t.expiresAt).toISOString(),
+    expiresInSeconds: Math.max(0, Math.round((t.expiresAt - Date.now()) / 1000)),
+    ...(auth.scope ? { scope: auth.scope } : {}),
+    grantType: auth.grantType,
+    tokenUrl: auth.tokenUrl,
+    hasRefreshToken: !!t.refreshToken,
+  };
+}
+
 async function getOAuth2Token(auth: Extract<AuthConfig, { type: 'oauth2' }>, ctx: AuthContext): Promise<CachedToken> {
-  const key = [auth.grantType, auth.tokenUrl, auth.clientId, auth.scope ?? '', auth.username ?? '', auth.audience ?? ''].join('|');
+  const key = oauth2Key(auth);
   const cached = tokenCache.get(key);
   if (cached && cached.expiresAt > Date.now() + 10_000) return cached;
   ctx.redactor?.addSecret(auth.clientSecret);

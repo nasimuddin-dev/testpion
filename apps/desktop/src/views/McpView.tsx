@@ -544,7 +544,7 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
                   <Field label="Command" hint="On Windows use npx.cmd or the full path to node.exe. Variables like {{workspaceDir}} are resolved.">
                     <Input className="mono" value={s.command} onChange={(e) => onChange({ ...s, command: e.target.value })} />
                   </Field>
-                  <Field label="Working directory">
+                  <Field label="Start in folder">
                     <Input className="mono" value={s.cwd ?? ''} onChange={(e) => onChange({ ...s, cwd: e.target.value || undefined })} />
                   </Field>
                 </div>

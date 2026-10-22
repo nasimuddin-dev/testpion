@@ -222,7 +222,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
               : onAssert
               ? onSaveVariable
                 ? 'Click a key to copy its JSONPath, save it to a variable or check it'
-                : 'Click a key to copy its JSONPath or turn it into an assertion'
+                : 'Click a key to copy its JSONPath or turn it into a check'
               : 'Click a key to copy its JSONPath'
         }
       />
@@ -253,7 +253,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                     align="start"
                     width={230}
                     trigger={
-                      <button title={`${r.path}: ${onAssert ? 'copy the path or add an assertion' : 'copy the path or map it'}`} className="syn-key hover:underline">
+                      <button title={`${r.path}: ${onAssert ? 'copy the path or add a check' : 'copy the path or map it'}`} className="syn-key hover:underline">
                         {/^\d+$/.test(r.key) ? r.key : `"${r.key}"`}
                       </button>
                     }

@@ -1,7 +1,8 @@
 import type { AuthConfig } from '../types';
-import { Button, Field, Input, Select, Textarea } from './ui';
+import { useState } from 'react';
+import { Button, Callout, Field, Input, Select, Textarea } from './ui';
 import { call } from '../api';
-import { useApp } from '../store';
+import { toastError, useApp } from '../store';
 import { KeyValueEditor } from './KeyValueEditor';
 
 const TYPES: Array<{ id: AuthConfig['type']; label: string }> = [
@@ -175,7 +176,7 @@ export function AuthEditor({
               <Input type="number" value={a.expiresInSec ?? ''} onChange={(e) => set({ expiresInSec: e.target.value ? Number(e.target.value) : undefined })} />
             </Field>
           </div>
-          <Field label="Payload (JSON)">
+          <Field label="Claims (JSON)">
             <Textarea className="field mono min-h-24" value={a.payload} onChange={(e) => set({ payload: e.target.value })} />
           </Field>
         </>
@@ -248,6 +249,7 @@ export function AuthEditor({
               Forget tokens
             </Button>
           </div>
+          <GetToken auth={a} />
         </>
       )}
       {a.type === 'digest' && (
@@ -355,7 +357,7 @@ export function AuthEditor({
             </Field>
           </div>
           <label className="text-sm flex items-center gap-2">
-            <input type="checkbox" checked={!!a.includePayloadHash} onChange={(e) => set({ includePayloadHash: e.target.checked || undefined })} /> Include the payload hash (text bodies)
+            <input type="checkbox" checked={!!a.includePayloadHash} onChange={(e) => set({ includePayloadHash: e.target.checked || undefined })} /> Include the body hash (text bodies)
           </label>
           <p className="text-xs text-muted">Signed when the request is sent, with a new nonce and timestamp.</p>
         </>
@@ -380,6 +382,68 @@ export function AuthEditor({
         </>
       )}
       {a.type === 'headers' && <KeyValueEditor rows={a.headers} onChange={(headers) => set({ headers })} keyPlaceholder="Header" />}
+    </div>
+  );
+}
+
+interface TokenInfo {
+  tokenMasked: string;
+  expiresAt: string;
+  expiresInSeconds: number;
+  scope?: string;
+  hasRefreshToken: boolean;
+}
+
+/** "Get token": run the grant now, so the person sees that the token call works, when the token ends and its scope. */
+function GetToken({ auth }: { auth: Extract<AuthConfig, { type: 'oauth2' }> }) {
+  const environment = useApp((s) => s.environment);
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<TokenInfo>();
+  const [error, setError] = useState<string>();
+  const run = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      setInfo(await call<TokenInfo>('auth.fetchToken', { auth, environment }));
+    } catch (e) {
+      setInfo(undefined);
+      const err = e as { message?: string; suggestions?: string[]; details?: { body?: string } };
+      setError([err.message, err.details?.body, err.suggestions?.[0]].filter(Boolean).join(' '));
+      toastError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2" data-get-token>
+      <div>
+        <Button size="sm" variant="primary" loading={busy} disabled={!auth.tokenUrl} title={auth.tokenUrl ? 'Run the grant now with the active environment' : 'Fill in the access token URL first'} onClick={() => void run()}>
+          Get token
+        </Button>
+      </div>
+      {error && (
+        <Callout tone="bad" role="alert">
+          {error}
+        </Callout>
+      )}
+      {info && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm" data-token-info>
+          <dt className="text-muted">Token</dt>
+          <dd className="mono">{info.tokenMasked}</dd>
+          <dt className="text-muted">Ends</dt>
+          <dd>
+            {new Date(info.expiresAt).toLocaleString()} (in {Math.floor(info.expiresInSeconds / 60)} min {info.expiresInSeconds % 60} s)
+          </dd>
+          {info.scope && (
+            <>
+              <dt className="text-muted">Scope</dt>
+              <dd>{info.scope}</dd>
+            </>
+          )}
+          <dt className="text-muted">Refresh token</dt>
+          <dd>{info.hasRefreshToken ? 'yes' : 'no'}</dd>
+        </dl>
+      )}
     </div>
   );
 }

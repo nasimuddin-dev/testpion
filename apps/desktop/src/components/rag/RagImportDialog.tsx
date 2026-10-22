@@ -11,7 +11,7 @@ const FORMATS: Array<{ id: Format; label: string; hint: string }> = [
   { id: 'ragas', label: 'Ragas', hint: 'An EvaluationDataset / SingleTurnSample file: user_input, reference, reference_contexts, reference_context_ids, response, retrieved_contexts.' },
   { id: 'deepeval', label: 'DeepEval', hint: 'Goldens or test cases: input, expected_output, context, actual_output, retrieval_context.' },
   { id: 'nvidia', label: 'NVIDIA retriever data', hint: 'query + pos_doc / positive_passages (the gold chunks) and optional negatives.' },
-  { id: 'promptfoo', label: 'promptfoo tests', hint: 'A config or list of tests (YAML or JSON): vars (the question, a context) and assertions (the expected value).' },
+  { id: 'promptfoo', label: 'promptfoo tests', hint: 'A config or list of tests (YAML or JSON): vars (the question, a context) and checks (the expected value).' },
   { id: 'beir', label: 'BEIR (queries + qrels)', hint: 'queries.jsonl, the qrels file (query-id, corpus-id, score) and optionally corpus.jsonl for the gold texts.' },
 ];
 

@@ -11,7 +11,7 @@ import { cx, Menu, Tooltip, type MenuItem } from './ui';
 /** A small count on a rail icon (the Git view's commits to pull): one look for every rail item that needs one. */
 function RailCount({ n }: { n: number }) {
   return (
-    <span data-rail-count="" className="absolute top-0 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-[0.6rem] font-bold leading-4 text-center pointer-events-none">
+    <span data-rail-count="" className="absolute top-0 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-[var(--accent-fg)] text-[0.6rem] font-bold leading-4 text-center pointer-events-none">
       {n > 99 ? '99+' : n}
     </span>
   );

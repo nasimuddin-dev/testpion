@@ -451,6 +451,8 @@ export function TestsView() {
   };
 
   useIntent('tests', async (p) => {
+    // the palette's "New AI Test File" (and any other "new file of this kind")
+    if (typeof p?.newFile === 'string') return void newFile(p.newFile);
     // a test named only by its id (a flaky test, an attention item, a test-case link): its file and step first
     let path: string | undefined = p?.path;
     let step: string | undefined = p?.step;

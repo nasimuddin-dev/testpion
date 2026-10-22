@@ -9,6 +9,8 @@ import {
   getProxySettings,
   describeCertificates,
   clearTokenCache,
+  fetchOAuth2Token,
+  type AuthConfig,
   FEEDBACK_EMAIL,
   samePath,
 } from '@testpion/core';
@@ -35,6 +37,15 @@ export function appHandlers(be: Backend): Handlers {
     'settings.get': () => be.settings,
     /** Forget cached OAuth 2.0 tokens (Auth tab ▸ Forget tokens); returns how many there were. */
     'auth.clearTokens': () => clearTokenCache(),
+    /** Auth tab ▸ Get token: run the OAuth 2.0 grant now and say whether it works, when the token ends and its scope (the token masked). */
+    'auth.fetchToken': async ({ auth, environment, collectionId }: { auth: AuthConfig; environment?: string; collectionId?: string }) => {
+      const ctx = be.context({ environment, collectionId });
+      try {
+        return await fetchOAuth2Token(ctx.vars.resolveDeep(auth), { redactor: ctx.redactor, openExternal: be.host.openExternal?.bind(be.host) }, { fresh: true });
+      } finally {
+        await ctx.dispose();
+      }
+    },
     'settings.save': (s: AppSettings) => {
       // refuse a malformed certificate instead of saving it and ignoring it
       if (s.tls?.extraCa) {

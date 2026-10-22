@@ -251,3 +251,45 @@ describe('--non-interactive', () => {
     }
   });
 });
+
+describe('settings, wrong commands, the library entry (P1/P2)', () => {
+  it('settings get / set / reset round-trip with the envelope, and set asks for --yes', async () => {
+    const h = join(tmp.dir, 'settings-home');
+    const get = await runCli(['settings', 'get', 'defaultTimeoutMs', '--json'], { home: h });
+    expect(JSON.parse(get.out).data).toEqual({ defaultTimeoutMs: 30000 });
+    const refused = await runCli(['settings', 'set', 'defaultTimeoutMs=5000', '--json', '--non-interactive'], { home: h, env: { CI: '1' } });
+    expect(refused.status).toBe(2);
+    expect(JSON.parse(refused.out).data.confirmationRequired).toBe(true);
+    const set = await runCli(['settings', 'set', 'defaultTimeoutMs=5000', 'theme=dark', '--yes', '--json'], { home: h });
+    expect(JSON.parse(set.out).data.changed).toEqual([
+      { key: 'defaultTimeoutMs', before: 30000, after: 5000 },
+      { key: 'theme', before: 'system', after: 'dark' },
+    ]);
+    expect(JSON.parse((await runCli(['settings', 'get', 'theme', '--json'], { home: h })).out).data).toEqual({ theme: 'dark' });
+    const bad = await runCli(['settings', 'set', 'theme=pink', '--yes', '--json'], { home: h });
+    expect(bad.status).toBe(2);
+    const reset = await runCli(['settings', 'reset', '--all', '--yes', '--json'], { home: h });
+    expect(JSON.parse(reset.out).data.reset).toEqual(expect.arrayContaining(['theme', 'defaultTimeoutMs']));
+  });
+
+  it('a misspelt command says what was meant', async () => {
+    const r = await runCli(['agnt-info', '--json'], { home: home() });
+    const e = JSON.parse(r.out) as { errors: Array<{ hint?: string }> };
+    expect(r.status).toBe(2);
+    expect(e.errors[0]!.hint).toMatch(/Did you mean testpion agent-info/);
+    expect(e.errors[0]!.hint).toMatch(/--help/);
+  });
+
+  it('every --json command now answers: agent-info and env get give an envelope, not an error', async () => {
+    const info = await runCli(['agent-info', '--json', '-w', ws], { home: home() });
+    expect(JSON.parse(info.out)).toMatchObject({ status: 'ok', command: 'agent-info', data: { schemaVersion: 1 } });
+    const envs = JSON.parse((await runCli(['env', 'list', '-w', ws, '--json'], { home: home() })).out).data as Array<{ name: string; variables?: unknown }>;
+    expect(envs.length).toBeGreaterThan(0);
+  });
+
+  it('the AI commands take --max-cost, and it refuses a bad amount', async () => {
+    const r = await runCli(['ai', 'run', 'explain-response', '--max-cost', 'lots', '-w', ws, '--json'], { home: home() });
+    expect(r.status).toBe(2);
+    expect(JSON.parse(r.out).errors[0].message).toMatch(/--max-cost is an amount/);
+  });
+});

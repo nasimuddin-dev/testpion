@@ -1,3 +1,4 @@
+import { LABEL } from '../lib/vocabulary';
 import { AlertTriangle, CheckCircle2, Cookie, Disc, Replace, ShieldCheck, SquareTerminal, Wrench } from 'lucide-react';
 import { openReverseProxyCapture } from '../lib/capture';
 import { useApp } from '../store';
@@ -27,7 +28,7 @@ export function StatusBarTools() {
   const tools: MenuItem[] = [
     { label: 'Cookies…', icon: <Cookie size={14} />, onSelect: () => useApp.getState().set({ cookiesOpen: true }) },
     { label: 'Find & replace in a collection…', icon: <Replace size={14} />, onSelect: () => useApp.getState().openIntent('collections', { replace: true }) },
-    { label: 'Reverse proxy for one API…', icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
+    { label: LABEL.captureReverseProxy, icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
     { label: 'Certificates', icon: <ShieldCheck size={14} />, onSelect: () => useApp.getState().openIntent('settings', { tab: 'certificates' }) },
   ];
   return (
@@ -55,7 +56,7 @@ export function StatusBarTools() {
         align="end"
         items={tools}
         trigger={
-          <button data-status="tools" className="flex items-center gap-1 hover:text-fg" title="Tools: cookies, find & replace, reverse proxy, certificates">
+          <button data-status="tools" className="flex items-center gap-1 hover:text-fg" title="Tools: cookies, find & replace, capture traffic for one API, certificates">
             <Wrench size={12} /> Tools
           </button>
         }

@@ -266,3 +266,56 @@ describe('size', () => {
     expect(texts(bad)[0]).toMatch(/response_format is "concise" or "detailed"/);
   });
 });
+
+describe('agents at the edges (the 2026-10-22 review)', () => {
+  it('a description is short enough for hosts that cut at about 1,200 characters; the rest is in the guide', async () => {
+    const long = tools.filter((t) => (t.description ?? '').length > 1200).map((t) => `${t.name}: ${t.description!.length}`);
+    expect(long).toEqual([]);
+    const guide = await client.callTool({ name: 'testpion_guide', arguments: {} });
+    expect(texts(guide).join('\n')).toContain('## Tool details');
+  });
+
+  it('every tool that calls the model takes max_cost_usd', () => {
+    for (const name of ['ai_run_task', 'flow_generate', 'ai_triage_run', 'search_ask', 'write_script', 'rag_generate_testset']) {
+      const t = tools.find((x) => x.name === name)!;
+      expect(Object.keys((t.inputSchema as { properties: Record<string, unknown> }).properties), name).toContain('max_cost_usd');
+    }
+  });
+
+  it('list_kinds is in the minimal profile and named in the instructions', async () => {
+    const { MINIMAL_TOOLS } = await import('../../packages/core/src/mcp-server/tools/search-tools.js');
+    expect(MINIMAL_TOOLS.has('list_kinds')).toBe(true);
+    expect(client.getInstructions()).toContain('list_kinds');
+  });
+
+  it('a tool error carries { code, message, hint, retryable } for the client that reads structured content', async () => {
+    const r = (await client.callTool({ name: 'get_request', arguments: { collection: 'No such collection', request: 'x' } })) as { isError?: boolean; structuredContent?: { error: { code: string; message: string; hint?: string; retryable: boolean } } };
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent?.error.code).toBe('ConfigurationError');
+    expect(r.structuredContent?.error.message).toMatch(/No such collection|not found|No collection/i);
+    expect(typeof r.structuredContent?.error.retryable).toBe('boolean');
+    const unknown = (await client.callTool({ name: 'no_such_tool', arguments: {} })) as { structuredContent?: { error: { hint?: string } } };
+    expect(unknown.structuredContent?.error.hint).toMatch(/search_tools/);
+  });
+
+  it('creating twice is not a surprise: create_collection fails or reuses, create_folder reuses, save_request can refuse a second', async () => {
+    const first = (await client.callTool({ name: 'create_collection', arguments: { name: 'Twice' } })) as { structuredContent?: { id: string; created: boolean } };
+    expect(first.structuredContent?.created).toBe(true);
+    const again = (await client.callTool({ name: 'create_collection', arguments: { name: 'Twice' } })) as { isError?: boolean };
+    expect(again.isError).toBe(true);
+    const reuse = (await client.callTool({ name: 'create_collection', arguments: { name: 'Twice', if_exists: 'reuse' } })) as { structuredContent?: { id: string; created: boolean } };
+    expect(reuse.structuredContent).toMatchObject({ id: first.structuredContent!.id, created: false });
+    const f1 = (await client.callTool({ name: 'create_folder', arguments: { collection: 'Twice', folder: 'A / B' } })) as { structuredContent?: { created: boolean } };
+    const f2 = (await client.callTool({ name: 'create_folder', arguments: { collection: 'Twice', folder: 'A / B' } })) as { structuredContent?: { created: boolean } };
+    expect([f1.structuredContent?.created, f2.structuredContent?.created]).toEqual([true, false]);
+    const save = { collection: 'Twice', name: 'Ping', method: 'GET', url: 'https://a.test/ping', if_exists: 'fail' };
+    expect(((await client.callTool({ name: 'save_request', arguments: save })) as { isError?: boolean }).isError).toBeFalsy();
+    expect(((await client.callTool({ name: 'save_request', arguments: save })) as { isError?: boolean }).isError).toBe(true);
+  });
+
+  it('the page size is the one the CLI uses', async () => {
+    const { SURFACE_PAGE } = await import('../../packages/core/src/util/page.js');
+    const t = tools.find((x) => x.name === 'list_collections')!;
+    expect(t.description).toContain(`default ${SURFACE_PAGE.limit}, at most ${SURFACE_PAGE.max}`);
+  });
+});

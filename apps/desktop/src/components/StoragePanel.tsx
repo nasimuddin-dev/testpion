@@ -44,7 +44,7 @@ export function StoragePanel() {
         <StatTile label="Kept data" value={formatBytes(u.totalBytes)} sub="runs, traces, history" />
         <StatTile label="Runs" value={String(u.runs)} sub={u.oldestRun ? `oldest ${timeAgo(u.oldestRun)}` : 'none yet'} />
         <StatTile label="History" value={String(u.history)} sub="sent from the app" />
-        <StatTile label="Traces" value={String(u.traces)} sub="one per execution" />
+        <StatTile label="Traces" value={String(u.traces)} sub="one per run" />
       </div>
       <ChartCard title="Disk use" aside="the open workspace">
         <div className="flex flex-col gap-1.5">

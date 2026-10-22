@@ -119,7 +119,7 @@ export function ResponseViewer({
           },
         ]
       : []),
-    ...(onSuggestAssertions ? [{ label: 'Suggest assertions', icon: <Sparkles size={12} />, onSelect: onSuggestAssertions }] : []),
+    ...(onSuggestAssertions ? [{ label: 'Suggest checks', icon: <Sparkles size={12} />, onSelect: onSuggestAssertions }] : []),
     {
       label: diffOpen ? 'Hide the diff' : 'Diff vs previous',
       icon: <GitCompareArrows size={12} />,
@@ -172,7 +172,7 @@ export function ResponseViewer({
           </Badge>
         )}
         {response.truncated && (
-          <Badge tone="warn" title="Only the first part of the body is shown. The full payload was streamed to disk.">
+          <Badge tone="warn" title="Only the first part of the body is shown. The full body was streamed to disk.">
             preview truncated
           </Badge>
         )}

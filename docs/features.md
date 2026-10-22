@@ -81,7 +81,7 @@ See [WebSocket](./api-testing/websocket.md).
 - **Save as test…** turns a tool call into a regression test.
 - A mock server's **Tools** tab designs a toolset (name, description, input schema, canned or scripted answers per tool), tries it in place, and shows the commands that serve it to an agent before the real server exists; **Generate with AI** drafts it from a sentence. See [MCP mock server](./mcp/mocking.md#design-a-toolset).
 - The other direction too: `testpion mcp-server` serves your workspace to AI agents as MCP tools (browse collections, send requests, run collections), with secrets redacted.
-- **Your flows as tools**: a test file or suite with an `expose:` block (Tests ▸ file menu ▸ *Expose as MCP tool…*) is a tool of its own on that server: an agent calls it by name with the inputs as arguments and gets each step's result and the values the flow extracted. `testpion flows` and Settings ▸ AI agents list them.
+- **Your flows as tools**: a test file or suite with an `expose:` block (Tests ▸ file menu ▸ *Expose as MCP tool…*) is a tool of its own on that server: an agent calls it by name with the inputs as arguments and gets each step's result and the values the flow extracted. `testpion flows` and Settings ▸ AI agents (MCP) list them.
 
 [MCP guide](/mcp/overview) · [Use from AI agents](/ai-testing/mcp-server)
 

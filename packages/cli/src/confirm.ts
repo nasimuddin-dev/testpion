@@ -63,6 +63,8 @@ export const CLI_CONFIRM: CliConfirm[] = [
   { tool: 'generate_tests', command: 'tests-from-spec', when: (o) => o.overwrite === true && real(o), args: () => ({ overwrite: true }) },
   { tool: 'generate_dataset', command: 'generate-data', when: (o) => o.overwrite === true && real(o), args: (_o, a) => ({ overwrite: true, name: a[0] }) },
   { tool: 'rag_capture_dataset', command: 'rag capture', when: (o) => o.overwrite === true && real(o), args: (o) => ({ overwrite: true, name: o.name }) },
+  { tool: 'set_settings', command: 'settings set', args: (_o, a) => ({ settings: a }) },
+  { tool: 'set_settings', command: 'settings reset', args: (o, a) => ({ reset: o.all ? 'all' : a }) },
   { tool: 'agents_init', command: 'agents init', when: (o) => o.force === true && real(o), args: () => ({ force: true }) },
 ];
 

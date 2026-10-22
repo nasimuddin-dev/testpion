@@ -207,7 +207,7 @@ const OPERATORS: Array<[RuleOperator, string]> = [
   ['between', 'Is between'],
   ['greater-than', 'Is greater than'],
   ['less-than', 'Is less than'],
-  ['matches', 'Matches (regex)'],
+  ['matches', 'Matches (regular expression)'],
 ];
 
 /** The Highlight Rule editor: a name, one condition on a column, and how the matching rows look in each theme. */
@@ -271,7 +271,7 @@ export function HighlightRuleEditor({ rule, onSaved, onCancel }: { rule?: Rule; 
         </div>
       </Field>
       <label className="flex items-center gap-2 text-xs">
-        <input type="checkbox" checked={!!cond.regex} onChange={(e) => set({ regex: e.target.checked })} /> Use regex
+        <input type="checkbox" checked={!!cond.regex} onChange={(e) => set({ regex: e.target.checked })} /> Use a regular expression
       </label>
       <div className="border-t border-line pt-3 grid gap-2">
         <label className="flex items-center gap-2 text-xs">

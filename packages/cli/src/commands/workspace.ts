@@ -157,7 +157,7 @@ export function registerWorkspaceCommands(program: Command): void {
 
   registerGitCommands(git, program);
 
-  const trash = program.command('trash').description(`recently deleted ${trashKindsText()} (kept ${TRASH_DAYS} days): list, restore, empty`);
+  const trash = program.command('trash').description(`Recently deleted (the command is called trash): ${trashKindsText()} (kept ${TRASH_DAYS} days): list, restore, empty`);
   trash
     .command('list')
     .description('list what was deleted in the last 30 days (Recently deleted): id, kind, name, when; restore one with `trash restore <id>`')
@@ -186,7 +186,7 @@ export function registerWorkspaceCommands(program: Command): void {
     });
   trash
     .command('empty')
-    .description('delete everything in the trash for good (or one item with --id)')
+    .description('delete everything in Recently deleted for good (or one item with --id)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--id <id>', 'only this item')
     .option('--yes', 'confirm; required, because this cannot be undone')

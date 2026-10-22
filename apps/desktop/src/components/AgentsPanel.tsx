@@ -134,6 +134,9 @@ export function AgentsPanel() {
         </div>
         <Toggle checked={opts.readOnly} onChange={(readOnly) => setOpts({ ...opts, readOnly })} label="Read-only: the agent can look but not send requests or change files" />
         <Toggle checked={opts.allowProduction} onChange={(allowProduction) => setOpts({ ...opts, allowProduction })} label="Allow sending to environments marked as production" />
+        <p className="text-xs text-muted" data-agents-unsaved>
+          These two change the command below only, and are not saved: copy the command again after changing them. An agent started with an older copy keeps the choices it had.
+        </p>
       </div>
 
       <div className="rounded-xl border border-line overflow-hidden">

@@ -4,6 +4,10 @@
  * these labels only.
  */
 export const LABEL = {
+  /** The one name of the reverse proxy that captures the traffic of one API (menus, the palette, the dialog's title is the same without the …). */
+  captureReverseProxy: 'Capture traffic for one API…',
+  /** A new AI prompt in the Playground (AI Lab); an AI test file of the Tests view only. */
+  newAiPrompt: 'New AI prompt (Playground)',
   /** Open an item where it lives. */
   open: 'Open',
   openNewTab: 'Open in new tab',
@@ -176,4 +180,7 @@ export const MENU_TEXT = {
  * Words of the tools underneath that a person using TestPion should not have to know. The unit test fails when one of them
  * is in a string a screen shows (menus, buttons, hints, dialogs): each is said in the words of what it does.
  */
-export const JARGON = ['textconv', 'serializer', 'preferStable', 'stable format', 'pre-commit hook', 'tracked files', 'merge and diff drivers', 'attribute files', 'TODO(import)', 'LFS server', '.ref file'] as const;
+export const JARGON = ['textconv', 'serializer', 'preferStable', 'stable format', 'pre-commit hook', 'tracked files', 'merge and diff drivers', 'attribute files', 'TODO(import)', 'LFS server', '.ref file',
+  // words of the engine underneath, in the words of what they mean (the 2026-10-22 review)
+  'Matches regex', 'Use regex', 'Glob or /regex/', 'full payload', 'payload bottlenecks', 'Largest payloads', 'runtime variables', 'per execution', 'No assertions', 'Suggest assertions', 'Working directory', 'Capture: reverse proxy', 'Reverse proxy for one API',
+] as const;

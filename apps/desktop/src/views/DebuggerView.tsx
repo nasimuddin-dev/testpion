@@ -1,3 +1,4 @@
+import { LABEL } from '../lib/vocabulary';
 import { startAi } from '../components/ai/AiAction';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import {
@@ -401,7 +402,7 @@ export function DebuggerView() {
     },
     { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => void startThen(() => setDialog('lan')) },
     // WF-12: a client that can't use a proxy points at a local address that forwards to the API (no certificate needed)
-    { label: 'Reverse proxy for one API…', icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
+    { label: LABEL.captureReverseProxy, icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
     status?.systemProxy
       ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
       : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void startThen(() => systemProxy(true)) },

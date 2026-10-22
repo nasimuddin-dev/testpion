@@ -47,7 +47,7 @@ export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: 
     { id: 'timeline', label: 'Timeline', hint: 'See the timing breakdown of the selected requests.', icon: BarChart3, panel: 'timeline', shortcut: 'F5', separator: true },
     { id: 'summary', label: 'Summary', hint: 'The selected request at a glance: program, connection, sizes and types.', icon: Info, panel: 'summary' },
     { id: 'structure', label: 'Structure', hint: 'See the structure of the requests: domains and their paths, with counts and sizes.', icon: ListTree, panel: 'structure', shortcut: 'F6' },
-    { id: 'performance', label: 'Performance', hint: 'Reveal response time and payload bottlenecks.', icon: Gauge, panel: 'performance', separator: true },
+    { id: 'performance', label: 'Performance', hint: 'Reveal response time and body size bottlenecks.', icon: Gauge, panel: 'performance', separator: true },
     { id: 'convert', label: 'Convert', hint: 'Decode and encode: URL, Base64, hex, JWT, timestamps, JSON.', icon: ArrowRightLeft, panel: 'convert' },
     { id: 'export', label: 'Export / Import', hint: 'Export or import traffic: sessions, HAR, Fiddler SAZ.', icon: Download, items: exportItems },
   ];

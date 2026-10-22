@@ -23,7 +23,7 @@ const CHECK_DEFS: CheckDef[] = [
   { type: 'not-equals', label: 'Not equals', group: 'Body', fields: ['path', 'expected'] },
   { type: 'contains', label: 'Contains', group: 'Body', fields: ['path', 'expected'] },
   { type: 'not-contains', label: 'Does not contain', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'regex', label: 'Matches regex', group: 'Body', fields: ['path', 'expected'] },
+  { type: 'regex', label: 'Matches a pattern (regular expression)', group: 'Body', fields: ['path', 'expected'] },
   { type: 'type', label: 'Type is', group: 'Body', fields: ['path', 'expected'], hint: 'string, number, integer, boolean, object, array, null' },
   { type: 'length', label: 'Length', group: 'Body', fields: ['path', 'expected'] },
   { type: 'threshold', label: 'Number within', group: 'Body', fields: ['path', 'min', 'max'] },
