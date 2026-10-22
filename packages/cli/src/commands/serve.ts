@@ -101,18 +101,18 @@ export function registerServeCommands(program: Command): void {
     .description('serve a workspace to AI agents over MCP (stdio): list and read collections, send requests, run collections')
     .option(...WORKSPACE_OPTION)
     .option('--read-only', 'only the browsing tools: no requests are sent')
-    .option('--profile <name>', "which tools are listed: full (every tool; the default) or minimal (the common jobs, for agents that load every listed tool; search_tools finds the rest)", 'full')
+    .option('--profile <name>', "what tools/list holds: full (every tool, compact: the default, about 200 KB), minimal (the common jobs, about 30 KB; search_tools finds the rest) or verbose (every tool with its complete text, about 310 KB). Any tool can be called in every profile; search_tools --name <tool> returns a tool's complete entry. The environment variable TESTPION_MCP_PROFILE sets the default.")
     .option('--allow-production', 'allow sending to environments marked as production')
     .option('--block-private-networks', 'refuse requests to localhost, private and cloud-metadata addresses (for shared or hosted use)')
     .option('--allow-host <host...>', 'with --block-private-networks: hosts that stay reachable')
     .action(async (o: { workspace?: string; readOnly?: boolean; profile?: string; allowProduction?: boolean; blockPrivateNetworks?: boolean; allowHost?: string[] }) => {
-      if (o.profile && o.profile !== 'full' && o.profile !== 'minimal') throw new CliError(`--profile is full or minimal, not ${o.profile}`, EXIT.CONFIG_ERROR);
+      if (o.profile && o.profile !== 'full' && o.profile !== 'minimal' && o.profile !== 'verbose') throw new CliError(`--profile is full, minimal or verbose, not ${o.profile}`, EXIT.CONFIG_ERROR);
       if (o.blockPrivateNetworks) setNetworkPolicy({ blockPrivateNetworks: true, allowHosts: o.allowHost ?? [] });
       // stdout carries the MCP protocol: everything else goes to stderr
       await withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace folder or pass -w <name|path>', EXIT.CONFIG_ERROR);
         console.error(dim(`TestPion MCP server for "${store.workspace.name}"${o.readOnly ? ' (read-only)' : ''} on stdio`));
-        await serveTestPionMcp({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), readOnly: o.readOnly, profile: o.profile as 'full' | 'minimal' | undefined, allowProduction: o.allowProduction, version: ENGINE_VERSION });
+        await serveTestPionMcp({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), readOnly: o.readOnly, profile: o.profile as 'full' | 'minimal' | 'verbose' | undefined, allowProduction: o.allowProduction, version: ENGINE_VERSION });
       });
     });
   program

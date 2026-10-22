@@ -28,7 +28,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
 });
 
-const connect = async (profile?: 'minimal') => {
+const connect = async (profile?: 'minimal' | 'verbose') => {
   const t0 = performance.now();
   const server = createTestPionMcpServer({ store, secrets: new EnvSecretStore(), settings: mgr.loadSettings(), profile });
   const made = performance.now() - t0;
@@ -53,7 +53,7 @@ describe('the MCP server with 3,000 test files', () => {
 
 // M-1: every listed tool is in an agent's context
 describe('tools/list size', () => {
-  const size = async (profile?: 'minimal') => {
+  const size = async (profile?: 'minimal' | 'verbose') => {
     const { client } = await connect(profile);
     const list = await client.listTools();
     await client.close();
@@ -64,9 +64,25 @@ describe('tools/list size', () => {
     console.log(`minimal tools/list: ${count} tools, ${(bytes / 1024).toFixed(0)} KB`);
     expect(bytes).toBeLessThan(40 * 1024);
   });
-  it('the full list does not grow past 330 KB (it was 335 KB for 201 tools before the repeated notes and titles went)', async () => {
+  it('the full profile (compact entries, the default) stays under 200 KB for every tool', async () => {
     const { bytes, count } = await size();
     console.log(`full tools/list: ${count} tools, ${(bytes / 1024).toFixed(0)} KB`);
+    expect(count).toBeGreaterThan(200);
+    expect(bytes).toBeLessThan(200 * 1024);
+  });
+  it('the verbose profile keeps the complete text and stays under 330 KB', async () => {
+    const { bytes, count } = await size('verbose');
+    console.log(`verbose tools/list: ${count} tools, ${(bytes / 1024).toFixed(0)} KB`);
     expect(bytes).toBeLessThan(330 * 1024);
+  });
+  it('search_tools with a name returns the complete entry the compact list leaves out', async () => {
+    const { client } = await connect();
+    const compact = (await client.listTools()).tools.find((t) => t.name === 'list_requests')!;
+    const entry = (await client.callTool({ name: 'search_tools', arguments: { name: 'list_requests' } })) as { structuredContent?: { description: string; inputSchema: unknown } };
+    expect(compact.description).not.toContain('Example:');
+    expect(entry.structuredContent!.description).toContain('Example:');
+    expect(entry.structuredContent!.description).toContain('When not:');
+    expect(Object.keys((entry.structuredContent!.inputSchema as { properties: object }).properties)).toEqual(Object.keys(compact.inputSchema.properties as object));
+    await client.close();
   });
 });

@@ -37,14 +37,19 @@ export const MINIMAL_TOOLS = new Set([
 ]);
 
 /** A tool found by what the agent wants to do: the matching tools with a line each and their required arguments. */
-export function searchTool(tools: Tool[], titleOf: (name: string, write: boolean) => string): Tool {
+export function searchTool(tools: Tool[], titleOf: (name: string, write: boolean) => string, entryOf?: (name: string) => Tool | undefined): Tool {
   const firstSentence = (s: string) => s.split(/(?<=\.)\s/)[0]!.slice(0, 200);
   return {
     name: 'search_tools',
     description:
-      'Find a TestPion tool by what you want to do ("run tests", "mock", "capture traffic", "compare two runs", "secrets"): the matching tools with a line each and their required arguments. Any tool it names can be called, listed or not. Use it before guessing a tool name.',
-    inputSchema: { type: 'object', properties: { query: str('What you want to do, in a few words') }, required: ['query'] },
+      'Find a TestPion tool by what you want to do ("run tests", "mock", "capture traffic", "compare two runs", "secrets"): the matching tools with a line each and their required arguments. Pass `name` instead to get the complete entry of one tool. Any tool it names can be called, listed or not. Use it before guessing a tool name.',
+    inputSchema: { type: 'object', properties: { query: str('What you want to do, in a few words'), name: str('A tool name: returns the complete entry of that tool (description with when not to use it and an example, every parameter described)') }, required: [] },
     run: (a) => {
+      if (typeof a.name === 'string' && a.name) {
+        const full = entryOf?.(a.name);
+        if (!full) return { error: `No tool called ${a.name}`, hint: 'search_tools with a query finds tools by what you want to do.' };
+        return { name: full.name, description: full.description, inputSchema: full.inputSchema, ...(full.outputSchema ? { outputSchema: full.outputSchema } : {}), changes: !!full.write };
+      }
       const words = String(a.query ?? '')
         .toLowerCase()
         .split(/[^a-z0-9_]+/)

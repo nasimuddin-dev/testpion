@@ -8,6 +8,7 @@ import { ApsError, normalizeError } from '../errors.js';
 import { Redactor } from '../util/redact.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
+import { compactTool } from './compact.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
 import { contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
@@ -42,17 +43,30 @@ interface TestPionMcpOptions {
   /** Only the browsing tools (no requests are sent). */
   readOnly?: boolean;
   /**
-   * Which tools are listed: `full` (every tool; the default) or `minimal` (the tools of the common jobs, for hosts
-   * that load every listed tool into the context; search_tools finds the rest, and any tool can be called).
+   * What `tools/list` holds (any tool can be called whatever the profile; env TESTPION_MCP_PROFILE sets it when this is not given):
+   * `full` (the default): every tool, compact (what it does, one line of when, short parameter descriptions: about 200 KB);
+   * `minimal`: the tools of the common jobs, compact, for hosts that load every listed tool into the context (search_tools finds the rest);
+   * `verbose`: every tool with its complete text (when not to use it, an example call, every parameter's full description: about 314 KB).
+   * `search_tools` with a `name` returns that tool's complete entry in any profile.
    */
-  profile?: 'minimal' | 'full';
+  profile?: McpProfile;
   /** Allow sending to environments marked as production (off by default). */
   allowProduction?: boolean;
   version?: string;
 }
 
+export type McpProfile = 'full' | 'minimal' | 'verbose';
+
+/** The profile asked for: the option, else TESTPION_MCP_PROFILE, else `full`. */
+export function resolveMcpProfile(profile?: string): McpProfile {
+  const p = profile ?? process.env.TESTPION_MCP_PROFILE ?? 'full';
+  if (p !== 'full' && p !== 'minimal' && p !== 'verbose') throw new ApsError('ConfigurationError', `The MCP profile is full, minimal or verbose, not "${p}"`);
+  return p;
+}
+
 export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   const { store, secrets, settings } = opts;
+  const profile = resolveMcpProfile(opts.profile);
   const redactor = new Redactor(settings.redactFields);
   const collections = () => store.listCollections().filter((c) => !c.problem);
   const findCollection = (ref: unknown): Collection => requireCollection(store, String(ref ?? ''), { loadable: true });
@@ -97,10 +111,11 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     const every = [...all];
     every.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !every.some((x) => x.name === t.name)));
     const base = withEnvironmentSecrets(store, withProductionConsent(every.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
-    base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title));
+    base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title, (name) => registry?.tools.find((t) => t.name === name)));
     // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
     const withContract = withToolContract(base, { docs: TOOL_DOCS, confirmer: () => confirmer });
-    return { all: every, tools: withContract, listed: opts.profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name)) : withContract };
+    const chosen = profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name)) : withContract;
+    return { all: every, tools: withContract, listed: profile === 'verbose' ? chosen : chosen.map(compactTool) };
   }
   const listedTools = () => (registry ??= buildRegistry()).listed;
 
@@ -108,7 +123,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${opts.profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
+      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
     },
   );
   server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
