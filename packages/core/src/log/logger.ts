@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, statSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Redactor } from '../util/redact.js';
+import { restrictToOwner } from '../storage/private-acl.js';
 
 export type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'TRACE';
 const ORDER: Record<LogLevel, number> = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3, TRACE: 4 };
@@ -99,6 +100,7 @@ export class Logger {
 export function fileSink(path: string, maxBytes = 10 * 1024 * 1024): LogSink {
   // the log can hold what an error message carried: readable by this account only (POSIX; Windows keeps the profile's permissions)
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  let restricted = false;
   return (rec) => {
     try {
       if ((statSync(path, { throwIfNoEntry: false })?.size ?? 0) > maxBytes) renameSync(path, `${path}.1`);
@@ -106,6 +108,11 @@ export function fileSink(path: string, maxBytes = 10 * 1024 * 1024): LogSink {
       /* ignore */
     }
     appendFileSync(path, JSON.stringify(rec) + '\n', { mode: 0o600 });
+    if (!restricted) {
+      restricted = true;
+      restrictToOwner(dirname(path), 'dir'); // Windows: this user only (best effort, once)
+      restrictToOwner(path, 'file');
+    }
   };
 }
 

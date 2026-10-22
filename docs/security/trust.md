@@ -46,7 +46,7 @@ Pointing at a file on this computer (a client certificate, a data file, a folder
 
 ## Files TestPion writes
 
-`secrets.json`, current values, the application log and saved Debugger sessions are readable by your account only (mode `0600`, folders `0700`). On Windows they keep the permissions of your profile folder, which is private to your account by default. On Linux without a Secret Service or KWallet, Electron falls back to a key that is part of its source code; TestPion treats that as **no secure store** and refuses to save a secret until you install a keyring, or start TestPion with `TESTPION_ALLOW_WEAK_SECRET_STORE=1` and accept it.
+`secrets.json`, current values, the application log and saved Debugger sessions are readable by your account only (mode `0600`, folders `0700`). On Windows the same files and their folders get an ACL with inheritance removed and a single entry, your account (full control), set with `icacls` the first time each is written; it is best effort (if `icacls` cannot run, saving goes on and the file keeps your profile folder's permissions, which are private to your account by default). On Linux without a Secret Service or KWallet, Electron falls back to a key that is part of its source code; TestPion treats that as **no secure store** and refuses to save a secret until you install a keyring, or start TestPion with `TESTPION_ALLOW_WEAK_SECRET_STORE=1` and accept it.
 
 ## Agents (MCP)
 

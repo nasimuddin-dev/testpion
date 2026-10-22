@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
 import { sha1Hex } from '../util/hash.js';
+import { restrictToOwner } from './private-acl.js';
 
 /**
  * End a write stream and wait until its file descriptor is closed. `end(cb)` only waits for 'finish'; the
@@ -300,6 +301,10 @@ export function writeOwned(path: string, data: string | Buffer, opts: { mode?: n
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
   writeFileSync(path, bytes, opts.mode === undefined ? undefined : { mode: opts.mode });
   if (opts.mode !== undefined && process.platform !== 'win32') chmodSync(path, opts.mode); // an existing file keeps its mode on write
+  if (opts.mode === PRIVATE_FILE_MODE) {
+    restrictToOwner(dirname(path), 'dir');
+    restrictToOwner(path, 'file');
+  }
   recordOwn(path, contentFingerprint(bytes));
   forgetText(path);
 }
@@ -323,6 +328,8 @@ export const PRIVATE_DIR_MODE = 0o700;
 export function stageAtomicWrite(path: string, data: string | Buffer, opts: { mode?: number } = {}): { commit(): void; discard(): void } {
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
   mkdirSync(dirname(path), { recursive: true, ...(opts.mode === PRIVATE_FILE_MODE ? { mode: PRIVATE_DIR_MODE } : {}) });
+  const priv = opts.mode === PRIVATE_FILE_MODE;
+  if (priv) restrictToOwner(dirname(path), 'dir'); // Windows: the folder's one entry (this user) is inherited by the file
   const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
   const fd = openSync(tmp, 'w', opts.mode);
   try {
@@ -348,6 +355,7 @@ export function stageAtomicWrite(path: string, data: string | Buffer, opts: { mo
         forgetText(path);
       }
       recordOwn(path, contentFingerprint(bytes));
+      if (priv) restrictToOwner(path, 'file');
     },
     discard() {
       if (done) return;
