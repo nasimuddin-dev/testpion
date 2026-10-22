@@ -1,5 +1,5 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { request as httpsRequest } from 'node:https';
+import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, type Socket } from 'node:net';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
@@ -353,6 +353,30 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   };
   const rulesNow = () => opts.rules?.() ?? [];
   const upstreamTls = () => ({ ca: trustedCa(), rejectUnauthorized: !opts.decrypt?.insecureUpstream });
+  /*
+   * One https.Agent for the upstream requests of a trust configuration: with the CA list in every request's options (hundreds of
+   * certificates) each request hashed it to find its agent. A new one is made only when the trusted CAs change.
+   */
+  let upstreamAgent: HttpsAgent | undefined;
+  let upstreamAgentCa: string[] | undefined;
+  const upstreamHttps = () => {
+    const ca = trustedCa();
+    if (!upstreamAgent || upstreamAgentCa !== ca) {
+      upstreamAgent?.destroy();
+      upstreamAgent = new HttpsAgent({ ca, rejectUnauthorized: !opts.decrypt?.insecureUpstream, keepAlive: true });
+      upstreamAgentCa = ca;
+    }
+    return { agent: upstreamAgent };
+  };
+  /** TLS contexts of the leaf certificates handed to clients, by certificate (parsing the PEM for every tunnel was repeated work). */
+  const contexts = new BoundedMap<string, ReturnType<typeof createSecureContext>>(500);
+  const contextFor = (leaf: { cert: string; key: string }) => {
+    const hit = contexts.get(leaf.cert);
+    if (hit) return hit;
+    const made = createSecureContext({ cert: leaf.cert, key: leaf.key });
+    contexts.set(leaf.cert, made);
+    return made;
+  };
   /** Where a request on this socket goes: the absolute URL of a proxy request, or the decrypted tunnel's origin plus the path. */
   const targetOf = (req: IncomingMessage | Http2ServerRequest, origin?: TunnelOrigin): URL => {
     if (origin) return new URL(req.url ?? '/', `${origin.scheme}://${origin.host}:${origin.port}`);
@@ -651,7 +675,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     if (e.redirectedTo) h.host = target.host;
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(secure ? upstreamTls() : {}) }, async (ures) => {
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(secure ? upstreamHttps() : {}) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -765,6 +789,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
     };
+    // the request's 60 s timeout only emitted an event nobody listened to: a stalled upstream never ended the exchange
+    up.on('timeout', () => up.destroy(Object.assign(new Error('The server did not answer within 60 s'), { code: 'ETIMEDOUT' })));
     up.on('error', (err: NodeJS.ErrnoException) => {
       e.error = err.code === 'ENOTFOUND' ? `Unknown host ${target.hostname}` : err.message;
       e.durationMs = Date.now() - t0;
@@ -831,7 +857,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     delete h['proxy-connection'];
     if (e.redirectedTo) h.host = target.host;
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(secure ? upstreamTls() : {}) });
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(secure ? upstreamHttps() : {}) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -998,11 +1024,11 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
         tlsSocket = new TLSSocket(inner, {
           isServer: true,
           ALPNProtocols: ['h2', 'http/1.1'],
-          secureContext: createSecureContext({ cert: leaf.cert, key: leaf.key }),
+          secureContext: contextFor(leaf),
           SNICallback: (name, cb) => {
             try {
               const l = opts.decrypt!.leafFor(name);
-              cb(null, createSecureContext({ cert: l.cert, key: l.key }));
+              cb(null, contextFor(l));
             } catch (err) {
               cb(err as Error);
             }
@@ -1091,6 +1117,10 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       new Promise<void>((resolve) => {
         for (const s of sockets) s.destroy();
         sockets.clear();
+        // upstream HTTP/2 sessions and the upstream agent's idle connections outlived the proxy
+        for (const sess of h2Sessions.values()) sess.destroy();
+        h2Sessions.clear();
+        upstreamAgent?.destroy();
         server.closeAllConnections?.();
         server.close(() => resolve());
       }),
