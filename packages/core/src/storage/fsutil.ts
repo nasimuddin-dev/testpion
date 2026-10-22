@@ -437,8 +437,19 @@ const textCache = new Map<string, { mtimeMs: number; size: number; text: string 
 const TEXT_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 let textCacheBytes = 0;
 
-function forgetText(path: string): void {
+/** What a parsed document is charged against the text budget, per character of its text (a parsed object is several times its text). */
+const PARSED_COST_FACTOR = 3;
+
+/** Drop a parsed document and give back what it was charged. */
+function forgetParsed(path: string): void {
+  const p = parsedCache.get(path);
+  if (!p) return;
+  textCacheBytes -= p.extra;
   parsedCache.delete(path);
+}
+
+function forgetText(path: string): void {
+  forgetParsed(path);
   const hit = textCache.get(path);
   if (!hit) return;
   textCache.delete(path);
@@ -451,7 +462,7 @@ function forgetText(path: string): void {
  * and every variable hovered; parsing a megabyte each time was most of the cost. Frozen deep, so a caller that needs an
  * object of its own to change says so by reading with `readJson`. An entry lives as long as its text does.
  */
-const parsedCache = new Map<string, { text: string; value: unknown }>();
+const parsedCache = new Map<string, { text: string; value: unknown; extra: number }>();
 
 /** Freeze a value and everything in it (a shared read-only document). */
 export function deepFreeze<T>(v: T): T {
@@ -469,14 +480,18 @@ function cachedText(path: string, mtimeMs: number, size: number): string {
   forgetText(path);
   textCache.set(path, { mtimeMs, size, text });
   textCacheBytes += text.length;
-  // oldest first (insertion order) until it fits again
+  evictTextOver(path);
+  return text;
+}
+
+/** Oldest first (insertion order) until the text and the parsed documents fit the budget again; `keep` stays. */
+function evictTextOver(keep: string): void {
   for (const [k, v] of textCache) {
-    if (textCacheBytes <= TEXT_CACHE_MAX_BYTES || k === path) break;
+    if (textCacheBytes <= TEXT_CACHE_MAX_BYTES || k === keep) break;
     textCache.delete(k);
-    parsedCache.delete(k);
+    forgetParsed(k);
     textCacheBytes -= v.text.length;
   }
-  return text;
 }
 
 export function writeJson(path: string, value: unknown): void {
@@ -548,7 +563,11 @@ export function readJsonShared<T>(path: string): T {
   const hit = parsedCache.get(path);
   if (hit && hit.text === text) return hit.value as T;
   const value = deepFreeze(parseJsonText<T>(path, text));
-  parsedCache.set(path, { text, value });
+  forgetParsed(path);
+  const extra = text.length * PARSED_COST_FACTOR;
+  parsedCache.set(path, { text, value, extra });
+  textCacheBytes += extra; // the parsed document counts too (it was 3-10 times the text, outside the 64 MB)
+  evictTextOver(path);
   return value;
 }
 
