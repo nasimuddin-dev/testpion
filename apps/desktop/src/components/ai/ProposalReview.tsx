@@ -128,6 +128,7 @@ export function ProposalReview({
     <Modal
       title={`Review · ${proposal.title}`}
       onClose={onClose}
+      onSubmit={() => void accept()}
       width={900}
       footer={
         <>
@@ -137,19 +138,19 @@ export function ProposalReview({
             </Button>
           )}
           {onRunNow && (
-            <Button icon={<Play size={13} />} loading={working === 'run'} disabled={!!working} onClick={() => void runNow()} title="Send the request again and check every item against the new response" data-proposal-run-now>
+            <Button icon={<Play size={13} />} loading={working === 'run'} disabled={!!working} reason="Still working" onClick={() => void runNow()} title="Send the request again and check every item against the new response" data-proposal-run-now>
               Run now
             </Button>
           )}
           {hasFlow && (
-            <Button icon={<FlaskConical size={13} />} loading={working === 'mock'} disabled={!!working} onClick={() => void reverify({ verifiers: ['flow-mock'] }, 'mock')} data-proposal-try-mock>
+            <Button icon={<FlaskConical size={13} />} loading={working === 'mock'} disabled={!!working} reason="Still working" onClick={() => void reverify({ verifiers: ['flow-mock'] }, 'mock')} data-proposal-try-mock>
               Try on mock
             </Button>
           )}
           {actions?.(chosen, busy || !!working)}
           <Button onClick={onClose}>Close</Button>
           {applicable.length > 0 && (
-            <Button variant="primary" loading={busy} disabled={!chosen.length} onClick={() => void accept()} data-proposal-accept>
+            <Button variant="primary" loading={busy} disabled={!chosen.length} reason="Tick at least one item" onClick={() => void accept()} data-proposal-accept>
               {acceptLabel} ({chosen.length})
             </Button>
           )}
@@ -238,10 +239,10 @@ export function ProposalReview({
               placeholder="Regenerate with a hint, e.g. include the refund path"
               value={hint}
               onChange={(e) => setHint(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && hint.trim() && onRegenerate(hint.trim())}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), hint.trim() && onRegenerate(hint.trim()))}
               aria-label="Hint for regenerating"
             />
-            <Button icon={<RefreshCw size={13} />} disabled={!hint.trim()} onClick={() => onRegenerate(hint.trim())}>
+            <Button icon={<RefreshCw size={13} />} disabled={!hint.trim()} reason="Write a hint first" onClick={() => onRegenerate(hint.trim())}>
               Regenerate
             </Button>
           </div>

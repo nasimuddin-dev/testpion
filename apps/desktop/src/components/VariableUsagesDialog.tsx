@@ -84,7 +84,7 @@ export function VariableUsagesDialog({ names, initial, onClose, onRenamed }: { n
             <Field label="Rename everywhere to" className="flex-1">
               <Input className="mono" value={renameTo} onChange={(e) => setRenameTo(e.target.value)} placeholder="newName" aria-label="New name" />
             </Field>
-            <Button icon={<PenLine size={13} />} loading={busy} disabled={!/^[\w.-]+$/.test(renameTo.trim()) || renameTo.trim() === name.trim()} onClick={() => void rename()}>
+            <Button icon={<PenLine size={13} />} loading={busy} disabled={!/^[\w.-]+$/.test(renameTo.trim()) || renameTo.trim() === name.trim()} reason="Enter a different name: letters, digits, dots, dashes and underscores" onClick={() => void rename()}>
               Rename
             </Button>
           </div>

@@ -208,7 +208,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
       width={680}
       footer={
         <AiRunFooter busy={!!busy} previewDisabled={!ready} onPreview={() => setPreviewing(asRequest())} onCancel={cancel} onStop={stop}>
-          <AiPrimaryButton disabled={!ready} onClick={() => void generate()} data-flow-generate="">
+          <AiPrimaryButton disabled={!ready} reason="Choose a source with something to generate from first" onClick={() => void generate()} data-flow-generate="">
             Generate
           </AiPrimaryButton>
         </AiRunFooter>

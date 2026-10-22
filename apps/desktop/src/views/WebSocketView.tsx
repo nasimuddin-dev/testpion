@@ -16,7 +16,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { JsonTree } from '../components/JsonView';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, Tabs, VirtualList } from '../components/ui';
+import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, Tabs, VirtualList, IconButton } from '../components/ui';
 import { MessageRate } from '../components/MessageRate';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { useExternalChange } from '../lib/external-change';
@@ -460,7 +460,9 @@ export function WebSocketView() {
                     Save message
                   </Button>
                   {pickedMessage && (
-                    <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} title={`Delete "${pickedMessage}"`} aria-label="Delete saved message" onClick={deleteMessage} />
+                    <IconButton label={`Delete the saved message "${pickedMessage}"`} className="h-7 w-7" onClick={deleteMessage}>
+                      <Trash2 size={12} />
+                    </IconButton>
                   )}
                 </div>
                 {sio && <div className="px-2 pt-1 text-[11px] text-muted">Arguments as JSON; a JSON list sends several arguments.</div>}
@@ -468,7 +470,7 @@ export function WebSocketView() {
                   <CodeEditor language="json" value={d.message} onChange={(message) => setD({ ...d, message })} />
                 </div>
                 <div className="p-2 border-t border-line flex justify-end">
-                  <Button variant="primary" icon={<Send size={13} />} disabled={status !== 'open' || (sio && !d.event?.trim()) || ((mqtt || kafka) && !d.topic?.trim())} onClick={send}>
+                  <Button variant="primary" icon={<Send size={13} />} disabled={status !== 'open' || (sio && !d.event?.trim()) || ((mqtt || kafka) && !d.topic?.trim())} reason={status !== 'open' ? 'Connect first' : sio ? 'Name the event first' : 'Enter a topic first'} onClick={send}>
                     {kafka ? 'Produce' : mqtt ? 'Publish' : sio ? 'Emit' : 'Send'}
                   </Button>
                 </div>
@@ -496,10 +498,10 @@ export function WebSocketView() {
                   <label className="text-xs text-muted flex items-center gap-1.5 shrink-0" title="Read what the topic holds already, then new messages">
                     <input type="checkbox" checked={newRead.fromBeginning} onChange={(e) => setNewRead({ ...newRead, fromBeginning: e.target.checked })} /> From the beginning
                   </label>
-                  <Button size="sm" icon={<Plus size={12} />} disabled={!newRead.topic.trim()} onClick={() => void addRead()}>
+                  <Button size="sm" icon={<Plus size={12} />} disabled={!newRead.topic.trim()} reason="Enter a topic first" onClick={() => void addRead()}>
                     {status === 'open' ? 'Read' : 'Add'}
                   </Button>
-                  <Button size="sm" variant="ghost" icon={<ListTree size={12} />} disabled={status !== 'open'} title="The topics of the cluster, to pick from" onClick={listClusterTopics}>
+                  <Button size="sm" variant="ghost" icon={<ListTree size={12} />} disabled={status !== 'open'} reason="Connect first" title="The topics of the cluster, to pick from" onClick={listClusterTopics}>
                     Topics
                   </Button>
                 </div>
@@ -509,7 +511,9 @@ export function WebSocketView() {
                       <div key={r.topic} className="flex items-center gap-2 px-2 h-8 border-b border-line/50 text-sm" data-kafka-read={r.topic}>
                         <span className="mono text-xs truncate flex-1">{r.topic}</span>
                         <Badge>{r.fromBeginning ? 'from the beginning' : 'new messages'}</Badge>
-                        <Button size="sm" variant="ghost" icon={<X size={12} />} aria-label={`Stop reading ${r.topic}`} title={status === 'open' ? 'Stop reading and remove' : 'Remove'} onClick={() => removeRead(r.topic)} />
+                        <IconButton label={status === 'open' ? `Stop reading ${r.topic} and remove it` : `Remove ${r.topic}`} className="h-7 w-7" onClick={() => removeRead(r.topic)}>
+                          <X size={12} />
+                        </IconButton>
                       </div>
                     ))
                   ) : (
@@ -539,7 +543,7 @@ export function WebSocketView() {
                     <option value="1">QoS 1</option>
                     <option value="2">QoS 2</option>
                   </Select>
-                  <Button size="sm" icon={<Plus size={12} />} disabled={!newSub.topic.trim()} onClick={() => void addSubscription()}>
+                  <Button size="sm" icon={<Plus size={12} />} disabled={!newSub.topic.trim()} reason="Enter a topic first" onClick={() => void addSubscription()}>
                     {status === 'open' ? 'Subscribe' : 'Add'}
                   </Button>
                 </div>
@@ -549,7 +553,9 @@ export function WebSocketView() {
                       <div key={s.topic} className="flex items-center gap-2 px-2 h-8 border-b border-line/50 text-sm">
                         <span className="mono text-xs truncate flex-1">{s.topic}</span>
                         <Badge>QoS {s.qos}</Badge>
-                        <Button size="sm" variant="ghost" icon={<X size={12} />} aria-label={`Remove ${s.topic}`} title={status === 'open' ? 'Unsubscribe and remove' : 'Remove'} onClick={() => removeSubscription(s.topic)} />
+                        <IconButton label={status === 'open' ? `Unsubscribe from ${s.topic} and remove it` : `Remove ${s.topic}`} className="h-7 w-7" onClick={() => removeSubscription(s.topic)}>
+                          <X size={12} />
+                        </IconButton>
                       </div>
                     ))
                   ) : (

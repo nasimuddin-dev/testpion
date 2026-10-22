@@ -9,7 +9,7 @@ import { useApp, type AssistantRequest, toastError } from '../store';
 import { Markdown } from './Markdown';
 import { AiGeneratedNotice, ErrorPanel } from './Results';
 import { Badge, Button, cx, IconButton, Input, Spinner } from './ui';
-import { copyText } from '../lib/clipboard';
+import { copyQuietly, copyText } from '../lib/clipboard';
 import { aiSetupAction } from '../lib/ai-errors';
 import { offerUndo } from '../lib/undo';
 import { AiPreviewDialog, taskParams, type AiPrivacy } from './ai/AiPreviewDialog';
@@ -156,7 +156,7 @@ export function AssistantPanel() {
         <IconButton label="What will be sent…" className="ml-auto" onClick={() => setPreviewing(true)} data-ai-preview-open>
           <Eye size={14} />
         </IconButton>
-        <IconButton label="New conversation" onClick={restart} disabled={!turns.length && !error}>
+        <IconButton label="New conversation" onClick={restart} disabled={!turns.length && !error} reason="The conversation is empty already">
           <RotateCcw size={14} />
         </IconButton>
         <IconButton label="Close assistant" onClick={() => (stop(), set({ assistant: undefined }))}>
@@ -283,7 +283,7 @@ export function AssistantPanel() {
               Stop
             </Button>
           ) : (
-            <Button variant="primary" onClick={() => void ask(question)} disabled={!question.trim() && (!!turns.length || free)}>
+            <Button variant="primary" onClick={() => void ask(question)} disabled={!question.trim() && (!!turns.length || free)} reason="Type a question first">
               Ask
             </Button>
           )}
@@ -388,9 +388,12 @@ const Answer = memo(function Answer({
       b.setAttribute('aria-label', 'Copy this code');
       b.className = 'absolute top-1 right-1 text-xs rounded px-1.5 py-0.5 bg-panel border border-line text-muted hover:text-fg';
       b.onclick = () => {
-        void navigator.clipboard.writeText(pre.querySelector('code')?.textContent ?? pre.textContent ?? '');
-        b.textContent = 'Copied';
-        setTimeout(() => (b.textContent = 'Copy'), 1200);
+        // "Copied" only when the clipboard took it (a refusal is reported)
+        void copyQuietly(pre.querySelector('code')?.textContent ?? pre.textContent ?? '').then((ok) => {
+          if (!ok) return;
+          b.textContent = 'Copied';
+          setTimeout(() => (b.textContent = 'Copy'), 1200);
+        });
       };
       pre.classList.add('relative');
       pre.appendChild(b);

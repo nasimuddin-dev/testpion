@@ -406,7 +406,7 @@ export function DebuggerView() {
       ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
       : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void startThen(() => systemProxy(true)) },
     ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => void copyText(s.lines, `the lines for ${s.shell}`)) })),
-    { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, onSelect: () => void changePort() },
+    { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, reason: 'Stop the proxy first', onSelect: () => void changePort() },
   ];
   // the session shown (the live capture, or the saved one open): the backend builds it from debug.har, secrets masked by default
   const outputSpec: OutputSpec = {
@@ -421,7 +421,7 @@ export function DebuggerView() {
     empty: rows.length ? undefined : 'No exchanges captured',
   };
   const sessionItems: MenuItem[] = [
-    { label: 'Save session…', icon: <Save size={14} />, disabled: !rows.length, onSelect: () => void saveSession() },
+    { label: 'Save session…', icon: <Save size={14} />, disabled: !rows.length, reason: 'Nothing captured yet', onSelect: () => void saveSession() },
     ...sessions.map<MenuItem>((s) => ({
       label: `Open ${s.name}${s.autosave ? ' (AutoSave)' : ''} · ${new Date(s.savedAt).toLocaleString()}`,
       icon: <FolderOpen size={14} />,
@@ -433,13 +433,14 @@ export function DebuggerView() {
       .map<MenuItem>((s) => ({ label: `Share ${s.name} with the team…`, icon: <Users size={14} />, title: 'Put a masked copy of this session in debugger/shared/, which git tracks', onSelect: () => void shareDebuggerSession(s.name) })),
     { label: 'Import a HAR file…', icon: <Upload size={14} />, onSelect: () => void importHar() },
     { label: 'Import a Fiddler session (.saz)…', icon: <Upload size={14} />, onSelect: () => void importSaz() },
-    { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, onSelect: () => void saveOutput(outputSpec, defaultFormat(outputSpec)) },
-    { label: 'Clear the session', icon: <Trash2 size={14} />, danger: true, disabled: !status?.exchanges, shortcut: 'Ctrl+E', onSelect: () => void clear() },
+    { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, reason: 'Nothing captured yet', onSelect: () => void saveOutput(outputSpec, defaultFormat(outputSpec)) },
+    { label: 'Clear the session', icon: <Trash2 size={14} />, danger: true, disabled: !status?.exchanges, reason: 'Nothing captured yet', shortcut: 'Ctrl+E', onSelect: () => void clear() },
   ];
 
   return (
     <div className="h-full flex flex-col min-h-0">
       <PageHeader
+        help="api-testing/http-debugger"
         icon={<Bug size={18} />}
         title="HTTP Debugger"
         subtitle={
@@ -481,9 +482,9 @@ export function DebuggerView() {
               <Menu
                 width={300}
                 items={[
-                  { label: 'Create flow from selection…', icon: <Workflow size={14} />, disabled: !selection().length, onSelect: () => createFlowFrom(selection()) },
-                  { label: 'Save selection to collection…', icon: <FolderPlus size={14} />, disabled: !selection().length, onSelect: () => saveToCollection(selection()) },
-                  { label: 'Create RAG dataset from selection…', icon: <Database size={14} />, disabled: !selection().length, onSelect: () => createDataset(selection()) },
+                  { label: 'Create flow from selection…', icon: <Workflow size={14} />, disabled: !selection().length, reason: 'Select exchanges first', onSelect: () => createFlowFrom(selection()) },
+                  { label: 'Save selection to collection…', icon: <FolderPlus size={14} />, disabled: !selection().length, reason: 'Select exchanges first', onSelect: () => saveToCollection(selection()) },
+                  { label: 'Create RAG dataset from selection…', icon: <Database size={14} />, disabled: !selection().length, reason: 'Select exchanges first', onSelect: () => createDataset(selection()) },
                   { label: 'Record a flow…', icon: <Circle size={14} />, onSelect: () => void startRecording() },
                 ]}
                 trigger={

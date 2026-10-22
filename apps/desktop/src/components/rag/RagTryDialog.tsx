@@ -140,11 +140,12 @@ export function RagTryDialog({
           </span>
         }
         onClose={onClose}
+        onSubmit={() => void run()}
         width={900}
         footer={
           <>
             <Button onClick={onClose}>Close</Button>
-            <Button variant="primary" icon={busy === 'run' ? <Spinner /> : <Play size={13} />} disabled={busy !== undefined || !effective.answer} onClick={() => void run()} data-rag-try-run>
+            <Button variant="primary" icon={busy === 'run' ? <Spinner /> : <Play size={13} />} disabled={busy !== undefined || !effective.answer} reason={busy !== undefined ? 'Still working' : 'Ask the question first, or fill in an answer'} onClick={() => void run()} data-rag-try-run>
               {judged ? 'Run (asks the judge)' : 'Run'}
             </Button>
           </>
@@ -178,8 +179,8 @@ export function RagTryDialog({
           {source === 'probe' ? (
             <div className="grid gap-2">
               <div className="flex gap-2">
-                <Input className="flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="A question for your RAG system" aria-label="Question to ask" data-rag-try-question onKeyDown={(e) => e.key === 'Enter' && void probe()} />
-                <Button icon={busy === 'probe' ? <Spinner /> : undefined} disabled={!target || !q.trim() || busy !== undefined} onClick={() => void probe()} data-rag-try-probe>
+                <Input className="flex-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="A question for your RAG system" aria-label="Question to ask" data-rag-try-question onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void probe())} />
+                <Button icon={busy === 'probe' ? <Spinner /> : undefined} disabled={!target || !q.trim() || busy !== undefined} reason={busy !== undefined ? 'Still working' : !target ? 'Choose a RAG target first' : 'Write a question first'} onClick={() => void probe()} data-rag-try-probe>
                   Ask
                 </Button>
               </div>

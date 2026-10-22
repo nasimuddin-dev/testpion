@@ -140,7 +140,7 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
               {result.report.operations.some((o) => !o.covered || o.untestedStatuses.length) && <AiAction label="Suggest tests with AI" request={suggest} onStart={onClose} preview={false} />}
             </>
           )}
-          <Button variant="primary" icon={<ScanSearch size={13} />} loading={busy} disabled={!ready} onClick={() => void analyse()}>
+          <Button variant="primary" icon={<ScanSearch size={13} />} loading={busy} disabled={!ready} reason="Choose an API definition and what to compare it with (a run or the history)" onClick={() => void analyse()}>
             Analyse
           </Button>
         </>

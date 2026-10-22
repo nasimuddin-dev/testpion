@@ -159,6 +159,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
         </span>
       }
       onClose={onClose}
+      onSubmit={() => void resolve()}
       width={1080}
       footer={
         <>
@@ -166,7 +167,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
             {detail?.mode === 'binary' ? 'A database or an image cannot be merged: one side is taken whole.' : `Every change that did not conflict, from both sides, stays. Your choices: ${counts.ours} mine · ${counts.theirs} theirs${counts.edited ? ` · ${counts.edited} edited` : ''}${picked.size ? '' : ' (nothing chosen yet: it starts with mine)'}.`}
           </span>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={<Check size={13} />} loading={busy} disabled={!detail} onClick={() => void resolve()}>
+          <Button variant="primary" icon={<Check size={13} />} loading={busy} disabled={!detail} reason="Still reading the conflict" onClick={() => void resolve()}>
             Resolve with these choices
           </Button>
         </>

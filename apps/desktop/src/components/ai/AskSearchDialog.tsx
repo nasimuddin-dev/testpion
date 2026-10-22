@@ -177,7 +177,7 @@ function QueryChips({
             </option>
           ))}
         </Select>
-        <Button size="sm" variant="primary" icon={<Search size={12} />} disabled={!sources.length} data-ask-run onClick={onSearch} className="ml-auto">
+        <Button size="sm" variant="primary" icon={<Search size={12} />} disabled={!sources.length} reason="Tick what to search in" data-ask-run onClick={onSearch} className="ml-auto">
           Search
         </Button>
       </div>
@@ -339,7 +339,7 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
               Stop
             </Button>
           ) : (
-            <Button type="submit" variant="primary" icon={<Sparkles size={13} />} disabled={!question.trim() || !!busy} data-ask-submit>
+            <Button type="submit" variant="primary" icon={<Sparkles size={13} />} disabled={!question.trim() || !!busy} reason="Ask a question first" data-ask-submit>
               Ask
             </Button>
           )}
@@ -433,7 +433,7 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
             )}
             {answer.mode !== 'text' && (
               <div>
-                <Button size="sm" variant="ghost" icon={null} onClick={() => void ask(true)} disabled={!!busy} title="Do not use the model: look for the words as typed">
+                <Button size="sm" variant="ghost" icon={null} onClick={() => void ask(true)} disabled={!!busy} reason="Still searching" title="Do not use the model: look for the words as typed">
                   Search the words only
                 </Button>
               </div>

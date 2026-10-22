@@ -230,6 +230,7 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
       <Modal
         title={initial ? `Metric · ${id}` : 'New custom metric'}
         onClose={() => void close()}
+        onSubmit={() => void save()}
         width={900}
         footer={
           <>
@@ -239,12 +240,12 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
               </Button>
             )}
             {exists && (
-              <Button icon={<Copy size={13} />} disabled={text === undefined || errors.length > 0} onClick={() => void saveAs()} title="Save the file as a copy under another id; this one stays" data-rag-metric-saveas>
+              <Button icon={<Copy size={13} />} disabled={text === undefined || errors.length > 0} reason={errors.length ? 'Fix the errors first' : 'Nothing to copy yet'} onClick={() => void saveAs()} title="Save the file as a copy under another id; this one stays" data-rag-metric-saveas>
                 Save as…
               </Button>
             )}
             <Button onClick={() => void close()}>{dirty ? 'Discard' : 'Close'}</Button>
-            <Button variant="primary" disabled={!validId || text === undefined || errors.length > 0 || !dirty} onClick={() => void save()} data-rag-metric-save>
+            <Button variant="primary" disabled={!validId || text === undefined || errors.length > 0 || !dirty} reason={!validId ? 'The id needs letters, digits and dashes only' : errors.length ? 'Fix the errors first' : 'Nothing changed yet'} onClick={() => void save()} data-rag-metric-save>
               Save
             </Button>
           </>
@@ -295,13 +296,13 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
             </ul>
           )}
           <div className="flex items-center gap-2 flex-wrap">
-            <Button size="sm" icon={running ? <Spinner /> : <Play size={12} />} disabled={!validId || errors.length > 0 || text === undefined || running} onClick={() => void runExamples()} data-rag-metric-examples>
+            <Button size="sm" icon={running ? <Spinner /> : <Play size={12} />} disabled={!validId || errors.length > 0 || text === undefined || running} reason={running ? 'Still running' : !validId ? 'The id needs letters, digits and dashes only' : 'Fix the errors first'} onClick={() => void runExamples()} data-rag-metric-examples>
               Run examples
             </Button>
             <span className="text-xs text-muted" role="status" aria-live="polite" data-rag-metric-cost>
               {judged ? `About ${plural(exampleCount || 1, 'judge call')}${fileKind === 'checklist' || fileKind === 'dag' ? ' or more' : ''}: spends tokens` : 'Runs on this computer: free'}
             </span>
-            <Button size="sm" icon={<FlaskConical size={12} />} disabled={!exists || dirty} onClick={() => setTrying(true)} title={exists && !dirty ? 'Try the saved metric on one sample' : 'Save the metric to try it on a sample'} data-rag-metric-try>
+            <Button size="sm" icon={<FlaskConical size={12} />} disabled={!exists || dirty} reason="Save the metric first" onClick={() => setTrying(true)} title={exists && !dirty ? 'Try the saved metric on one sample' : 'Save the metric to try it on a sample'} data-rag-metric-try>
               Try on a sample
             </Button>
             {results && (

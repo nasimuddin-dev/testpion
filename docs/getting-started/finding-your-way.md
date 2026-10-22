@@ -209,6 +209,8 @@ Deletes that can't be taken back still ask first: **Delete for good** in Recentl
 - **The bottom panel**: **Console**, **Logs**, **Terminal** (a shell in the workspace folder, see [Terminal](/getting-started/terminal)) and **Problems**.
 - **The status bar**: the Problems count, **Terminal**, the environment and **Tools**.
 - **The right edge**: **Info** and the **Assistant** (see [The Info panel](#the-info-panel)).
+- **Help**: the **?** at the right end of the top bar opens the docs page of the view on screen; a page header (a monitor, a load test, the Git view, the HTTP Debugger) and a dialog with a page of their own have the same **?** beside their actions or their Close.
+- **Dialogs** open with the cursor in their first field (never on Close). <kbd>Enter</kbd> in a single-line field is the dialog's main button (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> in a multi-line one); it does nothing while that button is disabled, and a disabled button's tooltip says why (so does a greyed menu item).
 - **A production frame**: while an environment marked as production is active, a thin frame in its colour runs around the window, and every send or run that changes data asks first (see [Production](/api-testing/environments#production)).
 
 The rail, the density and your [keys](/getting-started/keyboard-shortcuts#change-the-keys) are this computer's preferences, kept in the app's `settings.json` (`rail`, `density`, `keybindings`). A value there of the wrong shape (a hand edit, a file from another version) never stops the app: it starts with the default for that one.
@@ -216,6 +218,10 @@ The rail, the density and your [keys](/getting-started/keyboard-shortcuts#change
 <figure class="aps-screenshot">
   <img src="/images/density-compact.jpg" alt="The request editor in compact density: List patients with its response as a JSON tree, smaller spacing, fields and rows than the comfortable default" width="1440" height="900" loading="lazy">
 </figure>
+
+## Settings {#settings}
+
+**Settings** (<kbd>Ctrl</kbd>+<kbd>,</kbd>, the gear in the top bar) has a tab per subject: Appearance, Keyboard, Requests, Git, Proxy, Certificates, Privacy & security, Model pricing, Load testing, Storage, AI assistant, AI agents (MCP) and About. **Save settings** (<kbd>Ctrl</kbd>+<kbd>S</kbd>) writes what you changed on any tab and is enabled only once something changed; leaving the view with unsaved changes asks first, like closing an edited request tab. Keyboard, Storage and AI agents save on their own. Every number field says its default and what it does: the default timeout (30000 ms unless changed; 0 waits forever) and the maximum virtual users of a load test (200 unless changed; a guard against a typo overloading this computer or the API).
 
 ## Choose what the rail shows {#choose-what-the-rail-shows}
 

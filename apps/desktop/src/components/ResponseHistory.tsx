@@ -149,7 +149,7 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
           ))}
         </div>
         <div className="p-2 border-t border-line shrink-0">
-          <Button size="sm" variant="primary" className="w-full" icon={<GitCompareArrows size={13} />} disabled={picked.length !== 2} loading={busy && picked.length === 2}
+          <Button size="sm" variant="primary" className="w-full" icon={<GitCompareArrows size={13} />} disabled={picked.length !== 2} reason="Tick two responses to compare" loading={busy && picked.length === 2}
             onClick={() => { const [a, b] = sorted(picked); void compare(a!, b!); }}>
             Compare selected
           </Button>

@@ -337,7 +337,7 @@ export function EvaluationsView() {
             <Button className="shrink-0" icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this evaluation to run it again later'} onClick={() => void saveEval()}>
               {current && dirty ? 'Save*' : 'Save'}
             </Button>
-            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || (!ragTarget && !d.provider)} data-eval-run>
+            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || (!ragTarget && !d.provider)} reason={!count ? 'The dataset has no cases' : 'Choose a provider or a RAG target first'} data-eval-run>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
             </Button>
           </div>
@@ -608,7 +608,7 @@ export function EvaluationsView() {
               <Empty
                 icon={<FlaskConical size={28} />}
                 title="Run an evaluation"
-                actions={[{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run, disabled: !count }]}
+                actions={[{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run, disabled: !count, title: 'The dataset has no cases' }]}
               >
                 An evaluation runs every record of the dataset through the prompt and the model, and scores each answer with the evaluators. Records stream with bounded concurrency, retries and rate limiting; the results are kept on disk and can be compared with a baseline.
               </Empty>

@@ -389,7 +389,7 @@ export function CollectionPicker({ onPick, onClose }: { onPick(collection: strin
         ? [
             <div key={n.id} className="flex items-center gap-2 py-1 border-b border-line/50" style={{ paddingLeft: depth * 14 }}>
               <span className="font-medium truncate flex-1">{n.name}</span>
-              <Button size="sm" onClick={() => onPick(col!.id, n.id)} disabled={!count(n.items)} data-pick-folder={n.name}>
+              <Button size="sm" onClick={() => onPick(col!.id, n.id)} disabled={!count(n.items)} reason="This folder has no requests" data-pick-folder={n.name}>
                 Add {count(n.items)} chained
               </Button>
             </div>,

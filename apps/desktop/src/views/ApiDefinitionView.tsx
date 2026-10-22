@@ -188,7 +188,7 @@ export function ApiDefinitionView() {
             </Button>
           </>
         )}
-        <Button className={isAsync || !aiOn ? 'ml-auto' : undefined} icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
+        <Button className={isAsync || !aiOn ? 'ml-auto' : undefined} icon={<Save size={14} />} disabled={!dirty} reason="Nothing changed yet" onClick={() => void save()} title="Save (Ctrl+S)">
           Save
         </Button>
       </div>

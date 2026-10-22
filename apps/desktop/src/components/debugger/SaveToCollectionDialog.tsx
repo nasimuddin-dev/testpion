@@ -66,6 +66,7 @@ export function SaveToCollectionDialog({ ids, since, onClose }: { ids?: string[]
     <Modal
       title="Save to collection"
       onClose={onClose}
+      onSubmit={() => void save()}
       width={520}
       footer={
         <>

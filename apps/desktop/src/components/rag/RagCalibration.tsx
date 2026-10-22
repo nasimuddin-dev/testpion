@@ -160,7 +160,7 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
                   <Badge tone={d.human === 'pass' ? 'ok' : 'bad'}>you {d.human}</Badge>
                   {d.score !== undefined && <span className="text-muted">score {d.score}</span>}
                   {custom && (
-                    <Button size="sm" className="ml-auto" disabled={made.includes(d.resultId)} onClick={() => void makeExample(d.resultId, d.human)} title={`Adds this sample to the examples of the metric file, so the metric must say “${d.human}” for it from now on`} data-rag-make-example={d.resultId}>
+                    <Button size="sm" className="ml-auto" disabled={made.includes(d.resultId)} reason="Added as an example already" onClick={() => void makeExample(d.resultId, d.human)} title={`Adds this sample to the examples of the metric file, so the metric must say “${d.human}” for it from now on`} data-rag-make-example={d.resultId}>
                       {made.includes(d.resultId) ? 'Example added' : 'Make an example of this'}
                     </Button>
                   )}

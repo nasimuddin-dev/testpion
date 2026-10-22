@@ -22,7 +22,7 @@ import { viewContent } from '../lib/files';
 import { runOutputSpec } from './output/run-specs';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea, IconButton } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -348,10 +348,18 @@ function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string;
       .then((review) => onReviewed({ ...r, review: review ?? undefined }))
       .catch((e) => toastError(e));
   const rate = (rating: 'good' | 'bad') => void save({ rating: r.review?.rating === rating ? null : rating });
+  const saveNote = () => {
+    setNoteOpen(false);
+    void save({ note: note.trim() || null });
+  };
   return (
     <div className="flex items-center gap-0.5 shrink-0">
-      <Button size="sm" variant="ghost" aria-pressed={r.review?.rating === 'good'} title="Good result (press again to clear)" className={cx(r.review?.rating === 'good' && 'text-ok bg-ok/10')} icon={<ThumbsUp size={13} />} onClick={() => rate('good')} />
-      <Button size="sm" variant="ghost" aria-pressed={r.review?.rating === 'bad'} title="Bad result (press again to clear)" className={cx(r.review?.rating === 'bad' && 'text-bad bg-bad/10')} icon={<ThumbsDown size={13} />} onClick={() => rate('bad')} />
+      <IconButton label="Good result (press again to clear)" className={cx('h-7 w-7', r.review?.rating === 'good' && 'text-ok bg-ok/10')} aria-pressed={r.review?.rating === 'good'} onClick={() => rate('good')}>
+        <ThumbsUp size={13} />
+      </IconButton>
+      <IconButton label="Bad result (press again to clear)" className={cx('h-7 w-7', r.review?.rating === 'bad' && 'text-bad bg-bad/10')} aria-pressed={r.review?.rating === 'bad'} onClick={() => rate('bad')}>
+        <ThumbsDown size={13} />
+      </IconButton>
       <Button size="sm" variant="ghost" title="Add a note: why it is good or bad" onClick={() => setNoteOpen(true)}>
         Note
       </Button>
@@ -359,17 +367,12 @@ function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string;
         <Modal
           title={`Review: ${r.name}`}
           onClose={() => setNoteOpen(false)}
+          onSubmit={saveNote}
           width={480}
           footer={
             <>
               <Button onClick={() => setNoteOpen(false)}>Cancel</Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setNoteOpen(false);
-                  void save({ note: note.trim() || null });
-                }}
-              >
+              <Button variant="primary" onClick={saveNote}>
                 Save note
               </Button>
             </>
@@ -524,7 +527,7 @@ function BaselineModal({ runId, onClose }: { runId: string; onClose(): void }) {
           <Field label="Save this run as baseline" className="flex-1">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. main-2026-09" />
           </Field>
-          <Button disabled={!name} onClick={() => void call('baselines.save', { runId, name }).then(() => (useApp.getState().toast('Baseline saved', 'success'), void load()), toastError)}>
+          <Button disabled={!name} reason="Give the baseline a name first" onClick={() => void call('baselines.save', { runId, name }).then(() => (useApp.getState().toast('Baseline saved', 'success'), void load()), toastError)}>
             Save baseline
           </Button>
         </div>
@@ -560,7 +563,7 @@ function BaselineModal({ runId, onClose }: { runId: string; onClose(): void }) {
           <Field label="Score drop">
             <Input className="w-20" type="number" step="0.01" value={th.scoreDrop} onChange={(e) => setTh({ ...th, scoreDrop: Number(e.target.value) })} />
           </Field>
-          <Button variant="primary" disabled={!compareWith} onClick={() => call<RegressionReport>('baselines.compare', compareWith.startsWith('run:') ? { runId, withRun: compareWith.slice(4), thresholds: th } : { runId, name: compareWith, thresholds: th }).then(setReport)}>
+          <Button variant="primary" disabled={!compareWith} reason="Choose what to compare with first" onClick={() => call<RegressionReport>('baselines.compare', compareWith.startsWith('run:') ? { runId, withRun: compareWith.slice(4), thresholds: th } : { runId, name: compareWith, thresholds: th }).then(setReport)}>
             Compare
           </Button>
         </div>

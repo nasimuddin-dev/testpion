@@ -43,11 +43,12 @@ export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onCl
       <Modal
         title="Before this run"
         onClose={onClose}
+        onSubmit={() => !blocked && onRun(freeFirst)}
         width={760}
         footer={
           <>
             {hasTarget && firstJudged && (
-              <Button className="mr-auto" icon={busy ? <Spinner /> : <Eye size={13} />} onClick={() => void show()} disabled={busy} title="Asks your RAG system one question, then shows the exact prompt the judge would receive (nothing is sent to the judge)" data-rag-estimate-show>
+              <Button className="mr-auto" icon={busy ? <Spinner /> : <Eye size={13} />} onClick={() => void show()} disabled={busy} reason="Still asking your RAG system" title="Asks your RAG system one question, then shows the exact prompt the judge would receive (nothing is sent to the judge)" data-rag-estimate-show>
                 What the judge receives
               </Button>
             )}
@@ -57,7 +58,7 @@ export function RagEstimateDialog({ draft, firstQuestion, hasTarget, onRun, onCl
                 Set up AI
               </Button>
             ) : (
-              <Button variant="primary" icon={<Play size={13} />} disabled={!estimate} onClick={() => onRun(freeFirst)} data-rag-estimate-run>
+              <Button variant="primary" icon={<Play size={13} />} disabled={!estimate} reason="Still estimating the cost" onClick={() => onRun(freeFirst)} data-rag-estimate-run>
                 {over ? 'Run anyway (the rest becomes n/a)' : 'Run'}
               </Button>
             )}

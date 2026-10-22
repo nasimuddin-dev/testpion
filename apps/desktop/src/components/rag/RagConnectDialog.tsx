@@ -219,15 +219,16 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
       <Modal
         title={existing ? `RAG target · ${existing.name}` : 'Connect a RAG system'}
         onClose={onClose}
+        onSubmit={() => void save()}
         width={1040}
         footer={
           <>
-            <Button icon={<Eye size={13} />} disabled={!sample?.answer} onClick={() => setJudgePreview(true)} title="The exact prompt a judged metric (faithfulness) would send for this sample, before anything is sent" className="mr-auto">
+            <Button icon={<Eye size={13} />} disabled={!sample?.answer} reason="Probe first: it needs a sample answer" onClick={() => setJudgePreview(true)} title="The exact prompt a judged metric (faithfulness) would send for this sample, before anything is sent" className="mr-auto">
               What the judge receives
             </Button>
             <FooterHint>{problems[0]}</FooterHint>
             <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" icon={<Save size={13} />} disabled={problems.length > 0} onClick={() => void save()} data-rag-save>
+            <Button variant="primary" icon={<Save size={13} />} disabled={problems.length > 0} reason={problems[0]} onClick={() => void save()} data-rag-save>
               Save target
             </Button>
           </>
@@ -298,8 +299,8 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                 </div>
               </details>
               <div className="flex items-center gap-2">
-                <Input className="flex-1" value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="Probe question" data-rag-question onKeyDown={(e) => e.key === 'Enter' && void doProbe()} />
-                <Button variant="primary" icon={busy ? <Spinner /> : <Play size={13} />} disabled={!target || busy || !question.trim()} onClick={() => void doProbe()} data-rag-probe>
+                <Input className="flex-1" value={question} onChange={(e) => setQuestion(e.target.value)} aria-label="Probe question" data-rag-question onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void doProbe())} />
+                <Button variant="primary" icon={busy ? <Spinner /> : <Play size={13} />} disabled={!target || busy || !question.trim()} reason={busy ? 'Still asking' : !target ? 'Fill in the target first' : 'Write a question first'} onClick={() => void doProbe()} data-rag-probe>
                   Probe
                 </Button>
               </div>

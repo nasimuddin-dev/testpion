@@ -6,7 +6,7 @@ import { plural } from '../lib/format';
 import { Badge, Button, Empty, Field, Input, Modal, VirtualList, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
 import { usePersisted } from '../lib/sticky';
-import { copyText } from '../lib/clipboard';
+import { copyQuietly, copyText } from '../lib/clipboard';
 
 interface Exchange {
   id: string;
@@ -39,8 +39,8 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
       const r = await call<{ url: string; target: string }>('record.start', { target: target.trim(), port: port ? Number(port) : undefined });
       setRunning(r);
       setItems([]);
-      await navigator.clipboard.writeText(r.url).catch(() => undefined);
-      useApp.getState().toast(`Recording. Point your client at ${r.url} (copied)`, 'success');
+      const copied = await copyQuietly(r.url);
+      useApp.getState().toast(`Recording. Point your client at ${r.url}${copied ? ' (copied)' : ''}`, 'success');
     } catch (e) {
       toastError(e);
     } finally {
@@ -91,7 +91,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
             <Field label="Local port" className="w-28">
               <Input type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="any" aria-label="Local port" />
             </Field>
-            <Button variant="primary" icon={<Circle size={12} />} loading={busy} disabled={!/^https?:\/\/.+/.test(target.trim())} onClick={() => void start()}>
+            <Button variant="primary" icon={<Circle size={12} />} loading={busy} disabled={!/^https?:\/\/.+/.test(target.trim())} reason="Enter the API base URL, starting with http:// or https://" onClick={() => void start()}>
               Start recording
             </Button>
           </div>
@@ -131,7 +131,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
           <Field label="Save as collection" className="flex-1">
             <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="Collection name" />
           </Field>
-          <Button icon={<FolderPlus size={13} />} disabled={!items.length} onClick={() => void save()}>
+          <Button icon={<FolderPlus size={13} />} disabled={!items.length} reason="Nothing recorded yet" onClick={() => void save()}>
             Save
           </Button>
         </div>

@@ -54,6 +54,7 @@ export function ExportDialogBody({ collections, initial, onClose }: { collection
     <Modal
       title="Export"
       onClose={onClose}
+      onSubmit={() => void run()}
       width={520}
       footer={
         <>

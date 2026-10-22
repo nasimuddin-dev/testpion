@@ -98,11 +98,11 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
     return [
       ...(t.preview && onKeep ? [{ label: LABEL.keepOpen, icon: <Pin size={13} />, shortcut: 'Double-click', onSelect: () => onKeep(t) }] : []),
       ...(extraItems?.(t) ?? []),
-      { label: LABEL.rename, icon: <Pencil size={13} />, shortcut: 'F2', disabled: !t.rename || !onRename, onSelect: () => startRename(t) },
-      { label: LABEL.closeTab, icon: <X size={13} />, separator: true, shortcut: 'Middle-click', disabled: !closable(t), onSelect: () => close([t]) },
-      { label: LABEL.closeOtherTabs, icon: <SquareX size={13} />, disabled: !others.length, onSelect: () => close(others) },
-      { label: LABEL.closeTabsToRight, icon: <ArrowRightToLine size={13} />, disabled: !right.length, onSelect: () => close(right) },
-      { label: LABEL.closeAllTabs, icon: <ListX size={13} />, disabled: !all.length, onSelect: () => close(all) },
+      { label: LABEL.rename, icon: <Pencil size={13} />, shortcut: 'F2', disabled: !t.rename || !onRename, reason: 'This tab cannot be renamed', onSelect: () => startRename(t) },
+      { label: LABEL.closeTab, icon: <X size={13} />, separator: true, shortcut: 'Middle-click', disabled: !closable(t), reason: t.pinned ? 'Unpin the tab first' : 'This tab stays open', onSelect: () => close([t]) },
+      { label: LABEL.closeOtherTabs, icon: <SquareX size={13} />, disabled: !others.length, reason: 'No other tabs', onSelect: () => close(others) },
+      { label: LABEL.closeTabsToRight, icon: <ArrowRightToLine size={13} />, disabled: !right.length, reason: 'No tabs to the right', onSelect: () => close(right) },
+      { label: LABEL.closeAllTabs, icon: <ListX size={13} />, disabled: !all.length, reason: 'No tabs to close', onSelect: () => close(all) },
       // the same in every strip: the tab closed last in this workspace (a request, a monitor …), whichever strip it was in
       {
         label: LABEL.reopenClosedTab,

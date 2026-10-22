@@ -91,7 +91,7 @@ function rows(views: string[]): Array<{ title: string; rows: Row[] }> {
       title: 'Requests and tabs',
       rows: [
         { fixed: ['Mod+Enter'], text: 'Send the request (also runs AI prompts and gRPC calls)' },
-        { fixed: ['Mod+S'], text: 'Save' },
+        { fixed: ['Mod+S'], text: 'Save (a request, a test file, the settings …)' },
         { fixed: ['Mod+T'], text: 'New request tab' },
         { fixed: ['Mod+W'], text: 'Close the tab' },
         { fixed: ['Mod+Shift+W'], text: 'Close all tabs' },
@@ -124,10 +124,40 @@ function rows(views: string[]): Array<{ title: string; rows: Row[] }> {
       ],
     },
     {
+      title: 'Flow designer',
+      rows: [
+        { fixed: ['Shift+click', 'Shift+drag'], text: 'Add a step to the selection / select with a box' },
+        { fixed: ['Mod+A', 'Esc'], text: 'Select everything / nothing' },
+        { fixed: ['Delete'], text: 'Remove the selected steps, notes or connection' },
+        { fixed: ['Mod+D'], text: 'Duplicate the selected steps' },
+        { fixed: ['Mod+C', 'Mod+V'], text: 'Copy steps, to this or another flow' },
+        { fixed: ['Mod+Z', 'Mod+Y', 'Mod+Shift+Z'], text: 'Undo / redo any canvas change (redo has two keys)' },
+        { fixed: ['Enter'], text: 'Open the selected step in the editor' },
+        { fixed: ['Mod+F'], text: 'Find a step (Enter / Shift+Enter: next / previous match)' },
+        { fixed: ['Space+drag'], text: 'Pan (as does a plain drag on the empty canvas); the wheel zooms' },
+        { fixed: ['F9'], text: 'Add or remove a breakpoint on the selected step' },
+        { fixed: ['F8', 'F10'], text: 'While paused: Continue / Step over' },
+        { fixed: ['Mod+Enter'], text: 'Save a sticky note you are writing' },
+      ],
+    },
+    {
+      title: 'HTTP Debugger',
+      rows: [
+        { fixed: ['↑', '↓'], text: 'Move through the exchanges' },
+        { fixed: ['Enter'], text: 'Open as request: the selected exchange in a request tab' },
+        { fixed: ['Mod+click', 'Shift+click'], text: 'Select several exchanges (Save to collection…, Create flow from selection…)' },
+        { fixed: ['Delete'], text: 'Delete the selected exchanges' },
+        { fixed: ['Mod+F'], text: 'The filter box' },
+        { fixed: ['Mod+E'], text: 'Clear the session (it asks first)' },
+        { fixed: ['F5', 'F6'], text: 'The Timeline / Structure panel' },
+      ],
+    },
+    {
       title: 'Lists, menus and dialogs',
       rows: [
         { fixed: ['↑', '↓'], text: 'Move through results' },
-        { fixed: ['Enter'], text: 'Open or run the selected item' },
+        { fixed: ['Enter'], text: 'Open or run the selected item; in a dialog’s text field, its main button' },
+        { fixed: ['Mod+Enter'], text: 'In a dialog’s multi-line field: its main button' },
         { fixed: ['Esc'], text: 'Close' },
       ],
     },
@@ -238,7 +268,7 @@ export function commandFor(combo: Combo, bindings: Record<string, Combo>): strin
 /** Combinations the app or the system keeps for themselves: they can't be given to a command. */
 export function reservedCombos(mac: boolean): Map<Combo, string> {
   const out = new Map<Combo, string>();
-  for (const g of rows([])) for (const r of g.rows) if (r.fixed && (r.mac === undefined || r.mac === mac)) for (const c of r.fixed) if (!c.includes('…')) out.set(c, `${r.text.replace(/ \(.*$/, '')} (${g.title.toLowerCase()})`);
+  for (const g of rows([])) for (const r of g.rows) if (r.fixed && (r.mac === undefined || r.mac === mac)) for (const c of r.fixed) if (!/…|click|drag/.test(c)) out.set(c, `${r.text.replace(/ \(.*$/, '')} (${g.title.toLowerCase()})`);
   for (let i = 1; i <= 9; i++) out.set(`Mod+Alt+${i}`, `Go to view ${i} of the rail`);
   for (const [k, what] of Object.entries({ C: 'Copy', V: 'Paste', X: 'Cut', Z: 'Undo', Y: 'Redo', A: 'Select all', Q: 'Quit' })) out.set(`Mod+${k}`, what);
   out.set('Mod+Shift+Z', 'Redo');

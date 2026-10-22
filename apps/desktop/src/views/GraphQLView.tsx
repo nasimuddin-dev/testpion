@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
 import { parse, print } from 'graphql';
 import { asError, call, on, type NormalizedError } from '../api';
+import { copyQuietly } from '../lib/clipboard';
 import { confirmAction, persisted, toastError, useApp } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
 import { openRef, reportIfGone } from '../lib/open-ref';
@@ -134,8 +135,8 @@ export function GraphQLView() {
       if (!sdl) return useApp.getState().toast('Introspect the schema first, then mock it', 'error');
       const r = await call<{ url: string }>('gql.mock.start', { sdl });
       setMockUrl(r.url);
-      await navigator.clipboard.writeText(r.url).catch(() => undefined);
-      useApp.getState().toast(`GraphQL mock running at ${r.url} (copied). Every valid query gets fake, correctly typed data.`, 'success');
+      const copied = await copyQuietly(r.url);
+      useApp.getState().toast(`GraphQL mock running at ${r.url}${copied ? ' (copied)' : ''}. Every valid query gets fake, correctly typed data.`, 'success');
     } catch (e) {
       useApp.getState().toast(`Couldn't start the mock: ${asError(e).message}`, 'error');
     }
@@ -412,8 +413,9 @@ export function GraphQLView() {
     let variables: Record<string, unknown> | undefined;
     try {
       variables = d.variables.trim() ? (JSON.parse(d.variables) as Record<string, unknown>) : undefined;
-    } catch {
-      variables = undefined;
+    } catch (e) {
+      // never saved without the variables as if there were none: the file would run another query
+      return useApp.getState().toast(`The variables are not valid JSON (${asError(e).message}): fix them, then save the test file`, 'error');
     }
     void saveAsTestFile(d.name || selectedOp?.name || 'GraphQL query', { kind: 'graphql', endpoint: d.endpoint, query: d.query, variables, operationName: operations.length > 1 ? selectedOp?.name : undefined, headers: d.headers, auth: d.auth }, d.assertions);
   };
@@ -426,14 +428,14 @@ export function GraphQLView() {
       <div className="@container flex items-center gap-2 p-2 border-b border-line shrink-0">
         <Badge tone="accent">{isSubscription ? 'WS' : 'POST'}</Badge>
         <VarInput ariaLabel="GraphQL endpoint" className="flex-1 min-w-40 h-8" value={d.endpoint} onChange={(endpoint) => set({ endpoint })} placeholder="https://api.example.com/graphql" />
-        <Button icon={<RefreshCw size={13} className={introspecting ? 'spin' : ''} />} onClick={introspectNow} disabled={introspecting} title="Introspect the schema (autocomplete, validation, schema explorer)">
+        <Button icon={<RefreshCw size={13} className={introspecting ? 'spin' : ''} />} onClick={introspectNow} disabled={introspecting} reason="Still introspecting" title="Introspect the schema (autocomplete, validation, schema explorer)">
           <span className="hidden @[52rem]:inline">Introspect</span>
         </Button>
         <Button icon={<Network size={13} />} variant={schemaOpen ? 'soft' : 'default'} aria-pressed={schemaOpen} title="Show or hide the schema explorer" onClick={() => setSchemaOpen(!schemaOpen)}>
           <span className="hidden @[52rem]:inline">Schema</span>
         </Button>
         <Tooltip content={mockUrl ? `Mock running at ${mockUrl}: click to stop` : sdl ? 'Serve fake data for this schema on localhost' : 'Introspect a schema first'}>
-          <Button variant={mockUrl ? 'soft' : 'default'} icon={<FlaskConical size={13} />} onClick={() => void toggleMock()} disabled={!mockUrl && !sdl}>
+          <Button variant={mockUrl ? 'soft' : 'default'} icon={<FlaskConical size={13} />} onClick={() => void toggleMock()} disabled={!mockUrl && !sdl} reason="Introspect the schema first">
             <span className="hidden @[52rem]:inline">{mockUrl ? 'Mock on' : 'Mock'}</span>
           </Button>
         </Tooltip>
@@ -616,7 +618,7 @@ export function GraphQLView() {
                 <Empty
                   icon={<Play size={26} />}
                   title="Run the operation to see the response"
-                  actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: () => void run(), disabled: !!running }]}
+                  actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: () => void run(), disabled: !!running, title: 'Still running' }]}
                 >
                   Write a query or a mutation on the left; <b>Introspect</b> reads the endpoint's schema for autocomplete, validation and the schema explorer.
                 </Empty>

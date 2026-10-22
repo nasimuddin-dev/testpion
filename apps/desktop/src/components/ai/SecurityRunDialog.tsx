@@ -64,6 +64,7 @@ export function SecurityRunDialog({ path, environment, onClose }: { path: string
         </span>
       }
       onClose={onClose}
+      onSubmit={() => void run()}
       width={760}
       footer={
         <>
@@ -73,7 +74,7 @@ export function SecurityRunDialog({ path, environment, onClose }: { path: string
             </span>
           )}
           <Button onClick={onClose}>Close</Button>
-          <Button variant="primary" icon={<Play size={13} />} loading={busy} disabled={!environment || prod} onClick={() => void run()} data-security-run>
+          <Button variant="primary" icon={<Play size={13} />} loading={busy} disabled={!environment || prod} reason={prod ? 'Not against a production environment' : 'Choose an environment first'} onClick={() => void run()} data-security-run>
             {report ? 'Run again' : 'Run now'}
           </Button>
         </>

@@ -282,8 +282,8 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         icon: <Download size={14} />,
         onSelect: () => undefined,
         items: [
-          { label: 'Request body…', disabled: !e.requestBodyBytes, onSelect: () => void saveBody(e, 'request') },
-          { label: 'Response body…', disabled: !e.responseBodyBytes, onSelect: () => void saveBody(e, 'response') },
+          { label: 'Request body…', disabled: !e.requestBodyBytes, reason: 'This exchange has no request body', onSelect: () => void saveBody(e, 'request') },
+          { label: 'Response body…', disabled: !e.responseBodyBytes, reason: 'This exchange has no response body', onSelect: () => void saveBody(e, 'response') },
         ],
       },
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },

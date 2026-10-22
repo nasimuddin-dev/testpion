@@ -81,11 +81,12 @@ export function AlsoAddDialog({ from, keys, onClose }: { from: string; keys: str
     <Modal
       title={`New in ${fromName}: ${keys.length === 1 ? keys[0] : plural(keys.length, 'variable')}`}
       onClose={onClose}
+      onSubmit={() => void add()}
       width={460}
       footer={
         <>
           <Button onClick={onClose}>Not now</Button>
-          <Button variant="primary" icon={<CopyPlus size={13} />} loading={busy} disabled={!v.to.length} onClick={() => void add()}>
+          <Button variant="primary" icon={<CopyPlus size={13} />} loading={busy} disabled={!v.to.length} reason="Tick at least one place to add it to" onClick={() => void add()}>
             Add
           </Button>
         </>

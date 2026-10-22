@@ -119,10 +119,15 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
           </span>
         }
         onClose={() => (stop(), onClose())}
+        onSubmit={() => {
+          if (busy) return;
+          if (setup) setup.onClick();
+          else void generate();
+        }}
         width={820}
         footer={
           <>
-            <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={!ready || !!busy} onClick={() => setPreviewing({ task: 'rag-generate-testset', title: 'Generate a RAG test set', context: { ...params } })} data-ai-preview-open>
+            <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={!ready || !!busy} reason={busy ? 'Still generating' : 'Pick documents or URLs, and at least one question type'} onClick={() => setPreviewing({ task: 'rag-generate-testset', title: 'Generate a RAG test set', context: { ...params } })} data-ai-preview-open>
               What will be sent…
             </Button>
             <Button onClick={() => (stop(), onClose())}>Cancel</Button>
@@ -135,7 +140,7 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
                 {setup.label}
               </Button>
             ) : (
-              <Button variant="primary" icon={<Sparkles size={13} />} disabled={!ready || !!estimate?.judgeProblem} onClick={() => void generate()} data-rag-testset-generate>
+              <Button variant="primary" icon={<Sparkles size={13} />} disabled={!ready || !!estimate?.judgeProblem} reason={estimate?.judgeProblem ?? 'Pick documents or URLs, and at least one question type'} onClick={() => void generate()} data-rag-testset-generate>
                 {over ? 'Generate anyway' : 'Generate'}
               </Button>
             )}

@@ -2,7 +2,7 @@ import { Check, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
-import { Button, cx, Empty, Field, Input, Menu, Segmented, Select, type EmptyAction, type MenuItem } from '../ui';
+import { Button, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, type EmptyAction, type MenuItem } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
@@ -54,7 +54,9 @@ export function RuleList({
     <div className="flex-1 min-h-0 flex flex-col" data-rule-list={kinds.join(',')}>
       <div className="flex items-center gap-1 p-2 border-b border-line">
         <Input className="flex-1 h-7 text-xs" placeholder="Filter rules" aria-label="Filter rules" value={find} onChange={(e) => setFind(e.target.value)} />
-        <Button size="sm" variant="ghost" icon={<RotateCcw size={12} />} title="Count the hits from zero" aria-label="Reset hits" onClick={() => act(call<RulesState>('debug.resetRuleHits'))} />
+        <IconButton label="Reset hits: count the hits from zero" className="h-7 w-7" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>
+          <RotateCcw size={12} />
+        </IconButton>
         {add.items ? <Menu width={220} items={add.items} trigger={addButton} /> : addButton}
       </div>
       {rules.length > 0 && (

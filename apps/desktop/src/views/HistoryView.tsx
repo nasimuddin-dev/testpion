@@ -255,7 +255,7 @@ export function HistoryView() {
           <IconButton
             label="RAG dataset… Make a RAG dataset of the HTTP calls listed: question, answer and retrieved contexts, with personal data masked"
             className="shrink-0"
-            disabled={!items.some((e) => e.kind === 'http')}
+            disabled={!items.some((e) => e.kind === 'http')} reason="No HTTP calls are listed"
             onClick={() => setDataset(items.filter((e) => e.kind === 'http').map((e) => e.id))}
             data-history-rag-dataset
           >

@@ -340,6 +340,7 @@ export function GitView() {
   return (
     <div className="h-full flex flex-col min-h-0">
       <PageHeader
+        help="getting-started/git"
         icon={<FolderGit2 size={18} />}
         title="Git"
         subtitle={
@@ -421,14 +422,14 @@ export function GitView() {
           <SectionTitle>Commit {staged.length ? <span className="text-muted font-normal">· {staged.length} staged</span> : files.length ? <span className="text-muted font-normal">· all changes</span> : null}</SectionTitle>
           <Textarea className="field min-h-20 font-mono text-xs" aria-label="Commit message" placeholder="What changed and why (e.g. Add payment tests)" value={message} onChange={(e) => setMessage(e.target.value)} />
           <div className="flex gap-2">
-            <Button variant="primary" icon={<GitCommitHorizontal size={13} />} loading={busy === 'commit'} disabled={!files.length} onClick={() => void commit()}>
+            <Button variant="primary" icon={<GitCommitHorizontal size={13} />} loading={busy === 'commit'} disabled={!files.length} reason="Nothing changed" onClick={() => void commit()}>
               Commit
             </Button>
             {aiOn && (
               <Button
                 icon={<Sparkles size={13} />}
                 loading={busy === 'suggest'}
-                disabled={!files.length}
+                disabled={!files.length} reason="Nothing changed"
                 title="The AI assistant writes a message from what changed (no secret values are sent)"
                 onClick={() => void run('suggest', async () => setMessage((await call<{ message: string }>('git.suggestMessage')).message))}
               >

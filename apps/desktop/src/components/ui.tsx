@@ -4,10 +4,11 @@ import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { ChevronDown, Loader2, MoreHorizontal, X } from 'lucide-react';
+import { ChevronDown, CircleHelp, Loader2, MoreHorizontal, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
 import { TabOverflow } from './TabOverflow';
 import { cx } from '../lib/cx';
+import { openDocs } from '../lib/docs-link';
 import { Menu, type MenuItem } from './Menu';
 
 // icons drawn in every tab and menu row, made once (React skips an element it has already rendered)
@@ -19,15 +20,18 @@ type Variant = 'primary' | 'default' | 'ghost' | 'danger' | 'soft';
 
 /**
  * A button. Without an `icon` it shows the one its label names (Save, Delete, Run, Import …, see action-icons.tsx), so
- * the same action has the same picture everywhere; `icon={null}` keeps a button text-only.
+ * the same action has the same picture everywhere; `icon={null}` keeps a button text-only. A button that is `disabled`
+ * says why in `reason` (its tooltip while it is disabled; a dialog's main button shows it in the footer too, FooterHint).
  */
-export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md' | 'lg'; loading?: boolean; icon?: ReactNode }>(
-  ({ variant = 'default', size = 'md', loading, icon, className, children, disabled, ...p }, ref) => {
+export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md' | 'lg'; loading?: boolean; icon?: ReactNode; reason?: string }>(
+  ({ variant = 'default', size = 'md', loading, icon, className, children, disabled, reason, title, ...p }, ref) => {
     const shown = icon !== undefined ? icon : iconForLabel(textOf(children), variant, { size: size === 'sm' ? 12 : 13, fallback: false });
     return (
     <button
       ref={ref}
       disabled={disabled || loading}
+      data-variant={variant}
+      title={disabled && reason ? reason : title}
       className={cx(
         'inline-flex items-center justify-center gap-1.5 rounded-md border font-medium whitespace-nowrap select-none',
         'transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:scale-[0.97]',
@@ -88,12 +92,18 @@ export function Tooltip({ content, children, side = 'bottom' }: { content?: Reac
   );
 }
 
-export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean; tooltipSide?: 'top' | 'bottom' | 'left' | 'right' }>(
-  ({ label, children, className, active, tooltipSide, title: _title, ...p }, ref) => (
-    <Tooltip content={label} side={tooltipSide}>
+/**
+ * An icon-only button: `label` names it (its tooltip and its name for screen readers). Disabled, it says why: `reason`
+ * is the tooltip then (a disabled button gets no pointer events, so the box around it carries the tooltip and takes
+ * the keyboard focus, which shows it too).
+ */
+export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean; tooltipSide?: 'top' | 'bottom' | 'left' | 'right'; reason?: string }>(
+  ({ label, children, className, active, tooltipSide, title: _title, reason, disabled, ...p }, ref) => {
+    const button = (
       <button
         ref={ref}
         aria-label={label}
+        disabled={disabled}
         className={cx(
           'inline-flex items-center justify-center rounded-md h-8 w-8 text-muted transition-colors duration-150 hover:text-fg hover:bg-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
           active && 'bg-hover text-fg',
@@ -103,10 +113,32 @@ export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTM
       >
         {children}
       </button>
-    </Tooltip>
-  ),
+    );
+    if (disabled && reason)
+      return (
+        <Tooltip content={`${label}: ${reason}`} side={tooltipSide}>
+          <span tabIndex={0} aria-label={`${label}: ${reason}`} className="inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent" data-disabled-reason="">
+            {button}
+          </span>
+        </Tooltip>
+      );
+    return (
+      <Tooltip content={label} side={tooltipSide}>
+        {button}
+      </Tooltip>
+    );
+  },
 );
 IconButton.displayName = 'IconButton';
+
+/** The ? that opens the docs page of what is on screen (`page`, e.g. 'api-testing/cookies'): the one help button, in page headers, dialogs and the top bar. */
+export function HelpLink({ page, what, className }: { page: string; what?: string; className?: string }) {
+  return (
+    <IconButton label={what ? `Help: ${what} in the docs` : 'Help: this page in the docs'} className={className} onClick={() => openDocs(page)} data-help={page}>
+      <CircleHelp size={16} />
+    </IconButton>
+  );
+}
 
 /** The small + / ⋯ buttons on explorer rows: one look everywhere. Header rows (sections, collections) keep them faintly visible; item rows show them on hover. */
 export const rowActionClass = (header = false) =>
@@ -430,27 +462,78 @@ export function ModalOrPanel({ inline, title, onClose, width, footer, children }
   );
 }
 
-/** Accessible dialog (focus trap, Escape, click outside) with an open animation. Mount it to show it. */
-export function Modal({ title, onClose, children, footer, width = 560 }: { title: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; width?: number }) {
+/** What a dialog focuses as it opens: the first field of its body (a `data-autofocus` element first). */
+const MODAL_FIRST_FIELD =
+  '[data-autofocus], input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=button]):not([type=submit]):not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select:not([disabled]), [contenteditable="true"]';
+/** Inputs whose Enter is not "done": a tick box, a button … */
+const MODAL_NO_SUBMIT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color']);
+
+/**
+ * Accessible dialog (focus trap, Escape, click outside) with an open animation. Mount it to show it. It opens with the
+ * focus in its first field (else on its main button, never on Close), so the user types at once. `onSubmit`: Enter in
+ * a single-line field (Ctrl+Enter in a multi-line one) runs the footer's main action, the `variant="primary"` button,
+ * unless that button is disabled (so the dialog's own rules hold). `help`: the docs page of this dialog, as a ? beside
+ * Close.
+ */
+export function Modal({ title, onClose, children, footer, width = 560, onSubmit, help }: { title: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; width?: number; onSubmit?(): void; help?: string }) {
+  const content = useRef<HTMLDivElement>(null);
+  const footerBox = useRef<HTMLDivElement>(null);
+  const primaryButton = () => footerBox.current?.querySelector<HTMLButtonElement>('button[data-variant=primary]');
+  const focusFirst = (e: Event) => {
+    const root = content.current;
+    if (!root) return;
+    // a field that asked for the focus itself (autoFocus) keeps it
+    if (root.contains(document.activeElement) && document.activeElement !== root) return e.preventDefault();
+    const first = root.querySelector<HTMLElement>(`[data-modal-body] :is(${MODAL_FIRST_FIELD})`) ?? (primaryButton()?.disabled === false ? primaryButton() : undefined) ?? root;
+    e.preventDefault();
+    first.focus({ preventScroll: true });
+    if (first instanceof HTMLInputElement) first.select();
+  };
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!onSubmit || e.key !== 'Enter' || e.altKey || e.shiftKey || e.defaultPrevented || e.nativeEvent.isComposing) return;
+    const t = e.target as HTMLElement;
+    // a form of its own, a code editor and pickers handle Enter themselves
+    if (t.closest('form, .monaco-editor, [role=combobox], [role=listbox], [role=menu], [role=tree], [role=grid], [role=option]')) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const line = t instanceof HTMLInputElement && !MODAL_NO_SUBMIT_INPUTS.has(t.type);
+    const multi = t instanceof HTMLTextAreaElement || t.isContentEditable;
+    if (!line && !(multi && mod)) return;
+    if (primaryButton()?.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSubmit();
+  };
   return (
     <DialogPrimitive.Root open onOpenChange={(o) => !o && onClose()}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--overlay)] backdrop-blur-[2px] animate-in fade-in-0 duration-200" />
         <DialogPrimitive.Content
+          ref={content}
           aria-describedby={undefined}
+          onOpenAutoFocus={focusFirst}
+          onKeyDown={onKeyDown}
           className="fixed left-1/2 top-[9vh] z-50 -translate-x-1/2 bg-popover border border-line rounded-2xl shadow-lg max-h-[82vh] flex flex-col outline-none animate-in fade-in-0 zoom-in-[0.97] slide-in-from-top-2 duration-200"
           style={{ width, maxWidth: '94vw' }}
         >
           <div className="flex items-center justify-between gap-3 pl-5 pr-3 h-14 shrink-0">
             <DialogPrimitive.Title className="font-semibold text-[1.05rem] truncate">{title}</DialogPrimitive.Title>
-            <DialogPrimitive.Close asChild>
-              <button aria-label="Close" className="inline-flex items-center justify-center rounded-md h-8 w-8 text-muted hover:text-fg hover:bg-hover transition-colors">
-                <X size={16} />
-              </button>
-            </DialogPrimitive.Close>
+            <div className="flex items-center gap-0.5 shrink-0">
+              {help && <HelpLink page={help} what={typeof title === 'string' ? title : undefined} />}
+              <DialogPrimitive.Close asChild>
+                <button aria-label="Close" className="inline-flex items-center justify-center rounded-md h-8 w-8 text-muted hover:text-fg hover:bg-hover transition-colors">
+                  <X size={16} />
+                </button>
+              </DialogPrimitive.Close>
+            </div>
           </div>
-          <div className="px-5 pb-5 pt-1 overflow-auto">{children}</div>
-          {footer && <div className="px-5 py-3.5 border-t border-line bg-panel/60 rounded-b-2xl flex flex-wrap justify-end gap-2 shrink-0">{footer}</div>}
+          <div className="px-5 pb-5 pt-1 overflow-auto" data-modal-body="">
+            {children}
+          </div>
+          {footer && (
+            <div ref={footerBox} className="px-5 py-3.5 border-t border-line bg-panel/60 rounded-b-2xl flex flex-wrap justify-end gap-2 shrink-0">
+              {footer}
+            </div>
+          )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
@@ -657,8 +740,11 @@ export function OverflowActions({ items, label = 'More actions', at = 768, varia
   );
 }
 
-/** The header of a detail page (a monitor, a load test, a run …): icon, title, a line under it, the main actions and a ⋯ menu for the rest. */
-export function PageHeader({ icon, title, subtitle, actions, menu, menuLabel }: { icon?: ReactNode; title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; menu?: MenuItem[]; menuLabel?: string }) {
+/**
+ * The header of a detail page (a monitor, a load test, a run …): icon, title, a line under it, the main actions, a ⋯
+ * menu for the rest and, last, the ? that opens its docs page (`help`, e.g. 'test-runner/monitors': every page has one).
+ */
+export function PageHeader({ icon, title, subtitle, actions, menu, menuLabel, help }: { icon?: ReactNode; title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; menu?: MenuItem[]; menuLabel?: string; help: string }) {
   return (
     <div className="flex items-start gap-3 flex-wrap">
       {icon && <div className="grid place-items-center h-9 w-9 rounded-lg bg-accent-soft text-accent shrink-0">{icon}</div>}
@@ -669,6 +755,7 @@ export function PageHeader({ icon, title, subtitle, actions, menu, menuLabel }: 
       <div className="flex items-center gap-1.5 shrink-0">
         {actions}
         {menu && menu.length > 0 && <MoreMenu label={menuLabel} items={menu} />}
+        <HelpLink page={help} what={typeof title === 'string' ? title : undefined} />
       </div>
     </div>
   );

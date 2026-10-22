@@ -182,7 +182,7 @@ export function FlowInspector({
               >
                 Run together (parallel group)
               </Button>
-              <Button size="sm" onClick={() => onGroup(selSteps, { kind: 'parallel', name: null })} disabled={!flow.steps.some((s) => selSteps.includes(s.id) && s.parallel)}>
+              <Button size="sm" onClick={() => onGroup(selSteps, { kind: 'parallel', name: null })} disabled={!flow.steps.some((s) => selSteps.includes(s.id) && s.parallel)} reason="None of the selected steps is in a parallel group">
                 Leave the group
               </Button>
               <Button size="sm" onClick={() => onGroup(selSteps, { kind: 'finally', name: 'finally' })} title="Clean-up: run these steps after every other step, whatever happened">
@@ -202,7 +202,7 @@ export function FlowInspector({
               <Button size="sm" icon={<AlignCenterVertical size={12} />} onClick={() => onArrange('center')} data-flow-align="center" title="Line the centres up (one above the other)">
                 Align centres
               </Button>
-              <Button size="sm" icon={<AlignHorizontalSpaceAround size={12} />} onClick={() => onArrange('distribute')} disabled={selSteps.length < 3} data-flow-align="distribute" title="Space three or more steps evenly">
+              <Button size="sm" icon={<AlignHorizontalSpaceAround size={12} />} onClick={() => onArrange('distribute')} disabled={selSteps.length < 3} reason="Select three or more steps" data-flow-align="distribute" title="Space three or more steps evenly">
                 Distribute
               </Button>
             </div>

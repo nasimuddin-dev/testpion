@@ -385,6 +385,7 @@ export function LoadView() {
           />
         </div>
         <PageHeader
+          help="performance/load-testing"
           icon={<Gauge size={18} />}
           title={current ? current.name : 'New load test'}
           subtitle={current ? (dirty ? 'Unsaved changes' : 'Saved load test') : 'Not saved yet'}

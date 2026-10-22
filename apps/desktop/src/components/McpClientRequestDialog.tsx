@@ -28,6 +28,7 @@ export function McpClientRequestDialog({ current, onDone }: { current: ClientReq
       <Modal
         title={`${current.serverName} asks for input`}
         onClose={() => void respond({ action: 'cancel' })}
+        onSubmit={() => void respond({ action: 'accept', content: values })}
         width={560}
         footer={
           <>
@@ -72,6 +73,7 @@ export function McpClientRequestDialog({ current, onDone }: { current: ClientReq
     <Modal
       title={`${current.serverName} asks for an LLM completion`}
       onClose={() => void respond({ action: 'cancel' })}
+      onSubmit={() => void respond({ text: reply, model: model ?? 'user' })}
       width={720}
       footer={
         <>
@@ -88,7 +90,7 @@ export function McpClientRequestDialog({ current, onDone }: { current: ClientReq
               Draft with AI
             </Button>
           )}
-          <Button variant="primary" disabled={!reply.trim()} onClick={() => void respond({ text: reply, model: model ?? 'user' })}>
+          <Button variant="primary" disabled={!reply.trim()} reason="Write the reply first" onClick={() => void respond({ text: reply, model: model ?? 'user' })}>
             Send reply
           </Button>
         </>

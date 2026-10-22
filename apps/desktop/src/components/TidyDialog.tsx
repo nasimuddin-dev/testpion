@@ -58,9 +58,10 @@ export function TidyDialog({ collection, onClose, onDone, onReplace }: { collect
     <Modal
       title={`Tidy up ${collection.name}`}
       onClose={onClose}
+      onSubmit={() => void apply()}
       width={760}
       footer={
-        <Button variant="primary" icon={<Brush size={13} />} disabled={!any || busy} onClick={() => void apply()}>
+        <Button variant="primary" icon={<Brush size={13} />} disabled={!any || busy} reason="Nothing is ticked" onClick={() => void apply()}>
           Remove what is ticked
         </Button>
       }

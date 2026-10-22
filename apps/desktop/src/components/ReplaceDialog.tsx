@@ -73,9 +73,10 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
     <Modal
       title={`Find and replace in ${collection.name}`}
       onClose={onClose}
+      onSubmit={() => void apply()}
       width={760}
       footer={
-        <Button variant="primary" icon={<Replace size={13} />} disabled={!preview?.count || busy} onClick={() => void apply()}>
+        <Button variant="primary" icon={<Replace size={13} />} disabled={!preview?.count || busy} reason="Nothing matches yet" onClick={() => void apply()}>
           {preview?.count ? `Replace ${preview.count}` : 'Replace'}
         </Button>
       }

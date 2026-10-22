@@ -50,7 +50,8 @@ const TerminalPanel = lazy(() => import('./TerminalPanel'));
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
 import { useApp, type DialogRequest, type DialogTone, type NavLocation } from '../store';
-import { Button, cx, IconButton, Input, Kbd, Menu, Modal, Spinner } from './ui';
+import { Button, cx, HelpLink, IconButton, Input, Kbd, Menu, Modal, Spinner } from './ui';
+import { VIEW_DOCS } from '../lib/docs-pages';
 import { Toaster as SonnerToaster } from 'sonner';
 
 /** The navigation (components/nav.tsx) and the rail (components/Rail.tsx), here for the modules that import them from the shell. */
@@ -168,6 +169,7 @@ export function TopBar() {
         <IconButton label="Settings" onClick={() => useApp.getState().setView('settings')}>
           <Settings size={17} />
         </IconButton>
+        <ViewHelp />
       </div>
     </header>
   );
@@ -199,6 +201,12 @@ function DebuggerSegment() {
       {st.systemProxy && ' · system proxy'}
     </button>
   );
+}
+
+/** The ? of the top bar: the docs page of the view on screen (lib/docs-pages.ts), so help is one click away everywhere. */
+function ViewHelp() {
+  const view = useApp((s) => s.view);
+  return <HelpLink page={VIEW_DOCS[view]} what={view === 'settings' ? 'Settings' : NAV.find((n) => n.id === view)?.label} />;
 }
 
 export function StatusBar() {
@@ -644,7 +652,7 @@ function DialogView({ d }: { d: DialogRequest }) {
       onClose={() => d.resolve(d.cancelId, value)}
       width={d.input ? 460 : 520}
       footer={d.buttons.map((b) => (
-        <Button key={b.id} ref={b === focused ? focusRef : undefined} variant={b.variant ?? 'default'} icon={b.icon ?? iconForLabel(b.label, b.variant)} autoFocus={b === focused} disabled={!!d.input && b === primary && !value.trim()} onClick={() => d.resolve(b.id, value)}>
+        <Button key={b.id} ref={b === focused ? focusRef : undefined} variant={b.variant ?? 'default'} icon={b.icon ?? iconForLabel(b.label, b.variant)} autoFocus={b === focused} disabled={!!d.input && b === primary && !value.trim()} reason="Type something first" onClick={() => d.resolve(b.id, value)}>
           {b.label}
         </Button>
       ))}
@@ -722,17 +730,17 @@ function NavButtons() {
   };
   return (
     <div className="flex items-center gap-0.5">
-      <IconButton label={prev ? `Back to ${placeLabel(prev)}  (${keyLabel('back', bindings)})` : 'Back'} disabled={!prev} onClick={() => useApp.getState().goBack()}>
+      <IconButton label={prev ? `Back to ${placeLabel(prev)}  (${keyLabel('back', bindings)})` : 'Back'} disabled={!prev} reason="Nothing to go back to" onClick={() => useApp.getState().goBack()}>
         <ArrowLeft size={16} />
       </IconButton>
-      <IconButton label={next ? `Forward to ${placeLabel(next)}  (${keyLabel('forward', bindings)})` : 'Forward'} disabled={!next} onClick={() => useApp.getState().goForward()}>
+      <IconButton label={next ? `Forward to ${placeLabel(next)}  (${keyLabel('forward', bindings)})` : 'Forward'} disabled={!next} reason="Nothing to go forward to" onClick={() => useApp.getState().goForward()}>
         <ArrowRight size={16} />
       </IconButton>
       <Menu
         width={260}
         align="start"
         trigger={
-          <IconButton label="Recent places" disabled={!recent.length} className="w-6">
+          <IconButton label="Recent places" disabled={!recent.length} reason="No places visited yet" className="w-6">
             <NavChevron size={13} />
           </IconButton>
         }

@@ -55,7 +55,7 @@ export function ProbeSets() {
               <div className="text-xs text-muted">Metrics: {s.metrics.join(', ')}</div>
             </div>
             {!s.inWorkspace && (
-              <Button size="sm" icon={busy === s.id ? <Spinner /> : <Plus size={12} />} disabled={busy !== undefined} onClick={() => void add([s.id])} data-rag-probe-add={s.id}>
+              <Button size="sm" icon={busy === s.id ? <Spinner /> : <Plus size={12} />} disabled={busy !== undefined} reason="Still adding" onClick={() => void add([s.id])} data-rag-probe-add={s.id}>
                 Add
               </Button>
             )}
@@ -63,7 +63,7 @@ export function ProbeSets() {
         ))}
       </div>
       {missing.length > 1 && (
-        <Button className="mt-2" size="sm" disabled={busy !== undefined} onClick={() => void add()} data-rag-probe-add-all>
+        <Button className="mt-2" size="sm" disabled={busy !== undefined} reason="Still adding" onClick={() => void add()} data-rag-probe-add-all>
           Add all {missing.length} missing sets
         </Button>
       )}

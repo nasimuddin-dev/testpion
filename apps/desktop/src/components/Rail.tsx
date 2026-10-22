@@ -102,8 +102,8 @@ export function Sidebar() {
         : { label: 'Keep on the rail', icon: <Eye size={14} />, onSelect: () => void changeRail(id, 'show') },
       ...(shown
         ? [
-            { label: 'Move up', icon: <ArrowUp size={14} />, disabled: i <= 0, onSelect: () => void changeRail(id, 'up') },
-            { label: 'Move down', icon: <ArrowDown size={14} />, disabled: i >= rail.visible.length - 1, onSelect: () => void changeRail(id, 'down') },
+            { label: 'Move up', icon: <ArrowUp size={14} />, disabled: i <= 0, reason: 'It is first already', onSelect: () => void changeRail(id, 'up') },
+            { label: 'Move down', icon: <ArrowDown size={14} />, disabled: i >= rail.visible.length - 1, reason: 'It is last already', onSelect: () => void changeRail(id, 'down') },
           ]
         : []),
       ...moreItems(true),
@@ -118,8 +118,9 @@ export function Sidebar() {
       onSelect: () => undefined,
       items: rail.more.map((id) => ({ label: railItem(id)?.label ?? id, icon: railItem(id)?.icon, onSelect: () => void changeRail(id, 'show') })),
       disabled: !rail.more.length,
+      reason: 'Every view is on the rail already',
     },
-    { label: 'Show every view', icon: <Rows3 size={14} />, disabled: !rail.more.length, onSelect: () => void resetRail(true) },
+    { label: 'Show every view', icon: <Rows3 size={14} />, disabled: !rail.more.length, reason: 'Every view is on the rail already', onSelect: () => void resetRail(true) },
     { label: 'Reset the rail', icon: <RotateCcw size={14} />, onSelect: () => void resetRail() },
   ];
 

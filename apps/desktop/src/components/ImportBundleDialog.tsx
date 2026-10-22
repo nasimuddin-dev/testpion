@@ -160,11 +160,12 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
     <Modal
       title={request.into ? `Import a bundle into “${request.into.name}”` : request.section ? `Import ${KIND_INFO[request.section as KindId]?.plural.toLowerCase() ?? request.section} from a bundle` : 'Import a bundle'}
       onClose={onClose}
+      onSubmit={() => void apply()}
       width={680}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={<Upload size={13} />} loading={busy} disabled={!loaded || !(willWrite.length || globalsWrite)} onClick={() => void apply()}>
+          <Button variant="primary" icon={<Upload size={13} />} loading={busy} disabled={!loaded || !(willWrite.length || globalsWrite)} reason="Nothing in the bundle would be written" onClick={() => void apply()}>
             {willWrite.length ? `Import ${willWrite.length} item${willWrite.length === 1 ? '' : 's'}` : globalsWrite ? 'Import the variables' : 'Nothing to import'}
           </Button>
         </>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useApp, type ViewId } from './store';
+import { confirmAction, useApp, type ViewId } from './store';
 import { useDoc } from './lib/docs';
+import { setLeaveGuard } from './lib/leave-guard';
 
 /** Intents already handled by keyed consumers (so a component that remounts doesn't handle one again). */
 const handled = new Map<string, number>();
@@ -36,7 +37,7 @@ export function useSendShortcut(view: ViewId, fn: () => void): void {
   active.current = doc.active;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && useApp.getState().view === view && active.current) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && useApp.getState().view === view && active.current && !(e.target as HTMLElement | null)?.closest?.('[role=dialog], [role=alertdialog]')) {
         e.preventDefault();
         f.current();
       }
@@ -63,6 +64,26 @@ export function useSaveShortcut(view: ViewId, fn: () => void): void {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [view]);
+}
+
+/**
+ * While `dirty`, leaving this view (another view, an intent, back / forward) asks first, with the dialog the request
+ * tabs show on close: `what` names the edits ("The settings"). Save with Ctrl+S is the way to keep them.
+ */
+export function useLeaveGuard(view: ViewId, dirty: boolean, what: string): void {
+  useEffect(() => {
+    if (!dirty) return;
+    setLeaveGuard(view, () =>
+      confirmAction({
+        title: 'Unsaved changes',
+        message: `${what} have unsaved changes.`,
+        detail: 'Leave anyway and discard them? Save with Ctrl+S to keep them.',
+        confirmLabel: 'Discard changes',
+        danger: true,
+      }),
+    );
+    return () => setLeaveGuard(view, undefined);
+  }, [view, dirty, what]);
 }
 
 /**

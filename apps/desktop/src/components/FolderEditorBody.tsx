@@ -14,31 +14,30 @@ import { Button, Field, Modal, Tabs, Textarea } from './ui';
 export function FolderEditorBody({ folder, onSave, onClose }: { folder: CollectionFolder; onSave(f: CollectionFolder): void; onClose(): void }) {
   const [draft, setDraft] = useState<CollectionFolder>(folder);
   const [tab, setTab] = useState<'scripts' | 'variables' | 'headers' | 'auth' | 'settings' | 'docs'>('scripts');
+  const save = () => {
+    onSave({
+      ...draft,
+      preRequestScript: draft.preRequestScript?.trim() ? draft.preRequestScript : undefined,
+      testScript: draft.testScript?.trim() ? draft.testScript : undefined,
+      variables: draft.variables?.some((v) => v.key) ? draft.variables.filter((v) => v.key) : undefined,
+      headers: draft.headers?.some((h) => h.key) ? draft.headers.filter((h) => h.key) : undefined,
+      settings: draft.settings && Object.values(draft.settings).some((v) => v !== undefined) ? draft.settings : undefined,
+      description: draft.description?.trim() ? draft.description : undefined,
+    });
+    onClose();
+  };
   return (
     <Modal
       title={`Folder: ${folder.name}`}
       onClose={onClose}
+      onSubmit={save}
       width={880}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              onSave({
-                ...draft,
-                preRequestScript: draft.preRequestScript?.trim() ? draft.preRequestScript : undefined,
-                testScript: draft.testScript?.trim() ? draft.testScript : undefined,
-                variables: draft.variables?.some((v) => v.key) ? draft.variables.filter((v) => v.key) : undefined,
-                headers: draft.headers?.some((h) => h.key) ? draft.headers.filter((h) => h.key) : undefined,
-                settings: draft.settings && Object.values(draft.settings).some((v) => v !== undefined) ? draft.settings : undefined,
-                description: draft.description?.trim() ? draft.description : undefined,
-              });
-              onClose();
-            }}
-          >
+          <Button variant="primary" onClick={save}>
             Save
           </Button>
         </>

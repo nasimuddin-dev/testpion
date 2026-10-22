@@ -513,7 +513,7 @@ function CurrentValues({ envName }: { envName: string }) {
         </Button>
         <Button
           size="sm"
-          disabled={!keys.length}
+          disabled={!keys.length} reason="No current values to reset"
           onClick={async () => {
             await call('currentValues.reset', { scope: 'environment', owner: envName });
             load();

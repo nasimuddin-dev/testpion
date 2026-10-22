@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
 import { pickTextFile } from '../lib/files';
 import { toastError, useApp } from '../store';
-import { useIntent } from '../hooks';
+import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
 import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
@@ -46,23 +46,30 @@ export function SettingsView() {
   // the fields changed here and not saved yet: settings saved elsewhere meanwhile (the rail, key bindings, a workspace
   // opened) show up without losing them, and Save writes only these over the latest settings
   const dirty = useRef(new Set<keyof AppSettings>());
+  // how many fields changed since the last save: Save is enabled by it, and leaving the view asks while it is above 0
+  const [changed, setChanged] = useState(0);
   useEffect(() => setS((cur) => (cur && settings ? { ...settings, ...Object.fromEntries([...dirty.current].map((k) => [k, cur[k]])) } : settings)), [settings]);
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then(setProviders);
   }, []);
-  if (!s) return null;
-  const set = (p: Partial<AppSettings>) => {
-    for (const k of Object.keys(p)) dirty.current.add(k as keyof AppSettings);
-    setS({ ...s, ...p });
-  };
-  const save = () =>
-    useApp
+  const save = () => {
+    if (!s || !dirty.current.size) return Promise.resolve();
+    return useApp
       .getState()
       .saveSettings({ ...(useApp.getState().settings ?? s), ...Object.fromEntries([...dirty.current].map((k) => [k, s[k]])) })
       .then(
-        () => (dirty.current.clear(), useApp.getState().toast('Settings saved', 'success')),
+        () => (dirty.current.clear(), setChanged(0), useApp.getState().toast('Settings saved', 'success')),
         (e) => toastError(e),
       );
+  };
+  useSaveShortcut('settings', () => void save());
+  useLeaveGuard('settings', changed > 0, 'The settings');
+  if (!s) return null;
+  const set = (p: Partial<AppSettings>) => {
+    for (const k of Object.keys(p)) dirty.current.add(k as keyof AppSettings);
+    setChanged(dirty.current.size);
+    setS({ ...s, ...p });
+  };
   const setPrice = (i: number, p: Partial<PriceEntry>) => set({ pricing: s.pricing.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   return (
     <div className="h-full flex flex-col">
@@ -86,7 +93,7 @@ export function SettingsView() {
         ]}
         right={
           tab !== 'storage' && tab !== 'agents' && tab !== 'keyboard' && (
-            <Button size="sm" variant="primary" icon={<Save size={12} />} onClick={save}>
+            <Button size="sm" variant="primary" icon={<Save size={12} />} onClick={() => void save()} disabled={!changed} reason="Nothing changed yet" title="Save settings (Ctrl+S)">
               Save settings
             </Button>
           )
@@ -137,8 +144,8 @@ export function SettingsView() {
           )}
           {tab === 'requests' && (
             <>
-              <Field label="Default timeout (ms)">
-                <Input type="number" value={s.defaultTimeoutMs} onChange={(e) => set({ defaultTimeoutMs: Number(e.target.value) })} />
+              <Field label="Default timeout (ms)" hint="How long a request or a test may take before it is stopped, in milliseconds, unless the request or test sets its own. 30000 (30 seconds) unless changed; 0 waits forever.">
+                <Input type="number" min={0} step={1000} placeholder="30000" value={s.defaultTimeoutMs} onChange={(e) => set({ defaultTimeoutMs: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
               </Field>
               <Field label="Maximum response preview (MB)" hint="Larger bodies are streamed to disk and truncated in the viewer; use the download arrow on the response bar for the full payload.">
                 <Input type="number" step="0.5" value={s.maxPreviewBytes / 1024 / 1024} onChange={(e) => set({ maxPreviewBytes: Math.max(0.1, Number(e.target.value)) * 1024 * 1024 })} />
@@ -247,8 +254,8 @@ export function SettingsView() {
           {tab === 'load' && (
             <>
               <Toggle checked={s.loadTesting.allowRemoteHosts} onChange={(allowRemoteHosts) => set({ loadTesting: { ...s.loadTesting, allowRemoteHosts } })} label="Allow load tests against remote (non-local) hosts by default" />
-              <Field label="Maximum virtual users">
-                <Input type="number" value={s.loadTesting.maxVirtualUsers} onChange={(e) => set({ loadTesting: { ...s.loadTesting, maxVirtualUsers: Number(e.target.value) } })} />
+              <Field label="Maximum virtual users" hint="A load test asking for more virtual users than this is refused before it starts: a guard against overloading this computer or the API by a typo. 200 unless changed.">
+                <Input type="number" min={1} placeholder="200" value={s.loadTesting.maxVirtualUsers} onChange={(e) => set({ loadTesting: { ...s.loadTesting, maxVirtualUsers: Math.max(1, Math.round(Number(e.target.value) || 1)) } })} />
               </Field>
               <p className="text-xs text-muted">Environments marked as production always require an explicit per-run opt-in.</p>
             </>
@@ -344,7 +351,7 @@ function ProxySettings({ value, onChange }: { value: NonNullable<AppSettings['pr
             <Field label="Password" hint={info?.passwordSet ? 'A password is saved in the secret store.' : 'Saved in the OS secret store, never in settings.'}>
               <div className="flex gap-2">
                 <Input type="password" autoComplete="new-password" value={password} placeholder={info?.passwordSet ? '••••••••' : ''} onChange={(e) => setPassword(e.target.value)} />
-                <Button disabled={!password} onClick={() => void savePassword(password)}>
+                <Button disabled={!password} reason="Enter the password first" onClick={() => void savePassword(password)}>
                   Save
                 </Button>
                 {info?.passwordSet && (
@@ -496,7 +503,7 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
               {status?.hasKey ? (
                 <p className="text-sm flex items-center gap-2 flex-wrap">
                   <Badge tone="ok">key saved</Badge> in {status.keyStorage}, never in settings or workspace files.
-                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => void saveKey(null)}>
+                  <Button size="sm" variant="ghost" disabled={busy} reason="Still checking the key" onClick={() => void saveKey(null)}>
                     Remove key
                   </Button>
                 </p>
@@ -504,7 +511,7 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
                 <Field label="Anthropic API key" hint="Create one at console.anthropic.com ▸ API keys. TestPion checks it with Anthropic, then keeps it in the OS secret store.">
                   <div className="flex gap-2">
                     <Input type="password" autoComplete="off" spellCheck={false} className="mono flex-1 min-w-[22rem]" placeholder="sk-ant-…" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && key.trim() && void saveKey(key)} />
-                    <Button variant="primary" loading={busy} disabled={!key.trim()} onClick={() => void saveKey(key)}>
+                    <Button variant="primary" loading={busy} disabled={!key.trim()} reason="Enter the key first" onClick={() => void saveKey(key)}>
                       {busy ? 'Checking…' : 'Save key'}
                     </Button>
                   </div>

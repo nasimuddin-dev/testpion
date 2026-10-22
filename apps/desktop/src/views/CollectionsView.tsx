@@ -307,11 +307,9 @@ export function CollectionsView() {
                   <Button size="sm" variant="primary" onClick={() => save(draft)}>
                     Save
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-bad"
-                    icon={<Trash2 size={12} />}
+                  <IconButton
+                    label="Delete the collection"
+                    className="h-7 w-7 text-bad"
                     onClick={() =>
                       void deleteWithUndo({
                         kind: 'collection',
@@ -329,7 +327,9 @@ export function CollectionsView() {
                         },
                       })
                     }
-                  />
+                  >
+                    <Trash2 size={12} />
+                  </IconButton>
                 </div>
               </div>
               <Tabs

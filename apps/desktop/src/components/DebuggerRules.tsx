@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Check, Pencil, Plus, Play, Scale, Trash2, X, Zap } 
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, promptText, toastError, attempt } from '../store';
-import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea, IconButton } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
 
 /**
@@ -189,26 +189,18 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
                   {r.summary}
                 </td>
                 <td className="py-1 whitespace-nowrap text-right">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<ArrowUp size={12} />}
-                    disabled={i === 0}
-                    onClick={() => void act('debug.moveRule', { id: r.id, to: i - 1 })}
-                    title="Earlier (the first matching reply, redirect or breakpoint wins)"
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<ArrowDown size={12} />}
-                    disabled={i === state.rules.length - 1}
-                    onClick={() => void act('debug.moveRule', { id: r.id, to: i + 1 })}
-                    title="Later"
-                  />
+                  <IconButton label="Earlier (the first matching reply, redirect or breakpoint wins)" className="h-7 w-7" disabled={i === 0} reason="It is the first rule already" onClick={() => void act('debug.moveRule', { id: r.id, to: i - 1 })}>
+                    <ArrowUp size={12} />
+                  </IconButton>
+                  <IconButton label="Later" className="h-7 w-7" disabled={i === state.rules.length - 1} reason="It is the last rule already" onClick={() => void act('debug.moveRule', { id: r.id, to: i + 1 })}>
+                    <ArrowDown size={12} />
+                  </IconButton>
                   <Button size="sm" variant="ghost" icon={<Pencil size={12} />} onClick={() => setEditing(r)}>
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => void act('debug.deleteRule', { id: r.id })} title="Remove the rule" />
+                  <IconButton label="Remove the rule" className="h-7 w-7" onClick={() => void act('debug.deleteRule', { id: r.id })}>
+                    <Trash2 size={12} />
+                  </IconButton>
                 </td>
               </tr>
             ))}
@@ -223,7 +215,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
             aria-label="URL to test against the rules"
             value={check.url}
             onChange={(e) => setCheck({ ...check, url: e.target.value })}
-            onKeyDown={(e) => e.key === 'Enter' && void testUrl()}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void testUrl())}
           />
           <Button size="sm" icon={<Play size={12} />} onClick={() => void testUrl()}>
             Test
@@ -297,6 +289,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
     <Modal
       title={rule.id ? 'Edit rule' : 'New rule'}
       onClose={onClose}
+      onSubmit={() => void save()}
       width={640}
       footer={
         <>
@@ -455,10 +448,12 @@ export function BreakpointDialog({ bp, onDone }: { bp: HeldBreakpoint; onDone():
     }
     onDone();
   };
+  const edits = () => (req ? { method, url, headers: parseHeaders(headers), body } : { status: Number(status) || undefined, headers: parseHeaders(headers), body });
   return (
     <Modal
       title={`Breakpoint: the ${bp.phase} of ${e.method} ${e.url}`}
       onClose={() => void resume()}
+      onSubmit={() => void resume(edits())}
       width={720}
       footer={
         <>
@@ -471,7 +466,7 @@ export function BreakpointDialog({ bp, onDone }: { bp: HeldBreakpoint; onDone():
           <Button
             variant="primary"
             icon={<Play size={13} />}
-            onClick={() => void resume(req ? { method, url, headers: parseHeaders(headers), body } : { status: Number(status) || undefined, headers: parseHeaders(headers), body })}
+            onClick={() => void resume(edits())}
           >
             Continue with changes
           </Button>

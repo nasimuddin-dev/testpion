@@ -819,9 +819,9 @@ export function TestsView() {
               ? []
               : [
                   { label: LABEL.run, icon: <Play size={13} />, onSelect: () => void run([p!], p!) },
-                  { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), onSelect: () => void exposeFile(p!) },
-                  { label: 'Run with data…', icon: <FileSpreadsheet size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'data') },
-                  { label: LABEL.runInEnvironments, icon: <Layers size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), onSelect: () => void openScaling(p!, 'matrix') },
+                  { label: 'Expose as MCP tool…', icon: <Bot size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!), reason: 'Only a YAML or JSON test file', onSelect: () => void exposeFile(p!) },
+                  { label: 'Run with data…', icon: <FileSpreadsheet size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), reason: 'Only a YAML or JSON test file, not a suite', onSelect: () => void openScaling(p!, 'data') },
+                  { label: LABEL.runInEnvironments, icon: <Layers size={13} />, disabled: !/\.(ya?ml|json)$/.test(p!) || /\.suite\./.test(p!), reason: 'Only a YAML or JSON test file, not a suite', onSelect: () => void openScaling(p!, 'matrix') },
                 ]
           }
           tabs={[
@@ -842,7 +842,7 @@ export function TestsView() {
             tab !== 'run' &&
             file && (
               <>
-                <Button size="sm" icon={<Save size={12} />} onClick={save} disabled={!dirty}>
+                <Button size="sm" icon={<Save size={12} />} onClick={save} disabled={!dirty} reason="Nothing changed yet">
                   Save
                 </Button>
                 <Button size="sm" variant="primary" icon={<Play size={12} />} onClick={() => run([file], file)}>

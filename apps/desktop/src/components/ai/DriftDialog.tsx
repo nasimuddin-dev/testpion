@@ -127,7 +127,7 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
           onCancel={cancel}
           onStop={stop}
         >
-          <AiPrimaryButton disabled={!report?.findings.length} onClick={() => void analyse()} data-ai-analyse="">
+          <AiPrimaryButton disabled={!report?.findings.length} reason="No findings to explain" onClick={() => void analyse()} data-ai-analyse="">
             Explain and fix
           </AiPrimaryButton>
         </AiRunFooter>
