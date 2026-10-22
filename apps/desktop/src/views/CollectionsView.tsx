@@ -45,7 +45,7 @@ import { CollectionDocs } from '../components/CollectionDocs';
 import { addToFolder, CollectionTree } from '../components/CollectionTree';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from '../components/TrashDialog';
 import { KeyValueEditor } from '../components/KeyValueEditor';
-import { Badge, Button, cx, Empty, IconButton, Menu, MoreMenu, SectionTitle, Split, Tabs, type MenuItem } from '../components/ui';
+import { Badge, Bar, Button, cx, Empty, IconButton, Menu, type MenuItem, MoreMenu, SectionTitle, Split, Tabs } from '../components/ui';
 import { InlineRename, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { openItemMenu, type OpenItemCtx } from '../lib/item-menu';
@@ -249,10 +249,8 @@ export function CollectionsView() {
                     const target = cols.find((c) => c.id === sel) ?? cols[0];
                     if (!target) return [];
                     return [
-                      { label: `"${target.name}" as TestPion (.json)`, icon: <FileJson size={14} />, onSelect: () => void exportAs(target.id, 'testpion') },
-                      { label: 'as Postman collection v2.1', icon: <Send size={14} />, onSelect: () => void exportAs(target.id, 'postman') },
-                      { label: 'as OpenAPI 3.1 (.yaml)', icon: <FileCode size={14} />, onSelect: () => void exportAs(target.id, 'openapi') },
-                      { label: 'as Bruno collection folder…', icon: <FolderOpen size={14} />, onSelect: () => void exportAs(target.id, 'bruno') },
+                      // the collection's export choices: the one list (exportItems), with the words of its own menu's Export ▸
+                      { label: target.name, icon: <FileJson size={14} />, items: exportItems(target), onSelect: () => undefined },
                       {
                         label: 'Integration flows → tests/ (create, read, update, list, delete)',
                         icon: <Workflow size={14} />,
@@ -274,10 +272,10 @@ export function CollectionsView() {
                   New
                 </Button>
                 <IconButton label="Capture traffic into a collection (the Debugger's reverse proxy for one API)" onClick={() => openReverseProxyCapture()}>
-                  <Radio size={13} />
+                  <Radio />
                 </IconButton>
                 <IconButton label="Recently deleted" onClick={() => setTrashOpen(true)}>
-                  <ArchiveRestore size={13} />
+                  <ArchiveRestore />
                 </IconButton>
               </div>
             }
@@ -324,7 +322,7 @@ export function CollectionsView() {
         <div className="h-full flex flex-col min-w-0">
           {draft ? (
             <>
-              <div className="flex items-center gap-2 px-3 h-11 border-b border-line">
+              <Bar>
                 {renamingName ? (
                   <InlineRename value={draft.name} label="Collection name" className="font-semibold w-72" onCommit={(name) => void renameCollection(name)} onCancel={() => setRenamingName(false)} />
                 ) : (
@@ -370,23 +368,14 @@ export function CollectionsView() {
                       { label: 'Security review…', icon: <ShieldCheck size={14} />, separator: true, onSelect: () => setSecurityOpen(true) },
                     ]}
                   />
-                  <Menu
-                    trigger={
-                      <Button size="sm" icon={<Download size={12} />}>
-                        Export
-                      </Button>
-                    }
-                    width={230}
-                    items={exportItems(draft)}
-                  />
                   <Button size="sm" variant="primary" onClick={() => save(draft)}>
                     Save
                   </Button>
-                  {/* the collection's own menu (lib/node-menu.ts), the same as its row's: Delete… goes to Recently deleted, with Undo */}
+                  {/* the collection's own menu (lib/node-menu.ts), the same as its row's: Export ▸ is there (one export menu, H2); Delete… goes to Recently deleted, with Undo */}
                   <MoreMenu label="More collection actions" items={openItemMenu('collection', collectionMenu(draft))} />
                 </div>
-              </div>
-              <Tabs
+              </Bar>
+              <Tabs label="Collection"
                 value={tab}
                 onChange={setTab}
                 tabs={[

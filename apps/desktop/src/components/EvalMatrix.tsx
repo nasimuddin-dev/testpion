@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Grid3x3, Play, Search, Target, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Grid3x3, Play, Target, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { EvalColumnStats, EvalMatrixColumn, EvalMatrixPage, EvalMatrixQuery, EvalMatrixRow, EvalMatrixRowCell } from '@testpion/core';
 import { call } from '../api';
@@ -8,7 +8,7 @@ import { plural, timeAgo } from '../lib/format';
 import type { TestResult } from '../types';
 import type { RunRow } from './RunsOverview';
 import { ResultDetail } from './RunPanel';
-import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, VirtualList } from './ui';
+import { Badge, Button, cx, Empty, FilterInput, Input, SectionTitle, Segmented, Select, Split, VirtualList } from './ui';
 import { outputFileName } from '@testpion/shared';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
@@ -86,7 +86,7 @@ function Cell({ c, col, selected, onOpen }: { c: EvalMatrixRowCell; col: Column;
         <span className="text-muted">·</span>
       ) : (
         <>
-          {(c.change === 'regressed' || c.change === 'improved') && c.delta !== undefined && <span className="text-[10px] opacity-90">{signed(c.delta)}</span>}
+          {(c.change === 'regressed' || c.change === 'improved') && c.delta !== undefined && <span className="text-2xs opacity-90">{signed(c.delta)}</span>}
           {c.change === 'regressed' && c.delta === undefined && <ArrowDown size={11} />}
           {c.change === 'improved' && c.delta === undefined && <ArrowUp size={11} />}
           <span className="font-medium">{c.score !== undefined ? fmt(c.score) : c.status === 'passed' ? '✓' : c.status === 'skipped' ? '–' : '✗'}</span>
@@ -366,10 +366,7 @@ export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the e
             ))}
           </Select>
         )}
-        <label className="relative">
-          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          <Input className="h-6 min-h-6 w-40 text-xs pl-6" placeholder="Find a case" aria-label="Find a case" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </label>
+        <FilterInput className="w-40" placeholder="Find a case" label="Find a case" value={search} onChange={setSearch} />
         <Select
           className="h-6 min-h-6 py-0 text-xs"
           aria-label="Sort"
@@ -395,8 +392,8 @@ export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the e
       <div className="flex-1 min-h-0 overflow-x-auto">
         <div className="h-full flex flex-col min-h-0" style={{ minWidth }}>
           {/* the column heads: the variant, its pass count and mean score (and the change against the baseline); a click sorts by it */}
-          <div className="grid border-b border-line text-[11px] shrink-0" style={{ gridTemplateColumns: grid }}>
-            <div className="px-2 py-1 text-muted uppercase tracking-wide self-end">Case</div>
+          <div className="grid border-b border-line text-xs shrink-0" style={{ gridTemplateColumns: grid }}>
+            <SectionTitle size="sm" className="px-2 py-1 self-end">Case</SectionTitle>
             {cols.map((c, k) => (
               <button
                 key={c.key}

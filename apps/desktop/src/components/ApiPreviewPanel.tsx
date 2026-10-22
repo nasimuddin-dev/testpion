@@ -123,7 +123,7 @@ export const generateSpecTests = (spec: string) =>
   generateTestsFromDefinition(spec, {
     message: `A test file per tag under tests/, with each operation's example (its documented status, the OpenAPI contract, latency) and one invalid request that must get a 4xx, and a suite that runs them. Test files that exist are kept.`,
     summary: (r, n) => `${r.written.length} files, ${n} tests${r.skipped.length ? ` (${r.skipped.length} kept as they were)` : ''}: review the example values, then run the suite`,
-    onWritten: () => ({ label: 'Open Tests', onClick: () => useApp.getState().setView('tests') }),
+    onWritten: () => ({ label: 'Open tests', onClick: () => useApp.getState().setView('tests') }),
   });
 
 export function ApiPreviewPanel({ outline, error, spec, onRetry }: { outline?: ApiOutline; error?: string; spec?: string; /** Read the document again. */ onRetry(): void }) {

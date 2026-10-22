@@ -240,7 +240,7 @@ export function EnvironmentsView() {
   return (
     <div className="h-full flex flex-col">
       {alsoFor && <AlsoAddDialog from={alsoFor.from} keys={alsoFor.keys} onClose={() => setAlsoFor(undefined)} />}
-      <Tabs
+      <Tabs label="Variable scope"
         value={scope}
         onChange={setScope}
         tabs={[
@@ -263,7 +263,7 @@ export function EnvironmentsView() {
                 className="mx-0 pl-3 shrink-0"
                 ctx={() => ({ create: [{ label: 'New environment', icon: <Plus size={14} />, onSelect: () => void newEnvironment() }], on: { recentlyDeleted: () => setTrashOpen(true) } })}
               >
-                <span className="text-[0.82rem] font-semibold truncate">Environments</span>
+                <span className="text-xs font-semibold truncate">Environments</span>
                 {envs.length > 0 && <CountPill n={envs.length} />}
               </TreeRowShell>
               <div className="flex-1 overflow-auto" role="tree" aria-label="Environments">

@@ -231,7 +231,7 @@ The rail shows five views; **More…** under them lists the rest. Every view sta
 - A view opened from **More…** shows on the rail while it is open, under a line; right-click it and pick **Keep on the rail** to keep it there.
 - A count (the Git view's commits to pull) shows on **More…** while its view is hidden there.
 - <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd>, the tooltips, the [shortcuts list](/getting-started/keyboard-shortcuts) and the command palette's hints count the shown views, in the rail's order.
-- The choice is this computer's: it is saved in the app's `settings.json` as `rail: { order, shown }` (view ids such as `home`, `collections`, `tests`, `debugger`), not in the workspace. <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Rail: Show Every View** / **Rail: Reset to the Default Views** do the same as the menu.
+- The choice is this computer's: it is saved in the app's `settings.json` as `rail: { order, shown }` (view ids such as `home`, `collections`, `tests`, `debugger`), not in the workspace. <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Rail: Show every view** / **Rail: Reset to the default views** do the same as the menu.
 
 <figure class="aps-screenshot">
   <img src="/images/rail-more.jpg" alt="The rail with Home, Collections, Tests, Environments and History, and its More… menu open: Debugger, Monitors, Load, AI Lab, Evaluations, Traces and Git, then Show on the rail, Show every view and Reset the rail" width="1440" height="900" loading="lazy">

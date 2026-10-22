@@ -1,8 +1,9 @@
+import { plural } from '../lib/format';
 import { AskSearchButton } from '../components/ai/AskSearchButton';
 import { ASK_SCOPE } from '../components/ai/ask-search';
 import { useState } from 'react';
 import { BarChart3, History, Play } from 'lucide-react';
-import { Empty, Input } from '../components/ui';
+import { Empty, FilterInput } from '../components/ui';
 import { treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { RunMiniBar, type RunRow } from '../components/RunsOverview';
@@ -35,7 +36,7 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
         {runs.length > 3 && (
           <>
-            <Input className="h-7 min-h-7 text-sm flex-1 min-w-0" placeholder="Filter runs" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter runs" />
+            <FilterInput className="flex-1 min-w-0" placeholder="Filter runs" label="Filter runs" value={query} onChange={setQuery} />
             <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
               <input type="checkbox" checked={failedOnly} onChange={(e) => setFailedOnly(e.target.checked)} /> Failed
             </label>
@@ -89,7 +90,7 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
                 {r.errors > 0 && (
                   <span className="inline-flex items-center gap-0.5 text-bad" title="Errors: could not run (network, TLS, timeout or a script)" data-run-errors={r.errors}>
                     {TYPE_ICON.error}
-                    {r.errors} error{r.errors === 1 ? '' : 's'}
+                    {plural(r.errors, 'error')}
                   </span>
                 )}
                 {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}

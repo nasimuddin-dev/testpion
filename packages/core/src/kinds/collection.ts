@@ -25,7 +25,7 @@ function resolveNode(store: WorkspaceStore, r: Extract<ItemRef, { kind: 'request
 /** A collection, or its mock server: there when the collection is. */
 function resolveCollection(store: WorkspaceStore, r: Extract<ItemRef, { kind: 'collection' | 'mock' }>) {
   const c = collectionIndex(store, r.collectionId);
-  return c ? ok(r, c.name) : missing(r, 'That collection is no longer in this workspace (deleted, or in another workspace).', { label: 'Open Collections', view: 'collections' });
+  return c ? ok(r, c.name) : missing(r, 'That collection is no longer in this workspace (deleted, or in another workspace).', { label: 'Open collections', view: 'collections' });
 }
 
 export const collectionKinds: KindDefs = {

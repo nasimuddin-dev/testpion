@@ -482,7 +482,7 @@ export function LoadView() {
               </div>
             )}
             <div className="border border-line rounded-md">
-              <Tabs
+              <Tabs label="Load test request"
                 value={tab}
                 onChange={setTab}
                 tabs={[

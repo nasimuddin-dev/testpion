@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { FlaskConical, RotateCcw, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FlakyReport, Proposal, ProposalAttempt, ProposalFinding, ProposalItem, TriageResult } from '@testpion/core';
@@ -103,7 +104,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
       useApp
         .getState()
         .toast(
-          `Applied ${r.applied.length} ${r.applied.length === 1 ? 'fix' : 'fixes'}${r.skipped.length ? ` (${r.skipped.length} skipped: ${r.skipped[0]!.reason})` : ''}`,
+          `Applied ${plural(r.applied.length, 'fix', 'fixes')}${r.skipped.length ? ` (${r.skipped.length} skipped: ${r.skipped[0]!.reason})` : ''}`,
           r.skipped.length ? 'info' : 'success',
           undefined,
           { undo },
@@ -141,8 +142,8 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
       <Modal title={title} onClose={onClose} width={560} footer={<Button onClick={onClose}>Close</Button>}>
         <div className="grid gap-3 text-sm" data-triage-applied>
           <p>
-            Applied {applied.count} {applied.count === 1 ? 'fix' : 'fixes'}. Run the tests they fix again to see them pass
-            {applied.resultIds.length ? ` (${applied.resultIds.length} ${applied.resultIds.length === 1 ? 'result' : 'results'})` : ''}.
+            Applied {plural(applied.count, 'fix', 'fixes')}. Run the tests they fix again to see them pass
+            {applied.resultIds.length ? ` (${plural(applied.resultIds.length, 'result')})` : ''}.
           </p>
           <div className="flex gap-2 flex-wrap">
             <Button variant="primary" icon={<RotateCcw size={13} />} onClick={() => void runAgain(request.runId, applied.resultIds).then((id) => id && onClose())} data-triage-rerun>
@@ -226,7 +227,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
             <>
               <Badge tone="bad">{groups.failures === 1 ? '1 failure' : `${groups.failures.toLocaleString()} failures`}</Badge>
               <span>
-                in {groups.groups.length} {groups.groups.length === 1 ? 'group' : 'groups'} (same check, status and endpoint)
+                in {plural(groups.groups.length, 'group')} (same check, status and endpoint)
                 {groups.omitted.groups ? ` · ${groups.omitted.groups} more groups not sent` : ''} · run “{groups.run.name}”
               </span>
             </>

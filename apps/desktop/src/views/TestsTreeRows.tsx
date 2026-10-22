@@ -122,7 +122,7 @@ const TestTreeRow = memo(function TestTreeRow({ n, depth, expanded, active, rena
       actions={
         runnable && (
           <IconButton label={`Run ${n.name}`} className={rowActionClass()} onClick={() => h().run([n.path], n.path)}>
-            <Play size={12} />
+            <Play />
           </IconButton>
         )
       }

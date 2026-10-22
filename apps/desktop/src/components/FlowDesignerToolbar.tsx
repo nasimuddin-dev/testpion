@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { ChevronDown, ChevronsRight, FileSpreadsheet, GanttChart, Grid3x3, History, LayoutGrid, Layers, Map as MapIcon, Play, Plus, Redo2, Search, StepForward, StickyNote, Undo2, Bug } from 'lucide-react';
 import type { FlowStep } from '@testpion/shared';
 import { LABEL } from '../lib/vocabulary';
@@ -135,7 +136,7 @@ export function FlowDesignerToolbar({
               onSelect: onDebug,
               disabled: !stepCount || paused,
               title: breakpoints
-                ? `Run the flow one step at a time, pausing before the ${breakpoints} breakpoint${breakpoints === 1 ? '' : 's'}: inspect and change variables, then Continue, Step over or Stop`
+                ? `Run the flow one step at a time, pausing before the ${plural(breakpoints, 'breakpoint')}: inspect and change variables, then Continue, Step over or Stop`
                 : 'Run the flow pausing before breakpoints: add one with F9 or a step’s right-click menu',
             },
             { label: 'Run from selected', icon: <ChevronsRight size={14} />, onSelect: onRunFrom, disabled: !one, title: 'The selected step and every step after it, seeded from the latest run' },

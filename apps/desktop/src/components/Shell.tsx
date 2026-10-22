@@ -50,7 +50,7 @@ const TerminalPanel = lazy(() => import('./TerminalPanel'));
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
 import { useApp, type DialogRequest, type DialogTone, type NavLocation } from '../store';
-import { Button, cx, HelpLink, IconButton, Input, Kbd, Menu, Modal, Spinner } from './ui';
+import { Bar, Button, cx, HelpLink, IconButton, Input, Kbd, Menu, Modal, SectionTitle, Select, Spinner, Tabs } from './ui';
 import { VIEW_DOCS } from '../lib/docs-pages';
 import { Toaster as SonnerToaster } from 'sonner';
 
@@ -118,14 +118,14 @@ export function TopBar() {
       {drawn && (
         <IconButton
           label="Menu (File, Edit, View, Window, Help)"
-          className="h-8 w-8 -ml-1"
+          className="-ml-1"
           style={noDrag}
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
             window.aps?.appMenu?.(r.left, r.bottom + 4);
           }}
         >
-          <MenuIcon size={17} />
+          <MenuIcon />
         </IconButton>
       )}
       <div className="flex items-center gap-2 pr-1" style={noDrag}>
@@ -163,11 +163,11 @@ export function TopBar() {
         </Button>
         {aiOn && (
           <IconButton label="AI assistant" onClick={() => askAssistant()}>
-            <Bot size={17} />
+            <Bot />
           </IconButton>
         )}
         <IconButton label="Settings" onClick={() => useApp.getState().setView('settings')}>
-          <Settings size={17} />
+          <Settings />
         </IconButton>
         <ViewHelp />
       </div>
@@ -217,7 +217,7 @@ export function StatusBar() {
   const bottomTab = useApp((s) => s.bottomTab);
   const acts = Object.values(activity);
   return (
-    <footer className="h-7 shrink-0 border-t border-line bg-chrome flex items-center gap-4 px-3 text-[0.75rem] text-muted">
+    <footer className="h-7 shrink-0 border-t border-line bg-chrome flex items-center gap-4 px-3 text-xs text-muted">
       <EnvSelect variant="status" />
       <span className="flex items-center gap-1" title="Connected MCP servers">
         <Plug size={12} /> {mcp} MCP connected
@@ -285,16 +285,17 @@ export function LogsPanel() {
   const tab = useApp((s) => s.bottomTab);
   return (
     <div className="h-60 border-t border-line bg-panel flex flex-col shrink-0" data-bottom-panel={tab}>
-      <div className="flex items-center gap-1 px-2 h-8 border-b border-line text-xs shrink-0">
-        {(Object.keys(BOTTOM_TABS) as Array<keyof typeof BOTTOM_TABS>).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} data-bottom-tab={t} className={cx('px-2 h-6 rounded-md font-medium', tab === t ? 'bg-hover text-fg' : 'text-muted hover:text-fg')} onClick={() => useApp.getState().set({ bottomTab: t })}>
-            {BOTTOM_TABS[t]}
-          </button>
-        ))}
-        <IconButton label="Close panel" className="ml-auto" onClick={() => useApp.getState().set({ logsOpen: false })}>
-          <X size={13} />
-        </IconButton>
-      </div>
+      <Tabs
+        label="Bottom panel"
+        value={tab}
+        onChange={(t) => useApp.getState().set({ bottomTab: t })}
+        tabs={(Object.keys(BOTTOM_TABS) as Array<keyof typeof BOTTOM_TABS>).map((t) => ({ id: t, label: BOTTOM_TABS[t], data: { 'data-bottom-tab': t } }))}
+        right={
+          <IconButton size="md" label="Close panel" onClick={() => useApp.getState().set({ logsOpen: false })}>
+            <X />
+          </IconButton>
+        }
+      />
       {tab === 'problems' ? (
         <ProblemsPanel />
       ) : tab === 'console' ? (
@@ -309,6 +310,16 @@ export function LogsPanel() {
     </div>
   );
 }
+
+/** The log levels the Logs panel filters by, most severe first (the log's own words, ERROR … TRACE, stay in its lines). */
+const LOG_LEVELS = [
+  { id: 'ALL', label: 'All levels' },
+  { id: 'ERROR', label: 'Errors' },
+  { id: 'WARN', label: 'Warnings' },
+  { id: 'INFO', label: 'Info' },
+  { id: 'DEBUG', label: 'Debug' },
+  { id: 'TRACE', label: 'Trace' },
+] as const;
 
 function AppLogs() {
   const [logs] = useEventLog<{ time: string; level: string; scope: string; message: string; data?: unknown }>('log', 500, 'logs.recent');
@@ -330,19 +341,21 @@ function AppLogs() {
   );
   return (
     <>
-      <div className="flex items-center gap-2 px-3 h-7 border-b border-line text-xs shrink-0 min-w-0 overflow-clip whitespace-nowrap">
+      <Bar className="text-xs overflow-clip whitespace-nowrap">
         <OutputBarStart>
           <span className="text-muted truncate min-w-0">Application logs · secrets are always redacted</span>
         </OutputBarStart>
         <OutputActions spec={spec}>
-          <select className="bg-transparent" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Log level">
-            {['ALL', 'ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].map((l) => (
-              <option key={l}>{l}</option>
+          <Select className="field-sm text-xs w-auto" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Log level">
+            {LOG_LEVELS.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
             ))}
-          </select>
+          </Select>
         </OutputActions>
-      </div>
-      <div className="flex-1 overflow-auto mono text-[0.8rem] px-3 py-1" data-output="logs">
+      </Bar>
+      <div className="flex-1 overflow-auto mono text-xs px-3 py-1" data-output="logs">
         {shown.map((l, i) => (
           <div key={i} className="whitespace-pre-wrap">
             <span className="text-muted">{l.time.slice(11, 23)}</span> <span className={cx(l.level === 'ERROR' && 'text-bad', l.level === 'WARN' && 'text-warn')}>{l.level.padEnd(5)}</span> {l.message}
@@ -429,7 +442,7 @@ export function CommandPalette({
     c.run();
   };
   return (
-    <div className={cx('fixed inset-0 z-50', anchor ? '' : 'bg-black/30 flex items-start justify-center pt-[12vh]')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
+    <div className={cx('fixed inset-0 z-50', anchor ? '' : 'bg-[var(--overlay)] flex items-start justify-center pt-[12vh]')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div
         role="dialog"
         aria-label={label}
@@ -453,7 +466,7 @@ export function CommandPalette({
         <div role="listbox" ref={listRef} className={cx('overflow-auto py-1', anchor ? 'max-h-[340px]' : 'max-h-[50vh]')}>
           {filtered.map((c, i) => (
             <Fragment key={c.id}>
-              {c.group && c.group !== filtered[i - 1]?.group && <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{c.group}</div>}
+              {c.group && c.group !== filtered[i - 1]?.group && <SectionTitle size="sm" className="px-4 pt-2 pb-1">{c.group}</SectionTitle>}
               <button
                 role="option"
                 aria-selected={i === idx}
@@ -548,7 +561,7 @@ export function SearchDialog() {
   // kinds without an icon of their own here (environments, API definitions, datasets …) take their kind's (RefLink)
   const iconOf = (h: SearchHit) => icons[h.kind] ?? ((r) => (r ? refIcon(r, 14) : null))(toItemRef(h.ref));
   return (
-    <div className={cx('fixed inset-0 z-50 bg-black/30', !anchor && 'flex items-start justify-center pt-[12vh]')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
+    <div className={cx('fixed inset-0 z-50 bg-[var(--overlay)]', !anchor && 'flex items-start justify-center pt-[12vh]')} onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div
         role="dialog"
         aria-label="Search"
@@ -580,7 +593,7 @@ export function SearchDialog() {
                 <div className="text-sm truncate">{h.title}</div>
                 {h.subtitle && <div className="text-xs text-muted truncate">{h.subtitle}</div>}
               </span>
-              <span className="ml-auto text-[0.7rem] text-muted">{h.kind}</span>
+              <span className="ml-auto text-2xs text-muted">{h.kind}</span>
             </button>
           ))}
           {!q && <div className="px-4 py-6 text-sm text-muted">Searches requests, collections, tests, GraphQL operations, MCP servers, providers, environments and their variables, API definitions, datasets, history, traces and runs.</div>}
@@ -696,7 +709,7 @@ export function ProgressHost() {
             <Spinner size={17} />
           </span>
           <div className="min-w-0 flex-1 pt-0.5">
-            <div className="font-semibold text-[1.05rem]">{p.title}</div>
+            <div className="font-semibold text-title">{p.title}</div>
             <div className="text-sm text-muted mt-1">{p.message}</div>
             <div className="mt-3.5 h-2 rounded-full bg-panel2 relative overflow-hidden">
               {p.fraction === null ? <div className="absolute inset-0 indeterminate" /> : <div className="h-full rounded-full bg-[image:var(--brand-gradient)] transition-all" style={{ width: `${Math.round(p.fraction * 100)}%` }} />}
@@ -731,17 +744,17 @@ function NavButtons() {
   return (
     <div className="flex items-center gap-0.5">
       <IconButton label={prev ? `Back to ${placeLabel(prev)}  (${keyLabel('back', bindings)})` : 'Back'} disabled={!prev} reason="Nothing to go back to" onClick={() => useApp.getState().goBack()}>
-        <ArrowLeft size={16} />
+        <ArrowLeft />
       </IconButton>
       <IconButton label={next ? `Forward to ${placeLabel(next)}  (${keyLabel('forward', bindings)})` : 'Forward'} disabled={!next} reason="Nothing to go forward to" onClick={() => useApp.getState().goForward()}>
-        <ArrowRight size={16} />
+        <ArrowRight />
       </IconButton>
       <Menu
         width={260}
         align="start"
         trigger={
-          <IconButton label="Recent places" disabled={!recent.length} reason="No places visited yet" className="w-6">
-            <NavChevron size={13} />
+          <IconButton label="Recent places" disabled={!recent.length} reason="No places visited yet" narrow>
+            <NavChevron />
           </IconButton>
         }
         items={recent.map((l, i) => ({ label: placeLabel(l), icon: <History size={14} />, onSelect: () => jump(i + 1) }))}

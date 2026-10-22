@@ -1,10 +1,10 @@
-import { Check, Copy, Play, Radio, Square } from 'lucide-react';
+import { Copy, Play, Radio, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { toastError, useApp } from '../store';
 import { Badge, Button, cx, Empty, Field, Input, statusTone } from './ui';
 import { usePersisted } from '../lib/sticky';
-import { useCopied } from '../lib/clipboard';
+import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
 
 interface MockInfo {
@@ -37,7 +37,6 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
   const [fallback, setFallback] = usePersisted(`aps.mockFallback.${collectionId}`, '', { text: true });
   const [busy, setBusy] = useState(false);
   const [hits, setHits] = useState<MockHit[]>([]);
-  const { copied, copy } = useCopied();
 
   useEffect(() => {
     void call<MockInfo>('mock.status', { collectionId }).then(setInfo);
@@ -105,10 +104,10 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
             <Button
               size="sm"
               variant="ghost"
-              icon={copied ? <Check size={12} /> : <Copy size={12} />}
-              onClick={() => void copy(info.url!)}
+              icon={<Copy size={12} />}
+              onClick={() => void copyText(info.url!, 'the mock server URL')}
             >
-              {copied ? 'Copied' : 'Copy URL'}
+              Copy URL
             </Button>
           </div>
         )}

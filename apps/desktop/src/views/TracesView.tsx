@@ -1,3 +1,4 @@
+import { trafficKindLabel, trafficKindOptions } from '../lib/traffic-kinds';
 import { Activity, RefreshCw, Send } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { call, on } from '../api';
@@ -11,7 +12,7 @@ import { TraceView } from '../components/TraceView';
 import { DurationBar } from '../components/charts';
 import { AskSearchButton } from '../components/ai/AskSearchButton';
 import { ASK_SCOPE } from '../components/ai/ask-search';
-import { Badge, Busy, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList } from '../components/ui';
+import { Badge, Busy, Button, Empty, FilterInput, IconButton, Input, Modal, Select, Split, StatusDot, VirtualList } from '../components/ui';
 import { treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
@@ -137,11 +138,13 @@ export function TracesView() {
     <Split id="traces" initial={32}>
       <div className="h-full flex flex-col" data-output="traces" onKeyDown={treeKeys}>
         <div className="flex gap-2 p-2 border-b border-line">
-          <Input className="flex-1" placeholder="Filter traces" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <FilterInput className="flex-1" placeholder="Filter traces" label="Filter traces" value={query} onChange={setQuery} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
             <option value="">All kinds</option>
-            {['http', 'graphql', 'mcp', 'llm', 'test'].map((k) => (
-              <option key={k}>{k}</option>
+            {trafficKindOptions(['http', 'graphql', 'mcp', 'llm', 'test']).map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.label}
+              </option>
             ))}
           </Select>
           <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Only traces that ended in an error">
@@ -149,7 +152,7 @@ export function TracesView() {
           </label>
           <AskSearchButton scope={ASK_SCOPE.traces} />
           <IconButton label="Refresh" onClick={() => load(true)}>
-            <RefreshCw size={14} />
+            <RefreshCw />
           </IconButton>
         </div>
         {otlpOpen && <OtlpDialog ids={items.map((t) => t.id)} selected={sel} onClose={() => setOtlpOpen(false)} />}
@@ -157,7 +160,7 @@ export function TracesView() {
           <span className="text-xs text-muted truncate min-w-0">{plural(total, 'trace')}</span>
           <OutputActions spec={spec}>
             <IconButton label="Send to OpenTelemetry (OTLP)" onClick={() => setOtlpOpen(true)}>
-              <Send size={14} />
+              <Send />
             </IconButton>
           </OutputActions>
         </div>
@@ -185,7 +188,7 @@ export function TracesView() {
               >
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-2 text-sm">
-                    <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', t.status === 'ok' ? 'bg-ok' : 'bg-bad')} />
+                    <StatusDot tone={t.status === 'ok' ? 'ok' : 'bad'} />
                     <span className="truncate min-w-0">{t.name}</span>
                     <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted tabular-nums whitespace-nowrap shrink-0 pl-2">
                       <DurationBar ms={t.durationMs} max={maxMs} bad={t.status !== 'ok'} />
@@ -193,7 +196,7 @@ export function TracesView() {
                     </span>
                   </span>
                   <span className="text-xs text-muted flex gap-2 pl-3.5">
-                    <Badge>{t.kind}</Badge>
+                    <Badge>{trafficKindLabel(t.kind)}</Badge>
                     {plural(t.spanCount, 'span')} · {timeAgo(t.startTime)}
                   </span>
                 </span>

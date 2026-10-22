@@ -44,7 +44,7 @@ export function ChunkImage({ image }: { image: string }) {
     <figure className="m-0 mt-1" data-rag-chunk-image="shown">
       <img src={shown} alt="A picture of this chunk" className="max-h-40 max-w-full object-contain rounded border border-line bg-surface" />
       {data?.bytes !== undefined && (
-        <figcaption className="text-[10px] text-muted mono">
+        <figcaption className="text-2xs text-muted mono">
           {data.mime} · {data.width && data.height ? `${data.width}×${data.height} · ` : ''}
           {Math.max(1, Math.round(data.bytes / 1024))} KB{data.stripped ? ' · metadata removed' : ''}
         </figcaption>

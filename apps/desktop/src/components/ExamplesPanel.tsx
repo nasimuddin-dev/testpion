@@ -6,7 +6,7 @@ import { attempt } from '../store';
 import { deleteWithUndo, putBack } from '../lib/undo-delete';
 import type { SavedExample } from '../types';
 import { CodeEditor } from './CodeEditor';
-import { Badge, cx, Empty, IconButton, statusTone } from './ui';
+import { Badge, Bar, cx, Empty, IconButton, statusTone } from './ui';
 import { PinnablePanel } from './PinnablePanel';
 import { focusRow, InlineRename } from './TreeParts';
 
@@ -103,7 +103,7 @@ export function ExamplesPanel({
       </PinnablePanel>
       {current && (
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
-          <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0">
+          <Bar className="text-sm">
             <Badge tone={statusTone(current.status)}>
               {current.status} {current.statusText}
             </Badge>
@@ -132,7 +132,7 @@ export function ExamplesPanel({
               label="Rename example (F2)"
               onClick={() => setRenaming(current.id)}
             >
-              <Pencil size={14} />
+              <Pencil />
             </IconButton>
             <IconButton
               label="Delete example"
@@ -143,9 +143,9 @@ export function ExamplesPanel({
                 void deleteWithUndo({ what: `the example "${gone.name}"`, run: () => persist(examples.filter((e) => e.id !== gone.id)), undo: () => persist(putBack(latest.current, gone, at)) });
               }}
             >
-              <Trash2 size={14} />
+              <Trash2 />
             </IconButton>
-          </div>
+          </Bar>
           {current.headers.length > 0 && (
             <details className="border-b border-line text-sm shrink-0">
               <summary className="px-3 py-1.5 cursor-pointer text-muted text-xs">Headers ({current.headers.length})</summary>

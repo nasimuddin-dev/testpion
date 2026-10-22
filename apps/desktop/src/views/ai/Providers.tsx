@@ -109,7 +109,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
     <Split id="ai-providers" sidebar initial={26}>
       <div className="h-full flex flex-col bg-panel/50" onKeyDown={treeKeys}>
         <TreeRowShell kind="section:provider" nodeId="providers:section" label="Providers" header className="mx-0 pl-3 shrink-0" ctx={() => ({ create: [{ label: 'Add provider', icon: <Plus size={14} />, onSelect: addProvider }], on: {} })}>
-          <span className="text-[0.82rem] font-semibold truncate">Providers</span>
+          <span className="text-xs font-semibold truncate">Providers</span>
           {list.length > 0 && <CountPill n={list.length} />}
         </TreeRowShell>
         <div className="flex-1 overflow-auto pb-2" role="tree" aria-label="Providers">
@@ -141,7 +141,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
               Model: <span className="mono">{p.defaultModel}</span>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => useApp.getState().setView('settings')}>Open Settings</Button>
+              <Button onClick={() => useApp.getState().setView('settings')}>Open settings</Button>
               <Button variant="primary" loading={testing} onClick={() => void test()}>
                 Test connection
               </Button>

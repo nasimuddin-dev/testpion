@@ -8,7 +8,7 @@ import { call } from '../api';
 import { promptText, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { groupByDay, uid } from '../lib/format';
-import { Badge, cx, Empty, IconButton, Input, statusTone } from './ui';
+import { Badge, cx, Empty, FilterInput, IconButton, statusTone } from './ui';
 
 /** Sidebar pane: the workspace's environments; click one to make it active (Postman's Environments sidebar). */
 export function EnvironmentsPane() {
@@ -27,14 +27,14 @@ export function EnvironmentsPane() {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-1 px-2 pb-2">
-        <Input className="flex-1 h-7 min-h-7 text-sm" placeholder="Filter environments" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <FilterInput className="flex-1" placeholder="Filter environments" label="Filter environments" value={filter} onChange={setFilter} />
         <IconButton label="New environment" onClick={() => void create()}>
-          <Plus size={14} />
+          <Plus />
         </IconButton>
       </div>
       <div className="flex-1 overflow-auto" role="tree" aria-label="Environments" onKeyDown={treeKeys}>
         <button className={cx('w-[calc(100%-0.5rem)] mx-1 rounded-md flex items-center gap-2 px-3 h-8 text-sm text-left transition-colors', !env ? 'bg-accent-soft text-accent' : 'hover:bg-hover text-muted')} onClick={() => useApp.getState().setEnvironment(undefined)}>
-          <span className="w-2 h-2 rounded-full bg-[var(--line-strong)] shrink-0" />
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--line-strong)' }} />
           <span className="flex-1">No environment</span>
           {!env && <Check size={13} />}
         </button>
@@ -102,7 +102,7 @@ export function HistoryPane({ kind = 'http', onOpen, noun = 'Requests you send' 
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="px-2 pb-2">
-        <Input className="w-full h-7 min-h-7 text-sm" placeholder="Filter history" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <FilterInput className="w-full" placeholder="Filter history" label="Filter history" value={filter} onChange={setFilter} />
       </div>
       <div className="flex-1 overflow-auto" role="tree" aria-label="History" onKeyDown={treeKeys}>
         {rows.map((r, i) =>

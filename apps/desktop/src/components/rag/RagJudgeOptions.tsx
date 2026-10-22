@@ -36,13 +36,13 @@ export function RagJudgeOptions({
               </Select>
               <Input className="h-6 min-h-6 text-xs mono flex-1" value={j.model ?? ''} placeholder="model" aria-label={`Jury judge ${i + 1} model`} onChange={(e) => set({ judges: judges.map((x, k) => (k === i ? { ...x, model: e.target.value || undefined } : x)) })} />
               <IconButton label="Remove this judge" onClick={() => set({ judges: judges.filter((_, k) => k !== i) })}>
-                <X size={12} />
+                <X />
               </IconButton>
             </div>
           ))}
           <div className="flex items-center gap-2">
             <IconButton label="Add a judge to the jury" onClick={() => set({ judges: [...judges, {}] })} data-rag-add-judge>
-              <Plus size={12} />
+              <Plus />
             </IconButton>
             {judges.length > 1 && (
               <label className="flex items-center gap-1">

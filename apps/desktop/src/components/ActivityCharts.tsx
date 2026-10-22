@@ -1,3 +1,4 @@
+import { trafficKindLabel } from '../lib/traffic-kinds';
 import { useState, type ReactNode } from 'react';
 import { formatMs, plural } from '../lib/format';
 import { axisMs, BarRow, ChartCard, chartKeys, ChartTip, niceMax, StackedColumns, StatTile, Swatch, useWidth } from './charts';
@@ -25,14 +26,7 @@ export interface Activity {
   }>;
 }
 
-const KIND_LABEL: Record<string, string> = {
-  http: 'REST',
-  graphql: 'GraphQL',
-  grpc: 'gRPC',
-  mcp: 'MCP',
-  llm: 'AI',
-  websocket: 'WebSocket',
-};
+
 const dayDate = (day: string) => new Date(day + 'T12:00:00');
 const shortDay = (day: string, i: number, n: number) =>
   i === n - 1
@@ -203,7 +197,7 @@ function ByKind({ byKind }: { byKind: Record<string, number> }) {
       {rows.length ? (
         <div className="flex flex-col gap-1.5">
           {rows.map(([k, n]) => (
-            <BarRow key={k} label={KIND_LABEL[k] ?? k} segments={[{ value: n, color: 'var(--accent)' }]} of={max} right={n} title={plural(n, `${KIND_LABEL[k] ?? k} request`)} />
+            <BarRow key={k} label={trafficKindLabel(k)} segments={[{ value: n, color: 'var(--accent)' }]} of={max} right={n} title={plural(n, `${trafficKindLabel(k)} request`)} />
           ))}
         </div>
       ) : (
@@ -220,7 +214,7 @@ function Slowest({ rows }: { rows: Activity['slowest'] }) {
         <div className="flex flex-col">
           {rows.map((r) => (
             <div key={r.kind + r.name} className="flex items-center gap-2 py-1 text-xs min-w-0">
-              <span className="w-16 shrink-0 text-muted">{KIND_LABEL[r.kind] ?? r.kind}</span>
+              <span className="w-16 shrink-0 text-muted">{trafficKindLabel(r.kind)}</span>
               <span className="truncate flex-1 min-w-0 text-fg" title={r.name}>
                 {r.name}
               </span>

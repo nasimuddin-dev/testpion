@@ -64,7 +64,7 @@ export function Section({
         <TreeRowShell kind={kind} nodeId={`section:${id}`} label={title} header expanded={open} onClick={() => sections.toggle(id, def)} ctx={menu} className="mx-0.5 pl-1">
           {open ? OPEN_ICON : CLOSED_ICON}
           <span className="text-muted shrink-0">{icon}</span>
-          <span className="text-[0.82rem] font-semibold truncate">{title}</span>
+          <span className="text-xs font-semibold truncate">{title}</span>
           {count !== undefined && count > 0 && <CountPill n={count} />}
         </TreeRowShell>
       </div>

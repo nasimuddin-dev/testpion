@@ -4,7 +4,7 @@ import { asError, call } from '../api';
 import { formatBytes, formatMs, plural, timeAgo } from '../lib/format';
 import { JsonTree, RawView } from './JsonView';
 import { LatencyTrend } from './LatencyTrend';
-import { LinkButton, Badge, Button, cx, Empty, IconButton, Spinner, statusTone } from './ui';
+import { Badge, Bar, Button, cx, Empty, IconButton, LinkButton, Spinner, statusTone } from './ui';
 import { jsonPretty, outputFileName, toCsv } from '@testpion/shared';
 import { OutputHeader } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
@@ -125,8 +125,8 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
           spec={spec}
           left={<span className="truncate min-w-0 text-xs text-muted">{plural(entries.length, 'response')} · pick two to compare</span>}
           actions={
-            <IconButton label="Refresh" className="h-7 w-7" onClick={load}>
-              <RefreshCw size={13} />
+            <IconButton size="md" label="Refresh" onClick={load}>
+              <RefreshCw />
             </IconButton>
           }
         />
@@ -146,8 +146,8 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
                 </div>
               </button>
               {i < entries.length - 1 && (
-                <IconButton label="Compare with the previous response" className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => void compare(entries[i + 1]!.id, e.id)}>
-                  <GitCompareArrows size={14} />
+                <IconButton size="md" label="Compare with the previous response" className="opacity-0 group-hover:opacity-100 focus:opacity-100" onClick={() => void compare(entries[i + 1]!.id, e.id)}>
+                  <GitCompareArrows />
                 </IconButton>
               )}
             </div>
@@ -167,11 +167,11 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
           <CompareView c={compared} />
         ) : viewing ? (
           <div className="h-full flex flex-col min-h-0">
-            <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0">
+            <Bar className="text-sm">
               <Eye size={14} className="text-muted" />
               <Badge tone={viewing.entry.status === undefined ? 'bad' : statusTone(viewing.entry.status)}>{viewing.entry.status}</Badge>
               <span className="text-muted">{new Date(viewing.entry.timestamp).toLocaleString()}</span>
-            </div>
+            </Bar>
             <div className="flex-1 min-h-0">{viewing.bodyMissing ? <Empty title="The body of this response is no longer on disk" /> : <BodyView text={viewing.body ?? ''} />}</div>
           </div>
         ) : (
@@ -238,7 +238,7 @@ export function CompareView({ c, labels }: { c: Compared; labels?: [string, stri
             <div className="rounded-lg border border-line overflow-hidden">
               {d.body.changes.map((ch, i) => (
                 <div key={i} className="flex items-start gap-2 px-3 py-1.5 border-b border-line/60 last:border-0 text-sm">
-                  <span className={cx('shrink-0 whitespace-nowrap text-[0.7rem] font-semibold px-1.5 rounded border min-w-[4.75rem] text-center', KIND[ch.kind].className)}>
+                  <span className={cx('shrink-0 whitespace-nowrap text-2xs font-semibold px-1.5 rounded border min-w-[4.75rem] text-center', KIND[ch.kind].className)}>
                     {KIND[ch.kind].sign} {KIND[ch.kind].label}
                   </span>
                   <span className="mono text-xs shrink-0 pt-0.5 text-fg">{ch.path}</span>
@@ -276,7 +276,7 @@ export function CompareView({ c, labels }: { c: Compared; labels?: [string, stri
             <div className="rounded-lg border border-line overflow-hidden">
               {headers.map((h) => (
                 <div key={h.name} className={cx('flex items-start gap-2 px-3 py-1.5 border-b border-line/60 last:border-0 text-sm', h.volatile && 'opacity-60')}>
-                  <span className={cx('shrink-0 whitespace-nowrap text-[0.7rem] font-semibold px-1.5 rounded border min-w-[4.75rem] text-center', KIND[h.kind].className)}>
+                  <span className={cx('shrink-0 whitespace-nowrap text-2xs font-semibold px-1.5 rounded border min-w-[4.75rem] text-center', KIND[h.kind].className)}>
                     {KIND[h.kind].sign} {KIND[h.kind].label}
                   </span>
                   <span className="mono text-xs shrink-0 pt-0.5">{h.name}</span>

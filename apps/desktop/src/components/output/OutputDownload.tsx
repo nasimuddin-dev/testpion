@@ -5,11 +5,10 @@ import { call } from '../../api';
 import { useApp } from '../../store';
 import { scopedKey } from '../../lib/ws-scope';
 import { LABEL } from '../../lib/vocabulary';
-import { cx, IconButton, Menu, Spinner, Tooltip, type MenuItem } from '../ui';
+import { IconButton, Menu, Spinner, Tooltip, type MenuItem } from '../ui';
 import { copyOutput, defaultFormat, formatKey, formatLabel, onRunningChange, registerControl, running, saveOutput, saveWithSecrets, type OutputFormatSpec, type OutputSpec } from './output-core';
 
 /** The size of the control's buttons: the same in every output (the e2e consistency check reads it). */
-export const OUTPUT_BUTTON = 'h-7 w-7';
 
 /*
  * The format chosen last on each kind of output: a tiny store over localStorage. Every output bar on screen reads it on
@@ -140,28 +139,29 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
                 : 'Secrets are masked before this output is built (tokens, passwords, Authorization headers), so it is always saved and copied without them.'
             }
           >
-            <span className="inline-flex items-center gap-0.5 text-[0.7rem] text-muted px-1" data-output-redacted>
+            <span className="inline-flex items-center gap-0.5 text-2xs text-muted px-1" data-output-redacted>
               <ShieldCheck size={12} />
               <span>Redacted</span>
             </span>
           </Tooltip>
         )}
-        <IconButton label={`Copy ${what}`} className={OUTPUT_BUTTON} disabled={disabled || !copyFormat} onClick={() => copyFormat && void copyOutput(spec, copyFormat)} data-output-copy={spec.id}>
-          <Copy size={14} />
+        <IconButton label={`Copy ${what}`} size="md" disabled={disabled || !copyFormat} onClick={() => copyFormat && void copyOutput(spec, copyFormat)} data-output-copy={spec.id}>
+          <Copy />
         </IconButton>
         <IconButton
           ref={button}
           label={job ? `Saving ${what}${progress ? ` (${progress})` : ''}…` : `Download ${what}${current ? ` (${formatLabel(current)})` : ''}`}
-          className={cx(OUTPUT_BUTTON, 'rounded-r-none')}
+          size="md"
+          className="rounded-r-none"
           disabled={disabled || !!job}
           onClick={() => save(current)}
           data-output-download={spec.id}
         >
-          {job ? <Spinner size={13} /> : <Download size={14} />}
+          {job ? <Spinner /> : <Download />}
         </IconButton>
         {job ? (
-          <IconButton label={`Cancel saving the ${what}`} className={cx(OUTPUT_BUTTON, 'w-5 rounded-l-none')} onClick={() => void call('output.cancel', { jobId: job.jobId })} data-output-cancel>
-            <X size={12} />
+          <IconButton label={`Cancel saving the ${what}`} size="md" narrow className="rounded-l-none" onClick={() => void call('output.cancel', { jobId: job.jobId })} data-output-cancel>
+            <X />
           </IconButton>
         ) : (
           <Menu
@@ -170,8 +170,8 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
             width={250}
             items={items}
             trigger={
-              <IconButton label={LABEL.chooseDownloadFormat} className={cx(OUTPUT_BUTTON, 'w-5 rounded-l-none -ml-0.5')} disabled={disabled} data-output-formats={spec.id}>
-                <ChevronDown size={12} />
+              <IconButton label={LABEL.chooseDownloadFormat} size="md" narrow className="rounded-l-none -ml-0.5" disabled={disabled} data-output-formats={spec.id}>
+                <ChevronDown />
               </IconButton>
             }
           />

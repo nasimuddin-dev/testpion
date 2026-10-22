@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { HttpRequestSpec } from '../types';
-import { Input, Select, Textarea, Toggle } from './ui';
+import { Input, SectionTitle, Select, Textarea, Toggle } from './ui';
 
 /** One row of the request settings: name and explanation on the left, the control on the right (Postman's layout). */
 export function SettingRow({ title, children, control, isDefault }: { title: string; children?: ReactNode; control: ReactNode; isDefault?: boolean }) {
@@ -9,7 +9,7 @@ export function SettingRow({ title, children, control, isDefault }: { title: str
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium flex items-center gap-2">
           {title}
-          {isDefault === false && <span className="text-[0.7rem] px-1.5 rounded-full bg-accent-soft text-accent">changed</span>}
+          {isDefault === false && <span className="text-2xs px-1.5 rounded-full bg-accent-soft text-accent">changed</span>}
         </div>
         {children && <div className="text-xs text-muted mt-0.5 leading-snug">{children}</div>}
       </div>
@@ -28,7 +28,7 @@ const TLS_VERSIONS = ['TLSv1', 'TLSv1.1', 'TLSv1.2', 'TLSv1.3'] as const;
 export function RequestSettings({ settings: st, onChange }: { settings: NonNullable<HttpRequestSpec['settings']>; onChange(s: NonNullable<HttpRequestSpec['settings']>): void }) {
   const set = (patch: Partial<typeof st>) => onChange({ ...st, ...patch });
   const num = (v: string) => (v === '' ? undefined : Number(v));
-  const section = (label: string) => <div className="pt-5 pb-1 text-[11px] font-semibold tracking-wider uppercase text-muted">{label}</div>;
+  const section = (label: string) => <SectionTitle size="sm" className="pt-5 pb-1">{label}</SectionTitle>;
   const toggle = (checked: boolean, on: (v: boolean) => void) => <Toggle checked={checked} onChange={on} label={checked ? 'On' : 'Off'} />;
   return (
     <div className="h-full overflow-auto">

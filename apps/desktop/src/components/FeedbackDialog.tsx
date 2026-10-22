@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { call } from '../api';
 import { finishSave, type SaveResult } from '../lib/files';
 import { useApp, attempt } from '../store';
+import { copyQuietly, copyText } from '../lib/clipboard';
 import { LinkButton, Button, cx, Field, Input, Modal, Toggle, Textarea } from './ui';
 
 export type FeedbackKind = 'bug' | 'idea' | 'ui' | 'question';
@@ -90,8 +91,9 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
   const ready = !!title.trim() && !!description.trim();
   const copy = async (quiet = false) => {
     if (!report) return;
-    await navigator.clipboard.writeText(`# ${report.title}\n\n${report.body}`);
-    if (!quiet) useApp.getState().toast('Report copied', 'success');
+    const text = `# ${report.title}\n\n${report.body}`;
+    if (quiet) await copyQuietly(text);
+    else await copyText(text, 'the report');
   };
   const openGitHub = async () => {
     if (!report) return;

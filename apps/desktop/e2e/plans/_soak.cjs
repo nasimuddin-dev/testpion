@@ -348,7 +348,7 @@ const cycle = (c) => {
     r(
       `${p}-panels`,
       `const t0 = performance.now(); await __t.view('Collections');
-       const termTabs = () => [...document.querySelectorAll('[data-terminal-tab]')];
+       const termTabs = () => [...document.querySelectorAll('[data-terminal-strip] [role=tab]')];
        const termText = () => (document.querySelector('[data-terminal-box] .xterm-rows')?.innerText ?? '').replace(/\\u00a0/g, ' ');
        const sessions = () => window.aps.invoke('terminal.list', {});
        const footer = (k) => document.querySelector('footer [data-status="' + k + '"]');
@@ -358,7 +358,7 @@ const cycle = (c) => {
          await __t.waitFor(() => document.querySelector('[data-terminal-box] .xterm') && termTabs().length >= 1, 15000);
          document.querySelector('[data-terminal-strip] button[aria-label="New terminal"]')?.click();
          await __t.waitFor(() => termTabs().length === 2, 15000);
-         const id = termTabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.terminalTab;
+         const id = termTabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.tabId;
          await __t.waitFor(() => /\\S/.test(termText()), 20000);
          if (id) await window.aps.invoke('terminal.write', { id, data: 'echo soak-${c}\\r' });
          const echoed = !!(await __t.waitFor(() => /^soak-${c}\\s*$/m.test(termText()), 15000));

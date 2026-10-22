@@ -14,7 +14,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { JsonTree } from '../components/JsonView';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Field, IconButton, Input, Split, Tabs, VirtualList, Textarea } from '../components/ui';
+import { Badge, Bar, BAR_CLASS, Button, cx, Empty, Field, IconButton, Input, Select, Split, Tabs, Textarea, VirtualList } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { pickTextFile } from '../lib/files';
 import { useSticky } from '../lib/sticky';
@@ -342,14 +342,14 @@ export function GrpcView() {
             return true;
           }}
         />
-        <select className="field h-8 flex-1 min-w-0 mono text-xs" aria-label="Method" value={d.method} onChange={(e) => set({ method: e.target.value })} disabled={!methods.length}>
+        <Select className="h-8 flex-1 min-w-0 mono text-xs" aria-label="Method" value={d.method} onChange={(e) => set({ method: e.target.value })} disabled={!methods.length}>
           {!methods.length && <option value="">Add a .proto file or use server reflection to choose a method</option>}
           {methods.map((m) => (
             <option key={m.name} value={m.name}>
               {m.name} ({kind(m)})
             </option>
           ))}
-        </select>
+        </Select>
         {sending ? (
           <Button variant="danger" icon={<Square size={12} />} onClick={stop}>
             Stop
@@ -385,7 +385,7 @@ export function GrpcView() {
       <div className="flex-1 min-h-0">
         <ResponseSplit id="grpc-main" initialSide={45}>
           <div className="h-full flex flex-col min-h-0">
-            <Tabs
+            <Tabs label="Request"
               value={tab}
               onChange={setTab}
               tabs={[
@@ -397,7 +397,7 @@ export function GrpcView() {
             />
             {tab === 'message' && (
               <>
-                <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-xs text-muted shrink-0">
+                <Bar className="text-xs text-muted">
                   {current ? (
                     <span className="truncate mono">
                       {current.requestType} → {current.responseType}
@@ -409,7 +409,7 @@ export function GrpcView() {
                   <Button size="sm" variant="ghost" className="ml-auto" icon={<Sparkles size={12} />} disabled={!current} reason="Choose a method first" title={example} onClick={useExample}>
                     Example
                   </Button>
-                </div>
+                </Bar>
                 <div className="flex-1 min-h-0">
                   <CodeEditor language="json" value={d.message} onChange={(message) => set({ message })} path={`grpc-message/${d.method || 'none'}.json`} jsonSchema={current?.requestSchema} />
                 </div>
@@ -446,7 +446,7 @@ export function GrpcView() {
                     </>
                   )}
                 </div>
-                <div className={cx('flex items-center gap-2 px-3 h-10 border-b border-line shrink-0', d.descriptorSet && 'opacity-50 pointer-events-none')}>
+                <div className={cx(BAR_CLASS, d.descriptorSet && 'opacity-50 pointer-events-none')}>
                   <Button size="sm" icon={<FileCode2 size={12} />} onClick={() => void addProto()}>
                     Add .proto file
                   </Button>
@@ -490,7 +490,7 @@ export function GrpcView() {
                           <FileCode2 size={13} className="text-muted shrink-0" />
                           <Input className="h-6 min-h-6 mono text-xs flex-1" value={f.name} aria-label="Import path" onChange={(e) => set({ protoFiles: d.protoFiles.map((p, j) => (j === i ? { ...p, name: e.target.value } : p)) })} />
                           <IconButton label="Remove file" className="opacity-0 group-hover:opacity-100" onClick={(e) => (e.stopPropagation(), set({ protoFiles: d.protoFiles.filter((_, j) => j !== i) }), setEditing(undefined))}>
-                            <Trash2 size={12} />
+                            <Trash2 />
                           </IconButton>
                         </div>
                       ))}
@@ -554,7 +554,7 @@ export function GrpcView() {
               </Empty>
             ) : (
               <>
-                <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
+                <Bar className="text-sm">
                   {sending ? (
                     <>
                       <Badge tone="accent">{live.length ? `receiving · ${live.length}` : 'calling…'}</Badge>
@@ -575,8 +575,8 @@ export function GrpcView() {
                       </>
                     )
                   )}
-                </div>
-                <Tabs
+                </Bar>
+                <Tabs label="Response"
                   value={resTab}
                   onChange={setResTab}
                   tabs={[

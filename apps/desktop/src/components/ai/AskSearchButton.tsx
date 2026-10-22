@@ -17,7 +17,7 @@ export function AskSearchButton({ scope, className }: { scope: readonly string[]
       data-ask-button
       onClick={() => startAskSearch({ scope: [...scope] })}
     >
-      <Sparkles size={15} />
+      <Sparkles />
     </IconButton>
   );
 }

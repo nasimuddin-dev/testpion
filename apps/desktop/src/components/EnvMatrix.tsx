@@ -89,7 +89,7 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
                     <td className="px-3 py-1 mono">
                       {r.key}
                       {r.differs && (
-                        <span className="ml-2 text-[0.65rem] text-muted font-sans" title="The plain values differ between environments (expected for hosts and ids)">
+                        <span className="ml-2 text-3xs text-muted font-sans" title="The plain values differ between environments (expected for hosts and ids)">
                           differs
                         </span>
                       )}

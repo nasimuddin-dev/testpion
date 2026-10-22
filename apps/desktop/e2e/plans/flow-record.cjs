@@ -98,7 +98,7 @@ const steps = [
      if (!r) return 'NO ROW'; r.click(); await __t.sleep(1000);
      await __t.tab('Flow');
      const des = await __t.waitFor(() => document.querySelector('[data-flow-designer]'), 5000); if (!des) return 'NO DESIGNER';
-     const rec = [...des.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Record from the Debugger'); if (!rec) return 'NO RECORD BUTTON';
+     const rec = [...des.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Record from the debugger'); if (!rec) return 'NO RECORD BUTTON';
      rec.click();
      const badge = await __t.waitFor(() => document.querySelector('main [data-recording-badge]'), 6000);
      if (!badge) return 'NO RECORDING BADGE';

@@ -1,3 +1,5 @@
+import { plural } from '../lib/format';
+import { trafficKindLabel, trafficKindOptions } from '../lib/traffic-kinds';
 import { CompareView, type Compared } from '../components/ResponseHistory';
 import { Database, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -11,7 +13,7 @@ import { DurationBar } from '../components/charts';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
 import { JsonTree } from '../components/JsonView';
-import { Badge, Busy, Button, Empty, IconButton, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
+import { Badge, Bar, Busy, Button, cx, Empty, FilterInput, IconButton, SECTION_LABEL, Select, Split, statusTone, VirtualList } from '../components/ui';
 import { NodeMenu, TreeBadge, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
@@ -42,14 +44,6 @@ interface Entry {
 }
 
 /** The kinds History filters by; `capture` is a Debugger capture session saved as a collection, a flow or a HAR session. */
-const KINDS: Array<[string, string]> = [
-  ['http', 'HTTP'],
-  ['graphql', 'GraphQL'],
-  ['grpc', 'gRPC'],
-  ['mcp', 'MCP'],
-  ['llm', 'LLM'],
-  ['capture', 'Capture sessions'],
-];
 
 const MIX = [
   { key: 'ok', label: '2xx / OK', color: 'var(--ok)' },
@@ -79,7 +73,7 @@ function StatusMix({ items }: { items: Entry[] }) {
           <span key={m.key} style={{ flex: counts[m.key], background: m.color }} title={`${m.label}: ${counts[m.key]} (${Math.round((counts[m.key] / items.length) * 100)}%)`} />
         ))}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[0.7rem] text-muted">
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-2xs text-muted">
         {shown.map((m) => (
           <span key={m.key} className="inline-flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm" style={{ background: m.color }} />
@@ -124,7 +118,7 @@ function TimingStrip({ timing }: { timing?: Timing }) {
           <span key={k} style={{ flex: timing[k] as number, background: c }} title={`${l}: ${formatMs(timing[k] as number)} (${Math.round(((timing[k] as number) / sum) * 100)}%)`} />
         ))}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[0.7rem] text-muted">
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-2xs text-muted">
         {parts.map(([k, l, c]) => (
           <span key={k} className="inline-flex items-center gap-1">
             <span className="w-2 h-2 rounded-sm" style={{ background: c }} />
@@ -230,12 +224,12 @@ export function HistoryView() {
     <Split id="history" initial={45}>
       <div className="h-full flex flex-col" onKeyDown={treeKeys} data-output="history">
         <div className="flex gap-2 p-2 border-b border-line">
-          <Input className="flex-1" placeholder="Search history (name, URL, method, status)" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <FilterInput className="flex-1" placeholder="Search history (name, URL, method, status)" label="Search history" value={query} onChange={setQuery} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
-            <option value="">All</option>
-            {KINDS.map(([k, label]) => (
-              <option key={k} value={k}>
-                {label}
+            <option value="">All kinds</option>
+            {trafficKindOptions(['http', 'graphql', 'grpc', 'mcp', 'llm', 'capture']).map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.label}
               </option>
             ))}
           </Select>
@@ -267,7 +261,7 @@ export function HistoryView() {
         </div>
         {/* the count and the download share a row: the filter bar above has no room for the control in a narrow list */}
         <div className="flex items-center gap-2 px-3 min-h-8 min-w-0">
-          <span className="text-xs text-muted truncate min-w-0">{total.toLocaleString()} {total === 1 ? 'entry' : 'entries'} · grouped by day · double-click to open · Ctrl+click another to compare</span>
+          <span className="text-xs text-muted truncate min-w-0">{plural(total, 'entry', 'entries')} · grouped by day · double-click to open · Ctrl+click another to compare</span>
           {/* icon only (like Ask…): a text button here pushed the download control out of the row */}
           <IconButton
             label="RAG dataset… Make a RAG dataset of the HTTP calls listed: question, answer and retrieved contexts, with personal data masked"
@@ -276,7 +270,7 @@ export function HistoryView() {
             onClick={() => setDataset(items.filter((e) => e.kind === 'http').map((e) => e.id))}
             data-history-rag-dataset
           >
-            <Database size={14} />
+            <Database />
           </IconButton>
           <OutputActions spec={spec} />
         </div>
@@ -292,7 +286,7 @@ export function HistoryView() {
             render={(row) => {
               if ('header' in row)
                 return (
-                  <div className="h-full flex items-end px-3 pb-1.5 border-b border-line bg-panel/60 text-xs font-semibold text-muted uppercase tracking-wide" role="heading" aria-level={3}>
+                  <div className={cx(SECTION_LABEL, 'h-full flex items-end px-3 pb-1.5 border-b border-line bg-panel/60')} role="heading" aria-level={3}>
                     {row.header}
                   </div>
                 );
@@ -315,7 +309,7 @@ export function HistoryView() {
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-2 text-sm">
                       {e.method && <TreeBadge label={e.method} className={`method-${e.method}`} />}
-                      {!e.method && <Badge>{e.kind}</Badge>}
+                      {!e.method && <Badge>{trafficKindLabel(e.kind)}</Badge>}
                       <span className="truncate" data-history-capture={e.capture ? e.capture.result : undefined}>
                         {e.capture ? e.name : (e.url ?? e.name)}
                       </span>
@@ -358,7 +352,7 @@ export function HistoryView() {
       <div className="h-full flex flex-col">
         {pair ? (
           <>
-            <div className="flex items-center gap-2 px-3 h-10 border-b border-line text-sm">
+            <Bar className="text-sm">
               <span className="font-medium truncate">Comparing two responses</span>
               <span className="text-xs text-muted truncate">
                 {new Date(pair.before.timestamp).toLocaleTimeString()} → {new Date(pair.after.timestamp).toLocaleTimeString()}
@@ -366,14 +360,14 @@ export function HistoryView() {
               <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setPair(undefined)}>
                 Close
               </Button>
-            </div>
+            </Bar>
             <div className="flex-1 min-h-0 overflow-auto">
               {pair.error ? <p className="p-3 text-sm text-bad">{pair.error}</p> : pair.result ? <CompareView c={pair.result} labels={[`${pair.before.name} · ${new Date(pair.before.timestamp).toLocaleString()}`, `${pair.after.name} · ${new Date(pair.after.timestamp).toLocaleString()}`]} /> : <Busy>Comparing the two responses…</Busy>}
             </div>
           </>
         ) : sel ? (
           <>
-            <div className="flex items-center gap-2 px-3 h-10 border-b border-line">
+            <Bar>
               <span className="font-medium truncate">{sel.name}</span>
               <div className="ml-auto flex gap-2">
                 <Button size="sm" variant="primary" icon={<RotateCcw size={12} />} onClick={() => reopen(sel)}>
@@ -381,7 +375,7 @@ export function HistoryView() {
                 </Button>
                 <NodeMenu kind="history" label={sel.name} ctx={() => entryMenu(sel, { details: true })} header />
               </div>
-            </div>
+            </Bar>
             <TimingStrip timing={(sel.responseMeta as { timing?: Timing } | undefined)?.timing} />
             <div className="flex-1 min-h-0">
               <JsonTree data={sel.capture ? { timestamp: sel.timestamp, kind: sel.kind, status: sel.status, capture: sel.capture } : { timestamp: sel.timestamp, kind: sel.kind, status: sel.status, durationMs: sel.durationMs, request: sel.request }} />
@@ -395,7 +389,7 @@ export function HistoryView() {
         )}
       </div>
     </Split>
-      {dataset && <RagCaptureDialog initial={{ from: 'history', history: dataset, label: `${dataset.length} HTTP ${dataset.length === 1 ? 'entry' : 'entries'} of History` }} onClose={() => setDataset(undefined)} />}
+      {dataset && <RagCaptureDialog initial={{ from: 'history', history: dataset, label: `${plural(dataset.length, 'HTTP entry', 'HTTP entries')} of history` }} onClose={() => setDataset(undefined)} />}
     </>
   );
 }

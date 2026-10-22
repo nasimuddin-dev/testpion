@@ -107,8 +107,8 @@ export function AiAction({
         data-ai-action-estimate=""
       />
       {preview && configured && (
-        <IconButton label="What will be sent…" className="h-6 w-6" onClick={() => void build().then((r) => r && setPreviewing(r))} data-ai-preview-open>
-          <Eye size={12} />
+        <IconButton size="sm" label="What will be sent…" onClick={() => void build().then((r) => r && setPreviewing(r))} data-ai-preview-open>
+          <Eye />
         </IconButton>
       )}
       {previewing && (

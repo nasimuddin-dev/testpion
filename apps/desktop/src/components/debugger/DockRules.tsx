@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { deleteWithUndo } from '../../lib/undo-delete';
-import { Button, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, type EmptyAction, type MenuItem } from '../ui';
+import { Button, cx, Empty, type EmptyAction, Field, FilterInput, IconButton, Input, Menu, type MenuItem, Segmented, Select } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
@@ -70,14 +70,14 @@ export function RuleList({
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-rule-list={kinds.join(',')}>
       <div className="flex items-center gap-1 p-2 border-b border-line">
-        <Input className="flex-1 h-7 text-xs" placeholder="Filter rules" aria-label="Filter rules" value={find} onChange={(e) => setFind(e.target.value)} />
-        <IconButton label="Reset hits: count the hits from zero" className="h-7 w-7" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>
-          <RotateCcw size={12} />
+        <FilterInput className="flex-1" placeholder="Filter rules" label="Filter rules" value={find} onChange={setFind} />
+        <IconButton size="md" label="Reset hits: count the hits from zero" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>
+          <RotateCcw />
         </IconButton>
         {add.items ? <Menu width={220} items={add.items} trigger={addButton} /> : addButton}
       </div>
       {rules.length > 0 && (
-        <div className="flex items-center h-7 text-[11px] text-muted bg-panel border-b border-line px-2 shrink-0">
+        <div className="flex items-center h-7 text-xs text-muted bg-panel border-b border-line px-2 shrink-0">
           <span className="w-6" />
           <span className="flex-1">Rule</span>
           <span className="w-14 text-right">Hits</span>
@@ -108,7 +108,7 @@ export function RuleList({
               />
               <span className="flex-1 min-w-0">
                 <span className="block truncate">{r.name}</span>
-                {r.summary && <span className="block truncate text-[11px] text-muted">{r.summary}</span>}
+                {r.summary && <span className="block truncate text-xs text-muted">{r.summary}</span>}
               </span>
               <span className="w-14 text-right tabular-nums" title="Requests this rule acted on">
                 {hits[r.id] ?? 0}
@@ -129,7 +129,7 @@ export function RuleList({
   );
 }
 
-/** Filter: rules that leave requests out (Filter Out), or let only some in (Capture Only). Every one is the user's. */
+/** Filter: rules that leave requests out (Filter out), or let only some in (Capture only). Every one is the user's. */
 export function FilterPanel({ state, onChange, onNewRule, onEdit }: { state?: RulesState; onChange(s: RulesState): void; onNewRule(r: Partial<Rule>): void; onEdit(r: Rule): void }) {
   const [side, setSide] = useState<'ignore' | 'only'>('ignore');
   useLiveRules(onChange);
@@ -142,16 +142,16 @@ export function FilterPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
           value={side}
           onChange={setSide}
           options={[
-            { value: 'ignore', label: 'Filter Out' },
-            { value: 'only', label: 'Capture Only' },
+            { value: 'ignore', label: 'Filter out' },
+            { value: 'only', label: 'Capture only' },
           ]}
         />
-        <p className="text-[11px] text-muted mt-1.5">
+        <p className="text-xs text-muted mt-1.5">
           {side === 'ignore'
-            ? 'Requests a Filter Out rule matches are passed through but not listed.'
+            ? 'Requests a filter-out rule matches are passed through but not listed.'
             : onCount
-              ? `${onCount} Capture Only rule${onCount > 1 ? 's are' : ' is'} on: only what one of them matches is listed.`
-              : 'When a Capture Only rule is on, only the requests one of them matches are listed.'}
+              ? `${onCount} capture-only rule${onCount > 1 ? 's are' : ' is'} on: only what one of them matches is listed.`
+              : 'When a capture-only rule is on, only the requests one of them matches are listed.'}
         </p>
       </div>
       <RuleList
@@ -159,11 +159,11 @@ export function FilterPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
         kinds={[side]}
         onChange={onChange}
         onEdit={onEdit}
-        add={{ label: side === 'ignore' ? 'New Filter Out rule' : 'New Capture Only rule', onClick: () => onNewRule({ kind: side, enabled: true, match: {} }) }}
+        add={{ label: side === 'ignore' ? 'New filter-out rule' : 'New capture-only rule', onClick: () => onNewRule({ kind: side, enabled: true, match: {} }) }}
         empty={
           side === 'ignore'
-            ? 'A Filter Out rule hides the requests it matches (by program, domain, URL or method); they still go through. The quickest one starts from a request: right-click it ▸ Filter out.'
-            : 'A Capture Only rule lists just the requests it matches (by program, domain, URL or method). The quickest one starts from a request: right-click it ▸ Capture only.'
+            ? 'A filter-out rule hides the requests it matches (by program, domain, URL or method); they still go through. The quickest one starts from a request: right-click it ▸ Filter out.'
+            : 'A capture-only rule lists just the requests it matches (by program, domain, URL or method). The quickest one starts from a request: right-click it ▸ Capture only.'
         }
       />
     </>
@@ -227,7 +227,7 @@ const COLUMNS: Array<[RuleColumn, string]> = [
   ['user', 'User'],
   ['type', 'Type'],
   ['version', 'Version'],
-  ['ip', 'IP Address'],
+  ['ip', 'IP address'],
   ['duration', 'Duration (ms)'],
   ['size', 'Size (bytes)'],
 ];
@@ -243,7 +243,7 @@ const OPERATORS: Array<[RuleOperator, string]> = [
   ['matches', 'Matches (regex)'],
 ];
 
-/** The Highlight Rule editor: a name, one condition on a column, and how the matching rows look in each theme. */
+/** The highlight rule editor: a name, one condition on a column, and how the matching rows look in each theme. */
 export function HighlightRuleEditor({ rule, onSaved, onCancel }: { rule?: Rule; onSaved(s: RulesState): void; onCancel(): void }) {
   const [name, setName] = useState(rule?.name ?? '400x Client Errors');
   const [cond, setCond] = useState<RuleCondition>(rule?.match.where ?? { column: 'status', op: 'between', value: '400', value2: '499' });
@@ -324,7 +324,7 @@ export function HighlightRuleEditor({ rule, onSaved, onCancel }: { rule?: Rule; 
           <input type="checkbox" checked={!!style.row} onChange={(e) => setStyle({ ...style, row: e.target.checked })} />
         </label>
       </div>
-      <p className="text-[11px] text-muted">
+      <p className="text-xs text-muted">
         The colour applies to the Status column, or to the whole row&apos;s text with Entire row. Conditions on Status, Type, Duration and Size are checked when the response is in.
       </p>
       {rule && (

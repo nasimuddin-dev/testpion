@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FlaskConical, Plus, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, FlaskConical, Plus, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { normalizeMetricName } from '@testpion/shared';
 import { useRpc } from '../../lib/use-rpc';
@@ -6,7 +6,7 @@ import { plural } from '../../lib/format';
 import { useApp } from '../../store';
 import type { CheckConfig } from '../../types';
 import { AssertionEditor } from '../AssertionEditor';
-import { Badge, Button, Callout, Input, IconButton, Segmented, Select, Spinner, Toggle, cx } from '../ui';
+import { Badge, Button, Callout, cx, FilterInput, IconButton, Input, SectionTitle, Segmented, Select, Spinner, Toggle } from '../ui';
 import { MetricEditor, metricFilesChanged } from './CustomMetrics';
 import { metricResolver, type MetricCatalogue, type MetricRow } from './metric-resolver';
 
@@ -175,10 +175,7 @@ export function MetricPicker({
         </Button>
       </div>
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
-          <Input className="pl-7" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search metrics: faithfulness, LLMContextRecall, nv_context_relevance, recall@k …" aria-label="Search metrics" data-rag-picker-search />
-        </div>
+        <FilterInput className="flex-1" value={query} onChange={setQuery} placeholder="Search metrics: faithfulness, LLMContextRecall, nv_context_relevance, recall@k …" label="Search metrics" data-rag-picker-search="" />
         <Segmented
           label="Show"
           size="xs"
@@ -198,9 +195,9 @@ export function MetricPicker({
         const chosen = rows.filter((r) => byRow.has(r.id)).length;
         return (
           <section key={g.id} data-rag-group={g.id}>
-            <h3 className="text-xs font-semibold text-muted uppercase tracking-wide py-1">
+            <SectionTitle size="sm" as="h3" className="py-1">
               {g.label} <span className="font-normal normal-case">· {rows.length}{chosen ? ` · ${chosen} selected` : ''}</span>
-            </h3>
+            </SectionTitle>
             <div className="rounded-lg border border-line divide-y divide-line/70">
               {rows.map((r) => {
                 const idx = byRow.get(r.id) ?? [];
@@ -281,12 +278,12 @@ export function MetricPicker({
                             <RouteControl check={e} onChange={(p) => patch(i, p)} />
                             {r.options && (
                               <IconButton label={`Add another ${r.name}`} onClick={() => add(r, variantOf(r, evaluators.filter((_, k) => idx.includes(k))))}>
-                                <Plus size={12} />
+                                <Plus />
                               </IconButton>
                             )}
                             {idx.length > 1 && (
                               <IconButton label="Remove this one" onClick={() => remove([i])}>
-                                <X size={12} />
+                                <X />
                               </IconButton>
                             )}
                           </div>

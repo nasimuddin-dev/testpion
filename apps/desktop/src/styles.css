@@ -72,6 +72,12 @@
   --k-agent: oklch(0.55 0.17 320);
   --k-ai: oklch(0.56 0.18 275);
   --k-dataset: oklch(0.55 0.12 160);
+  /* the kinds of a trace's spans (TraceView's waterfall): the HTTP call, a tool, an evaluation, a test, the tracer's own */
+  --k-http: oklch(0.54 0.17 255);
+  --k-tool: oklch(0.62 0.15 50);
+  --k-evaluation: oklch(0.55 0.14 150);
+  --k-test: oklch(0.55 0.03 260);
+  --k-internal: oklch(0.68 0.02 260);
 }
 
 [data-theme='dark'] {
@@ -124,6 +130,11 @@
   --k-agent: oklch(0.78 0.14 320);
   --k-ai: oklch(0.78 0.14 275);
   --k-dataset: oklch(0.8 0.11 160);
+  --k-http: oklch(0.75 0.13 255);
+  --k-tool: oklch(0.8 0.13 55);
+  --k-evaluation: oklch(0.78 0.14 150);
+  --k-test: oklch(0.72 0.03 260);
+  --k-internal: oklch(0.6 0.02 260);
 }
 
 @theme inline {
@@ -163,6 +174,16 @@
   --text-xs--line-height: 1.1rem;
   --text-sm: 0.9rem;
   --text-sm--line-height: 1.3rem;
+  /* the two sizes under text-xs (a badge, a count, a section's small capitals, a chart's axis): named, never text-[11px] */
+  --text-2xs: 0.72rem;
+  --text-2xs--line-height: 1rem;
+  --text-3xs: 0.65rem;
+  --text-3xs--line-height: 0.9rem;
+  /* a dialog's or an empty state's title, and Home's greeting */
+  --text-title: 1.05rem;
+  --text-title--line-height: 1.45rem;
+  --text-hero: 1.75rem;
+  --text-hero--line-height: 2.2rem;
 }
 
 /*
@@ -181,6 +202,8 @@
   --text-xs--line-height: 1.02rem;
   --text-sm: 0.85rem;
   --text-sm--line-height: 1.18rem;
+  --text-2xs: 0.7rem;
+  --text-3xs: 0.63rem;
   --control-h: 28px;
   --control-px: 8px;
   --control-py: 2px;
@@ -457,6 +480,11 @@ input[type='range'] {
 .kind-agent { color: var(--k-agent); }
 .kind-ai { color: var(--k-ai); }
 .kind-dataset { color: var(--k-dataset); }
+.kind-http { color: var(--k-http); }
+.kind-tool { color: var(--k-tool); }
+.kind-evaluation { color: var(--k-evaluation); }
+.kind-test { color: var(--k-test); }
+.kind-internal { color: var(--k-internal); }
 /* compact coloured pill for methods in lists and tabs */
 .method-badge {
   display: inline-block;

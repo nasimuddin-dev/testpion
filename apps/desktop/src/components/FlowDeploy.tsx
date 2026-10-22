@@ -7,7 +7,8 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Bot, CalendarClock, Copy, Rocket, Square, Play, Webhook, Workflow } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { toastError } from '../store';
+import { copyText } from '../lib/clipboard';
 import { Badge, Button, cx, LinkButton } from './ui';
 
 /** Where a flow is deployed (tests.deployStatus). */
@@ -70,11 +71,7 @@ export function DeployPanel({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const copy = (text: string, what: string) =>
-    navigator.clipboard.writeText(text).then(
-      () => useApp.getState().toast(`${what} copied`),
-      () => useApp.getState().toast(text),
-    );
+  const copy = (text: string, what: string) => copyText(text, what);
   const serve = async (on: boolean) => {
     setBusy(true);
     try {
@@ -168,10 +165,10 @@ export function DeployPanel({
               >
                 {w ? (
                   <>
-                    <Button size="sm" icon={<Copy size={12} />} onClick={() => void copy(webhookUrl(w), 'Webhook URL')}>
+                    <Button size="sm" icon={<Copy size={12} />} onClick={() => void copy(webhookUrl(w), 'the webhook URL')}>
                       Copy URL
                     </Button>
-                    <Button size="sm" icon={<Copy size={12} />} onClick={() => void copy(`curl -X POST ${webhookUrl(w)} -H "content-type: application/json" -d "{}"`, 'curl command')}>
+                    <Button size="sm" icon={<Copy size={12} />} onClick={() => void copy(`curl -X POST ${webhookUrl(w)} -H "content-type: application/json" -d "{}"`, 'the curl command')}>
                       Copy curl
                     </Button>
                     <Button
@@ -221,7 +218,7 @@ export function DeployPanel({
               </Row>
             </>
           )}
-          <div className={cx('pt-2 text-[11px] text-muted')}>The flow file stays the one source: every target runs it as it is saved.</div>
+          <div className={cx('pt-2 text-xs text-muted')}>The flow file stays the one source: every target runs it as it is saved.</div>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

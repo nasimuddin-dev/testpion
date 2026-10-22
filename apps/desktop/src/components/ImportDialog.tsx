@@ -124,7 +124,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
           useApp.getState().toast(`${x.collection.name} can be tidied: names, folders, the host and token as variables, ids chained.`, 'info', { label: LABEL.tidyImport, onClick: () => startTidyImport({ collectionId: x.collection!.id, source: x.format }) });
         toastImportNotes({ notes: toastSpecKeptBoth({ ...x, notes: x.notes }), scriptWarnings: x.scriptWarnings });
       }
-      if (!r.receipts.length && r.snippets.length) useApp.getState().toast(`Imported ${r.snippets.length} request${r.snippets.length === 1 ? '' : 's'} into "Imported"`, 'success');
+      if (!r.receipts.length && r.snippets.length) useApp.getState().toast(`Imported ${plural(r.snippets.length, 'request')} into "Imported"`, 'success');
     } catch (e) {
       toastError(e);
     } finally {
@@ -275,7 +275,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
             <PlanCard key={i} source={p.input.source} plan={p.plan} single={plans.length === 1} />
           ))}
           {updates.length > 0 && <UpdateSection updates={updates} newCopy={newCopy} setNewCopy={setNewCopy} decisions={decisions} setDecisions={setDecisions} />}
-          {preview.snippets > 0 && <p className="text-sm">{preview.snippets} copied request{preview.snippets === 1 ? '' : 's'} (cURL, fetch …) will be saved to the <b>Imported</b> collection, with secrets replaced by variables.</p>}
+          {preview.snippets > 0 && <p className="text-sm">{plural(preview.snippets, 'copied request')} (cURL, fetch …) will be saved to the <b>Imported</b> collection, with secrets replaced by variables.</p>}
           {failed.map((p, i) => (
             <p key={i} className="text-sm text-bad">
               {p.input.source}: cannot be imported: {'error' in p ? p.error.message : ''}
@@ -283,7 +283,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
           ))}
           {preview.skipped.length > 0 && (
             <details className="text-xs text-muted">
-              <summary>{preview.skipped.length} file{preview.skipped.length === 1 ? '' : 's'} skipped</summary>
+              <summary>{plural(preview.skipped.length, 'file')} skipped</summary>
               <ul className="mt-1">
                 {preview.skipped.slice(0, 50).map((s) => (
                   <li key={s.path}>

@@ -10,9 +10,9 @@ import { RowMenu } from './TreeParts';
 import { flakyTestItems, triageRunItems } from './ai/ai-analysis';
 import { aiMenuItems } from '../lib/ai-menu';
 import { LABEL } from '../lib/vocabulary';
-import { cx, type MenuItem } from './ui';
+import { cx, type MenuItem, SectionTitle, StatusDot } from './ui';
 
-const DOT = { high: 'bg-bad', medium: 'bg-warn', low: 'bg-muted/60' } as const;
+const DOT = { high: 'bad', medium: 'warn', low: 'muted' } as const;
 /** A problem's type as an icon (a failure, an error, a warning): the Problems panel's, and every run list's split of failures from errors. */
 export const TYPE_ICON = { failure: <AlertTriangle size={13} className="text-bad" />, error: <AlertCircle size={13} className="text-bad" />, warning: <Info size={13} className="text-warn" /> } as const;
 
@@ -54,7 +54,7 @@ export function ProblemList({ problems, grouped, limit }: { problems: Problem[];
     <div role="list" aria-label="Problems" className="flex flex-col">
       {list.map((p, n) => (
         <Fragment key={`${p.kind}:${JSON.stringify(p.ref)}:${n}`}>
-          {grouped && p.group !== list[n - 1]?.group && <div className="px-3 pt-2 pb-0.5 text-[0.7rem] font-semibold uppercase tracking-wide text-muted">{p.group}</div>}
+          {grouped && p.group !== list[n - 1]?.group && <SectionTitle size="sm" className="px-3 pt-2 pb-0.5">{p.group}</SectionTitle>}
           <div
             role="listitem"
             data-problem={p.kind}
@@ -65,7 +65,7 @@ export function ProblemList({ problems, grouped, limit }: { problems: Problem[];
             }}
           >
             <button className="flex-1 min-w-0 flex items-center gap-2 py-1.5 text-left" onClick={() => void openRef(p.ref)} title={p.message}>
-              <span className={cx('w-2 h-2 rounded-full shrink-0', DOT[p.severity])} aria-label={p.severity} />
+              <StatusDot tone={DOT[p.severity]} label={`${p.severity} severity`} />
               <span className="shrink-0" aria-label={p.type}>
                 {TYPE_ICON[p.type]}
               </span>

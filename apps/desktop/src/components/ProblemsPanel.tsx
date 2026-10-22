@@ -7,7 +7,7 @@ import { ProblemList } from './ProblemList';
 import { OutputActions } from './output/OutputFrame';
 import { OutputHint } from './output/OutputToolbar';
 import type { OutputSpec } from './output/output-core';
-import { Empty } from './ui';
+import { Bar, Empty } from './ui';
 
 const COLUMNS = ['severity', 'type', 'kind', 'group', 'message', 'at'] as const;
 /** A problem as a row of the exported list (its ref as JSON, for what it names). */
@@ -34,7 +34,7 @@ export function ProblemsPanel() {
   );
   return (
     <>
-      <div className="flex items-center gap-3 px-3 h-7 border-b border-line text-xs text-muted shrink-0">
+      <Bar className="text-xs text-muted">
         <span>
           {plural(failures, 'failure')} · {plural(errors, 'error')} · {plural(problems.length - failures - errors, 'warning')}
         </span>
@@ -42,7 +42,7 @@ export function ProblemsPanel() {
         <OutputActions spec={spec}>
           <OutputHint hint="F8 / Shift+F8: next / previous problem" />
         </OutputActions>
-      </div>
+      </Bar>
       <div className="flex-1 overflow-auto px-1 py-1" data-output="problems">
         {problems.length ? (
           <ProblemList problems={problems} grouped />

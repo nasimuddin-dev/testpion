@@ -20,7 +20,7 @@ Open it with <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> (<kbd>⌘</kbd>+<kbd>&#96;</kbd> o
 | Windows | Windows PowerShell | PowerShell 7 (`pwsh`), Command Prompt, Git Bash |
 | macOS, Linux | your login shell (`$SHELL -l`) | zsh, bash, fish, sh |
 
-The drop-down next to **+** picks the shell of new terminals (remembered for each workspace). Up to 8 terminals can be open at once; each one's tab shows its shell, and a terminal whose shell exited stays, with its output, until you close it.
+The drop-down next to **+** picks the shell of new terminals (remembered for each workspace). Up to 8 terminals can be open at once; each one's tab shows its shell (*(exited)* once its shell has ended), and a terminal whose shell exited stays, with its output, until you close it. The terminals are document tabs like the request tabs: ✕ or a middle-click closes one (and ends its shell), ← → move between them, and a tab's right-click menu closes the others.
 
 ## What the shell gets
 

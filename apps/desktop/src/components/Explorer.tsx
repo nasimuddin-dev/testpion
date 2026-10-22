@@ -15,7 +15,7 @@ import { ExportDialog } from './ExportDialog';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
-import { IconButton, Input, Menu } from './ui';
+import { Bar, FilterInput, IconButton, Menu } from './ui';
 import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
@@ -698,7 +698,7 @@ export function Explorer() {
   return (
     <aside aria-label="Collections explorer" style={{ width }} className="relative shrink-0 border-r border-line bg-panel flex flex-col min-h-0">
       {handle}
-      <div className="flex items-center gap-1 px-2 h-10 border-b border-line shrink-0">
+      <Bar>
         <Layers size={15} className="text-accent shrink-0" />
         <span className="font-semibold text-sm flex-1 truncate" title={ws?.name}>
           {ws?.name ?? 'Workspace'}
@@ -706,31 +706,31 @@ export function Explorer() {
         <Menu
           width={240}
           trigger={
-            <IconButton label="New" className="h-7 w-7">
-              <Plus size={15} />
+            <IconButton size="md" label="New">
+              <Plus />
             </IconButton>
           }
           items={[{ label: 'Collection', icon: <FolderPlus size={14} />, onSelect: () => void newCollection() }, ...newRequestItems().map((it, i) => (i === 0 ? { ...it, separator: true } : it))]}
         />
         {/* in the header, not in a menu: the actions used every day */}
-        <IconButton label="Import (OpenAPI, AsyncAPI, Postman, Insomnia, Bruno, HAR, WSDL, cURL …)" className="h-7 w-7" onClick={importDefinition}>
-          <Upload size={14} />
+        <IconButton size="md" label="Import (OpenAPI, AsyncAPI, Postman, Insomnia, Bruno, HAR, WSDL, cURL …)" onClick={importDefinition}>
+          <Upload />
         </IconButton>
-        <IconButton label="Export a collection or the workspace" className="h-7 w-7" onClick={() => setExporting(true)}>
-          <Download size={14} />
+        <IconButton size="md" label="Export a collection or the workspace" onClick={() => setExporting(true)}>
+          <Download />
         </IconButton>
-        <IconButton label="Refresh" className="h-7 w-7" onClick={() => void load()}>
-          <RefreshCw size={14} />
+        <IconButton size="md" label="Refresh" onClick={() => void load()}>
+          <RefreshCw />
         </IconButton>
-        <IconButton label="Hide the sidebar (Ctrl+B)" className="h-7 w-7" onClick={() => useApp.getState().toggleExplorer(false)}>
-          <PanelLeftClose size={14} />
+        <IconButton size="md" label="Hide the sidebar (Ctrl+B)" onClick={() => useApp.getState().toggleExplorer(false)}>
+          <PanelLeftClose />
         </IconButton>
-      </div>
+      </Bar>
       <div className="p-2 shrink-0 flex items-center gap-1">
-        <Input className="flex-1 min-w-0 h-7 min-h-7 text-sm" placeholder="Filter" aria-label="Filter requests, connections, servers and definitions" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <FilterInput className="flex-1 min-w-0" placeholder="Filter" label="Filter requests, connections, servers and definitions" value={filter} onChange={setFilter} />
         <ExpandCollapseToggle start="collapse" onExpand={() => (sections.set(everySection(), true), setExpandAll((n) => n + 1))} onCollapse={() => (sections.set(everySection(), false), setCollapseAll((n) => n + 1))} />
-        <IconButton label="Recently deleted" className="h-7 w-7 shrink-0" onClick={() => setTrashOpen(true)}>
-          <ArchiveRestore size={14} />
+        <IconButton size="md" label="Recently deleted" className="shrink-0" onClick={() => setTrashOpen(true)}>
+          <ArchiveRestore />
         </IconButton>
       </div>
       {/* keyboard, like a file tree: ↑ ↓ move between rows, → expands, ← collapses (Enter opens, F2 renames, Delete deletes, Shift+F10 the menu) */}

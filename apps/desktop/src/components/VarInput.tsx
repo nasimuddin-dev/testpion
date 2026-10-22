@@ -190,7 +190,7 @@ export function VarInput({
             >
               <span className="mono">{v.name}</span>
               <span className="ml-auto text-xs text-muted truncate max-w-48">{v.secret ? '••••••' : v.value}</span>
-              <span className="text-[0.7rem] text-muted border border-line rounded px-1">{v.scope}</span>
+              <span className="text-2xs text-muted border border-line rounded px-1">{v.scope}</span>
             </button>
           ))}
           {/* outside a collection (MCP servers, settings …) collection variables don't apply: say so, and where they are */}
@@ -266,7 +266,7 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={cx('mono font-semibold truncate', defined || dynamic ? 'text-accent' : 'text-bad')}>{`{{${name}}}`}</span>
-        <span className={cx('ml-auto shrink-0 text-[0.7rem] rounded px-1.5 border', defined || dynamic ? 'border-line text-muted' : 'border-bad/40 text-bad')}>{dynamic ? 'dynamic' : defined ? info!.scope : 'not defined'}</span>
+        <span className={cx('ml-auto shrink-0 text-2xs rounded px-1.5 border', defined || dynamic ? 'border-line text-muted' : 'border-bad/40 text-bad')}>{dynamic ? 'dynamic' : defined ? info!.scope : 'not defined'}</span>
         <button aria-label="Close" className="shrink-0 text-muted hover:text-fg" onClick={onClose}>
           <X size={14} />
         </button>

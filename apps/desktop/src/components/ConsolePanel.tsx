@@ -4,7 +4,8 @@ import { ChevronRight, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { formatBytes, formatMs } from '../lib/format';
-import { Badge, cx, IconButton, Input, Segmented, statusTone } from './ui';
+import { Badge, Bar, cx, FilterInput, IconButton, Segmented, statusTone } from './ui';
+import { TRAFFIC_KIND, trafficKindLabel } from '../lib/traffic-kinds';
 import { useEventLog } from '../lib/use-rpc';
 import { RelatedRefs } from './RefLink';
 import { outputFileName, type ItemRef } from '@testpion/shared';
@@ -37,7 +38,6 @@ type Filter = 'all' | 'errors' | 'logs';
 /** Non-numeric statuses that mean success (MCP calls, WebSocket connect / send / close). */
 const OK_STATUS = new Set(['passed', 'ok', 'open', 'sent', 'closed']);
 const isError = (e: ConsoleEntry) => !!e.error || (typeof e.status === 'number' ? e.status >= 400 : e.status !== undefined && !OK_STATUS.has(e.status)) || !!e.failedChecks;
-const KIND_LABEL = { graphql: 'GraphQL', mcp: 'MCP', websocket: 'WebSocket' } as const;
 
 /**
  * Postman-style console: every request sent from the app or a run, newest last, with its script
@@ -90,7 +90,7 @@ export function ConsolePanel() {
 
   return (
     <>
-      <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs shrink-0 min-w-0 overflow-clip whitespace-nowrap">
+      <Bar className="text-xs overflow-clip whitespace-nowrap">
         <OutputBarStart>
         <Segmented
           label="Show"
@@ -103,7 +103,7 @@ export function ConsolePanel() {
             { value: 'logs', label: 'With logs' },
           ]}
         />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by URL, status or log text" aria-label="Filter console" className="h-6 min-h-0 text-xs w-64" />
+        <FilterInput value={q} onChange={setQ} placeholder="Filter by URL, status or log text" label="Filter console" className="w-64" />
         <span className="text-muted truncate min-w-0">
           {shown.length} of {entries.length} · secrets are redacted
         </span>
@@ -117,12 +117,12 @@ export function ConsolePanel() {
               setOpen(new Set());
             }}
           >
-            <Trash2 size={13} />
+            <Trash2 />
           </IconButton>
         </OutputActions>
-      </div>
+      </Bar>
       <div
-        className="flex-1 overflow-auto text-[0.8rem]"
+        className="flex-1 overflow-auto text-xs"
         data-output="console"
         onScroll={(e) => {
           const el = e.currentTarget;
@@ -143,7 +143,7 @@ export function ConsolePanel() {
                 <span className="mono truncate flex-1 text-fg" title={e.url}>
                   {e.url}
                 </span>
-                {e.kind && <Badge tone={e.kind === 'graphql' ? 'accent' : 'judge'}>{KIND_LABEL[e.kind]}</Badge>}
+                {e.kind && <Badge tone={TRAFFIC_KIND[e.kind]?.tone}>{trafficKindLabel(e.kind)}</Badge>}
                 {e.source === 'run' && <Badge title={e.run}>run</Badge>}
                 {e.status !== undefined && <Badge tone={statusTone(e.status)}>{e.status}</Badge>}
                 {!!e.failedChecks && <Badge tone="bad">{e.failedChecks} failed</Badge>}
@@ -151,7 +151,7 @@ export function ConsolePanel() {
                 {e.size !== undefined && <span className="text-muted tabular-nums w-16 text-right shrink-0">{formatBytes(e.size)}</span>}
               </button>
               {e.logs.map((l, j) => (
-                <div key={j} className="mono pl-9 pr-3 py-0.5 whitespace-pre-wrap text-[0.78rem]">
+                <div key={j} className="mono pl-9 pr-3 py-0.5 whitespace-pre-wrap text-xs">
                   <span className="text-muted">{l.phase === 'pre-request' ? 'pre ›' : 'test ›'}</span> {l.message}
                 </div>
               ))}

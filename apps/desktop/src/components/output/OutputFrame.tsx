@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { cx } from '../ui';
+import { BAR_CLASS, cx } from '../ui';
 import { OutputDownload } from './OutputDownload';
 import type { OutputSpec } from './output-core';
 
@@ -63,7 +63,7 @@ export function OutputHeader({ spec, title, left, actions, className }: { spec: 
   // the title and the view tools give way first (clipped at their right end), then the surface's actions: the control
   // at the right end is the last thing standing in a narrow pane
   return (
-    <div className={cx('flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0 min-w-0 overflow-clip whitespace-nowrap', className)} data-output-header>
+    <div className={cx(BAR_CLASS, 'text-sm overflow-clip whitespace-nowrap', className)} data-output-header>
       {(title !== undefined || left) && (
         <OutputBarStart>
           {title !== undefined && <span className="font-medium truncate min-w-0">{title}</span>}

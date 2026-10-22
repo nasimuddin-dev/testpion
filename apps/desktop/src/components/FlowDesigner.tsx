@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { startFlowGenerate } from './ai/flow-generate';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import {
@@ -279,7 +280,7 @@ export function FlowDesigner({
     if (d.block && !block) return;
     const r = await apply({ op: 'drop', ...(block ? { steps: [block.step] } : { refs: d.refs }), target: { ...target, ...(at ? { at } : {}) } }, { select: true });
     if (!r) return;
-    const what = `${r.added.length} step${r.added.length === 1 ? '' : 's'} added`;
+    const what = `${plural(r.added.length, 'step')} added`;
     useApp.getState().toast(r.notes?.length ? `${what}: ${r.notes.join('; ')}` : what, 'info', [{ label: 'Undo', onClick: undo }, { ref: { kind: 'flow', path: file } }]);
   };
   const addParallel = () => {
@@ -371,7 +372,7 @@ export function FlowDesigner({
   /** What the menus and the keys act with (FlowDesignerMenus). */
   const copy = (list: string[]) => {
     setCopied({ file, ids: list });
-    useApp.getState().toast(`${list.length} step${list.length === 1 ? '' : 's'} copied: Ctrl+V pastes them into this or another flow`, 'info', { ref: { kind: 'flow', path: file } });
+    useApp.getState().toast(`${plural(list.length, 'step')} copied: Ctrl+V pastes them into this or another flow`, 'info', { ref: { kind: 'flow', path: file } });
   };
   const actions: DesignerActions = {
     apply,
@@ -553,7 +554,7 @@ export function FlowDesigner({
           },
           { id: 'example', label: 'API example', icon: <Globe size={14} />, tone: 'var(--ok)', title: 'A ready request to a public API with an extract and a check: Run flow works at once', onClick: () => addStep(API_EXAMPLE) },
           { id: 'collection', label: 'Create from collection', icon: <FolderInput size={14} />, tone: 'var(--warn)', title: 'Saved requests (or a folder, chained)', onClick: () => setPicking(true) },
-          { id: 'record', label: 'Record from the Debugger', icon: <Bug size={14} />, tone: 'var(--bad)', title: 'Use your app; the exchanges become steps', onClick: () => useApp.getState().openIntent('debugger', { record: true }) },
+          { id: 'record', label: 'Record from the debugger', icon: <Bug size={14} />, tone: 'var(--bad)', title: 'Use your app; the exchanges become steps', onClick: () => useApp.getState().openIntent('debugger', { record: true }) },
           ...(aiOn ? [{ id: 'ai', ...aiButton('designFlow'), tone: 'oklch(0.62 0.18 300)', title: 'From a collection or folder, or described in words: the AI writes it, you review it', onClick: generate }] : []),
         ],
   };

@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { KIND_INFO, type ItemRef, type KindId } from '@testpion/shared';
@@ -139,7 +140,7 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
       useApp
         .getState()
         .toast(
-          `Imported ${n} item${n === 1 ? '' : 's'} from “${r.title}”${r.replaced.length ? ` (${r.replaced.length} replaced)` : ''}${fill}`,
+          `Imported ${plural(n, 'item')} from “${r.title}”${r.replaced.length ? ` (${r.replaced.length} replaced)` : ''}${fill}`,
           need.length ? 'warning' : 'success',
           r.open ? { ref: r.open } : undefined,
           {
@@ -166,7 +167,7 @@ export default function ImportBundleDialog({ request, onClose }: { request: Impo
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon={<Upload size={13} />} loading={busy} disabled={!loaded || !(willWrite.length || globalsWrite)} reason="Nothing in the bundle would be written" onClick={() => void apply()}>
-            {willWrite.length ? `Import ${willWrite.length} item${willWrite.length === 1 ? '' : 's'}` : globalsWrite ? 'Import the variables' : 'Nothing to import'}
+            {willWrite.length ? `Import ${plural(willWrite.length, 'item')}` : globalsWrite ? 'Import the variables' : 'Nothing to import'}
           </Button>
         </>
       }

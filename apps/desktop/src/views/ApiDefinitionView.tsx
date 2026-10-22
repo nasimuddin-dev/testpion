@@ -198,7 +198,7 @@ export function ApiDefinitionView() {
           Save
         </Button>
       </div>
-      <Tabs
+      <Tabs label="API definition"
         value={tab}
         onChange={setTab}
         tabs={[

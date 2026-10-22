@@ -1,7 +1,7 @@
 import { isMac, modKey } from '../api';
 import { useApp } from '../store';
 import { Keyboard } from 'lucide-react';
-import { Button, Kbd, Modal } from './ui';
+import { Button, Kbd, Modal, SectionTitle } from './ui';
 import { railItem, useRail } from '../lib/use-rail';
 import { shortcutGroups } from '../lib/shortcuts';
 import { useBindings } from '../lib/keybindings';
@@ -28,7 +28,7 @@ export function ShortcutsDialog() {
       <div className="grid md:grid-cols-2 gap-x-8 gap-y-5">
         {GROUPS.map((g) => (
           <section key={g.title}>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">{g.title}</h3>
+            <SectionTitle size="sm" as="h3" className="mb-2">{g.title}</SectionTitle>
             <dl className="flex flex-col gap-1.5">
               {g.items.map((it) => (
                 <div key={it.text} className="flex items-center gap-3 text-sm">

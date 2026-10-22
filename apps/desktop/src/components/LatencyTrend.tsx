@@ -49,7 +49,7 @@ export function LatencyTrend({ entries, onPick }: { entries: Point[]; onPick?(id
         <span className="font-medium text-fg">Response time</span>
         {stats.fails > 0 && <span className="ml-auto text-bad">{stats.fails} failed</span>}
       </div>
-      <div className="text-[11px] text-muted tabular-nums whitespace-nowrap">
+      <div className="text-xs text-muted tabular-nums whitespace-nowrap">
         median {formatMs(stats.p50)} · p95 {formatMs(stats.p95)} · slowest {formatMs(stats.max)}
       </div>
       <div ref={box} className="relative" onMouseLeave={() => setHover(undefined)}>

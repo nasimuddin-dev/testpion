@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, BarChart3, Copy, DatabaseZap, Table2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { plural } from '../lib/format';
-import { Button, cx, Input, Segmented, Select } from './ui';
+import { Button, cx, FilterInput, Segmented, Select } from './ui';
 import { ChartCard } from './charts';
 import { promptText, useApp, attempt } from '../store';
 import { call } from '../api';
@@ -78,7 +78,7 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
-        <Input className="h-7 min-h-7 text-sm max-w-64" placeholder="Filter rows" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <FilterInput className="max-w-64" placeholder="Filter rows" label="Filter rows" value={filter} onChange={setFilter} />
         <span className="text-xs text-muted">
           {plural(shown.length, 'row')}
           {shown.length !== rows.length ? ` of ${rows.length}` : ''} · {plural(columns.length, 'column')} · <span className="mono">{path}</span>
@@ -152,7 +152,7 @@ export function JsonTable({ rows, path, columnTypes }: { rows: Row[]; path: stri
                 <th key={c} className="text-left font-medium text-muted border-b border-r border-line px-2 py-1 whitespace-nowrap">
                   <button className="inline-flex items-center gap-1 hover:text-fg" onClick={() => toggle(c)} aria-label={`Sort by ${c}`} data-column={c} data-column-type={columnTypes?.[c]}>
                     {c}
-                    {columnTypes?.[c] && <span className="font-normal text-[0.68rem] text-muted/80">{columnTypes[c]}</span>}
+                    {columnTypes?.[c] && <span className="font-normal text-2xs text-muted/80">{columnTypes[c]}</span>}
                     {sort?.key === c && (sort.dir === 1 ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
                   </button>
                 </th>

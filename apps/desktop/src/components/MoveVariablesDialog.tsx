@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
-import { Badge, Button, cx, Modal } from './ui';
+import { Badge, Button, cx, FilterInput, Modal } from './ui';
 import { useEnvironments } from '../lib/environments-store';
 import { plural } from '../lib/format';
 
@@ -86,7 +86,7 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
                 None
               </button>
             </div>
-            <input className="field h-7 text-xs" placeholder="Filter" aria-label="Filter variables" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <FilterInput placeholder="Filter" label="Filter variables" value={filter} onChange={setFilter} />
             <div className="border border-line rounded-md max-h-64 overflow-auto">
               {vars.map((v) => (
                 <label key={v.key} className="flex items-center gap-2 px-2 h-7 text-xs cursor-pointer hover:bg-hover">

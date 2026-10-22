@@ -38,7 +38,7 @@ export async function shareDebuggerSession(name: string): Promise<boolean> {
 export async function pickAndShareSession(): Promise<void> {
   try {
     const saved = (await call<Array<{ name: string; autosave: boolean }>>('debug.sessions')).filter((s) => !s.autosave);
-    if (!saved.length) return void useApp.getState().toast('No saved session to share yet: capture traffic in the Debugger and choose Save session… first.', 'info', { label: 'Open the Debugger', onClick: () => useApp.getState().setView('debugger') });
+    if (!saved.length) return void useApp.getState().toast('No saved session to share yet: capture traffic in the Debugger and choose Save session… first.', 'info', { label: 'Open the debugger', onClick: () => useApp.getState().setView('debugger') });
     if (saved.length === 1) {
       await shareDebuggerSession(saved[0]!.name);
       return;

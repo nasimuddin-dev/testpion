@@ -22,7 +22,7 @@ import { viewContent } from '../lib/files';
 import { runOutputSpec } from './output/run-specs';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
-import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea } from './ui';
+import { Badge, Busy, Button, cx, Empty, Field, FilterInput, IconButton, Input, Metric, MetricGrid, Modal, MoreMenu, SectionTitle, Segmented, Select, Split, Tabs, Textarea, VirtualList } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -238,8 +238,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
         </MetricGrid>
       )}
       {done && (
-        <Tabs
-          className="min-h-9 [&>button]:h-9"
+        <Tabs label="Run"
           tabs={[
             { id: 'results', label: 'Results', badge: total || undefined },
             { id: 'charts', label: 'Charts' },
@@ -287,7 +286,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
                     ...(done ? [{ value: 'unreviewed', label: `To review ${rated?.unreviewed ?? ''}`.trim(), title: 'Not rated good or bad yet (👍 / 👎 on a result)' }] : []),
                   ]}
                 />
-                <Input className="flex-1 h-7 min-h-7 text-sm" placeholder="Filter by name" value={query} onChange={(e) => setQuery(e.target.value)} />
+                <FilterInput className="flex-1" placeholder="Filter by name" label="Filter results by name" value={query} onChange={setQuery} />
                 <span className="text-xs text-muted tabular-nums">{done ? `${rows.length}/${total}` : `${live.length} shown`}</span>
               </div>
               {list.length ? (
@@ -315,7 +314,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
                           {low.toFixed(2)}
                         </span>
                       )}
-                      <span className="text-[0.7rem] text-muted uppercase tracking-wide shrink-0">{r.type}</span>
+                      <SectionTitle size="sm" as="span" className="shrink-0">{r.type}</SectionTitle>
                       <span className="text-xs text-muted tabular-nums w-14 text-right shrink-0">{formatMs(r.latencyMs ?? r.durationMs)}</span>
                     </button>
                     );
@@ -354,11 +353,11 @@ function ReviewButtons({ r, runId, onReviewed }: { r: TestResult; runId: string;
   };
   return (
     <div className="flex items-center gap-0.5 shrink-0">
-      <IconButton label="Good result (press again to clear)" className={cx('h-7 w-7', r.review?.rating === 'good' && 'text-ok bg-ok/10')} aria-pressed={r.review?.rating === 'good'} onClick={() => rate('good')}>
-        <ThumbsUp size={13} />
+      <IconButton label="Good result (press again to clear)" size="md" className={cx(r.review?.rating === 'good' && 'text-ok bg-ok/10')} aria-pressed={r.review?.rating === 'good'} onClick={() => rate('good')}>
+        <ThumbsUp />
       </IconButton>
-      <IconButton label="Bad result (press again to clear)" className={cx('h-7 w-7', r.review?.rating === 'bad' && 'text-bad bg-bad/10')} aria-pressed={r.review?.rating === 'bad'} onClick={() => rate('bad')}>
-        <ThumbsDown size={13} />
+      <IconButton label="Bad result (press again to clear)" size="md" className={cx(r.review?.rating === 'bad' && 'text-bad bg-bad/10')} aria-pressed={r.review?.rating === 'bad'} onClick={() => rate('bad')}>
+        <ThumbsDown />
       </IconButton>
       <Button size="sm" variant="ghost" title="Add a note: why it is good or bad" onClick={() => setNoteOpen(true)}>
         Note
@@ -427,7 +426,7 @@ export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { 
             ))}
         </div>
       </div>
-      <Tabs
+      <Tabs label="Result details"
         value={tab}
         onChange={setTab}
         tabs={[

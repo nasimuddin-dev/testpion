@@ -6,20 +6,17 @@ import { setActiveScriptEditor } from '../lib/script-editor';
 import { CodeEditor } from './CodeEditor';
 import { scriptAiItems, type ScriptAiContext } from './ai/script-ai';
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { useWidth } from './charts';
 import { CommandPalette } from './Shell';
-import { LinkButton, Menu, Tabs, Tooltip, cx } from './ui';
+import { LinkButton, Menu, StatusDot, Tabs, Tooltip, cx } from './ui';
 import { PinnablePanel } from './PinnablePanel';
 
 const ScriptPackagesDialog = lazy(() => import('./ScriptPackagesDialog').then((m) => ({ default: m.ScriptPackagesDialog })));
 
 type Editor = Parameters<OnMount>[0];
 
-/** Narrower than this, the script list (Pre-request / Post-response) becomes tabs above the editor. */
-const NARROW = 700;
 
 /**
- * Pre-request / Post-response scripts with a snippet list (Postman layout). Scripts use the
+ * Pre-request / Post-response scripts, as the one tab strip above the editor, with a snippet list. Scripts use the
  * `tp` script API (Postman-compatible) and run in a WebAssembly sandbox. The snippets are a pinnable panel
  * (unpinned, the editor takes the room); Ctrl+Shift+I in the editor picks a snippet by name and inserts it at the cursor.
  */
@@ -27,8 +24,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost, ai }: { pre: string; po
   const [which, setWhich] = useState<'pre' | 'post'>(() => (pre && !post ? 'pre' : 'post'));
   const [packagesOpen, setPackagesOpen] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [hostRef, width] = useWidth<HTMLDivElement>();
-  const narrow = width > 0 && width < NARROW;
+
   const editorRef = useRef<Editor>(undefined);
   const unregister = useRef<() => void>(undefined);
   useEffect(() => () => unregister.current?.(), []);
@@ -100,42 +96,28 @@ export function ScriptsPanel({ pre, post, onPre, onPost, ai }: { pre: string; po
     ['pre', 'Pre-request', pre],
     ['post', 'Post-response', post],
   ] as const;
-  const dot = <span className="w-1.5 h-1.5 rounded-full bg-ok ml-auto" title="Has a script" />;
+  const dot = <StatusDot tone="ok" label="Has a script" />;
   return (
-    <div ref={hostRef} className="h-full flex min-h-0" data-scripts-layout={narrow ? 'tabs' : 'column'}>
-      {!narrow && (
-        <div className="w-40 shrink-0 border-r border-line py-1 text-sm flex flex-col" role="tablist" aria-label="Script">
-          {kinds.map(([id, label, code]) => (
-            <button key={id} role="tab" aria-selected={which === id} onClick={() => setWhich(id)} className={cx('w-full text-left px-3 py-1.5 flex items-center gap-2', which === id ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-hover')}>
-              {label}
-              {code.trim() && dot}
-            </button>
-          ))}
-          {packagesButton('w-full text-left px-3 py-1.5 mt-2 border-t border-line')}
-          {aiButton('w-full text-left px-3 py-1.5')}
-          <div className="mt-auto px-2 pt-1">{info}</div>
-        </div>
-      )}
+    <div className="h-full flex min-h-0" data-scripts-layout="tabs">
       {packagesOpen && (
         <Suspense fallback={null}>
           <ScriptPackagesDialog onClose={() => setPackagesOpen(false)} />
         </Suspense>
       )}
       <div className="flex-1 min-w-0 flex flex-col" data-script-editor-column>
-        {narrow && (
-          <Tabs
-            tabs={kinds.map(([id, label, code]) => ({ id, label: code.trim() ? <>{label} {dot}</> : label }))}
-            value={which}
-            onChange={setWhich}
-            right={
-              <>
-                {info}
-                {aiButton('h-7 px-2 rounded-md text-xs')}
-                {packagesButton('h-7 px-2 rounded-md text-xs')}
-              </>
-            }
-          />
-        )}
+        <Tabs
+          label="Script"
+          tabs={kinds.map(([id, label, code]) => ({ id, label: code.trim() ? <>{label} {dot}</> : label }))}
+          value={which}
+          onChange={setWhich}
+          right={
+            <>
+              {info}
+              {aiButton('h-7 px-2 rounded-md text-xs')}
+              {packagesButton('h-7 px-2 rounded-md text-xs')}
+            </>
+          }
+        />
         <div className="flex-1 min-h-0" data-script-editor>
           <CodeEditor
             key={which}
@@ -150,7 +132,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost, ai }: { pre: string; po
               // Scripts editor stays alive through it (soak test: 250 detached nodes per closed tab)
               const action = editor.addAction({
                 id: 'testpion.insertSnippet',
-                label: 'Insert Snippet…',
+                label: 'Insert snippet…',
                 keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyI],
                 contextMenuGroupId: 'navigation',
                 run: open,

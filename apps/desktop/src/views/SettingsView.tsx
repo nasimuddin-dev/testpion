@@ -73,7 +73,7 @@ export function SettingsView() {
   const setPrice = (i: number, p: Partial<PriceEntry>) => set({ pricing: s.pricing.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   return (
     <div className="h-full flex flex-col">
-      <Tabs
+      <Tabs label="Settings"
         value={tab}
         onChange={setTab}
         tabs={[
@@ -234,7 +234,7 @@ export function SettingsView() {
                       </td>
                       <td>
                         <IconButton label="Remove" onClick={() => set({ pricing: s.pricing.filter((_, j) => j !== i) })}>
-                          <Trash2 size={13} />
+                          <Trash2 />
                         </IconButton>
                       </td>
                     </tr>

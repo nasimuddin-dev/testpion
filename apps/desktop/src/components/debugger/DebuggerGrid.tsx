@@ -68,7 +68,7 @@ const COLUMNS: Column[] = [
   { id: 'speed', label: 'Speed (KB/s)', width: 88, align: 'right', sort: (e) => Number(speedOf(e)) || 0 },
   { id: 'application', label: 'Application', width: 110, sort: (e) => e.application ?? '' },
   { id: 'domain', label: 'Domain', width: 150, sort: (e) => e.host },
-  { id: 'ip', label: 'IP Address', width: 140, sort: (e) => e.serverAddress ?? '' },
+  { id: 'ip', label: 'IP address', width: 140, sort: (e) => e.serverAddress ?? '' },
   { id: 'user', label: 'User', width: 120, sort: (e) => e.user ?? '' },
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
 ];
@@ -98,7 +98,7 @@ function quickMatches(e: Exchange): QuickMatch[] {
     { label: `URL starts with ${urlStart}`, match: { url: `${urlStart}*` } },
     { label: `Domain = ${e.host}`, match: { host: e.host } },
     { label: `Method = ${e.method}`, match: { method: e.method } },
-    ...(e.serverAddress ? [{ label: `IP Address = ${e.serverAddress}`, match: { where: { column: 'ip' as const, op: 'equals' as const, value: e.serverAddress } } }] : []),
+    ...(e.serverAddress ? [{ label: `IP address = ${e.serverAddress}`, match: { where: { column: 'ip' as const, op: 'equals' as const, value: e.serverAddress } } }] : []),
   ];
 }
 
@@ -210,7 +210,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
             )}
             {e.tls && TLS_ICON}
             {e.kind === 'tunnel' ? `${e.host}  (HTTPS tunnel)` : e.url}
-            {e.grpc && <span className="ml-1 text-[10px] font-bold kind-grpc">gRPC</span>}
+            {e.grpc && <span className="ml-1 text-2xs font-bold kind-grpc">gRPC</span>}
             {!!e.frameCount && (
               <span className="ml-1">
                 <Badge>{e.frameCount} msg</Badge>
@@ -356,7 +356,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
   return (
     <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden" data-debugger-grid>
       <div className="h-full flex flex-col" style={{ minWidth }}>
-        <div className="flex items-center h-7 text-[11px] text-muted bg-panel border-b border-line shrink-0 select-none" role="row">
+        <div className="flex items-center h-7 text-xs text-muted bg-panel border-b border-line shrink-0 select-none" role="row">
           {cols.map((c) => (
             <button
               key={c.id}
@@ -459,7 +459,7 @@ export const GridTotals = memo(function GridTotals({ rows, selectedIds, total }:
     return { pick, bytes, secs: ms / 1000 };
   }, [rows, several]);
   return (
-    <div className="px-2 py-1 border-t border-line text-[11px] text-muted flex gap-4 shrink-0 tabular-nums" data-grid-totals>
+    <div className="px-2 py-1 border-t border-line text-xs text-muted flex gap-4 shrink-0 tabular-nums" data-grid-totals>
       <span>
         {selectedIds.length > 1 ? `${pick.length} selected · ` : ''}
         {rows.length === total || total === undefined ? `${rows.length} requests` : `${rows.length} of ${total} requests`}
@@ -474,7 +474,7 @@ export const GridTotals = memo(function GridTotals({ rows, selectedIds, total }:
 /** Outgoing (programs through the proxy) or Incoming (requests TestPion's mock servers received). */
 export function TrafficSide({ side, onSide, incoming }: { side: 'outgoing' | 'incoming'; onSide(s: 'outgoing' | 'incoming'): void; incoming: number }) {
   return (
-    <Tabs
+    <Tabs label="Traffic direction"
       value={side}
       onChange={onSide}
       tabs={[
@@ -501,7 +501,7 @@ export function IncomingList({ list, onClear, selected, onSelect }: { list: Inco
     );
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-incoming>
-      <div className="flex items-center h-7 text-[11px] text-muted bg-panel border-b border-line shrink-0">
+      <div className="flex items-center h-7 text-xs text-muted bg-panel border-b border-line shrink-0">
         <span className="w-12 px-2 text-right">#</span>
         <span className="w-24 px-2">Time</span>
         <span className="w-16 px-2">Method</span>

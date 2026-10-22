@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ColumnMapping, RagField } from '@testpion/core';
 import { call } from '../../api';
 import { toastError } from '../../store';
-import { useDebounced } from '../ui';
-import { Badge, Button, Callout, Field, Modal, Select } from '../ui';
+import { Badge, Button, Callout, Field, Modal, Select, useDebounced } from '../ui';
 
 interface Mapped {
   columns: string[];

@@ -22,7 +22,7 @@ import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
-import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip, NamedOptions, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
 import { NoOpenItems } from '../components/LibraryTabStrip';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
@@ -307,7 +307,7 @@ export function MonitorsView() {
                   id: m.id,
                   name: m.name,
                   folder: m.folder,
-                  icon: <span className={cx('block w-2 h-2 rounded-full', m.running ? 'bg-accent animate-pulse' : !m.lastResult ? 'bg-muted/50' : m.lastResult.status === 'passed' ? 'bg-ok' : 'bg-bad')} />,
+                  icon: <StatusDot className="block" tone={m.running ? 'accent' : !m.lastResult ? 'muted' : m.lastResult.status === 'passed' ? 'ok' : 'bad'} pulse={m.running} />,
                   badge: m.enabled ? <RecentRuns statuses={m.recent ?? []} /> : <Badge>paused</Badge>,
                   subtitle: `${targetName(m)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
                 }))}
@@ -352,13 +352,13 @@ export function MonitorsView() {
                   return {
                     id: m.id,
                     title: m.name,
-                    badge: <span className={cx('w-2 h-2 rounded-full shrink-0', running ? 'bg-accent animate-pulse' : !m.lastResult ? 'bg-muted/50' : m.lastResult.status === 'passed' ? 'bg-ok' : 'bg-bad')} />,
+                    badge: <StatusDot tone={running ? 'accent' : !m.lastResult ? 'muted' : m.lastResult.status === 'passed' ? 'ok' : 'bad'} pulse={running} />,
                     rename: 'inline' as const,
                     data: m,
                   };
                 }),
               // the monitor being created: its tab closes by cancelling
-              ...(editing && !editing.id ? [{ id: NEW_TAB, title: 'New monitor', badge: <span className="w-2 h-2 rounded-full shrink-0 bg-muted/50" /> }] : []),
+              ...(editing && !editing.id ? [{ id: NEW_TAB, title: 'New monitor', badge: <StatusDot tone="muted" /> }] : []),
             ]}
             onSelect={({ id }) => {
               if (id === NEW_TAB) return;
@@ -519,7 +519,7 @@ function MonitorDetail(p: {
 
       <div data-output="monitor.runs">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-medium text-muted uppercase tracking-wide">Runs</span>
+          <SectionTitle size="sm" as="span">Runs</SectionTitle>
           <OutputActions spec={runsSpec} />
         </div>
         {results.length ? (

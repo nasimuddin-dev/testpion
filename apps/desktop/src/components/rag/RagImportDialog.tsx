@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { useState } from 'react';
 import { call } from '../../api';
 import { useApp, attempt } from '../../store';
@@ -97,7 +98,7 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
         )}
         {imported !== undefined && (
           <p className="text-ok" role="status" data-rag-import-done>
-            Imported {imported} {imported === 1 ? 'record' : 'records'}. Choose another file to import more.
+            Imported {plural(imported, 'record')}. Choose another file to import more.
           </p>
         )}
         {notes.map((n) => (

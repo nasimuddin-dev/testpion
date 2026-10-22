@@ -201,7 +201,7 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
               <BarRow
                 key={m}
                 label={m}
-                labelClass={cx('mono font-bold w-12 text-[0.68rem]', `method-${m}`)}
+                labelClass={cx('mono font-bold w-12 text-2xs', `method-${m}`)}
                 segments={[{ value: n, color: 'var(--accent)' }]}
                 of={maxMethod}
                 right={n}
@@ -254,7 +254,7 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
                       onClick={() => onOpen(r.node)}
                       title={[...r.path, r.node.name].join(' / ')}
                     >
-                      <span className={cx('mono font-bold w-12 shrink-0 text-[0.68rem]', `method-${r.method}`)}>{r.method}</span>
+                      <span className={cx('mono font-bold w-12 shrink-0 text-2xs', `method-${r.method}`)}>{r.method}</span>
                       <span className="truncate flex-1 min-w-0 text-fg">
                         {r.path.length > 0 && <span className="text-muted">{r.path.join(' / ')} / </span>}
                         {r.node.name}

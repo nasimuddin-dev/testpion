@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { useEffect, useMemo, useState } from 'react';
 import type { CalibrationReport, MetricCalibration } from '@testpion/core';
 import { outputFileName } from '@testpion/shared';
@@ -52,7 +53,7 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
     await attempt(async () => {
       const r = await call<{ file: string; examples: number }>('rag.calibrate.example', { metric: m.metric, run, result: resultId, expect });
       setMade((x) => [...x, resultId]);
-      useApp.getState().toast(`Added to ${r.file} (${r.examples} example${r.examples === 1 ? '' : 's'})`, 'success');
+      useApp.getState().toast(`Added to ${r.file} (${plural(r.examples, 'example')})`, 'success');
     });
   };
   const canApply = !!tuned && m.metric !== 'overall' && (custom || !!evaluation);
@@ -243,7 +244,7 @@ export function RagCalibration({ runId, evaluation, onUseThreshold, onOpenSample
         {report && (
           <>
             <div className="text-xs text-muted">
-              {report.labelled} labelled sample{report.labelled === 1 ? '' : 's'} of {report.results} in this run · labels in labels/{report.labels}.json
+              {plural(report.labelled, 'labelled sample')} of {report.results} in this run · labels in labels/{report.labels}.json
               {report.stale ? ` · ${report.stale} left out because the system answered differently since` : ''}
               {report.missing ? ` · ${report.missing} labels are about records this run does not have` : ''}
             </div>

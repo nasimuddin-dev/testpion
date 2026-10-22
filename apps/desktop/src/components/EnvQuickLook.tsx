@@ -1,12 +1,12 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { Eye, Lock, Search } from 'lucide-react';
+import { Eye, Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { activeCollectionId } from '../lib/var-popover';
 import { useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import type { ItemRef } from '@testpion/shared';
-import { Badge, Button, cx, Input, Tooltip } from './ui';
+import { Badge, Button, cx, FilterInput, Tooltip } from './ui';
 import { Callout } from '../components/ui';
 
 interface Row {
@@ -47,7 +47,7 @@ function Table({ rows, empty, overridden }: { rows: Row[]; empty: string; overri
               {r.secret && <Lock size={10} className="inline mr-1 text-muted" aria-label="Secret" />}
               {r.key}
               {overridden.has(r.key) && (
-                <span className="ml-1 font-sans text-[0.65rem] text-muted" title="A scope above sets it too, and wins">
+                <span className="ml-1 font-sans text-3xs text-muted" title="A scope above sets it too, and wins">
                   (overridden)
                 </span>
               )}
@@ -202,17 +202,7 @@ export function EnvQuickLook() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                <Input
-                  autoFocus
-                  className="h-8 pl-7 text-sm"
-                  placeholder={`Filter ${count} variables by name or value`}
-                  aria-label="Filter variables"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-              </div>
+              <FilterInput autoFocus className="flex-1" placeholder={`Filter ${count} variables by name or value`} label="Filter variables" value={filter} onChange={setFilter} />
             </div>
           )}
           {trace?.winner?.row && (
@@ -289,7 +279,7 @@ export function EnvQuickLook() {
             )}
           {!focus && section('Workspace', data?.workspace ?? [], 'No workspace variables.', above.workspace, () => goTo({ kind: 'environment', scope: 'workspace' }))}
           {!focus && section('Globals', data?.globals ?? [], 'No global variables.', above.globals, () => goTo({ kind: 'environment', scope: 'globals' }))}
-          <p className="text-[0.7rem] text-muted">
+          <p className="text-2xs text-muted">
             {focus
               ? 'A scope higher up wins: the collection over the environment, the environment over the workspace and the globals. Edit opens the scope to change the value there.'
               : 'Listed in the order they win: a collection variable overrides the environment, which overrides the workspace and the globals. Current values are set by scripts and kept on this machine only. Secret values are never shown.'}

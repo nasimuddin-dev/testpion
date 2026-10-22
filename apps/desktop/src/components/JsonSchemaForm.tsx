@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { Button, IconButton, Textarea } from './ui';
+import { Button, IconButton, Select, Textarea } from './ui';
 
 type Schema = {
   type?: string | string[];
@@ -54,22 +54,22 @@ function SchemaField({ name, schema, required, value, onChange }: { name: string
   let input: React.ReactNode;
   if (t === 'enum')
     input = (
-      <select className="field" value={value === undefined ? '' : JSON.stringify(value)} onChange={(e) => onChange(e.target.value ? JSON.parse(e.target.value) : undefined)}>
+      <Select value={value === undefined ? '' : JSON.stringify(value)} onChange={(e) => onChange(e.target.value ? JSON.parse(e.target.value) : undefined)}>
         <option value="">—</option>
         {schema.enum!.map((v) => (
           <option key={JSON.stringify(v)} value={JSON.stringify(v)}>
             {String(v)}
           </option>
         ))}
-      </select>
+      </Select>
     );
   else if (t === 'boolean')
     input = (
-      <select className="field w-32" value={value === undefined ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value === 'true')}>
+      <Select className="w-32" value={value === undefined ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value === 'true')}>
         <option value="">—</option>
         <option value="true">true</option>
         <option value="false">false</option>
-      </select>
+      </Select>
     );
   else if (t === 'number' || t === 'integer')
     input = <input className="field w-48" type="number" step={t === 'integer' ? 1 : 'any'} value={value === undefined ? '' : String(value)} onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))} />;
@@ -81,7 +81,7 @@ function SchemaField({ name, schema, required, value, onChange }: { name: string
           <div key={i} className="flex gap-1">
             <input className="field flex-1" value={String(v)} onChange={(e) => onChange(arr.map((x, j) => (j === i ? (typeOf(schema.items!) === 'string' ? e.target.value : Number(e.target.value)) : x)))} />
             <IconButton label="Remove" onClick={() => onChange(arr.filter((_, j) => j !== i))}>
-              <Trash2 size={13} />
+              <Trash2 />
             </IconButton>
           </div>
         ))}

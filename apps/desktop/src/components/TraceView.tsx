@@ -1,37 +1,39 @@
 import { prettyBody } from '../lib/pretty';
 import { useMemo, useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
-import { Badge, cx, Empty, Segmented, Split, Tabs } from './ui';
+import { Badge, Bar, cx, Empty, IconButton, Segmented, Split, Tabs } from './ui';
 import { treeKeys } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
 import { jsonPretty, outputFileName } from '@testpion/shared';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 import { JsonTree, RawView } from './JsonView';
-import { useCopied } from '../lib/clipboard';
+import { copyText } from '../lib/clipboard';
 import { RelatedRefs } from './RefLink';
 import type { ItemRef } from '@testpion/shared';
 
-const KIND_COLORS: Record<string, string> = {
-  http: '#0969da',
-  graphql: '#e535ab',
-  llm: '#8250df',
-  mcp: '#bf8700',
-  tool: '#d4a72c',
-  evaluation: '#1a7f37',
-  test: '#6e7781',
-  script: '#57606a',
-  internal: '#8c959f',
+/** The token (styles.css `--k-*`, light and dark) of each kind of span; an LLM call is the AI colour. */
+const KIND_TOKEN: Record<string, string> = {
+  http: 'http',
+  graphql: 'graphql',
+  llm: 'ai',
+  mcp: 'mcp',
+  tool: 'tool',
+  evaluation: 'evaluation',
+  test: 'test',
+  script: 'script',
+  internal: 'internal',
 };
 
 /** A span's colour: by kind; the phases of an HTTP request (DNS, TCP, TLS, waiting, download) get their own shades. */
 function spanColor(s: Span): string {
   const phase = (s.attributes as { phase?: string } | undefined)?.phase;
-  if (phase === 'DNS lookup' || phase === 'TCP connect' || phase === 'TLS handshake') return 'color-mix(in oklab, #0969da 45%, transparent)';
-  if (phase === 'download') return '#2da44e';
-  return KIND_COLORS[s.kind] ?? '#888';
+  if (phase === 'DNS lookup' || phase === 'TCP connect' || phase === 'TLS handshake') return 'color-mix(in oklab, var(--k-http) 45%, transparent)';
+  if (phase === 'download') return 'var(--ok)';
+  const token = KIND_TOKEN[s.kind];
+  return token ? `var(--k-${token})` : 'var(--muted)';
 }
 
 export function spanRows(trace: Trace): Array<{ span: Span; depth: number }> {
@@ -75,7 +77,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
   const tokens = trace.spans.reduce((a, s) => a + (Number(s.attributes.inputTokens) || 0) + (Number(s.attributes.outputTokens) || 0), 0);
   return (
     <div className="h-full flex flex-col min-h-0" data-trace-view={trace.traceId}>
-      <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
+      <Bar className="text-sm">
         <span className="font-medium truncate min-w-0">{trace.name}</span>
         <Badge tone={trace.status === 'ok' ? 'ok' : trace.status === 'error' ? 'bad' : 'default'}>{trace.status}</Badge>
         <span className="text-muted whitespace-nowrap tabular-nums shrink-0">
@@ -85,7 +87,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
         <span className="text-muted mono text-xs ml-auto truncate min-w-0 hidden xl:inline" title="Trace ID (OpenTelemetry-compatible)">
           {trace.traceId}
         </span>
-      </div>
+      </Bar>
       <Split id="trace" direction="vertical" initial={55}>
         {/* the one row (TreeRowShell, without a menu: a span is not an item), nested by depth: click or Enter shows the span, ↑ ↓ move */}
         <div className="overflow-auto h-full" role="tree" aria-label="Spans" onKeyDown={treeKeys}>
@@ -100,7 +102,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                 </span>
                 <span className="flex-1 relative h-full mr-3">
                   <span className="absolute top-2 h-4 rounded-sm opacity-80" style={{ left: `${left}%`, width: `${width}%`, background: s.status === 'error' ? 'var(--bad)' : spanColor(s) }} />
-                  <span className="absolute top-1.5 text-[0.72rem] text-muted tabular-nums" style={{ left: `min(${left + width}% + 4px, calc(100% - 60px))` }}>
+                  <span className="absolute top-1.5 text-2xs text-muted tabular-nums" style={{ left: `min(${left + width}% + 4px, calc(100% - 60px))` }}>
                     {formatMs(s.durationMs)}
                   </span>
                 </span>
@@ -111,7 +113,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
         <div className="h-full flex flex-col min-h-0" data-output="trace.span">
           {span ? (
             <>
-              <Tabs
+              <Tabs label="Span details"
                 value={tab}
                 onChange={setTab}
                 tabs={[
@@ -202,14 +204,13 @@ const sizeOf = (text: string) => {
 
 function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { body: unknown; contentType?: string; status?: unknown }; emptyText: string }) {
   const [raw, setRaw] = useState(false);
-  const { copied, copy: copyToClipboard } = useCopied(1200);
   const body = payload?.body;
   // parsed once per body: a new value each render would fold the tree up again whenever the panel re-renders
   const p = useMemo(() => (body === undefined ? undefined : parsed(body)), [body]);
-  const copy = () => p && void copyToClipboard(p.text);
+  const what = `the ${title.toLowerCase()} payload`;
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="flex items-center gap-2 h-8 px-3 border-b border-line bg-panel/40 shrink-0 text-xs">
+      <Bar className="bg-panel/40 text-xs">
         <span className="font-semibold text-fg">{title}</span>
         {payload?.status !== undefined && <Badge>{String(payload.status)}</Badge>}
         {payload?.contentType && <span className="mono text-muted truncate">{payload.contentType.split(';')[0]}</span>}
@@ -228,12 +229,13 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
                 ]}
               />
             )}
-            <button aria-label={`Copy the ${title.toLowerCase()}`} title="Copy" className="p-1 rounded text-muted hover:text-fg hover:bg-hover" onClick={copy}>
-              {copied ? <Check size={13} className="text-ok" /> : <Copy size={13} />}
-            </button>
+            {/* the quick copy of what this box shows; the span's Copy / Download / ▾ are in the tab strip above */}
+            <IconButton size="sm" label={`Copy ${what}`} onClick={() => void copyText(p.text, what)}>
+              <Copy />
+            </IconButton>
           </div>
         )}
-      </div>
+      </Bar>
       <div className="flex-1 min-h-0 overflow-auto">
         {!p ? (
           <p className="p-3 text-sm text-muted">{emptyText}</p>

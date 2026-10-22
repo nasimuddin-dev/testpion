@@ -84,7 +84,7 @@ export function GitCommitPanel({ hash, onClose }: { hash: string; onClose(): voi
             </div>
           </div>
           <IconButton label="Close the commit" onClick={onClose}>
-            <X size={14} />
+            <X />
           </IconButton>
         </div>
         {detail.body && <pre className="mt-2 text-xs text-muted whitespace-pre-wrap font-sans">{detail.body}</pre>}

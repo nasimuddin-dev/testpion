@@ -19,13 +19,13 @@ import { ErrorPanel } from '../components/Results';
 import { type FolderListOps } from '../components/FolderList';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { McpUsage } from '../components/McpUsage';
-import { Button, cx, Empty, Field, Input, MoreMenu, SectionTitle, Select, Split, Tabs, VirtualList, Textarea, type MenuItem } from '../components/ui';
+import { Bar, Button, cx, Empty, Field, FilterInput, Input, type MenuItem, MoreMenu, SectionTitle, Select, Split, Tabs, Textarea, VirtualList } from '../components/ui';
 import { treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
-import { OutputActions } from '../components/output/OutputFrame';
+import { OutputActions, OutputBarStart } from '../components/output/OutputFrame';
 import { traceOutputSpec } from '../components/output/mcp-specs';
 import { ToolsetEditor, type ToolsetEditorHandle } from '../components/mcp/ToolsetEditor';
 import { VarInput } from '../components/VarInput';
@@ -375,7 +375,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
             </Button>
             <MoreMenu label="More server actions" items={serverMenu()} />
           </div>
-          <Tabs
+          <Tabs label="MCP server"
             value={tab}
             onChange={setTab}
             tabs={[
@@ -606,12 +606,15 @@ function McpTrace({ events, error, server }: { events: McpEvent[]; error?: Norma
     <Split id="mcp-trace" initial={55}>
       <div className="h-full flex flex-col" data-output="mcp.trace" onKeyDown={treeKeys}>
         {error && <ErrorPanel error={error} />}
-        <div className="flex items-center gap-2 px-2 h-9 border-b border-line text-xs">
-          <Input className="h-6 min-h-6 w-48 text-xs" placeholder="Filter method (e.g. tools/call)" value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <span className="text-muted">{plural(shown.length, 'event')}</span>
+        {/* the filter and the count give way first in a narrow pane: the output control at the right end stays whole (K1) */}
+        <Bar className="text-xs overflow-clip whitespace-nowrap">
+          <OutputBarStart>
+            <FilterInput className="w-48" placeholder="Filter method (e.g. tools/call)" label="Filter protocol messages by method" value={filter} onChange={setFilter} />
+            <span className="text-muted truncate min-w-0">{plural(shown.length, 'event')}</span>
+          </OutputBarStart>
           <OutputActions spec={spec} />
-        </div>
-        <div className="grid grid-cols-[70px_22px_1fr_80px_70px] text-[0.72rem] text-muted px-2 py-1 border-b border-line">
+        </Bar>
+        <div className="grid grid-cols-[70px_22px_1fr_80px_70px] text-2xs text-muted px-2 py-1 border-b border-line">
           <span>+time</span>
           <span />
           <span>method</span>

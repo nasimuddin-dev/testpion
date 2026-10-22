@@ -11,8 +11,8 @@ import type { Exchange } from './model';
 const TITLES: Record<DockPanel, string> = {
   filter: 'Filter',
   highlight: 'Highlight',
-  'highlight-rule': 'Highlight Rule',
-  'auto-reply': 'Auto-Reply',
+  'highlight-rule': 'Highlight rule',
+  'auto-reply': 'Auto-reply',
   modify: 'Modify',
   timeline: 'Timeline',
   summary: 'Summary',

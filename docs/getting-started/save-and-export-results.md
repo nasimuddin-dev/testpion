@@ -32,7 +32,7 @@ Every response and every result in TestPion has the same **down arrow** at the r
 **Keyboard.**
 
 - <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>S</kbd> on macOS) saves the output you are in, meaning the one nearest to where you last clicked, in its default format. You can rebind it (*Download the focused output*) in **Settings ▸ Keyboard**.
-- The command palette's **Download Output…** and **File ▸ Download Output…** open its format menu.
+- The command palette's **Download output…** and **File ▸ Download Output…** open its format menu.
 
 File names are made from what the output is and when, for example `GET-patients-2026-10-17-1405-200.json` or `run-smoke-2026-10-17-1405-passed.html`. They are safe on Windows, macOS and Linux: no reserved characters, no Windows device names such as `CON` or `NUL`, no invisible characters that make a name read differently. For a raw response body, the file name from the server's `Content-Disposition` header wins.
 

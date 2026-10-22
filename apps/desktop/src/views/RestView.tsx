@@ -15,7 +15,7 @@ import { CodeModal } from '../components/CodeModal';
 import { CookiesModal, hostOf } from '../components/CookiesModal';
 import { NEW_TAB_TITLE, NoOpenTabs, tabTitle, useEditorTabs } from '../components/EditorTabs';
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { uid } from '../lib/format';
+import { plural, uid } from '../lib/format';
 
 /** Browser devtools "Copy as cURL (bash/cmd) / fetch / fetch (Node.js) / PowerShell" output. */
 const isRequestSnippet = (t: string) =>
@@ -262,8 +262,8 @@ export function RestView() {
       const curl = await call<string>('http.code', { request: toEngineRequest(tab.request), environment: env, collectionId: tab.collectionId, requestId: tab.requestId, language: 'curl' }).catch(() => undefined);
       setResults((rs) => ({ ...rs, [tabId]: { ...r, curl, stream: streams.current[id] || undefined } }));
       if (r.blockedEnv?.length)
-        useApp.getState().toast(`This request reads the OS environment variable${r.blockedEnv.length === 1 ? '' : 's'} ${r.blockedEnv.map((n) => `$env.${n}`).join(', ')}, which the app does not allow by default. Settings ▸ Privacy lists the ones requests may read.`, 'warning', {
-          label: 'Open Settings',
+        useApp.getState().toast(`This request reads ${plural(r.blockedEnv.length, 'OS environment variable')} (${r.blockedEnv.map((n) => `$env.${n}`).join(', ')}), which the app does not allow by default. Settings ▸ Privacy lists the ones requests may read.`, 'warning', {
+          label: 'Open settings',
           onClick: () => useApp.getState().openIntent('settings', { tab: 'privacy' }),
         });
       else if (r.unresolved?.length && !r.error)
@@ -606,18 +606,18 @@ export function RestView() {
           </Button>
         )}
         <IconButton label="Compare across environments" onClick={() => setComparingEnvs(true)}>
-          <ArrowLeftRight size={16} />
+          <ArrowLeftRight />
         </IconButton>
         <IconButton label="Code snippet" onClick={() => setShowCode(true)}>
-          <Code2 size={16} />
+          <Code2 />
         </IconButton>
         {aiOn && (
           <IconButton label="Describe a request with AI" onClick={() => void describeRequest()}>
-            <Sparkles size={16} />
+            <Sparkles />
           </IconButton>
         )}
         <IconButton label="Cookies" onClick={() => setShowCookies(true)}>
-          <Cookie size={16} />
+          <Cookie />
         </IconButton>
         <Button icon={<Save size={13} />} onClick={quickSave} title="Save (Ctrl+S)">
           Save

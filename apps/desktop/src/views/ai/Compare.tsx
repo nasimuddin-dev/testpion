@@ -58,7 +58,7 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
                 <div className="flex items-center gap-1">
                   <ModelPicker providers={providers} provider={m.provider} model={m.name} onChange={(p, name) => set({ compare: rows.map((x, j) => (j === i ? { provider: p, name } : x)) })} />
                   <IconButton label="Remove model" onClick={() => set({ compare: rows.filter((_, j) => j !== i) })}>
-                    <Trash2 size={13} />
+                    <Trash2 />
                   </IconButton>
                 </div>
                 {p && !p.hasKey && p.needsKey && <AddKeyHint provider={p} />}
@@ -131,7 +131,7 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
                         return (
                           <td key={i} className="px-3 py-1.5 tabular-nums">
                             {fn(r)}
-                            {best !== undefined && v === best && <span className="ml-1.5 text-[0.7rem] text-ok">{LOWER_IS_BETTER[label]}</span>}
+                            {best !== undefined && v === best && <span className="ml-1.5 text-2xs text-ok">{LOWER_IS_BETTER[label]}</span>}
                             {v !== undefined && max > 0 && (
                               <span aria-hidden className="block h-1 mt-1 w-full max-w-40 rounded-full bg-hover/70 overflow-hidden">
                                 <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(3, (v / max) * 100)}%` }} />

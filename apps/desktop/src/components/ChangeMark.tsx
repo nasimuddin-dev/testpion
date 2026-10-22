@@ -24,7 +24,7 @@ export function ChangeMark({ change, count, className }: { change: string; count
       title={counted ? `${count} changed inside` : m.label}
       data-change-mark={m.letter}
       data-change-count={counted ? count : undefined}
-      className={cx('inline-grid place-items-center h-4 rounded text-[0.65rem] font-bold shrink-0', counted ? 'min-w-4 px-1 bg-warn/15' : 'w-4', className)}
+      className={cx('inline-grid place-items-center h-4 rounded text-3xs font-bold shrink-0', counted ? 'min-w-4 px-1 bg-warn/15' : 'w-4', className)}
       style={{ color: `var(--${m.tone})` }}
     >
       {counted ? count : m.letter}

@@ -7,7 +7,7 @@ import { formatMs, plural } from '../../lib/format';
 import { JsonTree } from '../JsonView';
 import { useSticky } from '../../lib/sticky';
 import { ErrorPanel } from '../Results';
-import { Badge, Button, cx, Empty, Field, Input, SectionTitle, Split } from '../ui';
+import { Badge, Bar, Button, cx, Empty, Field, Input, SectionTitle, Split } from '../ui';
 import { OutputActions } from '../output/OutputFrame';
 import { promptOutputSpec, resourceOutputSpec } from '../output/mcp-specs';
 
@@ -309,7 +309,7 @@ function PromptMessages({ out, server, prompt }: { out: { messages: unknown[]; d
   const messages = out.messages as Array<{ role: string; content: { type: string; text?: string; resource?: { uri: string; text?: string } } }>;
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm">
+      <Bar className="text-sm">
         <span className="text-muted">{plural(messages.length, 'message')}</span>
         {out.description && <span className="text-muted truncate">· {out.description}</span>}
         <OutputActions spec={spec}>
@@ -317,7 +317,7 @@ function PromptMessages({ out, server, prompt }: { out: { messages: unknown[]; d
             {json ? 'Messages' : 'JSON'}
           </Button>
         </OutputActions>
-      </div>
+      </Bar>
       {json ? (
         <div className="h-96">
           <JsonTree data={out} />

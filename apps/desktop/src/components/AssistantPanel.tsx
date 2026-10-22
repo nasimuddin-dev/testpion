@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { BookOpen, Bot, Check, Copy, Eye, ListChecks, Paperclip, RotateCcw, Square, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { extractCodeBlock } from '@testpion/shared';
@@ -8,8 +9,8 @@ import { currentViewContext, type ViewContext } from '../lib/assistant-context';
 import { useApp, type AssistantRequest, toastError } from '../store';
 import { Markdown } from './Markdown';
 import { AiGeneratedNotice, ErrorPanel } from './Results';
-import { Badge, Button, cx, IconButton, Input, Spinner } from './ui';
-import { copyQuietly, copyText } from '../lib/clipboard';
+import { Badge, Bar, Button, cx, IconButton, Input, Spinner } from './ui';
+import { copyText } from '../lib/clipboard';
 import { aiSetupAction } from '../lib/ai-errors';
 import { offerUndo } from '../lib/undo';
 import { AiPreviewDialog, taskParams, type AiPrivacy } from './ai/AiPreviewDialog';
@@ -150,19 +151,19 @@ export function AssistantPanel() {
         else set({ assistant: undefined });
       }}
     >
-      <div className="h-10 flex items-center gap-1 px-3 border-b border-line">
+      <Bar>
         <Bot size={16} className="text-judge shrink-0" />
         <span className="font-medium text-sm truncate ml-1">{req.title}</span>
         <IconButton label="What will be sent…" className="ml-auto" onClick={() => setPreviewing(true)} data-ai-preview-open>
-          <Eye size={14} />
+          <Eye />
         </IconButton>
         <IconButton label="New conversation" onClick={restart} disabled={!turns.length && !error} reason="The conversation is empty already">
-          <RotateCcw size={14} />
+          <RotateCcw />
         </IconButton>
         <IconButton label="Close assistant" onClick={() => (stop(), set({ assistant: undefined }))}>
-          <X size={15} />
+          <X />
         </IconButton>
-      </div>
+      </Bar>
       <AiGeneratedNotice />
       <div className="flex-1 overflow-auto p-3 text-sm flex flex-col gap-3" aria-live="polite">
         {turns.map((t, i) =>
@@ -329,14 +330,14 @@ async function acceptItems(proposal: Proposal, items: ProposalItem[], apply?: As
         return false;
       }
       if (r) toast(r.done, 'success', r.action);
-      else toast(`${apply.label}: ${items.length} item${items.length === 1 ? '' : 's'}`, 'success');
+      else toast(`${apply.label}: ${plural(items.length, 'item')}`, 'success');
       // the editor applied them (its own undo): the proposal and the usage ledger record the acceptance
       void call('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id), recordOnly: true }).catch(() => undefined);
       return true;
     }
     const r = await call<{ applied: Array<{ title: string }>; skipped: Array<{ item: string; reason: string }> }>('ai.applyProposal', { id: proposal.id, items: items.map((i) => i.id) });
     const undo = offerUndo(() => call('ai.undoProposal', { id: proposal.id }).then(() => toast('Undone', 'success'), toastError));
-    toast(`Applied ${r.applied.length} change${r.applied.length === 1 ? '' : 's'}${r.skipped.length ? ` (${r.skipped.length} skipped: ${r.skipped[0]!.reason})` : ''}`, r.skipped.length ? 'info' : 'success', { label: 'Undo', onClick: undo });
+    toast(`Applied ${plural(r.applied.length, 'change')}${r.skipped.length ? ` (${r.skipped.length} skipped: ${r.skipped[0]!.reason})` : ''}`, r.skipped.length ? 'info' : 'success', { label: 'Undo', onClick: undo });
     return true;
   } catch (e) {
     toastError(e);
@@ -387,14 +388,8 @@ const Answer = memo(function Answer({
       b.textContent = 'Copy';
       b.setAttribute('aria-label', 'Copy this code');
       b.className = 'absolute top-1 right-1 text-xs rounded px-1.5 py-0.5 bg-panel border border-line text-muted hover:text-fg';
-      b.onclick = () => {
-        // "Copied" only when the clipboard took it (a refusal is reported)
-        void copyQuietly(pre.querySelector('code')?.textContent ?? pre.textContent ?? '').then((ok) => {
-          if (!ok) return;
-          b.textContent = 'Copied';
-          setTimeout(() => (b.textContent = 'Copy'), 1200);
-        });
-      };
+      // the one copy feedback of the app: a toast (a refusal is reported the same way)
+      b.onclick = () => void copyText(pre.querySelector('code')?.textContent ?? pre.textContent ?? '', 'the code');
       pre.classList.add('relative');
       pre.appendChild(b);
     }
@@ -410,7 +405,7 @@ const Answer = memo(function Answer({
           <div className="flex items-center gap-2 text-xs">
             <ListChecks size={13} className="text-accent" />
             <span className="font-medium">
-              {p.items.length} proposed change{p.items.length === 1 ? '' : 's'}
+              {plural(p.items.length, 'proposed change')}
             </span>
             <Button size="sm" variant="primary" className="ml-auto" onClick={() => setReviewing(true)} data-proposal-review>
               Review

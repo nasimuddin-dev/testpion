@@ -14,7 +14,7 @@ import { JsonTree, RawView } from '../JsonView';
 import { Markdown } from '../Markdown';
 import { useSticky } from '../../lib/sticky';
 import { CheckList, ErrorPanel } from '../Results';
-import { Badge, Button, cx, Empty, Input, Segmented, Split, Tabs } from '../ui';
+import { Badge, Bar, Button, cx, Empty, FilterInput, Segmented, Split, Tabs } from '../ui';
 import { ResponseSplit } from '../ResponseSplit';
 import { type Tool } from './McpPanels';
 import { jsonPretty, outputFileName } from '@testpion/shared';
@@ -99,7 +99,7 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
     <Split id="mcp-tools" initial={28}>
       <div className="h-full flex flex-col">
         <div className="p-2">
-          <Input className="w-full h-7 min-h-7 text-sm" placeholder="Filter tools" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <FilterInput className="w-full" placeholder="Filter tools" label="Filter tools" value={filter} onChange={setFilter} />
         </div>
         <div className="flex-1 overflow-auto">
           {tools
@@ -119,7 +119,7 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
       {tool ? (
         <ResponseSplit id="mcp-tool-run" initialBelow={55}>
           <div className="h-full flex flex-col">
-            <div className="flex items-center gap-2 px-3 h-10 border-b border-line">
+            <Bar>
               <span className="font-semibold mono">{tool.name}</span>
               {destructive && <Badge tone="bad">destructive hint</Badge>}
               <label className="ml-auto text-xs flex items-center gap-1 text-muted">
@@ -150,8 +150,8 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
               <Button size="sm" variant="primary" icon={<Play size={12} />} loading={running} onClick={async () => (destructive && !(await confirmAction({ title: 'Run a destructive tool', message: 'This tool is marked destructive by the server.', detail: 'It may change or delete data. Run it only if you mean to.', confirmLabel: 'Execute anyway', tone: 'warning' })) ? undefined : exec())}>
                 Execute
               </Button>
-            </div>
-            <Tabs
+            </Bar>
+            <Tabs label="Tool call"
               value={sub}
               onChange={setSub}
               tabs={[
@@ -243,7 +243,7 @@ export function ToolResult({ r, name }: { r: Extract<ToolRun, { content: unknown
           />
         }
       />
-      <Tabs
+      <Tabs label="Tool result"
         value={tab}
         onChange={setTab}
         tabs={[
