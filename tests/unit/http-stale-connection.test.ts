@@ -52,3 +52,25 @@ describe('a connection closed by the server between requests', () => {
     expect(seen).toEqual(['POST /once']);
   });
 });
+
+// Mem-5: SSE events were capped by count (10,000) but not by size
+describe('a stream of large events', () => {
+  it('keeps events up to 32 MB of data and counts the rest', async () => {
+    const big = createServer((_q, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      const data = 'x'.repeat(1024 * 1024);
+      for (let i = 0; i < 40; i++) res.write(`data: ${data}\n\n`);
+      res.end();
+    });
+    await new Promise<void>((r) => big.listen(0, '127.0.0.1', r));
+    try {
+      const { response } = await executeHttp({ method: 'GET', url: `http://127.0.0.1:${(big.address() as AddressInfo).port}/`, headers: [] } as never, { maxPreviewBytes: 1024 });
+      expect(response.events!.length).toBeLessThanOrEqual(33);
+      expect(response.events!.length + (response.eventsDropped ?? 0)).toBe(40);
+      expect(response.eventsDropped).toBeGreaterThanOrEqual(7);
+    } finally {
+      big.closeAllConnections();
+      await new Promise<void>((r) => big.close(() => r()));
+    }
+  }, 60_000);
+});

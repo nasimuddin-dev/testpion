@@ -20,6 +20,8 @@ import { watchSend } from './socket-timing.js';
 
 /** Events kept per SSE response (the stream itself can be endless). */
 const MAX_SSE_EVENTS = 10_000;
+/** ...and at most this many characters of event data kept (10,000 events of 1 MB each were 10 GB); the rest are counted, not kept. */
+const MAX_SSE_EVENT_CHARS = 32 * 1024 * 1024;
 import type { Redactor } from '../../util/redact.js';
 import { shortId } from '../../util/ids.js';
 import { levenshtein } from '../../util/text-distance.js';
@@ -570,7 +572,7 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   let payloadPath: string | undefined;
   const decoder = opts.onChunk ? new TextDecoder() : undefined;
   // Server-Sent Events: parsed as they arrive; stopping the request keeps the events received so far
-  const sse = !opts.discardBody && isEventStream(res.headers.get('content-type')) ? { parser: new SseParser(), decoder: new TextDecoder(), events: [] as SseEvent[], total: 0 } : undefined;
+  const sse = !opts.discardBody && isEventStream(res.headers.get('content-type')) ? { parser: new SseParser(), decoder: new TextDecoder(), events: [] as SseEvent[], total: 0, chars: 0 } : undefined;
   let streamStopped = false;
 
   if (res.body && method !== 'HEAD') {
@@ -593,7 +595,10 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
           const atMs = round(performance.now() - t0);
           for (const ev of sse.parser.push(sse.decoder.decode(value, { stream: true }), atMs)) {
             sse.total++;
-            if (sse.events.length < MAX_SSE_EVENTS) sse.events.push(ev);
+            if (sse.events.length < MAX_SSE_EVENTS && sse.chars < MAX_SSE_EVENT_CHARS) {
+              sse.events.push(ev);
+              sse.chars += ev.data.length;
+            }
             opts.onSseEvent?.(ev);
           }
         }
@@ -629,6 +634,7 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
 
   const truncated = size > kept;
   const bodyBuf = Buffer.concat(chunks);
+  chunks.length = 0; // (the pieces and the joined body were both held until the response was built)
   const contentType = res.headers.get('content-type') ?? '';
   if (opts.payloadDir && !file && !opts.discardBody && !truncated && bodyBuf.length && isBinaryBody(bodyBuf, contentType)) {
     // "Save response" needs the bytes of a small binary body too (its preview is a placeholder)
