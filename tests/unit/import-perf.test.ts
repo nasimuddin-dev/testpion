@@ -2,15 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { expectWithin, heapAfterGc } from '../perf-budget';
 import { WorkspaceStore, collectionToInsomniaV5, importDocument, importIntoWorkspace, planImport, type Collection } from '../../packages/core/src/index.js';
 
 // Performance gate (quality bar): a 10,000-request collection in 500 folders with scripts previews in under 1.5 s and imports in under 3 s,
 // for the formats people bring their biggest collections in (Postman JSON, Insomnia v5 YAML, OpenCollection / Bruno JSON export).
 // The budgets are the release's; a slower machine (CI) is given a multiple through TESTPION_PERF_SLACK.
 
-const SLACK = Number(process.env.TESTPION_PERF_SLACK ?? 1);
-const PREVIEW_MS = 1500 * SLACK;
-const APPLY_MS = 3000 * SLACK;
+// (the time is held to the budget scaled to this machine's speed right now; TESTPION_PERF_GATE=1 holds the unscaled budget: see tests/perf-budget.ts)
+const PREVIEW_MS = 1500;
+const APPLY_MS = 3000;
 const N = 10_000;
 const FOLDERS = 500;
 
@@ -58,12 +59,12 @@ describe(`importing ${N} requests in ${FOLDERS} folders`, () => {
         const previews = [time(() => planImport(store, text)), time(() => planImport(store, text)), time(() => planImport(store, text))];
         const preview = previews.reduce((best, p) => (p.ms < best.ms ? p : best));
         expect(preview.value.collections[0]!.requests).toBe(N);
-        expect(preview.ms, `preview took ${Math.round(preview.ms)} ms`).toBeLessThan(PREVIEW_MS);
-        const heapBefore = process.memoryUsage().heapUsed;
+        expectWithin(preview.ms, PREVIEW_MS, `${name}: preview`);
+        const heapBefore = heapAfterGc();
         const applied = time(() => importIntoWorkspace(store, text));
         expect(applied.value.collection?.name).toBe('Big');
-        expect(applied.ms, `apply took ${Math.round(applied.ms)} ms`).toBeLessThan(APPLY_MS);
-        expect(process.memoryUsage().heapUsed - heapBefore).toBeLessThan(400 * 1024 * 1024);
+        expectWithin(applied.ms, APPLY_MS, `${name}: apply`);
+        expect(heapAfterGc() - heapBefore).toBeLessThan(400 * 1024 * 1024);
         // and it is all there
         const saved = store.getCollection(applied.value.collection!.id);
         expect(saved.items).toHaveLength(FOLDERS);

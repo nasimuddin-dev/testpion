@@ -62,10 +62,16 @@ afterAll(async () => {
 
 function fresh() {
   const home = mkdtempSync(join(tmpdir(), 'tp-audit-edge-'));
-  const be = new Backend({ appDir: home, emit: () => {}, noMonitors: true });
+  const events: Array<{ channel: string; payload: { runId?: string } }> = [];
+  const be = new Backend({ appDir: home, emit: (channel, payload) => events.push({ channel, payload: payload as { runId?: string } }), noMonitors: true });
   const root = (be as unknown as { store: { root: string } }).store.root;
   const call = (m: string, p: unknown = {}) => Promise.resolve().then(() => be.invoke(m, p));
-  return { be, root, call, home };
+  /** Resolves when the run has finished (its run.finished event), not after a guessed sleep. */
+  const finished = async (runId: string | undefined, ms = 60_000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 20))) if (events.some((e) => e.channel === 'run.finished' && e.payload.runId === runId)) return true;
+    return false;
+  };
+  return { be, root, call, home, finished };
 }
 const get = (url: string, extra: object = {}) => ({ request: { method: 'GET', url, headers: [], params: [] }, ...extra });
 const timed = async <T>(p: Promise<T>, ms: number): Promise<T | 'TIMEOUT'> => Promise.race([p, new Promise<'TIMEOUT'>((r) => setTimeout(() => r('TIMEOUT'), ms))]);
@@ -270,13 +276,13 @@ describe('audit: edge-case workspaces (backend)', () => {
   // a script that copies a secret into another variable: current-values/<ws>.json keeps it in plain text
   // (response payload files hold whatever the server echoed - expected; that hit is filtered out)
   it('secrets: a secret environment variable never lands in plain text in the data folder after a send and a run', async () => {
-    const { be, call, root, home } = fresh();
+    const { be, call, root, home, finished } = fresh();
     const SECRET = 'sk-AUDIT-9f8e7d6c5b4a';
     await call('env.save', { env: { id: 'sec', name: 'Sec', variables: [{ key: 'token', value: '', secret: true, enabled: true }] }, secrets: { token: SECRET } });
     await call('col.save', { schemaVersion: '1.0', id: 'sc', name: 'Sec', version: 0, variables: [], updatedAt: '', items: [{ kind: 'http', id: 'r1', name: 'echo', request: { method: 'GET', url: `${base}/echo?t={{token}}`, headers: [{ key: 'X-Api-Key', value: '{{token}}', enabled: true }], params: [] }, testScript: 'tp.environment.set("copied", tp.environment.get("token")); console.log(tp.environment.get("token"));' }] });
     await call('http.send', { request: { method: 'GET', url: `${base}/echo?t={{token}}`, headers: [{ key: 'Authorization', value: 'Bearer {{token}}', enabled: true }], params: [] }, environment: 'sec', collectionId: 'sc', requestId: 'r1', testScript: 'tp.environment.set("copied", tp.environment.get("token")); console.log("tok", tp.environment.get("token"));' });
     const run = (await call('col.run', { collectionId: 'sc', environment: 'sec' })) as { runId?: string; id?: string };
-    await new Promise((r) => setTimeout(r, 3000));
+    expect(await finished(run.runId)).toBe(true);
     await be.dispose();
     const hits: string[] = [];
     const walk = (d: string) => {

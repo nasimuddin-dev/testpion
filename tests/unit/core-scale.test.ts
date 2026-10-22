@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { expectWithin } from '../perf-budget';
 import {
   collectionRequests,
   collectionRequestToTest,
@@ -88,11 +89,11 @@ describe('a collection of 10,000 requests', () => {
     expect(tests[9999]!.id).toBe('r9999');
     expect(tests[9999]!.name).toBe('Folder 99 / Request 9999');
     expect(tests[0]!.variables).toEqual({ folder: '0' });
-    expect(ms, `10,000 requests took ${Math.round(ms)} ms`).toBeLessThan(5000);
+    expectWithin(ms, 5000, '10,000 requests');
     // a selection of one folder is found without walking the others again and again
     const t1 = performance.now();
     for (let i = 0; i < 100; i++) expect(collectionRequests(c, [`f${i}`])).toHaveLength(100);
-    expect(performance.now() - t1).toBeLessThan(5000);
+    expectWithin(performance.now() - t1, 5000, '100 folder selections');
   });
 
   it('runs more than a thousand requests in one go (the runaway guard counts loops, not a long collection)', async () => {
@@ -132,7 +133,7 @@ describe('a collection of 10,000 requests', () => {
     expect(summary.passed).toBe(10_000);
     expect(readFileSync(results, 'utf8').trim().split('\n')).toHaveLength(10_000);
     expect(peak - before, `the heap grew ${Math.round(peak - before)} MB`).toBeLessThan(120);
-    expect(ms, `10,000 steps took ${Math.round(ms)} ms`).toBeLessThan(120_000);
+    expectWithin(ms, 120_000, '10,000 steps');
   }, 180_000);
 });
 
@@ -195,7 +196,7 @@ describe('a run of thousands of results', () => {
     }
     expect(pages).toBe(4);
     expect(seen).toEqual(Array.from({ length: PER }, (_, i) => `test-${i}`));
-    expect(performance.now() - t0).toBeLessThan(10_000);
+    expectWithin(performance.now() - t0, 10_000, 'paging 4 pages of results');
   });
   it('caps a page at 1,000 and filters before it pages', async () => {
     const store = storeOf();
@@ -218,7 +219,7 @@ describe('a run of thousands of results', () => {
     const ms = performance.now() - t0;
     expect(points).toHaveLength(RUNS);
     expect(points.every((p) => p.status === 'passed')).toBe(true);
-    expect(ms, `40 runs took ${Math.round(ms)} ms`).toBeLessThan(10_000);
+    expectWithin(ms, 10_000, '40 runs');
   });
   it('lists the flaky tests in pages that add up to the whole list', async () => {
     const store = storeOf();
@@ -254,7 +255,7 @@ describe('a search over 100,000 history rows', () => {
     expect(out.matched).toBe(Math.ceil(5000 / 11));
     expect(out.rows).toHaveLength(50);
     expect(out.truncated).toBe(true);
-    expect(ms, `the search took ${Math.round(ms)} ms`).toBeLessThan(5000);
+    expectWithin(ms, 5000, 'the search');
   });
   it('pages: the offset of one answer is the next one, and the pages add up to the matches', async () => {
     const store = storeOf();
@@ -307,7 +308,7 @@ describe('scanning the test files of a workspace', () => {
     expect([...scanner.scan(dir)]).toHaveLength(N);
     expect(reads).toBe(N + 1);
     // (the first scan reads 3,000 new files: how long that takes is the disk's and the virus scanner's; the second only asks their sizes)
-    expect(second, `first scan ${Math.round(first)} ms, second ${Math.round(second)} ms`).toBeLessThan(8000);
+    expectWithin(second, 8000, `second scan (first ${Math.round(first)} ms)`);
   });
   it('lists the exposed flows from thousands of files, and notices an edit', () => {
     const ws = join(tmp.dir, 'ws-flows');
@@ -352,7 +353,7 @@ describe('the requests a spec gap analysis reads from a workspace', () => {
     const third = existingRequests(store);
     expect(third).toHaveLength(1500);
     expect(third[1]).toMatchObject({ source: 'tests/g0001.yaml#changed', method: 'POST' });
-    expect(ms, `a second look took ${Math.round(ms)} ms`).toBeLessThan(8000);
+    expectWithin(ms, 8000, 'a second look');
   });
 });
 
@@ -367,7 +368,7 @@ describe('state that grows with the data stays bounded', () => {
     const out = r.redactString(text);
     expect(out).not.toMatch(/secret-value-/);
     expect(out.match(/\[REDACTED\]/g)).toHaveLength(200);
-    expect(performance.now() - t0, 'registering 5,000 secrets').toBeLessThan(5000);
+    expectWithin(performance.now() - t0, 5000, 'registering 5,000 secrets');
   });
   it('the key rules answer the same for ten thousand different names', () => {
     const fields = secretKeyFields(['password', 'token']);

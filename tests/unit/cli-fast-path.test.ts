@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * `testpion --version` and `testpion --help` are answered from dist/fast-index.json without loading the command line
@@ -13,11 +15,9 @@ const index = resolve('packages/cli/dist/fast-index.json');
 const built = existsSync(index) && statSync(index).mtimeMs >= statSync(resolve('packages/cli/dist/index.js')).mtimeMs;
 
 const run = (args: string[], full: boolean) => {
-  const t0 = performance.now();
   const r = spawnSync(process.execPath, [bin, ...args], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1', ...(full ? { TESTPION_FULL_CLI: '1' } : {}) } });
-  return { out: r.stdout, err: r.stderr, status: r.status, ms: performance.now() - t0 };
+  return { out: r.stdout, err: r.stderr, status: r.status };
 };
-const best = (args: string[], full: boolean, runs = 3) => Math.min(...Array.from({ length: runs }, () => run(args, full).ms));
 
 describe.skipIf(!built)('the root --version and --help from the build index', () => {
   for (const flag of ['--version', '-V', '--help', '-h']) {
@@ -38,12 +38,35 @@ describe.skipIf(!built)('the root --version and --help from the build index', ()
     expect(out).toContain('Exit codes: 0 success');
   });
 
-  it('is much faster than loading everything (best of three each; the box is shared, so only the ratio is held)', () => {
-    const quick = best(['--version'], false);
-    const full = best(['--version'], true);
-    console.log(`testpion --version: ${quick.toFixed(0)} ms from the index, ${full.toFixed(0)} ms with the full command line`);
-    expect(quick).toBeLessThan(full / 2.5);
-  });
+  it('loads a handful of modules, not the whole command line (counted, not timed: a timing ratio flakes on a loaded machine)', () => {
+    // a resolve hook writes a byte per module resolution, so the work done is counted, whatever the speed of the machine
+    const dir = mkdtempSync(join(tmpdir(), 'tp-fastpath-'));
+    try {
+      const hook = join(dir, 'hook.mjs');
+      const pre = join(dir, 'pre.mjs');
+      const lines = (...l: string[]) => `${l.join('\n')}\n`;
+      writeFileSync(hook, lines("import { appendFileSync } from 'node:fs';", 'export async function resolve(specifier, context, next) {', "  appendFileSync(process.env.TP_COUNT_FILE, 'x');", '  return next(specifier, context);', '}'));
+      writeFileSync(pre, lines("import { register } from 'node:module';", "register(new URL('./hook.mjs', import.meta.url));"));
+      const resolved = (full: boolean) => {
+        const file = join(dir, full ? 'full.txt' : 'quick.txt');
+        writeFileSync(file, '');
+        const t0 = performance.now();
+        const r = spawnSync(process.execPath, ['--disable-warning=DEP0205', '--import', pathToFileURL(pre).href, bin, '--version'], {
+          encoding: 'utf8',
+          env: { ...process.env, NO_COLOR: '1', TP_COUNT_FILE: file, ...(full ? { TESTPION_FULL_CLI: '1', TESTPION_UNBUNDLED: '1' } : {}) },
+        });
+        expect(r.status).toBe(0);
+        return { count: readFileSync(file).length, ms: performance.now() - t0 };
+      };
+      const quick = resolved(false);
+      const full = resolved(true);
+      console.log(`testpion --version: ${quick.count} modules resolved (${quick.ms.toFixed(0)} ms) from the index, ${full.count} (${full.ms.toFixed(0)} ms) with the full command line`);
+      expect(quick.count).toBeLessThan(20);
+      expect(full.count).toBeGreaterThan(300);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('falls back to the full command line when the index is older than the build', () => {
     // any other argument loads the command line (and still works)

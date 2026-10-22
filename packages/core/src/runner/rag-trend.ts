@@ -4,7 +4,8 @@
  * (runs/<id>/rag-means.json) under the results file's size and modification time, so a trend over 30 runs of thousands of samples
  * reads each run once. It lives in runner/ because it reads runs; the arithmetic is eval/rag/trend.
  */
-import { existsSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+import { sha1Hex } from '../util/hash.js';
 import { join } from 'node:path';
 import { ApsError } from '../errors.js';
 import { analyzeTrend, type TrendFinding, type TrendMetric, type TrendPoint } from '../eval/rag/trend/analyze.js';
@@ -51,7 +52,15 @@ function keyOf(store: Pick<WorkspaceStore, 'runDir'>, id: string): string | unde
   const f = runResultsFile(store, id);
   if (!existsSync(f)) return undefined;
   const st = statSync(f);
-  return `${st.size}:${Math.round(st.mtimeMs)}`;
+  // size and time, and the start of the content: a file rewritten within the clock's granularity (10 ms on some file systems, 1 s on others) with the same size is still a different file
+  const head = Buffer.alloc(Math.min(4096, st.size));
+  const fd = openSync(f, 'r');
+  try {
+    readSync(fd, head, 0, head.length, 0);
+  } finally {
+    closeSync(fd);
+  }
+  return `${st.size}:${Math.round(st.mtimeMs)}:${sha1Hex(head).slice(0, 12)}`;
 }
 
 /** The judge and wording versions of a run: from the first judged checks (a run uses one judge). */

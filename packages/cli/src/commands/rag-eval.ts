@@ -257,7 +257,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--max-cost <usd>', 'stop judging once this much is spent; the rest is n/a')
     .option('--max-calls <n>', 'stop judging after this many model calls')
     .option('--limit <n>', 'only the first n dataset records')
-    .option('--rotate', 'with --limit: score a different --limit records each UTC day (a nightly job covers the dataset in a month; the same day picks the same records)')
+    .option('--rotate', 'with --limit: score a different --limit records each UTC day (a nightly job covers the dataset in a month; the same day picks the same records; TESTPION_NOW=<ISO date> sets the day, for tests)')
     .option('-c, --concurrency <n>', 'parallel samples')
     .option('--retries <n>', 'retries per failing sample')
     .option('--estimate', 'print the judge calls, tokens and cost range and exit; no call is made')
@@ -512,7 +512,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
       }),
     );
     if (o.rotate && !o.limit) throw new CliError('--rotate needs --limit <n>: the number of records to score each day', EXIT.CONFIG_ERROR);
-    const d = o.rotate ? rotateEvaluation(chosen, Number(o.limit), utcDay(new Date())).evaluation : chosen;
+    const d = o.rotate ? rotateEvaluation(chosen, Number(o.limit), utcDay(process.env.TESTPION_NOW ? new Date(process.env.TESTPION_NOW) : new Date())).evaluation : chosen;
     // the evaluation's own gates, with a --min for the same metric taking its mark
     const gates = mergeGates(d.gates, parseGates(o.min));
     if (o.estimate) {

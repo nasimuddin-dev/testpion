@@ -17,7 +17,9 @@ let ws: WorkspaceStore;
 let session: McpSession;
 const runs: string[] = [];
 const home = () => join(t.dir, 'home');
-const cli = (args: string[]) => runCli(args, { home: home() });
+const cli = (args: string[], env: NodeJS.ProcessEnv = {}) => runCli(args, { home: home(), env });
+/** The day the rotating sample is drawn for: fixed, so the test does not depend on today's date (or on midnight passing during it). */
+const DAY = { TESTPION_NOW: '2026-10-22T12:00:00Z' };
 
 const RULES: MockRule[] = [
   { match: 'faithfulness-v1[\\s\\S]*Parking is free', response: JSON.stringify({ reasoning: 'no parking document', items: [{ text: 'The clinic opens at 8am.', verdict: true, reason: '[doc-1]' }, { text: 'Parking is free.', verdict: false, reason: 'none' }] }) },
@@ -48,8 +50,9 @@ beforeAll(async () => {
   for (const judge of ['judge/mock-a', 'judge/mock-a', 'judge2/mock-b']) {
     const r = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', judge, '--json']);
     runs.push(cliData<{ runId: string }>(r.out).runId);
-    // the run list is ordered by start time: runs a few ms apart would tie
-    await new Promise((ok) => setTimeout(ok, 15));
+    // the run list is ordered by start time: wait until the clock has moved on (not a guessed sleep) so two runs never tie
+    const mark = Date.now();
+    while (Date.now() <= mark + 1) await new Promise((ok) => setTimeout(ok, 1));
   }
   session = new McpSession({ id: 'trend', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cliPath, 'mcp-server', '-w', ws.root], env: { ...process.env, TESTPION_HOME: home() } as Record<string, string> });
   await session.connect(30_000);
@@ -93,15 +96,15 @@ describe('rag_trend (MCP)', () => {
 describe('rag run with a rotating sample and a baseline file', () => {
   it('scores --limit records, and the markdown comment gets the regression table; a missing baseline file is no error', async () => {
     const md = join(t.dir, 'comment.md');
-    const first = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--limit', '1', '--rotate', '--baseline-results', join(t.dir, 'nothing', 'results.jsonl'), '--markdown', md, '--json']);
-    // which record is scored depends on the UTC day (--rotate): it may pass (0) or fail its check (1), never a configuration or run error
+    const first = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--limit', '1', '--rotate', '--baseline-results', join(t.dir, 'nothing', 'results.jsonl'), '--markdown', md, '--json'], DAY);
+    // which record is scored depends on the UTC day (--rotate), fixed here: it may pass (0) or fail its check (1), never a configuration or run error
     expect([0, 1]).toContain(first.status);
     const r1 = cliData<{ runId: string; summary: { total: number } }>(first.out);
     expect(r1.summary.total).toBe(1);
     const second = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--baseline', runs[0]!, '--markdown', md, '--json']);
     expect(second.status).toBe(0);
     expect(readFileSync(md, 'utf8')).toContain(`### Against ${runs[0]}`);
-    const noLimit = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--rotate']);
+    const noLimit = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--rotate'], DAY);
     expect(noLimit.status).toBe(2);
   });
 });

@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
+import { setFlagsFromString } from 'node:v8';
 import { FLOW_HIGH, FLUSH_BYTES, TerminalManager } from '../../apps/desktop/backend/terminal.js';
 import { nodePtyHost, type NodePty } from '../../apps/desktop/backend/node-pty-host.js';
 
@@ -59,6 +61,27 @@ const until = async (ok: () => boolean, ms: number) => {
   return ok();
 };
 
+/** A full collection before a heap reading (without it, heapUsed depends on when V8 last ran: the number measured is the garbage, not the leak). */
+function heapNow(): number {
+  setFlagsFromString('--expose-gc');
+  const gc = runInNewContext('gc') as () => void;
+  gc();
+  gc();
+  return process.memoryUsage().heapUsed;
+}
+
+/** Waits until `read()` has not changed for `quietMs` (an event-driven settle instead of a fixed sleep). */
+async function settled(read: () => number, quietMs = 300, maxMs = 20000): Promise<number> {
+  let last = read();
+  let since = Date.now();
+  for (const end = Date.now() + maxMs; Date.now() < end; await new Promise((r) => setTimeout(r, 25))) {
+    const now = read();
+    if (now !== last) (last = now), (since = Date.now());
+    else if (Date.now() - since >= quietMs) break;
+  }
+  return last;
+}
+
 /** Processes whose command line has `marker` (other than the one asking). */
 function processesWith(marker: string): number {
   if (win) {
@@ -94,12 +117,11 @@ describe('terminal with a real pty', () => {
     const s = m.create({ cols: 120, rows: 30 });
     await until(() => out().length > 0, 10000);
     clear();
-    const heap0 = process.memoryUsage().heapUsed;
+    const heap0 = heapNow();
     m.write(s.id, `"${process.execPath}" "${script}"\r`);
     // nobody acknowledges: the output stops at the high mark, the producer waits (however slow the machine is)
     expect(await until(() => !!m.list()[0]!.paused, 120000)).toBe(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    const held = size();
+    const held = await settled(size); // the output has stopped growing: held back at the high mark
     expect(m.list()[0]).toMatchObject({ paused: true });
     expect(held).toBeGreaterThan(FLOW_HIGH);
     expect(held).toBeLessThan(FLOW_HIGH + 4 * FLUSH_BYTES);
@@ -119,7 +141,7 @@ describe('terminal with a real pty', () => {
     expect(peakUnacked).toBeLessThan(FLOW_HIGH + 4 * FLUSH_BYTES);
     // the kept output is bounded whatever came through
     expect(m.list(true)[0]!.output!.length).toBeLessThanOrEqual(1024 * 1024);
-    const heapGrowth = (process.memoryUsage().heapUsed - heap0) / 1024 / 1024;
+    const heapGrowth = (heapNow() - heap0) / 1024 / 1024;
     // heapUsed depends on when the collector last ran (macOS CI measured 69 MB with the output bounded to 1 MB above): the allowance of the other heap checks
     expect(heapGrowth).toBeLessThan(96);
     console.log(

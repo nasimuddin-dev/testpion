@@ -4,8 +4,9 @@ vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gitMarksOf } from '@testpion/shared';
-import { gitChangesByItem, describeGitChanges, gitStatus, runGit } from '../../packages/core/src/index.js';
+import { gitChangesByItem, describeGitChanges, gitSpawns, gitStatus, runGit } from '../../packages/core/src/index.js';
 import { tempDir } from '../helpers';
+import { expectWithin } from '../perf-budget';
 
 /**
  * The git-everything performance budget (planning/git-everything.md §4j, B-26b): a workspace of 9,000 items — requests in
@@ -84,11 +85,14 @@ async function time<T>(fn: () => Promise<T> | T, runs = 3): Promise<{ ms: number
 
 describe(`git by item at 9,000 items (status < ${BUDGET_STATUS_MS} ms, marks < ${BUDGET_MARKS_MS} ms)`, () => {
   it('reads the changes of 12 changed files item by item within the budget', async () => {
-    const { ms, value } = await time(() => gitChangesByItem(ws));
+    const spawns0 = gitSpawns.count;
+    const { ms, value } = await time(() => gitChangesByItem(ws), 1);
+    // the work, which cannot flake: reading 300 changed items out of 9,000 takes a handful of git processes, not one per file
+    expect(gitSpawns.count - spawns0, 'git processes for one status by item').toBeLessThanOrEqual(8);
+    const timed = await time(() => gitChangesByItem(ws));
     // 100 requests, 150 prompts, 50 servers
     expect(value.items.length).toBe(300);
-    console.log(`git status by item: ${ms.toFixed(0)} ms for ${value.items.length} changed items of 9,000`);
-    expect(ms, `status by item took ${ms.toFixed(0)} ms`).toBeLessThan(BUDGET_STATUS_MS);
+    expectWithin(timed.ms, BUDGET_STATUS_MS, `git status by item (${value.items.length} changed items of 9,000; first call ${ms.toFixed(0)} ms)`);
   });
 
   it('makes the change marks from them within the budget', async () => {
@@ -96,7 +100,6 @@ describe(`git by item at 9,000 items (status < ${BUDGET_STATUS_MS} ms, marks < $
     const changes = await describeGitChanges(ws, st.files);
     const { ms, value } = await time(() => gitMarksOf(changes), 5);
     expect(value.size).toBeGreaterThan(300);
-    console.log(`change marks: ${ms.toFixed(1)} ms for ${changes.length} changes (${value.size} marks)`);
-    expect(ms, `marks took ${ms.toFixed(1)} ms`).toBeLessThan(BUDGET_MARKS_MS);
+    expectWithin(ms, BUDGET_MARKS_MS, `change marks (${changes.length} changes, ${value.size} marks)`);
   });
 });
