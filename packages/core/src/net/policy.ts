@@ -43,8 +43,8 @@ export function policyFromEnv(env: NodeJS.ProcessEnv): NetworkPolicy | undefined
     blockPrivateNetworks: /^(1|true|yes)$/i.test(block ?? ''),
     allowHosts: env.TESTPION_ALLOW_HOSTS?.split(',').map((h) => h.trim()).filter(Boolean),
     allowProcesses: procs === undefined ? true : /^(1|true|yes)$/i.test(procs),
-    allowLocalFiles: files === undefined ? true : /^(1|true|yes)$/i.test(files),
-    localFileRoots: env.TESTPION_LOCAL_FILE_ROOTS?.split(',').map((h) => h.trim()).filter(Boolean),
+    ...(files === undefined ? {} : { allowLocalFiles: /^(1|true|yes)$/i.test(files) }),
+    ...(env.TESTPION_LOCAL_FILE_ROOTS ? { localFileRoots: env.TESTPION_LOCAL_FILE_ROOTS.split(',').map((h) => h.trim()).filter(Boolean) } : {}),
   };
 }
 

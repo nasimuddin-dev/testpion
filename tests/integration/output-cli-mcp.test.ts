@@ -122,7 +122,7 @@ describe('testpion output', () => {
 
 describe('MCP save_output', () => {
   it('returns the same bytes inline, writes a new file inside the workspace, and refuses to overwrite or reach a definition', async () => {
-    const s = new McpSession({ id: 'out', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cliPath, 'mcp-server', '-w', ws], env: { TESTPION_HOME: home } });
+    const s = new McpSession({ id: 'out', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cliPath, 'mcp-server', '-w', ws], env: { TESTPION_HOME: home, TESTPION_MCP_CONFIRM_CODES: '0' } });
     await s.connect(20_000);
     try {
       const call = async (a: Record<string, unknown>) => mcpResultBody(await s.callTool('save_output', a));

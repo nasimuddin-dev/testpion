@@ -285,7 +285,7 @@ describe('example workspace (end-to-end)', () => {
   });
 
   it('CLI: `testpion mcp-server` gives AI agents the workspace as MCP tools', async () => {
-    const env = { TESTPION_HOME: join(dir, 'home') } as Record<string, string>;
+    const env = { TESTPION_HOME: join(dir, 'home'), TESTPION_MCP_CONFIRM_CODES: '0' } as Record<string, string>;
     const cli = cliPath;
     const s = new McpSession({ id: 'pl', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root], env });
     await s.connect(20_000);

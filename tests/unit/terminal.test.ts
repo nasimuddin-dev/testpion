@@ -296,7 +296,7 @@ describe('terminal RPCs', () => {
     const home = tmp();
     const be = new Backend({ appDir: home, emit: () => undefined, noMonitors: true });
     try {
-      expect(((await be.invoke('app.info', {})) as { capabilities: { shell: boolean } }).capabilities).toEqual({ shell: false });
+      expect(((await be.invoke('app.info', {})) as { capabilities: { shell: boolean } }).capabilities).toEqual({ shell: false, localFiles: true });
       expect(await be.invoke('terminal.shells', {})).toEqual({ available: false, shells: [] });
       await expect(be.invoke('terminal.create', { cols: 80, rows: 24 })).rejects.toThrow(/desktop app/);
       expect(await be.invoke('terminal.list', {})).toEqual([]);
@@ -316,7 +316,7 @@ describe('terminal RPCs', () => {
       terminal: { spawn: (f, a, o) => (spawned.push(new FakePty(f, a, o)), spawned.at(-1)!) },
     });
     try {
-      expect(((await be.invoke('app.info', {})) as { capabilities: { shell: boolean } }).capabilities).toEqual({ shell: true });
+      expect(((await be.invoke('app.info', {})) as { capabilities: { shell: boolean } }).capabilities).toEqual({ shell: true, localFiles: true });
       const { shells } = (await be.invoke('terminal.shells', {})) as { shells: Array<{ id: string }> };
       expect(shells.length).toBeGreaterThan(0);
       const s = (await be.invoke('terminal.create', { cols: 90, rows: 20 })) as { id: string; cwd: string };
