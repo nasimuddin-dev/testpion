@@ -346,6 +346,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (t) return;
       t = setTimeout(() => {
         t = undefined;
+        session.account(e); // what the stream holds so far counts against the session's budget
         opts.onExchange?.(e, 'response');
       }, 250);
     };

@@ -85,3 +85,23 @@ describe('stream parsers on large pieces', () => {
     expect(t2 - t1).toBeLessThan(500 * SLACK);
   });
 });
+
+// Mem-3: frames, events and gRPC messages were outside the session's body budget (~32 MB per streaming exchange, 5,000 allowed)
+import { DebuggerSession, type DebuggerExchange, type WebSocketFrame } from '../../packages/core/src/index.js';
+
+describe('the session budget counts streams', () => {
+  it('1,000 WebSocket exchanges of 500 frames stay inside the budget; the oldest lose their frames, not their rows', () => {
+    const budget = 20 * 1024 * 1024;
+    const s = new DebuggerSession({ maxBodyBytes: budget });
+    const text = 'x'.repeat(1024);
+    for (let i = 0; i < 1000; i++) {
+      const frames: WebSocketFrame[] = Array.from({ length: 500 }, () => ({ at: '2026-10-22T00:00:00Z', direction: 'received', opcode: 'text', bytes: 1024, text }));
+      s.add({ id: `ws${i}`, startedAt: '2026-10-22T00:00:00Z', kind: 'websocket', method: 'GET', url: `ws://h/${i}`, host: 'h', clientPort: 1, requestHeaders: {}, requestBodyBytes: 0, responseBodyBytes: 0, frames } as DebuggerExchange);
+    }
+    expect(s.bodyBytes).toBeLessThanOrEqual(budget + 600 * 1024); // (the newest exchange is never dropped, so one over)
+    expect(s.length).toBe(1000);
+    expect(s.items[0]!.frames).toBeUndefined();
+    expect(s.items[0]!.bodiesDropped).toBe(true);
+    expect(s.items[999]!.frames).toHaveLength(500);
+  });
+});
