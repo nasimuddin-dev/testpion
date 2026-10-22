@@ -68,3 +68,21 @@ describe('current values (pm.environment.set etc.)', () => {
     expect(vars.describe('greeting')).toMatchObject({ scope: 'environment', value: 'bonjour' });
   });
 });
+
+// S-5: a token-refresh script sets a variable on every request; each set rewrote the file with an fsync
+describe('deferred writes', () => {
+  it('200 sets from a run are written once, readable at once, and flushed at the end', async () => {
+    const path = join(dir, 'cv.json');
+    const cv = new CurrentValues(path, new MemorySecretStore(), 'ws1');
+    for (let i = 0; i < 200; i++) await cv.set('environment', 'Dev', 'token', `t${i}`, false, { defer: true });
+    expect(cv.writes).toBe(0);
+    expect(cv.get('environment', 'Dev')).toEqual({ token: 't199' });
+    cv.flush();
+    expect(cv.writes).toBe(1);
+    expect(new CurrentValues(path, new MemorySecretStore(), 'ws1').get('environment', 'Dev')).toEqual({ token: 't199' });
+    cv.flush();
+    expect(cv.writes).toBe(1);
+    await cv.set('environment', 'Dev', 'page', 2, false); // an explicit set is still written before it returns
+    expect(cv.writes).toBe(2);
+  });
+});

@@ -52,7 +52,31 @@ export class CurrentValues {
     return b;
   }
 
-  async set(scope: ScriptScope, owner: string, key: string, value: unknown, sensitive: boolean): Promise<void> {
+  private dirty = false;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  /** Writes made so far (the file is rewritten whole each time; scripts that set a variable per request would otherwise fsync once per request). */
+  writes = 0;
+
+  /** Write the file now if a deferred change is waiting. */
+  flush(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    if (!this.dirty) return;
+    this.dirty = false;
+    this.writes++;
+    writeJson(this.path, this.data);
+  }
+
+  private save(defer: boolean): void {
+    this.dirty = true;
+    if (!defer) return this.flush();
+    // a run's scripts set variables on every request: written once the burst is over (and at the end of the run, and on close)
+    this.timer ??= setTimeout(() => this.flush(), 500);
+    this.timer.unref?.();
+  }
+
+  /** `defer`: the file is written within half a second (coalesced with the next sets) instead of before this returns. */
+  async set(scope: ScriptScope, owner: string, key: string, value: unknown, sensitive: boolean, opts: { defer?: boolean } = {}): Promise<void> {
     const id = `${scope}/${owner}/${key}`;
     const b = this.bucket(scope, owner);
     if (value === undefined) {
@@ -66,7 +90,7 @@ export class CurrentValues {
       await this.secrets.set(this.secretName(id), typeof value === 'string' ? value : JSON.stringify(value));
       if (!this.data.secretKeys.includes(id)) this.data.secretKeys.push(id);
     } else b[key] = value;
-    writeJson(this.path, this.data);
+    this.save(!!opts.defer);
   }
 
   /** Remove current values (all, or for one environment / collection). */
@@ -77,7 +101,7 @@ export class CurrentValues {
     if (!scope) Object.assign(this.data, { environment: {}, globals: {}, collectionVariables: {} });
     else if (scope === 'globals') this.data.globals = {};
     else delete (scope === 'environment' ? this.data.environment : this.data.collectionVariables)[owner ?? ''];
-    writeJson(this.path, this.data);
+    this.save(false);
   }
 
   /** Overlay current values onto a context's scopes (they override the stored initial values). */

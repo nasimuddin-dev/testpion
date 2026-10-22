@@ -422,6 +422,7 @@ export class Backend {
     cancelScaleRuns(this); // data runs and matrices of the old workspace
     this.store = next;
     this.watchStore(this.store.root);
+    this.currentValues?.flush();
     this.currentValues = new CurrentValues(join(this.host.appDir, 'current-values', `${this.store.id}.json`), this.secrets, this.store.id);
     void this.cookieStore?.flush().catch(() => undefined);
     this.cookieStore = new CookieJarStore(this.secrets, this.store.id);
@@ -607,7 +608,7 @@ export class Backend {
         if (owner === undefined) return; // no environment / collection selected: keep it for this run only
         // a value that is (or holds) a known secret stays secret, whatever its key: tp.environment.set("copy", tp.environment.get("token"))
         const sensitive = ctx.redactor.isSensitiveKey(key) || (scope === 'environment' && secretEnvKeys.has(key)) || (typeof value === 'string' && value.length > 0 && ctx.redactor.redactString(value) !== value);
-        void cv.set(scope, owner, key, value, sensitive).catch((e) => this.logger.warn(`Could not save current value ${key}: ${(e as Error).message}`));
+        void cv.set(scope, owner, key, value, sensitive, { defer: true }).catch((e) => this.logger.warn(`Could not save current value ${key}: ${(e as Error).message}`));
       };
     }
     return ctx;
@@ -793,6 +794,7 @@ export class Backend {
         this.host.emit('run.error', { runId, error: err });
       } finally {
         events.flush();
+        this.currentValues?.flush(); // the variables the run's scripts set, written once
         // a finished run is forgotten: kept, its controller held the run's services and scope alive (soak test)
         this.runs.delete(runId);
         await ctx.dispose();
@@ -896,6 +898,7 @@ export class Backend {
     await this.debugger?.release?.();
     for (const s of this.gqlSubs.values()) s.stop();
     await this.cookieStore?.flush().catch(() => undefined);
+    this.currentValues?.flush();
     this.store?.close();
   }
 }
