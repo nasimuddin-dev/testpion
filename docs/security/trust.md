@@ -58,7 +58,7 @@ The installed app ignores `TESTPION_CAPTURE_SCRIPT` unless it is started with `-
 
 ## Known limits
 
-- Installers are not code-signed yet (Windows SmartScreen and macOS Gatekeeper ask on first launch).
+- Installers are not code-signed yet (Windows SmartScreen and macOS Gatekeeper ask on first launch). The release workflow signs by itself once the certificate secrets exist: [Code signing](/security/code-signing).
 - `node-forge` has an advisory about signature **verification**; TestPion only creates and reads certificates with it (listed in `scripts/audit-allow.json` with a date to look again).
 - `@lydell/node-pty` is a pre-release native module (the prebuilt N-API package of node-pty); it is pinned to one version and kept outside `app.asar`.
 

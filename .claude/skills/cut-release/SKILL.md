@@ -10,6 +10,8 @@ update feeds, `SHA256SUMS.txt` and its Sigstore signature `SHA256SUMS.txt.sigsto
 "Bypassed rule violations", which is expected). Never loosen the rulesets; if a push is rejected for another reason
 (secret detection, …) stop and tell the owner.
 
+**Code signing:** the workflow signs the Windows and macOS builds by itself when the repository has the certificate secrets (`WIN_CSC_LINK`, `CSC_LINK`, `APPLE_ID` …: docs/security/code-signing.md). Until the owner buys them, builds are unsigned and the release notes say so; once the secrets exist, verify the signatures (checklist in that page) before announcing.
+
 ## Steps
 
 1. **Tests, all green:**

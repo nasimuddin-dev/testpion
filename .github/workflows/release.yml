@@ -78,10 +78,36 @@ jobs:
       - name: Package
         working-directory: apps/desktop
         shell: bash
+        # Code signing happens by itself when the repository has the certificate secrets (docs/security/code-signing.md); without
+        # them the build is unsigned (Windows) or ad-hoc signed (macOS), as before.
         env:
-          # no signing certificates yet: skip keychain/cert discovery (macOS builds are ad-hoc signed)
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npx electron-builder --config electron-builder.yml ${{ matrix.target }} --publish never
+          # Windows: a .pfx (base64) and its password
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # macOS: a Developer ID Application certificate (.p12, base64) and its password; notarization with an app-specific password
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          extra=""
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            if [ -n "$CSC_LINK" ]; then
+              # a real identity replaces the ad-hoc one; hardened runtime is required for notarization
+              extra="--config.mac.identity=null --config.mac.hardenedRuntime=true"
+              [ -n "$APPLE_ID" ] && extra="$extra --config.mac.notarize=true"
+            else
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
+            fi
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            [ -z "$WIN_CSC_LINK" ] && export CSC_IDENTITY_AUTO_DISCOVERY=false
+          else
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          [ -z "$WIN_CSC_LINK" ] && unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD
+          [ -z "$CSC_LINK" ] && unset CSC_LINK CSC_KEY_PASSWORD
+          npx electron-builder --config electron-builder.yml ${{ matrix.target }} --publish never $extra
       - name: Collect installers
         shell: bash
         run: |
