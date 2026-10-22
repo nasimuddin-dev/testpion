@@ -278,7 +278,8 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
       cookies: ctx.cookies,
       jar: svc.cookieJar?.list(),
       info: scriptInfo(test, svc),
-      data: { body: ctx.body, toolCalls: ctx.toolCalls, tokens: ctx.tokens, error: ctx.error },
+      // an HTTP response's body goes into the script once, as text (response.body); tp.data.body is made from it there, when read
+      data: { ...(test.type === 'http' && typeof ctx.text === 'string' ? { bodyFromResponse: ctx.body === ctx.text ? 'text' : 'json' } : { body: ctx.body }), toolCalls: ctx.toolCalls, tokens: ctx.tokens, error: ctx.error },
     }, { sendRequest, requirePackage: svc.scriptPackage });
     if (svc.cookieJar) applyCookieJarOps(svc.cookieJar, s.jarOps);
     applyScriptOutput(s, [scope, svc.vars], { redactor: svc.redactor, persist: svc.persistVariable });

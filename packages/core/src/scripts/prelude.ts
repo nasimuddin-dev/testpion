@@ -698,7 +698,16 @@ const pm = {
     hmacSha256: (key, s) => __host_hmac('sha256', String(key), String(s)),
     base64: (s) => __host_b64(String(s)),
   },
-  data: __in.data,
+  data: (() => {
+    const d = __in.data || {};
+    if (d.bodyFromResponse && __in.response) {
+      const kind = d.bodyFromResponse;
+      delete d.bodyFromResponse;
+      let done = false, v;
+      Object.defineProperty(d, 'body', { enumerable: true, configurable: true, get() { if (!done) { done = true; v = kind === 'json' ? JSON.parse(__in.response.body) : __in.response.body; } return v; } });
+    }
+    return d;
+  })(),
 };
 const postman = {
   setNextRequest: (n) => { __out.nextRequest = n === null ? null : String(n); },
