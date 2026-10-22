@@ -97,10 +97,10 @@ export function FlowFindBar({
       <span className="text-muted tabular-nums whitespace-nowrap" data-flow-find-count>
         {query.trim() ? `${current ? matches.indexOf(current) + 1 : 0} of ${matches.length}` : ''}
       </span>
-      <IconButton label="Previous match (Shift+Enter)" className="h-6 w-6" onClick={() => onJump(-1)} disabled={!matches.length}>
+      <IconButton label="Previous match (Shift+Enter)" className="h-6 w-6" onClick={() => onJump(-1)} disabled={!matches.length} reason="No step matches">
         <ChevronUp size={13} />
       </IconButton>
-      <IconButton label="Next match (Enter)" className="h-6 w-6" onClick={() => onJump(1)} disabled={!matches.length}>
+      <IconButton label="Next match (Enter)" className="h-6 w-6" onClick={() => onJump(1)} disabled={!matches.length} reason="No step matches">
         <ChevronDown size={13} />
       </IconButton>
       <IconButton label="Close (Esc)" className="h-6 w-6" onClick={onClose}>

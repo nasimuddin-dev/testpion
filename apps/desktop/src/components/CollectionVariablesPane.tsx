@@ -128,10 +128,10 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
               <Button size="sm" variant="ghost" className="ml-auto" icon={<ExternalLink size={13} />} onClick={() => void openRef({ kind: 'collection', collectionId: current.id, tab: 'variables' })}>
                 Open collection
               </Button>
-              <Button size="sm" icon={<Copy size={13} />} disabled={!rows.some((r) => r.key)} onClick={() => void copyToEnvironment()} title="Use them outside this collection too (MCP servers, other collections)">
+              <Button size="sm" icon={<Copy size={13} />} disabled={!rows.some((r) => r.key)} reason="No variables to copy yet" onClick={() => void copyToEnvironment()} title="Use them outside this collection too (MCP servers, other collections)">
                 Copy to environment
               </Button>
-              <Button size="sm" variant="primary" icon={<Save size={13} />} disabled={!dirty} onClick={() => void save()}>
+              <Button size="sm" variant="primary" icon={<Save size={13} />} disabled={!dirty} reason="Nothing changed yet" onClick={() => void save()}>
                 Save
               </Button>
             </div>

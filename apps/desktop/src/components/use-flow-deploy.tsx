@@ -33,7 +33,7 @@ export function useFlowDeploy(o: { file: string; exposed: string | undefined; en
     { label: 'Manual', icon: <Play size={14} />, onSelect: () => useApp.getState().toast('The flow runs when you click Run flow, or from the terminal: testpion test tests/' + file) },
     { label: deploy.status?.schedule ? 'Schedule: open the monitor' : 'Schedule…', icon: <CalendarClock size={14} />, onSelect: schedule },
     { label: deploy.status?.webhook ? 'Webhook (on)' : 'Webhook', icon: <Webhook size={14} />, onSelect: () => (deploy.status?.webhook ? useApp.getState().toast('Webhook: Deploy ▸ Webhook copies its URL and serves it') : void setWebhook(true)) },
-    { label: exposed !== undefined ? 'MCP tool (exposed)…' : 'MCP tool…', icon: <Bot size={14} />, onSelect: () => onExpose?.(), disabled: !onExpose },
+    { label: exposed !== undefined ? 'MCP tool (exposed)…' : 'MCP tool…', icon: <Bot size={14} />, onSelect: () => onExpose?.(), disabled: !onExpose, reason: 'Save the flow as a test file first' },
     { label: 'CI…', icon: <Workflow size={14} />, onSelect: () => useApp.getState().set({ ci: { tests: [file], environment } }) },
   ];
   return { deploy, loadDeploy, setWebhook, schedule, triggerItems };

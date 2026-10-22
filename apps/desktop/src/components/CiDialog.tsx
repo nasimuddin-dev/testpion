@@ -135,14 +135,15 @@ export function CiDialog() {
     <Modal
       title="Run in CI"
       onClose={close}
+      onSubmit={() => void save()}
       width={820}
       footer={
         <>
           <span className="text-xs text-muted mr-auto">{cfg && <>Put it at <code>{cfg.path}</code> in your repository.</>}</span>
-          <Button icon={copied ? <Check size={14} /> : <Copy size={14} />} onClick={() => void copy()} disabled={!cfg}>
+          <Button icon={copied ? <Check size={14} /> : <Copy size={14} />} onClick={() => void copy()} disabled={!cfg} reason="The file is not ready yet">
             {copied ? 'Copied' : 'Copy'}
           </Button>
-          <Button variant="primary" icon={<Download size={14} />} onClick={() => void save()} disabled={!cfg}>
+          <Button variant="primary" icon={<Download size={14} />} onClick={() => void save()} disabled={!cfg} reason="The file is not ready yet">
             Save file…
           </Button>
         </>

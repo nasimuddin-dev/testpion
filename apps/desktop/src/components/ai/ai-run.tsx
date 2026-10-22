@@ -77,7 +77,7 @@ export function useAiEstimate(load: (() => Promise<AiTaskResult>) | undefined, d
 export function AiRunFooter({ busy, previewDisabled, onPreview, onCancel, onStop, children }: { busy: boolean; previewDisabled?: boolean; onPreview(): void; onCancel(): void; onStop(): void; children: ReactNode }) {
   return (
     <>
-      <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={busy || previewDisabled} onClick={onPreview} data-ai-preview-open>
+      <Button variant="ghost" icon={<Eye size={13} />} className="mr-auto" disabled={busy || previewDisabled} reason={busy ? 'Still running' : 'Nothing to send yet'} onClick={onPreview} data-ai-preview-open>
         What will be sent…
       </Button>
       <Button onClick={onCancel}>Cancel</Button>
@@ -93,9 +93,9 @@ export function AiRunFooter({ busy, previewDisabled, onPreview, onCancel, onStop
 }
 
 /** A dialog's primary AI action button (the sparkles icon). */
-export function AiPrimaryButton({ onClick, disabled, children, ...rest }: { onClick(): void; disabled?: boolean; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
+export function AiPrimaryButton({ onClick, disabled, reason, children, ...rest }: { onClick(): void; disabled?: boolean; /** Why it is disabled (its tooltip then). */ reason?: string; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
   return (
-    <Button variant="primary" icon={<Sparkles size={13} />} disabled={disabled} onClick={onClick} {...rest}>
+    <Button variant="primary" icon={<Sparkles size={13} />} disabled={disabled} reason={reason} onClick={onClick} {...rest}>
       {children}
     </Button>
   );

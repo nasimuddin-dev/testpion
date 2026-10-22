@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Friendlier everywhere
+
+- **Dialogs open with the cursor in their first field**, never on the Close button, so you can type at once; a field that asked for the focus itself keeps it. **Enter saves, moves, runs or imports**: in any dialog, Enter in a single-line field (Ctrl+Enter in a multi-line one) is the dialog's main button, and does nothing while that button is disabled. Fifty dialogs, one mechanism (`Modal onSubmit`).
+- **A disabled button or menu item says why.** Hover (or focus) a greyed button or menu item and its tooltip gives the reason in plain words: *Nothing changed yet*, *Tick at least one request to run*, *Introspect the schema first*, *No shell was found: install PowerShell or bash*, *This exchange has no request body* … (`reason` on Button, IconButton and menu items; a disabled icon button could not show a tooltip at all before).
+- **Help is one click away**: the **?** at the right end of the top bar opens the docs page of the view on screen; page headers (a monitor, a load test, Git, the HTTP Debugger) and dialogs with a page of their own have the same **?**.
+- **Settings cannot be lost**: Save settings is enabled only once something changed (and says so otherwise), Ctrl+S saves, and leaving the view with unsaved changes asks first, like closing an edited request. The default timeout and the maximum virtual users say their default and what they do.
+- **Every shortcut is listed**: the HTTP Debugger's keys (Ctrl+F the filter, Ctrl+E clear the session, which asks first) and the flow designer's are in the Shortcuts dialog and Settings ▸ Keyboard; Ctrl+Enter inside a dialog no longer also sends the request behind it.
+- **No silent failures**: saving a GraphQL request as a test file with variables that are not valid JSON now says so instead of saving the test without them; "(copied)" is said only when the clipboard took the text, and a refused copy is reported (the mock URL, the recording URL, the assistant's code blocks).
+- Icon-only buttons (move a rule, copy a line, rate a result, remove a topic) are named for screen readers and tooltips.
+- Docs: Settings ▸ Privacy is **Privacy & security**; the Postman migration page says *Settings ▸ Data* is Postman's own settings.
+
 ## 0.54.1 — 2026-10-21
 
 Importing a file with thousands of folders nested inside each other now says so in plain words on every Node version, instead of failing with a stack overflow while the import report was being built. Nothing else changes.

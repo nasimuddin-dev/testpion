@@ -179,7 +179,7 @@ export function AiAnalysisDialog({ request, onClose }: { request: Exclude<AiAnal
                 <Button
                   icon={<FlaskConical size={13} />}
                   loading={!!busy}
-                  disabled={working || (!chosen.length && !attempt)}
+                  disabled={working || (!chosen.length && !attempt)} reason={working ? 'Still working' : 'Tick at least one fix'}
                   onClick={() => void attemptFix(result.proposal!, chosen)}
                   title="Apply the fix and run the test 5 times"
                   data-attempt-fix

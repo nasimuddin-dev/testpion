@@ -3,7 +3,7 @@ import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from '
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import { Badge, Button, Empty, Menu, Modal, Select, Textarea } from './ui';
+import { Badge, Button, Empty, Menu, Modal, Select, Textarea, IconButton } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
 import { copyText } from '../lib/clipboard';
@@ -104,7 +104,9 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
               {info.instructions.map((line) => (
                 <li key={line} className="flex gap-2 items-start">
                   <span className="mono break-all flex-1">{line}</span>
-                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(line, 'the line')} title="Copy" />
+                  <IconButton label="Copy the line" className="h-7 w-7" onClick={() => void copyText(line, 'the line')}>
+                    <Copy size={12} />
+                  </IconButton>
                 </li>
               ))}
             </ul>
@@ -227,7 +229,11 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
       />
       <div className="flex items-center gap-2">
         <span className="text-xs font-semibold text-muted uppercase tracking-wide">{out?.label ?? 'Result'}</span>
-        {out?.value !== undefined && <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(out.value!, out.label.toLowerCase())} title="Copy" />}
+        {out?.value !== undefined && (
+          <IconButton label="Copy the result" className="h-7 w-7" onClick={() => void copyText(out.value!, out.label.toLowerCase())}>
+            <Copy size={12} />
+          </IconButton>
+        )}
       </div>
       <Textarea autoGrow={false} className="field mono text-xs w-full flex-1 min-h-24" readOnly value={out ? (out.value ?? `This text does not ${out.label.toLowerCase()}.`) : ''} aria-label="Converted text" data-convert-result />
       {readings.length > 0 && (
@@ -238,7 +244,9 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
               <div key={label} data-decode={label}>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">{label}</span>
-                  <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={() => void copyText(value!, label.toLowerCase())} title="Copy" />
+                  <IconButton label={`Copy the ${label.toLowerCase()} reading`} className="h-7 w-7" onClick={() => void copyText(value!, label.toLowerCase())}>
+                    <Copy size={12} />
+                  </IconButton>
                 </div>
                 <CodeBlock className="mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-40 overflow-auto" text={value ?? ''} />
               </div>

@@ -107,14 +107,15 @@ export function RagCaptureDialog({ onClose, onCreated, initial }: { onClose(): v
     <Modal
       title="Create dataset from captured calls"
       onClose={onClose}
+      onSubmit={() => void run('create')}
       width={760}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button disabled={!ready || !!busy} icon={busy === 'preview' ? <Spinner /> : undefined} onClick={() => void run('preview')} data-rag-capture-preview>
+          <Button disabled={!ready || !!busy} reason={busy ? 'Still working' : 'Choose a RAG target first'} icon={busy === 'preview' ? <Spinner /> : undefined} onClick={() => void run('preview')} data-rag-capture-preview>
             Preview
           </Button>
-          <Button variant="primary" disabled={!ready || !!busy || !result || !rep?.records} icon={busy === 'create' ? <Spinner /> : undefined} onClick={() => void run('create')} data-rag-capture-create>
+          <Button variant="primary" disabled={!ready || !!busy || !result || !rep?.records} reason={busy ? 'Still working' : !ready ? 'Choose a RAG target first' : 'Preview first: it shows what the dataset would hold'} icon={busy === 'create' ? <Spinner /> : undefined} onClick={() => void run('create')} data-rag-capture-create>
             Create dataset
           </Button>
         </>

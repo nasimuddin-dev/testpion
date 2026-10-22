@@ -353,7 +353,7 @@ export function MonitorsView() {
               closeTabs(ids.filter((id) => id !== NEW_TAB));
             }}
             onRename={(t, name) => name && name !== t.title && void update(t.id, { name })}
-            extraItems={({ id, data: m }) => [{ label: LABEL.runNow, icon: <Play size={13} />, disabled: !m || busy.includes(id) || m.running, onSelect: () => m && void run(m) }]}
+            extraItems={({ id, data: m }) => [{ label: LABEL.runNow, icon: <Play size={13} />, disabled: !m || busy.includes(id) || m.running, reason: 'It is running now', onSelect: () => m && void run(m) }]}
           />
         )}
         <div className="flex-1 min-h-0 overflow-auto">
@@ -444,6 +444,7 @@ function MonitorDetail(p: {
         <ItemBreadcrumb label="Where this monitor is" crumbs={[{ label: 'Monitors', view: 'monitors' }]} name={m.name} actions={refMenu({ kind: 'monitor', monitorId: m.id })} />
       </div>
       <PageHeader
+        help="test-runner/monitors"
         icon={<AlarmClock size={18} />}
         title={m.name}
         subtitle={
@@ -821,7 +822,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
           <div className="flex gap-2">
             <VarInput className="flex-1" placeholder="https://hooks.slack.com/services/…  or  {{alertWebhook}}" value={d.webhook ?? ''} onChange={(webhook) => setD({ ...d, webhook: webhook || undefined })} ariaLabel="Alert webhook" />
             <Button
-              disabled={!d.webhook?.trim()}
+              disabled={!d.webhook?.trim()} reason="Enter a webhook URL first"
               onClick={() =>
                 void call('monitor.testWebhook', { webhook: d.webhook, environment: d.environment, name: (d as { name?: string }).name }).then(
                   () => useApp.getState().toast('Test alert sent', 'success'),

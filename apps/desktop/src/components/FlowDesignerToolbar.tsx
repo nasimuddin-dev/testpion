@@ -122,7 +122,7 @@ export function FlowDesignerToolbar({
         <span className="hidden @[720px]:inline">Text</span>
       </Button>
       <span className="inline-flex">
-        <Button size="sm" className="rounded-r-none" icon={<Play size={12} />} onClick={onRun} disabled={!stepCount} title="Run every step of the flow; the steps light up as they finish" aria-label="Run flow" data-flow-run>
+        <Button size="sm" className="rounded-r-none" icon={<Play size={12} />} onClick={onRun} disabled={!stepCount} reason="The flow has no steps yet" title="Run every step of the flow; the steps light up as they finish" aria-label="Run flow" data-flow-run>
           <span className="hidden @[560px]:inline">Run flow</span>
         </Button>
         <Menu

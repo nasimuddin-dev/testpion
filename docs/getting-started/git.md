@@ -335,7 +335,7 @@ Secret values come from the CI system's secrets as `TESTPION_SECRET_…` variabl
 A workspace is data, but two things in it reach outside the app, and both ask first:
 
 - **Programs:** a `stdio` MCP server is a command the workspace starts on your computer. The first **Connect** shows the command line and asks (Run once / Always for this workspace).
-- **Your environment:** `{{$env.NAME}}` reads only the OS environment variables you list in **Settings ▸ Privacy**; a request that reads another one says so instead of sending it.
+- **Your environment:** `{{$env.NAME}}` reads only the OS environment variables you list in **Settings ▸ Privacy & security**; a request that reads another one says so instead of sending it.
 
 Requests themselves can call any URL, as in any API client: review a pull request's changes (the Git view lists them by meaning) as you would review code.
 

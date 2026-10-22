@@ -14,6 +14,8 @@ export interface MenuItem {
   danger?: boolean;
   shortcut?: string;
   disabled?: boolean;
+  /** Why the item is disabled (its tooltip then): "Nothing is selected", "The proxy is running" … */
+  reason?: string;
   /** Draw a separator above this item. */
   separator?: boolean;
   /** A tooltip (why the item is disabled, e.g. an environment whose file cannot be read). */
@@ -170,7 +172,7 @@ function MenuItems({ items: given }: { items: MenuItem[] }) {
           </>
         );
         return (
-          <div key={`${i}-${it.label}`} title={it.title}>
+          <div key={`${i}-${it.label}`} title={it.disabled && it.reason ? it.reason : it.title}>
             {it.separator && i > 0 && <MenuPrimitive.Separator className="my-1 h-px bg-line" />}
             {it.items ? (
               <MenuPrimitive.Sub>

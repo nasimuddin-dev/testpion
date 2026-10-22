@@ -45,11 +45,12 @@ export function RagColumnMapper({ dataset, format, onApply, onClose }: { dataset
     <Modal
       title="Map the columns of the dataset"
       onClose={onClose}
+      onSubmit={() => m && (onApply(m.text), onClose())}
       width={820}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!m || !m.count || !mapping?.question} onClick={() => m && (onApply(m.text), onClose())} data-rag-mapper-apply>
+          <Button variant="primary" disabled={!m || !m.count || !mapping?.question} reason="Map the question column first" onClick={() => m && (onApply(m.text), onClose())} data-rag-mapper-apply>
             Use these {m?.count ?? 0} records
           </Button>
         </>

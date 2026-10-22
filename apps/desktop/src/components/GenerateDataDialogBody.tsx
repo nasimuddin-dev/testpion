@@ -82,9 +82,10 @@ export function GenerateDataDialogBody({ onClose, onDone }: { onClose(): void; o
     <Modal
       title="Generate test data"
       onClose={onClose}
+      onSubmit={() => void generate()}
       width={620}
       footer={
-        <Button variant="primary" icon={<Wand2 size={13} />} disabled={busy || (source === 'operation' && !operation)} onClick={() => void generate()}>
+        <Button variant="primary" icon={<Wand2 size={13} />} disabled={busy || (source === 'operation' && !operation)} reason={busy ? 'Still generating' : 'Choose an operation first'} onClick={() => void generate()}>
           Generate
         </Button>
       }
@@ -95,7 +96,7 @@ export function GenerateDataDialogBody({ onClose, onDone }: { onClose(): void; o
           run.
         </p>
         <div className="flex gap-2">
-          <Button size="sm" variant={source === 'operation' ? 'primary' : undefined} disabled={!specs.length} onClick={() => setSource('operation')}>
+          <Button size="sm" variant={source === 'operation' ? 'primary' : undefined} disabled={!specs.length} reason="The workspace has no API definition to generate from" onClick={() => setSource('operation')}>
             From an API operation
           </Button>
           <Button size="sm" variant={source === 'schema' ? 'primary' : undefined} onClick={() => setSource('schema')}>

@@ -111,11 +111,12 @@ export function ExposeFlowDialog({ path, onClose, onChanged }: { path: string; o
         </span>
       }
       onClose={onClose}
+      onSubmit={() => void save()}
       width={640}
       footer={
         <>
           {exposed && (
-            <Button variant="danger" className="mr-auto" disabled={busy} onClick={() => void stop()}>
+            <Button variant="danger" className="mr-auto" disabled={busy} reason="Still working on the last action" onClick={() => void stop()}>
               Stop exposing
             </Button>
           )}

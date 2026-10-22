@@ -52,11 +52,12 @@ export function RagImportDialog({ onImport, onClose }: { onImport(text: string):
     <Modal
       title="Import a dataset"
       onClose={onClose}
+      onSubmit={() => void run()}
       width={600}
       footer={
         <>
           <Button onClick={onClose}>{imported !== undefined ? 'Close' : 'Cancel'}</Button>
-          <Button variant="primary" disabled={!ready} onClick={() => void run()} data-rag-import-run>
+          <Button variant="primary" disabled={!ready} reason={imported !== undefined ? 'Imported already' : format === 'beir' ? 'Choose the corpus and the qrels files' : 'Choose a file first'} onClick={() => void run()} data-rag-import-run>
             Import
           </Button>
         </>

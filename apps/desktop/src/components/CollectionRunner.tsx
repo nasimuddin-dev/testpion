@@ -343,7 +343,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                     }}
                   />
                   <div className="flex items-center gap-1 flex-wrap text-xs">
-                    <Button size="sm" onClick={() => void applyQuery()} disabled={query.trim() === (data.query ?? '').trim()}>
+                    <Button size="sm" onClick={() => void applyQuery()} disabled={query.trim() === (data.query ?? '').trim()} reason="The query is the same as the saved one">
                       Apply query
                     </Button>
                     {data.tables.length > 0 && <span className="text-muted ml-1">Tables:</span>}
@@ -439,7 +439,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
             </div>
           </div>
           <div className="border-t border-line p-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <Button variant="primary" className="min-w-0 max-w-full" icon={<Play size={13} />} loading={starting} disabled={!selected.length} onClick={start}>
+            <Button variant="primary" className="min-w-0 max-w-full" icon={<Play size={13} />} loading={starting} disabled={!selected.length} reason="Tick at least one request to run" onClick={start}>
               <span className="truncate">Run {folderId ? findName(collection.items, folderId) : collection.name}</span>
             </Button>
             <span className="text-xs text-muted whitespace-nowrap">

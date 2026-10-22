@@ -168,17 +168,18 @@ export function FlowProposalReview({
         </span>
       }
       onClose={onClose}
+      onSubmit={() => void accept()}
       width={1120}
       footer={
         <>
           <Button variant="ghost" icon={<Trash2 size={13} />} onClick={discard} className="mr-auto" data-proposal-discard>
             Discard
           </Button>
-          <Button icon={<FlaskConical size={13} />} loading={busy === 'mock'} disabled={!!busy || edited} onClick={() => void reverify({ verifiers: ['flow-mock'] }, 'mock')} data-proposal-try-mock>
+          <Button icon={<FlaskConical size={13} />} loading={busy === 'mock'} disabled={!!busy || edited} reason={busy ? 'Still working' : 'Edited by hand: the mock run checks the proposal as generated'} onClick={() => void reverify({ verifiers: ['flow-mock'] }, 'mock')} data-proposal-try-mock>
             Try on mock
           </Button>
           <Button onClick={onClose}>Close</Button>
-          <Button variant="primary" icon={<Check size={13} />} loading={busy === 'accept'} disabled={!!busy} onClick={() => void accept()} data-proposal-accept>
+          <Button variant="primary" icon={<Check size={13} />} loading={busy === 'accept'} disabled={!!busy} reason="Still working" onClick={() => void accept()} data-proposal-accept>
             Accept
           </Button>
         </>
@@ -308,10 +309,10 @@ export function FlowProposalReview({
                   placeholder="e.g. also test pagination"
                   value={hint}
                   onChange={(e) => setHint(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && hint.trim() && onRegenerate(hint.trim())}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), hint.trim() && onRegenerate(hint.trim()))}
                   aria-label="Hint for regenerating"
                 />
-                <Button size="sm" icon={<RefreshCw size={12} />} disabled={!hint.trim()} onClick={() => onRegenerate(hint.trim())} data-proposal-regenerate>
+                <Button size="sm" icon={<RefreshCw size={12} />} disabled={!hint.trim()} reason="Write a hint first" onClick={() => onRegenerate(hint.trim())} data-proposal-regenerate>
                   Regenerate
                 </Button>
               </div>

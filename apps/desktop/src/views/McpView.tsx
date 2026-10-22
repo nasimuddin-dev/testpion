@@ -353,8 +353,8 @@ It runs with your permissions. Allow it only if you know where this workspace co
                 </IconButton>
               }
               items={[
-                { label: 'Ping', icon: <Radio size={14} />, disabled: !server?.connected || !!draft, onSelect: () => void call<number>('mcp.ping', { serverId: current.id }).then((ms) => useApp.getState().toast(`Ping ${ms} ms`)) },
-                { label: 'Save as mock', icon: <Copy size={14} />, disabled: !server?.connected || !!draft || form.transport === 'mock', onSelect: () => void saveMock(current.id) },
+                { label: 'Ping', icon: <Radio size={14} />, disabled: !server?.connected || !!draft, reason: draft ? 'Save the server first' : 'Connect first', onSelect: () => void call<number>('mcp.ping', { serverId: current.id }).then((ms) => useApp.getState().toast(`Ping ${ms} ms`)) },
+                { label: 'Save as mock', icon: <Copy size={14} />, disabled: !server?.connected || !!draft || form.transport === 'mock', reason: form.transport === 'mock' ? 'It is a mock already' : draft ? 'Save the server first' : 'Connect first', onSelect: () => void saveMock(current.id) },
                 { label: draft ? 'Discard' : LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void removeCurrent() },
               ]}
             />

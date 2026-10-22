@@ -538,7 +538,7 @@ export default function TerminalPanel() {
               </span>
             ))}
           </div>
-          <IconButton label="New terminal" onClick={() => void create()} disabled={!shells?.available}>
+          <IconButton label="New terminal" onClick={() => void create()} disabled={!shells?.available} reason="No shell was found: install PowerShell or bash">
             <Plus size={13} />
           </IconButton>
           <Select
@@ -563,10 +563,10 @@ export default function TerminalPanel() {
           </Select>
         </OutputBarStart>
         <OutputActions spec={spec}>
-          <IconButton label="Clear terminal" disabled={!activeLive} onClick={() => (activeLive?.term.clear(), activeLive?.term.focus())}>
+          <IconButton label="Clear terminal" disabled={!activeLive} reason="No terminal is open" onClick={() => (activeLive?.term.clear(), activeLive?.term.focus())}>
             <Eraser size={13} />
           </IconButton>
-          <IconButton label="Kill terminal" disabled={!activeLive} onClick={() => active && kill(active)}>
+          <IconButton label="Kill terminal" disabled={!activeLive} reason="No terminal is open" onClick={() => active && kill(active)}>
             <Trash2 size={13} />
           </IconButton>
         </OutputActions>

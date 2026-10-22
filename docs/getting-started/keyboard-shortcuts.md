@@ -53,7 +53,7 @@ Your keys are this computer's (the app's `settings.json`, `keybindings`), and th
 | Keys | What it does |
 |---|---|
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send the request (also runs AI prompts and gRPC calls). |
-| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save. |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save (a request, a test file, the settings …). |
 | <kbd>Ctrl</kbd>+<kbd>T</kbd> | New request tab. |
 | <kbd>Ctrl</kbd>+<kbd>W</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>W</kbd> | Close the tab / all tabs. |
 | <kbd>Ctrl</kbd>+<kbd>O</kbd> | Import (Postman, Insomnia, Bruno, OpenAPI, Arazzo, cURL …). |
@@ -74,6 +74,7 @@ Your keys are this computer's (the app's `settings.json`, `keybindings`), and th
 | <kbd>*</kbd> | **Expand all** inside the focused collection, folder or section. |
 | Letters | Jump to the next row whose name starts with what you type. |
 | <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>J</kbd> / <kbd>K</kbd> | Move through a run's results. |
+| <kbd>Enter</kbd> | In a dialog's text field: the dialog's main button (nothing while that button is disabled). <kbd>Ctrl</kbd>+<kbd>Enter</kbd> does the same in a multi-line field. |
 | <kbd>Esc</kbd> | Close a menu or dialog. |
 
 ## Code editors
@@ -129,7 +130,7 @@ In the review of suggested checks, tests, a flow, a request, or the fixes for a 
 | <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click | Select several exchanges (for **Save to collection…** or **Create flow from selection…**). |
 | <kbd>Delete</kbd> | Delete the selected exchanges. |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | The filter box. |
-| <kbd>Ctrl</kbd>+<kbd>E</kbd> | Clear the session. |
+| <kbd>Ctrl</kbd>+<kbd>E</kbd> | Clear the session (it asks first). |
 | <kbd>F5</kbd> / <kbd>F6</kbd> | The **Timeline** / **Structure** panel. |
 
 ## Terminal

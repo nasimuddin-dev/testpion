@@ -133,7 +133,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
       <div className="h-full overflow-auto">
         {p && (p as { builtIn?: boolean }).builtIn ? (
           <div className="p-4 flex flex-col gap-3 max-w-2xl">
-            <PageHeader icon={<Sparkles size={18} />} title={p.name} subtitle="Built in: the assistant's Claude key from Settings" />
+            <PageHeader help="ai-testing/overview#providers" icon={<Sparkles size={18} />} title={p.name} subtitle="Built in: the assistant's Claude key from Settings" />
             <p className="text-sm text-muted">
               This provider uses the Anthropic API key saved in <b>Settings ▸ AI assistant</b> (kept in the OS secret store). It is available in every workspace; tests and prompts refer to it as <code>claude-app</code>.
             </p>
@@ -150,6 +150,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
         ) : p ? (
           <div className="p-4 flex flex-col gap-3 max-w-2xl">
             <PageHeader
+              help="ai-testing/overview#providers"
               icon={<Sparkles size={18} />}
               title={p.name}
               subtitle={`${KINDS.find((k) => k[0] === p.kind)?.[1] ?? p.kind}${p.hasKey ? ' · API key stored' : ''}`}

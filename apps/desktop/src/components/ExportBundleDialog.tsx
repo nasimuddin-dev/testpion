@@ -123,11 +123,12 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
               : `Export${request.title ? ` “${request.title}”` : ''}`
       }
       onClose={onClose}
+      onSubmit={() => void run()}
       width={560}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={<Download size={13} />} loading={busy} disabled={!summary} onClick={() => void run()}>
+          <Button variant="primary" icon={<Download size={13} />} loading={busy} disabled={!summary} reason="Still reading what the export holds" onClick={() => void run()}>
             Export
           </Button>
         </>

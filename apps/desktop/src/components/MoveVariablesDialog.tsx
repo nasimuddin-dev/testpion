@@ -62,9 +62,10 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
     <Modal
       title="Move variables to environments"
       onClose={onClose}
+      onSubmit={() => void move()}
       width={720}
       footer={
-        <Button variant="primary" icon={<ArrowRightLeft size={13} />} disabled={!keys.size || !targets.size || busy} onClick={() => void move()}>
+        <Button variant="primary" icon={<ArrowRightLeft size={13} />} disabled={!keys.size || !targets.size || busy} reason="Tick the variables to move and at least one environment" onClick={() => void move()}>
           Move {keys.size || ''}
         </Button>
       }

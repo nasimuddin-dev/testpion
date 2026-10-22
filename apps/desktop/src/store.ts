@@ -8,6 +8,7 @@ import type { FeedbackRequest } from './components/FeedbackDialog';
 import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
 import { setDraftScope } from './lib/ws-scope';
+import { mayLeave } from './lib/leave-guard';
 import { offerUndo, UNDO_MS } from './lib/undo';
 import { normalizeEnvironment } from './lib/environments-store';
 import { refOpenLabel, type ItemRef } from '@testpion/shared';
@@ -339,11 +340,21 @@ function record(get: Get, set: Set, next: NavLocation) {
   if (sameLocation(current, next)) return;
   set({ nav: { back: [...back, current].slice(-NAV_LIMIT), forward: [], current: named(next) } });
 }
+/** `go` once the view on screen agrees to be left (a view with unsaved edits asks; lib/leave-guard.ts). */
+function whenLeaving(get: Get, view: ViewId, go: () => void) {
+  const ok = view === get().view ? true : mayLeave(get().view);
+  if (ok === true) go();
+  else void ok.then((yes) => yes && go());
+}
 function travel(get: Get, set: Set, dir: 'back' | 'forward') {
   const { back, forward, current } = get().nav;
   const from = dir === 'back' ? back : forward;
   const to = from[from.length - 1];
   if (!to) return;
+  if (to.view !== get().view) {
+    const ok = mayLeave(get().view);
+    if (ok !== true) return void ok.then((yes) => yes && travel(get, set, dir));
+  }
   const nav = dir === 'back' ? { back: back.slice(0, -1), forward: [...forward, current].slice(-NAV_LIMIT), current: to } : { back: [...back, current].slice(-NAV_LIMIT), forward: forward.slice(0, -1), current: to };
   localStorage.setItem('aps.view', to.view);
   if (isDocView(to.view) && !to.payload) useDocs.getState().ensure(to.view);
@@ -353,12 +364,13 @@ function travel(get: Get, set: Set, dir: 'back' | 'forward') {
 export const useApp = create<AppState>((set, get) => ({
   // first launch opens the Home view
   view: (localStorage.getItem('aps.view') as ViewId) || 'home',
-  setView: (view) => {
-    localStorage.setItem('aps.view', view);
-    if (view !== get().view) record(get, set, { view });
-    if (isDocView(view)) useDocs.getState().ensure(view);
-    set({ view, ...lastRequest(view) });
-  },
+  setView: (view) =>
+    whenLeaving(get, view, () => {
+      localStorage.setItem('aps.view', view);
+      if (view !== get().view) record(get, set, { view });
+      if (isDocView(view)) useDocs.getState().ensure(view);
+      set({ view, ...lastRequest(view) });
+    }),
   lastRequestView: ((): ViewId => {
     try {
       const v = localStorage.getItem('aps.lastRequestView') as ViewId | null;
@@ -437,11 +449,12 @@ export const useApp = create<AppState>((set, get) => ({
     else delete a[key];
     set({ activity: a });
   },
-  openIntent: (view, payload) => {
-    localStorage.setItem('aps.view', view);
-    record(get, set, { view, payload: replayable(payload) });
-    set({ view, ...lastRequest(view), intent: { view, payload, nonce: Date.now(), docId: routeDoc(view, payload) } });
-  },
+  openIntent: (view, payload) =>
+    whenLeaving(get, view, () => {
+      localStorage.setItem('aps.view', view);
+      record(get, set, { view, payload: replayable(payload) });
+      set({ view, ...lastRequest(view), intent: { view, payload, nonce: Date.now(), docId: routeDoc(view, payload) } });
+    }),
   refreshWorkspace: async () => {
     const raw = await call<WorkspaceCurrent>('ws.current');
     // environment files are hand-edited and merged: every one has a text name and a list of variables here

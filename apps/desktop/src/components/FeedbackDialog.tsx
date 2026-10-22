@@ -123,20 +123,21 @@ export function FeedbackDialog({ request, onClose }: { request: FeedbackRequest;
     <Modal
       title="Send feedback"
       onClose={onClose}
+      onSubmit={() => void openGitHub()}
       width={640}
       footer={
         <>
           <span className="text-xs text-muted mr-auto">Nothing is sent until you post it on GitHub or send the email yourself.</span>
-          <Button icon={<Copy size={13} />} disabled={!ready} onClick={() => void copy()}>
+          <Button icon={<Copy size={13} />} disabled={!ready} reason="Write a title and a description first" onClick={() => void copy()}>
             Copy
           </Button>
-          <Button icon={<Download size={13} />} disabled={!ready} onClick={() => void save()}>
+          <Button icon={<Download size={13} />} disabled={!ready} reason="Write a title and a description first" onClick={() => void save()}>
             Save as file
           </Button>
-          <Button icon={<Mail size={13} />} disabled={!ready} onClick={() => void email()} title="Opens your mail app with the report addressed to the TestPion maintainer; no GitHub account needed">
+          <Button icon={<Mail size={13} />} disabled={!ready} reason="Write a title and a description first" onClick={() => void email()} title="Opens your mail app with the report addressed to the TestPion maintainer; no GitHub account needed">
             Email
           </Button>
-          <Button variant="primary" icon={<ExternalLink size={13} />} disabled={!ready} onClick={() => void openGitHub()} title="Opens a new GitHub issue with this report filled in; you review it and post it">
+          <Button variant="primary" icon={<ExternalLink size={13} />} disabled={!ready} reason="Write a title and a description first" onClick={() => void openGitHub()} title="Opens a new GitHub issue with this report filled in; you review it and post it">
             Open on GitHub
           </Button>
         </>

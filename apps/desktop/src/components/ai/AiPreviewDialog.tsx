@@ -74,12 +74,13 @@ export function AiPreviewDialog({
         </span>
       }
       onClose={onClose}
+      onSubmit={() => onSend?.(privacy)}
       width={820}
       footer={
         <>
           <Button onClick={onClose}>{onSend ? 'Cancel' : 'Close'}</Button>
           {onSend && (
-            <Button variant="primary" disabled={!preview} onClick={() => onSend(privacy)} data-ai-send>
+            <Button variant="primary" disabled={!preview} reason="Still preparing the preview" onClick={() => onSend(privacy)} data-ai-send>
               Send
             </Button>
           )}

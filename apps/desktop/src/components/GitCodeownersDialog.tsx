@@ -48,6 +48,7 @@ export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDo
         </span>
       }
       onClose={onClose}
+      onSubmit={() => void write()}
       width={720}
       footer={
         <>
@@ -55,10 +56,10 @@ export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDo
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button icon={<Copy size={13} />} disabled={!plan} onClick={() => plan && void copyText(plan.text, 'CODEOWNERS')}>
+          <Button icon={<Copy size={13} />} disabled={!plan} reason="Nothing to copy yet" onClick={() => plan && void copyText(plan.text, 'CODEOWNERS')}>
             Copy
           </Button>
-          <Button variant="primary" loading={busy} disabled={!plan || !!blocked || !plan.lines.length} onClick={() => void write()} data-codeowners-write="">
+          <Button variant="primary" loading={busy} disabled={!plan || !!blocked || !plan.lines.length} reason={blocked || 'Nothing to write yet'} onClick={() => void write()} data-codeowners-write="">
             Create .github/CODEOWNERS
           </Button>
         </>

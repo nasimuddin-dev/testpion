@@ -64,11 +64,12 @@ export function SaveModal({
     <Modal
       title={title}
       onClose={onClose}
+      onSubmit={submit}
       width={460}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!canSave} loading={busy} onClick={submit}>
+          <Button variant="primary" disabled={!canSave} reason={!name.trim() ? 'Give it a name first' : creating ? 'Name the new collection first' : 'Choose a collection first'} loading={busy} onClick={submit}>
             Save
           </Button>
         </>
@@ -76,12 +77,12 @@ export function SaveModal({
     >
       <div className="flex flex-col gap-3">
         <Field label="Name">
-          <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label={creating ? 'New collection' : 'Collection'} hint={creating && !collections.length ? 'You have no collections yet — this one will be created.' : undefined}>
           <div className="flex gap-2">
             {creating ? (
-              <Input className="flex-1" value={newCollection} placeholder="Collection name" onChange={(e) => setNewCollection(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} />
+              <Input className="flex-1" value={newCollection} placeholder="Collection name" onChange={(e) => setNewCollection(e.target.value)} />
             ) : (
               <Select className="flex-1" value={cid} onChange={(e) => (setCid(e.target.value), setFolder(''))}>
                 <NamedOptions items={collections} />

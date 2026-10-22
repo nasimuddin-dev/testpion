@@ -98,7 +98,7 @@ export function WorkspaceMenu() {
   /** Export a workspace as a bundle, .testpion.zip or .testpion.json (asks where; in the browser it downloads); the message says what was replaced and left out. */
   const exportWorkspace = (w: { name: string; path: string }) => void exportWorkspaceFile(w.path).catch(toastError);
   const rowMenu = (w: WorkspaceInfo): MenuItem[] => [
-    { label: isCurrent(w) ? 'Open (current)' : 'Open', icon: <Check size={14} />, disabled: isCurrent(w), onSelect: () => switchTo(w) },
+    { label: isCurrent(w) ? 'Open (current)' : 'Open', icon: <Check size={14} />, disabled: isCurrent(w), reason: 'It is the open workspace', onSelect: () => switchTo(w) },
     { label: 'Rename', icon: <Pencil size={14} />, onSelect: () => setNameDialog({ mode: 'rename', target: w, value: w.name }) },
     { label: 'Duplicate…', icon: <Copy size={14} />, onSelect: () => setNameDialog({ mode: 'duplicate', target: w, value: `${w.name} copy` }) },
     { label: 'Show in folder', icon: <FolderOpen size={14} />, onSelect: () => void call('app.openPath', { path: w.path }).catch(toastError) },
@@ -221,7 +221,7 @@ export function WorkspaceMenu() {
                 size="sm"
                 variant="ghost"
                 icon={<Download size={13} />}
-                disabled={!ws}
+                disabled={!ws} reason="No workspace is open"
                 title="Export the open workspace (collections, environments, tests, providers, MCP servers) to one .json file; secret values are never exported"
                 onClick={() => {
                   setOpen(false);
@@ -261,17 +261,18 @@ function NameModal({ dialog, onClose, act, onDone }: { dialog: NameDialog; onClo
     <Modal
       title={title}
       onClose={onClose}
+      onSubmit={() => void submit()}
       width={440}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!name.trim()} onClick={() => void submit()}>
+          <Button variant="primary" disabled={!name.trim()} reason="Give the workspace a name first" onClick={() => void submit()}>
             {dialog.mode === 'create' ? 'Create' : dialog.mode === 'rename' ? 'Rename' : 'Duplicate'}
           </Button>
         </>
       }
     >
-      <Input autoFocus className="w-full" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} placeholder="Workspace name" />
+      <Input className="w-full" value={name} onChange={(e) => setName(e.target.value)} placeholder="Workspace name" />
       {dialog.mode === 'duplicate' && <p className="text-xs text-muted mt-2">Copies collections, environments, tests and settings. Run history, traces and secret values are not copied.</p>}
     </Modal>
   );
@@ -309,7 +310,7 @@ function DeleteWorkspaceDialog({ target, onClose, act }: { target: WorkspaceInfo
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="danger" icon={<Trash2 size={13} />} loading={busy} disabled={!d || !matches} onClick={() => void remove()}>
+          <Button variant="danger" icon={<Trash2 size={13} />} loading={busy} disabled={!d || !matches} reason="Type the name of the workspace to confirm" onClick={() => void remove()}>
             {d && !d.managed ? 'Remove from list' : 'Delete workspace'}
           </Button>
         </>

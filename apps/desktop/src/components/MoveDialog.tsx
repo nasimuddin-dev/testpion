@@ -55,6 +55,7 @@ export function MoveDialog({
     <Modal
       title={`Move "${node.name}"`}
       onClose={onClose}
+      onSubmit={() => onMove(target, folderId)}
       width={480}
       footer={
         <>

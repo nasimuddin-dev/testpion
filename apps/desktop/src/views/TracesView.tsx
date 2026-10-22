@@ -56,15 +56,16 @@ function OtlpDialog({ ids, selected, onClose }: { ids: string[]; selected?: stri
     <Modal
       title="Send to OpenTelemetry"
       onClose={onClose}
+      onSubmit={() => void send(ids)}
       width={620}
       footer={
         <>
           {selected && (
-            <Button loading={busy} disabled={!cfg.endpoint.trim()} onClick={() => void send([selected])}>
+            <Button loading={busy} disabled={!cfg.endpoint.trim()} reason="Enter the endpoint first" onClick={() => void send([selected])}>
               Send selected trace
             </Button>
           )}
-          <Button variant="primary" icon={<Send size={13} />} loading={busy} disabled={!cfg.endpoint.trim() || !ids.length} onClick={() => void send(ids)}>
+          <Button variant="primary" icon={<Send size={13} />} loading={busy} disabled={!cfg.endpoint.trim() || !ids.length} reason={!cfg.endpoint.trim() ? 'Enter the endpoint first' : 'No traces are listed'} onClick={() => void send(ids)}>
             Send {ids.length === 1 ? 'the trace' : `${ids.length.toLocaleString()} traces`} shown
           </Button>
         </>

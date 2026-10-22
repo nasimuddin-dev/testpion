@@ -313,7 +313,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
               <Empty
                 icon={<Play size={26} />}
                 title="Run the prompt"
-                actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: run, disabled: !!running }]}
+                actions={[{ label: 'Run (Ctrl+Enter)', icon: <Play size={12} />, onClick: run, disabled: !!running, title: 'Still running' }]}
               >
                 Streams the answer and measures latency, time to first token, tokens and estimated cost; the evaluators below the prompt check it. Prompts and answers stay on this machine unless the provider is remote.
               </Empty>

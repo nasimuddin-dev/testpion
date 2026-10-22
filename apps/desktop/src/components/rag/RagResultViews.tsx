@@ -298,11 +298,12 @@ export function RagRescoreDialog({ runId, evaluators, evaluation, judge, provide
     <Modal
       title="Score this run again"
       onClose={onClose}
+      onSubmit={() => void go()}
       width={720}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={busy ? <Spinner /> : <Play size={13} />} disabled={busy || !est || !!est.judgeProblem} onClick={() => void go()} data-rag-rescore-run>
+          <Button variant="primary" icon={busy ? <Spinner /> : <Play size={13} />} disabled={busy || !est || !!est.judgeProblem} reason={busy ? 'Still scoring' : est?.judgeProblem ?? 'Still estimating the cost'} onClick={() => void go()} data-rag-rescore-run>
             Score again
           </Button>
         </>

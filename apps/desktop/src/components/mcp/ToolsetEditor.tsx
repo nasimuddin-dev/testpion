@@ -195,7 +195,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
           variant="primary"
           icon={<Save size={12} />}
           loading={saving}
-          disabled={!dirty}
+          disabled={!dirty} reason="Nothing changed yet"
           onClick={() => void save()}
           data-toolset-save
           title={loaded.exists ? `Write ${file}` : `Create ${file}`}
@@ -239,8 +239,8 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
                     }
                     items={[
                       { label: 'Duplicate', icon: <CopyPlus size={14} />, onSelect: () => duplicateTool(i) },
-                      { label: 'Move up', icon: <ArrowUp size={14} />, disabled: i === 0, onSelect: () => moveTool(i, i - 1) },
-                      { label: 'Move down', icon: <ArrowDown size={14} />, disabled: i === tools.length - 1, onSelect: () => moveTool(i, i + 1) },
+                      { label: 'Move up', icon: <ArrowUp size={14} />, disabled: i === 0, reason: 'It is first already', onSelect: () => moveTool(i, i - 1) },
+                      { label: 'Move down', icon: <ArrowDown size={14} />, disabled: i === tools.length - 1, reason: 'It is last already', onSelect: () => moveTool(i, i + 1) },
                       { label: LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => deleteTool(i) },
                     ]}
                   />

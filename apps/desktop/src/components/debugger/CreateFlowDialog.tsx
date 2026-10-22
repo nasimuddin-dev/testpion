@@ -69,11 +69,12 @@ export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; sinc
     <Modal
       title="Create a flow from the exchanges"
       onClose={onClose}
+      onSubmit={() => void create()}
       width={760}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={<Workflow size={13} />} disabled={!preview || busy} loading={busy} onClick={() => void create()} data-create-flow>
+          <Button variant="primary" icon={<Workflow size={13} />} disabled={!preview || busy} reason={busy ? 'Still creating the flow' : 'Still preparing the preview'} loading={busy} onClick={() => void create()} data-create-flow>
             Create
           </Button>
         </>

@@ -15,7 +15,7 @@ Everything below is what TestPion's Postman importer does today. An import never
 
 1. Collections: **⋯ ▸ Export ▸ Collection v2.1** (JSON).
 2. Environments and globals: **Environments ▸ ⋯ ▸ Export**.
-3. Everything at once: **Settings ▸ Data ▸ Export data** gives one ZIP; give TestPion the ZIP.
+3. Everything at once: in Postman, **Settings ▸ Data ▸ Export data** gives one ZIP; give TestPion the ZIP.
 4. Git integration: give TestPion the folder (or the repository link).
 
 ## Import into TestPion

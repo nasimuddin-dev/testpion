@@ -87,7 +87,7 @@ export function EnvCompareDialog({ tab, onClose }: { tab: RestTab; onClose(): vo
               <ArrowLeftRight size={14} />
             </IconButton>
             {picker(right, setRight, 'Second environment')}
-            <Button variant="primary" icon={<Play size={13} />} loading={running} disabled={!left || !right || left === right} onClick={() => void run()}>
+            <Button variant="primary" icon={<Play size={13} />} loading={running} disabled={!left || !right || left === right} reason="Choose two different environments" onClick={() => void run()}>
               Send to both
             </Button>
           </div>

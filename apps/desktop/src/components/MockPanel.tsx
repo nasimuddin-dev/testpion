@@ -91,7 +91,7 @@ export function MockPanel({ collectionId, onOpenRequest }: { collectionId: strin
             Stop
           </Button>
         ) : (
-          <Button variant="primary" className="mt-6" icon={<Play size={12} />} loading={busy} disabled={!routes.length} onClick={() => void start()}>
+          <Button variant="primary" className="mt-6" icon={<Play size={12} />} loading={busy} disabled={!routes.length} reason="Save an example first: the mock serves the saved examples" onClick={() => void start()}>
             Start mock server
           </Button>
         )}

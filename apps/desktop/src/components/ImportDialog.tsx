@@ -161,6 +161,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
     <Modal
       title={step === 'source' ? (guide ? `Migrate from ${guide.label}` : 'Import') : step === 'preview' ? 'Import: preview' : 'Import: done'}
       onClose={onClose}
+      onSubmit={() => (step === 'source' ? void run({ text }) : step === 'preview' ? void apply() : onClose())}
       width={720}
       footer={
         step === 'source' ? (
@@ -174,7 +175,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
             <Button icon={<FolderOpen size={13} />} loading={busy} title="A collection folder (Bruno, OpenCollection) or a folder of files" onClick={pick(pickImportFolder)}>
               Choose folder…
             </Button>
-            <Button variant={text.trim() ? 'primary' : 'default'} loading={busy} disabled={!text.trim()} onClick={() => void run({ text })}>
+            <Button variant={text.trim() ? 'primary' : 'default'} loading={busy} disabled={!text.trim()} reason="Paste a collection, a spec or a cURL command first" onClick={() => void run({ text })}>
               Preview pasted content
             </Button>
           </>
@@ -192,7 +193,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
                 <Toggle checked={liftTests} onChange={setLiftTests} label={`Turn ${plural(liftable, 'simple test')} into checks`} title="A test that only checks a status, a response time, a header or a JSON field becomes a check in the request's Tests tab (readable without running the script). The rest of the script is kept." />
               </span>
             )}
-            <Button variant="primary" loading={busy} disabled={!plans.length && !preview?.snippets} onClick={() => void apply()}>
+            <Button variant="primary" loading={busy} disabled={!plans.length && !preview?.snippets} reason="Nothing could be read from what was given" onClick={() => void apply()}>
               Import{plans.length > 1 ? ` ${plans.length} files` : ''}
             </Button>
           </>
@@ -238,7 +239,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
             }}
           >
             <Input className="flex-1" aria-label="Link to import" placeholder="Or a link: https://…/openapi.json, a GitHub or GitLab file or folder, postman:collection/<id>" value={link} onChange={(e) => setLink(e.target.value)} />
-            <Button type="submit" icon={<Link2 size={13} />} disabled={!/^(https?:\/\/\S+|postman:\S+)$/i.test(link.trim())} loading={busy && !!link.trim()}>
+            <Button type="submit" icon={<Link2 size={13} />} disabled={!/^(https?:\/\/\S+|postman:\S+)$/i.test(link.trim())} reason="Enter an http(s) link, or a postman: link" loading={busy && !!link.trim()}>
               Preview link
             </Button>
           </form>
@@ -247,7 +248,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
               <div className="flex gap-2">
                 <Input type="password" className="mono flex-1" aria-label="Postman API key" value={key} onChange={(e) => setKey(e.target.value)} placeholder={keySet ? '••••••••' : 'PMAK-…'} />
                 <Button
-                  disabled={!key.trim() && !keySet}
+                  disabled={!key.trim() && !keySet} reason="Enter the key first"
                   onClick={() =>
                     void call<{ set: boolean }>('import.setPostmanKey', { key }).then((r) => {
                       setKeySet(r.set);

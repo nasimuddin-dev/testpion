@@ -61,7 +61,7 @@ export function GitStash({ changed, afterChange }: { changed: boolean; afterChan
     <section data-git-stash>
       <SectionTitle
         right={
-          <Button size="sm" variant="ghost" icon={<Archive size={12} />} disabled={!changed || busy} onClick={() => void setAside()} title={SET_ASIDE_HINT}>
+          <Button size="sm" variant="ghost" icon={<Archive size={12} />} disabled={!changed || busy} reason={busy ? 'Still working on the last action' : 'Nothing changed'} onClick={() => void setAside()} title={SET_ASIDE_HINT}>
             Set changes aside…
           </Button>
         }
@@ -83,7 +83,7 @@ export function GitStash({ changed, afterChange }: { changed: boolean; afterChan
                   {new Date(s.date).toLocaleString()}
                 </span>
                 <span className="ml-auto flex gap-1 shrink-0">
-                  <Button size="sm" variant="ghost" icon={<ArchiveRestore size={12} />} disabled={busy} onClick={() => void run(async () => {
+                  <Button size="sm" variant="ghost" icon={<ArchiveRestore size={12} />} disabled={busy} reason="Still working on the last action" onClick={() => void run(async () => {
                     const r = await call<{ conflicted: boolean; message: string }>('git.stashApply', { hash: s.hash, pop: true });
                     useApp.getState().toast(r.message, r.conflicted ? 'warning' : 'success');
                   })} title="Bring the changes back and remove them from this list">
@@ -94,6 +94,7 @@ export function GitStash({ changed, afterChange }: { changed: boolean; afterChan
                     variant="ghost"
                     icon={<Trash2 size={12} />}
                     disabled={busy}
+                    reason="Still working on the last action"
                     onClick={async () => {
                       if (await confirmAction({ title: 'Drop what was set aside', message: `Throw away "${s.name}" for good?`, detail: 'These changes were never committed: they cannot be brought back.', confirmLabel: 'Drop', danger: true })) await run(() => call('git.stashDrop', { hash: s.hash }), 'Dropped');
                     }}

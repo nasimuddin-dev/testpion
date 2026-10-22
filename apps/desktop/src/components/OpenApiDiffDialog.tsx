@@ -105,7 +105,7 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
       onClose={onClose}
       width={760}
       footer={
-        <Button variant="primary" icon={<GitCompare size={13} />} loading={busy} disabled={!ready(before) || !ready(after)} onClick={() => void compare()}>
+        <Button variant="primary" icon={<GitCompare size={13} />} loading={busy} disabled={!ready(before) || !ready(after)} reason="Give both versions to compare" onClick={() => void compare()}>
           Compare
         </Button>
       }

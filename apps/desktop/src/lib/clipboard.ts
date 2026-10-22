@@ -10,6 +10,17 @@ export function copyText(text: string, what?: string): Promise<void> {
 }
 
 /**
+ * Copy text for a message that says more ("Recording at <url> (copied)"): true when the clipboard took it; false, and
+ * "Could not copy to the clipboard" shown, when it refused. The caller then leaves "(copied)" out.
+ */
+export function copyQuietly(text: string): Promise<boolean> {
+  return navigator.clipboard.writeText(text).then(
+    () => true,
+    () => (useApp.getState().toast('Could not copy to the clipboard', 'error'), false),
+  );
+}
+
+/**
  * A copy button that turns into a tick for a moment: `copied` is true for `ms` after `copy(text)` succeeded (a
  * clipboard that refuses is reported instead). For buttons whose own label says it; elsewhere copyText toasts.
  */

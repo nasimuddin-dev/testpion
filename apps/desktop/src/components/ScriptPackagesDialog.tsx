@@ -63,6 +63,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
     <Modal
       title="Script packages"
       onClose={onClose}
+      onSubmit={() => void save()}
       width={1000}
       footer={
         <>
@@ -74,7 +75,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
               Delete
             </Button>
           )}
-          <Button variant="primary" icon={<Save size={13} />} disabled={!dirty} onClick={() => void save()}>
+          <Button variant="primary" icon={<Save size={13} />} disabled={!dirty} reason="Nothing changed yet" onClick={() => void save()}>
             {dirty ? 'Save*' : 'Save'}
           </Button>
         </>

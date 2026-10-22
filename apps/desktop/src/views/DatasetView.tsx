@@ -145,14 +145,14 @@ export function DatasetView() {
         )}
         {file && <span className="text-xs text-muted shrink-0">{(file.size / 1024).toFixed(1)} KB</span>}
         <span className="flex-1" />
-        <Button icon={<Play size={14} />} disabled={!file} onClick={runCollection} title="Open the Collection Runner with this dataset as its data; pick the collection there">
+        <Button icon={<Play size={14} />} disabled={!file} reason="Open a dataset file first" onClick={runCollection} title="Open the Collection Runner with this dataset as its data; pick the collection there">
           Run a collection with this dataset
         </Button>
         <Button icon={<Copy size={14} />} onClick={useInTest} title="Copy the `dataset:` block that makes a YAML test read this file">
           Use in a test
         </Button>
         {!file?.binary && (
-          <Button icon={<Save size={14} />} disabled={!dirty} onClick={() => void save()} title="Save (Ctrl+S)">
+          <Button icon={<Save size={14} />} disabled={!dirty} reason="Nothing changed yet" onClick={() => void save()} title="Save (Ctrl+S)">
             Save
           </Button>
         )}
@@ -182,7 +182,7 @@ export function DatasetView() {
                     aria-label="SQL query for the rows"
                   />
                 </Field>
-                <Button onClick={() => void loadPreview(name, query)} disabled={!query.trim()}>
+                <Button onClick={() => void loadPreview(name, query)} disabled={!query.trim()} reason="Write a query first">
                   Run query
                 </Button>
               </div>

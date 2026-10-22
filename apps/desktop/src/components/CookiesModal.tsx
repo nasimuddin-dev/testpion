@@ -88,6 +88,9 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
     <Modal
       title="Cookies"
       onClose={onClose}
+      onSubmit={() => {
+        if (editing?.draft.name.trim()) void save();
+      }}
       width={900}
       footer={
         <>
@@ -95,7 +98,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
             <Lock size={12} />
             {persistent ? 'Kept on this machine only, encrypted with the OS credential store. Never written to workspace files.' : 'No OS credential store available: cookies are kept in memory until the app closes. Never written to workspace files.'}
           </span>
-          <Button variant="ghost" disabled={!cookies.length} onClick={async () => (await confirmAction({ title: 'Delete all cookies', message: 'Delete every cookie saved for this workspace?', detail: 'Sites will ask you to sign in again where a cookie kept you signed in.', confirmLabel: 'Delete all cookies', danger: true })) && void act(() => call('cookies.clear', {}), 'All cookies deleted')}>
+          <Button variant="ghost" disabled={!cookies.length} reason="There are no cookies" onClick={async () => (await confirmAction({ title: 'Delete all cookies', message: 'Delete every cookie saved for this workspace?', detail: 'Sites will ask you to sign in again where a cookie kept you signed in.', confirmLabel: 'Delete all cookies', danger: true })) && void act(() => call('cookies.clear', {}), 'All cookies deleted')}>
             Clear all
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -145,7 +148,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                 <Button size="sm" icon={<Plus size={13} />} onClick={() => setEditing({ draft: blank(domain) })}>
                   Add cookie
                 </Button>
-                <Button size="sm" variant="ghost" disabled={!count(domain)} onClick={() => void act(() => call('cookies.clear', { domain }), `Cookies of ${domain} deleted`)}>
+                <Button size="sm" variant="ghost" disabled={!count(domain)} reason="This domain has no cookies" onClick={() => void act(() => call('cookies.clear', { domain }), `Cookies of ${domain} deleted`)}>
                   Clear domain
                 </Button>
               </div>
@@ -215,7 +218,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                     <Button variant="ghost" onClick={() => setEditing(null)}>
                       Cancel
                     </Button>
-                    <Button variant="primary" disabled={!editing.draft.name.trim()} onClick={() => void save()}>
+                    <Button variant="primary" disabled={!editing.draft.name.trim()} reason="Give the cookie a name first" onClick={() => void save()}>
                       {editing.original ? 'Save' : 'Add'}
                     </Button>
                   </div>

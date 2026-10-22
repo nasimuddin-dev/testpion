@@ -90,11 +90,12 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
     <Modal
       title={`Run ${file.split('/').pop()} at scale`}
       onClose={onClose}
+      onSubmit={() => void start()}
       width={560}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" icon={<Play size={12} />} loading={starting} disabled={mode === 'matrix' && !chosen.length} data-scale-start onClick={() => void start()}>
+          <Button variant="primary" icon={<Play size={12} />} loading={starting} disabled={mode === 'matrix' && !chosen.length} reason="Tick at least one environment" data-scale-start onClick={() => void start()}>
             {mode === 'data' ? 'Run per row' : `Run in ${chosen.length} environment${chosen.length === 1 ? '' : 's'}`}
           </Button>
         </>

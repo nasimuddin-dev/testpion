@@ -355,13 +355,13 @@ export function GrpcView() {
             Stop
           </Button>
         ) : (
-          <Button variant="primary" icon={<Send size={13} />} disabled={!current} onClick={() => void send()}>
+          <Button variant="primary" icon={<Send size={13} />} disabled={!current} reason="Choose a method first" onClick={() => void send()}>
             Invoke
           </Button>
         )}
         <Button
           icon={<Terminal size={13} />}
-          disabled={!d.method}
+          disabled={!d.method} reason="Choose a method first"
           title="Copy the call as a grpcurl command ({{variables}} resolved)"
           onClick={() =>
             void call<string>('grpc.grpcurl', { target: d.target, method: d.method, message: d.message, metadata: d.metadata, tls: d.tls, protoFiles: d.descriptorSet ? [] : d.protoFiles.map((f) => f.name), timeoutMs: d.timeoutMs, environment: env })
@@ -372,7 +372,7 @@ export function GrpcView() {
         </Button>
         <Button
           icon={<FileCheck2 size={13} />}
-          disabled={!d.method}
+          disabled={!d.method} reason="Choose a method first"
           title="Save as a YAML test file (tests/grpc, using server reflection) for the Tests view, testpion test and CI"
           onClick={saveTest}
         >
@@ -406,7 +406,7 @@ export function GrpcView() {
                     <span>Choose a method</span>
                   )}
                   {current?.clientStreaming && <span>· a JSON list, one item per message</span>}
-                  <Button size="sm" variant="ghost" className="ml-auto" icon={<Sparkles size={12} />} disabled={!current} title={example} onClick={useExample}>
+                  <Button size="sm" variant="ghost" className="ml-auto" icon={<Sparkles size={12} />} disabled={!current} reason="Choose a method first" title={example} onClick={useExample}>
                     Example
                   </Button>
                 </div>
@@ -440,7 +440,7 @@ export function GrpcView() {
                   ) : (
                     <>
                       <span className="text-muted">No proto files? If the server offers reflection, it can describe itself.</span>
-                      <Button size="sm" className="ml-auto" icon={<ScanSearch size={12} />} loading={reflecting} disabled={!d.target.trim()} onClick={() => void reflect()}>
+                      <Button size="sm" className="ml-auto" icon={<ScanSearch size={12} />} loading={reflecting} disabled={!d.target.trim()} reason="Enter the server address first" onClick={() => void reflect()}>
                         Use server reflection
                       </Button>
                     </>

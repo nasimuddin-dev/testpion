@@ -101,7 +101,7 @@ export function KeyboardSettings() {
         >
           Import…
         </Button>
-        <Button size="sm" icon={<RotateCcw size={13} />} disabled={!changed} onClick={resetAll} title="Every shortcut back to its default keys">
+        <Button size="sm" icon={<RotateCcw size={13} />} disabled={!changed} reason="Every shortcut has its default keys" onClick={resetAll} title="Every shortcut back to its default keys">
           Reset all{changed ? ` (${changed})` : ''}
         </Button>
       </div>

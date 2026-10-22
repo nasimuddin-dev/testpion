@@ -146,7 +146,7 @@ export function DagTreeEditor({ text, onText }: { text: string; onText(text: str
         )}
         <span className="ml-auto flex items-center gap-1">
           {(['binary', 'choice', 'task', 'rule'] as const).map((k) => (
-            <Button key={k} size="sm" icon={<Plus size={11} />} onClick={() => add(k)} disabled={ids.length >= 40} data-dag-add={k} title={k === 'rule' ? 'A check that needs no model' : k === 'task' ? 'The judge writes something down that later questions can read' : k === 'choice' ? 'The judge picks one of several options' : 'The judge answers yes or no'}>
+            <Button key={k} size="sm" icon={<Plus size={11} />} onClick={() => add(k)} disabled={ids.length >= 40} reason="40 checks at most" data-dag-add={k} title={k === 'rule' ? 'A check that needs no model' : k === 'task' ? 'The judge writes something down that later questions can read' : k === 'choice' ? 'The judge picks one of several options' : 'The judge answers yes or no'}>
               {NODE_LABEL[k]}
             </Button>
           ))}

@@ -58,6 +58,7 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
         </span>
       }
       onClose={onClose}
+      onSubmit={() => (done ? onClose() : void apply())}
       width={680}
       footer={
         done ? (
@@ -85,7 +86,7 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
         ) : (
           <>
             <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" icon={<Wrench size={13} />} loading={busy} disabled={!plan || !todo} onClick={() => void apply()} data-fix-apply="">
+            <Button variant="primary" icon={<Wrench size={13} />} loading={busy} disabled={!plan || !todo} reason="Nothing left to fix" onClick={() => void apply()} data-fix-apply="">
               Fix{todo ? ` ${plural(todo, 'thing')}` : ''}
             </Button>
           </>

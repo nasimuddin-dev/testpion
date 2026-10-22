@@ -101,6 +101,7 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
     <Modal
       title={`History of ${title}`}
       onClose={onClose}
+      onSubmit={() => void restore()}
       width={1000}
       footer={
         <>
@@ -111,7 +112,7 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
           )}
           <Button onClick={onClose}>Close</Button>
           {tab === 'versions' && (
-            <Button variant="primary" icon={<RotateCcw size={13} />} disabled={!v} onClick={() => void restore()}>
+            <Button variant="primary" icon={<RotateCcw size={13} />} disabled={!v} reason="Choose a version first" onClick={() => void restore()}>
               Restore this version
             </Button>
           )}
