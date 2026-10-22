@@ -838,21 +838,25 @@ class JsonlMetaStore implements MetaStore {
       opts,
     );
   }
-  requestStats(collectionId: string) {
+  private statsOf(entries: HistoryEntry[]) {
     return summarizeRequestStats(
-      this.data.history
-        .filter((h) => h.collectionId === collectionId && isRequestEntry(h))
-        .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))
+      entries
+        .sort((x, y) => (x.timestamp < y.timestamp ? 1 : -1))
         .slice(0, 5000)
         .map((h) => ({ ...h, checksOk: (h.responseMeta as { checksOk?: boolean } | undefined)?.checksOk })),
     );
   }
+  requestStats(collectionId: string) {
+    return this.statsOf(this.data.history.filter((h) => h.collectionId === collectionId && isRequestEntry(h)));
+  }
   historyByCollection() {
-    const ids = new Set(this.data.history.filter(isRequestEntry).map((h) => h.collectionId).filter((c): c is string => !!c));
+    // grouped in one pass (it was a filter and a sort of the whole history for every collection)
+    const groups = new Map<string, HistoryEntry[]>();
+    for (const h of this.data.history) if (h.collectionId && isRequestEntry(h)) (groups.get(h.collectionId) ?? groups.set(h.collectionId, []).get(h.collectionId)!).push(h);
     return Object.fromEntries(
-      [...ids].map((c) => {
-        const stats = this.requestStats(c);
-        return [c, { sent: stats.length, failing: stats.filter((s) => !s.lastOk).length }];
+      [...groups].map(([c, entries]) => {
+        const stats = this.statsOf(entries);
+        return [c, { sent: stats.length, failing: stats.filter((x) => !x.lastOk).length }];
       }),
     );
   }
