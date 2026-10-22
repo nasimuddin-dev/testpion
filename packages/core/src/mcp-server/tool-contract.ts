@@ -367,9 +367,8 @@ function composeDescription(t: Tool, doc: ToolDoc | undefined): string {
   const parts = [t.description.trim()];
   if (doc) parts.push(`\nWhen to use: ${doc.when}\nWhen not: ${doc.whenNot}\nExample: ${JSON.stringify(doc.example)}`);
   const notes: string[] = [];
-  if (LIST_TOOLS[t.name]) notes.push(`Pages: \`limit\` (default ${DEFAULT_PAGE}, at most ${MAX_PAGE}) and \`cursor\` (the \`nextCursor\` of the page before).`);
-  if (BIG_TOOLS.has(t.name)) notes.push('`response_format`: "concise" (default: long texts and lists cut, each cut named) or "detailed".');
-  if (CONFIRM_TOOLS[t.name]) notes.push('Deletes or overwrites: without `confirm: true` it changes nothing and says what it would do. Ask the user first.');
+  // (the pages, `response_format` and `confirm` parameters describe themselves in the input schema: saying it twice was 30 KB of tools/list)
+  if (CONFIRM_TOOLS[t.name]) notes.push('Deletes or overwrites: needs `confirm: true` (ask the user first).');
   if (notes.length) parts.push(notes.join(' '));
   return parts.join('\n');
 }
@@ -395,11 +394,11 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
       } else properties[k] = v;
     }
     if (list) {
-      properties.cursor = prop('Where the page starts: the `nextCursor` of the page before (leave out for the first page)');
-      properties.limit = prop(`Items per page (default ${DEFAULT_PAGE}, at most ${MAX_PAGE})`, 'number');
+      properties.cursor = prop('The nextCursor of the page before (omit for the first page)');
+      properties.limit = prop(`Page size (default ${DEFAULT_PAGE}, max ${MAX_PAGE})`, 'number');
     }
-    if (big) properties.response_format = prop('"concise" (default: long texts and lists cut) or "detailed" (everything, within a size cap)', 'string', { enum: ['concise', 'detailed'] });
-    if (confirm) properties.confirm = prop('true to go ahead (ask the user first); without it nothing changes and the result says what would', 'boolean');
+    if (big) properties.response_format = prop('concise (default: long values cut, each cut named) or detailed', 'string', { enum: ['concise', 'detailed'] });
+    if (confirm) properties.confirm = prop('true to go ahead (ask the user first); omitted: nothing changes and the result says what would', 'boolean');
     const required = t.inputSchema.required?.map((r) => aliases.find(([, k]) => k === r)?.[0] ?? r);
     const doc = t.doc ?? o.docs[t.name];
     return {

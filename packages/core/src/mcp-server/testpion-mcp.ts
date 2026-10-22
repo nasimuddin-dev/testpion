@@ -85,14 +85,24 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     // the tools of every module (tools/index.ts): a new tool goes there, never here
     ...moduleTools(deps),
   ];
-  // list_flows and one tool per flow with an expose: block (flow-tools.ts); a flow never shadows a built-in tool
-  all.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !all.some((x) => x.name === t.name)));
-  const base = withEnvironmentSecrets(store, withProductionConsent(all.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
-  base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title));
-  // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
   let confirmer: Confirmer | undefined;
-  const tools = withToolContract(base, { docs: TOOL_DOCS, confirmer: () => confirmer });
-  const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
+  /*
+   * The tool set is put together at the first request, not when the server is made: it holds list_flows and one tool per flow with an
+   * expose: block (flow-tools.ts), which reads every test file under tests/ (a stat each, and the file when it changed) - time
+   * `initialize` should not wait for, growing with the number of test files. A flow never shadows a built-in tool.
+   */
+  let registry: { all: Tool[]; tools: Tool[]; listed: Tool[] } | undefined;
+  const tools = () => (registry ??= buildRegistry()).tools;
+  function buildRegistry() {
+    const every = [...all];
+    every.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !every.some((x) => x.name === t.name)));
+    const base = withEnvironmentSecrets(store, withProductionConsent(every.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
+    base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title));
+    // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
+    const withContract = withToolContract(base, { docs: TOOL_DOCS, confirmer: () => confirmer });
+    return { all: every, tools: withContract, listed: opts.profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name)) : withContract };
+  }
+  const listedTools = () => (registry ??= buildRegistry()).listed;
 
   const server = new (mcpServer().Server)(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
@@ -102,14 +112,15 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     },
   );
   server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
-    tools: listed.map(({ name, description, inputSchema, outputSchema, write }) => {
-      const annotations = toolAnnotations(name, !!write);
-      return { name, title: annotations.title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations };
+    tools: listedTools().map(({ name, description, inputSchema, outputSchema, write }) => {
+      // the title is the tool's own field; repeating it inside the annotations was 6 KB of a full list
+      const { title, ...annotations } = toolAnnotations(name, !!write);
+      return { name, title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations };
     }),
   }));
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
   const json = (uri: string, data: unknown) => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] });
-  const runTool = (name: string, args: Record<string, unknown> = {}) => all.find((t) => t.name === name)!.run(args);
+  const runTool = (name: string, args: Record<string, unknown> = {}) => (registry ??= buildRegistry()).all.find((t) => t.name === name)!.run(args);
   server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({
     resources: [
       { uri: 'testpion://guide', name: 'guide', title: 'TestPion guide for agents', description: 'Which tool to use for what, variables, check types and the test file format', mimeType: 'text/markdown' },
@@ -150,7 +161,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     return { description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(args) } }] };
   });
   server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
-    const tool = tools.find((t) => t.name === req.params.name);
+    const tool = tools().find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }] };
     try {
       const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
