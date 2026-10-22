@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ApsError } from '../errors.js';
 import { atomicWrite, PRIVATE_FILE_MODE, readJson } from './fsutil.js';
 import type { SecretReader } from '../vars/variables.js';
@@ -19,9 +20,21 @@ export interface SecretStore extends SecretReader {
   list(): string[];
 }
 
-/** `provider.openai.apiKey` → `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` */
-export function envNameForSecret(name: string): string {
+/** The name an environment variable gets when every character but a letter, digit or underscore becomes `_` (what versions before 0.55 used for every name; still read). */
+export function legacyEnvNameForSecret(name: string): string {
   return 'TESTPION_SECRET_' + name.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase();
+}
+
+/**
+ * `provider.openai.apiKey` → `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY`. A name made only of letters, digits and dots keeps that
+ * readable form (dots are the separators, so two such names never meet). A name with any other character (`env.a-b.key`,
+ * `env.a_b.key`) would meet another one after the lossy mapping, so it gets a short hash of the exact name: `…_H1A2B3C4D`.
+ * Case does not count (environment variable names are upper case).
+ */
+export function envNameForSecret(name: string): string {
+  const lossy = legacyEnvNameForSecret(name);
+  if (/^[A-Za-z0-9.]+$/.test(name)) return lossy;
+  return `${lossy}_H${createHash('sha1').update(name.toLowerCase()).digest('hex').slice(0, 8).toUpperCase()}`;
 }
 
 export class EnvSecretStore implements SecretStore {
@@ -30,11 +43,12 @@ export class EnvSecretStore implements SecretStore {
   constructor(private env: NodeJS.ProcessEnv = process.env) {}
   get(name: string): string | undefined {
     // earlier names of the project still work: FLUXPION_ (0.5), PROTOPION_ (0.4), PROTOLENS_ (0.2–0.3), APS_ (0.1)
-    const n = envNameForSecret(name);
-    for (const prefix of ['TESTPION_', 'FLUXPION_', 'PROTOPION_', 'PROTOLENS_', 'APS_']) {
-      const v = this.env[n.replace(/^TESTPION_/, prefix)];
-      if (v !== undefined) return v;
-    }
+    // the exact (injective) name first; the lossy name earlier versions documented still works, so existing pipelines keep running
+    for (const n of new Set([envNameForSecret(name), legacyEnvNameForSecret(name)]))
+      for (const prefix of ['TESTPION_', 'FLUXPION_', 'PROTOPION_', 'PROTOLENS_', 'APS_']) {
+        const v = this.env[n.replace(/^TESTPION_/, prefix)];
+        if (v !== undefined) return v;
+      }
     return undefined;
   }
   async set(): Promise<void> {

@@ -52,7 +52,8 @@ describe('MCP: flow_generate', () => {
       expect(dry).toContain('"dryRun":true');
       expect(dry).not.toContain('bookshelf');
 
-      const ran = JSON.stringify(await call('flow_generate', { collection: 'Shop', folder: 'Orders' }));
+      expect(JSON.stringify(await call('flow_generate', { collection: 'Shop', folder: 'Orders' }))).toContain('confirmationRequired');
+      const ran = JSON.stringify(await call('flow_generate', { collection: 'Shop', folder: 'Orders', confirm: true }));
       const id = /"id":"(ai-[^"]+)"/.exec(ran)![1]!;
       expect(ran).toContain('ai_apply_proposal');
       expect(ran).toContain('Dropped step');
