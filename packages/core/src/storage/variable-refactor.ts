@@ -173,6 +173,8 @@ export async function renameVariable(store: WorkspaceStore, from: string, to: st
   }
   for (const c0 of store.listCollections().filter((x) => !x.problem)) {
     const before = JSON.stringify(c0);
+    // a collection that never names the variable cannot change: it is not copied (every collection was cloned, stringified twice and compared)
+    if (!before.includes(from)) continue;
     const c: Collection = structuredClone(c0);
     c.variables = renameKeys(c.variables) ?? c.variables;
     for (const k of ['preRequestScript', 'testScript'] as const) if (c[k]) c[k] = swap(c[k]!, true);
