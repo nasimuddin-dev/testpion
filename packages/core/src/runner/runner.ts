@@ -282,6 +282,11 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const deferreds = new Map<string, Deferred>();
   const seen = new Set<string>();
   const dep = (id: string) => deferreds.get(id) ?? deferreds.set(id, deferred()).get(id)!;
+  // a result settles only what something is waiting for: a Deferred (a promise) for every result of a 100,000-iteration run was never used
+  const settle = (id: string, status: TestStatus) => {
+    if (!statusById.has(id)) statusById.set(id, status); // (a step that asks later finds it here)
+    deferreds.get(id)?.resolve(status);
+  };
 
   // traces are derived data: queued and written in batches so a test never waits for a file write
   const traceQueue: Array<[Trace, TestResult]> = [];
@@ -339,7 +344,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     const redacted = opts.services.redactor.redact(r);
     if (redacted.metadata?.setup !== true) agg.add(redacted);
     statusById.set(r.id, r.status);
-    dep(r.id).resolve(r.status);
+    settle(r.id, r.status);
     await write(redacted);
     if (trace && (opts.onTrace || opts.onTraceBatch) && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) queueTrace(trace, redacted);
     emit({ type: 'test-end', runId, result: redacted });
@@ -595,7 +600,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       if (!isAbortError(e)) {
         const err = normalizeError(e);
         await record({ ...skippedResult(t, 'internal error'), status: 'error', error: err });
-      } else dep(id).resolve('skipped');
+      } else settle(id, 'skipped');
     } finally {
       running--;
       release();
@@ -636,14 +641,14 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       const id = t.id ?? t.name;
       seen.add(id);
       if (done.has(id)) {
-        dep(id).resolve(statusById.get(id)!);
+        settle(id, statusById.get(id)!);
         continue;
       }
       if (only && !only.has(id)) {
         // not run: done in the run it was seeded from (the steps after it go on as if it had just run)
         const s: TestStatus = branchSkipped.has(id) ? 'skipped' : 'passed';
         statusById.set(id, s);
-        dep(id).resolve(s);
+        settle(id, s);
         continue;
       }
       if (setupFailed) {
@@ -653,7 +658,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       if (t.finally) {
         // a step that waits for it is told so (finally steps run last), never left waiting
         finallyIds.add(id);
-        dep(id).resolve('skipped');
+        settle(id, 'skipped');
         holdFinally(fileKey, t);
         continue;
       }
