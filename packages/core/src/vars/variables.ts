@@ -25,6 +25,10 @@ export interface ResolveOptions {
 }
 
 const TEMPLATE = templateRegex();
+/** Most variable lookups while one string is resolved (a request URL or body); generous for any real template. */
+const MAX_EXPANSIONS = 100_000;
+/** Deepest chain of variables naming variables. */
+const MAX_NESTING = 32;
 
 export class VariableScope {
   private scopes = new Map<ScopeName, Map<string, unknown>>();
@@ -191,6 +195,14 @@ export class VariableScope {
    */
   private lookupNested(expr: string, stack: string[]): unknown {
     const name = expr.trim();
+    // a value that names itself twice at every level (v1 = {{v0}}{{v0}}, v2 = {{v1}}{{v1}} …) is no cycle, but expands to 2^n lookups
+    // and text: the work of one string is bounded, and what goes past stays as the placeholder
+    if (++this.work > MAX_EXPANSIONS || stack.length >= MAX_NESTING) {
+      this.unresolved.add(name);
+      this.cycleHits++;
+      this.cycles.add(`${[...stack.slice(-3), name].join(' → ')} (expansion limit)`);
+      return undefined;
+    }
     if (stack.includes(name)) {
       const from = stack.indexOf(name);
       this.cycleHits++;
@@ -221,8 +233,12 @@ export class VariableScope {
 
   /** Replace `{{var}}` placeholders in a string. Unknown placeholders (and cycles) are left intact and recorded. */
   resolve(input: string): string {
+    this.work = 0;
     return this.resolveIn(input, []);
   }
+
+  /** Lookups made resolving the current string (see lookupNested). */
+  private work = 0;
 
   /**
    * Deeply resolve templates in any JSON-like value. A string that is exactly one placeholder
@@ -232,6 +248,7 @@ export class VariableScope {
     if (typeof value === 'string') {
       const m = /^\{\{\s*([^{}]+?)\s*\}\}$/.exec(value);
       if (m) {
+        this.work = 0;
         const v = this.lookupNested(m[1]!, []);
         if (v !== undefined) {
           if (this.secretKeys.has(m[1]!.trim()) && typeof v === 'string') this.redactor?.addSecret(v);
