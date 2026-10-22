@@ -270,7 +270,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     if (s.logs.length) metadata.scriptLogs = s.logs.slice(0, 100);
     if (s.visualizer) {
       // tp.visualizer output (redacted HTML) for reports, the MCP server and the CLI's --json output
-      const v = renderVisualizer(s.visualizer.template, s.visualizer.data);
+      const v = await renderVisualizer(s.visualizer.template, s.visualizer.data);
       metadata.visualizer = { html: v.html === undefined ? undefined : svc.redactor.redactString(v.html.slice(0, 200_000)), error: v.error };
     }
     if (s.sentRequests?.length) metadata.sentRequests = [...((metadata.sentRequests as unknown[]) ?? []), ...s.sentRequests.map((r) => ({ ...r, url: svc.redactor.redactUrl(r.url) }))];

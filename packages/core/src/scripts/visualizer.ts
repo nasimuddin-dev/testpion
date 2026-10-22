@@ -1,8 +1,4 @@
-import { nodeRequire } from '../util/lazy-require.js';
-
-// handlebars (and its source-map) loads with the first visualizer rendered, not at startup (see util/lazy-require.ts)
-let handlebarsMod: typeof import('handlebars') | undefined;
-const handlebars = (): typeof import('handlebars') => (handlebarsMod ??= typeof require === 'function' ? require('handlebars') : nodeRequire('handlebars'));
+import { renderTemplate } from './sandbox.js';
 
 /** What `tp.visualizer.set(template, data)` left behind, rendered for the Visualize tab. */
 export interface VisualizerResult {
@@ -15,18 +11,15 @@ export interface VisualizerResult {
 const MAX_HTML = 2_000_000;
 
 /**
- * Render a Postman Visualizer template (Handlebars) with its data. Each call uses an isolated
- * Handlebars environment, so templates can't register helpers or partials that leak into later
- * renders. Prototype properties stay blocked (Handlebars' default), and `{{…}}` output is escaped.
+ * Render a Postman Visualizer template (Handlebars) with its data. The template is workspace content (it comes from a
+ * script an imported or cloned collection can carry) and Handlebars compiles it to JavaScript, so it is rendered inside the
+ * script sandbox (QuickJS: no process, require, files or network), never in the host. Each render has its own context, so
+ * templates can't register helpers or partials that leak into later renders. Prototype properties stay blocked
+ * (Handlebars' default), and `{{…}}` output is escaped.
  */
-export function renderVisualizer(template: string, data: unknown): VisualizerResult {
-  try {
-    const hb = handlebars().create();
-    // Postman's visualizer offers no helpers beyond Handlebars' built-ins; add a JSON one for debugging
-    hb.registerHelper('json', (v: unknown) => JSON.stringify(v, null, 2));
-    const html = hb.compile(template, { strict: false })(data ?? {});
-    return html.length > MAX_HTML ? { html: html.slice(0, MAX_HTML), error: `The visualization was cut to ${MAX_HTML.toLocaleString('en-US')} characters` } : { html };
-  } catch (e) {
-    return { error: `Visualizer template error: ${e instanceof Error ? e.message : String(e)}` };
-  }
+export async function renderVisualizer(template: string, data: unknown): Promise<VisualizerResult> {
+  const r = await renderTemplate(template, data);
+  if (r.html === undefined) return { error: `Visualizer template error: ${r.error ?? 'unknown error'}` };
+  const html = r.html;
+  return html.length > MAX_HTML ? { html: html.slice(0, MAX_HTML), error: `The visualization was cut to ${MAX_HTML.toLocaleString('en-US')} characters` } : { html };
 }

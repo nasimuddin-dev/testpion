@@ -4,6 +4,7 @@ import { EPILOGUE, PRELUDE } from './prelude.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { validateSchema } from '../eval/checks.js';
 import { LODASH_SOURCE } from './lodash.generated.js';
+import { HANDLEBARS_SOURCE } from './handlebars.generated.js';
 import { MOMENT_SOURCE } from './moment.js';
 import { BRUNO_SOURCE, USES_BRUNO } from './bruno.js';
 import { queryHtml } from './html.js';
@@ -493,6 +494,76 @@ ${expr}
     return { error: (e as Error).message };
   } finally {
     // jobs of promises an expression made run out within its time (an endless one is interrupted), then the context goes
+    if (rt.hasPendingJob()) {
+      const j = rt.executePendingJobs();
+      if (j.error) j.error.dispose();
+    }
+    rt.removeInterruptHandler();
+    vm.dispose();
+    if (rt.hasPendingJob()) {
+      if (pooled) disposeSlot(pooled);
+      pooled = undefined;
+      rt.dispose();
+      runtime = undefined;
+    }
+  }
+}
+
+/**
+ * Render a Handlebars template with its data inside the script engine, in a context of its own: the template comes from a
+ * workspace script (`tp.visualizer.set`), and Handlebars compiles it to JavaScript, so the compile and the render happen
+ * where nothing reaches the process, `require`, files or the network. The engine is the embedded Handlebars (see
+ * scripts/make-handlebars.cjs); the template and data go in as text/JSON, the page comes out as a string. A second of CPU,
+ * 64 MB of heap, and the template, data and page sizes are capped. Answers the page, or the error.
+ */
+export async function renderTemplate(template: string, data: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxTemplateBytes?: number; maxDataBytes?: number; maxOutputBytes?: number } = {}): Promise<{ html?: string; error?: string }> {
+  const maxTemplate = opts.maxTemplateBytes ?? 256 * 1024;
+  const maxData = opts.maxDataBytes ?? 8 * 1024 * 1024;
+  const maxOut = opts.maxOutputBytes ?? 8 * 1024 * 1024;
+  if (typeof template !== 'string') return { error: 'The template is not text' };
+  if (template.length > maxTemplate) return { error: `The template is longer than ${Math.round(maxTemplate / 1024)} KB` };
+  let dataJson: string;
+  try {
+    dataJson = JSON.stringify(data ?? {}) ?? '{}';
+  } catch (e) {
+    return { error: `The data cannot be read: ${(e as Error).message}` };
+  }
+  if (dataJson.length > maxData) return { error: `The data is larger than ${Math.round(maxData / (1024 * 1024))} MB` };
+  const mod = await getModule();
+  const rt = getRuntime(mod);
+  const timeoutMs = opts.timeoutMs ?? 1000;
+  rt.setMemoryLimit((opts.memoryMb ?? 64) * 1024 * 1024);
+  const deadline = Date.now() + timeoutMs;
+  rt.setInterruptHandler(() => Date.now() > deadline);
+  const vm = rt.newContext();
+  try {
+    const lib = vm.evalCode(HANDLEBARS_SOURCE, 'handlebars.js');
+    if (lib.error) {
+      lib.error.dispose();
+      return { error: 'The template engine did not start' };
+    }
+    lib.value.dispose();
+    const source = `"use strict";
+const __d = JSON.parse(${JSON.stringify(JSON.stringify({ template, data: JSON.parse(dataJson) }))});
+const __hb = globalThis.Handlebars.create();
+__hb.registerHelper('json', function (v) { return JSON.stringify(v, null, 2); });
+const __html = __hb.compile(__d.template, { strict: false })(__d.data === null || __d.data === undefined ? {} : __d.data);
+JSON.stringify({ html: String(__html).slice(0, ${maxOut + 1}) });`;
+    const r = vm.evalCode(source, 'visualizer.js');
+    if (r.error) {
+      const err = vm.dump(r.error);
+      r.error.dispose();
+      const msg = typeof err === 'object' && err ? String((err as { message?: string }).message ?? JSON.stringify(err)) : String(err);
+      return { error: /interrupted/i.test(msg) ? `The template took longer than ${timeoutMs} ms` : /out of memory/i.test(msg) ? `The template used more than ${opts.memoryMb ?? 64} MB of memory` : msg };
+    }
+    const json = vm.typeof(r.value) === 'string' ? vm.getString(r.value) : undefined;
+    r.value.dispose();
+    if (json === undefined) return { error: 'The template produced nothing that can be read' };
+    const html = (JSON.parse(json) as { html?: string }).html ?? '';
+    return html.length > maxOut ? { html: html.slice(0, maxOut), error: `The page was cut to ${maxOut.toLocaleString('en-US')} characters` } : { html };
+  } catch (e) {
+    return { error: (e as Error).message };
+  } finally {
     if (rt.hasPendingJob()) {
       const j = rt.executePendingJobs();
       if (j.error) j.error.dispose();

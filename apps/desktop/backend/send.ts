@@ -205,7 +205,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       failedChecks: checks.filter((c) => !c.passed).length,
       refs: consoleRefs({ collectionId: p.collectionId, requestId: p.requestId, historyId, traceId: trace.traceId }),
     });
-    const rendered = visual ? renderVisualizer(visual.template, visual.data) : undefined;
+    const rendered = visual ? await renderVisualizer(visual.template, visual.data) : undefined;
     // scripts (charts) run only on the isolated visualization origin; the id is its access key
     const visualizer = rendered && { ...rendered, vizId: rendered.html !== undefined ? be.vizPages.publish(rendered.html, visual!.data) : undefined };
     return { id, response, prepared, checks, scriptLogs, visualizer, unresolved: [...ctx.vars.unresolved], cycles: [...ctx.vars.cycles], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId, historyId };
