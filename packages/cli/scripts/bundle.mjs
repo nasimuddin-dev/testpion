@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 let bundleCli;
+let bundleMcpSdk;
 try {
-  ({ bundleCli } = await import(new URL('../../../scripts/cli-bundle.mjs', import.meta.url).href));
+  ({ bundleCli, bundleMcpSdk } = await import(new URL('../../../scripts/cli-bundle.mjs', import.meta.url).href));
 } catch {
   console.log('bundle.js: skipped (esbuild is not installed)');
   process.exit(0);
@@ -16,3 +17,7 @@ try {
 const outfile = join(root, 'packages', 'cli', 'dist', 'bundle.js');
 await bundleCli({ root, outfile });
 console.log(`bundle.js: ${(statSync(outfile).size / 1024).toFixed(0)} KB`);
+// the MCP SDK's server side as one file (loaded by `mcp-server`: about 55 ms against 210 ms for its module files)
+const sdkFile = join(root, 'packages', 'cli', 'dist', 'mcp-sdk.cjs');
+await bundleMcpSdk({ root, outfile: sdkFile });
+console.log(`mcp-sdk.cjs: ${(statSync(sdkFile).size / 1024).toFixed(0)} KB`);

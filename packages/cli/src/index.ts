@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command, CommanderError } from 'commander';
 import {
   ApsError,
@@ -8,6 +9,7 @@ import {
   setTlsTrust,
   prefetchEnvironmentSecrets,
   setProductionAllowedByDefault,
+  useMcpSdkBundle,
 } from '@testpion/core';
 import { EXIT, red, dim, yellow, CliError, withWorkspace } from './shared.js';
 import { applyCliContract, commandFromArgv } from './contract.js';
@@ -140,6 +142,9 @@ export async function main(argv = process.argv): Promise<number> {
       return EXIT.CONFIG_ERROR;
     }
   }
+  // the MCP SDK as one file, when the build made it (see core's mcp-server/sdk.ts)
+  const sdkFile = fileURLToPath(new URL('./mcp-sdk.cjs', import.meta.url));
+  if (existsSync(sdkFile)) useMcpSdkBundle(sdkFile);
   const program = buildProgram();
   program.exitOverride();
   let code: number;

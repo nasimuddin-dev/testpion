@@ -70,3 +70,22 @@ export function bundleCli({ root, outfile }) {
     banner: { js: "import { createRequire as __tpCreateRequire } from 'node:module'; const require = __tpCreateRequire(import.meta.url);" },
   });
 }
+
+/** The MCP SDK's server side (types, server, stdio) with its dependencies as one CommonJS file: `mcp-server` loads it instead of ~500 module files. */
+export function bundleMcpSdk({ root, outfile }) {
+  return build({
+    stdin: {
+      contents: "module.exports = { types: require('@modelcontextprotocol/sdk/types.js'), server: require('@modelcontextprotocol/sdk/server/index.js'), stdio: require('@modelcontextprotocol/sdk/server/stdio.js') };",
+      resolveDir: join(root, 'packages', 'core'),
+      loader: 'js',
+    },
+    outfile,
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    sourcemap: false,
+    legalComments: 'none',
+    logLevel: 'warning',
+  });
+}
