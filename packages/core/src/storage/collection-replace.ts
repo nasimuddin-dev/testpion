@@ -1,6 +1,7 @@
 import { ApsError } from '../errors.js';
 import type { Collection, CollectionNode, KeyValue } from '../model/types.js';
 import { escapeRegex } from '../util/redact.js';
+import { compileUserRegex, safeReplace } from '../util/safe-regex.js';
 
 /**
  * Find and replace across a collection's requests (the collection's Find and replace…, `testpion replace`,
@@ -35,14 +36,10 @@ interface ReplaceOptions {
 
 function matcher(o: ReplaceOptions): (s: string) => string {
   if (!o.find) throw new ApsError('ValidationError', 'Give the text to find');
-  let re: RegExp;
-  try {
-    re = new RegExp(o.regex ? o.find : escapeRegex(o.find), o.caseSensitive ? 'g' : 'gi');
-  } catch (e) {
-    throw new ApsError('ValidationError', `Not a valid regular expression: ${(e as Error).message}`);
-  }
+  // a regex typed by the person: refused when it is the kind that freezes the app, and run with a deadline when it can be slow
+  const re = o.regex ? compileUserRegex(o.find, o.caseSensitive ? 'g' : 'gi', 'The find pattern') : new RegExp(escapeRegex(o.find), o.caseSensitive ? 'g' : 'gi');
   // a plain replacement is taken literally ($ means $); with regex, $1 … refer to the groups
-  return (s: string) => (o.regex ? s.replace(re, o.replace) : s.replace(re, () => o.replace));
+  return (s: string) => (o.regex ? safeReplace(re, s, o.replace) : s.replace(re, () => o.replace));
 }
 
 /** The changes a replacement would make, and the collection with them (nothing is saved here). */

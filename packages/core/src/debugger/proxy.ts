@@ -1,6 +1,9 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { connect as tcpConnect, type Socket } from 'node:net';
+import { connect as tcpConnect, isIP, type Socket } from 'node:net';
+import { lookup as dnsLookupAll } from 'node:dns/promises';
+import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
+import { isLocalOnlyAddress } from '../net/policy.js';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
   connect as h2connect,
@@ -17,7 +20,7 @@ import { DebuggerSession } from './session.js';
 export { applicationOfPort, ownerOfProcess, type ProgramInfo };
 import type { Duplex } from 'node:stream';
 import { ApsError } from '../errors.js';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { sleep } from '../util/concurrency.js';
 import { flattenHeaders } from '../util/headers.js';
 import { BoundedMap } from '../util/collections.js';
@@ -128,8 +131,15 @@ interface DebuggerProxyOptions {
   session?: DebuggerSession;
   /** Without a session given: how many bytes of bodies it keeps in memory in all (default 200 MB). */
   maxSessionBodyBytes?: number;
-  /** Listen on every interface (a phone, another computer), not only this one. */
+  /**
+   * Listen on every interface (a phone, another computer), not only this one. A client that is not on this computer must
+   * prove it was paired: it sends the pairing secret as the password of `Proxy-Authorization` (Basic), or opened the proxy's
+   * own page with `/?pair=<secret>` (the QR code), which pairs its address for 8 hours. It also cannot reach this computer's
+   * loopback or link-local addresses through the proxy.
+   */
   lan?: boolean;
+  /** The pairing secret of a LAN proxy (default: a new random one, `DebuggerProxy.pairingSecret`). */
+  lanSecret?: string;
   maxBodyBytes?: number;
   /** `update`: something learned later changed a listed exchange (its program, found after the response). */
   onExchange?(e: DebuggerExchange, phase: 'request' | 'response' | 'update'): void;
@@ -150,7 +160,25 @@ interface DebuggerProxyOptions {
 }
 
 /** A tunnel whose requests are read: where they go, who sent them, how many came, its connection id. */
+/**
+ * A `lookup` for the connections made on behalf of a device on the network: the name is resolved once, by the connection
+ * itself, and refused when it points at this computer (loopback, link-local). Checking first and connecting after would
+ * resolve twice, and a name that answers differently the second time (DNS rebinding) would get through.
+ */
+function guardedLookup(hostname: string, options: object, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void): void {
+  dnsLookup(hostname, options as never, ((err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => {
+    if (err) return callback(err, address, family);
+    const list = Array.isArray(address) ? address : [{ address, family: family ?? 4 }];
+    if (list.some((a) => isLocalOnlyAddress(a.address))) return callback(Object.assign(new Error(`${hostname} points at this computer`), { code: 'EACCES' }) as NodeJS.ErrnoException, address, family);
+    callback(null, address, family);
+  }) as never);
+}
+/** Exchanges of devices on the network: their connections use guardedLookup. */
+const remoteExchanges = new WeakSet<object>();
+
 interface TunnelOrigin {
+  /** The tunnel was opened by a device on the network. */
+  remote?: boolean;
   scheme: 'http' | 'https';
   host: string;
   port: number;
@@ -162,6 +190,8 @@ interface TunnelOrigin {
 export interface DebuggerProxy {
   url: string;
   port: number;
+  /** LAN mode: the secret a phone or another computer pairs with (in the QR code's address, or as the proxy password). */
+  pairingSecret?: string;
   /** The captured exchanges (the session's array). */
   exchanges: DebuggerExchange[];
   session: DebuggerSession;
@@ -328,6 +358,41 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     return new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   };
 
+  /** LAN mode: who may use the proxy, and what a client that is not this computer may reach through it. */
+  const pairingSecret = opts.lan ? (opts.lanSecret ?? randomBytes(15).toString('base64url')) : undefined;
+  const paired = new Map<string, number>();
+  const PAIRED_MS = 8 * 3600_000;
+  const isOwnAddress = (a?: string) => !a || a === '::1' || a === '127.0.0.1' || a.startsWith('127.') || /^::ffff:127\./i.test(a);
+  const secretMatches = (given: string) => {
+    const a = Buffer.from(given);
+    const b = Buffer.from(pairingSecret ?? '');
+    return a.length === b.length && b.length > 0 && timingSafeEqual(a, b);
+  };
+  /** Whether a client that is not this computer is paired: its address opened the paired page lately, or it sent the secret as the password. */
+  const isPaired = (address: string, header: string | string[] | undefined): boolean => {
+    const until = paired.get(address);
+    if (until && until > Date.now()) return true;
+    const h = Array.isArray(header) ? header[0] : header;
+    const m = /^(basic|bearer)\s+(.+)$/i.exec(h ?? '');
+    if (!m) return false;
+    const given = m[1]!.toLowerCase() === 'bearer' ? m[2]!.trim() : Buffer.from(m[2]!.trim(), 'base64').toString('utf8').replace(/^[^:]*:/, '');
+    return secretMatches(given);
+  };
+  /** Not this computer and not paired (always false when the proxy is not on the LAN). */
+  const unpaired = (socket: { remoteAddress?: string } | undefined, header: string | string[] | undefined) => !!pairingSecret && !isOwnAddress(socket?.remoteAddress) && !isPaired(socket?.remoteAddress ?? '', header);
+  /** A client that is not this computer must not reach this computer's loopback or link-local addresses through the proxy. */
+  async function refusedTarget(socket: { remoteAddress?: string } | undefined, host: string): Promise<boolean> {
+    if (!pairingSecret || isOwnAddress(socket?.remoteAddress)) return false;
+    const h = host.replace(/^\[|\]$/g, '');
+    if (isIP(h)) return isLocalOnlyAddress(h);
+    if (/^localhost$|\.localhost$/i.test(h)) return true;
+    try {
+      return (await dnsLookupAll(h, { all: true })).some((a) => isLocalOnlyAddress(a.address));
+    } catch {
+      return false; // does not resolve: the connection fails by itself
+    }
+  }
+
   /** Every connection to the proxy, so close() ends them all (tunnels, upgrades and injected TLS sockets included). */
   const sockets = new Set<Duplex>();
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => void handle(req, res, tlsOrigins.get(req.socket)));
@@ -343,6 +408,17 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     } catch {
       res.writeHead(400).end('Bad request');
       return;
+    }
+    if (!origin) {
+      // LAN mode: only a paired device uses the proxy, and none reaches this computer's own services through it
+      if (unpaired(req.socket, req.headers['proxy-authorization'])) {
+        res.writeHead(407, { 'proxy-authenticate': 'Basic realm="TestPion HTTP Debugger"', 'content-type': 'text/plain' }).end('Pair this device first: open the proxy address from the QR code, or use the pairing secret as the proxy password.');
+        return;
+      }
+      if (await refusedTarget(req.socket, target.hostname)) {
+        res.writeHead(403, { 'content-type': 'text/plain' }).end('A device on the network cannot reach this computer through the proxy.');
+        return;
+      }
     }
     if (origin) origin.requests++;
     const h2 = isH2(res);
@@ -364,6 +440,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       ...(h2 ? { streamId: (res as unknown as Http2ServerResponse).stream.id } : {}),
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
+    if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
     // gRPC: forwarded over HTTP/2 as it streams (messages both ways, then trailers); rules may ignore or highlight it
     if (h2 && /^application\/grpc/i.test(String(req.headers['content-type'] ?? ''))) {
       void application(e.clientPort).then((a) => {
@@ -471,6 +548,9 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   /** The page a browser gets when it opens the proxy itself: how to use it, and the root certificate to download. */
   function servePage(req: IncomingMessage | Http2ServerRequest, res: ServerResponse) {
     const pem = opts.rootCertificatePem?.();
+    // opening the page from the QR code (/?pair=<secret>) pairs this device's address
+    const asked = /[?&]pair=([^&\s]+)/.exec(req.url ?? '');
+    if (pairingSecret && asked && !isOwnAddress(req.socket?.remoteAddress) && secretMatches(asked[1]!.replace(/%([0-9a-f]{2})/gi, (_m, h: string) => String.fromCharCode(parseInt(h, 16))))) paired.set(req.socket.remoteAddress!, Date.now() + PAIRED_MS);
     if (/^\/testpion-root\.(pem|crt|cer)$/.test(req.url ?? '')) {
       if (!pem) return void res.writeHead(404, { 'content-type': 'text/plain' }).end('HTTPS decryption is off: no root certificate to download.');
       return void res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="testpion-root.crt"' }).end(pem);
@@ -508,7 +588,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     const key = target.origin;
     let session = h2Sessions.get(key);
     if (!session || session.closed || session.destroyed) {
-      session = h2connect(key, target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {});
+      session = h2connect(key, { ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {}) });
       session.on('error', () => undefined);
       session.on('close', () => h2Sessions.delete(key));
       h2Sessions.set(key, session);
@@ -603,7 +683,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     if (e.redirectedTo) h.host = target.host;
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(secure ? upstreamTls() : {}) }, async (ures) => {
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamTls() : {}) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -714,7 +794,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
   }
 
   // WebSocket: the upgrade goes to the server; both directions are read frame by frame on the way
-  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => void onUpgrade(req, socket, head));
+  async function onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer) {
     const t0 = Date.now();
     let target: URL;
     const origin = tlsOrigins.get(req.socket);
@@ -722,6 +803,10 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       target = targetOf(req, origin);
     } catch {
       socket.destroy();
+      return;
+    }
+    if (!origin && (unpaired(req.socket, req.headers['proxy-authorization']) || (await refusedTarget(req.socket, target.hostname)))) {
+      socket.end('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="TestPion HTTP Debugger"\r\nContent-Length: 0\r\n\r\n');
       return;
     }
     const e: DebuggerExchange = {
@@ -740,6 +825,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       frames: [],
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
+    if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
     void application(e.clientPort).then((a) => {
       setApp(e, a);
     });
@@ -760,7 +846,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     delete h['proxy-connection'];
     if (e.redirectedTo) h.host = target.host;
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(secure ? upstreamTls() : {}) });
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamTls() : {}) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -827,14 +913,17 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
     });
     up.end();
-  });
+  }
 
   // HTTPS: an opaque tunnel, listed by host; or, with decryption on, TLS to the program with a certificate for the
   // host signed by the TestPion root, and its requests captured like plain ones
-  server.on('connect', (req: IncomingMessage, socket: Socket, head: Buffer) => {
+  server.on('connect', (req: IncomingMessage, socket: Socket, head: Buffer) => void onConnect(req, socket, head));
+  async function onConnect(req: IncomingMessage, socket: Socket, head: Buffer) {
     const t0 = Date.now();
     const [host, portText] = (req.url ?? '').split(':');
     const port = Number(portText) || 443;
+    if (unpaired(socket, req.headers['proxy-authorization'])) return void socket.end('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="TestPion HTTP Debugger"\r\nContent-Length: 0\r\n\r\n');
+    if (await refusedTarget(socket, host ?? '')) return void socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n');
     const e: DebuggerExchange = {
       id: shortId('dbg-'),
       startedAt: new Date(t0).toISOString(),
@@ -847,6 +936,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       requestBodyBytes: 0,
       responseBodyBytes: 0,
     };
+    if (pairingSecret && !isOwnAddress(socket.remoteAddress)) remoteExchanges.add(e);
     void application(e.clientPort).then((a) => {
       setApp(e, a);
     });
@@ -884,7 +974,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
 
     /** Read the requests inside the tunnel: TLS to the program first (https), then HTTP/1.1 or HTTP/2 as it chose. */
     function readTunnel(scheme: 'http' | 'https', h2cPreface = false) {
-      const origin: TunnelOrigin = { scheme, host: host!, port, clientPort: e.clientPort, requests: 0, id: shortId('conn-') };
+      const origin: TunnelOrigin = { remote: remoteExchanges.has(e), scheme, host: host!, port, clientPort: e.clientPort, requests: 0, id: shortId('conn-') };
       let reported = false;
       // the program did not accept our certificate (an alert, or it hung up without a request): a tunnel that failed, with what to do
       const failed = (why?: string) => {
@@ -969,7 +1059,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       if (decision?.redirect) e.redirectedTo = `https://${to.host}:${to.port}`;
       e.connectionId = connectionOf(socket);
       if (listed) record(e, 'request');
-      const upstream = tcpConnect(to.port, to.host!, () => {
+      const upstream = tcpConnect({ port: to.port, host: to.host!, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}) }, () => {
         upstream.pipe(socket);
         socket.pipe(upstream);
         socket.resume();
@@ -992,7 +1082,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       socket.on('close', () => finish());
       socket.on('end', () => (finish(), upstream.end()));
     }
-  });
+  }
 
   server.on('connection', (socket: Duplex) => {
     sockets.add(socket);
@@ -1011,6 +1101,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
   return {
     url: `http://127.0.0.1:${port}`,
     port,
+    pairingSecret,
     exchanges,
     session,
     clear: () => session.clear(),

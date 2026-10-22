@@ -20,6 +20,10 @@ interface CertInfo {
   path: string;
   fingerprint: string;
   notAfter: string;
+  daysLeft?: number;
+  /** A root of earlier versions, valid for ten years. */
+  longLived?: boolean;
+  renewSoon?: boolean;
   trusted?: boolean;
   instructions: string[];
   note?: string;
@@ -60,6 +64,13 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
             {info.trusted === true ? <Badge tone="ok">trusted</Badge> : info.trusted === false ? <Badge tone="warn">not trusted yet</Badge> : <Badge>unknown here</Badge>}
             <span className="text-muted">valid until {new Date(info.notAfter).toLocaleDateString()}</span>
           </div>
+          {(info.renewSoon || info.longLived) && (
+            <p className="text-xs text-warn" data-cert-notice>
+              {info.renewSoon
+                ? `This root expires in ${plural(Math.max(info.daysLeft ?? 0, 0), 'day')}. TestPion makes a new one when it runs out; you then trust the new one again (and on a phone, install it again). Regenerate it now to choose the time.`
+                : 'This root was made by an earlier version and is valid for ten years. A copy of its key would let anyone intercept your HTTPS for that long. Regenerate it for a root that lasts one year; you then trust the new one again (and on a phone, install it again).'}
+            </p>
+          )}
           <div className="text-xs">
             <div className="text-muted">SHA-256 fingerprint</div>
             <div className="mono break-all">{info.fingerprint}</div>
@@ -95,7 +106,7 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
                 })) && void act('regenerate')
               }
             >
-              New certificate
+              Regenerate certificate
             </Button>
           </div>
           <div>
@@ -458,6 +469,8 @@ interface LanInfo {
   port?: number;
   decrypt: boolean;
   addresses: Array<{ ip: string; proxy?: string; page?: string; qrSvg?: string }>;
+  /** The password a device that cannot scan the code uses for the proxy. */
+  pairingSecret?: string;
 }
 
 /** A phone or another computer: listen on the network, then scan the QR code for the proxy settings and the certificate. */
@@ -474,8 +487,8 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
       ) : !info.lan ? (
         <div className="grid gap-3 text-sm">
           <p>
-            The proxy listens on this computer only. To let a phone or another computer on the same network use it, listen on the network too (anyone on the network can then send through it while it
-            runs).
+            The proxy listens on this computer only. To let a phone or another computer on the same network use it, listen on the network too. Only a device you pair (by scanning the code, or with the
+            password) can send through it, and none can reach this computer's own services.
           </p>
           <div>
             <Button variant="primary" onClick={() => void onRestartOnLan().then(load)}>
@@ -502,6 +515,12 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
               </div>
             ))}
           </div>
+          <p className="text-xs text-muted">
+            Scanning the code pairs the device for 8 hours. A device that cannot scan uses any user name and this password for the proxy:{' '}
+            <span className="mono" data-lan-secret>
+              {info.pairingSecret}
+            </span>
+          </p>
           {!info.decrypt && <p className="text-xs text-muted">HTTPS shows as tunnels by host. Turn on HTTPS ▸ Decrypt HTTPS to read it; the page then offers the root certificate.</p>}
         </div>
       )}

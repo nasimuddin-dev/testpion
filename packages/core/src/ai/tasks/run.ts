@@ -11,7 +11,7 @@ import { extractCodeBlock, type ItemRef } from '@testpion/shared';
 import { ApsError, normalizeError } from '../../errors.js';
 import type { Collection, PriceEntry, TokenUsage } from '../../model/types.js';
 import type { ExecServices } from '../../runner/execute.js';
-import { checkAiCaps, type AiSurface } from '../../storage/ai-usage.js';
+import { aiSettingsForSurface, checkAiCaps, type AiSurface } from '../../storage/ai-usage.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { shortId } from '../../util/ids.js';
 import { maskSensitiveText, type Redaction, type Redactor } from '../../util/redact.js';
@@ -20,6 +20,7 @@ import { buildAiContext, type AiContextSection } from '../context.js';
 import { estimateCost, type ProviderRegistry } from '../index.js';
 import { openProposal, proposedTestFilePath, saveProposal, type Proposal, type ProposalItem } from '../proposal.js';
 import { chatStructured, chatText } from '../structured.js';
+import { newFence } from '../untrusted.js';
 import { estimateTokens, type ChatImage, type ChatMessage } from '../types.js';
 import { visionCapable } from '../vision.js';
 import { imageTokens } from '../../util/image-info.js';
@@ -201,14 +202,17 @@ function composeMessages(def: AiTaskDef, contextText: string, req: AiTaskRequest
   const question = req.question ? safe(req.question) : undefined;
   const hint = req.hint ? `\n\nAlso: ${safe(req.hint)}` : '';
   const hasContext = !!contextText;
+  // the context is workspace content, responses and tool results: data, in a fence the model is told never to obey
+  const fence = newFence([contextText]);
+  const fenced = hasContext ? `Context:\n${fence.wrap('context', contextText)}` : '';
   const turn = first
-    ? `${question ? `Question: ${question}${hint}\n\n` : hint ? `${hint.trim()}\n\n` : ''}${hasContext ? `Context:\n${contextText}` : ''}`.trim() || 'Go ahead.'
+    ? `${question ? `Question: ${question}${hint}\n\n` : hint ? `${hint.trim()}\n\n` : ''}${fenced}`.trim() || 'Go ahead.'
     : `${question ?? ''}${hint}`;
-  if (!first && hasContext) history[0] = { role: history[0]!.role, content: `${history[0]!.content}\n\nContext:\n${contextText}` };
+  if (!first && hasContext) history[0] = { role: history[0]!.role, content: `${history[0]!.content}\n\n${fenced}` };
   // the format reference is made when it is used, from the schema and the check registry (never stale)
   const reference = def.format ? `\n\n${formatReference(def.format)}\n\n` : ' ';
   const stable = preferStable ? ` ${PREFER_STABLE}` : '';
-  return [{ role: 'system', content: `${SYSTEM} ${def.instruction}${stable}${reference}${FORMAT}${first ? '' : ` ${FOLLOW_UP}`}` }, ...history, { role: 'user', content: turn }];
+  return [{ role: 'system', content: `${SYSTEM} ${def.instruction}${stable}${reference}${FORMAT}${hasContext ? ` ${fence.rule}` : ''}${first ? '' : ` ${FOLLOW_UP}`}` }, ...history, { role: 'user', content: turn }];
 }
 
 /** How many calls were built (a counter for tests and profiling: a judged RAG sample used to be built twice per real call). */
@@ -328,7 +332,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
   // a dry run's messages go to the window: the pictures are in `preview.images` (thumbnails), not twice in the messages
   if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, ms: 0, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, dryRun: true };
-  checkAiCaps(deps.store, deps.settings.ai, { tokens: preview.estimate.inputTokens + maxOutputTokens, costUsd: preview.estimate.maxCostUsd });
+  checkAiCaps(deps.store, aiSettingsForSurface(deps.settings.ai, deps.surface), { tokens: preview.estimate.inputTokens + maxOutputTokens, costUsd: preview.estimate.maxCostUsd });
 
   const started = Date.now();
   const at = new Date().toISOString();

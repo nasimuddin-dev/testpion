@@ -1,7 +1,7 @@
 import { nodeRequire } from '../util/lazy-require.js';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ApsError } from '../errors.js';
@@ -50,7 +50,22 @@ const fingerprintOf = (certPem: string) => {
     .replace(/(..)(?=.)/g, '$1:');
 };
 
-/** Read the root certificate of this computer, or create it (RSA 2048, ten years). */
+/** How long a new root is valid. Earlier versions made roots valid for ten years: those keep working (re-trusting would break trusted installs) and are reported as long-lived, with the advice to make a new one. */
+export const ROOT_DAYS = 365;
+/** A root valid longer than this (days) is a long-lived one of earlier versions. */
+const LONG_LIVED_DAYS = 400;
+/** The app shows a notice this many days before the root expires. */
+export const RENEW_NOTICE_DAYS = 30;
+
+/** Where the root stands: days left, whether it is one of the ten-year roots, whether it is time to renew. */
+export function rootStanding(certPem: string): { daysLeft: number; longLived: boolean; renewSoon: boolean } {
+  const c = forge().pki.certificateFromPem(certPem);
+  const daysLeft = Math.floor((c.validity.notAfter.getTime() - Date.now()) / 86_400_000);
+  const span = (c.validity.notAfter.getTime() - c.validity.notBefore.getTime()) / 86_400_000;
+  return { daysLeft, longLived: span > LONG_LIVED_DAYS, renewSoon: daysLeft <= RENEW_NOTICE_DAYS };
+}
+
+/** Read the root certificate of this computer, or create it (RSA 2048, valid ROOT_DAYS; renewed when it has a day left). */
 export function ensureRootCertificate(dir: string): RootCertificate {
   mkdirSync(dir, { recursive: true });
   const path = join(dir, ROOT_FILE);
@@ -66,11 +81,11 @@ export function ensureRootCertificate(dir: string): RootCertificate {
   cert.publicKey = keys.publicKey;
   cert.serialNumber = '01' + sha1Hex(String(Date.now())).slice(0, 30);
   cert.validity.notBefore = new Date(Date.now() - 24 * 3600_000);
-  cert.validity.notAfter = new Date(Date.now() + 10 * 365 * 24 * 3600_000);
+  cert.validity.notAfter = new Date(Date.now() + ROOT_DAYS * 24 * 3600_000);
   cert.setSubject(SUBJECT);
   cert.setIssuer(SUBJECT);
   cert.setExtensions([
-    { name: 'basicConstraints', cA: true, critical: true },
+    { name: 'basicConstraints', cA: true, pathLenConstraint: 0, critical: true },
     { name: 'keyUsage', keyCertSign: true, cRLSign: true, digitalSignature: true, critical: true },
     { name: 'subjectKeyIdentifier' },
   ]);
@@ -86,7 +101,7 @@ export function ensureRootCertificate(dir: string): RootCertificate {
 export function regenerateRootCertificate(dir: string): RootCertificate {
   for (const f of [ROOT_FILE, KEY_FILE]) {
     const p = join(dir, f);
-    if (existsSync(p)) writeFileSync(p, '');
+    rmSync(p, { force: true });
   }
   return ensureRootCertificate(dir);
 }

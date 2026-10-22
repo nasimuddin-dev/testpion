@@ -141,6 +141,19 @@ export function aiUsageSummary(store: WorkspaceStore, o: { days?: number; settin
 }
 
 /**
+ * What an agent may spend when the person set no cap: a looping agent must not drain the credit. Calls from the MCP surface
+ * get these caps for each cap the AI settings leave unset; a cap set in Settings (or the app's settings.json) replaces the
+ * default, a larger number lifts it.
+ */
+export const MCP_DEFAULT_AI_CAPS = { maxTokensPerCall: 50_000, dailyTokens: 1_000_000, dailyBudgetUsd: 5 } as const;
+
+/** The AI settings a surface works under: the MCP surface gets default caps (MCP_DEFAULT_AI_CAPS) for the caps the person did not set. */
+export function aiSettingsForSurface(s: AiSettings | undefined, surface: AiSurface): AiSettings | undefined {
+  if (surface !== 'mcp') return s;
+  return { ...s, maxTokensPerCall: s?.maxTokensPerCall || MCP_DEFAULT_AI_CAPS.maxTokensPerCall, dailyTokens: s?.dailyTokens || MCP_DEFAULT_AI_CAPS.dailyTokens, dailyBudgetUsd: s?.dailyBudgetUsd || MCP_DEFAULT_AI_CAPS.dailyBudgetUsd };
+}
+
+/**
  * The caps of the AI settings, checked before a call is sent: the call's estimate (input tokens + the output limit)
  * against the per-call cap, and today's usage plus the estimate against the per-day token and cost caps. Refuses with a
  * clear message (nothing is sent).

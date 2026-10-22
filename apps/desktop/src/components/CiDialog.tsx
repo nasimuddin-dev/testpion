@@ -57,6 +57,8 @@ export function CiDialog() {
   const [dataFile, setDataFile] = useState('');
   const [matrix, setMatrix] = useState<string[]>([]);
   const [allowProduction, setAllowProduction] = useState(false);
+  // scripts of a workspace do not see secrets or reach other hosts in a pipeline unless the owner says so (--trust-scripts)
+  const [trustScripts, setTrustScripts] = useState(false);
   const [timeline, setTimeline] = useState(false);
   const [datasets, setDatasets] = useState<string[]>([]);
   // a saved RAG evaluation: the pipeline runs `testpion rag run` (its metrics, gates and a report); the judge key is a CI secret
@@ -86,6 +88,7 @@ export function CiDialog() {
       openapi: openapi.trim() || undefined,
       // any target: data-changing requests may go to a production environment only when asked
       ...(allowProduction && production ? { allowProduction: true } : {}),
+      ...(trustScripts ? { trustScripts: true } : {}),
       ...(kind === 'rag'
         ? {
             ragEvaluation: value,
@@ -121,7 +124,7 @@ export function CiDialog() {
       (e) => (setCfg(undefined), setError(asError(e).message)),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, target, environment, workspaceDir, openapi, flowRun, dataFile, matrix.join(','), allowProduction, timeline, JSON.stringify(rag)]);
+  }, [provider, target, environment, workspaceDir, openapi, flowRun, dataFile, matrix.join(','), allowProduction, trustScripts, timeline, JSON.stringify(rag)]);
 
   const copy = () => (cfg ? copyText(cfg.content, 'the pipeline file') : undefined);
   const save = async () => {
@@ -310,6 +313,15 @@ export function CiDialog() {
             Allow data-changing requests to the production environment (--allow-production)
           </label>
         )}
+        <div className="grid gap-0.5">
+          <label className="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" checked={trustScripts} onChange={(e) => setTrustScripts(e.target.checked)} data-ci-trust-scripts />
+            Allow scripts to read secrets and call other hosts in this pipeline (--trust-scripts)
+          </label>
+          <span className="text-xs text-muted pl-5">
+            Off: scripts in the workspace do not see secret variables and can only send to the host of their own request. Turn it on only for a repository you trust: the pipeline&apos;s secrets are then within reach of every script in it.
+          </span>
+        </div>
         {cfg?.localCommand && (
           <div className="grid gap-1" data-ci-local-command>
             <div className="flex items-center gap-2 text-xs">

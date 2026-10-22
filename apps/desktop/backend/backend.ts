@@ -4,11 +4,10 @@
  * behind a local HTTP bridge. All protocol execution happens in @testpion/core — the same
  * engine the CLI uses — so the UI thread never performs network or test execution.
  */
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import {
   ApsError,
-  ENGINE_VERSION,
   ChainSecretStore,
   EnvSecretStore,
   Logger,
@@ -28,6 +27,9 @@ import {
   breakdownOfRun,
   type RunBreakdown,
   createEngineContext,
+  assertHostPath,
+  setNetworkPolicy,
+  scriptTrustFor,
   expandDataset,
   fileSink,
   setBigFileNotifier,
@@ -80,7 +82,6 @@ import {
   APP_CLAUDE_SECRET,
   DEFAULT_CLAUDE_MODEL,
   appClaudeProvider,
-  addTemplateAdditions,
   readJson,
   describeChanges,
   watchWorkspace,
@@ -126,7 +127,8 @@ import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
 import { importHandlers } from './handlers/import.js';
 import { bundleHandlers } from './handlers/bundle.js';
-import { checkRpcParams, guardHandler } from './rpc-params.js';
+import { installExamples, updateExamples } from './backend-examples.js';
+import { checkRpcParams, guardHandler, hostPathsOf } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
 import { VizPages } from './viz-pages.js';
 import { OwnWrites, type OwnWriteBatch } from './own-writes.js';
@@ -162,6 +164,14 @@ export interface BackendHost {
   mcpCommand?: { command: string; args: string[] };
   /** Real shells for the Terminal panel (desktop only: node-pty); its presence is `capabilities.shell` (terminal.ts). */
   terminal?: TerminalHost;
+  /**
+   * A shared server, not one person's computer: no files outside `userRoot` (the host capability `localFiles` is off — every RPC
+   * that takes a path on the host goes through `hostPath`/`assertHostPath`), and the window cannot let `{{$env.NAME}}` read the
+   * server's own environment (Settings ▸ Privacy is ignored).
+   */
+  serverMode?: boolean;
+  /** Server mode: the folder of the signed-in user, the only place files can be read or written (default: the data folder). */
+  userRoot?: string;
 }
 
 export type Handler = (params: any) => Promise<unknown> | unknown;
@@ -251,7 +261,9 @@ export class Backend {
       },
     });
     this.manager = new WorkspaceManager(host.appDir);
+    if (host.serverMode) setNetworkPolicy({ allowLocalFiles: false, localFileRoots: [host.userRoot ?? host.appDir] });
     this.settings = this.manager.loadSettings();
+    if (host.serverMode) this.settings = { ...this.settings, envVariables: [] };
     const stores: SecretStore[] = [];
     stores.push(host.cipher ? encryptedSecrets(this, join(host.appDir, 'secrets.json'), host.cipher) : new MemorySecretStore());
     stores.push(new EnvSecretStore());
@@ -316,37 +328,11 @@ export class Backend {
 
   /** Copy the bundled examples workspace into the data folder (once); undefined when this host has none. */
   installExamples(): WorkspaceInfo | undefined {
-    const dir = this.host.examplesDir;
-    if (!dir || !existsSync(join(dir, 'workspace.json'))) return undefined;
-    try {
-      return this.manager.installTemplate(dir);
-    } catch (e) {
-      this.logger.warn(`Could not install the examples workspace: ${(e as Error).message}`);
-      return undefined;
-    }
+    return installExamples(this);
   }
 
-  /**
-   * Examples that shipped with this version go into the user's copy: additions only, never a change
-   * (addTemplateAdditions). Once per app version: the settings remember the version whose examples were offered.
-   */
   private updateExamples(): void {
-    const dir = this.host.examplesDir;
-    if (!dir || !existsSync(join(dir, 'workspace.json'))) return;
-    if (this.settings.examplesOfferedVersion === ENGINE_VERSION) return;
-    try {
-      const id = readJson<{ id: string }>(join(dir, 'workspace.json')).id;
-      const mine = this.manager.list().find((w) => w.id === id);
-      if (!mine) return;
-      // the files it adds are the app's own (copyOwned: no "changed on disk" for them)
-      const added = addTemplateAdditions(dir, mine.path);
-      this.examplesAdded = added;
-      if (added.length && this.store && samePath(this.store.root, mine.path)) this.host.emit('data.changed', { method: 'ws.import' });
-      this.settings = this.manager.saveSettings({ ...this.settings, examplesOfferedVersion: ENGINE_VERSION });
-      if (added.length) this.logger.info(`Added to the examples workspace: ${added.join(', ')}`);
-    } catch (e) {
-      this.logger.warn(`Could not add the new examples: ${(e as Error).message}`);
-    }
+    updateExamples(this);
   }
 
   /** Open the last workspace, or create a starter workspace on first launch. */
@@ -585,6 +571,7 @@ export class Backend {
     };
     try {
       params = checkRpcParams(method, params); // "<method>: missing <param>" before anything runs
+      for (const p of hostPathsOf(method, params)) assertHostPath(p, method); // a place on this computer: only where the host allows local files
       await prefetchSecretsFor(this, params); // the environment's secret manager references, before they're needed
       // the proxy settings apply from the first method that may go over the network (start-up's reads don't wait)
       if (!LOCAL_READS.test(method)) await ensureProxyApplied();
@@ -615,6 +602,15 @@ export class Backend {
     return this.settings.assistantProvider === APP_CLAUDE_ID && this.settings.assistantModel ? this.settings.assistantModel : DEFAULT_CLAUDE_MODEL;
   }
 
+  /** What scripts were refused in this session (one message each: the window offers to allow it, it does not ask on every send). */
+  private scriptTold = new Set<string>();
+  private scriptBlocked(b: { kind: 'host'; host: string } | { kind: 'secrets'; keys: string[] }): void {
+    const key = b.kind === 'host' ? `host:${b.host}` : 'secrets';
+    if (this.scriptTold.has(key)) return;
+    this.scriptTold.add(key);
+    this.host.emit('scripts.blocked', b);
+  }
+
   /** Engine services for an environment; `allowProduction` overrides the consent of the call (production-guard.ts). */
   context(opts: { environment?: string; collectionId?: string; allowProduction?: boolean }) {
     const ctx = createEngineContext({
@@ -630,6 +626,7 @@ export class Backend {
       cookieJar: this.cookieStore?.jar,
       allowProduction: opts.allowProduction,
       aiSurface: 'app',
+      scriptTrust: scriptTrustFor(this.ws, { onBlocked: (b) => this.scriptBlocked(b) }),
     });
     // Postman-style current values: set by scripts, kept on this machine, override stored values
     const cv = this.currentValues;

@@ -244,19 +244,33 @@ export class McpSession {
     // HTTP transports share the workspace cookie jar, like HTTP requests do
     const jar = this.opts.cookieJar;
     // every HTTP request to the server is checked against the network policy and shares the cookie jar
+    // Redirects are followed here, not by fetch: the server's configured headers (API keys, Authorization) and body go only to
+    // the origin the person configured, every hop passes the network policy, and a redirect to another origin is refused
+    // (GHSA-6prh-2h8m-c8cw: transports that follow cross-origin redirects replay custom headers to the new host).
     const jarFetch = async (url: string | URL, init?: RequestInit): Promise<Response> => {
-      await assertUrlAllowed(url);
-      // global fetch goes through undici's global dispatcher: the app's proxy settings, applied with undici's first load
-      await ensureProxyApplied();
-      const headers = new Headers(init?.headers);
-      if (jar && !headers.has('cookie')) {
-        const cookie = jar.headerFor(url);
-        if (cookie) headers.set('cookie', cookie);
+      const origin = new URL(String(url)).origin;
+      let target = String(url);
+      for (let hop = 0; ; hop++) {
+        await assertUrlAllowed(target);
+        // global fetch goes through undici's global dispatcher: the app's proxy settings, applied with undici's first load
+        await ensureProxyApplied();
+        const headers = new Headers(init?.headers);
+        if (jar && !headers.has('cookie')) {
+          const cookie = jar.headerFor(target);
+          if (cookie) headers.set('cookie', cookie);
+        }
+        const res = await fetch(target, { ...init, headers, redirect: 'manual' });
+        const setCookies = res.headers.getSetCookie?.() ?? [];
+        if (jar && setCookies.length) jar.storeFromResponse(target, setCookies);
+        const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+        if (!location) return res;
+        await res.body?.cancel().catch(() => undefined);
+        const next = new URL(location, target);
+        if (next.origin !== origin) throw new ApsError('ProtocolError', `The MCP server redirected to another origin (${next.origin}); the request was not repeated there so its headers stay with ${origin}`, { suggestions: ['Set the server URL to the address it redirects to.'] });
+        if (hop >= 5) throw new ApsError('ProtocolError', 'The MCP server redirected more than 5 times');
+        target = next.href;
+        if (res.status === 303 || ((res.status === 301 || res.status === 302) && init?.method === 'POST')) init = { ...init, method: 'GET', body: undefined };
       }
-      const res = await fetch(url, { ...init, headers });
-      const setCookies = res.headers.getSetCookie?.() ?? [];
-      if (jar && setCookies.length) jar.storeFromResponse(url, setCookies);
-      return res;
     };
     switch (c.transport) {
       case 'stdio': {

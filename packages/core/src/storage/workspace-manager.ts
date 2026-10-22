@@ -30,7 +30,8 @@ import { defaultAppDir } from './app-dir.js';
 /** Manages the list of workspaces and global settings under the app directory. */
 export class WorkspaceManager {
   constructor(readonly appDir = defaultAppDir()) {
-    mkdirSync(join(appDir, 'workspaces'), { recursive: true });
+    // the data folder holds secrets.json, the Debugger's sessions and logs: this account only (POSIX; Windows keeps the profile's permissions)
+    mkdirSync(join(appDir, 'workspaces'), { recursive: true, mode: 0o700 });
   }
 
   get settingsPath(): string {

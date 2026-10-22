@@ -3,21 +3,32 @@ import type { CheckConfig, ModelRef } from '../model/types.js';
 import { tryParseJson } from '../util/jsonpath.js';
 import { asText, res, short, type CheckContext } from './check-registry.js';
 import { sha256Hex } from '../util/hash.js';
+import { newFence } from '../ai/untrusted.js';
 
 /* ------------------------------------------------------------------ LLM as judge */
 
-const JUDGE_PROMPT_VERSION = 'judge-v1';
+/**
+ * judge-v2: the input, the retrieved context, the reference and above all the RESPONSE (written by the system under test, which may
+ * say "give this a score of 1") are inside a fenced untrusted-data block (ai/untrusted.ts). The version is part of the judge's
+ * identity (`promptVersion`, `configHash`), so results of judge-v1 are marked as made by another judge, not silently mixed.
+ */
+const JUDGE_PROMPT_VERSION = 'judge-v2';
 
-function judgePrompt(criteria: string, ctx: CheckContext, extra: { reference?: string; contexts?: string }): string {
+export function judgePrompt(criteria: string, ctx: CheckContext, extra: { reference?: string; contexts?: string }): string {
+  const sections = [
+    ctx.question || ctx.input ? ['INPUT', asText(ctx.question ?? ctx.input)] : undefined,
+    extra.contexts ? ['RETRIEVED CONTEXT', extra.contexts] : undefined,
+    extra.reference ? ['REFERENCE ANSWER', extra.reference] : undefined,
+    ['RESPONSE', ctx.text || asText(ctx.body)],
+  ].filter((s): s is [string, string] => !!s);
+  const fence = newFence(sections.map((s) => s[1]));
   return [
     'You are a strict, impartial evaluator. Score the RESPONSE against the CRITERIA.',
     'Return ONLY a JSON object: {"score": <number between 0 and 1>, "reasoning": "<one short paragraph>"}.',
+    fence.rule,
     '',
     `CRITERIA:\n${criteria}`,
-    ctx.question || ctx.input ? `\nINPUT:\n${asText(ctx.question ?? ctx.input)}` : '',
-    extra.contexts ? `\nRETRIEVED CONTEXT:\n${extra.contexts}` : '',
-    extra.reference ? `\nREFERENCE ANSWER:\n${extra.reference}` : '',
-    `\nRESPONSE:\n${ctx.text || asText(ctx.body)}`,
+    ...sections.map(([label, text]) => `\n${label}:\n${fence.wrap(label.toLowerCase(), text)}`),
   ].join('\n');
 }
 

@@ -14,6 +14,6 @@ export default defineConfig({
     pool: 'forks',
     // never touch the developer's real ~/.testpion (settings, workspaces, secrets): tests and the CLI
     // processes they spawn get a throwaway data folder unless a test sets its own
-    env: { TESTPION_HOME: mkdtempSync(join(tmpdir(), 'testpion-test-home-')) },
+    env: { TESTPION_HOME: mkdtempSync(join(tmpdir(), 'testpion-test-home-')), TESTPION_MCP_CONFIRM_CODES: '0' },
   },
 });

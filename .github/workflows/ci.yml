@@ -5,7 +5,24 @@ on:
     branches: [main]
   pull_request:
 
+# the jobs only read the repository; nothing here needs more than the default token can give a fork's pull request
+permissions:
+  contents: read
+
 jobs:
+  audit:
+    name: Dependency audit (production, high and critical)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # `npm audit --omit=dev --audit-level=high`, except advisories listed with a reason in scripts/audit-allow.json
+      - run: node scripts/audit-gate.mjs
+
   test:
     strategy:
       fail-fast: false
@@ -13,8 +30,8 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -29,7 +46,7 @@ jobs:
           node packages/cli/bin/testpion.js wait-for http://127.0.0.1:4010/health --timeout 60
           node packages/cli/bin/testpion.js run -w examples/veterinary-workspace --suite integration -r console junit -o test-results/integration
           node packages/cli/bin/testpion.js run -w examples/veterinary-workspace --suite regression -r console junit -o test-results
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: test-results-${{ matrix.os }}
@@ -38,8 +55,8 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run build -w @testpion/shared

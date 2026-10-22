@@ -5,6 +5,7 @@ import type { ScriptInput, ScriptOutput, ScriptRequestSender, ScriptScope } from
 import type { CookieJar } from '../cookies/cookie-jar.js';
 import { executeHttp } from '../protocols/http/client.js';
 import type { HttpRequestSpec } from '../model/types.js';
+import { checkScriptHost, type ScriptTrust } from './script-trust.js';
 
 /** Saved requests a script can run (`tp.execution.runRequest`): find one in the collection, and resolve its variables. */
 export interface SavedRequestRunner {
@@ -20,14 +21,28 @@ const SCOPE_MAP: Record<ScriptScope, ScopeName> = { environment: 'environment', 
 export type PersistVariable = (scope: ScriptScope, key: string, value: unknown | undefined) => void;
 
 /** Scope data a script sees. */
-export function scriptScopes(vars: VariableScope, iterationData?: Record<string, unknown>): Pick<ScriptInput, 'variables' | 'environment' | 'globals' | 'collectionVariables' | 'iterationData'> {
-  return {
+export function scriptScopes(vars: VariableScope, iterationData?: Record<string, unknown>, trust?: ScriptTrust): Pick<ScriptInput, 'variables' | 'environment' | 'globals' | 'collectionVariables' | 'iterationData'> {
+  const all = {
     variables: vars.toObject(),
     environment: vars.scopeValues('environment'),
     globals: vars.scopeValues('global'),
     collectionVariables: vars.scopeValues('collection'),
     iterationData: iterationData ?? {},
   };
+  if (!trust || trust.secretsAllowed()) return all;
+  // a workspace the person has not allowed to read secrets: its scripts see every variable except the ones flagged secret
+  const hidden = new Set<string>();
+  const strip = (o: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(o)) {
+      if (vars.isSecret(k)) hidden.add(k);
+      else out[k] = v;
+    }
+    return out;
+  };
+  const shown = { ...all, variables: strip(all.variables), environment: strip(all.environment), globals: strip(all.globals), collectionVariables: strip(all.collectionVariables) };
+  if (hidden.size) trust.onBlocked?.({ kind: 'secrets', keys: [...hidden].slice(0, 20) });
+  return shown;
 }
 
 /**
@@ -59,7 +74,7 @@ export function applyScriptOutput(out: Pick<ScriptOutput, 'vars' | 'unset' | 'sc
  * `production` is required (it may be undefined): the production guard of the context the script runs in, so a
  * data-changing tp.sendRequest to a production environment needs the same consent as the request itself (WF-06).
  */
-export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number; production: ProductionGate | undefined; saved?: SavedRequestRunner }): ScriptRequestSender {
+export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: CookieJar; signal?: AbortSignal; timeoutMs?: number; production: ProductionGate | undefined; saved?: SavedRequestRunner; trust?: ScriptTrust; ownHost?: () => string | undefined }): ScriptRequestSender {
   return async (req) => {
     if (req.url.startsWith(SAVED)) {
       const ref = req.url.slice(SAVED.length);
@@ -73,6 +88,7 @@ export function scriptRequestSender(o: { redactor?: Redactor; cookieJar?: Cookie
       return { status: response.status, statusText: response.statusText, headers: response.headers, body: response.bodyPreview, time: response.durationMs };
     }
     if (!/^https?:\/\//i.test(req.url)) throw new Error(`tp.sendRequest: "${req.url}" is not an http(s) URL`);
+    checkScriptHost(o.trust, req.url, o.ownHost?.());
     assertProductionStep(o.production, { action: `tp.sendRequest ${String(req.method ?? 'GET').toUpperCase()} ${o.redactor ? o.redactor.redactUrl(req.url) : req.url}`, changesData: isDataChangingMethod(req.method) });
     const timeoutMs = o.timeoutMs ?? 30_000;
     const signal = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);

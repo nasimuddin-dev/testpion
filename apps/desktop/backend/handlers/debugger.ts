@@ -14,6 +14,7 @@ import {
   openTerminalWithProxy,
   proxyShellLines,
   regenerateRootCertificate,
+  rootStanding,
   removeRootCertificate,
   restoreSystemProxy,
   rootCertificateTrusted,
@@ -33,7 +34,8 @@ import {
   captureSessionFileName,
   recordCaptureSession,
   removeOwned,
-  atomicWrite,
+  writeOwned,
+  PRIVATE_FILE_MODE,
 } from '@testpion/core';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
@@ -311,10 +313,10 @@ export function debuggerHandlers(be: Backend): Handlers {
     return be.ws.safePath(file, sessionsDir());
   };
   const writeSession = (name: string) => {
-    mkdirSync(sessionsDir(), { recursive: true });
+    mkdirSync(sessionsDir(), { recursive: true, mode: 0o700 });
     const file = sessionFile(name);
     if (file !== viewing) views.delete(file); // a tab showing it later reads it again (the one on screen stays as shown)
-    atomicWrite(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2)); // atomic: a crash while saving keeps the previous file
+    writeOwned(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2), { mode: PRIVATE_FILE_MODE }); // atomic and private: a crash while saving keeps the previous file
     return { name: basename(file, '.har'), path: file, exchanges: state.exchanges.length };
   };
   const touch = () => {
@@ -344,9 +346,9 @@ export function debuggerHandlers(be: Backend): Handlers {
           slice = performance.now();
         }
       }
-      mkdirSync(sessionsDir(), { recursive: true });
+      mkdirSync(sessionsDir(), { recursive: true, mode: 0o700 });
       const file = sessionFile(AUTOSAVE);
-      await writeFile(`${file}.tmp`, shell.slice(0, at) + parts.join(',') + shell.slice(at));
+      await writeFile(`${file}.tmp`, shell.slice(0, at) + parts.join(',') + shell.slice(at), { mode: PRIVATE_FILE_MODE });
       await rename(`${file}.tmp`, file);
       noteOwnChange(file); // the app's own write (the watcher does not report it; the views hear of it)
     } catch (e) {
@@ -545,11 +547,12 @@ export function debuggerHandlers(be: Backend): Handlers {
       const port = state.proxy?.port;
       const addresses = await Promise.all(
         lanAddresses().map(async (ip) => {
-          const page = port ? `http://${ip}:${port}/` : undefined;
+          // the QR code opens the page with the pairing secret: that pairs the phone's address for 8 hours (the proxy refuses unpaired devices)
+          const page = port ? `http://${ip}:${port}/${state.proxy?.pairingSecret ? `?pair=${encodeURIComponent(state.proxy.pairingSecret)}` : ''}` : undefined;
           return { ip, proxy: port ? `${ip}:${port}` : undefined, page, qrSvg: page ? await (await qrcode()).toString(page, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : undefined };
         }),
       );
-      return { running: !!state.proxy, lan: !!state.lan, port, decrypt: !!state.decrypt, addresses };
+      return { running: !!state.proxy, lan: !!state.lan, port, decrypt: !!state.decrypt, addresses, pairingSecret: state.proxy?.pairingSecret };
     },
     /** The browsers found on this computer, the shell lines to paste, and whether the system proxy is ours. */
     'debug.captureOptions': () => ({
@@ -610,7 +613,7 @@ export function debuggerHandlers(be: Backend): Handlers {
         return { ...r, fingerprint: root.fingerprint };
       }
       const trusted = await rootCertificateTrusted(root);
-      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, trusted, instructions: trustInstructions(root.path), note, platform: process.platform };
+      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, instructions: trustInstructions(root.path), note, platform: process.platform };
     },
     /** Switch the system proxy to ours (every program that honours it) and back. */
     'debug.systemProxy': async ({ on }: { on: boolean }) => {

@@ -1,5 +1,6 @@
 import type { DebuggerExchange } from './proxy.js';
 import { globToRegex } from '../util/glob.js';
+import { compileUserRegex, safeTest } from '../util/safe-regex.js';
 
 /**
  * The HTTP Debugger's rules (planning/http-debugger.md, DBG-3): what the proxy does to the traffic that matches.
@@ -98,14 +99,25 @@ export function patternToRegExp(pattern: string | undefined): RegExp | undefined
   if (!p) return undefined;
   const m = /^\/(.+)\/([a-z]*)$/.exec(p);
   if (m) {
+    const cached = patterns.get(p);
+    if (cached !== undefined) return cached ?? undefined;
+    let re: RegExp | null;
     try {
-      return new RegExp(m[1]!, m[2]!.includes('i') ? m[2]! : m[2]! + 'i');
-    } catch {
-      return undefined;
+      re = compileUserRegex(m[1]!, m[2]!.includes('i') ? m[2]! : m[2]! + 'i', 'The rule');
+    } catch (e) {
+      // a pattern that can freeze the app (nested repetition) never matches; one that is not valid is ignored, as before
+      re = (e as { message?: string }).message?.includes('is refused') ? NEVER : null;
     }
+    if (patterns.size >= 200) patterns.clear();
+    patterns.set(p, re);
+    return re ?? undefined;
   }
   return globToRegex(p);
 }
+/** Patterns of rules and filters, compiled once (a rule is checked on every request); null: not valid. */
+// bounded: one entry per distinct rule pattern; cleared with the rules (a few hundred at most)
+const patterns = new Map<string, RegExp | null>();
+const NEVER = /(?!)/;
 
 /** Whether an exchange's status (or its failure) is what a rule or a filter asks for: a code, ok / redirect / client-error / server-error, or error. */
 export function statusMatches(want: RuleMatch['status'], status: number | undefined, error: string | undefined): boolean {
@@ -124,7 +136,7 @@ function regexOf(pattern: string): RegExp | null {
   let re = compiled.get(pattern);
   if (re === undefined) {
     try {
-      re = pattern.length > 500 ? null : new RegExp(pattern, 'i');
+      re = compileUserRegex(pattern, 'i', 'The condition');
     } catch {
       re = null;
     }
@@ -135,6 +147,7 @@ function regexOf(pattern: string): RegExp | null {
 }
 /** The text a condition tests, capped: a long URL or body can't make a pattern run for long. */
 const MAX_TESTED = 4096;
+const MAX_URL_TESTED = 16_384;
 
 /** The value of a column for an exchange, as the grid shows it. */
 function columnValue(e: DebuggerExchange, column: RuleColumn): string | number | undefined {
@@ -175,7 +188,8 @@ export function conditionHolds(c: RuleCondition, e: DebuggerExchange): boolean {
   if (c.regex || c.op === 'matches') {
     const re = regexOf(c.value);
     if (!re) return false;
-    return c.op === 'not-equals' ? !re.test(text) : re.test(text);
+    const hit = safeTest(re, text).matched;
+    return c.op === 'not-equals' ? !hit : hit;
   }
   const low = text.toLowerCase();
   const want = c.value.toLowerCase();
@@ -205,9 +219,9 @@ export function conditionHolds(c: RuleCondition, e: DebuggerExchange): boolean {
 export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'request' | 'response'): boolean {
   const m = rule.match;
   const host = patternToRegExp(m.host);
-  if (host && !host.test(e.host) && !host.test(e.host.replace(/:\d+$/, ''))) return false;
+  if (host && !safeTest(host, e.host.slice(0, MAX_TESTED)).matched && !safeTest(host, e.host.replace(/:\d+$/, '').slice(0, MAX_TESTED)).matched) return false;
   const url = patternToRegExp(m.url);
-  if (url && !url.test(e.url)) return false;
+  if (url && !safeTest(url, e.url.slice(0, MAX_URL_TESTED)).matched) return false;
   if (
     m.method &&
     !m.method
@@ -218,7 +232,7 @@ export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'req
   )
     return false;
   const app = patternToRegExp(m.application);
-  if (app && !app.test(e.application ?? '')) return false;
+  if (app && !safeTest(app, (e.application ?? '').slice(0, MAX_TESTED)).matched) return false;
   const needsResponse = m.status !== undefined || m.minMs !== undefined || m.minBytes !== undefined || (!!m.where && RESPONSE_COLUMNS.includes(m.where.column));
   if (needsResponse) {
     if (phase === 'request') return false;

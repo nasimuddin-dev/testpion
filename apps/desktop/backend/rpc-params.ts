@@ -1,10 +1,11 @@
-import { ApsError, HISTORY_KINDS, normalizeError, type ErrorKind } from '@testpion/core';
+import { ApsError, HISTORY_KINDS, looksLikeHostPath, normalizeError, type ErrorKind } from '@testpion/core';
 
 /**
  * A light check of the parameters of RPC calls, before the handler runs: every host (the window, the web bridge, a
  * future cloud server, an agent over MCP) gets "<method>: missing <param>" instead of a TypeError from deep inside.
  *
- * A type is one of s (string), n (number), b (boolean), o (object, not an array), a (array), sa (array of strings),
+ * A type is one of s (string), wp / wpa (a path / a list of paths inside the workspace, checked by the handler with safePath), p (a path on the host computer: gated by the host's localFiles capability, see hostPathsOf), pn (a
+ * name or such a path), n (number), b (boolean), o (object, not an array), a (array), sa (array of strings),
  * x (any value but undefined); `|null` also allows null; a trailing `?` makes the parameter optional (null then counts as
  * absent and is dropped before the call).
  */
@@ -40,14 +41,14 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'ai.models': { providerId: 's' },
   'ai.saveProviders': { providers: 'a', keys: 'o?' },
   'ai.setAppKey': { key: 's|null' },
-  'ai.runTask': { task: 's', question: 's?', context: 'o?', history: 'a?', privacy: 's?', hint: 's?', path: 's?', provider: 's?', model: 's?', maxTokens: 'n?', response: 'o?', previous: 'o?', preferStable: 'b?' },
+  'ai.runTask': { task: 's', question: 's?', context: 'o?', history: 'a?', privacy: 's?', hint: 's?', path: 'wp?', provider: 's?', model: 's?', maxTokens: 'n?', response: 'o?', previous: 'o?', preferStable: 'b?' },
   'ai.preview': { task: 's', question: 's?', context: 'o?', history: 'a?', privacy: 's?' },
-  'ai.generateFlow': { collectionId: 's', folderId: 's?', hint: 's?', privacy: 's?', path: 's?', dryRun: 'b?', noAi: 'b?' },
+  'ai.generateFlow': { collectionId: 's', folderId: 's?', hint: 's?', privacy: 's?', path: 'wp?', dryRun: 'b?', noAi: 'b?' },
   'ai.specGaps': { spec: 's', categories: 'sa?', operations: 'sa?', gapsOnly: 'b?', includeDelete: 'b?' },
-  'ai.specTests': { spec: 's', categories: 'sa?', operations: 'sa?', gapsOnly: 'b?', includeDelete: 'b?', hint: 's?', privacy: 's?', path: 's?', dryRun: 'b?', noAi: 'b?' },
+  'ai.specTests': { spec: 's', categories: 'sa?', operations: 'sa?', gapsOnly: 'b?', includeDelete: 'b?', hint: 's?', privacy: 's?', path: 'wp?', dryRun: 'b?', noAi: 'b?' },
   'ai.tidyImport': { collectionId: 's', flow: 'b?', source: 's?', hint: 's?', privacy: 's?', dryRun: 'b?', noAi: 'b?' },
-  'ai.securityTests': { collectionId: 's', folderId: 's?', identities: 'o?', probes: 'sa?', includeWrite: 'b?', includeDelete: 'b?', rate: 'n?', max: 'n?', hint: 's?', privacy: 's?', path: 's?', dryRun: 'b?', noAi: 'b?' },
-  'ai.securityRun': { path: 's', environment: 's' },
+  'ai.securityTests': { collectionId: 's', folderId: 's?', identities: 'o?', probes: 'sa?', includeWrite: 'b?', includeDelete: 'b?', rate: 'n?', max: 'n?', hint: 's?', privacy: 's?', path: 'wp?', dryRun: 'b?', noAi: 'b?' },
+  'ai.securityRun': { path: 'wp', environment: 's' },
   'ai.driftReport': { spec: 's', source: 'o?' },
   'ai.driftExplain': { spec: 's', source: 'o?', hint: 's?', privacy: 's?', dryRun: 'b?', noAi: 'b?' },
   'ai.reverifyProposal': { id: 's', item: 's?', after: 's?', data: 'x?', verifiers: 'sa?', response: 'o?', previous: 'o?' },
@@ -62,9 +63,9 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'search.fields': {},
   'assistant.ask': { task: 's', question: 's?', context: 'x?', history: 'a?' },
   'app.openExternal': { url: 's' },
-  'asyncapi.outline': { path: 's?', text: 's?' },
+  'asyncapi.outline': { path: 'wp?', text: 's?' },
   'bundle.export': { selection: 'a?', section: 's?', folder: 'o?', all: 'b?', uses: 'b?', datasets: 's?', providers: 'b?', format: 's?', title: 's?', dryRun: 'b?', workspaceVariables: 'b?', exclude: 'sa?' },
-  'bundle.preview': { pick: 'b?', base64: 's?', path: 's?', fileName: 's?' },
+  'bundle.preview': { pick: 'b?', base64: 's?', path: 'p?', fileName: 's?' },
   'bundle.apply': { planId: 's', onConflict: 's?', decisions: 'o?', only: 'sa?', workspaceVariables: 's?', into: 'o?' },
   'bundle.undo': { importId: 's', planId: 's?' },
   'eval.compare': { run: 's', baseline: 's', threshold: 'n?', maxRegressions: 'n?', failOnMissing: 'b?', limit: 'n?' },
@@ -83,9 +84,9 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'col.getMany': { ids: 'sa' },
   'col.import': { text: 's', fileName: 's?', keepPm: 'b?' },
   'col.importBrunoFolder': { name: 's?', files: 'a' },
-  'col.previewDataFile': { path: 's', query: 's?' },
+  'col.previewDataFile': { path: 'p', query: 's?' },
   'col.replace': { collectionId: 's', find: 's', replace: 's', fields: 'a?' },
-  'col.run': { collectionId: 's', selection: 'sa?', dataPath: 's?', dataQuery: 's?', iterations: 'n?', delayMs: 'n?', name: 's?' },
+  'col.run': { collectionId: 's', selection: 'sa?', dataPath: 'p?', dataQuery: 's?', iterations: 'n?', delayMs: 'n?', name: 's?' },
   'col.save': { id: 's', name: 's?', items: 'a?', variables: 'a?' },
   'col.securityLint': { id: 's' },
   'col.setExamples': { collectionId: 's', requestId: 's', examples: 'a' },
@@ -100,7 +101,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'currentValues.set': { scope: 's', owner: 's?', key: 's', value: 'x' },
   'datasets.appendRow': { name: 's', row: 'o' },
   'datasets.create': { name: 's', format: 's?' },
-  'datasets.read': { path: 's' },
+  'datasets.read': { path: 'wp' },
   'datasets.saveCsv': { name: 's', text: 's' },
   'datasets.write': { name: 's', text: 's' },
   'debug.createFlow': { ids: 'sa?', since: 's?', name: 's?', drop: 'sa?', keepNoise: 'b?', noiseHosts: 'sa?', dryRun: 'b?', overwrite: 'b?' },
@@ -108,7 +109,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'debug.delete': { ids: 'sa' },
   'debug.deleteSession': { name: 's' },
   'debug.exchanges': { host: 's?', method: 's?', text: 's?', kind: 's?', application: 's?', type: 's?', limit: 'n?', offset: 'n?' },
-  'debug.openSession': { name: 's?', path: 's?', text: 's?', base64: 's?' },
+  'debug.openSession': { name: 's?', path: 'wp?', text: 's?', base64: 's?' },
   'debug.view': { session: 's?' },
   'debug.profile': { action: 's', name: 's', from: 's?' },
   'debug.record': { on: 'b?' },
@@ -120,7 +121,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'env.quickLook': {},
   'env.save': { env: 'o', secrets: 'o?' },
   'env.secretStatus': { envId: 's', keys: 'sa' },
-  'eval.run': { template: 'o', name: 's?', datasetText: 's?', datasetPath: 's?', datasetFormat: 's?', limit: 'n?' },
+  'eval.run': { template: 'o', name: 's?', datasetText: 's?', datasetPath: 'p?', datasetFormat: 's?', limit: 'n?' },
   'eval.runDraft': { draft: 'o' },
   'rag.check': { target: 'o' },
   'rag.targets': {},
@@ -152,8 +153,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'rag.label.list': { run: 's', labels: 's?', result: 's?' },
   'rag.label.set': { run: 's', result: 's', metric: 's', label: 's', note: 's?', labels: 's?' },
   'rag.testset.sources': {},
-  'rag.testset.estimate': { paths: 'sa?', urls: 'sa?', count: 'n?', types: 'sa?', name: 's?', seed: 'x?', judge: 'x?', noJudge: 'b?', personas: 'sa?', styles: 'sa?', dedupe: 's?', embedder: 's?' },
-  'rag.testset.generate': { paths: 'sa?', urls: 'sa?', count: 'n?', types: 'sa?', name: 's?', seed: 'x?', judge: 'x?', noJudge: 'b?', personas: 'sa?', styles: 'sa?', dedupe: 's?', embedder: 's?' },
+  'rag.testset.estimate': { paths: 'wpa?', urls: 'sa?', count: 'n?', types: 'sa?', name: 's?', seed: 'x?', judge: 'x?', noJudge: 'b?', personas: 'sa?', styles: 'sa?', dedupe: 's?', embedder: 's?' },
+  'rag.testset.generate': { paths: 'wpa?', urls: 'sa?', count: 'n?', types: 'sa?', name: 's?', seed: 'x?', judge: 'x?', noJudge: 'b?', personas: 'sa?', styles: 'sa?', dedupe: 's?', embedder: 's?' },
   'rag.trend': { evaluation: 's?', runIds: 'sa?', metrics: 'sa?', runs: 'n?', since: 's?', minDelta: 'n?' },
   'bundle.imports': {},
   'git.large': {},
@@ -177,40 +178,41 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'flows.webhooks.start': { port: 'n?', host: 's?' },
   'flows.webhooks.status': {},
   'flows.webhooks.stop': {},
-  'git.clone': { url: 's', dest: 's?', branch: 's?' },
-  'git.commit': { message: 's', paths: 'sa?' },
+  'git.autoFetchSet': { enabled: 'b' },
+  'git.clone': { url: 's', dest: 'p?', branch: 's?' },
+  'git.commit': { message: 's', paths: 'wpa?' },
   'git.deleteBranch': { branch: 's' },
-  'git.diff': { path: 's' },
+  'git.diff': { path: 'wp' },
   'git.discard': { files: 'a' },
   'git.fixSecrets': { findings: 'a', environmentId: 's' },
   'git.fixStaged': { findings: 'a', environmentId: 's' },
   'git.fix': { hook: 'b?', untrack: 'b?' },
   'git.fixPlan': { hook: 'b?', untrack: 'b?' },
-  'git.largeTrack': { file: 's', mode: 's', source: 's?', dryRun: 'b?' },
+  'git.largeTrack': { file: 'wp', mode: 's', source: 's?', dryRun: 'b?' },
   'git.shareSession': { name: 's', dryRun: 'b?' },
   'git.unshareSession': { name: 's' },
   'git.codeownersPlan': { owner: 's?' },
   'git.codeownersWrite': { owner: 's?' },
   'git.allowSecret': { finding: 'o', reason: 's' },
   'git.disallowSecret': { hash: 's' },
-  'git.itemBlame': { ref: 'x?', itemId: 's?', file: 's?', limit: 'n?' },
-  'git.itemDiscard': { ref: 'x?', itemId: 's?', file: 's?', dryRun: 'b?' },
-  'git.itemRestore': { rev: 's', ref: 'x?', itemId: 's?', file: 's?', dryRun: 'b?' },
-  'git.itemStage': { ref: 'x?', itemId: 's?', file: 's?', unstage: 'b?', dryRun: 'b?' },
-  'git.itemVersions': { ref: 'x?', itemId: 's?', file: 's?', limit: 'n?' },
+  'git.itemBlame': { ref: 'x?', itemId: 's?', file: 'wp?', limit: 'n?' },
+  'git.itemDiscard': { ref: 'x?', itemId: 's?', file: 'wp?', dryRun: 'b?' },
+  'git.itemRestore': { rev: 's', ref: 'x?', itemId: 's?', file: 'wp?', dryRun: 'b?' },
+  'git.itemStage': { ref: 'x?', itemId: 's?', file: 'wp?', unstage: 'b?', dryRun: 'b?' },
+  'git.itemVersions': { ref: 'x?', itemId: 's?', file: 'wp?', limit: 'n?' },
   'git.stashApply': { index: 'n?', hash: 's?', pop: 'b?' },
   'git.stashDrop': { index: 'n?', hash: 's?' },
   'git.stashPush': { name: 's', dryRun: 'b?' },
   'git.stashShow': { index: 'n?', hash: 's?' },
-  'git.target': { ref: 'x?', itemId: 's?', file: 's?' },
+  'git.target': { ref: 'x?', itemId: 's?', file: 'wp?' },
   'git.undo': { id: 's?' },
   'git.init': { remote: 's?' },
-  'git.openFolder': { path: 's' },
+  'git.openFolder': { path: 'p' },
   'git.renameBranch': { from: 's', to: 's' },
-  'git.resolve': { path: 's', side: 's?', resolutions: 'o?' },
-  'git.stage': { paths: 'sa' },
+  'git.resolve': { path: 'wp', side: 's?', resolutions: 'o?' },
+  'git.stage': { paths: 'wpa' },
   'git.switch': { branch: 's', from: 's?' },
-  'git.unstage': { paths: 'sa' },
+  'git.unstage': { paths: 'wpa' },
   'gql.introspect': { request: 'o' },
   'gql.mock.start': { sdl: 's', port: 'n?', overrides: 'o?' },
   'gql.send': { request: 'o' },
@@ -238,16 +240,16 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'kinds.list': { kind: 's?', all: 'b?' },
   'item.remove': { ref: 'x' },
   'item.restore': { trashId: 's' },
-  'workspace.revealFile': { path: 's' },
-  'openapi.spec.rename': { path: 's', to: 's' },
-  'openapi.spec.delete': { path: 's' },
+  'workspace.revealFile': { path: 'wp' },
+  'openapi.spec.rename': { path: 'wp', to: 's' },
+  'openapi.spec.delete': { path: 'wp' },
   'load.start': { config: 'o', collection: 'o?' },
   'load.thresholds': { rules: 'sa', snapshot: 'o' },
   'mcp.deleteServer': { serverId: 's' },
   'mcp.mock.call': { definition: 'o', tool: 's', args: 'o?' },
   'mcp.mock.parse': { text: 's' },
-  'mcp.mock.read': { file: 's', name: 's?' },
-  'mcp.mock.write': { file: 's', definition: 'o?', text: 's?' },
+  'mcp.mock.read': { file: 'wp', name: 's?' },
+  'mcp.mock.write': { file: 'wp', definition: 'o?', text: 's?' },
   'mcp.saveTest': { serverId: 's', tool: 's', args: 'o?', assertions: 'a?', name: 's' },
   'mock.start': { collectionId: 's', port: 'n?', delayMs: 'n?', fallbackUrl: 's?' },
   'monitor.daily': { id: 's', days: 'n?', tzOffsetMin: 'n?' },
@@ -259,11 +261,11 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'mqtt.connect': { url: 's', subscriptions: 'a?' },
   'openapi.bodySchema': { method: 's', url: 's' },
   'openapi.diff': { old: 'o', new: 'o' },
-  'openapi.generateFlows': { path: 's?', overwrite: 'b?' },
-  'openapi.lint': { path: 's?', text: 's?', disable: 'sa?' },
-  'openapi.outline': { path: 's?', text: 's?' },
+  'openapi.generateFlows': { path: 'wp?', overwrite: 'b?' },
+  'openapi.lint': { path: 'wp?', text: 's?', disable: 'sa?' },
+  'openapi.outline': { path: 'wp?', text: 's?' },
   'openapi.replaceSpec': { kept: 's', original: 's' },
-  'openapi.spec.save': { path: 's', text: 's' },
+  'openapi.spec.save': { path: 'wp', text: 's' },
   'packages.delete': { name: 's' },
   'packages.save': { name: 's', code: 's' },
   'prompt.variables': { template: 's' },
@@ -277,49 +279,52 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'runs.scoreTrend': { runIds: 'sa?', name: 's?', limit: 'n?' },
   'runs.setBreakpoints': { runId: 's', ids: 'sa' },
   'schema.validate': { schema: 'o|b', data: 'x?' },
+  'scripts.allow': { host: 's?', secrets: 'b?' },
+  'scripts.forget': { host: 's?', secrets: 'b?', all: 'b?' },
+  'scripts.trust': {},
   'secrets.allow': { environment: 's', refs: 'sa?' },
   'secrets.refs': { environment: 's' },
   'settings.describeCertificates': { pem: 's' },
   'sio.connect': { url: 's', path: 's?', headers: 'a?', auth: 's?' },
   'stats.requests': { collectionId: 's' },
   'terminal.ack': { id: 's', parsed: 'n', epoch: 'n?' },
-  'terminal.create': { shell: 's?', cols: 'n?', rows: 'n?', cwd: 's?' },
+  'terminal.create': { shell: 's?', cols: 'n?', rows: 'n?', cwd: 'p?' },
   'terminal.kill': { id: 's' },
   'terminal.list': { withOutput: 'b?' },
   'terminal.resize': { id: 's', cols: 'n', rows: 'n' },
   'terminal.write': { id: 's', data: 's' },
-  'tests.delete': { path: 's' },
-  'tests.move': { from: 's', to: 's' },
-  'tests.deployStatus': { file: 's' },
-  'tests.expose': { path: 's', expose: 'o|null' },
-  'tests.exposure': { path: 's' },
-  'tests.exportArazzo': { path: 's', spec: 's?', workflowId: 's?', save: 'b?' },
-  'tests.flow': { file: 's', raw: 'b?', text: 's?' },
-  'tests.flowEdit': { file: 's', op: 'o' },
-  'tests.flowBreakpoints': { file: 's', ids: 'sa' },
-  'tests.flowPin': { file: 's', stepId: 's' },
-  'tests.flowRun': { file: 's', ids: 'sa?', from: 's?', to: 's?', seedRunId: 's?', debug: 'b?', breakpoints: 'sa?', usePins: 'b?', concurrency: 'n?', retries: 'n?' },
-  'tests.flowRunResults': { file: 's', runId: 's' },
-  'tests.flowRuns': { file: 's', limit: 'n?' },
-  'tests.dataRun': { file: 's', data: 's?', dataQuery: 's?', limit: 'n?', concurrency: 'n?', bail: 'b?' },
-  'tests.matrixRun': { file: 's', environments: 'sa' },
+  'tests.delete': { path: 'wp' },
+  'tests.move': { from: 'wp', to: 'wp' },
+  'tests.deployStatus': { file: 'wp' },
+  'tests.expose': { path: 'wp', expose: 'o|null' },
+  'tests.exposure': { path: 'wp' },
+  'tests.exportArazzo': { path: 'wp', spec: 's?', workflowId: 's?', save: 'b?' },
+  'tests.flow': { file: 'wp', raw: 'b?', text: 's?' },
+  'tests.flowEdit': { file: 'wp', op: 'o' },
+  'tests.flowBreakpoints': { file: 'wp', ids: 'sa' },
+  'tests.flowPin': { file: 'wp', stepId: 's' },
+  'tests.flowRun': { file: 'wp', ids: 'sa?', from: 's?', to: 's?', seedRunId: 's?', debug: 'b?', breakpoints: 'sa?', usePins: 'b?', concurrency: 'n?', retries: 'n?' },
+  'tests.flowRunResults': { file: 'wp', runId: 's' },
+  'tests.flowRuns': { file: 'wp', limit: 'n?' },
+  'tests.dataRun': { file: 'wp', data: 's?', dataQuery: 's?', limit: 'n?', concurrency: 'n?', bail: 'b?' },
+  'tests.matrixRun': { file: 'wp', environments: 'sa' },
   'tests.scaleCancel': { id: 's' },
-  'tests.scaleRuns': { file: 's?', limit: 'n?' },
+  'tests.scaleRuns': { file: 'wp?', limit: 'n?' },
   'tests.scaleRun': { id: 's' },
   'tests.scaleRows': { id: 's', offset: 'n?', limit: 'n?', status: 's?' },
   'tests.scaleRow': { id: 's', index: 'n' },
-  'tests.flowTimeline': { file: 's?' },
-  'tests.flowTimelineHtml': { file: 's?' },
+  'tests.flowTimeline': { file: 'wp?' },
+  'tests.flowTimelineHtml': { file: 'wp?' },
 
-  'tests.flowState': { file: 's' },
-  'tests.flowUnpin': { file: 's', stepId: 's' },
-  'tests.lint': { content: 's', path: 's?' },
+  'tests.flowState': { file: 'wp' },
+  'tests.flowUnpin': { file: 'wp', stepId: 's' },
+  'tests.lint': { content: 's', path: 'wp?' },
   'tests.locate': { testId: 's' },
-  'tests.preview': { path: 's' },
-  'tests.read': { path: 's' },
-  'tests.run': { paths: 'sa', name: 's?', grep: 's?', tags: 'sa?', concurrency: 'n?', retries: 'n?' },
+  'tests.preview': { path: 'wp' },
+  'tests.read': { path: 'wp' },
+  'tests.run': { paths: 'wpa', name: 's?', grep: 's?', tags: 'sa?', concurrency: 'n?', retries: 'n?' },
   'tests.saveFrom': { name: 's?', source: 'o?', ref: 'o?', assertions: 'a?' },
-  'tests.write': { path: 's', content: 's' },
+  'tests.write': { path: 'wp', content: 's' },
   'traces.exportOtlp': { ids: 'sa', endpoint: 's', headers: 'a?' },
   'traces.get': { id: 's' },
   'vars.inspect': { template: 's?' },
@@ -339,7 +344,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'ws.export': { ref: 's?', format: 's?', legacy: 'b?' },
   'ws.import': { bundle: 'o', name: 's?' },
   'ws.importFile': { text: 's?', base64: 's?', fileName: 's?', keepPm: 'b?' },
-  'ws.open': { ref: 's?' },
+  'ws.open': { ref: 'pn?' },
   'ws.rename': { ref: 's', name: 's' },
   'ws.search': { query: 's' },
   'output.save': { surface: 's', format: 's', suggestedName: 's', label: 's?', content: 'o?', source: 'o?', includeSecrets: 'b?', jobId: 's?' },
@@ -352,17 +357,54 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'wsock.connect': { url: 's', protocols: 'sa?', headers: 'a?' },
 };
 
+/**
+ * The range of the numbers that size work or time, wherever a method takes them: a call from a bridge client, an agent or a
+ * mis-click with `iterations: 1e9` or `concurrency: 1e6` is refused instead of starting it. Generous: nothing a person sets is near them.
+ */
+export const RPC_RANGES: Record<string, readonly [number, number]> = {
+  iterations: [0, 100_000],
+  concurrency: [0, 256],
+  retries: [0, 50],
+  delayMs: [0, 3_600_000],
+  days: [0, 3650],
+  runs: [0, 10_000],
+  limit: [0, 1_000_000],
+  port: [0, 65_535],
+  count: [0, 10_000],
+};
+
 /** Parameters that take one of a fixed list of values (an unknown one is a mistake, not an empty answer). */
 export const RPC_VALUES: Record<string, Record<string, readonly string[]>> = {
   'history.list': { kind: HISTORY_KINDS },
   'history.exportHar': { kind: HISTORY_KINDS },
 };
 
-const NAMES: Record<string, string> = { s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
+/**
+ * The places on the host computer a call names (the `p` and `pn` parameters): checked by the backend against the host's
+ * `localFiles` capability (assertHostPath) before the handler runs. `p` is always a host path; `pn` is a name, and a host
+ * path only when it looks like one (an absolute path, ~, a UNC or file: path).
+ */
+export function hostPathsOf(method: string, params: unknown): string[] {
+  const spec = RPC_PARAMS[method];
+  if (!spec || !params || typeof params !== 'object') return [];
+  const out: string[] = [];
+  for (const [key, raw] of Object.entries(spec)) {
+    const types = raw.replace(/\?$/, '').split('|');
+    const v = (params as Record<string, unknown>)[key];
+    if (typeof v !== 'string' || !v) continue;
+    if (types.includes('p') || (types.includes('pn') && looksLikeHostPath(v))) out.push(v);
+  }
+  return out;
+}
+
+const NAMES: Record<string, string> = { wp: 'a string', wpa: 'a list of strings', p: 'a path', pn: 'a name or a path', s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
 
 function isType(v: unknown, t: string): boolean {
   switch (t) {
     case 's':
+    case 'p':
+    case 'pn':
+    case 'wp':
       return typeof v === 'string';
     case 'n':
       return typeof v === 'number' && Number.isFinite(v);
@@ -373,6 +415,7 @@ function isType(v: unknown, t: string): boolean {
     case 'a':
       return Array.isArray(v);
     case 'sa':
+    case 'wpa':
       return Array.isArray(v) && v.every((x) => typeof x === 'string');
     case 'null':
       return v === null;
@@ -404,6 +447,8 @@ export function checkRpcParams(method: string, params: unknown): Record<string, 
       continue;
     }
     if (!types.some((t) => isType(v, t))) throw new ApsError('ValidationError', `${method}: ${key} must be ${types.map((t) => NAMES[t] ?? t).join(' or ')}`, { details: { method, param: key } });
+    const range = RPC_RANGES[key];
+    if (range && typeof v === 'number' && (v < range[0] || v > range[1])) throw new ApsError('ValidationError', `${method}: ${key} must be from ${range[0]} to ${range[1].toLocaleString('en-US')}`, { details: { method, param: key, min: range[0], max: range[1] } });
     const allowed = RPC_VALUES[method]?.[key];
     if (allowed && v !== '' && !allowed.includes(v as string))
       throw new ApsError('ValidationError', `${method}: unknown ${key} "${String(v)}"`, { suggestions: [`Use one of: ${allowed.join(', ')}`], details: { method, param: key, valid: allowed } });

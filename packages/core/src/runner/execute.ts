@@ -46,6 +46,8 @@ import { pickRecord } from '../eval/rag/record.js';
 import { scoreTargetRepeats } from './rag-repeat.js';
 import { runScript } from '../scripts/sandbox.js';
 import { renderVisualizer } from '../scripts/visualizer.js';
+import { hostOfUrl } from '../storage/trust.js';
+import type { ScriptTrust } from '../scripts/script-trust.js';
 import { applyScriptOutput, scriptRequestSender, scriptScopes, type PersistVariable } from '../scripts/bridge.js';
 import { query, tryParseJson } from '../util/jsonpath.js';
 import { sleep, withTimeout } from '../util/concurrency.js';
@@ -94,6 +96,8 @@ export interface ExecServices {
   runSubflow?: RunSubflow;
   /** A step's pinned response (the flow designer's pins, set by runTests' `pins`): the step is answered with it, the API is not called. */
   pinned?: (testId: string) => PinnedResponse | undefined;
+  /** What the workspace's scripts may do: hosts for `tp.sendRequest`, reading secrets (scripts/script-trust.ts). Unset: unrestricted. */
+  scriptTrust?: ScriptTrust;
   /** A production environment's gate: data-changing steps run only with consent (net/production-guard.ts). */
   production?: ProductionGate;
   /** The judge of the judged RAG metrics (eval/rag/judge.ts): the AI settings, the cache and the budget of this run. */
@@ -157,7 +161,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
   let ctx: CheckContext = { testType: test.type, body: undefined, text: '' };
   let partial: Partial<ExecutionOutcome> = {};
   const saved = svc.savedRequest ? { find: svc.savedRequest, resolve: (s: HttpRequestSpec) => scope.resolveDeep(s) } : undefined;
-  const sendRequest = scriptRequestSender({ redactor: svc.redactor, cookieJar: svc.cookieJar, signal: opts.signal, timeoutMs: svc.defaultTimeoutMs, production: svc.production, saved });
+  const sendRequest = scriptRequestSender({ redactor: svc.redactor, cookieJar: svc.cookieJar, signal: opts.signal, timeoutMs: svc.defaultTimeoutMs, production: svc.production, saved, trust: svc.scriptTrust, ownHost: () => (test.type === 'http' ? hostOfUrl(scope.resolve(test.request.url)) : test.type === 'graphql' ? hostOfUrl(scope.resolve(test.endpoint)) : undefined) });
 
   try {
     // pre-request script (Postman-compatible: can read/modify the request and set variables)
@@ -168,7 +172,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
           : test.type === 'graphql'
             ? { method: 'POST', url: test.endpoint, headers: [...(test.headers ?? [])], body: JSON.stringify({ query: test.query, variables: test.graphqlVariables, operationName: test.operationName }) }
             : undefined;
-      const s = await runScript(test.preRequestScript, { ...scriptScopes(scope, test.variables), request: req, jar: svc.cookieJar?.list(), info: scriptInfo(test, svc) }, { sendRequest, requirePackage: svc.scriptPackage });
+      const s = await runScript(test.preRequestScript, { ...scriptScopes(scope, test.variables, svc.scriptTrust), request: req, jar: svc.cookieJar?.list(), info: scriptInfo(test, svc) }, { sendRequest, requirePackage: svc.scriptPackage });
       root.event('pre-request script', { logs: s.logs, error: s.error });
       if (svc.cookieJar) applyCookieJarOps(svc.cookieJar, s.jarOps);
       applyScriptOutput(s, [scope, svc.vars], { redactor: svc.redactor, persist: svc.persistVariable });
@@ -249,7 +253,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
   // test script (sandboxed)
   if (test.testScript) {
     const s = await runScript(test.testScript, {
-      ...scriptScopes(scope, test.variables),
+      ...scriptScopes(scope, test.variables, svc.scriptTrust),
       request:
         test.type === 'http'
           ? { method: test.request.method, url: scope.resolve(test.request.url), headers: scope.resolveDeep([...(test.request.headers ?? [])]) }
@@ -270,7 +274,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     if (s.logs.length) metadata.scriptLogs = s.logs.slice(0, 100);
     if (s.visualizer) {
       // tp.visualizer output (redacted HTML) for reports, the MCP server and the CLI's --json output
-      const v = renderVisualizer(s.visualizer.template, s.visualizer.data);
+      const v = await renderVisualizer(s.visualizer.template, s.visualizer.data);
       metadata.visualizer = { html: v.html === undefined ? undefined : svc.redactor.redactString(v.html.slice(0, 200_000)), error: v.error };
     }
     if (s.sentRequests?.length) metadata.sentRequests = [...((metadata.sentRequests as unknown[]) ?? []), ...s.sentRequests.map((r) => ({ ...r, url: svc.redactor.redactUrl(r.url) }))];

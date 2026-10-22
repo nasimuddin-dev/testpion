@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, session, shell, nativeTheme } from 'electron';
 import { existsSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import * as nodeModule from 'node:module';
@@ -7,10 +7,12 @@ import { Backend } from '../backend/backend.js';
 import { openLinksIn, queueOpenLink } from '../backend/open-links.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
 import { installAppMenu, installTextContextMenu } from './app-menu.js';
-import { defaultAppDir, normalizeError, runMergeDriver, textconvFile } from '@testpion/core';
+import { defaultAppDir, normalizeError, runMergeDriver, safeStorageCipher, textconvFile, type SafeStorageLike } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 import { ptyHost } from './pty-host.js';
 import { crashMessage, onRendererCrash, type CrashRecord } from './crash-recovery.js';
+import { CAPTURE_SWITCH, captureScript } from './capture.js';
+import { permissionAllowed } from './permissions.js';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -170,7 +172,8 @@ if (mcpMode) {
 }
 
 // Documentation screenshot mode (scripts/capture.cjs): isolated profile, fixed size, dark theme.
-const capture = process.env.TESTPION_CAPTURE_SCRIPT;
+const { script: capture, ignored: ignoredCapture } = captureScript(process.env, process.argv, app.isPackaged);
+if (ignoredCapture) console.error(`TESTPION_CAPTURE_SCRIPT is ignored by an installed build unless the program is started with ${CAPTURE_SWITCH}`);
 if (capture) {
   app.setPath('userData', join(process.env.TESTPION_HOME!, 'electron-profile'));
   nativeTheme.themeSource = 'dark';
@@ -201,13 +204,6 @@ if (mergeAt < 0 && cliAt < 0 && !capture && !mcpMode) {
 // or Windows ties the installed app's taskbar button to electron.exe and shows Electron's icon for it.
 const APP_ID = app.isPackaged ? 'dev.nasimuddin.protolens' : 'dev.nasimuddin.protolens.source';
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
-
-function osBackendName(): string {
-  if (process.platform === 'win32') return 'Windows DPAPI';
-  if (process.platform === 'darwin') return 'macOS Keychain';
-  const b = (safeStorage as unknown as { getSelectedStorageBackend?: () => string }).getSelectedStorageBackend?.();
-  return b ? `Linux ${b}` : 'Linux Secret Service';
-}
 
 /** The window and taskbar icon: the .ico on Windows (every size), the PNG elsewhere. The packaged Windows app takes it from its .exe. */
 function windowIcon(): string | undefined {
@@ -344,6 +340,9 @@ Data directory: ${process.env.TESTPION_HOME || defaultAppDir()}`);
  * constructed once the window's page is on its way, and the page's first calls wait for it (backendReady).
  */
 function start(): void {
+  // deny every web permission the app does not use (camera, microphone, location …), whatever page asks (electron/permissions.ts)
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => callback(permissionAllowed(permission, details.requestingUrl, process.env.VITE_DEV_SERVER_URL)));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permissionAllowed(permission, origin, process.env.VITE_DEV_SERVER_URL));
   ipcMain.handle('aps:rpc', async (e, method: string, params: unknown) => {
     // only the app's own page (the window's top frame) may call the backend, never an embedded frame
     if (!win || e.sender !== win.webContents || e.senderFrame !== win.webContents.mainFrame) return { ok: false, error: normalizeError(new Error('Not allowed')) };
@@ -416,12 +415,8 @@ function startBackend(): void {
   const t0 = Date.now();
   backend = new Backend({
     appDir: process.env.TESTPION_HOME || defaultAppDir(),
-    cipher: {
-      isAvailable: () => safeStorage.isEncryptionAvailable(),
-      encrypt: (s) => safeStorage.encryptString(s),
-      decrypt: (b) => safeStorage.decryptString(b),
-      backend: osBackendName(),
-    },
+    // on Linux without a keyring Electron's "encrypted" store has a public key: refused unless the person opts in (storage/secrets.ts)
+    cipher: safeStorageCipher(safeStorage as unknown as SafeStorageLike),
     emit,
     // bundled with the installer (electron-builder extraResources); the repo's copy when running from source
     examplesDir: app.isPackaged ? join(process.resourcesPath, 'examples', 'public-workspace') : join(__dirname, '..', '..', '..', 'examples', 'public-workspace'),

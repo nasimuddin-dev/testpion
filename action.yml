@@ -48,6 +48,9 @@ inputs:
   allow-production:
     description: 'Data-changing requests may go to an environment marked as production (true/false; adds --allow-production).'
     default: 'false'
+  trust-scripts:
+    description: "The workspace's scripts may read secret variables and call other hosts (true/false; adds --trust-scripts). Off by default."
+    default: 'false'
   start:
     description: 'Integration tests: a command that starts the system under test, run in the background before the tests.'
     default: ''
@@ -115,6 +118,7 @@ runs:
         CLI="${{ github.action_path }}/packages/cli/bin/testpion.js"
         ENV=""; [ -n "${{ inputs.environment }}" ] && ENV="-e ${{ inputs.environment }}"
         PROD=""; [ "${{ inputs.allow-production }}" = "true" ] && PROD="--allow-production"
+        [ "${{ inputs.trust-scripts }}" = "true" ] && export TESTPION_TRUST_SCRIPTS=1
         TRIAGE=""; [ "${{ inputs.triage }}" = "true" ] && TRIAGE="--triage"
         if [ -n "${{ inputs.rag-evaluation }}" ]; then
           RAG=""

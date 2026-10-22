@@ -1,9 +1,10 @@
-import { closeSync, copyFileSync, cpSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { chmodSync, closeSync, copyFileSync, cpSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { copyFile, mkdir, open as openFile, rename as renameFile, rm } from 'node:fs/promises';
 import { ApsError } from '../errors.js';
 import { sha1Hex } from '../util/hash.js';
+import { restrictToOwner } from './private-acl.js';
 
 /**
  * End a write stream and wait until its file descriptor is closed. `end(cb)` only waits for 'finish'; the
@@ -296,30 +297,42 @@ export function copyOwned(from: string, to: string, opts: { recursive?: boolean 
 }
 
 /** Write a file in place (no temp file: an append-style rewrite, a small file) as the app's own change. */
-export function writeOwned(path: string, data: string | Buffer): void {
-  mkdirSync(dirname(path), { recursive: true });
+export function writeOwned(path: string, data: string | Buffer, opts: { mode?: number } = {}): void {
+  mkdirSync(dirname(path), { recursive: true, ...(opts.mode === PRIVATE_FILE_MODE ? { mode: PRIVATE_DIR_MODE } : {}) });
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
-  writeFileSync(path, bytes);
+  writeFileSync(path, bytes, opts.mode === undefined ? undefined : { mode: opts.mode });
+  if (opts.mode !== undefined && process.platform !== 'win32') chmodSync(path, opts.mode); // an existing file keeps its mode on write
+  if (opts.mode === PRIVATE_FILE_MODE) {
+    restrictToOwner(dirname(path), 'dir');
+    restrictToOwner(path, 'file');
+  }
   recordOwn(path, contentFingerprint(bytes));
   forgetText(path);
 }
 
 /** Atomic write: write a temp file, fsync, then rename over the target. A crash never leaves a half-written file. */
 
-export function atomicWrite(path: string, data: string | Buffer): void {
-  stageAtomicWrite(path, data).commit();
+export function atomicWrite(path: string, data: string | Buffer, opts: { mode?: number } = {}): void {
+  stageAtomicWrite(path, data, opts).commit();
 }
+
+/** The mode of a file only its owner may read or write (POSIX; Windows keeps the user profile's own permissions). */
+export const PRIVATE_FILE_MODE = 0o600;
+/** The mode of a folder only its owner may enter. */
+export const PRIVATE_DIR_MODE = 0o700;
 
 /**
  * An atomic write in two steps: the bytes are written to a temp file (and synced) now; `commit()` renames it over
  * `path`, `discard()` drops it. In between, something else can be made to appear with the file: whatever is done just
  * before `commit()` (synchronously) is seen by anyone who sees the file, and the slow part (the write) is done before it.
  */
-export function stageAtomicWrite(path: string, data: string | Buffer): { commit(): void; discard(): void } {
+export function stageAtomicWrite(path: string, data: string | Buffer, opts: { mode?: number } = {}): { commit(): void; discard(): void } {
   const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
-  mkdirSync(dirname(path), { recursive: true });
+  mkdirSync(dirname(path), { recursive: true, ...(opts.mode === PRIVATE_FILE_MODE ? { mode: PRIVATE_DIR_MODE } : {}) });
+  const priv = opts.mode === PRIVATE_FILE_MODE;
+  if (priv) restrictToOwner(dirname(path), 'dir'); // Windows: the folder's one entry (this user) is inherited by the file
   const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
-  const fd = openSync(tmp, 'w');
+  const fd = openSync(tmp, 'w', opts.mode);
   try {
     writeSync(fd, bytes);
     fsyncSync(fd);
@@ -343,6 +356,7 @@ export function stageAtomicWrite(path: string, data: string | Buffer): { commit(
         forgetText(path);
       }
       recordOwn(path, contentFingerprint(bytes));
+      if (priv) restrictToOwner(path, 'file');
     },
     discard() {
       if (done) return;
@@ -612,9 +626,9 @@ function cachedText(path: string, mtimeMs: number, size: number): string {
   return text;
 }
 
-export function writeJson(path: string, value: unknown): void {
+export function writeJson(path: string, value: unknown, opts: { mode?: number } = {}): void {
   keepBrokenFile(path);
-  atomicWrite(path, JSON.stringify(value, null, 2) + '\n');
+  atomicWrite(path, JSON.stringify(value, null, 2) + '\n', opts);
 }
 
 /**

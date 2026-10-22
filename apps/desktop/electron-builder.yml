@@ -54,6 +54,8 @@ electronFuses:
   enableNodeOptionsEnvironmentVariable: false
   enableNodeCliInspectArguments: false
   onlyLoadAppFromAsar: true
+  # the hash of app.asar is embedded in the executable and checked at start: a tampered or swapped app.asar no longer loads
+  enableEmbeddedAsarIntegrityValidation: true
   # macOS builds are ad-hoc signed: the signature is redone after the fuses change the binary
   resetAdHocDarwinSignature: true
 # Auto-update source (electron-updater). Builds use --publish never; the release workflow uploads

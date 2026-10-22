@@ -1,4 +1,4 @@
-import { assertUrlAllowed, getNetworkPolicy } from '../../net/policy.js';
+import { assertHostPath, assertUrlAllowed, getNetworkPolicy } from '../../net/policy.js';
 import { ENGINE_VERSION } from '../../version.js';
 import { baseDispatcher, ensureProxyApplied, makeDispatcher, proxyGeneration } from '../../net/proxy.js';
 import { createWriteStream, openAsBlob, readFileSync, mkdirSync, type WriteStream } from 'node:fs';
@@ -100,9 +100,9 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): D
     if (s.tlsMaxVersion) connect.maxVersion = s.tlsMaxVersion;
     if (s.ciphers?.trim()) connect.ciphers = s.ciphers.trim();
     if (s.clientCert) {
-      connect.cert = readFileSync(s.clientCert.certPath);
-      connect.key = readFileSync(s.clientCert.keyPath);
-      if (s.clientCert.caPath) connect.ca = readFileSync(s.clientCert.caPath);
+      connect.cert = readFileSync(assertHostPath(s.clientCert.certPath, 'Client certificate'));
+      connect.key = readFileSync(assertHostPath(s.clientCert.keyPath, 'Client certificate key'));
+      if (s.clientCert.caPath) connect.ca = readFileSync(assertHostPath(s.clientCert.caPath, 'Client certificate CA'));
       if (s.clientCert.passphrase) connect.passphrase = s.clientCert.passphrase;
     }
     d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...pool });

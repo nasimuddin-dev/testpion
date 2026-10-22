@@ -20,10 +20,13 @@ let parserMod: typeof import('node-html-parser') | undefined;
 const htmlParser = (): typeof import('node-html-parser') => (parserMod ??= typeof require === 'function' ? require('node-html-parser') : nodeRequire('node-html-parser'));
 
 const cache = new BoundedMap<string, HTMLElement>(4);
+const MAX_HTML = 4 * 1024 * 1024;
+
 function rootOf(html: string): HTMLElement {
   let r = cache.get(html);
   if (!r) {
-    r = htmlParser().parse(html, { comment: false, blockTextElements: { script: true, style: true, pre: true, noscript: true } });
+    // the parser runs on the host (not in the sandbox): a page of a few MB is plenty for a script to look at
+    r = htmlParser().parse(html.length > MAX_HTML ? html.slice(0, MAX_HTML) : html, { comment: false, blockTextElements: { script: true, style: true, pre: true, noscript: true } });
     cache.set(html, r);
   }
   return r;

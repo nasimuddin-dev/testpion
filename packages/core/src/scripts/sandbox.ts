@@ -4,6 +4,7 @@ import { EPILOGUE, PRELUDE } from './prelude.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { validateSchema } from '../eval/checks.js';
 import { LODASH_SOURCE } from './lodash.generated.js';
+import { HANDLEBARS_SOURCE } from './handlebars.generated.js';
 import { MOMENT_SOURCE } from './moment.js';
 import { BRUNO_SOURCE, USES_BRUNO } from './bruno.js';
 import { queryHtml } from './html.js';
@@ -177,8 +178,24 @@ interface Slot {
   libs: Map<string, Array<[name: string, handle: QuickJSHandle]>>;
   /** Scripts run in this context; it is replaced after MAX_SLOT_USES to bound what unreachable leftovers it can hold. */
   uses: number;
+  /** Heap in use after the first run (the prelude and libraries); what grows past it is what scripts left behind. */
+  baseline?: number;
 }
 const MAX_SLOT_USES = 2000;
+/** A context is replaced when scripts left more than this share of the memory limit in its heap (unreachable garbage counts against the next script). */
+const SLOT_RETAIN_SHARE = 0.25;
+
+/** Heap bytes in use in the runtime now, or undefined when the engine cannot say. */
+function heapUsed(rt: QuickJSRuntime, vm: QuickJSContext): number | undefined {
+  try {
+    const h = rt.computeMemoryUsage();
+    const u = vm.dump(h) as { memory_used_size?: number } | undefined;
+    h.dispose();
+    return typeof u?.memory_used_size === 'number' ? u.memory_used_size : undefined;
+  } catch {
+    return undefined;
+  }
+}
 let runtime: QuickJSRuntime | undefined;
 let pooled: Slot | undefined;
 /** Options of the script running now, read by the host functions. */
@@ -427,6 +444,17 @@ async function runScriptOnce(code: string, input: ScriptInput, opts: ScriptOptio
       checked.value.dispose();
     }
     if (Date.now() > deadline) keep = false;
+    // memory a script left reachable only to the garbage collector counts against the next script: a context that holds much more
+    // than it did after its first run is replaced instead of reused
+    if (keep) {
+      const gc = rt.executePendingJobs();
+      if (gc.error) gc.error.dispose();
+      const used = heapUsed(rt, vm);
+      if (used !== undefined) {
+        if (slot.baseline === undefined) slot.baseline = used;
+        else if (used - slot.baseline > ((opts.memoryMb ?? 32) * 1024 * 1024) * SLOT_RETAIN_SHARE) keep = false;
+      }
+    }
     const out = JSON.parse(json) as Omit<ScriptOutput, 'durationMs'> & { error: string | null };
     // an interrupt inside the async body is caught by its rejection handler
     if (out.error && /^InternalError: interrupted/.test(out.error)) out.error = `Script timed out after ${opts.timeoutMs ?? 2000} ms`;
@@ -493,6 +521,76 @@ ${expr}
     return { error: (e as Error).message };
   } finally {
     // jobs of promises an expression made run out within its time (an endless one is interrupted), then the context goes
+    if (rt.hasPendingJob()) {
+      const j = rt.executePendingJobs();
+      if (j.error) j.error.dispose();
+    }
+    rt.removeInterruptHandler();
+    vm.dispose();
+    if (rt.hasPendingJob()) {
+      if (pooled) disposeSlot(pooled);
+      pooled = undefined;
+      rt.dispose();
+      runtime = undefined;
+    }
+  }
+}
+
+/**
+ * Render a Handlebars template with its data inside the script engine, in a context of its own: the template comes from a
+ * workspace script (`tp.visualizer.set`), and Handlebars compiles it to JavaScript, so the compile and the render happen
+ * where nothing reaches the process, `require`, files or the network. The engine is the embedded Handlebars (see
+ * scripts/make-handlebars.cjs); the template and data go in as text/JSON, the page comes out as a string. A second of CPU,
+ * 64 MB of heap, and the template, data and page sizes are capped. Answers the page, or the error.
+ */
+export async function renderTemplate(template: string, data: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxTemplateBytes?: number; maxDataBytes?: number; maxOutputBytes?: number } = {}): Promise<{ html?: string; error?: string }> {
+  const maxTemplate = opts.maxTemplateBytes ?? 256 * 1024;
+  const maxData = opts.maxDataBytes ?? 8 * 1024 * 1024;
+  const maxOut = opts.maxOutputBytes ?? 8 * 1024 * 1024;
+  if (typeof template !== 'string') return { error: 'The template is not text' };
+  if (template.length > maxTemplate) return { error: `The template is longer than ${Math.round(maxTemplate / 1024)} KB` };
+  let dataJson: string;
+  try {
+    dataJson = JSON.stringify(data ?? {}) ?? '{}';
+  } catch (e) {
+    return { error: `The data cannot be read: ${(e as Error).message}` };
+  }
+  if (dataJson.length > maxData) return { error: `The data is larger than ${Math.round(maxData / (1024 * 1024))} MB` };
+  const mod = await getModule();
+  const rt = getRuntime(mod);
+  const timeoutMs = opts.timeoutMs ?? 1000;
+  rt.setMemoryLimit((opts.memoryMb ?? 64) * 1024 * 1024);
+  const deadline = Date.now() + timeoutMs;
+  rt.setInterruptHandler(() => Date.now() > deadline);
+  const vm = rt.newContext();
+  try {
+    const lib = vm.evalCode(HANDLEBARS_SOURCE, 'handlebars.js');
+    if (lib.error) {
+      lib.error.dispose();
+      return { error: 'The template engine did not start' };
+    }
+    lib.value.dispose();
+    const source = `"use strict";
+const __d = JSON.parse(${JSON.stringify(JSON.stringify({ template, data: JSON.parse(dataJson) }))});
+const __hb = globalThis.Handlebars.create();
+__hb.registerHelper('json', function (v) { return JSON.stringify(v, null, 2); });
+const __html = __hb.compile(__d.template, { strict: false })(__d.data === null || __d.data === undefined ? {} : __d.data);
+JSON.stringify({ html: String(__html).slice(0, ${maxOut + 1}) });`;
+    const r = vm.evalCode(source, 'visualizer.js');
+    if (r.error) {
+      const err = vm.dump(r.error);
+      r.error.dispose();
+      const msg = typeof err === 'object' && err ? String((err as { message?: string }).message ?? JSON.stringify(err)) : String(err);
+      return { error: /interrupted/i.test(msg) ? `The template took longer than ${timeoutMs} ms` : /out of memory/i.test(msg) ? `The template used more than ${opts.memoryMb ?? 64} MB of memory` : msg };
+    }
+    const json = vm.typeof(r.value) === 'string' ? vm.getString(r.value) : undefined;
+    r.value.dispose();
+    if (json === undefined) return { error: 'The template produced nothing that can be read' };
+    const html = (JSON.parse(json) as { html?: string }).html ?? '';
+    return html.length > maxOut ? { html: html.slice(0, maxOut), error: `The page was cut to ${maxOut.toLocaleString('en-US')} characters` } : { html };
+  } catch (e) {
+    return { error: (e as Error).message };
+  } finally {
     if (rt.hasPendingJob()) {
       const j = rt.executePendingJobs();
       if (j.error) j.error.dispose();

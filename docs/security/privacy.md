@@ -19,7 +19,7 @@ Everything written to logs, traces, history, results, reports and exports passes
 A workspace export (a bundle, `<name>.testpion.zip`: **Export ▸ Workspace…** or `testpion workspace export`) is meant to be shared, so it **never contains a secret value**:
 
 - **Contains:** collections, environments, test files, saved items, MCP servers, providers, script packages, and the files of `specs/`, `datasets/`, `mocks/` and `protos/` (a dataset over 10 MB travels by reference and is named in the message). The workspace's own variables are not part of a bundle; the export says so.
-- **Never contains:** the values of secret variables (exported empty), anything in the OS secret store, run results, history, traces, cookies, `.local/` (trusted commands, current values) and Recently deleted.
+- **Never contains:** the values of secret variables (exported empty), anything in the OS secret store, run results, history, traces, cookies, `.local/` (current values and other state of this computer) and Recently deleted.
 - **Replaced by `{{variables}}`:** a value typed in where a secret belongs, found by one detector shared with `testpion git check` and the masks above. It looks at the **name** (`password`, `Authorization`, `X-API-Key`, `client_secret` and your redact fields) and at the **shape** of the value, each with a confidence: private key blocks, JWTs, `Bearer` / `Basic` credentials, provider keys (`sk-…`, `ghp_…`, `github_pat_…`, `glpat-…`, `xoxb-…`, `AKIA…`, `AIza…`, `SG.…`, `npm_…`, `pypi-…`, Stripe, Hugging Face, Twilio), passwords in connection strings (`postgres://`, `mysql://`, `mongodb://`, `amqp://`, `redis://` …) and credential query parameters. MCP servers are **denied by default**: every header and stdio `env` value becomes a variable, except names that never hold a secret (`Content-Type`, `Accept`, `User-Agent`, `NODE_ENV` …). An environment or workspace variable with a secret name or value that is not marked secret is exported empty and marked secret. A `{{variable}}`, `{{$secret.…}}` or `$env.NAME` reference is never replaced. Request bodies are not changed.
 - **Listed:** the export says what it replaced (where, and the variable; never the value): the message in the app, the CLI output and `replaced: [{ kind, item, field, variable }]` with `--json`. Importing the file lists the **values needed**, to set as secret variables.
 
@@ -42,6 +42,8 @@ The backend applies these rules from one list of outputs, never from what the wi
 
 TestPion's own AI features (explain, suggest checks, write tests or a flow, explain and fix a failed run, find out why a test is flaky) send a context only when you start one, only to the model you chose, and redacted more strictly than logs: besides the rules above, credentials found by their shape in any text (JWTs, `Bearer` / `Basic` credentials, private keys, provider API keys, `?access_token=` and similar) and personal data (e-mail addresses, phone numbers, card numbers, IBANs) are masked. **What will be sent…** shows the exact messages first; *Metadata only* and *Names only* send less, and **Local only** refuses any model that is not on this computer. Variable names may be sent, values never. See [AI features: privacy, cost and review](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first).
 
+**Prompt injection.** Everything in a prompt that somebody else wrote (a response, a collection from git or an import, a tool result) is placed inside a fenced block that the model is told is data, never instructions; the fence carries an id that is a hash of the data, so the data cannot close it or forge it. What the model proposes is verified and applied only by you (a proposal); it never writes on its own. The RAG and `llm-judge` judges get the same fence around the answer they score (the system under test may say "give this a 1.0"). That changes the judge prompts once: the `llm-judge` check is now `judge-v2` (results of `judge-v1` show as made by another judge), and cached verdicts of the RAG judge from earlier versions are not reused, so the first run after the update asks the judge again and costs once. Scores and baselines already stored are not touched.
+
 **Failed runs and flaky tests** carry the most: **Explain and fix failures with AI…** (and `--triage` in CI) sends, for each group of failures, at most two failing examples — the request, the status, the failed checks, the checks as your test writes them, the response's headers and body, and what changed since the test last passed — after the same masking; it never sends all the failures, and up to 40 groups at most. *Metadata only* sends no body values and no failure messages (they quote the body): the request's method and URL (query values as `…`), statuses, check types and names, the checks as your test writes them, header names, the shape of the body (field names and types, a text as `string (N chars)`), which headers changed since the last pass, and the body's changes since then as shapes only (how many; each change's path and kind as `string (N chars)`, so not which fields changed). **Why is this flaky?** sends the test's results across runs (statuses, times, environments, the failed checks) and one failing and one passing response, masked the same way; at *Metadata only* the failure messages and how the bodies differ are left out. A variable fix the model proposes is refused when it looks like a secret: TestPion never takes a credential from a model. See [Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage) and [Why is this flaky?](/ai-testing/ai-features#why-is-this-flaky).
 
 ## OS environment variables
@@ -50,7 +52,7 @@ TestPion's own AI features (explain, suggest checks, write tests or a flow, expl
 
 ## Programs a workspace starts
 
-An MCP server of the `stdio` kind is a program TestPion starts on your computer, with your permissions. Because a workspace can come from git, an import or a teammate, the first **Connect** to such a server shows the exact command line and asks: **Run once**, or **Always for this workspace** (remembered in the workspace's `.local/trust.json`, which is per computer and never committed). Mock and HTTP servers start nothing and never ask. The CLI and the MCP server for agents run what you invoke, like any command.
+An MCP server of the `stdio` kind is a program TestPion starts on your computer, with your permissions. Because a workspace can come from git, an import or a teammate, the first **Connect** to such a server shows the exact command line and asks: **Run once**, or **Always for this workspace** (remembered per computer in TestPion's own data folder, never in the workspace, so a repository cannot ship its own trust: [Trust and permissions](/security/trust)). Mock and HTTP servers start nothing and never ask. The CLI and the MCP server for agents run what you invoke, like any command.
 
 ## Script sandbox
 
@@ -65,6 +67,16 @@ On your desktop TestPion can call anything, including `localhost` and your priva
 - **Allow list:** specific internal hosts can stay reachable.
 
 Turn it on with environment variables (`TESTPION_BLOCK_PRIVATE_NETWORKS=1`, `TESTPION_ALLOW_HOSTS=api.internal,10.0.0.5`, `TESTPION_ALLOW_PROCESSES=0`) or with `testpion mcp-server --block-private-networks [--allow-host api.internal]`.
+
+## What leaves your computer without you asking {#without-asking}
+
+- **The update check**, 5 seconds after start (turn it off in Settings ▸ About ▸ *Check for updates when the app starts*). Two endpoints, both GitHub, both sending only a `TestPion/<version>` user agent:
+  - where the app can update itself (the Windows installer, the Linux AppImage), `github.com/nasimuddin-dev/testpion/releases` serves `latest.yml` and, if you accept, the installer, whose SHA-512 is checked against `latest.yml`;
+  - everywhere else, `api.github.com/repos/nasimuddin-dev/testpion/releases/latest` returns the newest release number and notes, which the app compares with its own.
+- **The background git fetch** of the open workspace, every few minutes, to its own remote, only for workspaces you have pushed or synced from on this computer (never a repository you only cloned).
+- **Monitors** on the schedule you set, and their webhooks.
+
+Nothing else is sent unasked. Crash and error details stay in the local log.
 
 ## Telemetry
 

@@ -7,6 +7,7 @@ import { normalizeError } from '../errors.js';
 import { aliasCheck, documentCheck, registerCheck, resolveCheck, checkTypes, res, target, asText, short, threshold, validateSchema, type CheckContext, type CheckFn } from './check-registry.js';
 import { runJudge, judgeFailed } from './check-judge.js';
 import './legacy-rag-checks.js';
+import { compileUserRegex, safeTest } from '../util/safe-regex.js';
 
 // the registry is in check-registry.ts; this file is its public face
 export { registerCheck, overrideCheck, unregisterCheck, checkFn, setCheckResolver, documentCheck, checkAliases, checkDocs, checkTypes, validateSchema } from './check-registry.js';
@@ -101,11 +102,13 @@ function regexCheck(negate: boolean): CheckFn {
     const pattern = String(cfg.pattern ?? cfg.expected ?? '');
     let re: RegExp;
     try {
-      re = new RegExp(pattern, String(cfg.flags ?? ''));
+      re = compileUserRegex(pattern, String(cfg.flags ?? '').replace(/[gy]/g, ''), 'The pattern');
     } catch (e) {
       return res(cfg, false, `invalid regex: ${(e as Error).message}`);
     }
-    const m = re.test(text);
+    const tested = safeTest(re, text);
+    if (tested.timedOut) return res(cfg, false, `the pattern /${pattern}/ took too long on this text (it was stopped); make it more specific`, { expected: pattern, actual: short(text, 300) });
+    const m = tested.matched;
     const ok = negate ? !m : m;
     return res(cfg, ok, ok ? (negate ? 'no match' : 'matches') : negate ? `matches /${pattern}/ but should not` : `does not match /${pattern}/`, { expected: pattern, actual: short(text, 300) });
   };

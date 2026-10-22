@@ -1,5 +1,6 @@
 import { StoragePanel } from '../components/StoragePanel';
 import { AgentsPanel } from '../components/AgentsPanel';
+import { ScriptTrustPanel } from '../components/ScriptTrustPanel';
 import { KeyboardSettings } from '../components/KeyboardSettings';
 import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
@@ -160,7 +161,7 @@ export function SettingsView() {
             </>
           )}
           {tab === 'git' && (
-            <Field label="Fetch in the background every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off.">
+            <Field label="Fetch in the background every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off. It runs for workspaces you have pushed from on this computer, not for a repository you only cloned.">
               <Input type="number" min={0} max={1440} aria-label="Background fetch minutes" value={s.git?.autoFetchMinutes ?? 5} onChange={(e) => set({ git: { ...s.git, autoFetchMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
             </Field>
           )}
@@ -182,6 +183,14 @@ export function SettingsView() {
                 <p className="text-muted">
                   Telemetry is <b>disabled</b> and not implemented in this build. TestPion never transmits request bodies, prompts, responses or credentials anywhere except to the endpoints and providers you
                   explicitly call.
+                </p>
+              </div>
+              <ScriptTrustPanel />
+              <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
+                <div className="font-medium">What leaves this computer without you asking</div>
+                <p className="text-muted">
+                  The update check at start (turn it off in About) asks GitHub for the newest release: <span className="mono">github.com/nasimuddin-dev/testpion/releases</span> for <span className="mono">latest.yml</span> and the installer when the app can update itself, or{' '}
+                  <span className="mono">api.github.com</span> for the release number when it cannot. Only the app version is sent. The background git fetch contacts the remote of a workspace you have pushed from. Monitors and their webhooks run on the schedule you set.
                 </p>
               </div>
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">

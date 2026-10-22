@@ -63,7 +63,8 @@ function launch(planFile, home, planOut, env) {
   // a window behind others (or minimised) must keep running: Chromium pauses an occluded window's frames and throttles
   // its timers, which hung every wait for a painted frame
   const keepRunning = ['--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-features=CalculateNativeWinOcclusion'];
-  const appArgs = [...keepRunning, ...(process.env.E2E_INSPECT ? [`--inspect=${process.env.E2E_INSPECT}`] : []), ...(process.env.E2E_RDP ? [`--remote-debugging-port=${process.env.E2E_RDP}`] : []), ...(exe ? [] : [join(repo, 'apps', 'desktop')])];
+  // an installed build runs a capture script only when started with this switch (electron/capture.ts)
+  const appArgs = ['--testpion-capture', ...keepRunning, ...(process.env.E2E_INSPECT ? [`--inspect=${process.env.E2E_INSPECT}`] : []), ...(process.env.E2E_RDP ? [`--remote-debugging-port=${process.env.E2E_RDP}`] : []), ...(exe ? [] : [join(repo, 'apps', 'desktop')])];
   return new Promise((done) => {
     const child = spawn(electron, appArgs, {
       env: { ...process.env, TESTPION_HOME: home, TESTPION_CAPTURE_SCRIPT: join(here, 'harness.cjs'), E2E_PLAN: planFile, E2E_OUT: planOut, ...env },

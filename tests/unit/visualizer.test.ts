@@ -13,7 +13,7 @@ describe('pm.visualizer (Postman Visualizer)', () => {
     expect(out.error).toBeUndefined();
     expect(out.visualizer?.template).toContain('{{#each rows}}');
     expect(out.visualizer?.data).toEqual({ rows: [{ name: 'Rex', species: 'dog' }, { name: 'Tom', species: 'cat' }] });
-    const r = renderVisualizer(out.visualizer!.template, out.visualizer!.data);
+    const r = await renderVisualizer(out.visualizer!.template, out.visualizer!.data);
     expect(r.error).toBeUndefined();
     expect(r.html).toBe('<table><tr><td>Rex</td><td>dog</td></tr><tr><td>Tom</td><td>cat</td></tr></table>');
   });
@@ -25,10 +25,10 @@ describe('pm.visualizer (Postman Visualizer)', () => {
     expect(fn.visualizer?.data).toEqual({ x: 1 });
   });
 
-  it('escapes {{values}}, blocks prototype access and keeps renders isolated', () => {
-    expect(renderVisualizer('<p>{{v}}</p>', { v: '<img src=x onerror=alert(1)>' }).html).toBe('<p>&lt;img src&#x3D;x onerror&#x3D;alert(1)&gt;</p>');
-    expect(renderVisualizer('{{constructor.name}}|{{__proto__}}', {}).html).toBe('|');
-    expect(renderVisualizer('{{json v}}', { v: { a: 1 } }).html).toBe('{\n  &quot;a&quot;: 1\n}');
-    expect(renderVisualizer('{{#each}}', {}).error).toMatch(/Visualizer template error/);
+  it('escapes {{values}}, blocks prototype access and keeps renders isolated', async () => {
+    expect((await renderVisualizer('<p>{{v}}</p>', { v: '<img src=x onerror=alert(1)>' })).html).toBe('<p>&lt;img src&#x3D;x onerror&#x3D;alert(1)&gt;</p>');
+    expect((await renderVisualizer('{{constructor.name}}|{{__proto__}}', {})).html).toBe('|');
+    expect((await renderVisualizer('{{json v}}', { v: { a: 1 } })).html).toBe('{\n  &quot;a&quot;: 1\n}');
+    expect((await renderVisualizer('{{#each}}', {})).error).toMatch(/Visualizer template error/);
   });
 });

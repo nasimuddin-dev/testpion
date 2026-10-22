@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto';
 import { ApsError } from '../errors.js';
 import { copyFileSync } from 'node:fs';
-import { atomicWrite, readJson } from './fsutil.js';
+import { atomicWrite, PRIVATE_FILE_MODE, readJson } from './fsutil.js';
 import type { SecretReader } from '../vars/variables.js';
 
 /**
@@ -20,9 +21,21 @@ export interface SecretStore extends SecretReader {
   list(): string[];
 }
 
-/** `provider.openai.apiKey` → `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` */
-export function envNameForSecret(name: string): string {
+/** The name an environment variable gets when every character but a letter, digit or underscore becomes `_` (what versions before 0.55 used for every name; still read). */
+export function legacyEnvNameForSecret(name: string): string {
   return 'TESTPION_SECRET_' + name.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase();
+}
+
+/**
+ * `provider.openai.apiKey` → `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY`. A name made only of letters, digits and dots keeps that
+ * readable form (dots are the separators, so two such names never meet). A name with any other character (`env.a-b.key`,
+ * `env.a_b.key`) would meet another one after the lossy mapping, so it gets a short hash of the exact name: `…_H1A2B3C4D`.
+ * Case does not count (environment variable names are upper case).
+ */
+export function envNameForSecret(name: string): string {
+  const lossy = legacyEnvNameForSecret(name);
+  if (/^[A-Za-z0-9.]+$/.test(name)) return lossy;
+  return `${lossy}_H${createHash('sha1').update(name.toLowerCase()).digest('hex').slice(0, 8).toUpperCase()}`;
 }
 
 export class EnvSecretStore implements SecretStore {
@@ -31,11 +44,12 @@ export class EnvSecretStore implements SecretStore {
   constructor(private env: NodeJS.ProcessEnv = process.env) {}
   get(name: string): string | undefined {
     // earlier names of the project still work: FLUXPION_ (0.5), PROTOPION_ (0.4), PROTOLENS_ (0.2–0.3), APS_ (0.1)
-    const n = envNameForSecret(name);
-    for (const prefix of ['TESTPION_', 'FLUXPION_', 'PROTOPION_', 'PROTOLENS_', 'APS_']) {
-      const v = this.env[n.replace(/^TESTPION_/, prefix)];
-      if (v !== undefined) return v;
-    }
+    // the exact (injective) name first; the lossy name earlier versions documented still works, so existing pipelines keep running
+    for (const n of new Set([envNameForSecret(name), legacyEnvNameForSecret(name)]))
+      for (const prefix of ['TESTPION_', 'FLUXPION_', 'PROTOPION_', 'PROTOLENS_', 'APS_']) {
+        const v = this.env[n.replace(/^TESTPION_/, prefix)];
+        if (v !== undefined) return v;
+      }
     return undefined;
   }
   async set(): Promise<void> {
@@ -75,6 +89,41 @@ export interface SecretCipher {
   decrypt(data: Buffer): string;
   /** Human-readable backend name, e.g. "Windows DPAPI". */
   backend?: string;
+}
+
+/** The part of Electron's `safeStorage` the cipher uses. */
+export interface SafeStorageLike {
+  isEncryptionAvailable(): boolean;
+  encryptString(plain: string): Buffer;
+  decryptString(data: Buffer): string;
+  /** Linux only: which store Electron chose (`gnome_libsecret`, `kwallet*`, `basic_text`, `unknown`). */
+  getSelectedStorageBackend?(): string;
+}
+
+/** Environment switch for a Linux computer with no keyring: the person accepts a key that is not secret (see weakStorageBackend). */
+export const ALLOW_WEAK_SECRET_STORE_ENV = 'TESTPION_ALLOW_WEAK_SECRET_STORE';
+
+/** On Linux Electron falls back to `basic_text` when no Secret Service / KWallet is reachable: "encrypted" with a key that is in the source. */
+export function weakStorageBackend(backend: string | undefined, platform: string = process.platform): boolean {
+  return platform === 'linux' && (backend === 'basic_text' || backend === 'unknown');
+}
+
+/**
+ * The cipher over Electron's safeStorage. `isEncryptionAvailable()` is true for the `basic_text` backend too, which protects
+ * nothing, so on Linux a weak backend counts as unavailable (the store then refuses to write, with the way out) unless the person
+ * opted in with TESTPION_ALLOW_WEAK_SECRET_STORE=1.
+ */
+export function safeStorageCipher(s: SafeStorageLike, o: { platform?: string; env?: Record<string, string | undefined> } = {}): SecretCipher {
+  const platform = o.platform ?? process.platform;
+  const optIn = (o.env ?? process.env)[ALLOW_WEAK_SECRET_STORE_ENV] === '1';
+  const selected = () => (platform === 'linux' ? s.getSelectedStorageBackend?.() : undefined);
+  const backend = platform === 'win32' ? 'Windows DPAPI' : platform === 'darwin' ? 'macOS Keychain' : `Linux ${selected() ?? 'Secret Service'}`;
+  return {
+    isAvailable: () => s.isEncryptionAvailable() && (optIn || !weakStorageBackend(selected(), platform)),
+    encrypt: (plain) => s.encryptString(plain),
+    decrypt: (data) => s.decryptString(data),
+    backend: weakStorageBackend(selected(), platform) ? `${backend}, not secure` : backend,
+  };
 }
 
 /** File of individually encrypted values; the cipher is provided by the host (Electron safeStorage). */
@@ -129,7 +178,11 @@ export class EncryptedFileSecretStore implements SecretStore {
   async set(name: string, value: string): Promise<void> {
     if (!this.cipher.isAvailable())
       throw new ApsError('ConfigurationError', 'OS secure storage is not available; refusing to store the secret in plain text', {
-        suggestions: ['On Linux, install and unlock a Secret Service provider (gnome-keyring or KWallet).', 'Alternatively provide the secret via an TESTPION_SECRET_* environment variable.'],
+        suggestions: [
+          'On Linux, install and unlock a Secret Service provider (gnome-keyring or KWallet); without one the desktop only offers a key that is in the source code, which protects nothing.',
+          'Alternatively provide the secret via an TESTPION_SECRET_* environment variable.',
+          `Or accept the weak store for this computer by starting TestPion with ${ALLOW_WEAK_SECRET_STORE_ENV}=1 (the values are then readable by anyone who can read the file).`,
+        ],
       });
     this.raw[name] = this.cipher.encrypt(value).toString('base64');
     this.cache.set(name, value);
@@ -147,7 +200,7 @@ export class EncryptedFileSecretStore implements SecretStore {
   }
 
   private flush(): void {
-    atomicWrite(this.path, JSON.stringify({ schemaVersion: '1.0', note: 'Values are encrypted with the OS credential store and cannot be decrypted on another machine.', secrets: this.raw }, null, 2));
+    atomicWrite(this.path, JSON.stringify({ schemaVersion: '1.0', note: 'Values are encrypted with the OS credential store and cannot be decrypted on another machine.', secrets: this.raw }, null, 2), { mode: PRIVATE_FILE_MODE });
   }
 }
 

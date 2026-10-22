@@ -180,6 +180,8 @@ const docsSidebar = [
     items: [
       { text: 'Secrets', link: '/security/secrets' },
       { text: 'API Security Checks', link: '/security/api-security' },
+      { text: 'Trust & Permissions', link: '/security/trust' },
+      { text: 'Code Signing', link: '/security/code-signing' },
       { text: 'Privacy & Redaction', link: '/security/privacy' },
     ],
   },

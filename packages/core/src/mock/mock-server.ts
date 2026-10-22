@@ -4,6 +4,7 @@ import type { Collection, CollectionNode, SavedExample, SavedHttpRequest } from 
 import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { flattenHeaders } from '../util/headers.js';
+import { isLoopbackHostHeader } from '../net/local-guard.js';
 
 /** One example the mock server can answer with. */
 export interface MockRoute {
@@ -274,6 +275,11 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
   let routes = collectMockRoutes(collection);
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
+    // DNS rebinding: a page on another name that resolves to this computer sends its own Host header
+    if (!isLoopbackHostHeader(req.headers.host)) {
+      res.writeHead(421, { 'content-type': 'text/plain' });
+      return void res.end('The mock server answers to localhost only.');
+    }
     const u = new URL(req.url ?? '/', 'http://mock');
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': '*' };
     if (req.method === 'OPTIONS' && req.headers['access-control-request-method']) {

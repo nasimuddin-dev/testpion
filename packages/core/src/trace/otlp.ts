@@ -3,6 +3,7 @@ import { ApsError } from '../errors.js';
 import type { Redactor } from '../util/redact.js';
 import { ENGINE_VERSION } from '../version.js';
 import { ensureProxyApplied } from '../net/proxy.js';
+import { assertUrlAllowed } from '../net/policy.js';
 
 /**
  * OpenTelemetry export: TestPion traces as OTLP/HTTP JSON, sent to a collector (Jaeger, Grafana Tempo,
@@ -94,6 +95,7 @@ const tracesUrl = (endpoint: string) => (/\/v1\/traces\/?$/.test(endpoint) ? end
 /** Send traces to an OTLP/HTTP collector, in batches of 100 traces. Returns how many spans were sent. */
 export async function exportOtlp(traces: Trace[], target: OtlpTarget, opts: { serviceName?: string; redactor?: Redactor; resource?: Record<string, string>; signal?: AbortSignal } = {}): Promise<{ spans: number; url: string }> {
   const url = tracesUrl(target.endpoint);
+  await assertUrlAllowed(url); // the network policy applies to the collector too
   let spans = 0;
   for (let i = 0; i < traces.length; i += 100) {
     const batch = traces.slice(i, i + 100);
@@ -101,6 +103,7 @@ export async function exportOtlp(traces: Trace[], target: OtlpTarget, opts: { se
     const { fetch: undiciFetch } = await import('undici');
     const res = await undiciFetch(url, {
       method: 'POST',
+      redirect: 'error',
       headers: { 'content-type': 'application/json', ...(target.headers ?? {}) },
       body: JSON.stringify(tracesToOtlp(batch, opts)),
       signal: opts.signal ?? AbortSignal.timeout(30_000),

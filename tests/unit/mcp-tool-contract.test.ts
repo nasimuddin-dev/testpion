@@ -239,6 +239,66 @@ describe('confirmation', () => {
   });
 });
 
+// A client that cannot ask the person: `confirm: true` is only an argument, so an agent that read it in an API response would
+// pass it. The server shows the person a one-time code instead, and only that code lets the call through.
+describe('confirmation codes (clients that cannot be asked)', () => {
+  const announced: Array<{ code: string; tool: string; what: string }> = [];
+  let coded: Client;
+  let sendBudgeted: Client;
+  const connectWith = async (extra: Record<string, unknown>) => {
+    const c = new Client({ name: 'coded', version: '1' });
+    const server = createTestPionMcpServer({ store, secrets: new EnvSecretStore(), settings: new WorkspaceManager(join(dir, 'home')).loadSettings(), ...extra });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(a), c.connect(b)]);
+    return c;
+  };
+  beforeAll(async () => {
+    coded = await connectWith({ confirmCodes: { announce: (i: { code: string; tool: string; what: string }) => announced.push(i) } });
+    sendBudgeted = await connectWith({ sendBudget: 2 });
+  });
+  afterAll(async () => {
+    await coded.close();
+    await sendBudgeted.close();
+  });
+  const del = { collection: 'No such collection', request: 'No such request' };
+  const reached = (r: Awaited<ReturnType<Client['callTool']>>) => !(r.structuredContent as { confirmationRequired?: boolean } | undefined)?.confirmationRequired;
+
+  it('confirm: true does nothing; the code goes to the person, not to the agent; the code works once, for the same arguments only', async () => {
+    const first = await coded.callTool({ name: 'delete_request', arguments: { ...del, confirm: true } });
+    expect(reached(first)).toBe(false);
+    expect(announced).toHaveLength(1);
+    const { code } = announced[0]!;
+    expect(code).toMatch(/^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
+    expect(JSON.stringify(first)).not.toContain(code);
+    expect(texts(first).join('\n')).toMatch(/confirmation code/);
+    // a guess, or the code on other arguments, is refused
+    expect(reached(await coded.callTool({ name: 'delete_request', arguments: { ...del, confirm: 'ABC-DEF' } }))).toBe(false);
+    expect(reached(await coded.callTool({ name: 'delete_request', arguments: { collection: 'Another', request: 'x', confirm: code } }))).toBe(false);
+    // the person's code, with the same arguments, goes through to the tool (which then answers that there is no such collection) …
+    const ok = await coded.callTool({ name: 'delete_request', arguments: { ...del, confirm: code.toLowerCase() } });
+    expect(reached(ok)).toBe(true);
+    expect(texts(ok).join('\n')).toMatch(/collection/i);
+    // … once
+    expect(reached(await coded.callTool({ name: 'delete_request', arguments: { ...del, confirm: code } }))).toBe(false);
+  });
+
+  it('a run of calls that send stops at a budget per session, until the person says yes', async () => {
+    const args = { collection: 'Veterinary API', request: 'No such request' };
+    for (let i = 0; i < 2; i++) expect(reached(await sendBudgeted.callTool({ name: 'send_request', arguments: args })), `call ${i + 1}`).toBe(true);
+    const third = await sendBudgeted.callTool({ name: 'send_request', arguments: args });
+    expect(third.structuredContent).toMatchObject({ confirmationRequired: true, wouldDo: expect.stringMatching(/already made 2 calls that send requests/) });
+    // without codes the old way still works: confirm: true lets another block through
+    expect(reached(await sendBudgeted.callTool({ name: 'send_request', arguments: { ...args, confirm: true } }))).toBe(true);
+    expect(reached(await sendBudgeted.callTool({ name: 'send_request', arguments: args }))).toBe(true);
+  });
+
+  it('a resource read keeps to the size caps of the contract', async () => {
+    const r = await client.readResource({ uri: `testpion://collections/${encodeURIComponent(store.listCollections()[0]!.id)}` });
+    const text = (r.contents[0] as { text: string }).text;
+    expect(text.length).toBeLessThanOrEqual(20_000 + 100);
+  });
+});
+
 describe('size', () => {
   it('concise cuts long texts and lists and names each cut; detailed keeps more; the whole result fits a cap', () => {
     const big = { body: 'x'.repeat(50_000), rows: Array.from({ length: 300 }, (_, i) => ({ i })) };

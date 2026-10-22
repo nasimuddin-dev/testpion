@@ -7,7 +7,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { ApsError, normalizeError } from '@testpion/core';
+import { ApsError, isLoopbackHostHeader, normalizeError } from '@testpion/core';
 import { Backend } from './backend.js';
 
 /** Largest RPC request accepted (imports and uploaded files travel as JSON). */
@@ -34,6 +34,8 @@ const backend = new Backend({
 });
 
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // DNS rebinding: a page on another name that resolves to this computer sends its own Host header
+  if (!isLoopbackHostHeader(req.headers.host)) return reply(res, 421, { error: 'The bridge answers to localhost only' });
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   const viz = /^\/viz\/([0-9a-f]{32})\/?$/.exec(url.pathname);
   if (viz && req.method === 'GET') {

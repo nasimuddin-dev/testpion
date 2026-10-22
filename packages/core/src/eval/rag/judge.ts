@@ -158,6 +158,8 @@ export function assertJudgeUsable(host: RagJudgeHost, judge?: JudgeRef): { provi
   return usable;
 }
 
+/** The framing of the judge's prompt: 1 = the sample as plain text (before 0.55), 2 = inside the untrusted-data fence. Part of the cache key. */
+export const JUDGE_FRAME = 2;
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 
 /** The AI task request of a metric's judge call. */
@@ -201,7 +203,9 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   if (cut.length) throw new ApsError('ValidationError', `The sample is too long for the judge (${cut.map((s) => `${s.name}: ${s.notes.join(', ')}`).join('; ')})`, { suggestions: ['Retrieve fewer or shorter documents, or score this sample with the metrics that need no model.'] });
   const judge = { provider: preview.providerName, model: preview.model, metric: metric.id, promptVersion: metric.version };
   // the key is the exact prompt (after redaction) with the model that answers: any change to the sample, the wording, the model or the task misses
-  const key = hash({ task: 'rag-judge', provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: keyMessages(preview.messages) });
+  // `frame` names how the sample sits in the prompt (the context in a fenced untrusted-data block, ai/untrusted.ts): changing it is a
+  // deliberate change of every key, so verdicts cached under an older framing are not reused (they are asked again, and cost once)
+  const key = hash({ task: 'rag-judge', frame: JUDGE_FRAME, provider: preview.provider, providerName: preview.providerName, model: preview.model, metric: metric.id, version: metric.version, messages: keyMessages(preview.messages) });
   const cache = host.deps.store?.meta;
   if (host.dry) {
     // what a dry run lists goes to the window: the pictures are in preview.images (thumbnails), never twice as base64

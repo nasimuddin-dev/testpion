@@ -19,6 +19,7 @@ import { syncCustomMetrics } from './eval/rag/custom/compile.js';
 import { buildRagJudgeHost, type RagJudgeHost } from './eval/rag/judge.js';
 import { prepareAiTask, runAiTask } from './ai/tasks/run.js';
 import type { AiSurface } from './storage/ai-usage.js';
+import { scriptTrustFor, TRUST_SCRIPTS_ENV, type ScriptTrust } from './scripts/script-trust.js';
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
 
 export interface ContextOptions {
@@ -56,6 +57,8 @@ export interface ContextOptions {
   aiSurface?: AiSurface;
   /** TESTPION_AI_* variables the judge may read (the CLI and CI pass process.env; the app and the MCP server pass none). */
   aiEnv?: Record<string, string | undefined>;
+  /** What the workspace's scripts may do (hosts, secrets). Unset: the workspace's trust list on this computer (scripts/script-trust.ts). */
+  scriptTrust?: ScriptTrust;
 }
 
 export interface EngineContext {
@@ -158,6 +161,16 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     readFile: (path: string) => readFileSync(store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
     workspaceRoot: opts.fileRoot ?? store.root,
     scriptPackage: (name: string) => store.readScriptPackage(name),
+    scriptTrust:
+      opts.scriptTrust ??
+      scriptTrustFor(store, {
+        onBlocked: (b) =>
+          logger.warn(
+            b.kind === 'host'
+              ? `A script tried to send a request to ${b.host}, which this workspace is not allowed to reach from scripts on this computer (allow it in the app, or pass --trust-scripts / ${TRUST_SCRIPTS_ENV}=1)`
+              : `Scripts do not see the secret variables ${b.keys.join(', ')}: this workspace is not allowed to read secrets from scripts on this computer (allow it in the app, or pass --trust-scripts / ${TRUST_SCRIPTS_ENV}=1)`,
+          ),
+      }),
     onCertificate: (url, c) => recordCertificate(store, url, c),
     ragJudge: createRagJudgeHost({ store, providers, redactor, settings, surface: opts.aiSurface ?? 'cli', env: opts.aiEnv }),
   };

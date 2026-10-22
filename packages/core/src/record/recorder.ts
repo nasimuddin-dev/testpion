@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { ApsError } from '../errors.js';
 import type { BodyConfig, Collection, CollectionNode, HttpRequestSpec, KeyValue, SavedExample, SavedHttpRequest } from '../model/types.js';
 import { shortId } from '../util/ids.js';
+import { isLoopbackHostHeader, isLoopbackOrigin } from '../net/local-guard.js';
 import type { Redactor } from '../util/redact.js';
 import { externalizeSecrets, type SecretPlaceholder } from '../import/save-request.js';
 
@@ -71,6 +72,8 @@ export async function startRecorder(opts: {
   port?: number;
   maxBodyBytes?: number;
   cors?: boolean;
+  /** Web origins besides this computer's own (localhost pages) that may call the recorder from a browser. */
+  allowOrigins?: string[];
   onExchange?: (e: RecordedExchange) => void;
   /** Keep the exchanges in `exchanges` (default). The app passes false: they go to the Debugger's store instead. */
   keep?: boolean;
@@ -90,9 +93,21 @@ export async function startRecorder(opts: {
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     const t0 = performance.now();
-    const corsHeaders: Record<string, string> = cors
-      ? { 'access-control-allow-origin': String(req.headers.origin ?? '*'), 'access-control-allow-credentials': 'true', 'access-control-expose-headers': '*' }
-      : {};
+    // DNS rebinding: a page on another name that resolves to this computer sends its own Host header
+    if (!isLoopbackHostHeader(req.headers.host)) {
+      res.writeHead(421, { 'content-type': 'text/plain' });
+      return void res.end('The recorder answers to localhost only.');
+    }
+    // a cross-site page must not use the recorder as a relay into the recorded API: only pages from this computer (the front
+    // end in development) or an origin the caller listed may call it; those get CORS headers, everyone else is refused
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    const originAllowed = origin === undefined || isLoopbackOrigin(origin) || (opts.allowOrigins ?? []).includes(origin);
+    if (!originAllowed) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      return void res.end(`The origin ${origin} may not use the recorder.`);
+    }
+    // credentials only with a named origin, never with *
+    const corsHeaders: Record<string, string> = cors ? { 'access-control-allow-origin': origin ?? '*', ...(origin ? { 'access-control-allow-credentials': 'true', vary: 'Origin' } : {}), 'access-control-expose-headers': '*' } : {};
     // a browser's CORS preflight is answered here: the target may not allow the local origin
     if (cors && req.method === 'OPTIONS' && req.headers['access-control-request-method']) {
       res.writeHead(204, { ...corsHeaders, 'access-control-allow-methods': '*', 'access-control-allow-headers': String(req.headers['access-control-request-headers'] ?? '*'), 'access-control-max-age': '600' });

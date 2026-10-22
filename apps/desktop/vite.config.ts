@@ -10,7 +10,11 @@ export default defineConfig({
       // the packaged app talks to its backend over IPC only: the development endpoints leave its security policy
       name: 'production-csp',
       apply: 'build',
-      transformIndexHtml: (html) => html.replace(" connect-src 'self' http://127.0.0.1:5174 ws://localhost:5173 http://localhost:5173;", " connect-src 'self';"),
+      // (no data: or blob: frames either: the only frames are the visualizer's isolated tpviz: origin and sandboxed srcdoc pages)
+      transformIndexHtml: (html) =>
+        html
+          .replace(" connect-src 'self' http://127.0.0.1:5174 ws://localhost:5173 http://localhost:5173;", " connect-src 'self';")
+          .replace(" frame-src 'self' blob: data: tpviz:", " frame-src 'self' tpviz:"),
     },
   ],
   base: './',

@@ -36,7 +36,9 @@ describe('MCP: ai_* tools (propose, then a confirmed apply)', () => {
       expect(dry).toContain('"dryRun":true');
       expect(dry).toContain('"messages"');
 
-      const ran = JSON.stringify(await call('ai_run_task', { task: 'design-flow', question: 'smoke test', path: 'ai/smoke.yaml' }));
+      const askedFirst = JSON.stringify(await call('ai_run_task', { task: 'design-flow', question: 'smoke test', path: 'ai/smoke.yaml' }));
+      expect(askedFirst).toContain('confirmationRequired');
+      const ran = JSON.stringify(await call('ai_run_task', { task: 'design-flow', question: 'smoke test', path: 'ai/smoke.yaml', confirm: true }));
       const id = /"id":"(ai-[^"]+)"/.exec(ran)![1]!;
       expect(ran).toContain('ai_apply_proposal');
 
