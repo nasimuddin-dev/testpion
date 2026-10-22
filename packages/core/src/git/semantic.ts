@@ -476,23 +476,32 @@ function listedItems(file: string, before: string | undefined, after: string | u
   if (!x || !y) return undefined;
   const noun = at ? KIND_INFO[at.kind].label : (LIBRARY_LABEL[library!] ?? 'Saved item');
   const nameOf = (i: Rec) => String(i.name ?? i.id);
-  const find = (l: Rec[], id: string) => l.find((i) => String(i.id) === id);
+  const byId = (l: Rec[]) => {
+    const m = new Map<string, Rec>();
+    for (const i of l) {
+      const id = String(i.id);
+      if (!m.has(id)) m.set(id, i);
+    }
+    return m;
+  };
+  const [xm, ym] = [byId(x), byId(y)];
   if (itemId) {
-    const [b, a] = [find(x, itemId), find(y, itemId)];
+    const [b, a] = [xm.get(itemId), ym.get(itemId)];
     return { title: `${noun} ${nameOf((a ?? b) as Rec)}`, before: b && partsOf(b), after: a && partsOf(a) };
   }
   const ids = [...new Set([...x, ...y].map((i) => String(i.id)))];
-  const flat = (l: Rec[]) => {
+  // the items that differ, found once (it was a scan of both lists and two stringifies per id, for each side)
+  const changed = ids.filter((id) => JSON.stringify(xm.get(id) ?? null) !== JSON.stringify(ym.get(id) ?? null));
+  const flat = (lm: Map<string, Rec>) => {
     const out: Record<string, string> = {};
-    for (const id of ids) {
-      const [b, a] = [find(x, id), find(y, id)];
-      if (JSON.stringify(b ?? null) === JSON.stringify(a ?? null)) continue;
-      const item = find(l, id);
+    for (const id of changed) {
+      const [b, a] = [xm.get(id), ym.get(id)];
+      const item = lm.get(id);
       for (const [part, v] of Object.entries(item ? partsOf(item) : {})) out[`${nameOf((a ?? b) as Rec)} ▸ ${part}`] = v;
     }
     return out;
   };
-  return { title: file, before: before === undefined ? undefined : flat(x), after: after === undefined ? undefined : flat(y) };
+  return { title: file, before: before === undefined ? undefined : flat(xm), after: after === undefined ? undefined : flat(ym) };
 }
 
 /**
