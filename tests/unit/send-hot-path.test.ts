@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkspaceStore, executeHttp, requireEnvironment } from '../../packages/core/src/index.js';
@@ -68,6 +68,25 @@ describe('requiring the environment of a send', () => {
       writeFileSync(store.path('environments', 'env3.json'), JSON.stringify({ id: 'env3', name: 'Renamed', variables: [] }));
       expect(requireEnvironment(store, 'Renamed', true).id).toBe('env3');
       expect(lists).toBe(2);
+    } finally {
+      store.close();
+    }
+  });
+});
+
+// S-9: tp.require read the package file from disk on every script run
+describe('script packages', () => {
+  it('are read once while unchanged and again when the file changes', () => {
+    const store = WorkspaceStore.create(join(dir, 'ws-pkg'), 'Pkg');
+    try {
+      mkdirSync(store.path('packages'), { recursive: true });
+      const file = store.path('packages', 'util.js');
+      writeFileSync(file, 'module.exports = 1;');
+      expect(store.readScriptPackage('util')).toBe('module.exports = 1;');
+      expect(store.readScriptPackage('util')).toBe('module.exports = 1;');
+      writeFileSync(file, 'module.exports = 22;');
+      expect(store.readScriptPackage('util')).toBe('module.exports = 22;');
+      expect(store.readScriptPackage('missing')).toBeUndefined();
     } finally {
       store.close();
     }

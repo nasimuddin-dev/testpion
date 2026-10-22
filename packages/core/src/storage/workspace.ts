@@ -294,10 +294,18 @@ export class WorkspaceStore {
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
+  private packageText = new Map<string, { mtimeMs: number; size: number; text: string }>();
   readScriptPackage(name: string): string | undefined {
     if (!SCRIPT_PACKAGE_NAME.test(name)) return undefined;
     const p = this.packagePath(name);
-    return existsSync(p) ? readFileSync(p, 'utf8') : undefined;
+    // by size and time: tp.require reads the package on every script run
+    const st = statSync(p, { throwIfNoEntry: false });
+    if (!st?.isFile()) return undefined;
+    const hit = this.packageText.get(p);
+    if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.text;
+    const text = readFileSync(p, 'utf8');
+    this.packageText.set(p, { mtimeMs: st.mtimeMs, size: st.size, text });
+    return text;
   }
   saveScriptPackage(name: string, code: string): void {
     const p = this.packagePath(name);

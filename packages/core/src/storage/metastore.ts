@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import type { HistoryEntry, RunSummary } from '../model/types.js';
@@ -334,13 +335,21 @@ function removeFiles(root: string, paths: Array<string | null | undefined>): voi
   }
 }
 
+/** `removeFiles` without holding the caller: a prune drops about 200 files at once, inside the send that triggered it. */
+function removeFilesLater(root: string, paths: Array<string | null | undefined>): void {
+  const allowed = [resolve(root, 'payloads') + sep, resolve(root, 'traces') + sep];
+  const files = paths.filter((p): p is string => !!p).map((p) => resolve(root, p)).filter((file) => allowed.some((a) => file.startsWith(a)));
+  void Promise.all(files.map((file) => rm(file, { force: true }).catch(() => undefined)));
+}
+
 class SqliteMetaStore implements MetaStore {
   readonly backend = 'sqlite' as const;
   private db: SqliteDb;
   private root: string;
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
-  private inserts = { history: 0, traces: 0, ai: 0, judge: 0 };
+  // (1, not 0: the first insert of a process - every CLI command - does not count the table; the 200th does)
+  private inserts = { history: 1, traces: 1, ai: 1, judge: 1 };
   private batchDepth = 0;
 
   private stmt(sql: string) {
@@ -461,12 +470,12 @@ class SqliteMetaStore implements MetaStore {
   private prune(table: 'history' | 'traces' | 'ai_calls' | 'judge_cache', order: string, fileCol: string, max: number): void {
     const n = (this.stmt(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
     if (n <= max) return;
-    const old = this.db.prepare(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
+    const old = this.stmt(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
     this.batch(() => {
       const del = this.stmt(`DELETE FROM ${table} WHERE rowid = ?`);
       for (const r of old) del.run(r.id);
     });
-    removeFiles(this.root, old.map((r) => r.file));
+    removeFilesLater(this.root, old.map((r) => r.file));
   }
 
   /** `total` of a page: free when the page is not full, else counted (indexed filters are cheap; a text query scans). */
