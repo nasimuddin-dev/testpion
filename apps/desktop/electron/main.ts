@@ -7,7 +7,7 @@ import { Backend } from '../backend/backend.js';
 import { openLinksIn, queueOpenLink } from '../backend/open-links.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
 import { installAppMenu, installTextContextMenu } from './app-menu.js';
-import { defaultAppDir, normalizeError, runMergeDriver, textconvFile } from '@testpion/core';
+import { defaultAppDir, normalizeError, runMergeDriver, safeStorageCipher, textconvFile, type SafeStorageLike } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 import { ptyHost } from './pty-host.js';
 
@@ -158,13 +158,6 @@ if (mergeAt < 0 && cliAt < 0 && !capture && !mcpMode) {
 // or Windows ties the installed app's taskbar button to electron.exe and shows Electron's icon for it.
 const APP_ID = app.isPackaged ? 'dev.nasimuddin.protolens' : 'dev.nasimuddin.protolens.source';
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
-
-function osBackendName(): string {
-  if (process.platform === 'win32') return 'Windows DPAPI';
-  if (process.platform === 'darwin') return 'macOS Keychain';
-  const b = (safeStorage as unknown as { getSelectedStorageBackend?: () => string }).getSelectedStorageBackend?.();
-  return b ? `Linux ${b}` : 'Linux Secret Service';
-}
 
 /** The window and taskbar icon: the .ico on Windows (every size), the PNG elsewhere. The packaged Windows app takes it from its .exe. */
 function windowIcon(): string | undefined {
@@ -371,12 +364,8 @@ function startBackend(): void {
   const t0 = Date.now();
   backend = new Backend({
     appDir: process.env.TESTPION_HOME || defaultAppDir(),
-    cipher: {
-      isAvailable: () => safeStorage.isEncryptionAvailable(),
-      encrypt: (s) => safeStorage.encryptString(s),
-      decrypt: (b) => safeStorage.decryptString(b),
-      backend: osBackendName(),
-    },
+    // on Linux without a keyring Electron's "encrypted" store has a public key: refused unless the person opts in (storage/secrets.ts)
+    cipher: safeStorageCipher(safeStorage as unknown as SafeStorageLike),
     emit,
     // bundled with the installer (electron-builder extraResources); the repo's copy when running from source
     examplesDir: app.isPackaged ? join(process.resourcesPath, 'examples', 'public-workspace') : join(__dirname, '..', '..', '..', 'examples', 'public-workspace'),

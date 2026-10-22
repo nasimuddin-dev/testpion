@@ -1,4 +1,4 @@
-import { readJson, writeJson } from './fsutil.js';
+import { PRIVATE_FILE_MODE, readJson, writeJson } from './fsutil.js';
 import type { SecretStore } from './secrets.js';
 import type { ScriptScope } from '../scripts/sandbox.js';
 import type { Redactor } from '../util/redact.js';
@@ -66,7 +66,7 @@ export class CurrentValues {
       await this.secrets.set(this.secretName(id), typeof value === 'string' ? value : JSON.stringify(value));
       if (!this.data.secretKeys.includes(id)) this.data.secretKeys.push(id);
     } else b[key] = value;
-    writeJson(this.path, this.data);
+    writeJson(this.path, this.data, { mode: PRIVATE_FILE_MODE });
   }
 
   /** Remove current values (all, or for one environment / collection). */
@@ -77,7 +77,7 @@ export class CurrentValues {
     if (!scope) Object.assign(this.data, { environment: {}, globals: {}, collectionVariables: {} });
     else if (scope === 'globals') this.data.globals = {};
     else delete (scope === 'environment' ? this.data.environment : this.data.collectionVariables)[owner ?? ''];
-    writeJson(this.path, this.data);
+    writeJson(this.path, this.data, { mode: PRIVATE_FILE_MODE });
   }
 
   /** Overlay current values onto a context's scopes (they override the stored initial values). */

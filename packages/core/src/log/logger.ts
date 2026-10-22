@@ -97,14 +97,15 @@ export class Logger {
 
 /** JSON-lines file sink with simple size-based rotation. */
 export function fileSink(path: string, maxBytes = 10 * 1024 * 1024): LogSink {
-  mkdirSync(dirname(path), { recursive: true });
+  // the log can hold what an error message carried: readable by this account only (POSIX; Windows keeps the profile's permissions)
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   return (rec) => {
     try {
       if ((statSync(path, { throwIfNoEntry: false })?.size ?? 0) > maxBytes) renameSync(path, `${path}.1`);
     } catch {
       /* ignore */
     }
-    appendFileSync(path, JSON.stringify(rec) + '\n');
+    appendFileSync(path, JSON.stringify(rec) + '\n', { mode: 0o600 });
   };
 }
 

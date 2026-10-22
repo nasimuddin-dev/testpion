@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron';
 import { join } from 'node:path';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { ChainSecretStore, EncryptedFileSecretStore, EnvSecretStore, ENGINE_VERSION, serveTestPionMcp, setNetworkPolicy, WorkspaceManager, type SecretStore } from '@testpion/core';
+import { ChainSecretStore, EncryptedFileSecretStore, EnvSecretStore, ENGINE_VERSION, safeStorageCipher, serveTestPionMcp, setNetworkPolicy, WorkspaceManager, type SafeStorageLike, type SecretStore } from '@testpion/core';
 
 /**
  * `TestPion --mcp-server`: the installed app serves a workspace to AI agents over MCP (stdio), the same as
@@ -47,8 +47,8 @@ export async function runMcpMode(o: McpModeOptions, appDir: string): Promise<num
     if (!ref) throw new Error('No workspace: pass --workspace <name or folder> (or open one in TestPion first)');
     const store = mgr.open(ref);
     const stores: SecretStore[] = [];
-    if (safeStorage.isEncryptionAvailable())
-      stores.push(new EncryptedFileSecretStore(join(appDir, 'secrets.json'), { isAvailable: () => true, encrypt: (s) => safeStorage.encryptString(s), decrypt: (b) => safeStorage.decryptString(b), backend: 'os' }));
+    const cipher = safeStorageCipher(safeStorage as unknown as SafeStorageLike);
+    if (cipher.isAvailable()) stores.push(new EncryptedFileSecretStore(join(appDir, 'secrets.json'), cipher));
     stores.push(new EnvSecretStore());
     console.error(`TestPion MCP server for "${store.workspace.name}"${o.readOnly ? ' (read-only)' : ''} on stdio`);
     try {
