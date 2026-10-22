@@ -442,6 +442,8 @@ export async function atomicWriteAsync(path: string, data: string | Buffer): Pro
     throw e;
   }
   await fh.close();
+  // the folder watcher hears of the rename before this function continues: the write must already be known as the app's own
+  recordOwn(path, contentFingerprint(bytes));
   try {
     await renameWithRetryAsync(tmp, path);
   } catch (e) {
