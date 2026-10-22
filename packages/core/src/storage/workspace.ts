@@ -241,16 +241,20 @@ export class WorkspaceStore {
     });
   }
 
-  /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
-  environmentView(idOrName: string): Environment | undefined {
-    if (typeof idOrName !== 'string') return undefined;
+  /** Every environment as listEnvironments answers it, shared and frozen: the files are read again only when one of them changed. */
+  environmentList(): readonly Environment[] {
     const dir = this.path('environments');
     // the files' names, sizes and times: a list of environments read again only when one of them changed
     const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
     const sig = files.map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false }))).join('|');
     const hit = this.views.get('environments');
-    const list = hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
-    return list.find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
+    return hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
+  }
+
+  /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
+  environmentView(idOrName: string): Environment | undefined {
+    if (typeof idOrName !== 'string') return undefined;
+    return this.environmentList().find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
   }
 
   /*

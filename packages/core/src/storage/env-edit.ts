@@ -9,15 +9,16 @@ import { secretKeys, type SecretStore } from './secrets.js';
  * variables are refused: their values live in the OS secret store and are set in the app (or passed to
  * the CLI as TESTPION_SECRET_* environment variables), never through here.
  */
-export function findEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'>, ref: string): Environment | undefined {
+export function findEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'> & Partial<Pick<WorkspaceStore, 'environmentList'>>, ref: string, cached = false): Environment | undefined {
   if (typeof ref !== 'string') return undefined;
-  const envs = store.listEnvironments();
+  // `cached`: the shared frozen list (nothing is read or parsed unless an environment file changed); the caller must not change what it gets
+  const envs = (cached && store.environmentList ? store.environmentList() : store.listEnvironments()) as Environment[];
   return envs.find((e) => e.id === ref) ?? envs.find((e) => e.name.toLowerCase() === ref.toLowerCase());
 }
 
 /** The environment, or a configuration error naming the ones there are (or saying why its file cannot be read). */
-export function requireEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'>, ref: string): Environment {
-  const env = findEnvironment(store, ref);
+export function requireEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'> & Partial<Pick<WorkspaceStore, 'environmentList'>>, ref: string, cached = false): Environment {
+  const env = findEnvironment(store, ref, cached);
   if (!env) throw new ApsError('ConfigurationError', `No environment "${ref}". Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`);
   if (env.problem) throw brokenEnvironmentError(env);
   return env;

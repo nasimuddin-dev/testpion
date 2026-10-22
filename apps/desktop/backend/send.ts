@@ -38,7 +38,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
   const id = p.id ?? shortId('req-');
   if (p.environment)
     try {
-      requireEnvironment(be.ws, p.environment);
+      requireEnvironment(be.ws, p.environment, true); // from the shared view: sending does not parse every environment file each time
     } catch (e) {
       return { id, error: normalizeError(e), scriptLogs: [], unresolved: [], cycles: [], blockedEnv: [] };
     }
@@ -316,7 +316,7 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
     be.ws.saveTrace(trace, 'graphql');
     recordCertificate(be.ws, r.prepared.url, r.response.connection?.certificate);
     const historyId = shortId('h-');
-    be.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'graphql', name: p.name ?? p.operationName ?? 'GraphQL query', method: 'POST', url: r.prepared.url, status: r.response.status, durationMs: r.response.durationMs, size: r.response.size, request: ctx.redactor.redact(p.request), responseMeta: { timing: timingSummary(r.response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) }, traceId: trace.traceId, collectionId: p.collectionId, requestId: p.requestId });
+    be.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'graphql', name: p.name ?? p.operationName ?? 'GraphQL query', method: 'POST', url: r.prepared.url, status: r.response.status, durationMs: r.response.durationMs, size: r.response.size, request: ctx.redactor.redact(p.request), responseMeta: { timing: timingSummary(r.response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) }, traceId: trace.traceId, collectionId: p.collectionId, requestId: p.requestId, payloadPath: r.response.payloadPath });
     const clip = (t: string) => clipConsole(t)!;
     be.consoleEntry({
       id,

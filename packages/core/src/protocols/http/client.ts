@@ -2,6 +2,7 @@ import { assertUrlAllowed, getNetworkPolicy } from '../../net/policy.js';
 import { ENGINE_VERSION } from '../../version.js';
 import { baseDispatcher, ensureProxyApplied, makeDispatcher, proxyGeneration } from '../../net/proxy.js';
 import { createWriteStream, openAsBlob, readFileSync, mkdirSync, type WriteStream } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { subscribe } from 'node:diagnostics_channel';
 import { STATUS_CODES } from 'node:http';
@@ -585,16 +586,20 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
         }
         size += value.byteLength;
         if (opts.discardBody) continue;
+        const before = chunks.length;
         if (kept < maxPreview) {
           const take = Math.min(value.byteLength, maxPreview - kept);
           chunks.push(Buffer.from(value.buffer, value.byteOffset, take));
           kept += take;
         }
-        if (opts.payloadDir) {
+        // The full body goes to a file only when it does not fit the preview (a body that fits is the preview: no folder, no file, no
+        // handle per response; a small binary one is written after the loop, because its preview is not its bytes).
+        if (opts.payloadDir && size > maxPreview) {
           if (!file) {
             mkdirSync(opts.payloadDir, { recursive: true });
             payloadPath = join(opts.payloadDir, `${shortId('resp-')}.bin`);
             file = createWriteStream(payloadPath);
+            for (const c of chunks.slice(0, before)) file.write(c);
           }
           if (!file.write(value)) await new Promise<void>((r) => file!.once('drain', () => r()));
         }
@@ -612,6 +617,12 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   const truncated = size > kept;
   const bodyBuf = Buffer.concat(chunks);
   const contentType = res.headers.get('content-type') ?? '';
+  if (opts.payloadDir && !file && !opts.discardBody && !truncated && bodyBuf.length && isBinaryBody(bodyBuf, contentType)) {
+    // "Save response" needs the bytes of a small binary body too (its preview is a placeholder)
+    mkdirSync(opts.payloadDir, { recursive: true });
+    payloadPath = join(opts.payloadDir, `${shortId('resp-')}.bin`);
+    await writeFile(payloadPath, bodyBuf);
+  }
   let bodyPreviewText = opts.discardBody ? '' : decodeBody(bodyBuf, contentType);
   if (truncated) bodyPreviewText = trimToCharBoundary(bodyPreviewText);
   let json: unknown;
@@ -670,9 +681,13 @@ function bodyDecodeError(e: unknown, encoding: string | null): ApsError | undefi
   });
 }
 
+function isBinaryBody(buf: Buffer, contentType: string): boolean {
+  return /image\/|audio\/|video\/|octet-stream|application\/(zip|pdf|gzip)/i.test(contentType) || looksBinary(buf);
+}
+
 function decodeBody(buf: Buffer, contentType: string): string {
   if (!buf.length) return '';
-  if (/image\/|audio\/|video\/|octet-stream|application\/(zip|pdf|gzip)/i.test(contentType) || looksBinary(buf))
+  if (isBinaryBody(buf, contentType))
     return `<binary data ${buf.length} bytes — use "Save response" to download>`;
   const charset = /charset=([^;]+)/i.exec(contentType)?.[1]?.trim().toLowerCase();
   try {
