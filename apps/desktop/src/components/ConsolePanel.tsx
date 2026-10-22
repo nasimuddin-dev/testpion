@@ -1,7 +1,7 @@
 import { toastError } from '../store';
 import { CodeBlock } from './CodeBlock';
 import { ChevronRight, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { formatBytes, formatMs } from '../lib/format';
 import { Badge, cx, IconButton, Input, Segmented, statusTone } from './ui';
@@ -38,6 +38,9 @@ type Filter = 'all' | 'errors' | 'logs';
 const OK_STATUS = new Set(['passed', 'ok', 'open', 'sent', 'closed']);
 const isError = (e: ConsoleEntry) => !!e.error || (typeof e.status === 'number' ? e.status >= 400 : e.status !== undefined && !OK_STATUS.has(e.status)) || !!e.failedChecks;
 const KIND_LABEL = { graphql: 'GraphQL', mcp: 'MCP', websocket: 'WebSocket' } as const;
+
+/** A row's key: the entry's id and time (a run's result id repeats across runs), never its position (the buffer slides). */
+export const consoleKey = (e: Pick<ConsoleEntry, 'id' | 'time'>) => `${e.id}-${e.time}`;
 
 /**
  * Postman-style console: every request sent from the app or a run, newest last, with its script
@@ -80,13 +83,16 @@ export function ConsolePanel() {
     [entries.length],
   );
 
-  const toggle = (key: string) =>
-    setOpen((s) => {
-      const n = new Set(s);
-      if (n.has(key)) n.delete(key);
-      else n.add(key);
-      return n;
-    });
+  const toggle = useCallback(
+    (key: string) =>
+      setOpen((s) => {
+        const n = new Set(s);
+        if (n.has(key)) n.delete(key);
+        else n.add(key);
+        return n;
+      }),
+    [],
+  );
 
   return (
     <>
@@ -130,47 +136,51 @@ export function ConsolePanel() {
         }}
       >
         {!shown.length && <p className="px-3 py-2 text-muted text-xs">{entries.length ? 'Nothing matches the filter.' : 'Requests you send (HTTP, GraphQL, MCP and WebSocket), and the console.log output of their scripts, appear here.'}</p>}
-        {shown.map((e, i) => {
-          const key = `${e.id}-${e.time}-${i}`;
-          const expanded = open.has(key);
-          const hasDetails = !!(e.request || e.response || e.error || e.refs?.length);
-          return (
-            <div key={key} className="border-b border-line/70">
-              <button className={cx('w-full flex items-center gap-2 px-3 py-1 text-left hover:bg-hover', isError(e) && 'text-bad')} onClick={() => hasDetails && toggle(key)} aria-expanded={hasDetails ? expanded : undefined}>
-                <ChevronRight size={12} className={cx('shrink-0 transition-transform', expanded && 'rotate-90', !hasDetails && 'opacity-0')} />
-                <span className="text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>
-                <span className="mono font-medium w-14 shrink-0">{e.method}</span>
-                <span className="mono truncate flex-1 text-fg" title={e.url}>
-                  {e.url}
-                </span>
-                {e.kind && <Badge tone={e.kind === 'graphql' ? 'accent' : 'judge'}>{KIND_LABEL[e.kind]}</Badge>}
-                {e.source === 'run' && <Badge title={e.run}>run</Badge>}
-                {e.status !== undefined && <Badge tone={statusTone(e.status)}>{e.status}</Badge>}
-                {!!e.failedChecks && <Badge tone="bad">{e.failedChecks} failed</Badge>}
-                {e.durationMs !== undefined && <span className="text-muted tabular-nums w-16 text-right shrink-0">{formatMs(e.durationMs)}</span>}
-                {e.size !== undefined && <span className="text-muted tabular-nums w-16 text-right shrink-0">{formatBytes(e.size)}</span>}
-              </button>
-              {e.logs.map((l, j) => (
-                <div key={j} className="mono pl-9 pr-3 py-0.5 whitespace-pre-wrap text-[0.78rem]">
-                  <span className="text-muted">{l.phase === 'pre-request' ? 'pre ›' : 'test ›'}</span> {l.message}
-                </div>
-              ))}
-              {expanded && (
-                <div className="pl-9 pr-3 pb-2 grid gap-2">
-                  <RelatedRefs refs={e.refs} />
-                  {e.error && <div className="text-bad">{e.error}</div>}
-                  {e.request && <Section title="Request" headers={e.request.headers} body={e.request.body} />}
-                  {e.response && <Section title="Response" headers={e.response.headers} body={e.response.body} />}
-                </div>
-              )}
-            </div>
-          );
+        {shown.map((e) => {
+          const key = consoleKey(e);
+          return <ConsoleRow key={key} e={e} expanded={open.has(key)} onToggle={toggle} />;
         })}
         <div ref={bottom} />
       </div>
     </>
   );
 }
+
+/** One entry: memoised, so the rows already shown are not rendered again when an entry arrives or one leaves the buffer. */
+const ConsoleRow = memo(function ConsoleRow({ e, expanded, onToggle }: { e: ConsoleEntry; expanded: boolean; onToggle(key: string): void }) {
+  const hasDetails = !!(e.request || e.response || e.error || e.refs?.length);
+  return (
+    <div className="border-b border-line/70" data-console-row={consoleKey(e)}>
+      <button className={cx('w-full flex items-center gap-2 px-3 py-1 text-left hover:bg-hover', isError(e) && 'text-bad')} onClick={() => hasDetails && onToggle(consoleKey(e))} aria-expanded={hasDetails ? expanded : undefined}>
+        <ChevronRight size={12} className={cx('shrink-0 transition-transform', expanded && 'rotate-90', !hasDetails && 'opacity-0')} />
+        <span className="text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>
+        <span className="mono font-medium w-14 shrink-0">{e.method}</span>
+        <span className="mono truncate flex-1 text-fg" title={e.url}>
+          {e.url}
+        </span>
+        {e.kind && <Badge tone={e.kind === 'graphql' ? 'accent' : 'judge'}>{KIND_LABEL[e.kind]}</Badge>}
+        {e.source === 'run' && <Badge title={e.run}>run</Badge>}
+        {e.status !== undefined && <Badge tone={statusTone(e.status)}>{e.status}</Badge>}
+        {!!e.failedChecks && <Badge tone="bad">{e.failedChecks} failed</Badge>}
+        {e.durationMs !== undefined && <span className="text-muted tabular-nums w-16 text-right shrink-0">{formatMs(e.durationMs)}</span>}
+        {e.size !== undefined && <span className="text-muted tabular-nums w-16 text-right shrink-0">{formatBytes(e.size)}</span>}
+      </button>
+      {e.logs.map((l, j) => (
+        <div key={j} className="mono pl-9 pr-3 py-0.5 whitespace-pre-wrap text-[0.78rem]">
+          <span className="text-muted">{l.phase === 'pre-request' ? 'pre ›' : 'test ›'}</span> {l.message}
+        </div>
+      ))}
+      {expanded && (
+        <div className="pl-9 pr-3 pb-2 grid gap-2">
+          <RelatedRefs refs={e.refs} />
+          {e.error && <div className="text-bad">{e.error}</div>}
+          {e.request && <Section title="Request" headers={e.request.headers} body={e.request.body} />}
+          {e.response && <Section title="Response" headers={e.response.headers} body={e.response.body} />}
+        </div>
+      )}
+    </div>
+  );
+});
 
 function Section({ title, headers, body }: { title: string; headers: Array<[string, string]>; body?: string }) {
   return (

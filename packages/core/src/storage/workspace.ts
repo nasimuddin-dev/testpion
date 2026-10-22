@@ -7,7 +7,7 @@ import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
 import { normalizeUiPrefs } from '../model/ui-prefs.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, isInside, readJson, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
+import { atomicWrite, deepFreeze, isInside, readJson, readJsonShared, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
 import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -196,7 +196,7 @@ export class WorkspaceStore {
     for (const f of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
       if (!readTextCached(join(dir, f))?.includes(quoted)) continue;
       try {
-        if (readJson<Collection>(join(dir, f)).id === id) return join(dir, f);
+        if (readJsonShared<Collection>(join(dir, f)).id === id) return join(dir, f);
       } catch {
         /* unreadable: not this one */
       }
@@ -214,6 +214,43 @@ export class WorkspaceStore {
     const c = normalizeCollection(readJson<Collection>(this.collectionFile(id)));
     // a de-duplicated id (see listCollections) is the file name: the copy says so too
     return this.withLocalMeta(c.id === id ? c : { ...c, id });
+  }
+
+  /*
+   * Read-only views for readers that only look (the engine context of every send, code snippet and variable hover):
+   * parsed once per change of the file and shared, deeply frozen, so a megabyte collection is not parsed again for each.
+   * A caller that changes what it reads uses getCollection / getEnvironment, which answer objects of its own.
+   */
+  private views = new Map<string, { from: unknown; value: unknown }>();
+  private view<T>(key: string, from: unknown, make: () => T): T {
+    const hit = this.views.get(key);
+    if (hit && hit.from === from) return hit.value as T;
+    const value = deepFreeze(make());
+    this.views.set(key, { from, value });
+    return value;
+  }
+
+  /** The collection as getCollection answers it, shared and frozen (see the views above). */
+  collectionView(id: string): Collection {
+    if (typeof id !== 'string' || !id) throw new ApsError('ValidationError', 'A collection id is required');
+    const doc = readJsonShared<Collection>(this.collectionFile(id));
+    const meta = this.readLocalMeta().collections[id];
+    return this.view(`c:${id}:${meta?.version ?? ''}:${meta?.updatedAt ?? ''}`, doc, () => {
+      const c = normalizeCollection(doc);
+      return this.withLocalMeta(c.id === id ? c : { ...c, id });
+    });
+  }
+
+  /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
+  environmentView(idOrName: string): Environment | undefined {
+    if (typeof idOrName !== 'string') return undefined;
+    const dir = this.path('environments');
+    // the files' names, sizes and times: a list of environments read again only when one of them changed
+    const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
+    const sig = files.map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false }))).join('|');
+    const hit = this.views.get('environments');
+    const list = hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
+    return list.find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
   }
 
   /*
@@ -294,7 +331,7 @@ export class WorkspaceStore {
     if (existsSync(join(dir, slug))) return `environments/${slug}`;
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
       try {
-        const e = readJson<Environment>(join(dir, f));
+        const e = readJsonShared<Environment>(join(dir, f));
         if (e.id === idOrName || e.name === idOrName) return `environments/${f}`;
       } catch {
         /* not an environment */

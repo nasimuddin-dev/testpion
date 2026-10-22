@@ -4,10 +4,14 @@
  * after every request it sends and every run, so the answers are kept and only redone when what they read changed:
  *
  * - health: one grouped query over the history, redone when the history changed;
- * - attention: redone when the history, the latest run, the monitors' results, the collections (any `data.changed`)
- *   or the day changed.
+ * - attention: redone when the history, the latest run, the files it reads (collections, environments, the library
+ *   with the monitors, the monitors' results, the certificates) or the day changed. The key is the files' names, sizes
+ *   and times: a `data.changed` that wrote nothing of these (a run's results, a connection) is a hit, and finding that
+ *   out parses no file.
  */
-import { lastMonitorResult, listMonitors, workspaceAttention, type AttentionItem, type WorkspaceStore } from '@testpion/core';
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { workspaceAttention, type AttentionItem, type WorkspaceStore } from '@testpion/core';
 
 export interface CollectionHealth {
   sent: number;
@@ -39,24 +43,32 @@ export function collectionsHealth(ws: WorkspaceStore): Record<string, Collection
   return value;
 }
 
+/** The files of a folder as a signature (name, size, time): one readdir and a stat each, no parsing; '' when there is no such folder. */
+export function filesSignature(dir: string): string {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return '';
+  }
+  const parts: string[] = [];
+  for (const name of names) {
+    const st = statSync(join(dir, name), { throwIfNoEntry: false });
+    if (st?.isFile()) parts.push(`${name}:${st.size}:${st.mtimeMs}`);
+  }
+  return parts.join(',');
+}
+
 const attention = new WeakMap<WorkspaceStore, { key: string; value: Promise<AttentionItem[]> }>();
 
-/**
- * What needs attention, remembered by what it reads. `dataEpoch` counts the backend's `data.changed` events (a
- * collection saved, imported, deleted, changed on disk …).
- */
-export function cachedAttention(ws: WorkspaceStore, dataEpoch: number): Promise<AttentionItem[]> {
+/** What needs attention, remembered by what it reads (see the top of the file). */
+export function cachedAttention(ws: WorkspaceStore): Promise<AttentionItem[]> {
   const mark = historyMark(ws);
   const latestRun = ws.meta.listRuns({ limit: 1 }).items[0];
-  const monitors = listMonitors(ws)
-    .filter((m) => m.enabled)
-    .map((m) => {
-      const r = lastMonitorResult(ws, m.id);
-      return `${m.id}:${m.name}:${r?.runId ?? ''}:${r?.status ?? ''}`;
-    })
-    .join('|');
+  const files = [ws.path('collections'), ws.path('environments'), ws.path('library'), ws.path('runs', 'monitors')].map(filesSignature);
+  const certificates = statSync(ws.path('runs', 'certificates.json'), { throwIfNoEntry: false });
   const day = new Date().toISOString().slice(0, 10);
-  const key = JSON.stringify([mark.total, mark.latestId, latestRun?.id, monitors, dataEpoch, day]);
+  const key = JSON.stringify([mark.total, mark.latestId, latestRun?.id, files, certificates ? `${certificates.size}:${certificates.mtimeMs}` : '', day]);
   const known = attention.get(ws);
   if (known?.key === key) return known.value;
   const value = workspaceAttention(ws);

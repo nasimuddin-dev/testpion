@@ -35,7 +35,8 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
   // files that can't be read: nothing in them works until they are fixed
   for (const e of store.listEnvironments())
     if (e.problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Environment "${e.name}" can't be read: ${e.problem}`, ref: { kind: 'environment', environmentId: e.id } });
-  for (const c of store.listCollections())
+  const collections = store.listCollections(); // once: the failing requests below walk the same list
+  for (const c of collections)
     if ((c as { problem?: string }).problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Collection "${c.name}" can't be read: ${(c as { problem?: string }).problem}`, ref: { kind: 'collection', collectionId: c.id } });
   for (const m of listMonitors(store)) {
     if (!m.enabled) continue;
@@ -68,7 +69,7 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
       message: `The latest run "${latest.name}": ${[latest.failed ? `${latest.failed} failed` : '', latest.errors ? `${latest.errors} error${latest.errors === 1 ? '' : 's'} (network, TLS, timeout or script)` : ''].filter(Boolean).join(', ')}`,
       ref: { kind: 'run', runId: latest.id },
     });
-  for (const c of store.listCollections()) {
+  for (const c of collections) {
     if ((c as { problem?: string }).problem) continue;
     const names = new Map(collectionRequests(c).map((r) => [r.id, [...r.path, r.name].join(' / ')]));
     const failing = store.meta.requestStats(c.id).filter((s) => !s.lastOk && names.has(s.requestId));

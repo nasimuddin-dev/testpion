@@ -1,7 +1,8 @@
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { ArrowDown, ArrowDownUp, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2, Users, Wrench } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
+import { useDoc } from '../lib/docs';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { ItemRef, KindId } from '@testpion/shared';
@@ -117,7 +118,15 @@ export function GitView() {
   const [toFix, setToFix] = useState(0);
   const refreshToFix = useCallback(() => void call<{ steps: Array<{ state: string }> }>('git.fixPlan', {}).then((p) => setToFix(p.steps.filter((x) => x.state === 'todo').length), () => setToFix(0)), []);
 
+  // the rest (branches, the log, the pull request link, a proposal) is read while the view is on screen: an event that
+  // comes while it is hidden is answered when it shows again, not with git processes behind another view
+  const { active } = useDoc();
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const stale = useRef(false);
   const load = useCallback(async () => {
+    if (!activeRef.current) return void (stale.current = true);
+    stale.current = false;
     try {
       await refreshGit();
       if (!gitSnapshot().status?.repository) return;
@@ -142,11 +151,21 @@ export function GitView() {
     refreshToFix();
     // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reloads)
     void call('git.autoFetch').catch(() => undefined);
-    // an edit outside the app: read again once the files settled (a merge writes several)
-    let settle: ReturnType<typeof setTimeout> | undefined;
-    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => { void load(); clearTimeout(settle); settle = setTimeout(() => void load(), 2200); }), on('workspace.changedOnDisk', () => { clearTimeout(settle); settle = setTimeout(() => void load(), 2200); })];
-    return () => (clearTimeout(settle), offs.forEach((o) => o()));
+    // a save or an edit outside the app reaches this view through the shared read (lib/git: one read once things
+    // settled), as the status below; only a git event (a commit, a pull, a branch switch) reads the rest at once
+    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load())];
+    return () => offs.forEach((o) => o());
   }, [load, refreshToFix]);
+  useEffect(() => {
+    if (active && stale.current) void load();
+  }, [active, load]);
+  // the branch, its upstream or its distance to the remote changed in the shared status: the branches and the log follow
+  const head = status ? `${status.branch ?? ''}|${status.upstream ?? ''}|${status.ahead}|${status.behind}|${status.repository}` : '';
+  const seenHead = useRef<string>(undefined);
+  useEffect(() => {
+    if (seenHead.current !== undefined && seenHead.current !== head) void load();
+    seenHead.current = head;
+  }, [head, load]);
   // what a sync that stopped on conflicts said, shown with the Conflicts list
   const [syncNote, setSyncNote] = useState<string>();
   useEffect(() => {

@@ -420,10 +420,28 @@ const TEXT_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 let textCacheBytes = 0;
 
 function forgetText(path: string): void {
+  parsedCache.delete(path);
   const hit = textCache.get(path);
   if (!hit) return;
   textCache.delete(path);
   textCacheBytes -= hit.text.length;
+}
+
+/*
+ * The documents of those files parsed, shared and frozen: `readJsonShared` answers the very same object while the file
+ * is unchanged. The engine context reads the collection and the environments for every request sent, every code snippet
+ * and every variable hovered; parsing a megabyte each time was most of the cost. Frozen deep, so a caller that needs an
+ * object of its own to change says so by reading with `readJson`. An entry lives as long as its text does.
+ */
+const parsedCache = new Map<string, { text: string; value: unknown }>();
+
+/** Freeze a value and everything in it (a shared read-only document). */
+export function deepFreeze<T>(v: T): T {
+  if (v && typeof v === 'object' && !Object.isFrozen(v)) {
+    Object.freeze(v);
+    for (const k of Object.keys(v as object)) deepFreeze((v as Record<string, unknown>)[k]);
+  }
+  return v;
 }
 
 function cachedText(path: string, mtimeMs: number, size: number): string {
@@ -437,6 +455,7 @@ function cachedText(path: string, mtimeMs: number, size: number): string {
   for (const [k, v] of textCache) {
     if (textCacheBytes <= TEXT_CACHE_MAX_BYTES || k === path) break;
     textCache.delete(k);
+    parsedCache.delete(k);
     textCacheBytes -= v.text.length;
   }
   return text;
@@ -493,7 +512,29 @@ export function readJson<T>(path: string, fallback?: T): T {
     if (fallback !== undefined) return fallback;
     throw new ApsError('ConfigurationError', `File not found: ${path}`);
   }
+  return parseJsonText<T>(path, cachedText(path, stat.mtimeMs, stat.size));
+}
+
+/**
+ * Read a JSON file as a shared, deeply frozen document: the same object again while the file is unchanged (see the
+ * parsed cache above). For readers that only look (the engine context, lists); a caller that changes what it read uses
+ * `readJson`. A file that does not parse fails as in `readJson`.
+ */
+export function readJsonShared<T>(path: string): T {
+  const stat = statSync(path, { throwIfNoEntry: false });
+  if (!stat) {
+    forgetText(path);
+    throw new ApsError('ConfigurationError', `File not found: ${path}`);
+  }
   const text = cachedText(path, stat.mtimeMs, stat.size);
+  const hit = parsedCache.get(path);
+  if (hit && hit.text === text) return hit.value as T;
+  const value = deepFreeze(parseJsonText<T>(path, text));
+  parsedCache.set(path, { text, value });
+  return value;
+}
+
+function parseJsonText<T>(path: string, text: string): T {
   try {
     return JSON.parse(text.replace(/^﻿/, '')) as T;
   } catch (e) {

@@ -76,8 +76,8 @@ export function requestsHandlers(be: Backend): Handlers {
      * included, like Postman's and the browser's Copy as cURL; `containsSecrets` lets the UI say so.
      */
     'http.copyCode': async (p: { request: HttpRequestSpec; environment?: string; collectionId?: string; requestId?: string; language: string }) => {
-      const text = await be.codeSnippet({ ...p, revealSecrets: true });
-      const masked = await be.codeSnippet({ ...p, revealSecrets: false });
+      // one engine context, both forms of the code (the masked one says whether a secret is in it)
+      const { text, masked } = await be.codeSnippets(p);
       return { text, containsSecrets: masked !== text };
     },
     'http.parseCurl': ({ text }: { text: string }) => parseCurl(text),
@@ -104,7 +104,7 @@ export function requestsHandlers(be: Backend): Handlers {
       return c;
     },
     /** What needs attention: failing monitors, expiring certificates, the latest failed run, failing requests, flaky tests. */
-    'stats.attention': () => cachedAttention(be.ws, be.dataEpoch),
+    'stats.attention': () => cachedAttention(be.ws),
     /** Where the time of a collection's requests went (DNS, TCP, TLS, server, download), from responses sent in the app. */
     'stats.collectionTiming': ({ collectionId }: { collectionId: string }) => collectionTiming(be.ws, collectionId) ?? null,
     'history.get': ({ id }: { id: string }) => be.ws.meta.getHistory(id),

@@ -106,12 +106,13 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     { key: 'workspaceDir', value: store.root.split('\\').join('/') },
     ...store.workspace.variables.map((v) => ((v as { secret?: boolean }).secret ? { ...v, value: opts.secrets.get(secretKeys.workspaceVar(store.id, v.key)) ?? '', secret: true } : v)),
   ]);
-  const environment = opts.environment ? store.getEnvironment(opts.environment) : undefined;
+  // read-only views (parsed once per change of the file): the context only looks at the environment and the collection
+  const environment = opts.environment ? store.environmentView(opts.environment) : undefined;
   vars.setScope('environment', environmentVariables(environment, opts.secrets, store.root));
   let collection: Collection | undefined;
   if (opts.collectionId) {
     try {
-      collection = store.getCollection(opts.collectionId);
+      collection = store.collectionView(opts.collectionId);
       vars.setScope('collection', collection.variables);
     } catch {
       /* collection missing — ignore */

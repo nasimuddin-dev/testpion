@@ -5,6 +5,8 @@
 const { withExpect, stepOf } = require('../lib.cjs');
 
 const COUNT = 5000;
+/** The proxy's port for the capture step (not 8899: the owner's own TestPion may hold it). */
+const CAPTURE_PORT = 8919;
 /** A HAR of COUNT exchanges over 40 hosts, with headers and small JSON bodies, built in the page. */
 const har = `(() => {
   const entries = [];
@@ -106,6 +108,24 @@ const steps = [
      vis('main [data-debugger-grid] [role=columnheader]').find((h) => h.textContent.trim().startsWith('#'))?.click(); await __t.sleep(200);
      return 'sort ms: ' + sort + ' | sort back ms: ' + sort2 + ' | scroll frame ms: ' + scroll;`,
   ),
+  // a Shift-click range over 2,000 rows: the selection's panels (the timeline, the totals) follow at once
+  step(
+    'select-2000-rows',
+    `const list = rows()[0].parentElement.parentElement.parentElement;
+     list.scrollTop = 0; await ${painted}();
+     rows()[0].click(); await ${painted}();
+     const h = rows()[0].getBoundingClientRect().height || 24;
+     list.scrollTop = 1999 * h; await ${painted}(); await __t.sleep(100);
+     const target = rows()[Math.floor(rows().length / 2)];
+     const t = performance.now();
+     target.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+     await ${painted}();
+     const ms1 = ${ms('t')};
+     await __t.sleep(200);
+     const picked = document.querySelectorAll('main [data-debugger-grid] [role=row][data-exchange].bg-accent-soft').length;
+     list.scrollTop = 0; rows()[0].click(); await __t.sleep(200);
+     return 'select range ms: ' + ms1 + ' | selected drawn: ' + picked;`,
+  ),
   step(
     'structure-and-performance',
     `const rail = (l) => document.querySelector('[data-tool-rail] button[aria-label="' + l + '"]');
@@ -114,6 +134,35 @@ const steps = [
      const p = await open('Performance');
      await window.aps.invoke('debug.clear');
      return 'structure ms: ' + s + ' | performance ms: ' + p;`,
+  ),
+  // capturing while a 400 KB JSON response is open on the Content tab: each sync of the list leaves the panes alone (the
+  // body is laid out once), so the window keeps its frames while 50 more requests arrive. The proxy listens on its own
+  // port (8899 may be another TestPion's).
+  step(
+    'capture-with-an-open-body',
+    `const st = await window.aps.invoke('debug.status');
+     if (!st.running) await window.aps.invoke('debug.start', { port: ${CAPTURE_PORT} });
+     await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/large?mb=0.4' });
+     const big = await __t.waitFor(() => rows().find((r) => r.textContent.includes('/large')), 8000); if (!big) return 'NO ROW /large';
+     big.click();
+     const pane = await __t.waitFor(() => document.querySelector('main [data-details-pane=response]'), 4000); if (!pane) return 'NO PANE';
+     const content = [...pane.querySelectorAll('[role=tab], button')].find((b) => b.textContent.trim() === 'Content'); if (!content) return 'NO TAB Content';
+     content.click();
+     await __t.sleep(800);
+     const longTasks = []; const po = new PerformanceObserver((l) => l.getEntries().forEach((e) => longTasks.push(Math.round(e.duration)))); po.observe({ entryTypes: ['longtask'] });
+     let last = performance.now(); let worst = 0; let running = true;
+     const tick = (t) => { worst = Math.max(worst, t - last); last = t; if (running) requestAnimationFrame(tick); };
+     requestAnimationFrame((t) => { last = t; requestAnimationFrame(tick); });
+     const t0 = performance.now();
+     for (let i = 0; i < 50; i += 5) await Promise.all([0, 1, 2, 3, 4].map((k) => window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?open-body=' + (i + k) })));
+     await __t.waitFor(() => (rows().length && document.querySelector('main [data-debugger-grid]') ? true : null), 2000);
+     await __t.sleep(1200);
+     running = false; po.disconnect();
+     const took = Math.round(performance.now() - t0);
+     const still = document.querySelector('main [data-details-pane=response]')?.textContent.includes('"items"');
+     await window.aps.invoke('debug.stop').catch(() => undefined);
+     await window.aps.invoke('debug.clear');
+     return 'worst frame ms: ' + Math.round(worst) + ' | long tasks: ' + (longTasks.filter((d) => d > 50).join(',') || 'none') + ' | body shown: ' + !!still + ' | took ms: ' + took;`,
   ),
 ];
 
@@ -126,4 +175,7 @@ module.exports = withExpect(steps, {
   'filter-keystrokes': (r) => (num(r, 'max keystroke') < 200 ? undefined : 'slow: ' + r),
   'sort-and-scroll': (r) => (num(r, 'sort') < 600 && num(r, 'scroll frame') < 100 ? undefined : 'slow: ' + r),
   'structure-and-performance': (r) => (num(r, 'structure') < 800 && num(r, 'performance') < 800 ? undefined : 'slow: ' + r),
+  'select-2000-rows': (r) => (num(r, 'select range') < 200 ? undefined : 'slow: ' + r),
+  // the panes are not laid out again per sync: no long task, and no frame over 50 ms while 50 requests arrive
+  'capture-with-an-open-body': (r) => (num(r, 'worst frame') < 50 && /long tasks: none/.test(r) && /body shown: true/.test(r) ? undefined : 'janky: ' + r),
 });

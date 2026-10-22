@@ -2,17 +2,20 @@ import { Check, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
+import { useDoc } from '../../lib/docs';
 import { Button, cx, Empty, Field, Input, Menu, Segmented, Select, type MenuItem } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 
-/** The hits keep counting while traffic flows: the rule panels read them again every two seconds. */
+/** The hits keep counting while traffic flows: the rule panels read them again every two seconds, while the Debugger is on screen. */
 export function useLiveRules(onChange: (s: RulesState) => void) {
+  const { active } = useDoc();
   useEffect(() => {
+    if (!active) return;
     const t = setInterval(() => void call<RulesState>('debug.rules').then(onChange, () => undefined), 2000);
     return () => clearInterval(t);
-  }, [onChange]);
+  }, [onChange, active]);
 }
 
 /**

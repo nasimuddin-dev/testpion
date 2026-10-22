@@ -6,7 +6,8 @@ import { askAssistant } from './components/ai/AiAction';
 import { useAiEnabled } from './lib/use-ai-enabled';
 import { RightPanel } from './components/RightPanel';
 import { openReverseProxyCapture } from './lib/capture';
-import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { createElement, lazy, memo, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazyMemoView, type LazyView } from './lib/memo-view';
 import { call, modKey, on } from './api';
 import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
 import { useApp, type ViewId } from './store';
@@ -23,7 +24,7 @@ import { ViewBoundary } from './components/ViewBoundary';
 import { isRequestView } from './store';
 import { Explorer } from './components/Explorer';
 import { EditorTabStrip, NoOpenTabs, useEditorTabsStore } from './components/EditorTabs';
-import { DOC_VIEWS, DocContext, isDocView, useDocs } from './lib/docs';
+import { DOC_VIEWS, DocScope, isDocView, useDocs } from './lib/docs';
 import { watchRunNotifications } from './lib/run-notifications';
 import { remindExpiringCertificates, watchMonitorAlerts } from './lib/monitor-alerts';
 import { runMenuCommand, type MenuCommand } from './menu-commands';
@@ -67,16 +68,31 @@ const FeedbackDialog = lazy(async () => ({ default: (await import('./components/
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
 const OpenApiDiffDialog = lazy(async () => ({ default: (await import('./components/OpenApiDiffDialog')).OpenApiDiffDialog }));
 const ApiCoverageDialog = lazy(async () => ({ default: (await import('./components/ApiCoverageDialog')).ApiCoverageDialog }));
-/** A view, loaded on first use or by `prefetch()`; once loaded it renders at once (a Suspense fallback is held 300 ms). */
-type View = ComponentType & { prefetch(): Promise<unknown> };
-const view = (load: () => Promise<any>, name: string): View => {
-  let loaded: ComponentType | undefined;
-  const prefetch = async () => (loaded ??= (await load())[name] as ComponentType);
-  const Lazy = lazy(async () => ({ default: await prefetch() }));
-  const V = () => createElement(useState(() => loaded ?? Lazy)[0]);
-  return Object.assign(V, { prefetch });
-};
-const VIEWS: Record<ViewId, View> = {
+/** A view, loaded on first use or by `prefetch()`, memoised (lib/memo-view): the shell renders without rendering the views it keeps mounted. */
+const view = (load: () => Promise<any>, name: string): LazyView => lazyMemoView(load, name);
+
+/**
+ * One mounted view (or one document of a multi-document editor): shown or kept out of sight, and told so through
+ * DocScope (`active`), the one signal a view, its editors and its polls use to work only while on screen.
+ */
+const ViewHost = memo(function ViewHost({ id, docId, shown }: { id: ViewId; docId?: string; shown: boolean }) {
+  const V = VIEWS[id];
+  return (
+    <div className="absolute inset-0 flex flex-col" style={{ display: shown ? 'flex' : 'none' }}>
+      <DocScope docId={docId} active={shown}>
+        <ViewBoundary view={id}>
+          <Suspense fallback={<div className="h-full grid place-items-center"><Spinner size={20} /></div>}>
+            <V />
+          </Suspense>
+        </ViewBoundary>
+      </DocScope>
+    </div>
+  );
+});
+
+/** Views that show a code editor: the editor (Monaco) is warmed in idle time once one of them opened, not before. */
+const EDITOR_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections', 'tests', 'ai', 'evaluations', 'load', 'monitors'];
+const VIEWS: Record<ViewId, LazyView> = {
   home: view(() => import('./views/HomeView'), 'HomeView'),
   rest: view(() => import('./views/RestView'), 'RestView'),
   graphql: view(() => import('./views/GraphQLView'), 'GraphQLView'),
@@ -231,13 +247,10 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const [info, settings] = await Promise.all([call('app.info'), call('settings.get')]);
+        // the three first reads go out together: nothing waits for the one before it
+        const [info, settings] = await Promise.all([call('app.info'), call('settings.get'), useApp.getState().refreshWorkspace()]);
         useApp.getState().set({ info, settings });
-        await useApp.getState().refreshWorkspace();
         scheduleUpdateCheck();
-        // warm the code editor in the background once the first screen is up, when the window is idle (it is a long task)
-        if (typeof requestIdleCallback === 'function') requestIdleCallback(() => void loadMonaco(), { timeout: 5000 });
-        else setTimeout(() => void loadMonaco(), 1500);
         // examples that came with this version (added to the user's copy at start): say so once
         setTimeout(() => void announceNewExamples(), 2500);
         // certificates that expire within 7 days: a reminder once a day
@@ -302,12 +315,20 @@ export default function App() {
     };
   }, []);
 
-  // editors with an open tab stay mounted (their tabs, drafts and live connections), REST always
+  // editors with an open tab stay mounted (their tabs, drafts and live connections); the rest once visited
   const openEditors = useEditorTabsStore((s) => s.openViews);
   const docs = useDocs((s) => s.docs);
   const activeDocs = useDocs((s) => s.active);
   const docViews = DOC_VIEWS.filter((v) => (docs[v] ?? []).length);
-  const mounted = useMemo(() => [...new Set<ViewId>([...visited, 'rest', ...openEditors, ...docViews])], [visited, openEditors, docViews.join()]);
+  const mounted = useMemo(() => [...new Set<ViewId>([...visited, ...openEditors, ...docViews])], [visited, openEditors, docViews.join()]);
+  // the code editor (Monaco, a long task to parse) is warmed in idle time once a view that shows one opened
+  const warmed = useRef(false);
+  useEffect(() => {
+    if (!ready || warmed.current || !EDITOR_VIEWS.includes(view)) return;
+    warmed.current = true;
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => void loadMonaco(), { timeout: 5000 });
+    else setTimeout(() => void loadMonaco(), 1500);
+  }, [ready, view]);
   // a multi-document editor always has a document to show (e.g. started on it from the last session)
   useEffect(() => {
     if (isDocView(view)) useDocs.getState().ensure(view);
@@ -502,34 +523,12 @@ export default function App() {
                 <NoOpenTabs />
               </div>
             )}
-            {mounted.flatMap((id) => {
-              const V = VIEWS[id];
+            {mounted.flatMap((id) =>
               // multi-document editors: one instance per open document (tab), each with its own draft and connection
-              if (isDocView(id))
-                return (docs[id] ?? []).map((docId) => {
-                  const shown = id === view && docId === activeDocs[id];
-                  return (
-                    <div key={`${workspace?.id}-${id}-${docId}`} className="absolute inset-0 flex flex-col" style={{ display: shown ? 'flex' : 'none' }}>
-                      <DocContext.Provider value={{ docId, active: shown }}>
-                        <ViewBoundary view={id}>
-                          <Suspense fallback={<div className="h-full grid place-items-center"><Spinner size={20} /></div>}>
-                            <V />
-                          </Suspense>
-                        </ViewBoundary>
-                      </DocContext.Provider>
-                    </div>
-                  );
-                });
-              return [(
-                <div key={`${workspace?.id}-${id}`} className="absolute inset-0 flex flex-col" style={{ display: id === view ? 'flex' : 'none' }}>
-                  <ViewBoundary view={id}>
-                    <Suspense fallback={<div className="h-full grid place-items-center"><Spinner size={20} /></div>}>
-                      <V />
-                    </Suspense>
-                  </ViewBoundary>
-                </div>
-              )];
-            })}
+              isDocView(id)
+                ? (docs[id] ?? []).map((docId) => <ViewHost key={`${workspace?.id}-${id}-${docId}`} id={id} docId={docId} shown={id === view && docId === activeDocs[id]} />)
+                : [<ViewHost key={`${workspace?.id}-${id}`} id={id} shown={id === view} />],
+            )}
           </div>
           {logsOpen && (
             <ViewBoundary view="logs" variant="bar" label="bottom panel" className="border-t" onDismiss={close({ logsOpen: false })}>

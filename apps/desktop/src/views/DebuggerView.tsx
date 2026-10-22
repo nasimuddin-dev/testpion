@@ -336,7 +336,11 @@ export function DebuggerView() {
       /* remembered for this session only */
     }
   };
-  const picked = useMemo(() => (selectedIds.length > 1 ? rows.filter((r) => selectedIds.includes(r.id)) : detail ? [detail] : []), [rows, selectedIds, detail]);
+  const picked = useMemo(() => {
+    if (selectedIds.length <= 1) return detail ? [detail] : [];
+    const ids = new Set(selectedIds); // a Shift-click range over thousands of rows: one lookup per row, not a scan
+    return rows.filter((r) => ids.has(r.id));
+  }, [rows, selectedIds, detail]);
   const quickRule = (kind: Rule['kind'], name: string, match: Rule['match'], extra?: Partial<Rule>) =>
     void call<RulesState>('debug.saveRule', { rule: { kind, name, enabled: true, match, ...extra } }).then(
       (r) => (setRules(r), toast(`Rule added: ${name}`), openDock(kind === 'ignore' || kind === 'only' ? 'filter' : kind === 'reply' ? 'auto-reply' : kind === 'highlight' ? 'highlight' : 'modify')),
@@ -370,6 +374,33 @@ export function DebuggerView() {
     onNewRule: setRuleDraft,
     onConnections: () => setTab('connections'),
     onRulesPanel: (k) => openDock(k === 'ignore' || k === 'only' ? 'filter' : k === 'highlight' ? 'highlight' : k === 'reply' ? 'auto-reply' : 'modify'),
+  });
+  // the detail panes are memoised too: a capture sync that leaves the selected exchange as it was renders nothing there
+  const paneActions = useStableCallbacks({
+    onOpen: () => sel && openInTab(sel),
+    onResend: () => sel && void resend(sel),
+    onAsk: () => sel && ask(sel),
+    onBookmark: async () => sel && (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked })),
+    onDelete: () => sel && void remove([sel.id]),
+    onCompare: () => setCompareA(sel),
+    onRule: (preset: string) => {
+      if (!sel) return;
+      if (preset === 'reply-with-this') {
+        void call<RulesState>('debug.saveRule', {
+          rule: {
+            kind: 'reply',
+            name: `Reply ${sel.status ?? 200} for ${sel.host}`,
+            enabled: true,
+            match: { host: sel.host, url: sel.url.split('?')[0] + '*' },
+            reply: {
+              status: sel.status ?? 200,
+              headers: Object.fromEntries(Object.entries(sel.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
+              body: sel.responseBody ?? '',
+            },
+          },
+        }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), toastError);
+      } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), toastError);
+    },
   });
 
   // What to capture: one program (a browser or a terminal opened through the proxy), or everything on this computer
@@ -797,29 +828,13 @@ export function DebuggerView() {
                       ) : (
                         <ExchangePanes
                           e={sel}
-                          onOpen={() => openInTab(sel)}
-                          onResend={() => void resend(sel)}
-                          onAsk={aiOn ? () => ask(sel) : undefined}
-                          onBookmark={async () => (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked }))}
-                          onDelete={() => void remove([sel.id])}
-                          onCompare={() => setCompareA(sel)}
-                          onRule={(preset) => {
-                            if (preset === 'reply-with-this') {
-                              void call<RulesState>('debug.saveRule', {
-                                rule: {
-                                  kind: 'reply',
-                                  name: `Reply ${sel.status ?? 200} for ${sel.host}`,
-                                  enabled: true,
-                                  match: { host: sel.host, url: sel.url.split('?')[0] + '*' },
-                                  reply: {
-                                    status: sel.status ?? 200,
-                                    headers: Object.fromEntries(Object.entries(sel.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
-                                    body: sel.responseBody ?? '',
-                                  },
-                                },
-                              }).then((r) => (setRules(r), toast('Rule added: this response is served by TestPion from now on')), toastError);
-                            } else void call<RulesState>('debug.addPreset', { preset, host: sel.host }).then((r) => (setRules(r), toast(`Rule added for ${sel.host}`)), toastError);
-                          }}
+                          onOpen={paneActions.onOpen}
+                          onResend={paneActions.onResend}
+                          onAsk={aiOn ? paneActions.onAsk : undefined}
+                          onBookmark={paneActions.onBookmark}
+                          onDelete={paneActions.onDelete}
+                          onCompare={paneActions.onCompare}
+                          onRule={paneActions.onRule}
                         />
                       )}
                     </div>

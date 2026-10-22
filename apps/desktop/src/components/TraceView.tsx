@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
-import { Badge, cx, Segmented, Split, Tabs } from './ui';
+import { Badge, cx, Segmented, Split, Tabs, VirtualList } from './ui';
 import { JsonTree, RawView } from './JsonView';
 import { useCopied } from '../lib/clipboard';
 import { RelatedRefs } from './RefLink';
@@ -57,6 +57,21 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
   const total = Math.max(1, end - start);
   const span = trace.spans.find((s) => s.spanId === sel);
   const tokens = trace.spans.reduce((a, s) => a + (Number(s.attributes.inputTokens) || 0) + (Number(s.attributes.outputTokens) || 0), 0);
+  // the tree's value is made once per span and tab: a new object each render would fold the tree up again whenever the
+  // list around it renders (a search keystroke, a live run's batch)
+  const tabData = useMemo(
+    () =>
+      !span || tab === 'payload'
+        ? undefined
+        : tab === 'attributes'
+          ? JSON.parse(JSON.stringify({ spanId: span.spanId, parentSpanId: span.parentSpanId, startTime: new Date(span.startTime).toISOString(), status: span.status, ...span.attributes }))
+          : tab === 'input'
+            ? (span.input ?? null)
+            : tab === 'output'
+              ? (span.output ?? null)
+              : (span.events ?? []),
+    [span, tab],
+  );
   return (
     <div className="h-full flex flex-col min-h-0" data-trace-view={trace.traceId}>
       <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
@@ -71,15 +86,19 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
         </span>
       </div>
       <Split id="trace" direction="vertical" initial={55}>
-        <div className="overflow-auto h-full">
-          {rows.map(({ span: s, depth }) => {
+        <VirtualList
+          className="h-full"
+          items={rows}
+          rowHeight={28}
+          keyOf={(r) => r.span.spanId}
+          name="TraceSpans"
+          render={({ span: s, depth }) => {
             const left = ((s.startTime - start) / total) * 100;
             const width = Math.max(0.4, (((s.endTime ?? end) - s.startTime) / total) * 100);
             return (
               <button
-                key={s.spanId}
                 onClick={() => setSel(s.spanId)}
-                className={cx('w-full flex items-center h-7 text-sm border-b border-line/60 text-left hover:bg-hover', sel === s.spanId && 'bg-accent/10')}
+                className={cx('w-full flex items-center h-full text-sm border-b border-line/60 text-left hover:bg-hover', sel === s.spanId && 'bg-accent/10')}
               >
                 <div className="w-[38%] shrink-0 truncate flex items-center gap-1.5" style={{ paddingLeft: 8 + depth * 14 }}>
                   <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: spanColor(s) }} />
@@ -93,8 +112,8 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                 </div>
               </button>
             );
-          })}
-        </div>
+          }}
+        />
         <div className="h-full flex flex-col min-h-0">
           {span ? (
             <>
@@ -118,17 +137,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                 {tab === 'payload' ? (
                   <PayloadPanel key={span.spanId} span={span} />
                 ) : (
-                <JsonTree
-                  data={
-                    tab === 'attributes'
-                      ? JSON.parse(JSON.stringify({ spanId: span.spanId, parentSpanId: span.parentSpanId, startTime: new Date(span.startTime).toISOString(), status: span.status, ...span.attributes }))
-                      : tab === 'input'
-                        ? span.input ?? null
-                        : tab === 'output'
-                          ? span.output ?? null
-                          : span.events ?? []
-                  }
-                />
+                <JsonTree data={tabData} />
                 )}
               </div>
             </>

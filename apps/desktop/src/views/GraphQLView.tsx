@@ -27,7 +27,7 @@ import { JsonTree, RawView } from '../components/JsonView';
 import { JsonTable, tableRowsOf } from '../components/JsonTable';
 import { CheckList, ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Input, Select, Split, statusTone, Tabs, Tooltip } from '../components/ui';
+import { Badge, Button, cx, Empty, Input, Select, Split, statusTone, Tabs, Tooltip, VirtualList } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { currentCollectionTree, refreshCollections, useCollectionTree } from '../lib/collections-store';
@@ -82,7 +82,10 @@ interface SubEvent {
   time: number;
   data?: unknown;
   message?: string;
+  /** Given as it arrives: the row's key and what the selection names (the list keeps the last 2,000, so a position is not stable). */
+  seq?: number;
 }
+const MAX_SUB_EVENTS = 2000;
 
 const DEFAULT_QUERY = `# Write your query. Ctrl+Space for schema-aware suggestions, Ctrl+Enter to run.
 query GetPatient($id: ID!) {
@@ -268,13 +271,16 @@ export function GraphQLView() {
     () =>
       on<{ id: string; event: SubEvent }>('gql.subscription', (p) => {
         if (p.id !== subscriptionRef.current) return;
-        setEvents((xs) => [...(xs ?? []), p.event].slice(-2000));
+        const event = { ...p.event, seq: ++eventSeq.current };
+        setEvents((xs) => (xs && xs.length < MAX_SUB_EVENTS ? [...xs, event] : [...(xs ?? []), event].slice(-MAX_SUB_EVENTS)));
         if (p.event.type === 'complete' || (p.event.type === 'status' && p.event.message === 'Connection closed')) setSubscription(undefined);
       }),
     [],
   );
   const subscriptionRef = useRef<string | undefined>(undefined);
   subscriptionRef.current = subscription?.id;
+  const eventSeq = useRef(0);
+  const selectedEvent = useMemo(() => (eventSel === undefined ? undefined : events?.find((e) => e.seq === eventSel)), [events, eventSel]);
   const subscribe = async () => {
     setEvents([]);
     setEventSel(undefined);
@@ -559,16 +565,21 @@ export function GraphQLView() {
                   />
                   <div className="flex-1 min-h-0" data-output="graphql.events">
                   <Split id="gql-sub-events" direction="vertical" initial={45}>
-                    <div className="h-full overflow-auto">
-                      {events.map((e, i) => (
-                        <button key={i} onClick={() => setEventSel(i)} className={cx('w-full flex items-center gap-2 px-3 py-1 text-left text-sm border-b border-line/50 hover:bg-hover', eventSel === i && 'bg-accent/10')}>
+                    <VirtualList
+                      className="h-full"
+                      items={events}
+                      rowHeight={30}
+                      keyOf={(e) => e.seq ?? e.time}
+                      name="GraphQLEvents"
+                      render={(e) => (
+                        <button onClick={() => setEventSel(e.seq)} className={cx('w-full h-full flex items-center gap-2 px-3 text-left text-sm border-b border-line/50 hover:bg-hover', eventSel === e.seq && 'bg-accent/10')}>
                           <span className="text-xs text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>
                           <Badge tone={e.type === 'next' ? 'accent' : e.type === 'error' ? 'bad' : 'default'}>{e.type}</Badge>
                           <span className="mono text-xs truncate">{e.message ?? JSON.stringify(e.data)}</span>
                         </button>
-                      ))}
-                    </div>
-                    <div className="h-full overflow-auto">{eventSel !== undefined && events[eventSel]?.data !== undefined ? <JsonTree data={events[eventSel]!.data} /> : <Empty title="Select an event" />}</div>
+                      )}
+                    />
+                    <div className="h-full overflow-auto">{selectedEvent?.data !== undefined ? <JsonTree data={selectedEvent.data} /> : <Empty title="Select an event" />}</div>
                   </Split>
                   </div>
                 </div>

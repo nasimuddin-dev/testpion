@@ -190,6 +190,9 @@ export class Backend {
   logBuffer: LogRecord[] = [];
   /** Postman-style console: recent requests with their details and script output. */
   consoleBuffer: ConsoleEntry[] = [];
+  /** Console entries and log records reach the window in batches (one event per 50 ms), as a run's events do. */
+  consoleEvents = this.batched<ConsoleEntry>('console', 50);
+  logEvents = this.batched<LogRecord>('log', 50);
   /** What the output builders (output.save) read from the handlers that hold it: the Debugger session on screen, as HAR. */
   outputProviders: { har?: NonNullable<OutputDeps['har']>; scaleRows?: OutputDeps['scaleRows'] } = {};
   /** Redactors of connected MCP servers and WebSocket sessions, for their console entries. */
@@ -250,7 +253,7 @@ export class Backend {
     this.logger.addSink((rec) => {
       this.logBuffer.push(rec);
       if (this.logBuffer.length > 500) this.logBuffer.shift();
-      this.host.emit('log', rec);
+      this.logEvents.push(rec);
     });
     this.terminals = createTerminals(this);
     this.handlers = this.buildHandlers();
@@ -656,6 +659,11 @@ export class Backend {
 
   /** Code snippet for a request, with variables and auth resolved. Secrets are masked unless revealSecrets. */
   async codeSnippet(p: { request: HttpRequestSpec; environment?: string; collectionId?: string; requestId?: string; language: string; revealSecrets?: boolean }) {
+    return (await codeSnippetImpl(this, p))[p.revealSecrets ? 'text' : 'masked'];
+  }
+
+  /** The code with secrets and with them masked, from one engine context. */
+  async codeSnippets(p: { request: HttpRequestSpec; environment?: string; collectionId?: string; requestId?: string; language: string }) {
     return codeSnippetImpl(this, p);
   }
 
@@ -867,6 +875,8 @@ export class Backend {
 
   async dispose(): Promise<void> {
     for (const t of this.deferred) clearTimeout(t);
+    this.consoleEvents.flush();
+    this.logEvents.flush();
     this.terminals.dispose('quit');
     this.stopWatching?.();
     this.ownWrites.dispose();

@@ -238,7 +238,8 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
 }
 
 /** Code snippet for a request, with variables and auth resolved. Secrets are masked unless revealSecrets. */
-export async function codeSnippet(be: Backend, p: { request: HttpRequestSpec; environment?: string; collectionId?: string; requestId?: string; language: string; revealSecrets?: boolean }) {
+/** The code for a request in a language, with its secrets (`text`) and with them masked (`masked`), from one engine context. */
+export async function codeSnippet(be: Backend, p: { request: HttpRequestSpec; environment?: string; collectionId?: string; requestId?: string; language: string }): Promise<{ text: string; masked: string }> {
   const ctx = be.context({ environment: p.environment, collectionId: p.collectionId });
   let request = p.request;
   if ((!request.auth || request.auth.type === 'inherit') && ctx.collection)
@@ -262,11 +263,10 @@ export async function codeSnippet(be: Backend, p: { request: HttpRequestSpec; en
   };
   // "url": the resolved URL only (Copy URL); otherwise code in the chosen language
   const code = p.language === 'url' ? snippet.url : generateCode(snippet, p.language);
-  if (p.revealSecrets) return code;
   // mask secret values and sensitive headers
   let masked = ctx.redactor.redactString(code);
   for (const [k, v] of headers) if (ctx.redactor.isSensitiveKey(k) && v.length >= 4) masked = masked.split(v).join('<secret>');
-  return masked.split('[REDACTED]').join('<secret>');
+  return { text: code, masked: masked.split('[REDACTED]').join('<secret>') };
 }
 
 export async function gqlSend(be: Backend, p: GqlSendParams) {

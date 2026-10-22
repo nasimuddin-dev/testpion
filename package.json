@@ -36,6 +36,7 @@
     "@types/ws": "^8.18.1",
     "aedes": "^1.2.0",
     "pg-mem": "^3.0.14",
+    "react-test-renderer": "^19.3.0",
     "socket.io": "^4.8.4",
     "typescript": "^5.9.0",
     "vitest": "^5.0.2",

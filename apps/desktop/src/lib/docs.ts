@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, createElement, useContext, useMemo, type ReactNode } from 'react';
 import { create } from 'zustand';
 import type { ViewId } from '../store';
 import { dropDraft } from './draft-store';
@@ -16,6 +16,16 @@ export const isDocView = (v: ViewId) => DOC_VIEWS.includes(v);
 /** Which document an editor instance is, and whether it's the one on screen. */
 export const DocContext = createContext<{ docId?: string; active: boolean }>({ active: true });
 export const useDoc = () => useContext(DocContext);
+
+/**
+ * The scope of one mounted view (or one document of a multi-document editor): which document it is and whether it is on
+ * screen — the one signal a view, its editors and its polls use to work only while shown. The value is made once per
+ * change, so a render of the shell around it reaches no consumer through a new object.
+ */
+export function DocScope({ docId, active, children }: { docId?: string; active: boolean; children: ReactNode }) {
+  const value = useMemo(() => ({ docId, active }), [docId, active]);
+  return createElement(DocContext.Provider, { value }, children);
+}
 
 interface DocsState {
   docs: Partial<Record<ViewId, string[]>>;

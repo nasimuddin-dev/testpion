@@ -22,7 +22,7 @@ import { viewContent } from '../lib/files';
 import { runOutputSpec } from './output/run-specs';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea, useDebounced } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -76,7 +76,11 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
   const [baselineOpen, setBaselineOpen] = useState(false);
   // results list or the run's charts (once it finished); remembered
   const [pane, pickPane] = usePersisted<'results' | 'charts' | 'timeline'>('aps.runPane', 'results', { text: true, parse: (v) => (v === 'charts' || v === 'timeline' ? v : 'results') });
-  const loadingPage = useRef(false);
+  // the pages are read a moment after the last keystroke in the filter; the newest query's answer wins (an older one
+  // that arrives later is dropped), and a page of more rows is one at a time
+  const appliedQuery = useDebounced(query, 250);
+  const querySeq = useRef(0);
+  const loadingMore = useRef(false);
 
   useEffect(() => {
     setProgress({ completed: 0, passed: 0, failed: 0, skipped: 0, errors: 0, running: 0 });
@@ -110,23 +114,25 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
 
   const loadPage = useCallback(
     async (reset: boolean) => {
-      if (loadingPage.current) return;
-      loadingPage.current = true;
+      if (!reset && loadingMore.current) return;
+      const seq = reset ? ++querySeq.current : querySeq.current;
+      if (!reset) loadingMore.current = true;
       try {
         const offset = reset ? 0 : rows.length;
-        const r = await call<{ items: TestResult[]; total: number }>('runs.results', { runId, offset, limit: PAGE, status, query: query || undefined });
+        const r = await call<{ items: TestResult[]; total: number }>('runs.results', { runId, offset, limit: PAGE, status, query: appliedQuery || undefined });
+        if (seq !== querySeq.current) return;
         setRows((x) => (reset ? r.items : [...x, ...r.items]));
         setTotal(r.total);
       } finally {
-        loadingPage.current = false;
+        if (!reset) loadingMore.current = false;
       }
     },
-    [runId, rows.length, status, query],
+    [runId, rows.length, status, appliedQuery],
   );
   useEffect(() => {
     if (done) void loadPage(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done, status, query]);
+  }, [done, status, appliedQuery]);
   const autoPicked = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!done || !summary || autoPicked.current === runId) return;
