@@ -403,6 +403,17 @@ async function executeHttpAttempt(spec: HttpRequestSpec, opts: HttpExecOptions =
   }
 }
 
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE', 'TRACE']);
+/** undici reports a connection closed under a request as UND_ERR_SOCKET ("other side closed"); a reset or broken pipe is the same event. */
+function isStaleConnectionError(e: unknown): boolean {
+  const code = (e as { cause?: { code?: string }; code?: string } | undefined)?.cause?.code ?? (e as { code?: string } | undefined)?.code;
+  return code === 'UND_ERR_SOCKET' || code === 'ECONNRESET' || code === 'EPIPE';
+}
+/** A body that can be written again: not a stream. */
+function isReplayableBody(body: unknown): boolean {
+  return body === undefined || body === null || typeof body === 'string' || body instanceof Uint8Array || body instanceof ArrayBuffer || (typeof Blob !== 'undefined' && body instanceof Blob) || body instanceof URLSearchParams || (typeof FormData !== 'undefined' && body instanceof FormData);
+}
+
 async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions, pool?: Dispatcher): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
   const t0 = performance.now();
   const timeline: TimelinePhase[] = [];
@@ -422,7 +433,7 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   const s = spec.settings ?? {};
   const jar = opts.cookieJar;
   const follow = s.followRedirects !== false;
-  const tSend = performance.now();
+  let tSend = performance.now();
   // With a cookie jar, redirects are followed here so cookies set by each hop (login flows) are kept.
   let current = url;
   let curMethod = method;
@@ -439,22 +450,39 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   // Postman's redirect options are applied hop by hop, so redirects are followed here when one is set
   const custom = !!(s.followOriginalMethod || s.followAuthorizationHeader || s.removeRefererOnRedirect);
   // the connection the (first) request goes over: DNS, TCP and TLS phases when it is a new one
-  const watch = watchSend(url, method);
+  let watch = watchSend(url, method);
+  let staleRetried = false;
   // undici loads with the first request, with the app's proxy and certificate settings applied
   await ensureProxyApplied();
   const { fetch: undiciFetch } = await undici();
   for (;;) {
     await assertUrlAllowed(current);
-    res = await undiciFetch(current, {
-      method: curMethod,
-      headers: headers as unknown as Record<string, string>,
-      body: (ntlmStage === 1 ? undefined : curBody) as never,
-      redirect: follow && !jar && !guarded && !custom ? 'follow' : 'manual',
-      signal: opts.signal,
-      dispatcher: pool ?? dispatcherFor(spec),
-      // duplex is required by undici for streamed (Blob/FormData) bodies
-      ...({ duplex: 'half' } as object),
-    });
+    try {
+      res = await undiciFetch(current, {
+        method: curMethod,
+        headers: headers as unknown as Record<string, string>,
+        body: (ntlmStage === 1 ? undefined : curBody) as never,
+        redirect: follow && !jar && !guarded && !custom ? 'follow' : 'manual',
+        signal: opts.signal,
+        dispatcher: pool ?? dispatcherFor(spec),
+        // duplex is required by undici for streamed (Blob/FormData) bodies
+        ...({ duplex: 'half' } as object),
+      });
+    } catch (e) {
+      // A pooled connection the server had already closed (its keep-alive timer ran out, a load balancer recycled it): the
+      // request never reached the server, so a request that can be sent again goes once more over a new connection, as a
+      // browser does. (A busy machine lost one request of thousands this way.)
+      const sentOver = watch.result();
+      if (!staleRetried && !opts.signal?.aborted && sentOver?.times && sentOver.times.created < tSend - 1 && isStaleConnectionError(e) && IDEMPOTENT_METHODS.has(curMethod) && isReplayableBody(curBody)) {
+        staleRetried = true;
+        watch.stop();
+        watch = watchSend(current, curMethod);
+        tSend = performance.now();
+        continue;
+      }
+      watch.stop();
+      throw e;
+    }
     // NTLM: the server's challenge (message 2) is answered on the same connection; a server that does not challenge
     // (it needs no auth) keeps this response
     if (ntlm && ntlmStage === 1) {
@@ -507,12 +535,12 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   if (sent) {
     const t = sent.times;
     // a socket opened after the request started is this request's own new connection
-    const fresh = !!t && t.created >= tSend - 1;
+    const fresh = staleRetried || (!!t && t.created >= tSend - 1);
     if (fresh) {
       const phase = (name: string, from: number, to?: number) => to !== undefined && timeline.push({ name, startMs: round(from - t0), durationMs: round(to - from) });
-      phase('DNS lookup', t.created, t.lookup);
-      phase('TCP connect', t.lookup ?? t.created, t.connect);
-      if (t.connect !== undefined) phase('TLS handshake', t.connect, t.secure);
+      if (t) phase('DNS lookup', t.created, t.lookup);
+      if (t) phase('TCP connect', t.lookup ?? t.created, t.connect);
+      if (t?.connect !== undefined) phase('TLS handshake', t.connect, t.secure);
     }
     connection = { reused: !fresh, remoteAddress: sent.remoteAddress, remotePort: sent.remotePort, tlsProtocol: sent.tlsProtocol, cipher: sent.cipher, certificate: sent.certificate };
     timeline.push({ name: 'waiting (TTFB)', startMs: round(sent.sentAt - t0), durationMs: round(performance.now() - sent.sentAt) });
