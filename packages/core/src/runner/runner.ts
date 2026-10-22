@@ -370,13 +370,23 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   let lastResponse: StepResponse | undefined;
   const conditionById = new Map<string, boolean>();
   const branchSkipped = new Set<string>();
+  const responseChars = new Map<string, number>();
+  let responseCharsTotal = 0;
+  const forgetResponse = (id: string) => {
+    responseCharsTotal -= responseChars.get(id) ?? 0;
+    responseChars.delete(id);
+    responses.delete(id);
+  };
   const remember = (id: string, full: StepResponse) => {
     // a big body is not kept (an if: then sees its status and headers): a long run holds at most 100 small responses
     const r = (full.text?.length ?? 0) > 262_144 ? { status: full.status, headers: full.headers } : full;
-    responses.delete(id);
+    // (and at most 4 million characters of body in all - each also held parsed, 3-10 times the text - the oldest go first)
+    forgetResponse(id);
     responses.set(id, r);
+    responseChars.set(id, r.text?.length ?? 0);
+    responseCharsTotal += r.text?.length ?? 0;
     lastResponse = r;
-    if (responses.size > 100) responses.delete(responses.keys().next().value!);
+    while (responses.size > 100 || (responseCharsTotal > 4_000_000 && responses.size > 1)) forgetResponse(responses.keys().next().value!);
   };
   for (const [id, r] of Object.entries(opts.seed?.responses ?? {})) remember(id, r);
   for (const [id, c] of Object.entries(opts.seed?.conditions ?? {})) conditionById.set(id, c);
