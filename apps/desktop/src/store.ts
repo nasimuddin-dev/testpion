@@ -8,6 +8,7 @@ import type { FeedbackRequest } from './components/FeedbackDialog';
 import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
 import { setDraftScope } from './lib/ws-scope';
+import { dirtyGuard, guardLeave } from './lib/leave-guard';
 import { offerUndo, UNDO_MS } from './lib/undo';
 import { normalizeEnvironment } from './lib/environments-store';
 import { refOpenLabel, type ItemRef } from '@testpion/shared';
@@ -340,6 +341,15 @@ function record(get: Get, set: Set, next: NavLocation) {
   set({ nav: { back: [...back, current].slice(-NAV_LIMIT), forward: [], current: named(next) } });
 }
 function travel(get: Get, set: Set, dir: 'back' | 'forward') {
+  const { back, forward } = get().nav;
+  const from = dir === 'back' ? back : forward;
+  const to = from[from.length - 1];
+  if (!to) return;
+  // a view with unsaved changes asks first, then this runs again
+  if (get().view !== to.view && dirtyGuard(get().view)) return guardLeave(get().view, to.view, () => travelNow(get, set, dir));
+  travelNow(get, set, dir);
+}
+function travelNow(get: Get, set: Set, dir: 'back' | 'forward') {
   const { back, forward, current } = get().nav;
   const from = dir === 'back' ? back : forward;
   const to = from[from.length - 1];
@@ -354,6 +364,7 @@ export const useApp = create<AppState>((set, get) => ({
   // first launch opens the Home view
   view: (localStorage.getItem('aps.view') as ViewId) || 'home',
   setView: (view) => {
+    if (dirtyGuard(get().view) && view !== get().view) return guardLeave(get().view, view, () => get().setView(view));
     localStorage.setItem('aps.view', view);
     if (view !== get().view) record(get, set, { view });
     if (isDocView(view)) useDocs.getState().ensure(view);
@@ -438,6 +449,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ activity: a });
   },
   openIntent: (view, payload) => {
+    if (dirtyGuard(get().view) && view !== get().view) return guardLeave(get().view, view, () => get().openIntent(view, payload));
     localStorage.setItem('aps.view', view);
     record(get, set, { view, payload: replayable(payload) });
     set({ view, ...lastRequest(view), intent: { view, payload, nonce: Date.now(), docId: routeDoc(view, payload) } });

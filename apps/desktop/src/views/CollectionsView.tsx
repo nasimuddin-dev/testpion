@@ -32,7 +32,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
-import { useIntent } from '../hooks';
+import { useIntent, useSaveShortcut } from '../hooks';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
@@ -53,6 +53,8 @@ import { subtreeIds } from '../components/MoveDialog';
 import { ImportModal } from './rest/dialogs';
 import { SecurityReviewDialog } from '../components/SecurityReviewDialog';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { adoptSaved, changedFields, discardDraft, editDraft, markSaved, resolveConflict, useCollectionDrafts } from '../lib/collection-draft';
+import { useLeaveGuard } from '../lib/leave-guard';
 
 export function CollectionsView() {
   const [trashOpen, setTrashOpen] = useState(false);
@@ -76,7 +78,13 @@ export function CollectionsView() {
     );
     return () => void (live = false);
   }, [selOutline]);
-  const [draft, setDraft] = useState<Collection>();
+  // the edits of the collection's own settings live in lib/collection-draft: a refresh of the outline (a save in a
+  // request tab, the file watcher, a pull, an AI apply) merges into them and never wipes what is being typed
+  const entries = useCollectionDrafts((s) => s.entries);
+  const entry = sel ? entries[sel] : undefined;
+  const draft = entry?.draft;
+  const setDraft = editDraft;
+  const dirty = !!entry && changedFields(entry.base, entry.draft).length > 0;
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'headers' | 'auth' | 'scripts' | 'settings' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
   // a dataset chosen before the collection (the sidebar's "Run a collection with it"): the runner starts with it
@@ -97,7 +105,9 @@ export function CollectionsView() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => setDraft(stored && stored.id === sel ? stored : undefined), [sel, stored]);
+  useEffect(() => {
+    if (stored && stored.id === sel) adoptSaved(stored);
+  }, [sel, stored]);
   useIntent('collections', (p) => {
     if (p?.collectionId) setSel(p.collectionId);
     // straight to a part of the collection's settings (e.g. its variables, from the variable popover or the quick look)
@@ -144,6 +154,17 @@ export function CollectionsView() {
     await load();
     useApp.getState().toast('Collection saved', 'success');
   };
+  /** Save the settings being edited (the draft). Resolves false when it could not be saved. */
+  const saveDraft = async (): Promise<boolean> => {
+    if (!draft || !dirty) return true;
+    const ok = await attempt(() => save(draft));
+    if (ok) markSaved(draft);
+    return ok;
+  };
+  /** Save a change to the requests (the tree): the settings being edited stay unsaved and are merged back after. */
+  const saveItems = (c: Collection) => save(c.id === entry?.base.id ? { ...entry.base, items: c.items } : c);
+  useSaveShortcut('collections', () => void saveDraft());
+  useLeaveGuard('collections', dirty, draft ? `The settings of "${draft.name}"` : 'The collection', saveDraft);
   const exportAs = async (id: string, format: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi') => {
     try {
       const r = await call<SaveResult & { name: string; notes: string[] }>('col.export', { id, format });
@@ -221,7 +242,10 @@ export function CollectionsView() {
           <div className="flex-1 overflow-auto">
             {cols.map((c) => (
               <button key={c.id} onClick={() => setSel(c.id)} className={cx('w-full text-left px-3 py-2 border-b border-line/60', sel === c.id ? 'bg-accent/10' : 'hover:bg-hover')}>
-                <div className={cx('text-sm font-medium', c.problem && 'text-bad')}>{c.name}</div>
+                <div className={cx('text-sm font-medium', c.problem && 'text-bad')}>
+                  {c.name}
+                  {entries[c.id] && changedFields(entries[c.id].base, entries[c.id].draft).length > 0 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent ml-1.5 align-middle" aria-label="Unsaved changes" />}
+                </div>
                 <div className="text-xs text-muted">{c.problem ? c.problem : `${plural(count(c.items), 'request')} · v${c.version} · ${c.updatedAt ? timeAgo(c.updatedAt) : ''}`}</div>
               </button>
             ))}
@@ -260,6 +284,12 @@ export function CollectionsView() {
                   </span>
                 )}
                 <Badge>v{draft.version}</Badge>
+                {dirty && (
+                  <span className="flex items-center gap-1 text-xs text-muted" data-collection-dirty>
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+                    Unsaved changes
+                  </span>
+                )}
                 <div className="ml-auto flex gap-2">
                   <Button size="sm" icon={<FilePlus2 size={12} />} onClick={() => useApp.getState().openIntent('rest', { newTab: true })}>
                     New HTTP request
@@ -304,9 +334,14 @@ export function CollectionsView() {
                       { label: 'AsyncAPI 3.0 (its connections)', icon: <Radio size={14} />, onSelect: () => void exportAs(draft.id, 'asyncapi') },
                     ]}
                   />
-                  <Button size="sm" variant="primary" onClick={() => save(draft)}>
+                  <Button size="sm" variant="primary" disabled={!dirty} title={dirty ? undefined : 'Nothing changed'} onClick={() => void saveDraft()}>
                     Save
                   </Button>
+                  {dirty && (
+                    <Button size="sm" variant="ghost" title="Throw away the changes that are not saved" onClick={() => discardDraft(draft.id)}>
+                      Discard
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -332,6 +367,19 @@ export function CollectionsView() {
                   />
                 </div>
               </div>
+              {entry && entry.conflict.length > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b border-line bg-warn/10 text-xs" role="status" data-collection-conflict>
+                  <span>
+                    Changed outside this editor while you were editing: {entry.conflict.join(', ')}. Your edits are kept until you choose.
+                  </span>
+                  <Button size="sm" className="ml-auto" onClick={() => resolveConflict(draft.id, 'mine')}>
+                    Keep mine
+                  </Button>
+                  <Button size="sm" onClick={() => resolveConflict(draft.id, 'theirs')}>
+                    Take the saved version
+                  </Button>
+                </div>
+              )}
               <Tabs
                 value={tab}
                 onChange={setTab}
@@ -366,14 +414,14 @@ export function CollectionsView() {
                     <CollectionTree
                       collections={[draft]}
                       onOpen={open}
-                      onChange={save}
+                      onChange={saveItems}
                       onRun={(_, folderId) => {
                         setRunFolder(folderId);
                         setTab('run');
                       }}
                       onNewRequest={async (c, folderId) => {
                         const node = { kind: 'http' as const, id: uid('req-'), name: 'New request', request: { method: 'GET', url: '{{baseUrl}}/' }, assertions: [{ type: 'status', expected: 200 }] };
-                        await save({ ...c, items: addToFolder(c.items, folderId, node) });
+                        await saveItems({ ...c, items: addToFolder(c.items, folderId, node) });
                         open(c, node);
                       }}
                     />
