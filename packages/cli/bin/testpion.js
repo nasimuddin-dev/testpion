@@ -52,6 +52,9 @@ async function loadMain() {
         (await import('node:module')).enableCompileCache?.();
         return (await import('../dist/bundle.js')).main;
       }
+      // a bundle older than a package build (tsc rewrote core or shared): the ~1,000 files load instead - 1.4 s with a warm disk
+      // cache and, measured on Windows, 28 s with a cold one - so say so once (a source checkout only; the npm package has no bundle.js)
+      process.stderr.write('testpion: dist/bundle.js is older than the last build, loading the ~1,000 module files instead (slow). Run: npm run build -w @testpion/cli' + String.fromCharCode(10));
     } catch {
       // no bundle (a source checkout that was not built with it, the npm package): the files
     }
