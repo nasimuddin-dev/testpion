@@ -13,7 +13,7 @@ A workspace comes from somewhere: a git repository, an import, a teammate, a sha
 
 Decisions are kept in the app's data folder (`~/.testpion/trust/<hash of the workspace's real path>.json`), one file per workspace. A `.local/trust.json` inside a workspace folder (written by versions before 0.55) is **ignored**: you are asked again the next time it matters. That is the one-time migration, and it never trusts anything silently. Imports, bundles and zip files refuse any path under `.local/`.
 
-To forget every decision of a workspace, delete its file there (the window's own call is `scripts.forget`).
+**Settings ▸ Privacy & security ▸ Script trust** lists what the open workspace was allowed (secret reads, hosts, programs) with a **Forget** button for each and **Forget everything**. On the command line: `testpion trust list --json` and `testpion trust forget [--host h | --secrets | --all]`. An agent can read the list with the MCP tool `trust_status`, never change it.
 
 ## Programs
 

@@ -210,6 +210,11 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { withinDays: 30 },
     narrow: 'Lower `withinDays`, lower `limit`, or page with `cursor`.',
   },
+  trust_status: {
+    when: 'Use it to see why a script was refused a secret or a host, or whether a stdio MCP server of the workspace is allowed to start.',
+    whenNot: 'To allow something: an agent cannot; ask the user to do it in Settings ▸ Privacy & security or with `testpion trust`.',
+    example: {},
+  },
   check_certificate: {
     when: 'Use it to read a host’s TLS certificate now: expiry, issuer and whether this machine trusts it.',
     whenNot: 'For every certificate already seen, use `list_certificates`.',

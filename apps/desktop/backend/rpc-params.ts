@@ -275,7 +275,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'runs.setBreakpoints': { runId: 's', ids: 'sa' },
   'schema.validate': { schema: 'o|b', data: 'x?' },
   'scripts.allow': { host: 's?', secrets: 'b?' },
-  'scripts.forget': {},
+  'scripts.forget': { host: 's?', secrets: 'b?', all: 'b?' },
   'scripts.trust': {},
   'secrets.allow': { environment: 's', refs: 'sa?' },
   'secrets.refs': { environment: 's' },

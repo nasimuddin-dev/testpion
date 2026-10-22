@@ -1,5 +1,6 @@
 import { StoragePanel } from '../components/StoragePanel';
 import { AgentsPanel } from '../components/AgentsPanel';
+import { ScriptTrustPanel } from '../components/ScriptTrustPanel';
 import { KeyboardSettings } from '../components/KeyboardSettings';
 import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
@@ -177,6 +178,7 @@ export function SettingsView() {
                   explicitly call.
                 </p>
               </div>
+              <ScriptTrustPanel />
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
                 <div className="font-medium">What leaves this computer without you asking</div>
                 <p className="text-muted">

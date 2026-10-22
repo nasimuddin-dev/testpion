@@ -126,3 +126,24 @@ export function trustSecretReads(store: Store): void {
 export function forgetTrustedCommands(store: Store): void {
   save(store, { commands: [] });
 }
+
+/** Forget one host the workspace's scripts were allowed to reach (`*` included). */
+export function forgetHost(store: Store, host: string): void {
+  const t = load(store);
+  const h = hostKey(host);
+  t.hosts = (t.hosts ?? []).filter((e) => e.host !== h);
+  save(store, t);
+}
+
+/** Forget that the workspace's scripts may read stored secrets. */
+export function forgetSecretReads(store: Store): void {
+  const t = load(store);
+  delete t.secretReads;
+  save(store, t);
+}
+
+/** Everything the person allowed this workspace on this computer (programs, script hosts, secret reads). */
+export function trustSummary(store: Store): { commands: TrustedCommand[]; hosts: Array<{ host: string; at: string }>; secretReads: { at: string } | null } {
+  const t = load(store);
+  return { commands: t.commands, hosts: t.hosts ?? [], secretReads: t.secretReads ?? null };
+}

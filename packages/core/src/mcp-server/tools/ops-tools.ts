@@ -2,6 +2,7 @@ import { checkCertificate } from '../../net/certificate-check.js';
 import { ciConfig, type CiConfigOptions } from '../../runner/ci-config.js';
 import { ciTargetOfRun, finishedRun } from '../../runner/result-source.js';
 import { listCertificates, recordCertificate } from '../../storage/certificates.js';
+import { trustSummary } from '../../storage/trust.js';
 import { llmUsage } from '../../storage/llm-usage.js';
 import { mcpToolUsage } from '../../storage/mcp-usage.js';
 import { str } from '../tool.js';
@@ -64,6 +65,12 @@ export function opsTools(d: ModuleToolDeps): Tool[] {
       description: 'TLS certificates of the HTTPS hosts this workspace has called (from the app, test runs, monitors and agents), soonest to expire first: host, subject, issuer, valid until, days left and when last seen. Use it to find certificates that expire soon.',
       inputSchema: { type: 'object', properties: { withinDays: { type: 'number', description: 'Only those that expire within this many days' } } },
       run: (a) => listCertificates(store).filter((c) => a.withinDays === undefined || (c.daysLeft !== undefined && c.daysLeft <= Number(a.withinDays))),
+    },
+    {
+      name: 'trust_status',
+      description: "What the user allowed this workspace on this computer: the programs it may start, the hosts its scripts may send to, whether its scripts may read secrets. Read-only: an agent cannot allow anything; the user does that in the app (Settings ▸ Privacy & security) or with `testpion trust`.",
+      inputSchema: { type: 'object', properties: {} },
+      run: () => trustSummary(store),
     },
     {
       name: 'llm_usage',
