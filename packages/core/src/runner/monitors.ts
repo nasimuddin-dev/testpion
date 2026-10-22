@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { atomicWrite } from '../storage/fsutil.js';
 import { dirname, join } from 'node:path';
 import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
@@ -262,7 +263,7 @@ const resultsFile = (store: WorkspaceStore, id: string) => store.path('runs', 'm
  * A monitor's results file parsed once per change of it (newest first) and kept: the list, the status, the daily uptime
  * and the scheduler's tick each ask for it several times a minute, and the file holds up to a thousand lines.
  */
-const parsedResults = new Map<string, { mtimeMs: number; size: number; results: MonitorResult[] }>();
+const parsedResults = new Map<string, { mtimeMs: number; size: number; results: MonitorResult[] }>(); // bounded: PARSED_RESULTS_MAX
 const PARSED_RESULTS_MAX = 500;
 
 /** Results of a monitor, newest first. */
@@ -339,13 +340,16 @@ function recordResult(store: WorkspaceStore, r: MonitorResult): void {
   appendFileSync(f, JSON.stringify(r) + '\n');
   // keep the file bounded: rewrite the newest results when it grows past twice the limit
   const lines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim());
-  if (lines.length > KEEP_RESULTS * 2) writeFileSync(f, lines.slice(-KEEP_RESULTS).join('\n') + '\n');
+  if (lines.length > KEEP_RESULTS * 2) atomicWrite(f, lines.slice(-KEEP_RESULTS).join('\n') + '\n'); // atomic: a crash while compacting keeps the old file
 }
 
 /** When a monitor should run next: `everyMinutes` after its last run, or now if it never ran. */
 export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Date.now()): number {
   if (!last) return now;
-  return Date.parse(last.startedAt) + m.everyMinutes * 60_000;
+  const ran = Date.parse(last.startedAt);
+  // the clock was set back (an NTP correction, a restored VM): a last run in the future would make the monitor wait for hours; it is due now, and its new result carries the right time
+  if (ran > now) return now;
+  return ran + m.everyMinutes * 60_000;
 }
 
 export function isDue(m: Monitor, last: MonitorResult | undefined, now = Date.now()): boolean {

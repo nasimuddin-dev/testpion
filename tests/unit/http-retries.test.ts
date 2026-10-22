@@ -40,8 +40,8 @@ describe('request retries', () => {
 
   it('retries a refused connection, then reports the error', async () => {
     const t0 = Date.now();
-    await expect(executeHttp({ method: 'POST', url: 'http://127.0.0.1:1/x', settings: { retries: 2, retryDelayMs: 50 } })).rejects.toThrow();
-    // two waits: 50 + 100 ms
+    await expect(executeHttp({ method: 'POST', url: 'http://127.0.0.1:1/x', settings: { retries: 2, retryDelayMs: 50, retryJitter: false } })).rejects.toThrow();
+    // two waits: 50 + 100 ms (exact: jitter off)
     expect(Date.now() - t0).toBeGreaterThanOrEqual(140);
   });
 

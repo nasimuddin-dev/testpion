@@ -49,8 +49,8 @@ export async function aiChat(be: Backend, p: AiChatParams) {
         })
       : [];
     const trace = tracer.finish();
-    be.ws.saveTrace(trace, 'llm');
-    be.ws.meta.addHistory({ id: shortId('h-'), timestamp: new Date().toISOString(), kind: 'llm', name: `${provider.config.name} · ${r.model || model}`, status: 'ok', durationMs: r.timing.totalMs, request: { provider: p.provider, model, prompt: p.prompt, system: p.system, input }, responseMeta: { usage: r.usage, costUsd: cost.cost, firstTokenMs: r.timing.firstTokenMs }, traceId: trace.traceId });
+    be.record('trace', () => be.ws.saveTrace(trace, 'llm'));
+    be.record('history entry', () => be.ws.meta.addHistory({ id: shortId('h-'), timestamp: new Date().toISOString(), kind: 'llm', name: `${provider.config.name} · ${r.model || model}`, status: 'ok', durationMs: r.timing.totalMs, request: { provider: p.provider, model, prompt: p.prompt, system: p.system, input }, responseMeta: { usage: r.usage, costUsd: cost.cost, firstTokenMs: r.timing.firstTokenMs }, traceId: trace.traceId }));
     return {
       id,
       provider: provider.config.name,

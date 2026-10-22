@@ -19,7 +19,7 @@ export interface ProtocolAdapter<Req = unknown, Res = unknown, Conn = unknown> {
   disconnect?(connection: Conn): Promise<void>;
 }
 
-const adapters = new Map<string, ProtocolAdapter>();
+const adapters = new Map<string, ProtocolAdapter>(); // registry: the protocols, registered at start-up
 
 export function registerProtocol(adapter: ProtocolAdapter<any, any, any>): void {
   if (adapters.has(adapter.id)) throw new ApsError('ConfigurationError', `Protocol adapter "${adapter.id}" is already registered`);

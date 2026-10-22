@@ -3,15 +3,41 @@ import { ApsError, errorKindForStatus } from '../errors.js';
 import type { Redactor } from '../util/redact.js';
 import type { ToolCall } from './types.js';
 
+/**
+ * How long an AI provider may take. `requestMs`: from sending the request to the answer (for a call that is not streamed: the whole answer;
+ * for a stream: the response headers). `idleMs`: the longest silence inside a stream. 0 turns a limit off. Settings ▸ AI sets them
+ * (`ai.requestTimeoutMs`, `ai.idleTimeoutMs`); the defaults are generous (a large generation takes minutes) but finite.
+ */
+export const AI_TIMEOUT_DEFAULTS = { requestMs: 120_000, idleMs: 60_000 };
+const aiTimeouts = { ...AI_TIMEOUT_DEFAULTS };
+export function setAiTimeouts(t: { requestMs?: number; idleMs?: number } | undefined): void {
+  aiTimeouts.requestMs = t?.requestMs !== undefined && t.requestMs >= 0 ? t.requestMs : AI_TIMEOUT_DEFAULTS.requestMs;
+  aiTimeouts.idleMs = t?.idleMs !== undefined && t.idleMs >= 0 ? t.idleMs : AI_TIMEOUT_DEFAULTS.idleMs;
+}
+
+/** The controller behind a response: aborting it ends the body read. */
+const controllers = new WeakMap<Response, AbortController>();
+
 /** POST JSON and return parsed JSON, mapping HTTP failures to normalised errors. */
 export async function postJson(
   url: string,
   body: unknown,
   headers: Record<string, string>,
-  opts: { signal?: AbortSignal; redactor?: Redactor; provider: string },
+  opts: { signal?: AbortSignal; redactor?: Redactor; provider: string; timeoutMs?: number },
 ): Promise<unknown> {
   const res = await doFetch(url, body, headers, opts);
-  const text = await res.text();
+  // the answer of a call that is not streamed is the body: the same limit covers reading it
+  const limit = opts.timeoutMs ?? aiTimeouts.requestMs;
+  const ctl = controllers.get(res);
+  const timer = limit > 0 && ctl ? setTimeout(() => ctl.abort(new ApsError('TimeoutError', `${opts.provider} did not finish its answer within ${Math.round(limit / 1000)} s`)), limit) : undefined;
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (e) {
+    throw ctl?.signal.reason instanceof ApsError ? ctl.signal.reason : e;
+  } finally {
+    clearTimeout(timer);
+  }
   try {
     return JSON.parse(text);
   } catch {
@@ -23,24 +49,38 @@ export async function doFetch(
   url: string,
   body: unknown,
   headers: Record<string, string>,
-  opts: { signal?: AbortSignal; redactor?: Redactor; provider: string; method?: string },
+  opts: { signal?: AbortSignal; redactor?: Redactor; provider: string; method?: string; timeoutMs?: number },
 ): Promise<Response> {
   let res: Response;
   await assertUrlAllowed(url);
+  // the caller's cancel and the provider's limit end the same fetch; the limit stops counting once the headers are here
+  const ctl = new AbortController();
+  const limit = opts.timeoutMs ?? aiTimeouts.requestMs;
+  const onCancel = () => ctl.abort(opts.signal?.reason);
+  if (opts.signal?.aborted) onCancel();
+  else opts.signal?.addEventListener('abort', onCancel, { once: true });
+  const timer = limit > 0 ? setTimeout(() => ctl.abort(new ApsError('TimeoutError', `${opts.provider} did not answer within ${Math.round(limit / 1000)} s`, { suggestions: ['Check that the provider is reachable (a local model must be running).', 'Raise the limit in Settings ▸ AI (request timeout).'] })), limit) : undefined;
   try {
     res = await fetch(url, {
       method: opts.method ?? 'POST',
       headers: { 'content-type': 'application/json', ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: opts.signal,
+      signal: ctl.signal,
     });
   } catch (e) {
+    if (ctl.signal.reason instanceof ApsError && !opts.signal?.aborted) throw ctl.signal.reason;
     const err = e as Error & { cause?: { code?: string } };
-    if (err.name === 'AbortError') throw new ApsError('CancelledError', 'Request cancelled');
+    if (err.name === 'AbortError' || opts.signal?.aborted) throw new ApsError('CancelledError', 'Request cancelled');
     throw new ApsError('NetworkError', `Could not reach ${opts.provider} at ${opts.redactor?.redactUrl(url) ?? url}: ${err.cause?.code ?? err.message}`, {
       suggestions: ['Check the provider base URL.', 'For local models (Ollama), make sure the server is running.', 'This feature needs network access.'],
     });
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener('abort', onCancel);
   }
+  controllers.set(res, ctl);
+  // the user's cancel also ends the body that is still being read
+  if (opts.signal && !opts.signal.aborted) opts.signal.addEventListener('abort', onCancel, { once: true });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     const kind = errorKindForStatus(res.status) ?? 'ServerError';
@@ -98,16 +138,32 @@ export function providerAdvice(provider: string, status: number, message: string
 }
 
 /** Iterate Server-Sent Events from a fetch Response. Yields `{ event, data }`. */
-export async function* sseEvents(res: Response): AsyncGenerator<{ event?: string; data: string }> {
+export async function* sseEvents(res: Response, opts: { idleMs?: number } = {}): AsyncGenerator<{ event?: string; data: string }> {
   if (!res.body) return;
   const reader = res.body.getReader();
+  const idleMs = opts.idleMs ?? aiTimeouts.idleMs;
+  const ctl = controllers.get(res);
+  // a read that gets nothing for `idleMs` is a stream that stopped: end it with a clear error (what arrived so far was already yielded)
+  const read = (): ReturnType<typeof reader.read> => {
+    if (idleMs <= 0) return reader.read();
+    let timer: NodeJS.Timeout | undefined;
+    const idle = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new ApsError('TimeoutError', `The model stopped sending for ${Math.round(idleMs / 1000)} s`, { suggestions: ['Run again; for a slow local model raise the limit in Settings ▸ AI (idle timeout).'] });
+        ctl?.abort(err);
+        void reader.cancel().catch(() => undefined);
+        reject(err);
+      }, idleMs);
+    });
+    return Promise.race([reader.read(), idle]).finally(() => clearTimeout(timer));
+  };
   const decoder = new TextDecoder();
   let buf = '';
   let event: string | undefined;
   let data: string[] = [];
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
       let nl: number;

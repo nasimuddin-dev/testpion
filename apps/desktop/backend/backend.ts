@@ -88,6 +88,7 @@ import {
   samePath,
   type OutputDeps,
 } from '@testpion/core';
+import { closeStoreAfterRuns, noteProblem, noteSlowCall, recordBestEffort, reportMetaProblem, scheduleSweep, settleWithin } from './backend-health.js';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
 import { collectionsHandlers } from './handlers/collections.js';
@@ -170,6 +171,10 @@ export type Handlers = Record<string, Handler>;
 interface RunState {
   ctrl: AbortController;
   done: boolean;
+  /** The workspace the run writes to: a switch stops the run and closes this store only after the run has ended. */
+  store?: WorkspaceStore;
+  /** Settles when the run's `finally` has run (results, history row, `run.finished`). */
+  finished: Promise<void>;
 }
 
 export type { ConsoleEntry } from './console-log.js';
@@ -188,6 +193,10 @@ export class Backend {
   secrets: SecretStore;
   logger: Logger;
   logBuffer: LogRecord[] = [];
+  /** The slowest calls of this session, slowest first (no I/O; Settings ▸ Privacy & security ▸ Save diagnostics). */
+  slowRpcs: Array<{ method: string; ms: number; at: string }> = [];
+  /** Problems the app reported to the window (full disk, damaged database …), for the diagnostics. */
+  problems: string[] = [];
   /** Postman-style console: recent requests with their details and script output. */
   consoleBuffer: ConsoleEntry[] = [];
   /** Console entries and log records reach the window in batches (one event per 50 ms), as a run's events do. */
@@ -284,7 +293,7 @@ export class Backend {
   }
 
   /** Work put off past startup (the schedulers, the examples update); `close` cancels what has not run. */
-  private deferred: Array<ReturnType<typeof setTimeout>> = [];
+  deferred: Array<ReturnType<typeof setTimeout>> = [];
 
   /** Apply the proxy and certificate settings (the proxy password comes from the secret store and is redacted from logs). */
   applyProxy(): void {
@@ -377,6 +386,7 @@ export class Backend {
   /** Notice changes made outside the app (git pull, a branch switch, another editor) and refresh the UI. */
   private watchStore(root: string): void {
     this.stopWatching?.();
+    let said = false;
     this.stopWatching = watchWorkspace(
       root,
       (changes) => {
@@ -390,6 +400,16 @@ export class Backend {
         const complete = !collectionIds.some((id) => id === undefined);
         this.host.emit('data.changed', { method: 'disk', kinds, paths: changes.map((c) => c.path).slice(0, 50), ...(complete ? { collectionIds: collectionIds as string[] } : {}) });
         this.host.emit('workspace.changedOnDisk', { message: describeChanges(changes), kinds: [...new Set(changes.map((c) => c.kind))], files: changes.map((c) => c.path).slice(0, 50) });
+      },
+      {
+        // the watch failed (the folder was unmounted, a system limit): logged every time, said to the window once
+        onProblem: (message, code) => {
+          this.logger.warn(message, { code });
+          noteProblem(this, message);
+          if (said) return;
+          said = true;
+          this.host.emit('workspace.problem', { kind: 'watch', code, message: `${message}.`, hint: code === 'ENOSPC' ? 'Raise fs.inotify.max_user_watches.' : undefined });
+        },
       },
     );
   }
@@ -410,7 +430,7 @@ export class Backend {
     // the new workspace opens first: when it is refused (not a TestPion folder) the open one stays as it was
     const next = WorkspaceStore.open(path);
     if (this.store && !samePath(this.store.root, next.root)) this.terminals?.dispose('workspace'); // the same folder by another name keeps them
-    this.store?.close();
+    void closeStoreAfterRuns(this, this.store);
     for (const s of this.mcpSessions.values()) void s.close();
     this.mcpSessions.clear();
     forgetProductionSessions(this);
@@ -428,7 +448,15 @@ export class Backend {
     this.search = new WorkspaceSearch(this.store);
     if (this.settings.lastWorkspace !== this.store.root) this.settings = this.manager.saveSettings({ ...this.settings, lastWorkspace: this.store.root });
     this.logger.info(`Opened workspace ${this.store.workspace.name}`, { migrations: this.store.migrationsApplied });
+    reportMetaProblem(this, this.store);
+    scheduleSweep(this, this.store);
   }
+
+  /** Best-effort bookkeeping around work that already succeeded: see backend-health.ts. */
+  record(what: string, fn: () => void) {
+    return recordBestEffort(this, what, fn);
+  }
+  problemsSaid = new Map<string, number>(); // bounded: one entry per kind of error
 
   jar() {
     if (!this.cookieStore) throw new ApsError('ConfigurationError', 'No workspace is open');
@@ -560,7 +588,9 @@ export class Backend {
         () => guardProduction(this, method, checked, async () => h(checked ?? {})), // WF-06: production needs consent
         (b) => (written = b),
       );
-      this.logger.trace(`rpc ${method}`, { ms: Math.round(performance.now() - t0) });
+      const ms = Math.round(performance.now() - t0);
+      this.logger.trace(`rpc ${method}`, { ms });
+      noteSlowCall(this, method, ms);
       changed();
       return r;
     } catch (e) {
@@ -752,10 +782,12 @@ export class Backend {
   ) {
     const runId = shortId('run-');
     const ctrl = new AbortController();
-    this.runs.set(runId, { ctrl, done: false });
-    const dir = this.ws.runDir(runId);
-    mkdirSync(dir, { recursive: true });
+    let finish!: () => void;
+    const finished = new Promise<void>((res) => (finish = res));
     const store = this.ws;
+    this.runs.set(runId, { ctrl, done: false, store, finished });
+    const dir = store.runDir(runId);
+    mkdirSync(dir, { recursive: true });
     const ctx = this.context({ environment: opts.environment, collectionId: opts.collectionId });
     if (opts.keepVariableValues === false) ctx.services.persistVariable = undefined;
     const events = this.batched<RunEvent>('run.events', 100);
@@ -799,6 +831,7 @@ export class Backend {
         await ctx.dispose();
         // the counts let the app say how it went (a desktop notification when it's in the background)
         this.host.emit('run.finished', { runId, name, total: summary?.total, passed: summary?.passed, failed: summary?.failed, errors: summary?.errors, durationMs: Date.now() - started, cancelled: ctrl.signal.aborted });
+        finish();
       }
     })();
     return { runId };
@@ -873,30 +906,37 @@ export class Backend {
     return startLoadImpl(this, p);
   }
 
+  /**
+   * Shuts the backend down. The cheap state that must not be lost goes first (cookies, the Debugger session), the sessions that talk to the
+   * network are closed last and each is capped, so one that never answers cannot keep the app from quitting (the caller bounds the whole).
+   */
   async dispose(): Promise<void> {
     for (const t of this.deferred) clearTimeout(t);
     this.consoleEvents.flush();
     this.logEvents.flush();
     this.terminals.dispose('quit');
     this.stopWatching?.();
-    this.ownWrites.dispose();
     this.monitorScheduler.stop();
     this.gitAutoFetch.stop();
+    const cookies = this.cookieStore?.flush().catch(() => undefined); // started now, awaited with the rest
+    await settleWithin([this.debugger?.release?.()], 2000); // saves a Debugger session with unsaved exchanges
     for (const c of this.controllers.values()) c.abort();
     for (const r of this.runs.values()) r.ctrl.abort();
-    for (const s of this.mcpSessions.values()) await s.close();
+    await settleWithin(
+      [...this.runs.values()].map((r) => r.finished),
+      3000,
+    );
+    const CAP = 1000;
+    for (const s of this.mcpSessions.values()) await settleWithin([s.close()], CAP);
     for (const s of this.wsSessions.values()) s.close();
     for (const s of this.sioSessions.values()) s.close();
     for (const s of this.mqttSessions.values()) s.close();
-    for (const s of this.kafkaSessions.values()) await s.closeAndWait();
-    for (const m of this.mocks.values()) await m.close();
-    await this.gqlMock?.close();
-    await stopFlowWebhooks(this);
-    await this.recorder?.close();
-    await this.debugger?.proxy?.close();
-    await this.debugger?.release?.();
+    for (const s of this.kafkaSessions.values()) await settleWithin([s.closeAndWait()], CAP);
+    for (const m of this.mocks.values()) await settleWithin([m.close()], CAP);
+    await settleWithin([this.gqlMock?.close(), stopFlowWebhooks(this), this.recorder?.close(), this.debugger?.proxy?.close()], CAP);
     for (const s of this.gqlSubs.values()) s.stop();
-    await this.cookieStore?.flush().catch(() => undefined);
+    await settleWithin([cookies], CAP);
+    this.ownWrites.dispose();
     this.store?.close();
   }
 }

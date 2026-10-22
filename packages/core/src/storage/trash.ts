@@ -238,7 +238,30 @@ function dropCollectionItems(store: WorkspaceStore, collectionIds: Array<string 
   }
 }
 
-/** Deleted items, newest first; entries older than 30 days are removed on the way. */
+/**
+ * Removes the trash entries older than 30 days. A separate step (at open, then now and then), never a side effect of looking: a listing on
+ * a computer whose clock is wrong must not empty the trash.
+ */
+export function expireTrash(store: WorkspaceStore, now = Date.now()): number {
+  let n = 0;
+  for (const kind of TRASH_KINDS) {
+    const dir = trashDir(store, kind);
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir)) {
+      const m = /^(\d+)--(.+)$/.exec(f);
+      if (!m || !KINDS[kind].entry.exec(m[2]!)) continue;
+      if (now - Number(m[1]) <= TRASH_DAYS * 86_400_000) continue;
+      const path = join(dir, f);
+      const gone = kind === 'collection' ? trashedCollectionId(path) : undefined;
+      rmSync(path, { recursive: true, force: true });
+      if (gone) dropCollectionItems(store, [gone]);
+      n++;
+    }
+  }
+  return n;
+}
+
+/** Deleted items, newest first; entries older than 30 days are left out (expireTrash removes them), nothing is deleted here. */
 export function listTrash(store: WorkspaceStore, now = Date.now()): TrashItem[] {
   const out: TrashItem[] = [];
   for (const kind of TRASH_KINDS) {
@@ -250,12 +273,7 @@ export function listTrash(store: WorkspaceStore, now = Date.now()): TrashItem[] 
       if (!m || !name) continue;
       const at = Number(m[1]);
       const path = join(dir, f);
-      if (now - at > TRASH_DAYS * 86_400_000) {
-        const gone = kind === 'collection' ? trashedCollectionId(path) : undefined;
-        rmSync(path, { force: true });
-        if (gone) dropCollectionItems(store, [gone]);
-        continue;
-      }
+      if (now - at > TRASH_DAYS * 86_400_000) continue;
       try {
         out.push({ id: `${kind}/${f}`, kind, ...KINDS[kind].describe(store, path, name), deletedAt: new Date(at).toISOString() });
       } catch {

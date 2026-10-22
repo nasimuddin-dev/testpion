@@ -25,7 +25,7 @@ export function endAndClose(stream: NodeJS.WritableStream & { closed?: boolean; 
  * file is the last name of most paths and costs one `lstat` to tell a link from a plain file; a kept entry expires so a
  * folder swapped for a junction after it was seen is noticed within seconds, not for the life of the process.
  */
-const realDirs = new Map<string, { real: string; at: number }>();
+const realDirs = new Map<string, { real: string; at: number }>(); // bounded: cleared above 4096
 const REAL_DIR_TTL_MS = 10_000;
 
 /**
@@ -149,12 +149,12 @@ export function pathMatcher(target: string): (p: string | undefined) => boolean 
  * in it. Entries are kept for a minute (the watcher's events arrive within that); `OUTSIDE` marks a path whose last
  * change was someone else's, so an own entry of a folder above it no longer speaks for it.
  */
-const recentWrites = new Map<string, { at: number; fingerprint: string; dir?: boolean }>();
+const recentWrites = new Map<string, { at: number; fingerprint: string; dir?: boolean }>(); // bounded: 1000 entries, 60 s
 const OWN_WRITE_TTL_MS = 60_000;
 /** At most this many own writes are remembered (~200 B each): a write the watcher has not seen yet is only forgotten beyond it. */
 const MAX_OWN_WRITES = 100_000;
 const OUTSIDE = 'outside';
-const ownWriteListeners = new Set<(path: string) => void>();
+const ownWriteListeners = new Set<(path: string) => void>(); // bounded: the app's own listeners (each registration returns its disposer)
 
 /**
  * The key of a path in the own-writes registry: its real path (its folder's, with its name), so a write and the
@@ -353,33 +353,71 @@ export function stageAtomicWrite(path: string, data: string | Buffer): { commit(
 
 /**
  * Waits between rename attempts: Windows refuses a rename while another program (antivirus, an indexer, an editor) has
- * the file open. A scan of a just-written file can hold it for over a second (seen with several app instances writing
- * at once), so the waits grow to about 1.5 s in all; then the bytes are copied over the target instead of renamed.
+ * the file open. Most often it is the freshly written temp file a scanner holds, so the first answer is not to wait at all:
+ * the bytes are copied to a second temp file (one nobody has seen yet) and that one is renamed. Only when the target itself is held
+ * are there short pauses (about 0.4 s in all, the main thread's budget; this call is synchronous) and, last, the bytes are copied over
+ * the target in place. A rename that works also syncs the folder (POSIX), so the new name survives a power cut.
  */
-const RENAME_RETRY_MS = [50, 100, 200, 400, 700];
+const RENAME_RETRY_MS = [25, 50, 100, 200];
 const sleepBuf = new Int32Array(new SharedArrayBuffer(4));
+const BUSY = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+function syncFolder(path: string): void {
+  if (process.platform === 'win32') return; // a folder cannot be opened for syncing there
+  try {
+    const fd = openSync(dirname(path), 'r');
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    /* a file system that cannot sync a folder: the rename itself stands */
+  }
+}
 
 function renameWithRetry(from: string, to: string): void {
+  let copied = false;
   for (let attempt = 0; ; attempt++) {
     try {
       renameSync(from, to);
+      syncFolder(to);
       return;
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
-      const wait = RENAME_RETRY_MS[attempt];
-      if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw e;
+      if (!code || !BUSY.has(code)) throw e;
+      if (!copied) {
+        // the source is probably what is held: a copy of it under a new name is renamed instead (atomic: the target is replaced whole)
+        copied = true;
+        const second = `${to}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
+        try {
+          copyFileSync(from, second);
+          try {
+            renameSync(second, to);
+            syncFolder(to);
+            rmSync(from, { force: true });
+            return;
+          } catch {
+            rmSync(second, { force: true });
+          }
+        } catch {
+          /* the copy itself failed: the pauses below */
+        }
+        continue;
+      }
+      const wait = RENAME_RETRY_MS[attempt - 1];
       if (wait === undefined) {
-        // still refused: a scanner keeps the new file (or the old one) open. Copy the bytes over instead (the target
-        // is replaced in place, which only needs it writable), then drop the temp file when it can be dropped.
+        // the target is held open and nothing else works: copy the bytes over it in place (needs only that it is writable). Not atomic, but
+        // the last resort, and the temp file stays until it is written (a crash leaves a complete copy beside the target)
         copyFileSync(from, to);
         try {
           rmSync(from, { force: true });
         } catch {
-          // left for the scanner to release; a .tmp- file is ignored by the watcher and the loaders
+          // left for the scanner to release; a .tmp- file is ignored by the watcher and the loaders, and swept later
         }
         return;
       }
-      Atomics.wait(sleepBuf, 0, 0, wait); // a synchronous pause: the callers write synchronously
+      Atomics.wait(sleepBuf, 0, 0, wait); // a short synchronous pause: the callers write synchronously
     }
   }
 }
@@ -388,7 +426,7 @@ function renameWithRetry(from: string, to: string): void {
  * Plain write for derived files (traces, caches) that can be produced again: no fsync, no temp file and rename,
  * and each folder is created once per process. Several times cheaper than `atomicWrite` on Windows.
  */
-const madeDirs = new Set<string>();
+const madeDirs = new Set<string>(); // bounded: cleared above 1000
 export function writeDerived(path: string, data: string | Buffer): void {
   const dir = dirname(path);
   if (!madeDirs.has(dir)) {
@@ -415,7 +453,7 @@ export function writeDerived(path: string, data: string | Buffer): void {
  * list shown; opening a file is the slow part (milliseconds each on Windows), checking it is not.
  * Only the text is kept: every read still parses, so callers get objects of their own to change.
  */
-const textCache = new Map<string, { mtimeMs: number; size: number; text: string }>();
+const textCache = new Map<string, { mtimeMs: number; size: number; text: string }>(); // bounded: 64 MB of text, oldest first
 const TEXT_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 let textCacheBytes = 0;
 
@@ -433,7 +471,7 @@ function forgetText(path: string): void {
  * and every variable hovered; parsing a megabyte each time was most of the cost. Frozen deep, so a caller that needs an
  * object of its own to change says so by reading with `readJson`. An entry lives as long as its text does.
  */
-const parsedCache = new Map<string, { text: string; value: unknown }>();
+const parsedCache = new Map<string, { text: string; value: unknown }>(); // bounded: an entry lives as long as its text in textCache
 
 /** Freeze a value and everything in it (a shared read-only document). */
 export function deepFreeze<T>(v: T): T {

@@ -1,7 +1,7 @@
 import { ENGINE_VERSION } from '../version.js';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname } from 'node:path';
-import { createInterface } from 'node:readline';
+import { fileLines } from '../util/file-lines.js';
 import type { RunSummary, TestCase, TestResult, TestStatus, Trace } from '../model/types.js';
 import { ApsError, isAbortError, normalizeError } from '../errors.js';
 import { Tracer } from '../trace/tracer.js';
@@ -168,7 +168,7 @@ export async function readResultsFile(path: string, o: { contains?: string } = {
   const contains = o.contains;
   async function* gen() {
     if (!existsSync(path)) return;
-    const rl = createInterface({ input: createReadStream(path, 'utf8'), crlfDelay: Infinity });
+    const rl = fileLines(path);
     for await (const line of rl) {
       if (contains !== undefined && !line.includes(contains)) continue;
       if (!line.trim()) continue;

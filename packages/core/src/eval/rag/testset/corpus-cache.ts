@@ -6,7 +6,7 @@
 import type { Corpus } from './types.js';
 
 const MAX = 4;
-const cache = new Map<string, Corpus>();
+const cache = new Map<string, Corpus>(); // bounded: least recently used, MAX entries
 
 export function rememberCorpus(token: string, c: Corpus): void {
   cache.delete(token);

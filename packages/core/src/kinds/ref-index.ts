@@ -17,7 +17,7 @@ export interface Indexed {
   byId: Map<string, { name: string; kind: string; protocol?: RequestProtocol; path: string[] }>;
 }
 // per file: the ids in it (bounded: one entry per collection or library file of the open workspaces)
-const indexes = new Map<string, Indexed>();
+const indexes = new Map<string, Indexed>(); // bounded: INDEX_LIMIT files
 const INDEX_LIMIT = 500;
 
 function stamp(file: string): { mtime: number; size: number } | undefined {

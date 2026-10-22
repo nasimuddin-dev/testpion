@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
+import { isDeviceFileName } from '../util/ids.js';
 import { generateRows, operationBodySchema, rowsToCsv, type DatasetRow } from '../runner/generate-dataset.js';
 import type { WorkspaceStore } from './workspace.js';
 import { atomicWrite } from './fsutil.js';
@@ -38,11 +39,13 @@ export function generateWorkspaceDataset(
   }
   const format = o.format ?? 'csv';
   // a file name, never a path: the dataset stays in datasets/
-  const base = o.name
+  let base = o.name
     .replace(/\.(csv|json)$/i, '')
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-')
     .replace(/^\.+/, '')
+    .replace(/[. ]+$/, '')
     .trim();
+  if (base && isDeviceFileName(base)) base = `${base}-data`; // con.csv is the console on Windows
   if (!base) throw new ApsError('ValidationError', 'Give the dataset a name');
   const rel = `datasets/${base}.${format}`;
   const file = store.safePath(rel);

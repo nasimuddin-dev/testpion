@@ -4,6 +4,7 @@
  * and what it replaced is listed in the manifest (`requires.secrets`) and in the answer, never the value.
  */
 import { ApsError } from '../errors.js';
+import { isDeviceFileName } from '../util/ids.js';
 import { SecretStripper, type ReplacedSecret } from '../storage/bundle-secrets.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { ENGINE_VERSION } from '../version.js';
@@ -59,7 +60,7 @@ export function bundleFileName(title: string, format: 'zip' | 'json'): string {
     .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-')
     .replace(/^[\s.]+|[\s.]+$/g, '')
     .slice(0, 120);
-  return `${safe || 'bundle'}.testpion.${format}`;
+  return `${isDeviceFileName(safe) ? `${safe}-bundle` : safe || 'bundle'}.testpion.${format}`;
 }
 
 const isTextual = (b: Buffer) => !b.includes(0);

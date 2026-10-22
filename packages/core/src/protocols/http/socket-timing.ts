@@ -99,7 +99,7 @@ interface Waiter {
   method: string;
   sent?: SentOver;
 }
-const waiters = new Set<Waiter>();
+const waiters = new Set<Waiter>(); // bounded: 200
 subscribe('undici:client:sendHeaders', (m) => {
   if (!waiters.size) return;
   const { request, socket } = m as { request?: { origin?: unknown; path?: string; method?: string }; socket?: Sock };

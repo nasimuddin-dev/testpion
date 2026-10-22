@@ -45,6 +45,8 @@ export interface HttpSettings {
   retries?: number;
   /** First wait between attempts in ms (doubles each time, max 10 s; Retry-After wins). Default 500. */
   retryDelayMs?: number;
+  /** Spread the waits between retries randomly (default on): parallel requests that failed together do not retry together. false: exactly base * 2^attempt. */
+  retryJitter?: boolean;
   /** Use HTTP/1.1 only. By default HTTP/2 is offered over https (ALPN) and used when the server supports it. */
   http1Only?: boolean;
   /** On a 301/302 redirect keep the original method and body (by default POST becomes GET; 303 is always GET). */

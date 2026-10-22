@@ -127,8 +127,8 @@ export interface MetricDef {
   estimate?(s: SampleShape, opts: Record<string, unknown>): MetricEstimate;
 }
 
-const registry = new Map<string, MetricDef>();
-const names = new Map<string, { def: MetricDef; options?: Record<string, unknown>; ragas?: boolean }>();
+const registry = new Map<string, MetricDef>(); // registry: built-in metrics plus the workspace's custom ones (removed when unregistered)
+const names = new Map<string, { def: MetricDef; options?: Record<string, unknown>; ragas?: boolean }>(); // registry: built-in metrics plus the workspace's custom ones (removed when unregistered)
 
 export { normalizeMetricName };
 

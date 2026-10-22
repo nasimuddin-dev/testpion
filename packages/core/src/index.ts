@@ -7,6 +7,7 @@ export * from './model/history-kinds.js';
 export * from './model/ui-prefs.js';
 export * from './errors.js';
 export * from './util/ids.js';
+export * from './storage/housekeeping.js';
 export * from './util/concurrency.js';
 // yaml loaded at first use (keeps it off the app's startup path): use these instead of importing 'yaml'
 export { parseYaml, stringifyYaml } from './util/lazy-yaml.js';
@@ -343,6 +344,7 @@ export * from './engine.js';
 
 export { ENGINE_VERSION } from './version.js';
 export * from './report/feedback.js';
+export * from './report/diagnostics.js';
 export * from './runner/run-records.js';
 export * from './runner/collection-findings.js';
 export * from './openapi/spec-files.js';

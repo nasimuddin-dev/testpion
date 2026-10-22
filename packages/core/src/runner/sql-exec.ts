@@ -212,7 +212,7 @@ interface SqlResult {
   rows: unknown[][];
 }
 
-const gates = new Map<string, Semaphore>();
+const gates = new Map<string, Semaphore>(); // bounded: one per database connection the workspace configures (a handful)
 const gateOf = (key: string) => {
   let g = gates.get(key);
   if (!g) gates.set(key, (g = new Semaphore(SQL_DEFAULTS.maxConcurrent)));

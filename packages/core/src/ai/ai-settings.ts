@@ -33,6 +33,10 @@ export interface AiSettings {
   localOnly?: boolean;
   /** The privacy level a task starts with (default full, redacted). */
   privacy?: AiPrivacy;
+  /** Longest wait for a provider's answer (ms; for a stream: the first bytes). Default 120000; 0 = no limit. */
+  requestTimeoutMs?: number;
+  /** Longest silence inside a stream (ms). Default 60000; 0 = no limit. */
+  idleTimeoutMs?: number;
   /** Mask e-mail addresses, phone numbers, card numbers and IBANs (default on). */
   maskPersonalData?: boolean;
   /** Most tokens (input estimate + the output limit) one call may use; 0 or unset: no cap. */

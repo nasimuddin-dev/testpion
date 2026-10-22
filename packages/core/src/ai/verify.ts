@@ -54,7 +54,7 @@ export interface VerifyContext {
 
 export type Verifier = (item: ProposalItem, ctx: VerifyContext) => Promise<VerificationBadge | undefined> | VerificationBadge | undefined;
 
-const verifiers = new Map<string, Verifier>();
+const verifiers = new Map<string, Verifier>(); // registry: the verifier kinds, registered at start-up
 
 /** Add (or replace) a verifier a task can name. */
 export function registerVerifier(name: string, v: Verifier): void {

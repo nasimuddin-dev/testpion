@@ -61,7 +61,7 @@ export function embedderFor(src: EmbedderSource, spec?: string, judgeProvider?: 
   }
 }
 
-const vectors = new Map<string, number[]>();
+const vectors = new Map<string, number[]>(); // bounded: trimmed above 20,000 vectors
 const keyOf = (embedder: string, text: string) => `${embedder}\u0000${text}`;
 
 /** The vectors of the texts, one embedding call for those not seen before. */

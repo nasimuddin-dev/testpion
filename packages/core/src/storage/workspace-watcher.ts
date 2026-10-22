@@ -43,16 +43,24 @@ export type WorkspaceWatch = (() => void) & {
 };
 
 /** The folder events the watcher listens to (node's recursive `fs.watch`; a test passes its own). */
-export type WatchSource = (root: string, listener: (event: string, name: string | null) => void) => { close(): void };
+export type WatchSource = (root: string, listener: (event: string, name: string | null) => void, onError?: (e: Error) => void) => { close(): void };
 
-const nodeWatch: WatchSource = (root, listener) => {
+const nodeWatch: WatchSource = (root, listener, onError) => {
   const w = watch(root, { recursive: true, persistent: false }, (event, name) => listener(event, name === null ? null : String(name)));
-  w.on('error', () => undefined);
+  w.on('error', (e) => onError?.(e));
   return w;
 };
 
 /** Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. */
-export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; maxWaitMs?: number; watch?: WatchSource } = {}): WorkspaceWatch {
+/** Waits before the watch is started again after it failed (the folder was unmounted, a limit was reached). */
+const RETRY_WATCH_MS = [1000, 5000, 30_000];
+
+/**
+ * Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. `onProblem` hears why the watch could not start or
+ * stopped (once per failure; the code, e.g. ENOSPC when the inotify limit is reached), and the watch is started again after 1, 5 and then
+ * every 30 seconds: outside changes are not silently missed.
+ */
+export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; maxWaitMs?: number; watch?: WatchSource; onProblem?: (message: string, code?: string) => void } = {}): WorkspaceWatch {
   const pending = new Map<string, WorkspaceChange>();
   const debounce = opts.debounceMs ?? 400;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -239,13 +247,51 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     if (wait > 0 && (pending.size || rescanAll)) timer = setTimeout(check, wait);
     else flush();
   };
-  try {
-    watcher = (opts.watch ?? nodeWatch)(root, (_event, name) => onEvent(name));
-  } catch {
-    // a host without recursive watching: the app still works, it just won't notice outside changes
-    return Object.assign(() => undefined, { adopt: () => undefined });
-  }
+  let stopped = false;
+  let retries = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  const begin = (): boolean => {
+    try {
+      const mine = (opts.watch ?? nodeWatch)(
+        root,
+        (_event, name) => onEvent(name),
+        (e) => {
+          if (watcher !== mine) return; // an older watch that was already replaced
+          failed(e);
+        },
+      );
+      watcher = mine;
+      return true;
+    } catch (e) {
+      failed(e as Error);
+      return false;
+    }
+  };
+  const failed = (e: Error) => {
+    const code = (e as NodeJS.ErrnoException).code;
+    try {
+      watcher?.close();
+    } catch {
+      /* already closed */
+    }
+    watcher = undefined;
+    if (stopped) return;
+    const wait = RETRY_WATCH_MS[Math.min(retries++, RETRY_WATCH_MS.length - 1)]!;
+    opts.onProblem?.(`Not watching ${root} for changes made outside TestPion (${code ?? e.message}); trying again in ${Math.round(wait / 1000)} s`, code);
+    retryTimer = setTimeout(() => {
+      if (stopped) return;
+      if (begin()) {
+        retries = 0;
+        rescanAll = true; // what changed while the watch was down
+        arm();
+      }
+    }, wait);
+    retryTimer.unref?.();
+  };
+  begin();
   const stop = () => {
+    stopped = true;
+    clearTimeout(retryTimer);
     if (timer) clearTimeout(timer);
     timer = undefined;
     walk++;

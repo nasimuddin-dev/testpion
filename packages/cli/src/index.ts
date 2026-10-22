@@ -20,7 +20,7 @@ import { registerDataCommands } from './commands/data.js';
 import { registerImportCommands } from './commands/import.js';
 import { registerWorkspaceCommands } from './commands/workspace.js';
 import { registerMonitorCommands } from './commands/monitor.js';
-import { registerDoctorCommand } from './commands/doctor.js';
+import { registerDoctorCommand, registerDiagnosticsCommand } from './commands/doctor.js';
 import { registerAgentInfoCommand } from './commands/agent-info.js';
 import { registerAgentsCommands } from './commands/agents.js';
 import { registerOpenCommand } from './commands/open.js';
@@ -66,6 +66,7 @@ export function buildProgram(): Command {
   registerImportCommands(program);
   registerWorkspaceCommands(program);
   registerDoctorCommand(program);
+  registerDiagnosticsCommand(program);
   registerAgentInfoCommand(program);
   registerAgentsCommands(program);
   registerOpenCommand(program);
@@ -104,6 +105,13 @@ export function buildProgram(): Command {
     if (path(action) !== 'mcp-server') setProductionAllowedByDefault((action.opts() as { allowProduction?: unknown }).allowProduction === true);
   });
 
+  // test hook: a rejection nobody awaits while the command runs, to see what a crash looks like from outside (tests/unit/robustness-fixes.test.ts)
+  if (process.env.TESTPION_TEST_CRASH === 'reject')
+    program.hook('preAction', async () => {
+      void Promise.reject(new Error('detached rejection (test)'));
+      await new Promise((r) => setTimeout(r, 100));
+    });
+
   // an environment's secret manager references (op://, vault://, aws-sm:// …) are read before the command runs
   program.hook('preAction', async (_cmd, action) => {
     const o = action.opts() as { environment?: unknown; workspace?: unknown };
@@ -127,6 +135,32 @@ export function buildProgram(): Command {
   return program;
 }
 
+/** Set once the command has answered (its envelope is written): a crash after that cannot add a second one. */
+let answered = false;
+let crashed = false;
+let running: { program: Command; argv: string[] } | undefined;
+
+/**
+ * An exception or rejection nobody caught (a late trace flush, a socket error after the answer): a crash, not a failed test. Node's default
+ * ends the process with code 1 (= EXIT.TEST_FAILURE) and a --json caller gets no envelope. This prints the error, answers --json with the
+ * envelope (exit code 3) when the command has not answered yet, and returns the exit code to use.
+ */
+export function reportCrash(e: unknown): number | undefined {
+  const err = normalizeError(e);
+  console.error(red(`${err.kind}: ${err.message}`));
+  if (process.env.TESTPION_DEBUG && e instanceof Error && e.stack) console.error(dim(e.stack));
+  if (answered) return undefined; // the command's result stands: its exit code is already set
+  answered = crashed = true;
+  try {
+    // the command may not have started (the crash came first): a --json caller still gets its envelope
+    if (!cli.command && running?.argv.includes('--json')) beginCommand(commandFromArgv(running.program, running.argv), { json: true }, true);
+    finishOutput(EXIT.EXECUTION_ERROR, e);
+  } catch {
+    /* the output itself is what failed */
+  }
+  return EXIT.EXECUTION_ERROR;
+}
+
 export async function main(argv = process.argv): Promise<number> {
   // HTTP_PROXY / HTTPS_PROXY / NO_PROXY apply to everything the CLI sends (curl-style)
   setProxySettings({ mode: process.env.TESTPION_NO_PROXY ? 'off' : 'env' });
@@ -142,6 +176,7 @@ export async function main(argv = process.argv): Promise<number> {
   }
   const program = buildProgram();
   program.exitOverride();
+  running = { program, argv };
   let code: number;
   let error: unknown;
   try {
@@ -175,6 +210,8 @@ export async function main(argv = process.argv): Promise<number> {
     cli.dryRun = dry;
     if (!machine()) console.log(describeDryRun(dry));
   }
+  if (crashed) return EXIT.EXECUTION_ERROR; // a crash already answered (envelope, exit 3)
+  answered = true;
   finishOutput(code, error);
   // a script that reads the text: the --json form answers with a structured error
   if (code > 1 && !machine() && cli.canJson && !process.stdout.isTTY) console.error(dim(`For a machine-readable error, run it again with --json (status, errors: [{ code, message, hint, retryable }]).`));

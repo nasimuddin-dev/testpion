@@ -10,6 +10,7 @@ import { installAppMenu, installTextContextMenu } from './app-menu.js';
 import { defaultAppDir, normalizeError, runMergeDriver, textconvFile } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 import { ptyHost } from './pty-host.js';
+import { crashMessage, onRendererCrash, type CrashRecord } from './crash-recovery.js';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -113,6 +114,35 @@ process.on('uncaughtException', (e) => {
 process.on('unhandledRejection', (e) => {
   try {
     backend?.appLog('error', `Unhandled rejection in the main process: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+  } catch {
+    /* the log itself failed */
+  }
+});
+
+// A dead page is a white window the user cannot use: log it (stderr is nowhere in the packaged app), reload it once; a second crash
+// within a minute asks (Reload / Quit) instead of looping. The backend keeps running; the reloaded page reattaches its terminals.
+const crashes: CrashRecord = { times: [] };
+async function recoverRenderer(d: { reason: string; exitCode: number }): Promise<void> {
+  console.error(`[aps] renderer gone: ${d.reason} (exit ${d.exitCode})`);
+  try {
+    backend?.appLog('error', crashMessage('renderer', d, process.memoryUsage() as unknown as Record<string, number>));
+  } catch {
+    /* the log itself failed */
+  }
+  if (d.reason === 'clean-exit' || quitting) return;
+  const w = win;
+  if (!w || w.isDestroyed()) return;
+  if (onRendererCrash(crashes, Date.now(), d.reason) === 'reload') {
+    w.webContents.reload();
+    return;
+  }
+  const r = await dialog.showMessageBox(w, { type: 'error', message: "TestPion's window crashed twice", detail: `The page stopped (${d.reason}) twice within a minute. Your work on disk is safe. Reload tries again; Quit closes TestPion (the reason is in Help > Open log folder, app.log).`, buttons: ['Reload', 'Quit'], defaultId: 0, cancelId: 1, noLink: true });
+  if (r.response === 0 && !w.isDestroyed()) w.webContents.reload();
+  else app.quit();
+}
+app.on('child-process-gone', (_e, d) => {
+  try {
+    backend?.appLog('error', crashMessage('child', d));
   } catch {
     /* the log itself failed */
   }
@@ -227,7 +257,9 @@ function createWindow(): void {
   installTextContextMenu(win);
   win.webContents.once('dom-ready', () => mark('domReady'));
   win.webContents.on('did-finish-load', () => (mark('didFinishLoad'), console.log('[aps] renderer loaded')));
-  win.webContents.on('render-process-gone', (_e, d) => console.error(`[aps] renderer gone: ${d.reason} (exit ${d.exitCode})`));
+  win.webContents.on('render-process-gone', (_e, d) => void recoverRenderer(d));
+  win.on('unresponsive', () => backend?.appLog('warn', 'The window stopped responding'));
+  win.on('responsive', () => backend?.appLog('info', 'The window responds again'));
   win.webContents.on('console-message', (e) => {
     const level = (e as unknown as { level?: string }).level;
     if (level === 'error' || level === 'warning') console.error(`[renderer ${level}] ${(e as unknown as { message: string }).message}`);
@@ -482,6 +514,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
-  void backend?.dispose();
+// Quit waits (at most a few seconds) for the backend to save what is pending: cookies, a Debugger session, the history store, the
+// sessions to close. Without the wait the process ended before the first await of dispose().
+let quitting = false;
+let disposed = false;
+app.on('before-quit', (e) => {
+  quitting = true;
+  if (disposed || !backend) return;
+  e.preventDefault();
+  disposed = true;
+  const done = () => app.quit();
+  const timer = setTimeout(done, 4000);
+  void backend.dispose().then(
+    () => (clearTimeout(timer), done()),
+    () => (clearTimeout(timer), done()),
+  );
 });

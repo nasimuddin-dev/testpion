@@ -1,9 +1,10 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import type { HistoryEntry, RunSummary } from '../model/types.js';
 import { MAX_AI_CALLS, type AiCallRecord } from './ai-usage.js';
 import { atomicWrite } from './fsutil.js';
+import { ApsError } from '../errors.js';
 import { isRequestEntry, REQUEST_HISTORY_KINDS } from '../model/history-kinds.js';
 
 /** SQL: only request entries (isRequestEntry), not capture sessions or other non-request kinds. */
@@ -209,8 +210,18 @@ interface ListQuery {
  * Metadata store for history, runs and traces. Only small metadata rows live here —
  * large payloads, traces and results are separate files on disk (spec §25).
  */
+/** Why the history database could not be used as it was (shown to the user; never a silent fall back to another store). */
+export interface MetaProblem {
+  code: 'damaged' | 'locked' | 'newer' | 'unavailable';
+  message: string;
+  /** The damaged file, kept beside the new database. */
+  backup?: string;
+}
+
 export interface MetaStore {
   readonly backend: 'sqlite' | 'jsonl';
+  /** Set when the store opened in a degraded way (a damaged database was set aside, or nothing could be opened: then it only lives in memory). */
+  readonly problem?: MetaProblem;
   addHistory(e: HistoryEntry): void;
   listHistory(q?: ListQuery): Page<HistoryEntry>;
   getHistory(id: string): HistoryEntry | undefined;
@@ -218,6 +229,8 @@ export interface MetaStore {
   historyOfTrace(traceId: string): HistoryEntry | undefined;
   deleteHistory(id: string): void;
   clearHistory(): void;
+  /** Which files the rows point at: response bodies (payloads/…) and run ids (runs/<id>). What no row points at is an orphan (storage/housekeeping.ts). */
+  referencedFiles(): { payloads: Set<string>; runIds: Set<string> };
   addRun(summary: RunSummary, dir: string): void;
   listRuns(q?: ListQuery): Page<RunMeta>;
   deleteRun(id: string): void;
@@ -338,6 +351,7 @@ class SqliteMetaStore implements MetaStore {
   readonly backend = 'sqlite' as const;
   private db: SqliteDb;
   private root: string;
+  private path: string;
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
   private inserts = { history: 0, traces: 0, ai: 0, judge: 0 };
@@ -349,15 +363,28 @@ class SqliteMetaStore implements MetaStore {
     return s;
   }
 
-  constructor(path: string, Db: new (p: string) => SqliteDb) {
-    mkdirSync(dirname(path), { recursive: true });
-    this.root = dirname(path);
+  problem?: MetaProblem;
+
+  constructor(path: string, Db: new (p: string) => SqliteDb, root = dirname(path)) {
+    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
+    this.root = root;
+    this.path = path;
     this.db = new Db(path);
     // another process may be writing (the app and a CLI run, CI jobs side by side): wait for its lock instead of failing
     // at once — a failed open fell back to metadata.jsonl, and the runs recorded there were missing from the history
     this.db.exec('PRAGMA busy_timeout=10000;');
-    this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16000;');
-    this.migrate();
+    try {
+      this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16000;');
+      this.migrate();
+    } catch (e) {
+      // an open handle would keep the file locked (Windows cannot move it aside)
+      try {
+        this.db.close();
+      } catch {
+        /* already closed */
+      }
+      throw e;
+    }
   }
 
   private migrate(): void {
@@ -368,6 +395,9 @@ class SqliteMetaStore implements MetaStore {
     this.db.exec('CREATE TABLE IF NOT EXISTS judge_cache (key TEXT PRIMARY KEY, at TEXT, doc TEXT); CREATE INDEX IF NOT EXISTS judge_cache_at ON judge_cache(at);');
     const row = this.db.prepare("SELECT value FROM meta WHERE key='schema'").get() as { value: string } | undefined;
     const v = row ? Number(row.value) : 0;
+    if (v > SQLITE_SCHEMA_VERSION) throw new ApsError('ConfigurationError', `The history database was written by a newer TestPion (format ${v}; this version reads up to ${SQLITE_SCHEMA_VERSION})`, { suggestions: ['Update TestPion, or open the workspace with the newer version.'], details: { code: 'newer' } });
+    // a copy before a migration rewrites rows (small enough to copy; the database stays usable if a migration is cut short)
+    if (v >= 1 && v < SQLITE_SCHEMA_VERSION) this.backupBeforeMigration(v);
     if (v < 1) {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS history (id TEXT PRIMARY KEY, ts TEXT, kind TEXT, name TEXT, method TEXT, url TEXT, status TEXT, duration REAL, size INTEGER, trace_id TEXT, payload TEXT, doc TEXT);
@@ -400,6 +430,18 @@ class SqliteMetaStore implements MetaStore {
         `);
         this.db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)").run(String(SQLITE_SCHEMA_VERSION));
       });
+    }
+  }
+
+  private backupBeforeMigration(from: number): void {
+    if (this.path === ':memory:') return;
+    try {
+      if (statSync(this.path).size > 1024 ** 3) return; // too big to copy for a safety net: the migration is one transaction
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+      const backup = `${this.path}.bak-v${from}`;
+      if (!existsSync(backup)) copyFileSync(this.path, backup);
+    } catch {
+      /* the backup is best-effort */
     }
   }
 
@@ -550,6 +592,12 @@ class SqliteMetaStore implements MetaStore {
     const row = this.db.prepare('SELECT payload FROM history WHERE id = ?').get(id) as { payload: string | null } | undefined;
     this.db.prepare('DELETE FROM history WHERE id = ?').run(id);
     removeFiles(this.root, [row?.payload]);
+  }
+
+  referencedFiles(): { payloads: Set<string>; runIds: Set<string> } {
+    const payloads = new Set((this.db.prepare('SELECT payload FROM history WHERE payload IS NOT NULL').all() as Array<{ payload: string }>).map((r) => r.payload));
+    const runIds = new Set((this.db.prepare('SELECT id FROM runs').all() as Array<{ id: string }>).map((r) => r.id));
+    return { payloads, runIds };
   }
 
   clearHistory(): void {
@@ -804,6 +852,9 @@ class JsonlMetaStore implements MetaStore {
     this.data.history = this.data.history.filter((h) => h.id !== id);
     this.log('history', id, 'del');
   }
+  referencedFiles() {
+    return { payloads: new Set(this.data.history.flatMap((h) => (h.payloadPath ? [h.payloadPath] : []))), runIds: new Set(this.data.runs.map((r) => r.id)) };
+  }
   clearHistory() {
     removeFiles(this.root, this.data.history.map((h) => h.payloadPath));
     this.data.history = [];
@@ -902,14 +953,59 @@ class JsonlMetaStore implements MetaStore {
   }
 }
 
-export function openMetaStore(dir: string): MetaStore {
-  const sqlite = loadSqlite();
-  if (sqlite) {
-    try {
-      return new SqliteMetaStore(`${dir}/database.sqlite`, sqlite.DatabaseSync);
-    } catch {
-      /* fall through */
+/** What went wrong opening a database: damaged (not a database, malformed), busy, read-only, or newer than this version reads. */
+function classifyOpenError(e: unknown): MetaProblem['code'] {
+  const err = e as { message?: string; errcode?: number; details?: { code?: string } };
+  if (err?.details?.code === 'newer') return 'newer';
+  const msg = String(err?.message ?? '');
+  if (err?.errcode === 26 || err?.errcode === 11 || /not a database|malformed|disk image|corrupt/i.test(msg)) return 'damaged';
+  if (err?.errcode === 5 || err?.errcode === 6 || /locked|busy/i.test(msg)) return 'locked';
+  return 'unavailable';
+}
+
+/** Moves a damaged database (and its -wal / -shm files) aside as `database.sqlite.broken-<time>`; the answer is the kept file. */
+function setAside(file: string): string {
+  const backup = `${file}.broken-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  renameSync(file, backup);
+  for (const ext of ['-wal', '-shm']) rmSync(file + ext, { force: true });
+  return backup;
+}
+
+/**
+ * Opens the history store. With `node:sqlite` available it is always the database: a file that is damaged is set aside (kept, and said)
+ * and a new one started; one that is locked, read-only or newer than this version reads gets a store in memory with `problem` set — never
+ * a second store on disk (metadata.jsonl) that would diverge from the database. Only a Node without `node:sqlite` (or `{ backend: 'jsonl' }`,
+ * for tests of that store) uses the JSONL file.
+ */
+export function openMetaStore(dir: string, o: { backend?: 'jsonl' } = {}): MetaStore {
+  const sqlite = o.backend === 'jsonl' ? undefined : loadSqlite();
+  if (!sqlite) return new JsonlMetaStore(`${dir}/metadata.jsonl`);
+  const file = `${dir}/database.sqlite`;
+  try {
+    return new SqliteMetaStore(file, sqlite.DatabaseSync);
+  } catch (e) {
+    const code = classifyOpenError(e);
+    const why = (e as Error)?.message ?? String(e);
+    if (code === 'damaged' && existsSync(file)) {
+      try {
+        const backup = setAside(file);
+        const fresh = new SqliteMetaStore(file, sqlite.DatabaseSync);
+        fresh.problem = { code, backup, message: `The history database was damaged (${why}). It was set aside as ${backup} and a new one started: History, Runs and Traces start empty.` };
+        return fresh;
+      } catch {
+        /* the folder is not writable either: below */
+      }
     }
+    const mem = new SqliteMetaStore(':memory:', sqlite.DatabaseSync, dir);
+    mem.problem = {
+      code,
+      message:
+        code === 'locked'
+          ? `The history database is locked by another program (${why}). History is not saved in this session.`
+          : code === 'newer'
+            ? `${why}. History is not saved in this session.`
+            : `The history database could not be opened (${why}). History is not saved in this session.`,
+    };
+    return mem;
   }
-  return new JsonlMetaStore(`${dir}/metadata.jsonl`);
 }

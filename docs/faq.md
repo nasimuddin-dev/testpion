@@ -61,6 +61,10 @@ In `~/.testpion` (`%USERPROFILE%\.testpion` on Windows): settings, logs, encrypt
 
 Run `testpion doctor -w <workspace>`: it checks Node.js, SQLite, the app folder, secrets from the environment, proxy and certificate settings, and whether every collection of the workspace can be read (`--json` for scripts and bug reports). The app's logs are under **Logs** in the status bar.
 
+To send everything a bug report needs at once, use **Settings ▸ Privacy & security ▸ Save diagnostics** (a zip) or `testpion diagnostics --json`: versions, your settings without secrets, the last 500 log records, the size of the workspace and the slowest calls. Home folders, tokens and passwords are masked, and nothing is sent: you attach the file yourself.
+
+**"The history database was damaged"**: TestPion set the damaged `database.sqlite` aside as `database.sqlite.broken-<time>` (keep it if you need the old entries; it opens with any SQLite tool) and started a new one, so History, Runs and Traces start empty. A database written by a newer TestPion, or locked by another program, is left untouched and history is not saved until it can be opened. **"The disk is full"** and **"The folder is read-only"** are said as such: a request that succeeded still shows its response, only its history entry is missing.
+
 ## Why does Windows or macOS warn me when installing?
 
 The installers aren't code-signed yet. The [Windows](/installation/windows) and [macOS](/installation/macos) guides show how to proceed safely.

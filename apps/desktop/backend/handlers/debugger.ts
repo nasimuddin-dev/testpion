@@ -33,7 +33,7 @@ import {
   captureSessionFileName,
   recordCaptureSession,
   removeOwned,
-  writeOwned,
+  atomicWrite,
 } from '@testpion/core';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
@@ -314,7 +314,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     mkdirSync(sessionsDir(), { recursive: true });
     const file = sessionFile(name);
     if (file !== viewing) views.delete(file); // a tab showing it later reads it again (the one on screen stays as shown)
-    writeOwned(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2));
+    atomicWrite(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2)); // atomic: a crash while saving keeps the previous file
     return { name: basename(file, '.har'), path: file, exchanges: state.exchanges.length };
   };
   const touch = () => {
@@ -377,6 +377,15 @@ export function debuggerHandlers(be: Backend): Handlers {
   };
   state.release = async () => {
     stopAutosave();
+    // quitting (or a workspace switch) with exchanges not yet saved: keep them, as stopping the capture does
+    if (state.dirty && state.exchanges.length) {
+      try {
+        writeSession(AUTOSAVE);
+        state.dirty = false;
+      } catch (e) {
+        be.logger.warn(`Debugger session not saved at shutdown: ${(e as Error).message}`);
+      }
+    }
     await restoreSystem();
   };
   // one store for every capture mode: what the reverse proxy forwards joins the session like the proxy's exchanges

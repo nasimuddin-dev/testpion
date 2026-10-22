@@ -51,6 +51,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
   const sseEvents = be.batched<unknown>('http.sse', 100);
   let scriptLogs: string[] = [];
   let preLogCount: number | undefined;
+  let failedPayload: string | undefined; // the body file of a response that arrived although the send then failed (a test script threw): the history row points at it
   const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name, requestId: p.requestId, environmentName: ctx.environment?.name });
   const sentLogs =(o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
     (o.sentRequests ?? []).map((r) => `tp.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
@@ -100,6 +101,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       sseEvents.flush();
     }
     const { response, prepared } = result;
+    failedPayload = response.payloadPath;
     root.setAttributes({ status: response.status, url: prepared.url, size: response.size });
     // DNS, TCP, TLS, waiting and download as child spans (the Traces waterfall, OTLP export)
     timingSpans(root, response.timeline, sentAt);
@@ -138,26 +140,33 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       checks.push(...testChecks(out));
     }
     const trace = tracer.finish();
-    be.ws.saveTrace(trace, 'http');
+    const recording: Array<{ what: string; reason: string }> = [];
+    const keep = (what: string, fn: () => void) => {
+      const r = be.record(what, fn);
+      if (!r.ok) recording.push({ what, reason: r.message });
+    };
+    keep('trace', () => be.ws.saveTrace(trace, 'http'));
     const historyId = shortId('h-');
-    be.ws.meta.addHistory({
-      id: historyId,
-      timestamp: new Date().toISOString(),
-      kind: 'http',
-      name: p.name ?? `${prepared.method} ${prepared.url}`,
-      method: prepared.method,
-      url: prepared.url,
-      status: response.status,
-      durationMs: response.durationMs,
-      size: response.size,
-      request: ctx.redactor.redact(p.request),
-      payloadPath: response.payloadPath,
-      traceId: trace.traceId,
-      collectionId: p.collectionId,
-      requestId: p.requestId,
-      responseMeta: { headers: ctx.redactor.redact(response.headers), contentType: response.contentType, truncated: response.truncated, timing: timingSummary(response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) },
-    });
-    recordCertificate(be.ws, prepared.url, response.connection?.certificate);
+    keep('history entry', () =>
+      be.ws.meta.addHistory({
+        id: historyId,
+        timestamp: new Date().toISOString(),
+        kind: 'http',
+        name: p.name ?? `${prepared.method} ${prepared.url}`,
+        method: prepared.method,
+        url: prepared.url,
+        status: response.status,
+        durationMs: response.durationMs,
+        size: response.size,
+        request: ctx.redactor.redact(p.request),
+        payloadPath: response.payloadPath,
+        traceId: trace.traceId,
+        collectionId: p.collectionId,
+        requestId: p.requestId,
+        responseMeta: { headers: ctx.redactor.redact(response.headers), contentType: response.contentType, truncated: response.truncated, timing: timingSummary(response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) },
+      }),
+    );
+    keep('certificate', () => recordCertificate(be.ws, prepared.url, response.connection?.certificate));
     const clip = clipConsole;
     // values typed into sensitive headers are secrets too (e.g. echoed back in a response body)
     for (const h of spec.headers ?? [])
@@ -208,14 +217,16 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
     const rendered = visual ? renderVisualizer(visual.template, visual.data) : undefined;
     // scripts (charts) run only on the isolated visualization origin; the id is its access key
     const visualizer = rendered && { ...rendered, vizId: rendered.html !== undefined ? be.vizPages.publish(rendered.html, visual!.data) : undefined };
-    return { id, response, prepared, checks, scriptLogs, visualizer, unresolved: [...ctx.vars.unresolved], cycles: [...ctx.vars.cycles], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId, historyId };
+    return { id, response, prepared, checks, scriptLogs, visualizer, unresolved: [...ctx.vars.unresolved], cycles: [...ctx.vars.cycles], blockedEnv: [...ctx.vars.blockedEnv], traceId: trace.traceId, historyId, ...(recording.length ? { recording } : {}) };
   } catch (e) {
     const err = normalizeError(ctrl.signal.reason instanceof ApsError ? ctrl.signal.reason : e);
     root.fail(e);
     const trace = tracer.finish('error');
-    be.ws.saveTrace(trace, 'http');
+    be.record('trace', () => be.ws.saveTrace(trace, 'http'));
     const failedHistoryId = shortId('h-');
-    be.ws.meta.addHistory({ id: failedHistoryId, timestamp: new Date().toISOString(), kind: 'http', name: p.name ?? `${p.request.method} ${p.request.url}`, method: p.request.method, url: ctx.redactor.redactUrl(ctx.vars.resolve(p.request.url)), status: err.kind, request: ctx.redactor.redact(p.request), traceId: trace.traceId });
+    be.record('history entry', () =>
+      be.ws.meta.addHistory({ id: failedHistoryId, timestamp: new Date().toISOString(), kind: 'http', name: p.name ?? `${p.request.method} ${p.request.url}`, method: p.request.method, url: ctx.redactor.redactUrl(ctx.vars.resolve(p.request.url)), status: err.kind, request: ctx.redactor.redact(p.request), traceId: trace.traceId, ...(failedPayload ? { payloadPath: failedPayload } : {}) }),
+    );
     be.consoleEntry({
       id,
       time: new Date().toISOString(),

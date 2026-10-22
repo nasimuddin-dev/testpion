@@ -12,7 +12,7 @@ import type { ParsedBundle } from './format.js';
 
 const TTL_MS = 30 * 60 * 1000;
 const MAX_PLANS = 8;
-const plans = new Map<string, { bundle: ParsedBundle; root: string; at: number }>();
+const plans = new Map<string, { bundle: ParsedBundle; root: string; at: number }>(); // bounded: MAX_PLANS, expiring after TTL_MS
 
 export function rememberBundle(store: WorkspaceStore, bundle: ParsedBundle): string {
   const now = Date.now();

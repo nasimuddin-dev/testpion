@@ -4,8 +4,8 @@
  * Each reader gives CapturedCall rows: the method, URL, request body, status and response text, never headers or cookies
  * of the request (they are not needed and must not reach a dataset).
  */
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { fileLines } from '../../../util/file-lines.js';
 import { ApsError } from '../../../errors.js';
 import type { HistoryEntry } from '../../../model/types.js';
 import type { DebuggerExchange } from '../../../debugger/proxy.js';
@@ -210,7 +210,7 @@ async function readRun(store: Reader, run: string): Promise<CapturedCall[]> {
   const file = store.safePath('results.jsonl', store.runDir(run));
   if (!existsSync(file)) throw new ApsError('ConfigurationError', `No results for run "${run}"`, { suggestions: ['`testpion history list` shows the runs.'] });
   const out: CapturedCall[] = [];
-  const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
+  const rl = fileLines(file);
   for await (const line of rl) {
     if (!line.trim()) continue;
     let r: { id?: string; startedAt?: string; metadata?: { rag?: { query?: string; reference?: string; referenceIds?: string[]; sample?: { answer?: string; contexts?: Array<{ id: string; text: string; score?: number; source?: string }> } } } };

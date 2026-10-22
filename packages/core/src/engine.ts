@@ -7,6 +7,7 @@ import { savedRequestSpec } from './runner/saved-request.js';
 import { Redactor } from './util/redact.js';
 import { Logger } from './log/logger.js';
 import { ProviderRegistry } from './ai/index.js';
+import { setAiTimeouts } from './ai/http.js';
 import { McpManager, type McpTraceEvent } from './protocols/mcp/client.js';
 import type { ExecServices } from './runner/execute.js';
 import type { WorkspaceStore } from './storage/workspace.js';
@@ -136,6 +137,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     extra.push(appClaudeProvider((settings.assistantProvider === APP_CLAUDE_ID && settings.assistantModel) || undefined));
   const providers = new ProviderRegistry([...own, ...extra.filter((p) => !own.some((o) => o.id === p.id))], vars, redactor);
   const logger = opts.logger ?? new Logger(settings.logLevel, redactor);
+  setAiTimeouts({ requestMs: settings.ai?.requestTimeoutMs, idleMs: settings.ai?.idleTimeoutMs }); // how long a model may be silent (Settings ▸ AI)
 
   const services: ExecServices = {
     vars,

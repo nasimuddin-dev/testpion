@@ -50,6 +50,7 @@ export function grpcHandlers(be: Backend): Handlers {
         };
         const r = await executeGrpc(spec, { signal: ctrl.signal, redactor: ctx.redactor, onMessage: (data, atMs) => live.push({ id, data, atMs }) });
         be.logger.info(`gRPC ${r.method} → ${r.codeName}`, { target: r.target, ms: r.durationMs });
+        be.record('history entry', () =>
         be.ws.meta.addHistory({
           id: shortId('h-'),
           timestamp: new Date().toISOString(),
@@ -61,7 +62,8 @@ export function grpcHandlers(be: Backend): Handlers {
           durationMs: r.durationMs,
           // enough to open it again; the message is redacted, the proto files are not stored
           request: { target: p.target, method: p.method, message: ctx.redactor.redactString(p.message ?? ''), metadata: ctx.redactor.redact(p.metadata ?? []) },
-        });
+        }),
+        );
         return { ...r, unresolved: ctx.vars.unresolved.size ? [...ctx.vars.unresolved] : undefined };
       } finally {
         live.flush();

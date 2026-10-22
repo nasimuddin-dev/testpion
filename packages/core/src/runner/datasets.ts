@@ -1,8 +1,8 @@
 import { csvRecords, parseCsvLine } from '@testpion/shared';
 import { assertUrlAllowed } from '../net/policy.js';
-import { appendFileSync, closeSync, createReadStream, existsSync, mkdirSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
+import { fileLines } from '../util/file-lines.js';
 import { dirname, extname, join, relative, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
@@ -92,7 +92,7 @@ async function* rawRecords(src: DatasetSource): AsyncGenerator<DatasetRecord> {
     return;
   }
   if (fmt === 'jsonl') {
-    const rl = createInterface({ input: createReadStream(src.path, 'utf8'), crlfDelay: Infinity });
+    const rl = fileLines(src.path);
     let line = 0;
     for await (const l of rl) {
       line++;
@@ -107,7 +107,7 @@ async function* rawRecords(src: DatasetSource): AsyncGenerator<DatasetRecord> {
     return;
   }
   if (fmt === 'csv') {
-    const rl = createInterface({ input: createReadStream(src.path, 'utf8'), crlfDelay: Infinity });
+    const rl = fileLines(src.path);
     const delim = src.path.endsWith('.tsv') ? '\t' : ',';
     let header: string[] | undefined;
     let pending = '';
@@ -317,7 +317,7 @@ export async function appendDatasetRow(
 /** Non-blank lines of a file, streamed. */
 async function countLines(file: string): Promise<number> {
   let n = 0;
-  const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
+  const rl = fileLines(file);
   for await (const l of rl) if (l.trim()) n++;
   return n;
 }

@@ -59,7 +59,7 @@ class TargetLimiter {
   }
 }
 
-const limiters = new Map<string, TargetLimiter>();
+const limiters = new Map<string, TargetLimiter>(); // bounded: cleared above 200 targets
 
 /** The limiter of a target, or undefined when it has no limits. */
 export function limiterOf(target: Pick<RagTarget, 'step' | 'limits'>): TargetLimiter | undefined {

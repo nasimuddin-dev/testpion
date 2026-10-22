@@ -3,8 +3,8 @@
  * page, a filter or a sort reads the kept one), a cell's full result, and the comparison of a run with a baseline run
  * that `testpion eval compare`, the eval_compare MCP tool and the app share.
  */
-import { createReadStream, existsSync, statSync } from 'node:fs';
-import { createInterface } from 'node:readline';
+import { existsSync, statSync } from 'node:fs';
+import { fileLines } from '../util/file-lines.js';
 import type { RunSummary, TestResult } from '../model/types.js';
 import { isMonitorRun, latestFinishedRun } from './result-source.js';
 import { EVALUATIONS_LIBRARY } from './saved-evaluations.js';
@@ -76,7 +76,7 @@ function stamp(store: Store, runId: string): string {
 }
 
 /** The matrices built lately (a few: each is ~1 MB for 50,000 cells), and the builds under way (shared by callers). */
-const cache = new Map<string, Promise<EvalMatrix>>();
+const cache = new Map<string, Promise<EvalMatrix>>(); // bounded: CACHE_SIZE
 const CACHE_SIZE = 4;
 
 export interface EvalMatrixParams {
@@ -122,7 +122,7 @@ export async function evalMatrixResult(store: Pick<WorkspaceStore, 'runDir'>, ru
   if (!existsSync(file)) return null;
   // the id as it is written in the file: lines without it are not parsed
   const needle = JSON.stringify(resultId).slice(1, -1);
-  const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
+  const rl = fileLines(file);
   let found: TestResult | undefined;
   for await (const line of rl) {
     if (!line.includes(needle)) continue;

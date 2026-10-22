@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Collection, CollectionNode, Environment } from '../model/types.js';
 import { readTextCached } from './fsutil.js';
+import { ApsError } from '../errors.js';
+import { SCHEMA_VERSION } from '../model/types.js';
 
 /**
  * Workspace files as the engine expects them: a workspace.json that is TestPion's (not another tool's file of the
@@ -37,11 +39,38 @@ export function scanString(text: string | undefined, key: string): string | unde
   }
 }
 
+/** The major number of a schemaVersion ('1.0' → 1); undefined when there is none. */
+const majorOf = (v: unknown): number | undefined => {
+  const m = typeof v === 'string' ? /^(\d+)/.exec(v.trim()) : null;
+  return m ? Number(m[1]) : undefined;
+};
+
+/**
+ * A file written by a newer TestPion with a breaking format (a higher major schemaVersion): reading it as this version understands it would
+ * silently drop what it does not know, and saving would overwrite it. It is listed with this message and never rewritten.
+ */
+export function assertSchemaSupported(schemaVersion: unknown, what: string): void {
+  const have = majorOf(schemaVersion);
+  const mine = majorOf(SCHEMA_VERSION)!;
+  if (have !== undefined && have > mine)
+    throw new ApsError('ConfigurationError', `${what} was written by a newer TestPion (format ${String(schemaVersion)}; this version reads format ${SCHEMA_VERSION})`, {
+      suggestions: ['Update TestPion to open it. The file is left as it is.'],
+      details: { code: 'newer', schemaVersion: String(schemaVersion) },
+    });
+}
+
+/** Before a save: the file on disk is not from a newer TestPion (cheap: the text is scanned for its schemaVersion, not parsed). */
+export function assertNotNewerOnDisk(file: string, what: string): void {
+  if (!existsSync(file)) return;
+  assertSchemaSupported(scanString(readTextCached(file), 'schemaVersion'), what);
+}
+
 const str = (v: unknown, fallback: string): string => (typeof v === 'string' ? v : v === undefined || v === null ? fallback : String(v));
 
 /** A collection as the rest of the engine expects it, from a file that is valid JSON but incomplete (no items, a numeric name …). */
 export function normalizeCollection(c: Collection): Collection {
   const raw = (c && typeof c === 'object' && !Array.isArray(c) ? c : {}) as Collection;
+  assertSchemaSupported(raw.schemaVersion, `The collection "${str(raw.name, str(raw.id, ''))}"`);
   const items = (nodes: unknown): CollectionNode[] =>
     (Array.isArray(nodes) ? nodes : [])
       .filter((n): n is CollectionNode => !!n && typeof n === 'object')
@@ -52,6 +81,7 @@ export function normalizeCollection(c: Collection): Collection {
 /** An environment as the rest of the engine expects it: an id, a name and a variables list. */
 export function normalizeEnvironment(e: Environment, fileId: string): Environment {
   const raw = (e && typeof e === 'object' && !Array.isArray(e) ? e : {}) as Environment;
+  assertSchemaSupported((raw as { schemaVersion?: unknown }).schemaVersion, `The environment "${str(raw.name, fileId)}"`);
   const id = str(raw.id, fileId) || fileId;
   return { ...raw, id, name: str(raw.name, id), variables: Array.isArray(raw.variables) ? raw.variables.filter((v) => !!v && typeof v === 'object') : [] };
 }

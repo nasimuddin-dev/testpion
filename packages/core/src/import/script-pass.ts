@@ -10,7 +10,7 @@ type Holder = { name?: string; preRequestScript?: string; testScript?: string; i
  * same snippets thousands of times (the same status check in every request), so each distinct script is parsed once. The
  * results are read-only. Bounded by the size of the code held: past the budget the memory is dropped and starts again.
  */
-const converted = new Map<string, ScriptResult>();
+const converted = new Map<string, ScriptResult>(); // bounded: CONVERTED_CHARS in all
 let convertedChars = 0;
 const CONVERTED_CHARS = 8_000_000;
 function convertOnce(code: string, tool: ScriptTool, alias: 'tp' | 'pm'): ScriptResult {

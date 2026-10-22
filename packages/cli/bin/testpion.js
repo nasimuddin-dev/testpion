@@ -50,17 +50,17 @@ async function loadMain() {
       if (mtime('../dist/bundle.js') >= Math.max(mtime(entry), mtime('../../core/dist/index.js'), mtime('../../shared/dist/index.js'))) {
         // V8's compile cache (Node 22.1+) keeps the compiled bundle between runs
         (await import('node:module')).enableCompileCache?.();
-        return (await import('../dist/bundle.js')).main;
+        return await import('../dist/bundle.js');
       }
     } catch {
       // no bundle (a source checkout that was not built with it, the npm package): the files
     }
   }
-  return (await import(entry)).main;
+  return import(entry);
 }
 
 if (!(await answerQuickly())) {
-  const main = await loadMain();
+  const { main, reportCrash } = await loadMain();
 
   // Let the event loop drain instead of calling process.exit() right away: exiting while libuv is still
   // finishing file work aborts Node on Windows ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)").
@@ -71,8 +71,18 @@ if (!(await answerQuickly())) {
     setTimeout(() => process.exit(code), 3000).unref();
   };
 
-  main().then(exitWith, (err) => {
-    console.error(err);
-    exitWith(3);
-  });
+  // Anything nobody catches is a crash (exit 3, with the --json envelope), never a failed test (exit 1, Node's default).
+  const crash = (err) => {
+    let code = 3;
+    try {
+      code = reportCrash(err);
+    } catch {
+      console.error(err);
+    }
+    if (code !== undefined) exitWith(code);
+  };
+  process.on('unhandledRejection', crash);
+  process.on('uncaughtException', crash);
+
+  main().then(exitWith, crash);
 }

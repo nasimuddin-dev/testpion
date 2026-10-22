@@ -275,7 +275,7 @@ function yielder(sliceMs = 15): () => Promise<void> {
  * The rows of files already described, by workspace and path, valid while the file is the same: same state, same blob in the
  * last commit and in the index, same size and modified time in the working folder. A save then describes one file again, not all.
  */
-const described = new Map<string, { sig: string; rows: SemanticChange[] }>();
+const described = new Map<string, { sig: string; rows: SemanticChange[] }>(); // bounded: DESCRIBED_MAX
 const DESCRIBED_MAX = 4000;
 /** A file modified more recently than this is not remembered: a second write in the same clock tick would look the same. */
 const SETTLE_MS = 2000;

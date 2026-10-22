@@ -67,10 +67,10 @@ const undici = () => (undiciMod ??= import('undici'));
 
 /** Connection pools by TLS / proxy settings: at most this many are kept, the least recently used is closed (a host that serves many users with different client certificates must not collect pools without end). */
 const DISPATCHERS_MAX = 32;
-const dispatchers = new Map<string, Dispatcher>();
+const dispatchers = new Map<string, Dispatcher>(); // bounded: DISPATCHERS_MAX, least recently used
 
 // the protocol each connection negotiated (ALPN), by origin: how an HTTP/2 response is recognised
-const alpnByOrigin = new Map<string, string>();
+const alpnByOrigin = new Map<string, string>(); // bounded: cleared above 500 origins
 subscribe('undici:client:connected', (message) => {
   const m = message as { connectParams?: { protocol?: string; host?: string }; socket?: { alpnProtocol?: string | false } };
   if (!m.connectParams?.host || m.connectParams.protocol !== 'https:') return;
@@ -296,6 +296,16 @@ function setJarCookies(headers: Headers, jar: CookieJar, url: URL, explicitCooki
 
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 
+/**
+ * The wait before a retry: the server's Retry-After when it gave one (exact), else base * 2^attempt capped at 10 s, spread over its upper
+ * half when `jitter` is on (so workers that failed together do not retry at the same instant against a server that just said 429).
+ */
+export function retryDelayMs(base: number, attempt: number, retryAfterMs?: number, jitter = true, random: () => number = Math.random): number {
+  if (retryAfterMs !== undefined && Number.isFinite(retryAfterMs) && retryAfterMs >= 0) return Math.min(10_000, retryAfterMs);
+  const exp = Math.min(10_000, base * 2 ** attempt);
+  return jitter ? Math.round(exp / 2 + (random() * exp) / 2) : exp;
+}
+
 /** Execute an HTTP request, streaming the response with bounded memory. */
 export async function executeHttp(spec: HttpRequestSpec, opts: HttpExecOptions = {}): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
   const unresolved = unresolvedHostError(spec.url, opts.variableNames?.());
@@ -308,7 +318,7 @@ export async function executeHttp(spec: HttpRequestSpec, opts: HttpExecOptions =
   const base = Math.max(0, spec.settings?.retryDelayMs ?? 500);
   const wait = (attempt: number, retryAfter?: string | null) => {
     const ra = retryAfter ? (/^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now()) : NaN;
-    const ms = Math.min(10_000, Number.isFinite(ra) && ra >= 0 ? ra : base * 2 ** attempt);
+    const ms = retryDelayMs(base, attempt, Number.isFinite(ra) ? ra : undefined, spec.settings?.retryJitter !== false);
     return new Promise<void>((resolve, reject) => {
       const signal = opts.signal;
       if (signal?.aborted) return reject(new ApsError('CancelledError', 'Request cancelled'));

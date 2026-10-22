@@ -210,8 +210,8 @@ describe('the second pass (F-25, F-32, F-35)', () => {
 
   it('the JSON-lines fallback store keeps the database limits, loads in one pass and pages from its end', () => {
     const dir = join(tmp.dir, 'jsonl');
-    mkdirSync(join(dir, 'database.sqlite'), { recursive: true }); // the database cannot open: the fallback store
-    const meta = openMetaStore(dir);
+    mkdirSync(dir, { recursive: true });
+    const meta = openMetaStore(dir, { backend: 'jsonl' }); // the store of a Node without node:sqlite (a database that cannot open is no longer a reason to switch: see robustness-fixes.test.ts)
     expect(meta.backend).toBe('jsonl');
     const at = (i: number) => new Date(1_700_000_000_000 + i * 1000).toISOString();
     for (let i = 0; i < 20_500; i++) meta.addHistory({ id: `h${i}`, timestamp: at(i), kind: 'http', name: `R${i}`, method: 'GET', url: `https://x/${i}`, status: 200 });
@@ -226,7 +226,7 @@ describe('the second pass (F-25, F-32, F-35)', () => {
     meta.close();
     // read again: one pass, the same newest first
     const l0 = performance.now();
-    const again = openMetaStore(dir);
+    const again = openMetaStore(dir, { backend: 'jsonl' });
     expect(performance.now() - l0, 'load').toBeLessThan(2000);
     expect(again.listHistory({ limit: 1 }).items[0]!.id).toBe('h20499');
     expect(again.listHistory({ limit: 1 }).total).toBe(20_000);

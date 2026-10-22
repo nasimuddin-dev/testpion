@@ -10,7 +10,7 @@ import { buildMatrixBase, buildMetricMatrix, cutMatrix, matrixIntervals, type Ma
 import { runResults, runResultsFile } from './run-results.js';
 
 const KEEP = 4;
-const bases = new Map<string, { stamp: string; base: Promise<MatrixBase> }>();
+const bases = new Map<string, { stamp: string; base: Promise<MatrixBase> }>(); // bounded: KEEP
 
 /** The base of a run (built once while its results file stays as it is). */
 function ragMatrixBase(store: Pick<WorkspaceStore, 'runDir'>, runId: string): Promise<MatrixBase> {

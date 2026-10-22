@@ -119,7 +119,7 @@ export function statusMatches(want: RuleMatch['status'], status: number | undefi
 const RESPONSE_COLUMNS: RuleColumn[] = ['status', 'type', 'duration', 'size', 'ip'];
 
 /** Patterns compiled once (a rule is checked on every request), at most 200 kept; an invalid one is null. */
-const compiled = new Map<string, RegExp | null>();
+const compiled = new Map<string, RegExp | null>(); // bounded: cleared at 200 patterns
 function regexOf(pattern: string): RegExp | null {
   let re = compiled.get(pattern);
   if (re === undefined) {

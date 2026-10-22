@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path';
 import type { Collection, Environment, Library, McpServerConfig, ProviderConfig, Workspace } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
+import { isDeviceFileName } from '../util/ids.js';
 import { atomicWrite } from './fsutil.js';
 import { adoptLooseRequests } from './loose-requests.js';
 import { SecretStripper, type ReplacedSecret } from './bundle-secrets.js';
@@ -68,7 +69,7 @@ export function workspaceExportFileName(name: string): string {
     .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, '-')
     .replace(/^[\s.]+|[\s.]+$/g, '')
     .slice(0, 120);
-  return `${safe || 'workspace'}.testpion.json`;
+  return `${isDeviceFileName(safe) ? `${safe}-workspace` : safe || 'workspace'}.testpion.json`;
 }
 
 const mb = (n: number) => `${(n / 1024 / 1024).toFixed(n < 1024 * 1024 ? 2 : 1)} MB`;

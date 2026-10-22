@@ -225,7 +225,7 @@ export function mcpHandlers(be: Backend): Handlers {
         const { body, text } = mcpResultBody(r);
         const checks = await runChecks(assertions, { testType: 'mcp', body, text, isError: r.isError, latencyMs: r.durationMs });
         const trace = tracer.finish();
-        be.ws.saveTrace(trace, 'mcp');
+        be.record('trace', () => be.ws.saveTrace(trace, 'mcp'));
         const historyId = shortId('h-');
         be.consoleProtocol('mcp', be.mcpRedactor(serverId), {
           name: `${s.config.name} · ${tool}`,
@@ -241,11 +241,11 @@ export function mcpHandlers(be: Backend): Handlers {
             { kind: 'trace', traceId: trace.traceId },
           ],
         });
-        be.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'mcp', name: `${s.config.name} · ${tool}`, status: r.isError ? 'error' : 'ok', durationMs: r.durationMs, request: { serverId, tool, args }, traceId: trace.traceId });
+        be.record('history entry', () => be.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'mcp', name: `${s.config.name} · ${tool}`, status: r.isError ? 'error' : 'ok', durationMs: r.durationMs, request: { serverId, tool, args }, traceId: trace.traceId }));
         return { ...r, body, checks, traceId: trace.traceId };
       } catch (e) {
         span.fail(e);
-        be.ws.saveTrace(tracer.finish('error'), 'mcp');
+        be.record('trace', () => be.ws.saveTrace(tracer.finish('error'), 'mcp'));
         const err = normalizeError(e);
         be.consoleProtocol('mcp', be.mcpRedactor(serverId), { name: `${s.config.name} · ${tool}`, method: 'CALL', url: `${s.config.name} › tools/call ${tool}`, status: err.kind, request: args, error: err.message });
         throw e;

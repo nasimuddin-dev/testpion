@@ -100,7 +100,7 @@ export function compileCustomMetric(f: CustomMetricFile): CompiledMetric {
   return { def, check, file: f, hash };
 }
 
-const registered = new Map<string, string>();
+const registered = new Map<string, string>(); // bounded: one entry per custom metric id; removed when the metric is unregistered
 
 /** What the registry holds came from this folder in this state (set by `syncCustomMetrics`; any other change to the registry forgets it). */
 let lastSync: { dir: string; stamp: string; result: SyncResult } | undefined;

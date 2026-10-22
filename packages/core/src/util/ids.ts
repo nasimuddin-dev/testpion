@@ -43,13 +43,25 @@ export function uniqueId(used: Set<string>, base: string): string {
   return id;
 }
 
-/** Lower-case words joined by `-`: at most `max` characters (64), `fallback` ('item') when nothing is left. */
+/** Names Windows resolves to a device whatever the extension (con.json is the console): never a file name as they are. */
+const DEVICE_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
+
+/** Whether a file name (with or without an extension) is a Windows device name (CON, nul.txt, COM1 …). */
+export function isDeviceFileName(name: string): boolean {
+  return DEVICE_NAME.test(name.split('.')[0]!.replace(/[ .]+$/, ''));
+}
+
+/**
+ * Lower-case words joined by `-`: at most `max` characters (64), `fallback` ('item') when nothing is left. The answer is safe as a file
+ * name on every system: a Windows device name (con, nul, com1 …) gets `-item` after it (`con.json` would open the console), and there are
+ * no trailing dots or spaces.
+ */
 export function slugify(name: string, o: { max?: number; fallback?: string } = {}): string {
-  return (
+  const slug =
     name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, o.max ?? 64) || (o.fallback ?? 'item')
-  );
+      .slice(0, o.max ?? 64) || (o.fallback ?? 'item');
+  return isDeviceFileName(slug) ? `${slug}-item` : slug;
 }

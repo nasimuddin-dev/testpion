@@ -53,6 +53,29 @@ Every list of saved items (prompts, evaluations, load tests, monitors, MCP serve
 - **One name for one export.** A collection's export choices are one list with one set of words: the Collections list's **Export** shows them under the collection's name, and the open collection's ⋯ menu has them (the second Export button in its header is gone).
 - **Smaller things**: kinds of call are named the same in History, Traces, the console and the activity and run charts (*HTTP*, *GraphQL*, *gRPC*, *MCP*, *AI*); counts use the one plural; the Logs level is the app's drop-down; section titles are one style; text sizes come from one scale that follows the font-size and density settings; an icon button's icon has one size per button size; the MCP protocol trace's bar keeps its download control in view in a narrow pane.
 
+### More robust
+
+Robustness review of 2026-10-22 (`planning/review-2026-10-22-robustness.md`): every finding fixed, each with a regression test.
+
+- **Switching workspace during a run no longer loses the run.** The run is stopped, writes its results and history row, and only then is the old workspace's database closed (before, the run ended in an error and never reached History).
+- **The collection cache stays small.** A collection that is saved again and again keeps one parsed copy, not one per save (a heavy editing day grew by hundreds of megabytes); the cache holds at most 64 collections.
+- **A crashed window comes back.** If the window's page dies (out of memory, a graphics crash) it is written to the app log and reloaded once; a second crash within a minute asks Reload or Quit instead of leaving a white window. Other process crashes are logged too.
+- **A full disk no longer hides a response.** The history entry, the trace and the certificate of a request are saved best-effort: when the disk is full or read-only the response is still shown, a message says what is missing (once a minute), and the entry of a failed send points at its saved body. A full disk, a read-only folder, a path that is too long and too many open files are named as such (not as a protocol error) with what to do.
+- **A damaged history database is never swapped for an empty second store.** `database.sqlite` that is damaged is set aside as `database.sqlite.broken-<time>` and a new one starts, with a message; one that is locked or written by a newer TestPion is left alone and History is not saved meanwhile (it used to switch silently to `metadata.jsonl`, and the two diverged). A database from an older version is copied (`.bak-v1`) before it is upgraded.
+- **AI providers can no longer hang for ever.** A provider that never answers ends with a timeout (default 2 minutes), a stream that goes silent for a minute ends with "The model stopped sending" (what arrived is kept); both are settings (`ai.requestTimeoutMs`, `ai.idleTimeoutMs`) and Cancel still works.
+- **The CLI tells a crash from a failed test.** An unhandled error exits with code 3 (not 1, which means a test failed) and `--json` gets its envelope.
+- **Quitting saves what is pending**: cookies, an unsaved Debugger session and the history store are written before the app exits (waiting at most a few seconds for a session that does not close).
+- **Windows device names** (`CON`, `NUL`, `AUX`, `COM1` …) can be collection, environment, dataset, export and folder names; they get `-item` and are never used as the file name as they are.
+- **A stale whole-collection save can be refused**: `col.save` takes `expectedVersion` and fails with a Conflict naming both versions when a newer one exists (the window adopts it with the revision work).
+- **Leftovers are cleaned up**: temp files of writes that never finished, response bodies no history row points at, run folders that never got a summary and old inline dataset files are removed a few seconds after a workspace opens; the trash is emptied of 30-day-old entries then, not by looking at it (a wrong clock could empty it).
+- **Files from a newer TestPion are left alone**: a collection, environment, library, providers or MCP file with a higher major `schemaVersion` is listed with "written by a newer TestPion" and never overwritten.
+- **Outside changes are not missed silently**: when the folder watch fails (unmounted drive, system limit) it is logged, the window says so once, and the watch starts again after 1 s, 5 s and then every 30 s.
+- **Saved Debugger sessions and monitor histories are written atomically**; the main thread waits at most about 0.4 s for a busy file (not 1.5 s), a copy under a new name replaces it whole before anything is copied in place, and the folder is synced after a save on macOS and Linux.
+- **Retries are spread out** (jitter) so parallel requests that failed together do not retry together; a monitor whose last run is "in the future" (the clock was set back) runs now instead of waiting for hours.
+- **Save diagnostics** (Settings ▸ Privacy & security) and `testpion diagnostics --json` collect versions, settings without secrets, the last 500 log records, the workspace size and the slowest calls, masked, for a bug report.
+- Files read line by line are closed as soon as the reader stops early; every module-level cache in the engine is bounded or says why it is not (a test enforces it).
+- Tests: the timing assertions of the CLI start, the terminal flood, the git, import and scale budgets, and the RAG trend are now deterministic (work counted, events awaited, a fixed day; budgets scale to the machine, `TESTPION_PERF_GATE=1` holds them exact).
+
 ## 0.54.1 — 2026-10-21
 
 Importing a file with thousands of folders nested inside each other now says so in plain words on every Node version, instead of failing with a stack overflow while the import report was being built. Nothing else changes.

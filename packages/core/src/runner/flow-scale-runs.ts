@@ -212,7 +212,7 @@ function stepsOf(dir: string, entries: Entry[], index: number): TestResult[] | u
 }
 
 /** The index of a finished run's rows: rows.idx.json, else rebuilt by reading rows.jsonl (a run that crashed). Cached for the last few runs. */
-const indexCache = new Map<string, { size: number; entries: Entry[] }>();
+const indexCache = new Map<string, { size: number; entries: Entry[] }>(); // bounded: 4 folders
 function indexOf(dir: string): Entry[] {
   const rowsFile = join(dir, 'rows.jsonl');
   if (!existsSync(rowsFile)) return [];

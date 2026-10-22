@@ -151,7 +151,7 @@ export function gitVersion(): Promise<string | undefined> {
  * the next ask after that. A folder that is not in a repository stays known as such (no git spawned on every
  * status) until a `.git` appears in it or above it, or `gitInit` / a clone forgets the roots.
  */
-const roots = new Map<string, { root: string | undefined; at: number }>();
+const roots = new Map<string, { root: string | undefined; at: number }>(); // bounded: 500 folders
 export async function repoRoot(dir: string): Promise<string | undefined> {
   const known = roots.get(dir);
   if (known) {
@@ -646,7 +646,7 @@ export async function gitClone(url: string, dest: string, opts: { branch?: strin
 }
 
 /** The remote's URL (origin), if any: a link to open pull requests with. Remembered for a few seconds (the status asks after every save). */
-const remotes = new Map<string, { url: string | undefined; at: number }>();
+const remotes = new Map<string, { url: string | undefined; at: number }>(); // bounded: 500 workspaces
 export async function gitRemoteUrl(ws: string): Promise<string | undefined> {
   const known = remotes.get(ws);
   if (known && Date.now() - known.at < 5000) return known.url;

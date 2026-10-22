@@ -88,6 +88,17 @@ export function errorKindForStatus(status: number): ErrorKind | undefined {
   return undefined;
 }
 
+/** File-system failures that are the user's disk or folder, not a protocol or a bug: what to tell them. */
+const STORAGE_CODES: Record<string, { kind: ErrorKind; text: string; why: string; hint: string[] }> = {
+  ENOSPC: { kind: 'ConfigurationError', text: 'The disk is full', why: 'There is no space left to write the file.', hint: ['Free some disk space, or move the workspace to another drive.'] },
+  EDQUOT: { kind: 'ConfigurationError', text: 'The disk quota is used up', why: 'The disk quota for this account is used up.', hint: ['Free some space or ask for a larger quota.'] },
+  EROFS: { kind: 'ConfigurationError', text: 'The folder is read-only', why: 'The file system does not allow writing here.', hint: ['Open a workspace on a writable drive, or remount the folder read-write.'] },
+  ENAMETOOLONG: { kind: 'ValidationError', text: 'The file name or path is too long', why: 'The path is longer than the file system allows (260 characters on Windows).', hint: ['Use a shorter name, or move the workspace closer to the drive root.'] },
+  EMFILE: { kind: 'ConfigurationError', text: 'Too many files are open', why: 'The process reached its limit of open files.', hint: ['Close other programs, or raise the open-file limit (ulimit -n).'] },
+  ENFILE: { kind: 'ConfigurationError', text: 'Too many files are open on this computer', why: 'The system reached its limit of open files.', hint: ['Close other programs and try again.'] },
+  EBUSY: { kind: 'ConfigurationError', text: 'A file is in use by another program', why: 'Another program (an editor, an antivirus scan) holds the file open.', hint: ['Close it there and try again.'] },
+};
+
 /** Convert any thrown value into a NormalizedError suitable for display or persistence. */
 export function normalizeError(err: unknown): NormalizedError {
   if (err instanceof ApsError) return err.toJSON();
@@ -107,6 +118,8 @@ export function normalizeError(err: unknown): NormalizedError {
   let kind: ErrorKind = looksNetwork ? 'NetworkError' : 'ProtocolError';
   let why: string | undefined;
   let text: string | undefined;
+  let hint: string[] | undefined;
+  const where = (e as { path?: string })?.path;
   if (e?.name === 'AbortError' || code === 'ABORT_ERR') {
     kind = 'CancelledError';
     // the DOMException's own text ("This operation was aborted") and code (20) say nothing to a user
@@ -134,6 +147,13 @@ export function normalizeError(err: unknown): NormalizedError {
     kind = 'NetworkError';
     text = 'The connection closed before the response was complete';
     why = 'The server (or something in between) closed the connection while the body was being received.';
+  } else if (code && STORAGE_CODES[code] && !looksNetwork) {
+    // the disk, not the server: a full or read-only folder, a path that is too long, too many open files
+    const s = STORAGE_CODES[code]!;
+    kind = s.kind;
+    text = s.text + (where ? ` (${where})` : '');
+    why = s.why;
+    hint = s.hint;
   } else if (err instanceof SyntaxError) kind = 'ValidationError';
   else if (code === 'ERR_INVALID_URL' || code === 'ENOENT' || code === 'EACCES' || code === 'EPERM' || (code?.startsWith('ERR_INVALID') && code !== 'ERR_INVALID_ARG_TYPE' && code !== 'ERR_INVALID_ARG_VALUE')) {
     kind = 'ConfigurationError';
@@ -147,6 +167,7 @@ export function normalizeError(err: unknown): NormalizedError {
   const base = new ApsError(kind, causeMsg && !msg.includes(causeMsg) && !(why ?? '').includes(causeMsg) ? `${msg}: ${causeMsg}` : msg, why ? { why } : {});
   const out = base.toJSON();
   if (code && kind !== 'CancelledError') out.details = { code };
+  if (hint) out.suggestions = hint;
   if (kind === 'NetworkError' && code && /CERT|SSL|TLS/i.test(code))
     out.suggestions = ['Provide the CA certificate in request settings.', 'For local development only, enable "Disable TLS verification".'];
   return out;

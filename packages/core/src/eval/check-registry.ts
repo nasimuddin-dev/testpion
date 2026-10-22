@@ -61,7 +61,7 @@ export interface CheckContext {
 
 export type CheckFn = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult> | CheckResult;
 
-const registry = new Map<string, CheckFn>();
+const registry = new Map<string, CheckFn>(); // registry: the built-in checks, registered at start-up
 /** The sorted type names (the "known types" of an unknown-type message, the editor's list): rebuilt only after a registration changes. */
 let sortedTypes: string[] | undefined;
 
@@ -70,7 +70,7 @@ export interface CheckDoc {
   fields: string;
   example: CheckConfig;
 }
-const docs = new Map<string, CheckDoc>();
+const docs = new Map<string, CheckDoc>(); // registry: the built-in checks, registered at start-up
 
 /**
  * Register a check type (plugin extension point); `doc` says what it reads (shown to AI models writing checks). A type is

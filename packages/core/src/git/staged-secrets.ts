@@ -223,7 +223,7 @@ async function stagedFiles(ws: string): Promise<string[]> {
  * What a blob held, by blob, file and salt: the findings before the allowlist is applied. A commit scans everything staged
  * and the Git view asks again after each click, so a blob that did not change is not read and scanned a second time.
  */
-const scanned = new Map<string, StagedSecret[]>();
+const scanned = new Map<string, StagedSecret[]>(); // bounded: SCANNED_MAX
 const SCANNED_MAX = 5000;
 
 /**

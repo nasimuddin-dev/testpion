@@ -145,7 +145,7 @@ export async function fetchSecretRef(ref: string, opts: { timeoutMs?: number } =
 }
 
 const TTL_MS = 10 * 60_000;
-const cache = new Map<string, { value: string; at: number }>();
+const cache = new Map<string, { value: string; at: number }>(); // bounded: 10 minutes each, capped at 1000 references
 /**
  * Values are kept per workspace (its folder) and reference: a value read for one workspace is never handed to another
  * that wasn't allowed to read it, even when both name the same reference.
@@ -191,6 +191,7 @@ export const externalSecrets = {
           return;
         }
         try {
+          if (cache.size >= 1000) cache.delete(cache.keys().next().value!);
           cache.set(key(opts.scope, ref), { value: await fetchSecretRef(ref, { timeoutMs: opts.timeoutMs }), at: Date.now() });
           out.fetched.push(ref);
         } catch (e) {

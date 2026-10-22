@@ -5,7 +5,7 @@ import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
-import { pickTextFile } from '../lib/files';
+import { finishSave, pickTextFile, type SaveResult } from '../lib/files';
 import { toastError, useApp } from '../store';
 import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
@@ -189,6 +189,18 @@ export function SettingsView() {
                 <p className="text-muted">
                   Secrets are stored using <b>{info?.secretBackend}</b>. Workspace files only contain references, so workspaces are safe to commit to git.
                 </p>
+              </div>
+              <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-2">
+                <div className="font-medium">Diagnostics</div>
+                <p className="text-muted">
+                  Save a file for a bug report: versions, your settings without secrets, the last 500 log records, the size of the workspace and the slowest calls. Home folders, tokens and passwords are masked. Nothing is sent: you
+                  attach the file yourself.
+                </p>
+                <div>
+                  <Button icon={<Save size={13} />} onClick={() => void call<SaveResult>('diagnostics.bundle').then((r) => finishSave(r, 'Diagnostics'), toastError)}>
+                    Save diagnostics
+                  </Button>
+                </div>
               </div>
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
                 <div className="font-medium">Script sandbox</div>

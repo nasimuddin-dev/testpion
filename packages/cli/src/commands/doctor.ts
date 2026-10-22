@@ -1,7 +1,7 @@
 /** `testpion doctor`: is this machine (and the workspace) ready to run TestPion? */
 import { accessSync, constants, existsSync } from 'node:fs';
 import { Command } from 'commander';
-import { WorkspaceManager, workspaceStorage, ENGINE_VERSION } from '@testpion/core';
+import { WorkspaceManager, workspaceStorage, ENGINE_VERSION, collectDiagnostics, diagnosticsSummary } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 interface Check {
@@ -105,5 +105,35 @@ export function registerDoctorCommand(program: Command): void {
         for (const c of checks) console.log(`${c.status === 'ok' ? green('✓') : c.status === 'warn' ? yellow('!') : red('✗')} ${c.name.padEnd(14)} ${c.status === 'ok' ? dim(c.detail) : c.detail}`);
       }
       process.exitCode = failed ? EXIT.CONFIG_ERROR : EXIT.SUCCESS;
+    });
+}
+
+/** `testpion diagnostics`: what a bug report needs (versions, settings without secrets, the end of the app log, the workspace's size), masked. */
+export function registerDiagnosticsCommand(program: Command): void {
+  program
+    .command('diagnostics')
+    .description('print what a bug report needs: versions, settings without secrets, the last 500 log records, the workspace size (home folders, tokens and passwords are masked)')
+    .option(...WORKSPACE_OPTION)
+    .option('--json', 'print the diagnostics as JSON')
+    .action(async (o: { workspace?: string; json?: boolean }) => {
+      const mgr = new WorkspaceManager();
+      let workspace: Record<string, unknown> | undefined;
+      let metaBackend: string | undefined;
+      const problems: string[] = [];
+      if (o.workspace || findWorkspaceUp(process.cwd())) {
+        try {
+          await withWorkspace(o.workspace, (store) => {
+            const u = workspaceStorage(store);
+            metaBackend = store.meta.backend;
+            if (store.meta.problem) problems.push(store.meta.problem.message);
+            workspace = { collections: store.listCollections().length, environments: store.listEnvironments().length, runs: u.runs, historyEntries: u.history, traces: u.traces, megabytes: Math.round(u.totalBytes / 1048576) };
+          });
+        } catch (e) {
+          problems.push((e as Error).message);
+        }
+      }
+      const d = collectDiagnostics({ settings: mgr.loadSettings(), appDir: mgr.appDir, workspace, problems, metaBackend });
+      if (o.json) printJson(d);
+      else console.log(diagnosticsSummary(d));
     });
 }

@@ -60,7 +60,8 @@ export function maskReportText(s: string, redactor = new Redactor()): string {
       .replace(/\/(?:home|Users)\/[^/\s"']+/g, '~')
       .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 ***')
       .replace(/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g, '***')
-      .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|pwd|client[_-]?secret)["']?\s*[:=]\s*["']?)[^\s"'&,;]+/gi, '$1***')
+      .replace(/\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|pwd|client[_-]?secret)\\?["']?\s*[:=]\s*\\?["']?)[^\s"'&,;\\]+/gi, '$1***')
+      .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@:'"]+:[^\s/@'"]+@/gi, '$1***@') // user:password@ in a URL
       .replace(/\b(?:sk|pk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{12,}/g, '***'),
   );
 }

@@ -277,6 +277,8 @@ export default function App() {
       if (p.kinds.includes('environments') || p.kinds.includes('workspace')) s.set({ envsVersion: (s.envsVersion ?? 0) + 1 });
       s.toast(`${p.message}: TestPion shows the new version.`);
     });
+    // the disk, the history store or the file watcher has a problem (full disk, damaged database, a watch that stopped): said once, with what to do
+    const offProblem = on<{ message: string; hint?: string }>('workspace.problem', (p) => useApp.getState().toast(`${p.message}${p.hint ? ` ${p.hint}` : ''}`, 'error'));
     // environments (and workspace.json) written by anyone through the app — this window, an agent over MCP, the
     // assistant, a generator: the environment picker and every dialog listing them read the workspace again (once per
     // burst; changes made outside the app come as workspace.changedOnDisk above)
@@ -306,6 +308,7 @@ export default function App() {
       off();
       offUpdate();
       offDisk();
+      offProblem();
       offData();
       offTabs();
       offMenu();

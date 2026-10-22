@@ -115,7 +115,7 @@ interface ResultsIndex {
  * kept while the file is unchanged: a page, a filter keystroke or a count then reads only the lines it shows, not the
  * whole file again. A few files are kept (the runs open on screen); a run still writing is indexed again as it grows.
  */
-const indexes = new Map<string, ResultsIndex>();
+const indexes = new Map<string, ResultsIndex>(); // bounded: INDEXED_FILES
 const INDEXED_FILES = 4;
 
 async function resultsIndex(file: string): Promise<ResultsIndex> {

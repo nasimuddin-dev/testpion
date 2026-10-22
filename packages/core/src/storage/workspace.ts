@@ -8,7 +8,7 @@ import { normalizeUiPrefs } from '../model/ui-prefs.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
 import { atomicWrite, deepFreeze, isInside, readJson, readJsonShared, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
-import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
+import { assertNotNewerOnDisk, looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
 import { openMetaStore, type MetaStore } from './metastore.js';
@@ -36,6 +36,8 @@ export interface TestFileNode {
   children?: TestFileNode[];
 }
 
+/** At most this many read-only views are kept per workspace (one per collection, the least recently used go first). */
+const VIEWS_MAX = 64;
 const TEST_FILE_EXT = /\.(ya?ml|json|jsonl|csv|md)$/i;
 // folders first, then by name in the user's locale (a Collator gives what localeCompare gives, without building one per comparison)
 const nameOrder = new Intl.Collator().compare;
@@ -221,13 +223,25 @@ export class WorkspaceStore {
    * parsed once per change of the file and shared, deeply frozen, so a megabyte collection is not parsed again for each.
    * A caller that changes what it reads uses getCollection / getEnvironment, which answer objects of its own.
    */
-  private views = new Map<string, { from: unknown; value: unknown }>();
-  private view<T>(key: string, from: unknown, make: () => T): T {
+  // bounded: one entry per collection id (a new version replaces the old one, a save or delete drops it), at most VIEWS_MAX entries, oldest used first
+  private views = new Map<string, { from: unknown; sig: string; value: unknown }>();
+  private view<T>(key: string, from: unknown, make: () => T, sig = ''): T {
     const hit = this.views.get(key);
-    if (hit && hit.from === from) return hit.value as T;
+    if (hit && hit.from === from && hit.sig === sig) {
+      this.views.delete(key); // most recently used last
+      this.views.set(key, hit);
+      return hit.value as T;
+    }
     const value = deepFreeze(make());
-    this.views.set(key, { from, value });
+    this.views.delete(key);
+    this.views.set(key, { from, sig, value });
+    while (this.views.size > VIEWS_MAX) this.views.delete(this.views.keys().next().value as string);
     return value;
+  }
+
+  /** Number of cached read-only views (for tests and diagnostics). */
+  get viewCount(): number {
+    return this.views.size;
   }
 
   /** The collection as getCollection answers it, shared and frozen (see the views above). */
@@ -235,10 +249,15 @@ export class WorkspaceStore {
     if (typeof id !== 'string' || !id) throw new ApsError('ValidationError', 'A collection id is required');
     const doc = readJsonShared<Collection>(this.collectionFile(id));
     const meta = this.readLocalMeta().collections[id];
-    return this.view(`c:${id}:${meta?.version ?? ''}:${meta?.updatedAt ?? ''}`, doc, () => {
-      const c = normalizeCollection(doc);
-      return this.withLocalMeta(c.id === id ? c : { ...c, id });
-    });
+    return this.view(
+      `c:${id}`,
+      doc,
+      () => {
+        const c = normalizeCollection(doc);
+        return this.withLocalMeta(c.id === id ? c : { ...c, id });
+      },
+      `${meta?.version ?? ''}:${meta?.updatedAt ?? ''}`,
+    );
   }
 
   /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
@@ -249,7 +268,7 @@ export class WorkspaceStore {
     const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
     const sig = files.map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false }))).join('|');
     const hit = this.views.get('environments');
-    const list = hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
+    const list = hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, sig: '', value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
     return list.find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
   }
 
@@ -304,14 +323,27 @@ export class WorkspaceStore {
     removeOwned(this.packagePath(name));
   }
 
-  saveCollection(c: Collection): Collection {
+  /**
+   * Saves the whole collection. With `expectedVersion` (the `version` the caller read) a save over a newer one is refused: the caller held a
+   * stale copy (another window, the CLI or an agent saved meanwhile) and would overwrite their work. The error says so (details.code
+   * 'Conflict', with the version on disk); without it the save is last-writer-wins as before.
+   */
+  saveCollection(c: Collection, o: { expectedVersion?: number } = {}): Collection {
     if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id) throw new ApsError('ValidationError', 'A collection to save needs an id');
     const meta = this.readLocalMeta();
     const before = meta.collections[c.id];
+    if (typeof o.expectedVersion === 'number' && (before?.version ?? 0) > o.expectedVersion)
+      throw new ApsError('ValidationError', `"${c.name}" was changed since you opened it (version ${before!.version}, you have ${o.expectedVersion})`, {
+        suggestions: ['Read the collection again, apply your change to the new version, and save.'],
+        details: { code: 'Conflict', theirs: before!.version, mine: o.expectedVersion },
+      });
     const { problem: _problem, ...rest } = c as Collection & { problem?: string };
     void _problem;
     const next: Collection = { ...rest, schemaVersion: SCHEMA_VERSION, version: Math.max(before?.version ?? 0, c.version ?? 0) + 1, updatedAt: new Date().toISOString() };
-    writeJson(this.collectionFile(c.id), collectionFileContent(next));
+    const file = this.collectionFile(c.id);
+    assertNotNewerOnDisk(file, `The collection "${c.name}"`);
+    writeJson(file, collectionFileContent(next));
+    this.views.delete(`c:${c.id}`);
     meta.collections[c.id] = { version: next.version, updatedAt: next.updatedAt };
     mkdirSync(join(this.root, '.local'), { recursive: true });
     writeJson(this.localMetaFile(), meta);
@@ -321,6 +353,7 @@ export class WorkspaceStore {
   /** Moves the collection to the trash (restorable for 30 days; see trash.ts). */
   deleteCollection(id: string): void {
     moveToTrash(this, 'collection', this.collectionFile(id));
+    this.views.delete(`c:${id}`);
   }
 
   /* environments */
@@ -396,7 +429,8 @@ export class WorkspaceStore {
       if (order === undefined) delete clean.order;
       else clean.order = order;
     }
-    writeJson(this.path('environments', `${slugify(env.id)}.json`), environmentFileValue(clean));
+    assertNotNewerOnDisk(file, `The environment "${clean.name}"`);
+    writeJson(file, environmentFileValue(clean));
     return clean;
   }
 
@@ -416,6 +450,7 @@ export class WorkspaceStore {
         throw new ApsError('ValidationError', `Provider "${p.name}" has a literal API key; store it as a secret instead`, {
           suggestions: ['Use {{$secret.provider.<id>.apiKey}} or {{$env.NAME}}.'],
         });
+    assertNotNewerOnDisk(this.path('providers.json'), 'providers.json');
     writeJson(this.path('providers.json'), providersFileValue({ schemaVersion: SCHEMA_VERSION, providers }));
   }
 
@@ -436,6 +471,7 @@ export class WorkspaceStore {
   }
 
   saveMcpServers(servers: McpServerConfig[]): void {
+    assertNotNewerOnDisk(this.path('mcp-servers.json'), 'mcp-servers.json');
     writeJson(this.path('mcp-servers.json'), mcpServersFileValue({ schemaVersion: SCHEMA_VERSION, servers }));
   }
 
@@ -449,6 +485,7 @@ export class WorkspaceStore {
     const folders = [...new Set([...(lib.folders ?? []), ...lib.items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b));
     const next: Library<T> = { schemaVersion: SCHEMA_VERSION, folders, items: lib.items.map((i) => ({ ...i, id: i.id || shortId('lib-'), name: i.name || 'Untitled' })) };
     mkdirSync(this.path('library'), { recursive: true });
+    assertNotNewerOnDisk(this.libraryPath(kind), `library/${kind}.json`);
     writeJson(this.libraryPath(kind), libraryFileValue(next));
     return next;
   }
