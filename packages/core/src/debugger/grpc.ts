@@ -1,4 +1,5 @@
 import { gunzipSync, inflateSync } from 'node:zlib';
+import { ByteQueue } from './frames.js';
 import type protobuf from 'protobufjs';
 import { grpcRoot, type ProtoFile } from '../protocols/grpc/grpc.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -51,25 +52,38 @@ export function grpcMethodOf(path: string): { service: string; method: string } 
 
 /** Reads length-prefixed gRPC messages from a stream of bytes in one direction; call `push` with every chunk. */
 export function grpcMessageReader(onMessage: (bytes: Buffer, compressed: boolean) => void): { push(chunk: Buffer): void } {
-  let buf: Buffer = Buffer.alloc(0);
+  const queue = new ByteQueue();
+  queue.need = 5;
   return {
     push(chunk: Buffer) {
-      buf = buf.length ? Buffer.concat([buf, chunk]) : chunk;
+      queue.add(chunk);
+      if (!queue.ready()) return;
+      let buf = queue.all();
       while (buf.length >= 5) {
         const len = buf.readUInt32BE(1);
-        if (buf.length < 5 + len) return;
+        if (buf.length < 5 + len) {
+          queue.set(buf);
+          queue.need = 5 + len;
+          return;
+        }
         onMessage(Buffer.from(buf.subarray(5, 5 + len)), buf[0] === 1);
         buf = buf.subarray(5 + len);
       }
+      queue.set(buf);
+      queue.need = 5;
     },
   };
 }
 
+/** The most a compressed message may expand to. */
+const MAX_DECOMPRESSED = 64 * 1024 * 1024;
+
 /** A compressed message as plain bytes (gzip and deflate; anything else stays as it is). */
 export function grpcDecompress(bytes: Buffer, encoding: string | undefined): Buffer {
   try {
-    if (/gzip/i.test(encoding ?? '')) return gunzipSync(bytes);
-    if (/deflate/i.test(encoding ?? '')) return inflateSync(bytes);
+    // (capped: a few hundred bytes can expand to gigabytes, and this runs synchronously inside the proxy)
+    if (/gzip/i.test(encoding ?? '')) return gunzipSync(bytes, { maxOutputLength: MAX_DECOMPRESSED });
+    if (/deflate/i.test(encoding ?? '')) return inflateSync(bytes, { maxOutputLength: MAX_DECOMPRESSED });
   } catch {
     /* as it is */
   }

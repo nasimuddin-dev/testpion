@@ -19,32 +19,68 @@ export interface DebuggerSseEvent {
   data: string;
 }
 
+/**
+ * Bytes that arrive in pieces, joined only when enough have arrived to read the next unit. A 50 MB frame in 64 KB chunks was
+ * joined again with everything before it on every chunk (about 20 GB copied); now it is joined once, when it is complete.
+ */
+export class ByteQueue {
+  private chunks: Buffer[] = [];
+  length = 0;
+  /** The bytes needed before the next read is worth trying. */
+  need = 0;
+  add(chunk: Buffer): void {
+    this.chunks.push(chunk);
+    this.length += chunk.length;
+  }
+  /** Whether enough has arrived to try reading. */
+  ready(): boolean {
+    return this.length >= this.need;
+  }
+  /** Everything as one buffer (the pieces are joined once and replaced by the result). */
+  all(): Buffer {
+    if (this.chunks.length > 1) this.chunks = [Buffer.concat(this.chunks, this.length)];
+    return this.chunks[0] ?? Buffer.alloc(0);
+  }
+  /** Keep only \`rest\` (what is left after the units read). */
+  set(rest: Buffer): void {
+    this.chunks = rest.length ? [rest] : [];
+    this.length = rest.length;
+  }
+}
+
 const OPCODES: Record<number, WebSocketFrame['opcode']> = { 0: 'continuation', 1: 'text', 2: 'binary', 8: 'close', 9: 'ping', 10: 'pong' };
 
 /** Reads WebSocket frames from a stream of bytes in one direction; call `push` with every chunk. */
 export function webSocketFrameParser(direction: WebSocketFrame['direction'], onFrame: (f: WebSocketFrame) => void, maxText = 64 * 1024): { push(chunk: Buffer): void } {
-  let buf: Buffer = Buffer.alloc(0);
+  const queue = new ByteQueue();
+  queue.need = 2;
   return {
     push(chunk: Buffer) {
-      buf = buf.length ? Buffer.concat([buf, chunk]) : chunk;
+      queue.add(chunk);
+      if (!queue.ready()) return;
+      let buf = queue.all();
+      const wait = (need: number) => {
+        queue.set(buf);
+        queue.need = need;
+      };
       for (;;) {
-        if (buf.length < 2) return;
+        if (buf.length < 2) return wait(2);
         const b0 = buf[0]!;
         const b1 = buf[1]!;
         const masked = (b1 & 0x80) !== 0;
         let len = b1 & 0x7f;
         let off = 2;
         if (len === 126) {
-          if (buf.length < 4) return;
+          if (buf.length < 4) return wait(4);
           len = buf.readUInt16BE(2);
           off = 4;
         } else if (len === 127) {
-          if (buf.length < 10) return;
+          if (buf.length < 10) return wait(10);
           len = Number(buf.readBigUInt64BE(2));
           off = 10;
         }
         const maskLen = masked ? 4 : 0;
-        if (buf.length < off + maskLen + len) return;
+        if (buf.length < off + maskLen + len) return wait(off + maskLen + len);
         const mask = masked ? buf.subarray(off, off + 4) : undefined;
         let payload = buf.subarray(off + maskLen, off + maskLen + len);
         if (mask) {
@@ -100,9 +136,16 @@ export function sseParser(onEvent: (e: DebuggerSseEvent) => void, maxData = 64 *
   };
   return {
     push(chunk: Buffer) {
-      rest += chunk.toString('utf8');
-      const lines = rest.split(/\r\n|\n|\r/);
-      rest = lines.pop() ?? '';
+      // only the part up to the last line break is split; a long line still arriving is not scanned again for every chunk
+      const text = chunk.toString('utf8');
+      const cut = Math.max(text.lastIndexOf('\n'), text.lastIndexOf('\r'));
+      if (cut < 0) {
+        rest += text;
+        return;
+      }
+      const lines = (rest + text.slice(0, cut + 1)).split(/\r\n|\n|\r/);
+      rest = text.slice(cut + 1);
+      lines.pop();
       for (const l of lines) line(l);
     },
     end() {
