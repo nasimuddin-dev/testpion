@@ -30,7 +30,7 @@ import {
 } from '@testpion/core';
 import { CUSTOM_METRIC_KINDS, customMetricTemplate, type CustomMetricKind } from '@testpion/shared';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
-import { machine } from '../output.js';
+import { machine, respond } from '../output.js';
 import { proposeCommand } from './ai-propose.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
@@ -180,8 +180,8 @@ export function registerRagMetricFileCommands(rag: Command): void {
         if (!f) throw new CliError(`No metric file metrics/${id}.yaml`, EXIT.CONFIG_ERROR);
         if (o.out) {
           writeFileSync(resolve(o.out), f.text);
-          console.log(`${green('Wrote')} ${o.out}`);
-        } else process.stdout.write(f.text);
+          respond({ id, file: resolve(o.out) }, () => console.log(`${green('Wrote')} ${o.out}`));
+        } else respond({ id, text: f.text }, () => process.stdout.write(f.text));
       }),
     );
 
@@ -202,7 +202,7 @@ export function registerRagMetricFileCommands(rag: Command): void {
         if (!p.metric) throw new CliError(`Not a valid metric file:\n${p.problems.filter((x) => x.level === 'error').map((x) => `  ${x.field ? `${x.field}: ` : ''}${x.message}`).join('\n')}`, EXIT.CONFIG_ERROR);
         if (readMetricFile(store, guess) && !o.force) throw new CliError(`metrics/${guess}.yaml exists (--force replaces it)`, EXIT.CONFIG_ERROR);
         writeMetricFile(store, guess, text);
-        console.log(`${green('Imported')} metrics/${guess}.yaml`);
+        respond({ id: guess, file: `metrics/${guess}.yaml` }, () => console.log(`${green('Imported')} metrics/${guess}.yaml`));
       }),
     );
 
@@ -251,6 +251,8 @@ export function registerRagMetricFileCommands(rag: Command): void {
         }
         const m = await buildMetricMatrix(runResults(store, run), { runId: run, all: true, external });
         if (!m.total) throw new CliError(`Run ${run} has no RAG results`, EXIT.CONFIG_ERROR);
+        // with --json the envelope carries the aggregates (and the file's text unless it was written to --out)
+        if (machine() && o.table) return respond({ runId: run, total: m.total, aggregates: m.aggregates }, () => undefined);
         if (o.table) {
           console.log(`${bold('Metric'.padEnd(34))}${'mean'.padStart(7)}${'pass'.padStart(7)}${'n'.padStart(6)}${'n/a'.padStart(5)}`);
           for (const a of m.aggregates) console.log(`${a.key.padEnd(34)}${String(a.mean ?? '—').padStart(7)}${(a.passRate !== undefined ? `${Math.round(a.passRate * 100)}%` : '—').padStart(7)}${String(a.n).padStart(6)}${String(a.naCount).padStart(5)}`);
@@ -259,8 +261,8 @@ export function registerRagMetricFileCommands(rag: Command): void {
         const text = o.format === 'csv' ? ragMatrixCsv(m, { names: o.names }) : o.format === 'html' ? ragMatrixHtml(m, { names: o.names }) : ragMatrixJson(m, { names: o.names });
         if (o.out) {
           writeFileSync(resolve(o.out), text);
-          console.log(`${green('Wrote')} ${m.total} samples × ${m.columns.length} metrics → ${o.out}`);
-        } else process.stdout.write(text);
+          respond({ runId: run, file: resolve(o.out), samples: m.total, metrics: m.columns.length, format: o.format }, () => console.log(`${green('Wrote')} ${m.total} samples × ${m.columns.length} metrics → ${o.out}`));
+        } else respond({ runId: run, samples: m.total, format: o.format, ...(o.format === 'json' ? { matrix: JSON.parse(text) } : { text }) }, () => process.stdout.write(text));
       }),
     );
 

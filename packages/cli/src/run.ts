@@ -650,6 +650,8 @@ export async function executeMock(ref: string, o: { workspace?: string; port?: s
   console.log(bold(`Mock server for ${collection.name}: ${mock.url}`));
   for (const r of mock.routes) console.log(dim(`  ${r.method.padEnd(7)} ${r.path} → ${r.example.status} ${r.example.name}`));
   console.log(dim('Press Ctrl+C to stop.'));
+  // --json: the address, as the first line (a script or an agent needs it while the server runs)
+  emitEvent('listening', { url: mock.url, routes: mock.routes.length });
   await new Promise<void>((done) => {
     const stop = () => {
       process.off('SIGINT', stop);

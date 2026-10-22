@@ -3,7 +3,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Command } from 'commander';
 import { buildProgram } from '../../packages/cli/src/index.js';
-import { commandPath, JSON_MEANS_JSONL, leafCommands, STREAMING_COMMANDS, WRITE_COMMANDS } from '../../packages/cli/src/contract.js';
+import { commandPath, JSON_MEANS_JSONL, leafCommands, NO_ENVELOPE, STREAMING_COMMANDS, WRITE_COMMANDS } from '../../packages/cli/src/contract.js';
+import { CLI_CONFIRM, CLI_NO_CONFIRM } from '../../packages/cli/src/confirm.js';
+import { PLAN_ONLY } from '../../packages/cli/src/plan.js';
+import { CONFIRM_TOOLS } from '@testpion/core';
 import { cliData, copyExample, runCli, tempDir } from '../helpers.js';
 
 // The CLI's output contract: every command with --json prints one envelope { schema_version, command, status, data,
@@ -26,9 +29,9 @@ const has = (c: Command, flag: string) => [c, c.parent].some((x) => !!x && x.opt
 const LONG_RUNNING = new Set([
   'serve flows',
   'mcp-server',
-  'mock',
-  'mock-mcp',
-  'mock-graphql',
+  'mock collection',
+  'mock mcp',
+  'mock graphql',
   'record',
   'debug',
   'monitor start',
@@ -44,7 +47,7 @@ const LONG_RUNNING = new Set([
 ]);
 
 describe('every --json command answers one envelope', () => {
-  const targets = leaves.filter(({ c, path }) => has(c, '--json') && !LONG_RUNNING.has(path) && !JSON_MEANS_JSONL.has(path));
+  const targets = leaves.filter(({ c, path }) => has(c, '--json') && !LONG_RUNNING.has(path) && !JSON_MEANS_JSONL.has(path) && !NO_ENVELOPE.has(path));
 
   it('there are many, and the shared lists name real commands', () => {
     expect(targets.length).toBeGreaterThan(50);
@@ -93,6 +96,74 @@ describe('every --json command answers one envelope', () => {
     }
     expect(bad).toEqual([]);
   }, 240_000);
+});
+
+describe('the contract is on every command (the 2026-10-22 review)', () => {
+  it('every command takes --json (or --jsonl), --non-interactive and has a description', () => {
+    const noJson = leaves.filter(({ c }) => !has(c, '--json') && !has(c, '--jsonl')).map((l) => l.path);
+    expect(noJson).toEqual([]);
+    const noDescription = leaves.filter(({ c }) => !c.description()).map((l) => l.path);
+    expect(noDescription).toEqual([]);
+  });
+
+  it('every command that writes takes --dry-run (the generic one, its own, or a plan for git), or says why not', () => {
+    // a leaf whose description starts with a write verb
+    const WRITES = /^(delete|remove|write|save|set|restore|commit|push|pull|sync|resolve|apply|import|export|clear|add|create|rename|move|undo|install|switch|take an import back|generate)/i;
+    // what writes only where the user points it (a report file, stdout) or has no state to preview
+    const NO_PREVIEW: Record<string, string> = {
+      test: 'writes the reports it was asked for',
+      'git stage-item': 'has its own',
+      'monitor start': 'a scheduler, not a write',
+    };
+    const offenders = leaves
+      .filter(({ c, path }) => WRITES.test(c.description()) && !has(c, '--dry-run') && !WRITE_COMMANDS.has(path) && !PLAN_ONLY[path] && !NO_PREVIEW[path])
+      .map((l) => `${l.path}: ${l.c.description().slice(0, 50)}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('every MCP tool that confirms has a CLI twin that takes --yes, or a reason it needs none', () => {
+    const paths = new Set(leaves.map((l) => l.path));
+    for (const e of CLI_CONFIRM) {
+      expect(paths.has(e.command), `${e.command} is a command`).toBe(true);
+      if (e.tool) expect(Object.keys(CONFIRM_TOOLS), `${e.tool} is a confirm tool`).toContain(e.tool);
+    }
+    const twins = new Set(CLI_CONFIRM.map((e) => e.tool).filter(Boolean));
+    const undecided = Object.keys(CONFIRM_TOOLS).filter((t) => !twins.has(t) && !CLI_NO_CONFIRM[t]);
+    expect(undecided).toEqual([]);
+    for (const t of Object.keys(CLI_NO_CONFIRM)) expect(Object.keys(CONFIRM_TOOLS), `${t} in CLI_NO_CONFIRM is a confirm tool`).toContain(t);
+    for (const { c, path } of leaves) if (CLI_CONFIRM.some((e) => e.command === path)) expect(has(c, '--yes'), `${path} takes --yes`).toBe(true);
+  });
+
+  it('item delete without --yes in a non-interactive run refuses with confirmationRequired and changes nothing', async () => {
+    const r = await runCli(['item', 'delete', 'collection:nope', '-w', ws, '--json', '--non-interactive'], { home: home(), env: { CI: '1' } });
+    const e = JSON.parse(r.out) as { status: string; data: { confirmationRequired?: boolean; wouldDo?: string; hint?: string }; errors: Array<{ hint?: string }> };
+    expect(r.status).toBe(2);
+    expect(e.status).toBe('error');
+    expect(e.data.confirmationRequired).toBe(true);
+    expect(e.data.wouldDo).toMatch(/delete/);
+    expect(e.errors[0]!.hint).toMatch(/--yes/);
+  });
+
+  it('git commit --dry-run prints its plan and runs nothing; the old spellings still work', async () => {
+    const r = await runCli(['git', 'commit', '-m', 'x', '-w', ws, '--dry-run', '--json'], { home: home() });
+    const e = JSON.parse(r.out) as { dry_run?: { applied: boolean; plan?: { would?: string } } };
+    expect(e.dry_run?.applied).toBe(false);
+    expect(e.dry_run?.plan?.would).toMatch(/commit/);
+    const lint = await runCli(['openapi-lint', '--help'], { home: home() });
+    expect(lint.out).toMatch(/Usage: testpion lint openapi/);
+    const mock = await runCli(['mock', '--help'], { home: home() });
+    expect(mock.out).toMatch(/graphql/);
+  });
+
+  it('the command line has few top-level words: related commands live in groups', () => {
+    expect(program.commands.length).toBeLessThanOrEqual(75);
+    for (const g of ['lint', 'mock', 'openapi']) expect(program.commands.find((c) => c.name() === g)?.commands.length, g).toBeGreaterThan(2);
+  });
+
+  it('the page default and maximum are the one pair the MCP tools use (SURFACE_PAGE)', async () => {
+    const { SURFACE_PAGE } = await import('@testpion/core');
+    expect(SURFACE_PAGE).toEqual({ limit: 100, max: 500 });
+  });
 });
 
 describe('envelopes in practice', () => {

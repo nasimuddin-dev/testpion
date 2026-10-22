@@ -5,7 +5,7 @@ import type { ResultReview, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readJson, writeJson } from '../storage/fsutil.js';
-import { cursorOf, offsetOfCursor, pageLimit, type PageBounds } from '../util/page.js';
+import { cursorOf, offsetOfCursor, pageLimit, SURFACE_PAGE, type PageBounds } from '../util/page.js';
 import { readResultsFile } from './runner.js';
 import { runBreakdown, type RunBreakdown } from './breakdown.js';
 
@@ -31,8 +31,8 @@ interface ResultsPage {
   nextCursor?: string;
 }
 
-/** A page of results: 100 unless asked, at most 1,000 (the window asks for 50 to 500). */
-const RESULTS_PAGE: PageBounds = { limit: 100, max: 1000 };
+/** A page of results: the surfaces' page (100 unless asked, at most 500; the window asks for 50 to 500). */
+const RESULTS_PAGE: PageBounds = SURFACE_PAGE;
 
 /* ------------------------------------------------------------------ human review */
 

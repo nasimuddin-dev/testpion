@@ -27,7 +27,7 @@ import {
   reviewResult,
   runReviewReport,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, requireCollection, JSON_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { addPaging, reportPage } from '../paging.js';
 
@@ -46,10 +46,11 @@ export function registerHistoryCommands(program: Command): void {
         const items = store.meta.listHistory({ query: o.query, limit: Math.min(Number(o.limit) || 500, 2000) }).items;
         const har = historyToHar(store, items, new Redactor(new WorkspaceManager().loadSettings().redactFields));
         const text = JSON.stringify(har, null, 2) + '\n';
+        const entries = (har.log as { entries: unknown[] }).entries.length;
         if (o.out) {
           writeFileSync(resolve(o.out), text);
-          console.log(green(`Wrote ${(har.log as { entries: unknown[] }).entries.length} entries to ${resolve(o.out)}`));
-        } else process.stdout.write(text);
+          respond({ file: resolve(o.out), entries }, () => console.log(green(`Wrote ${entries} entries to ${resolve(o.out)}`)));
+        } else respond(har, () => process.stdout.write(text));
       }),
     );
   addOutputOptions(
@@ -185,7 +186,7 @@ export function registerHistoryCommands(program: Command): void {
     .description('tests whose result keeps changing across the latest runs, or that passed only after a retry (exit 1 when there are any)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('-n, --runs <n>', 'how many of the latest runs', '30')
-    .option('-l, --limit <n>', 'how many tests per page (default 200, at most 1000); more: --cursor')
+    .option('-l, --limit <n>', 'how many tests per page (default 100, at most 500); more: --cursor')
     .option('--cursor <cursor>', 'where the page starts: the nextCursor of the page before')
     .option('--offset <n>', 'where the page starts, as a number (the same as --cursor)')
     .option(...JSON_OPTION)

@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { Command, CommanderError } from 'commander';
 import {
   ApsError,
@@ -13,6 +15,8 @@ import { EXIT, red, dim, yellow, CliError, withWorkspace } from './shared.js';
 import { applyCliContract, commandFromArgv } from './contract.js';
 import { beginCommand, cli, finishOutput, machine, noteWarning } from './output.js';
 import { describeDryRun, finishDryRun } from './dry-run.js';
+import { PlanOnly } from './plan.js';
+import { regroup, rewriteLegacy } from './groups.js';
 import { registerRunCommands } from './commands/run.js';
 import { registerEvaluationCommands } from './commands/evaluations.js';
 import { registerServeCommands } from './commands/serve.js';
@@ -123,11 +127,14 @@ export function buildProgram(): Command {
   });
 
   // the same options and output for every command: --json envelope, --jsonl, --dry-run, --non-interactive (contract.ts)
+  regroup(program);
   applyCliContract(program);
   return program;
 }
 
-export async function main(argv = process.argv): Promise<number> {
+export async function main(args = process.argv): Promise<number> {
+  // the old spellings (`openapi-lint`, `lint-tests`, `mock-mcp` …) are the commands they became (groups.ts)
+  const argv = rewriteLegacy(args);
   // HTTP_PROXY / HTTPS_PROXY / NO_PROXY apply to everything the CLI sends (curl-style)
   setProxySettings({ mode: process.env.TESTPION_NO_PROXY ? 'off' : 'env' });
   // TESTPION_USE_SYSTEM_CA=1 trusts the OS certificate store; TESTPION_CA_FILE adds CA certificates (PEM).
@@ -148,7 +155,12 @@ export async function main(argv = process.argv): Promise<number> {
     await program.parseAsync(argv);
     code = Number(process.exitCode ?? 0);
   } catch (e) {
-    if (e instanceof CommanderError) {
+    if (e instanceof PlanOnly) {
+      // a git command's dry run: its plan was printed instead of running it
+      code = EXIT.SUCCESS;
+      cli.dryRun = { changes: [], applied: false, plan: e.plan };
+      if (!machine()) console.log(`Dry run: nothing was changed. It would ${String(e.plan.would)}.`);
+    } else if (e instanceof CommanderError) {
       if (e.code === 'commander.helpDisplayed' || e.code === 'commander.version' || e.code === 'commander.help') return EXIT.SUCCESS;
       // a wrong argument: the command never started, but a --json caller still gets the envelope
       if (!cli.command && argv.includes('--json'))
@@ -180,3 +192,6 @@ export async function main(argv = process.argv): Promise<number> {
   if (code > 1 && !machine() && cli.canJson && !process.stdout.isTTY) console.error(dim(`For a machine-readable error, run it again with --json (status, errors: [{ code, message, hint, retryable }]).`));
   return code;
 }
+
+// `node dist/index.js …` works like `node bin/testpion.js …` (the library module used to print nothing and exit 0)
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) process.exitCode = await main();

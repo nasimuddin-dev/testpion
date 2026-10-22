@@ -84,7 +84,7 @@ export class CliError extends Error {
 }
 
 /** `--json` output goes through the one writer of the envelope (output.ts). */
-export { printJson } from './output.js';
+export { printJson, respond } from './output.js';
 
 export function collectVar(v: string, prev: Record<string, string> = {}): Record<string, string> {
   const i = v.indexOf('=');

@@ -163,6 +163,7 @@ export function registerRagEvalCommands(rag: Command): void {
   const metric = rag.command('metric').description('one metric: show what it is, or try it on one sample');
   metric
     .command('show')
+    .description('what a metric is: what it measures, how, an example, what it reads from the dataset, and what it calls')
     .argument('<name>', 'a metric id, alias or Ragas name')
     .option(...JSON_OPTION)
     .action((name: string, o: { json?: boolean }) => {

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
@@ -440,7 +440,7 @@ export function registerDataCommands(program: Command): void {
       return withWorkspace(o.workspace, async (store) => {
         const out = resolve(o.out ?? `${store.workspace.name.replace(/[^\w.-]+/g, '-').slice(0, 60) || 'workspace'}-report.html`);
         writeFileSync(out, workspaceReportHtml(store, { days: Number(o.days) || 14, tzOffsetMin: new Date().getTimezoneOffset(), attention: await workspaceAttention(store) }));
-        console.log(green(`Wrote ${out}`));
+        respond({ file: out, days: Number(o.days) || 14 }, () => console.log(green(`Wrote ${out}`)));
       });
     });
   const datasets = program
@@ -519,7 +519,7 @@ export function registerDataCommands(program: Command): void {
             return { id: i.id, kind: 'websocket', name: i.name, folder: i.folder, method: d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', target: redactor.redactString(d.url ?? '') };
           }),
         ];
-        // a long collection comes a page at a time (200 unless asked): `data` is the plain list, the envelope's `page` says the rest
+        // a long collection comes a page at a time (100 unless asked): `data` is the plain list, the envelope's `page` says the rest
         const page = pagedList(everything, o);
         const rows = page.items;
         if (o.health) {
@@ -622,11 +622,12 @@ export function registerDataCommands(program: Command): void {
     .option('-o, --out <file>', 'write to this file instead of stdout')
     .action((ref: string, o: { workspace?: string; out?: string }) => {
       return withWorkspace(o.workspace, (store, ephemeral) => {
-        const json = JSON.stringify(exportPostmanEnvironment(requireEnvironment(store, ref)), null, 2) + '\n';
+        const exported = exportPostmanEnvironment(requireEnvironment(store, ref));
+        const json = JSON.stringify(exported, null, 2) + '\n';
         if (o.out) {
           writeFileSync(resolve(o.out), json);
-          console.error(dim(`Environment written to ${resolve(o.out)}`));
-        } else process.stdout.write(json);
+          respond({ file: resolve(o.out), bytes: json.length }, () => console.error(dim(`Environment written to ${resolve(o.out!)}`)));
+        } else respond(exported, () => process.stdout.write(json));
       });
     });
   program
@@ -640,10 +641,11 @@ export function registerDataCommands(program: Command): void {
     .action(async (ref: string, o: { workspace?: string; out?: string; examples?: boolean; html?: boolean }) => {
       const c = await loadCollectionRef(ref, o.workspace);
       const md = o.html ? collectionHtml(c, { examples: o.examples }) : collectionMarkdown(c, { examples: o.examples });
+      const format = o.html ? 'html' : 'markdown';
       if (o.out) {
         writeFileSync(resolve(o.out), md);
-        console.error(dim(`Documentation written to ${resolve(o.out)}`));
-      } else process.stdout.write(md);
+        respond({ file: resolve(o.out), format, bytes: md.length }, () => console.error(dim(`Documentation written to ${resolve(o.out!)}`)));
+      } else respond({ format, text: md }, () => process.stdout.write(md));
     });
   program
     .command('scripts')
@@ -868,7 +870,7 @@ export function registerDataCommands(program: Command): void {
     .action((ref: string, keys: string[], o) => {
       return withWorkspace(o.workspace, (store) => {
         const env = unsetEnvironmentVariables(store, ref, keys);
-        console.log(green(`${env.name}: removed ${keys.join(', ')}`));
+        respond({ environment: env.name, removed: keys }, () => console.log(green(`${env.name}: removed ${keys.join(', ')}`)));
       }).catch((e) => {
         throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
       });
@@ -886,7 +888,7 @@ export function registerDataCommands(program: Command): void {
         const v = env.variables.find((x) => x.key === key);
         if (!v) throw new CliError(`${env.name} has no variable "${key}"`, EXIT.CONFIG_ERROR);
         if ((v as { secret?: boolean }).secret) throw new CliError(`"${key}" is a secret variable: its value is never printed`, EXIT.CONFIG_ERROR);
-        console.log(v.value);
+        respond({ environment: env.name, key, value: v.value }, () => console.log(v.value));
       });
     });
   addPaging(envCmd

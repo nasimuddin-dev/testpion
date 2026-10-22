@@ -92,6 +92,15 @@ export function printJson(value: unknown): void {
   else log(JSON.stringify(value, null, 2));
 }
 
+/**
+ * The result of a command: with --json / --jsonl it is the envelope's data; otherwise `human` prints it for people. For
+ * the commands that used to print only text (or a raw file), so every command answers in the same envelope.
+ */
+export function respond(data: unknown, human: () => void): void {
+  if (machine()) cli.outputs.push(data);
+  else human();
+}
+
 /** One event of a streaming command (`--jsonl`): a line now. Without --jsonl nothing is printed. */
 export function emitEvent(type: string, data: unknown): void {
   if (!cli.jsonl) return;

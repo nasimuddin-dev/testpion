@@ -135,7 +135,7 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 ## Paging {#paging}
 
-A command that lists something that can grow long comes a page at a time, the same way everywhere (and like the MCP tools): `-n/--limit` (how many; 200 unless the command says otherwise, at most 1,000), and `--cursor <c>` (the `nextCursor` of the page before) or `--offset <n>` (the same as a number). A list that was cut says so: in text mode a last line `200 of 2500 requests shown; more: --cursor o5k`, and with `--json` the envelope has `page` (`{ total, limit, truncated, nextCursor }`) and a warning with the same line, while `data` stays the plain list, so a script that reads `.data` is unchanged. A list that fits has no `page`. To read all of it, repeat the command with `nextCursor` until `page` is gone.
+A command that lists something that can grow long comes a page at a time, the same way everywhere (and like the MCP tools): `-n/--limit` (how many; 100 unless the command says otherwise, at most 500: the same numbers as the MCP tools), and `--cursor <c>` (the `nextCursor` of the page before) or `--offset <n>` (the same as a number). A list that was cut says so: in text mode a last line `100 of 2500 requests shown; more: --cursor o5k`, and with `--json` the envelope has `page` (`{ total, limit, truncated, nextCursor }`) and a warning with the same line, while `data` stays the plain list, so a script that reads `.data` is unchanged. A list that fits has no `page`. To read all of it, repeat the command with `nextCursor` until `page` is gone.
 
 ```bash
 testpion history flaky -w my-workspace --json -l 500                       # page.nextCursor says where the next page starts

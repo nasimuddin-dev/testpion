@@ -234,6 +234,7 @@ export * from './mock/mock-server.js';
 export * from './mock/graphql-mock.js';
 export * from './mcp-server/testpion-mcp.js';
 export { MINIMAL_TOOLS } from './mcp-server/tools/search-tools.js';
+export { CONFIRM_TOOLS } from './mcp-server/tool-contract.js';
 export { flowInputSchema, flowTools, runFlow, type FlowRunResult, type FlowToolDeps } from './mcp-server/tools/flow-tools.js';
 export { agentGuide, AGENT_PROMPTS } from './mcp-server/agent-kit.js';
 export * from './agents/agent-facts.js';

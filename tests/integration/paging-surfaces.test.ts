@@ -122,25 +122,25 @@ describe('CLI paging', () => {
     expect(small.page?.nextCursor).toBeUndefined();
   });
 
-  it('history flaky: pages of 1000 (default 200), exit 1 while there are flaky tests', async () => {
+  it('history flaky: pages of 500 (default 100), exit 1 while there are flaky tests', async () => {
     const first = await cliPage<unknown[]>(['history', 'flaky', '-w', ws]);
-    expect(first.data).toHaveLength(200);
+    expect(first.data).toHaveLength(100);
     expect(first.status).toBe(1);
-    expect(first.page).toMatchObject({ total: N, limit: 200, truncated: true });
+    expect(first.page).toMatchObject({ total: N, limit: 100, truncated: true });
     expect(first.warnings.join(' ')).toMatch(/more: --cursor/);
     const r = await walk(async (c) => {
       const p = await cliPage<Array<{ id: string }>>(['history', 'flaky', '-w', ws, '-l', '1000'], c);
       return { ids: p.data.map((t) => t.id), next: p.page?.nextCursor, truncated: p.page?.truncated };
     });
-    everyOnce(r, N, 3);
+    everyOnce(r, N, 5);
   });
 
-  it('history results: the results of a run, pages of 1000 and a filter', async () => {
+  it('history results: the results of a run, pages of 500 and a filter', async () => {
     const r = await walk(async (c) => {
       const p = await cliPage<Array<{ id: string }>>(['history', 'results', 'run-a', '-w', ws, '-n', '1000'], c);
       return { ids: p.data.map((t) => t.id), next: p.page?.nextCursor, truncated: p.page?.truncated };
     });
-    everyOnce(r, N, 3);
+    everyOnce(r, N, 5);
     const failed = await cliPage<Array<{ id: string; status: string }>>(['history', 'results', 'run-b', '-w', ws, '--status', 'failed', '-n', '5']);
     expect(failed.data.map((t) => t.status)).toEqual(Array(5).fill('failed'));
     expect(failed.page).toMatchObject({ total: N, truncated: true });
@@ -182,15 +182,15 @@ describe('CLI paging', () => {
     everyOnce(r, N, 3);
   });
 
-  it('requests of a collection: 200 unless asked, then pages', async () => {
+  it('requests of a collection: 100 unless asked, then pages', async () => {
     const first = await cliPage<unknown[]>(['requests', 'Big', '-w', ws]);
-    expect(first.data).toHaveLength(200);
-    expect(first.page).toMatchObject({ total: N, limit: 200, truncated: true });
+    expect(first.data).toHaveLength(100);
+    expect(first.page).toMatchObject({ total: N, limit: 100, truncated: true });
     const r = await walk(async (c) => {
       const p = await cliPage<Array<{ id: string }>>(['requests', 'Big', '-w', ws, '-n', '1000'], c);
       return { ids: p.data.map((x) => x.id), next: p.page?.nextCursor, truncated: p.page?.truncated };
     });
-    everyOnce(r, N, 3);
+    everyOnce(r, N, 5);
   });
 });
 

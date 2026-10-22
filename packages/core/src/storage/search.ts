@@ -4,7 +4,7 @@ import { kindOfLibrary, type ItemRef } from '@testpion/shared';
 import type { CollectionNode } from '../model/types.js';
 import type { TestFileNode, WorkspaceStore } from './workspace.js';
 import { listSpecs } from '../openapi/spec-files.js';
-import { pageOf, type ListPage } from '../util/page.js';
+import { pageOf, SURFACE_PAGE, type ListPage } from '../util/page.js';
 
 export interface SearchHit {
   kind: 'request' | 'graphql' | 'collection' | 'test' | 'environment' | 'environment-variable' | 'mcp-server' | 'provider' | 'history' | 'trace' | 'run' | 'saved' | 'spec' | 'dataset';
@@ -150,7 +150,7 @@ export class WorkspaceSearch {
 
   /** A page of the hits, best first: `limit` (20 unless asked, at most 1,000) from the position `cursor` names. */
   searchPage(query: string, o: { limit?: number; cursor?: string | number } = {}): ListPage<SearchHit> {
-    return pageOf(this.ranked(query), o, { limit: 20, max: 1000 });
+    return pageOf(this.ranked(query), o, { limit: 20, max: SURFACE_PAGE.max });
   }
 
   private ranked(query: string): SearchHit[] {

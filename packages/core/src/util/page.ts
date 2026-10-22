@@ -35,8 +35,8 @@ export function pageLimit(asked: number | undefined, b: PageBounds = DEFAULT_PAG
   return Number.isFinite(asked) && asked! >= 1 ? Math.min(Math.floor(asked!), b.max) : b.limit;
 }
 
-/** The page a surface (the CLI, an MCP tool) gives when it is not told: 200, and never more than 1,000. */
-export const SURFACE_PAGE: PageBounds = { limit: 200, max: 1000 };
+/** The page a surface (the CLI, an MCP tool) gives when it is not told: 100, and never more than 500. One pair for all of them. */
+export const SURFACE_PAGE: PageBounds = { limit: 100, max: 500 };
 
 /** `limit`, `cursor` and `offset` as a surface gets them (text from a shell, numbers from JSON), as `pageOf` takes them. */
 export function pageArgs(a: { limit?: unknown; cursor?: unknown; offset?: unknown }): { limit?: number; cursor?: string | number } {

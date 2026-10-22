@@ -12,6 +12,7 @@
  *   through MCP elicitation when the client supports it); without it the result says what it would do.
  * - **Output schemas** for the run, send and check tools, so clients can read their results as data.
  */
+import { SURFACE_PAGE } from '../util/page.js';
 import { ApsError } from '../errors.js';
 import type { Tool, ToolDoc } from './tool.js';
 
@@ -322,8 +323,8 @@ export function fitResult(value: unknown, format: ResponseFormat): { value: unkn
 
 /* ------------------------------------------------------------------ cursors */
 
-const DEFAULT_PAGE = 100;
-const MAX_PAGE = 500;
+const DEFAULT_PAGE = SURFACE_PAGE.limit;
+const MAX_PAGE = SURFACE_PAGE.max;
 
 export function encodeCursor(tool: string, offset: number): string {
   return Buffer.from(JSON.stringify({ t: tool, o: offset })).toString('base64url');
