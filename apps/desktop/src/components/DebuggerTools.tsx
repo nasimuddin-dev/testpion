@@ -449,6 +449,8 @@ interface LanInfo {
   port?: number;
   decrypt: boolean;
   addresses: Array<{ ip: string; proxy?: string; page?: string; qrSvg?: string }>;
+  /** The password a device that cannot scan the code uses for the proxy. */
+  pairingSecret?: string;
 }
 
 /** A phone or another computer: listen on the network, then scan the QR code for the proxy settings and the certificate. */
@@ -465,8 +467,8 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
       ) : !info.lan ? (
         <div className="grid gap-3 text-sm">
           <p>
-            The proxy listens on this computer only. To let a phone or another computer on the same network use it, listen on the network too (anyone on the network can then send through it while it
-            runs).
+            The proxy listens on this computer only. To let a phone or another computer on the same network use it, listen on the network too. Only a device you pair (by scanning the code, or with the
+            password) can send through it, and none can reach this computer's own services.
           </p>
           <div>
             <Button variant="primary" onClick={() => void onRestartOnLan().then(load)}>
@@ -493,6 +495,12 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
               </div>
             ))}
           </div>
+          <p className="text-xs text-muted">
+            Scanning the code pairs the device for 8 hours. A device that cannot scan uses any user name and this password for the proxy:{' '}
+            <span className="mono" data-lan-secret>
+              {info.pairingSecret}
+            </span>
+          </p>
           {!info.decrypt && <p className="text-xs text-muted">HTTPS shows as tunnels by host. Turn on HTTPS ▸ Decrypt HTTPS to read it; the page then offers the root certificate.</p>}
         </div>
       )}
