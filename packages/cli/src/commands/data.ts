@@ -735,6 +735,7 @@ export function registerDataCommands(program: Command): void {
     .option('--timeline-html', 'one flow file: keep the run as an HTML timeline (test-results/timeline.html), also when it fails')
     .option('-e, --environment <name>', 'environment to run with')
     .option('--allow-production', 'the pipeline may send data-changing requests to an environment marked as production (adds --allow-production to its run line)')
+    .option('--trust-scripts', "the workspace's scripts may read secret variables and call other hosts in the pipeline (adds --trust-scripts to its run line); off by default")
     .option('--workspace-dir <path>', 'the workspace folder relative to the repository root', '.')
     .option('--openapi <file>', 'OpenAPI document in the repository: pull requests fail on breaking changes against the target branch')
     .option('--start <command>', 'integration tests: start the system under test first, in the background (e.g. "npm start", "docker compose up -d")')
@@ -759,6 +760,7 @@ export function registerDataCommands(program: Command): void {
           envMatrix: o.envMatrix,
           timelineHtml: o.timelineHtml,
           allowProduction: o.allowProduction,
+          trustScripts: o.trustScripts,
           environment: o.environment ?? fromRun?.environment,
           workspaceDir: o.workspaceDir,
           openapi: o.openapi,

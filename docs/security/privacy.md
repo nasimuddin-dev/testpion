@@ -66,6 +66,16 @@ On your desktop TestPion can call anything, including `localhost` and your priva
 
 Turn it on with environment variables (`TESTPION_BLOCK_PRIVATE_NETWORKS=1`, `TESTPION_ALLOW_HOSTS=api.internal,10.0.0.5`, `TESTPION_ALLOW_PROCESSES=0`) or with `testpion mcp-server --block-private-networks [--allow-host api.internal]`.
 
+## What leaves your computer without you asking {#without-asking}
+
+- **The update check**, 5 seconds after start (turn it off in Settings ▸ About ▸ *Check for updates when the app starts*). Two endpoints, both GitHub, both sending only a `TestPion/<version>` user agent:
+  - where the app can update itself (the Windows installer, the Linux AppImage), `github.com/nasimuddin-dev/testpion/releases` serves `latest.yml` and, if you accept, the installer, whose SHA-512 is checked against `latest.yml`;
+  - everywhere else, `api.github.com/repos/nasimuddin-dev/testpion/releases/latest` returns the newest release number and notes, which the app compares with its own.
+- **The background git fetch** of the open workspace, every few minutes, to its own remote, only for workspaces you have pushed or synced from on this computer (never a repository you only cloned).
+- **Monitors** on the schedule you set, and their webhooks.
+
+Nothing else is sent unasked. Crash and error details stay in the local log.
+
 ## Telemetry
 
 Telemetry is not implemented. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call.

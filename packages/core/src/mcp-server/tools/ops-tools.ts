@@ -27,6 +27,7 @@ export function opsTools(d: ModuleToolDeps): Tool[] {
           data: str("One flow file (tests: [file]): run it once per row of this dataset ('' for the file's own data:)"),
           envMatrix: { type: 'array', items: { type: 'string' }, description: 'One flow file: run it in each of these environments and compare' },
           allowProduction: { type: 'boolean', description: 'Allow data-changing requests to an environment marked as production' },
+          trustScripts: { type: 'boolean', description: "Let the workspace's scripts read secret variables and call other hosts in the pipeline (adds --trust-scripts; off by default: only for a workspace the pipeline's owner trusts)" },
           timelineHtml: { type: 'boolean', description: 'One flow file: keep the run as an HTML timeline (test-results/timeline.html)' },
           ragEvaluation: str('Instead of tests: a saved RAG evaluation (list_evaluations) run with `testpion rag run`: its metrics and gates, a JUnit and HTML report; the judge key is a CI secret'),
           ragPreset: str('With ragEvaluation: a metric preset (rag_metrics lists them)'),

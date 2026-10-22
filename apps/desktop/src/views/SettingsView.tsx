@@ -178,6 +178,13 @@ export function SettingsView() {
                 </p>
               </div>
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
+                <div className="font-medium">What leaves this computer without you asking</div>
+                <p className="text-muted">
+                  The update check at start (turn it off in About) asks GitHub for the newest release: <span className="mono">github.com/nasimuddin-dev/testpion/releases</span> for <span className="mono">latest.yml</span> and the installer when the app can update itself, or{' '}
+                  <span className="mono">api.github.com</span> for the release number when it cannot. Only the app version is sent. The background git fetch contacts the remote of a workspace you have pushed from. Monitors and their webhooks run on the schedule you set.
+                </p>
+              </div>
+              <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
                 <div className="font-medium">Secret storage</div>
                 <p className="text-muted">
                   Secrets are stored using <b>{info?.secretBackend}</b>. Workspace files only contain references, so workspaces are safe to commit to git.

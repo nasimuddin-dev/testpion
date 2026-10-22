@@ -72,6 +72,8 @@ A failing test fails the build. The file never contains secret values. Instead, 
 
 ### Pipelines against production
 
+**Scripts and secrets in a pipeline.** A workspace's scripts do not see secret variables, and can only send requests to the host of their own request, unless the run says otherwise ([Trust and permissions](/security/trust)). A pipeline whose scripts need them (an HMAC signature from a secret, a login call to another host) tick **Allow scripts to read secrets and call other hosts in this pipeline** in the CI dialog (it is off by default), or pass `--trust-scripts` to `testpion ci …`, `trustScripts: true` to `ci_config`, or `trust-scripts: true` to the GitHub Action. The generated run line then carries `--trust-scripts`. Do this only for a repository you trust: every script in it can then read the pipeline's secrets.
+
 A pipeline that runs against an environment marked as [production](/api-testing/environments#production) runs its reads (GET, HEAD, OPTIONS, GraphQL queries, gRPC reads), but every data-changing step fails with *"… is a production environment: POST … needs confirmation"* unless the run line has `--allow-production` (`testpion test`, `run`, `run-collection`, `send`, `load`, `eval run`, `serve flows`, `monitor add / run / start` and `ai attempt-fix` take it). So a smoke run against production needs nothing. For a pipeline that has to write, tick **Allow data-changing requests to the production environment** in the CI dialog (it shows, for any suite, collection or test files, when the environment is marked production), run `testpion ci … --allow-production`, or pass `allowProduction: true` to `ci_config`; the GitHub Action takes `allow-production: true`.
 
 ## Integration tests: start the system first

@@ -33,6 +33,11 @@ export interface CiTarget {
   envMatrix?: string[];
   /** Data-changing requests may go to an environment marked as production. */
   allowProduction?: boolean;
+  /**
+   * The workspace's scripts may read secret variables and call other hosts in this pipeline (`--trust-scripts`). Off by default:
+   * a workspace from git is not trusted with the pipeline's secrets until its owner says so.
+   */
+  trustScripts?: boolean;
   /** Run a saved RAG evaluation (`testpion rag run`): its metrics, gates and a JUnit / HTML report; the judge key is a CI secret. */
   ragEvaluation?: string;
   /** With a RAG evaluation: a metric preset replacing its metrics, the judge (provider/model), gates ("faithfulness=0.8"), a baseline run, the most the judge may cost. */
@@ -113,6 +118,14 @@ export function ciSecrets(store: WorkspaceStore, environment?: string, opts: { p
 
 /** The CLI command the pipeline runs (with `testpion` = the installed CLI). */
 export function ciCommand(o: CiConfigOptions, cli = 'testpion'): string {
+  const command = ciCommandBase(o, cli);
+  if (!o.trustScripts) return command;
+  // the flag goes right after the sending command: `testpion run --trust-scripts -w …`
+  const esc = cli.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return command.replace(new RegExp(`(${esc} (?:rag run|run-collection|run|test))\\b`), '$1 --trust-scripts');
+}
+
+function ciCommandBase(o: CiConfigOptions, cli: string): string {
   const ws = o.workspaceDir?.trim() || '.';
   const env = o.environment ? ` -e ${q(o.environment)}` : '';
   const out = ' -r console junit html -o test-results';
