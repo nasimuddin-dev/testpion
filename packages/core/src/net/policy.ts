@@ -119,6 +119,43 @@ function blockedError(host: string, ip?: string): ApsError {
   });
 }
 
+/*
+ * A short-lived cache of successful lookups: every new pooled connection (a load test's ramp-up opens hundreds to one host) and
+ * every redirect hop under the private-network policy did a getaddrinfo on libuv's 4-thread pool, shared with file I/O. The
+ * answers are cached for DNS_TTL_MS (short, so rebinding is still noticed) and every caller still checks the addresses it gets.
+ */
+const DNS_TTL_MS = 10_000;
+const DNS_CACHE_MAX = 500;
+type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void;
+let resolver: (host: string, options: object, cb: LookupCallback) => void = (host, options, cb) => dnsLookup(host, options as never, cb as never);
+const dnsCache = new Map<string, { at: number; address: string | LookupAddress[]; family?: number }>();
+const waitingOn = new Map<string, LookupCallback[]>();
+function cachedLookup(host: string, options: object, cb: LookupCallback): void {
+  const key = `${host}|${JSON.stringify(options)}`;
+  const hit = dnsCache.get(key);
+  if (hit && Date.now() - hit.at < DNS_TTL_MS) return process.nextTick(cb, null, hit.address, hit.family);
+  // lookups of one name that are already under way share the answer
+  const pending = waitingOn.get(key);
+  if (pending) return void pending.push(cb);
+  waitingOn.set(key, [cb]);
+  resolver(host, options, (err, address, family) => {
+    const callbacks = waitingOn.get(key) ?? [];
+    waitingOn.delete(key);
+    if (!err) {
+      dnsCache.delete(key);
+      dnsCache.set(key, { at: Date.now(), address, family });
+      if (dnsCache.size > DNS_CACHE_MAX) dnsCache.delete(dnsCache.keys().next().value!);
+    }
+    for (const c of callbacks) c(err, address, family);
+  });
+}
+/** For tests: replace the resolver (and forget what was cached). */
+export function setDnsResolverForTests(fn?: typeof resolver): void {
+  resolver = fn ?? ((host, options, cb) => dnsLookup(host, options as never, cb as never));
+  dnsCache.clear();
+  waitingOn.clear();
+}
+
 /**
  * Check a URL before connecting. Host names are resolved and every address must be public.
  * No-op when private networks are allowed (the desktop default).
@@ -133,7 +170,7 @@ export async function assertUrlAllowed(url: string | URL): Promise<void> {
     if (isPrivateAddress(host)) throw blockedError(host);
     return;
   }
-  const addrs = await new Promise<LookupAddress[]>((ok, fail) => dnsLookup(host, { all: true }, (e, a) => (e ? fail(e) : ok(a))));
+  const addrs = await new Promise<LookupAddress[]>((ok, fail) => cachedLookup(host, { all: true }, (e, a) => (e ? fail(e) : ok(a as LookupAddress[]))));
   const bad = addrs.find((a) => isPrivateAddress(a.address));
   if (bad) throw blockedError(host, bad.address);
 }
@@ -143,7 +180,7 @@ export async function assertUrlAllowed(url: string | URL): Promise<void> {
  * client's connection pool, so redirects and DNS rebinding can't reach a private address either.
  */
 export function policyLookup(hostname: string, options: object, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void): void {
-  dnsLookup(hostname, options as never, ((err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => {
+  cachedLookup(hostname, options, ((err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => {
     if (err || !current.blockPrivateNetworks || allowed(hostname)) return callback(err, address, family);
     const list = Array.isArray(address) ? address : [{ address, family: family ?? 4 }];
     const bad = list.find((a) => isPrivateAddress(a.address));
