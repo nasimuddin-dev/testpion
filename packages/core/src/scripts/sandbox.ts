@@ -178,8 +178,24 @@ interface Slot {
   libs: Map<string, Array<[name: string, handle: QuickJSHandle]>>;
   /** Scripts run in this context; it is replaced after MAX_SLOT_USES to bound what unreachable leftovers it can hold. */
   uses: number;
+  /** Heap in use after the first run (the prelude and libraries); what grows past it is what scripts left behind. */
+  baseline?: number;
 }
 const MAX_SLOT_USES = 2000;
+/** A context is replaced when scripts left more than this share of the memory limit in its heap (unreachable garbage counts against the next script). */
+const SLOT_RETAIN_SHARE = 0.25;
+
+/** Heap bytes in use in the runtime now, or undefined when the engine cannot say. */
+function heapUsed(rt: QuickJSRuntime, vm: QuickJSContext): number | undefined {
+  try {
+    const h = rt.computeMemoryUsage();
+    const u = vm.dump(h) as { memory_used_size?: number } | undefined;
+    h.dispose();
+    return typeof u?.memory_used_size === 'number' ? u.memory_used_size : undefined;
+  } catch {
+    return undefined;
+  }
+}
 let runtime: QuickJSRuntime | undefined;
 let pooled: Slot | undefined;
 /** Options of the script running now, read by the host functions. */
@@ -428,6 +444,17 @@ async function runScriptOnce(code: string, input: ScriptInput, opts: ScriptOptio
       checked.value.dispose();
     }
     if (Date.now() > deadline) keep = false;
+    // memory a script left reachable only to the garbage collector counts against the next script: a context that holds much more
+    // than it did after its first run is replaced instead of reused
+    if (keep) {
+      const gc = rt.executePendingJobs();
+      if (gc.error) gc.error.dispose();
+      const used = heapUsed(rt, vm);
+      if (used !== undefined) {
+        if (slot.baseline === undefined) slot.baseline = used;
+        else if (used - slot.baseline > ((opts.memoryMb ?? 32) * 1024 * 1024) * SLOT_RETAIN_SHARE) keep = false;
+      }
+    }
     const out = JSON.parse(json) as Omit<ScriptOutput, 'durationMs'> & { error: string | null };
     // an interrupt inside the async body is caught by its rejection handler
     if (out.error && /^InternalError: interrupted/.test(out.error)) out.error = `Script timed out after ${opts.timeoutMs ?? 2000} ms`;
