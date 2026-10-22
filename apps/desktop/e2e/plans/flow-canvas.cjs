@@ -390,6 +390,8 @@ const steps = [
   step(
     'result-links-to-its-step',
     `const runs = await window.aps.invoke('tests.flowRuns', { file: ${JSON.stringify(HOOK_FILE)} }); if (!runs.runs[0]) return 'NO RUN';
+     // the Runs tab is there once something opened it: the sidebar's Runs pane does
+     [...document.querySelectorAll('[role=tablist][aria-label="Sidebar"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim().startsWith('Runs'))?.click(); await __t.sleep(800);
      document.querySelector('main [role=tab][data-tab-id="run"]')?.click(); await __t.sleep(800);
      // the run's result (the run panel selects one; a click makes sure)
      await __t.waitFor(() => vis('main button[data-result]')[0], 4000); vis('main button[data-result]')[0]?.click(); await __t.sleep(300);

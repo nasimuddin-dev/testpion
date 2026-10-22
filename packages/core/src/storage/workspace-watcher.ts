@@ -173,7 +173,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
         const kind = changeKind(path);
         if (!kind) continue;
         if (e.isDirectory()) walkAll(path, depth + 1);
-        else pending.set(path, { path, kind });
+        else if (!isKnownOwnWrite(path)) pending.set(path, { path, kind });
       }
     };
     walkAll('', 0);
@@ -206,24 +206,28 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     if (!firstEventAt) firstEventAt = lastEventAt;
     if (!timer) timer = setTimeout(check, debounce);
   };
+  /** True when the path is exactly what the app itself wrote (the known state now): nothing to report. */
+  const isKnownOwnWrite = (path: string): boolean => {
+    const full = join(root, path);
+    const own = ownWrite(full);
+    if (own === undefined) return false;
+    // the app's own change when the file is exactly what it made it (or gone, when it removed it): that is the known
+    // state now. Anything else is someone else's change after it (an editor, git), reported like any outside change.
+    const f = fingerprint(path, own.startsWith('stat:') ? 'stat' : 'hash');
+    if (f === own) {
+      if (f === 'gone') seen.delete(path);
+      else seen.set(path, f);
+      return true;
+    }
+    if (f !== 'dir') forgetOwnWrite(full);
+    return false;
+  };
   const onEvent = (name: string | null) => {
     if (!name) return void ((rescanAll = true), arm());
     const path = String(name).split(sep).join('/');
     const kind = changeKind(path);
     if (!kind) return;
-    const full = join(root, path);
-    const own = ownWrite(full);
-    if (own !== undefined) {
-      // the app's own change when the file is exactly what it made it (or gone, when it removed it): that is the known
-      // state now. Anything else is someone else's change after it (an editor, git), reported like any outside change.
-      const f = fingerprint(path, own.startsWith('stat:') ? 'stat' : 'hash');
-      if (f === own) {
-        if (f === 'gone') seen.delete(path);
-        else seen.set(path, f);
-        return;
-      }
-      if (f !== 'dir') forgetOwnWrite(full);
-    }
+    if (isKnownOwnWrite(path)) return;
     // a just-written temp file renamed into place reports the final name too: one entry per path
     pending.set(path, { path, kind });
     arm();

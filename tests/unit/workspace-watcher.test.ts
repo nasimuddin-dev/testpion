@@ -77,6 +77,30 @@ describe('workspace watcher', () => {
     }
   });
 
+  it('a nameless event does not report what the app itself just wrote (only the outside change in the same burst)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-watch-overflow-own-'));
+    try {
+      mkdirSync(join(dir, 'collections'), { recursive: true });
+      writeFileSync(join(dir, 'collections', 'mine.json'), '{"a":1}');
+      writeFileSync(join(dir, 'collections', 'theirs.json'), '{"a":1}');
+      let emit!: (name: string | null) => void;
+      const batches: WorkspaceChange[][] = [];
+      const stop = watchWorkspace(dir, (b) => batches.push(b), { debounceMs: 50, watch: (_r, l) => ((emit = (n) => l('change', n)), { close: () => undefined }) });
+      try {
+        await sleep(50);
+        atomicWrite(join(dir, 'collections', 'mine.json'), '{"a":2}'); // the app's save
+        writeFileSync(join(dir, 'collections', 'theirs.json'), '{"a":3}'); // another program
+        emit(null);
+        await sleep(300);
+        expect(batches.flat().map((c) => c.path)).toEqual(['collections/theirs.json']);
+      } finally {
+        stop();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('reports a change another program makes right after the app saved the same file', async () => {
     mkdirSync(join(root, 'tests'), { recursive: true });
     const batches: WorkspaceChange[][] = [];

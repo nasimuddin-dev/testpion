@@ -255,9 +255,9 @@ const steps = [
     'file-menu-and-palette-have-the-bundle-commands',
     `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
      const input = await __t.waitFor(() => document.querySelector('[role=dialog] input, input[placeholder*="ommand"]'), 3000); if (!input) return 'NO INPUT';
-     await __t.real.type('TestPion Bundle');
-     const t = await __t.waitFor(() => document.body.textContent.includes('Import a TestPion Bundle'), 3000);
-     const both = document.body.textContent.includes('Export a TestPion Bundle');
+     await __t.real.type('TestPion bundle');
+     const t = await __t.waitFor(() => document.body.textContent.includes('Import a TestPion bundle'), 3000);
+     const both = document.body.textContent.includes('Export a TestPion bundle');
      await __t.real.key('Escape');
      return 'import command: ' + !!t + ' | export command: ' + both;`,
   ),

@@ -68,7 +68,7 @@ const steps = [
     'right-click-collection',
     `await __t.requests();
      const row = await __t.waitFor(() => [...document.querySelectorAll('aside [data-tree-row]')].find((r) => r.offsetParent && r.textContent.includes('E2E HAR import')), 4000); if (!row) return 'NO ROW';
-     await __t.real.rightClick(row);
+     row.scrollIntoView({ block: 'center' }); await __t.sleep(200); await __t.real.rightClick(row);
      const aiMenu = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'AI'), 3000); if (!aiMenu) return 'NO AI submenu'; await __t.real.click(aiMenu);
      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Tidy with AI…'), 3000); if (!item) return 'NO MENU item';
      await __t.real.click(item);
@@ -102,11 +102,12 @@ const steps = [
   step(
     'undo-puts-it-back',
     `const b = [...document.querySelectorAll('[data-sonner-toast] button')].find((x) => x.textContent.trim() === 'Undo'); if (!b) return 'NO UNDO';
+     const outside = [...document.querySelectorAll('[data-sonner-toast]')].some((t) => /changed outside TestPion/.test(t.textContent));
      await __t.real.click(b); await __t.sleep(1200);
      const c = await col();
      const flat = (n) => (n.kind === 'folder' ? n.items.flatMap(flat) : [n]);
      const get = c.items.flatMap(flat).find((r) => r.id === 'e2e-get');
-     return 'vars: ' + c.variables.length + ' | url: ' + get?.request.url + ' | top-level: ' + c.items.length;`,
+     return 'vars: ' + c.variables.length + ' | url: ' + get?.request.url + ' | top-level: ' + c.items.length + ' | reported as an outside change: ' + outside;`,
   ),
 ];
 
@@ -116,7 +117,7 @@ module.exports = withExpect(
     'right-click-collection': /^collection: true \| estimate: true$/,
     'tidy-and-review': /^changes: [4-9] \| ticked: [3-8] \| failed checks: 0 \| invented skipped: true \| titles: /,
     apply: new RegExp(`^vars: apiUrl,orderId,token \\| url: \\{\\{apiUrl\\}\\}/orders/\\{\\{orderId\\}\\} \\| header: Bearer \\{\\{token\\}\\} \\| folder: .*Orders.* \\| script: true \\| analytics gone: true \\| users kept: true$`),
-    'undo-puts-it-back': new RegExp(`^vars: 0 \\| url: ${HOST.replace(/[.]/g, '\\.').replace(/\//g, '\\/')}\\/orders\\/ord-77 \\| top-level: 5$`),
+    'undo-puts-it-back': new RegExp(`^vars: 0 \\| url: ${HOST.replace(/[.]/g, '\\.').replace(/\//g, '\\/')}\\/orders\\/ord-77 \\| top-level: 5 \\| reported as an outside change: false$`),
   },
   { settings: { assistantProvider: 'demo', assistantModel: 'demo' }, prepare },
 );

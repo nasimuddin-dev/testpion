@@ -20,5 +20,5 @@ module.exports = withExpect(steps, {
   'open-from-status-bar': /Send feedback · Problem · Idea · Design · Question/,
   'fill-problem': /\[Bug\] Feedback test: the view froze[\s\S]*token=\*\*\*/,
   'save-file': /Report saved to/,
-  'palette-entry': /Send Feedback or Report a Problem/,
+  'palette-entry': /Send feedback or report a problem/,
 }, { allowErrors: ['throw-error'], env: (out) => ({ E2E_STUB_SAVE: require('node:path').join(out, 'report.md') }) });

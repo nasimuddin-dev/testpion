@@ -18,8 +18,8 @@ const steps = [
   step(
     'rate-good',
     `const before = short(radio('To review')?.textContent, 20);
-     vis('main button[title^="Good result"]')[0]?.click(); await __t.sleep(800);
-     const pressed = vis('main button[title^="Good result"]')[0]?.getAttribute('aria-pressed');
+     vis('main button[aria-label^="Good result"]')[0]?.click(); await __t.sleep(800);
+     const pressed = vis('main button[aria-label^="Good result"]')[0]?.getAttribute('aria-pressed');
      return 'before=' + before + ' after=' + short(radio('To review')?.textContent, 20) + ' pressed=' + pressed + ' rowIcon=' + !!vis('main [aria-label="Rated good"]').length;`,
   ),
   step(
