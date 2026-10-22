@@ -77,6 +77,9 @@ const drafts = persisted('grpc', {
 
 const kind = (m: MethodInfo) => (m.clientStreaming && m.serverStreaming ? 'bidi stream' : m.clientStreaming ? 'client stream' : m.serverStreaming ? 'server stream' : 'unary');
 
+/** The most messages of a live stream kept in the window (the same cap as the WebSocket log). */
+const LIVE_CAP = 20_000;
+
 /** gRPC client: pick a method from .proto files, send a message (or a list, for client streams), see the response live. */
 export function GrpcView() {
   // this document's draft (each tab of this editor is its own document)
@@ -204,7 +207,8 @@ export function GrpcView() {
     () =>
       on<Array<{ id: string; data: unknown; atMs: number }>>('grpc.messages', (items) => {
         const mine = items.filter((i) => i.id === sendingRef.current);
-        if (mine.length) setLive((l) => [...l, ...mine.map(({ data, atMs }) => ({ data, atMs }))]);
+        // a long server stream keeps the last 20,000 messages (the WebSocket log's cap), not everything ever received
+        if (mine.length) setLive((l) => [...l, ...mine.map(({ data, atMs }) => ({ data, atMs }))].slice(-LIVE_CAP));
       }),
     [],
   );
@@ -258,6 +262,9 @@ export function GrpcView() {
   const stop = () => sending && call('grpc.cancel', { id: sending });
 
   const streamRows = sending ? live : (result?.messages ?? []);
+  // the arrival sparkline's times once per change of the stream, not on every render of the view
+  const liveTimes = useMemo(() => live.map((m) => m.atMs), [live]);
+  const resultTimes = useMemo(() => result?.messages?.map((m) => m.atMs) ?? [], [result?.messages]);
   const selectedData = selected !== undefined ? streamRows[selected]?.data : undefined;
   const statusTone = result ? (result.code === 0 ? 'ok' : result.streamStopped ? 'warn' : 'bad') : 'default';
   const example = useMemo(() => (current ? JSON.stringify(current.example) : ''), [current]);
@@ -558,7 +565,7 @@ export function GrpcView() {
                   {sending ? (
                     <>
                       <Badge tone="accent">{live.length ? `receiving · ${live.length}` : 'calling…'}</Badge>
-                      <ArrivalSpark times={live.map((m) => m.atMs)} />
+                      <ArrivalSpark times={liveTimes} />
                     </>
                   ) : (
                     result && (
@@ -570,7 +577,7 @@ export function GrpcView() {
                           Time <span className="text-fg tabular-nums">{Math.round(result.durationMs)} ms</span>
                         </span>
                         {result.messages && <span className="text-muted">{plural(result.messages.length, 'message')}</span>}
-                        {result.messages && <ArrivalSpark times={result.messages.map((m) => m.atMs)} />}
+                        {result.messages && <ArrivalSpark times={resultTimes} />}
                         {result.details && <span className="text-muted truncate">{result.details}</span>}
                       </>
                     )

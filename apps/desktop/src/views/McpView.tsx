@@ -31,29 +31,9 @@ import { ToolsetEditor, type ToolsetEditorHandle } from '../components/mcp/Tools
 import { VarInput } from '../components/VarInput';
 import { useExternalChange } from '../lib/external-change';
 
-interface McpEvent {
-  id: string;
-  timestamp: number;
-  direction: 'outgoing' | 'incoming' | 'local';
-  method: string;
-  kind: string;
-  rpcId?: string | number;
-  request?: unknown;
-  response?: unknown;
-  error?: unknown;
-  durationMs?: number;
-  metadata?: Record<string, unknown>;
-}
+import { mergeEventBatch, mergeEvents, type McpEvent } from '../lib/mcp-events';
 
 type Tab = 'tools' | 'calls' | 'resources' | 'prompts' | 'usage' | 'trace' | 'info' | 'settings';
-
-/** Merge event lists by id — the connect snapshot and the live stream overlap. */
-function mergeEvents(a: McpEvent[], b: McpEvent[]): McpEvent[] {
-  const seen = new Set(a.map((e) => e.id));
-  const out = [...a];
-  for (const e of b) if (!seen.has(e.id)) (seen.add(e.id), out.push(e));
-  return out.sort((x, y) => x.timestamp - y.timestamp).slice(-5000);
-}
 
 /** Which server each MCP tab shows (each tab is its own document). */
 const tabServer = persisted<{ serverId?: string }>('mcp', {});
@@ -82,13 +62,7 @@ export function McpView() {
   }, []);
   useEffect(() => {
     void load();
-    return on<Array<{ serverId: string; event: McpEvent }>>('mcp.events', (items) =>
-      setEvents((ev) => {
-        const next = { ...ev };
-        for (const it of items) next[it.serverId] = mergeEvents(next[it.serverId] ?? [], [it.event]);
-        return next;
-      }),
-    );
+    return on<Array<{ serverId: string; event: McpEvent }>>('mcp.events', (items) => setEvents((ev) => mergeEventBatch(ev, items)));
   }, [load]);
   const addServer = (folder?: string) => {
     setDraft({ id: uid('mcp-'), name: NEW_TAB_TITLE.mcp, transport: 'stdio', command: 'node', args: [], ...(folder ? { folder } : {}) });
@@ -602,6 +576,11 @@ function McpTrace({ events, error, server }: { events: McpEvent[]; error?: Norma
   const t0 = events[0]?.timestamp ?? 0;
   endRef.current = shown.length - 1;
   const spec = useMemo(() => traceOutputSpec(server, shown), [server, shown]);
+  // built once per selected event: a new value each render would fold the tree up again on every event that arrives
+  const selData = useMemo(
+    () => (sel ? JSON.parse(JSON.stringify({ timestamp: new Date(sel.timestamp).toISOString(), direction: sel.direction, method: sel.method, kind: sel.kind, rpcId: sel.rpcId, durationMs: sel.durationMs, request: sel.request, response: sel.response, error: sel.error, metadata: sel.metadata })) : undefined),
+    [sel],
+  );
   return (
     <Split id="mcp-trace" initial={55}>
       <div className="h-full flex flex-col" data-output="mcp.trace" onKeyDown={treeKeys}>
@@ -640,9 +619,7 @@ function McpTrace({ events, error, server }: { events: McpEvent[]; error?: Norma
       </div>
       <div className="h-full">
         {sel ? (
-          <JsonTree
-            data={JSON.parse(JSON.stringify({ timestamp: new Date(sel.timestamp).toISOString(), direction: sel.direction, method: sel.method, kind: sel.kind, rpcId: sel.rpcId, durationMs: sel.durationMs, request: sel.request, response: sel.response, error: sel.error, metadata: sel.metadata }))}
-          />
+          <JsonTree data={selData} />
         ) : (
           <Empty title="Select an event" />
         )}

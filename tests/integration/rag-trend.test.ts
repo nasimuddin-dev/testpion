@@ -94,7 +94,8 @@ describe('rag run with a rotating sample and a baseline file', () => {
   it('scores --limit records, and the markdown comment gets the regression table; a missing baseline file is no error', async () => {
     const md = join(t.dir, 'comment.md');
     const first = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--limit', '1', '--rotate', '--baseline-results', join(t.dir, 'nothing', 'results.jsonl'), '--markdown', md, '--json']);
-    expect(first.status).toBe(0);
+    // which record is scored depends on the UTC day (--rotate): it may pass (0) or fail its check (1), never a configuration or run error
+    expect([0, 1]).toContain(first.status);
     const r1 = cliData<{ runId: string; summary: { total: number } }>(first.out);
     expect(r1.summary.total).toBe(1);
     const second = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--baseline', runs[0]!, '--markdown', md, '--json']);

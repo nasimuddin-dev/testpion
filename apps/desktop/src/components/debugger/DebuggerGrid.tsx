@@ -73,6 +73,8 @@ const COLUMNS: Column[] = [
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
 ];
 const DEFAULT_HIDDEN: ColumnId[] = ['pid'];
+/** One collator for every sort (a localeCompare per comparison made one each). */
+const COLLATOR = new Intl.Collator();
 const HIDDEN_KEY = 'testpion.debugger.hiddenColumns';
 const parseHidden = (raw: string): ColumnId[] | undefined => {
   const v = JSON.parse(raw) as unknown;
@@ -154,12 +156,13 @@ export const DebuggerGrid = memo(function DebuggerGrid({
   const sorted = useMemo(() => {
     const c = COLUMNS.find((x) => x.id === sort.col)!;
     if (sort.col === 'seq' && !sort.desc) return rows;
-    return [...rows].sort((a, b) => {
-      const x = c.sort(a);
-      const y = c.sort(b);
-      const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y));
+    // the key of each row once (not twice per comparison), compared with one collator
+    const keyed = rows.map((row) => ({ row, key: c.sort(row) }));
+    keyed.sort((a, b) => {
+      const r = typeof a.key === 'number' && typeof b.key === 'number' ? a.key - b.key : COLLATOR.compare(String(a.key), String(b.key));
       return sort.desc ? -r : r;
     });
+    return keyed.map((k) => k.row);
   }, [rows, sort]);
   useEffect(() => onOrder?.(sorted), [sorted, onOrder]);
   const toggleColumn = (id: ColumnId) => {

@@ -28,8 +28,11 @@ const steps = [
     'save-it-as-pretty-json',
     `const heap0 = performance.memory?.usedJSHeapSize ?? 0;
      const longTasks = []; const po = new PerformanceObserver((l) => l.getEntries().forEach((e) => longTasks.push(Math.round(e.duration)))); po.observe({ entryTypes: ['longtask'] });
-     let last = performance.now(); let worst = 0; let frames = 0; let running = true;
-     const tick = (t) => { worst = Math.max(worst, t - last); last = t; frames++; if (running) requestAnimationFrame(tick); };
+     // what the slowest frames spent their time on (Long Animation Frames): script, style and layout, or waiting
+     const loafs = []; const lo = new PerformanceObserver((l) => l.getEntries().forEach((e) => loafs.push(e)));
+     try { lo.observe({ type: 'long-animation-frame', buffered: false }); } catch {}
+     let last = performance.now(); let worst = 0; let worstAt = 0; let frames = 0; let running = true;
+     const tick = (t) => { if (t - last > worst) ((worst = t - last), (worstAt = last - t0)); last = t; frames++; if (running) requestAnimationFrame(tick); };
      requestAnimationFrame((t) => { last = t; requestAnimationFrame(tick); });
      const before = toasts().filter((x) => / saved to /.test(x)).length;
      const t0 = performance.now();
@@ -37,9 +40,11 @@ const steps = [
      const sawProgress = await __t.waitFor(() => (toasts().some((x) => /^Saving response body…/.test(x)) || !!document.querySelector('[data-output-cancel]') ? true : null), 20000);
      const done = await __t.waitFor(() => (toasts().filter((x) => / saved to /.test(x)).length > before ? true : null), 120000);
      const took = Math.round(performance.now() - t0);
-     running = false; po.disconnect(); await __t.sleep(100);
+     running = false; po.disconnect(); await __t.sleep(100); lo.disconnect();
      const heap = Math.round(((performance.memory?.usedJSHeapSize ?? 0) - heap0) / 1024 / 1024);
-     return 'saved: ' + !!done + ' | progress shown: ' + !!sawProgress + ' | worst frame ms: ' + Math.round(worst) + ' | long tasks: ' + (longTasks.filter((d) => d > 50).join(',') || 'none') + ' | heap growth mb: ' + heap + ' | frames: ' + frames + ' | took ms: ' + took;`,
+     const w = loafs.sort((a, b) => b.duration - a.duration)[0];
+     const loaf = w ? 'worst ' + Math.round(w.duration) + ' ms (script ' + Math.round((w.scripts ?? []).reduce((n, s) => n + s.duration, 0)) + ', style+layout ' + Math.round(w.styleAndLayoutStart ? w.startTime + w.duration - w.styleAndLayoutStart : 0) + ', blocking ' + Math.round(w.blockingDuration ?? 0) + ', ' + ((w.scripts ?? []).map((s) => (s.invoker || s.sourceFunctionName || '?') + ' ' + Math.round(s.duration)).slice(0, 3).join('; ') || 'no script') + ') of ' + loafs.length : 'none';
+     return 'saved: ' + !!done + ' | progress shown: ' + !!sawProgress + ' | worst frame ms: ' + Math.round(worst) + ' | long tasks: ' + (longTasks.filter((d) => d > 50).join(',') || 'none') + ' | heap growth mb: ' + heap + ' | frames: ' + frames + ' | took ms: ' + took + ' | worst frame at ms: ' + Math.round(worstAt) + ' | loaf: ' + loaf;`,
   ),
   [
     'the-file',

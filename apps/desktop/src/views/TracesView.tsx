@@ -84,7 +84,8 @@ function OtlpDialog({ ids, selected, onClose }: { ids: string[]; selected?: stri
 export function TracesView() {
   const [otlpOpen, setOtlpOpen] = useState(false);
   const [items, setItems] = useState<TraceMeta[]>([]);
-  const maxMs = Math.max(1, ...items.map((t) => t.durationMs));
+  // once per change of the list (up to 20,000 loaded), with a loop: not on every keystroke, never a spread on the stack
+  const maxMs = useMemo(() => items.reduce((m, t) => (t.durationMs > m ? t.durationMs : m), 1), [items]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('');

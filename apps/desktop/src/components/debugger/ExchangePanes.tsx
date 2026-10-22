@@ -1,7 +1,7 @@
 import { prettyBody } from '../../lib/pretty';
 import { CodeBlock } from '../CodeBlock';
 import { Bot, ChevronDown, Copy, ExternalLink, Pause, Play, Scale, Star, X } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { Badge, Button, Empty, Input, Menu, Split, statusTone, Tabs } from '../ui';
 import { JsonTree, RawView } from '../JsonView';
@@ -32,13 +32,35 @@ export interface ExchangeActions {
   onRule?(preset: string): void;
 }
 
+/** A body above this many characters is laid out after the pane painted (the frame is not spent on it). */
+const HEAVY_BODY_CHARS = 64 * 1024;
+
+/**
+ * `fn(text)` once per text (a capture sync re-renders the panes several times a second; the body did not change). A small
+ * text is laid out in the render; a big one in the next task, with the text itself shown until then.
+ */
+function useLaidOut(text: string | undefined, fn: (t: string) => string): string | undefined {
+  const heavy = !!text && text.length > HEAVY_BODY_CHARS;
+  const small = useMemo(() => (text && !heavy ? fn(text) : undefined), [text, heavy, fn]);
+  const [big, setBig] = useState<{ text: string; out: string }>();
+  useEffect(() => {
+    if (!heavy || !text) return;
+    const t = setTimeout(() => setBig({ text, out: fn(text) }), 0);
+    return () => clearTimeout(t);
+  }, [text, heavy, fn]);
+  if (!text) return undefined;
+  return heavy ? (big?.text === text ? big.out : text) : small;
+}
+
+const pretty = (t: string) => prettyBody(t);
+
 /**
  * The selected exchange, the HTTP Debugger Pro way: its actions on one line, then Request Details and Response Details
  * side by side. Each pane is a header table (the start line first, a filter on top) with Header / Content / Raw / JSON
  * tabs at the bottom, plus what the exchange has: credentials and bytes on the request, gRPC messages, WebSocket frames
- * or events on the response.
+ * or events on the response. Memoised: a capture sync that did not change the exchange renders nothing here.
  */
-export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
+export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
   const raw = useMemo(() => rawOf(e), [e]);
   const path = (() => {
     try {
@@ -183,7 +205,7 @@ export function ExchangePanes({ e, ...a }: { e: Exchange } & ExchangeActions) {
       </div>
     </div>
   );
-}
+});
 
 interface ExtraTab {
   id: string;
@@ -229,7 +251,8 @@ function DetailsPane({
     setTab(initial ?? 'header');
     setFind('');
   }
-  const json = useMemo(() => parseJson(body), [body]);
+  const json = useMemo(() => (tab === 'json' ? parseJson(body) : undefined), [tab, body]);
+  const content = useLaidOut(tab === 'content' ? body : undefined, pretty);
   const f = find.trim().toLowerCase();
   const rows = (h?: Record<string, string>) => Object.entries(h ?? {}).filter(([k, v]) => !f || k.toLowerCase().includes(f) || v.toLowerCase().includes(f));
   const current = extra.find((x) => x.id === tab);
@@ -282,7 +305,7 @@ function DetailsPane({
             </tbody>
           </table>
         )}
-        {tab === 'content' && (body ? <RawView text={prettyBody(body)} /> : <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" text={bodyNote} />)}
+        {tab === 'content' && (content !== undefined ? <RawView text={content} /> : <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" text={bodyNote} />)}
         {tab === 'raw' && <CodeBlock className="p-3 text-xs mono whitespace-pre-wrap break-all" language={'http'} text={raw} />}
         {tab === 'json' && (json !== undefined ? <JsonTree data={json} /> : <Empty title="Not JSON">{body ? 'The body is not JSON: see Content.' : bodyNote}</Empty>)}
         {current?.render()}
@@ -302,14 +325,15 @@ function DetailsPane({
   );
 }
 
-function HexView({ text }: { text?: string }) {
+const HexView = memo(function HexView({ text }: { text?: string }) {
+  const dump = useLaidOut(text, hexDump);
   return (
     <div className="p-3 grid gap-2">
-      <pre className="text-xs mono whitespace-pre rounded border border-line p-2 bg-panel overflow-auto">{text ? hexDump(text) : '(no body kept)'}</pre>
+      <pre className="text-xs mono whitespace-pre rounded border border-line p-2 bg-panel overflow-auto">{dump ?? '(no body kept)'}</pre>
       <p className="text-xs text-muted">Binary bodies are counted, not kept; text bodies are shown as their UTF-8 bytes.</p>
     </div>
   );
-}
+});
 
 /** The Auth inspector: the scheme, the user, a JWT decoded, the cookies by name; never a secret's value. */
 function AuthView({ e }: { e: Exchange }) {

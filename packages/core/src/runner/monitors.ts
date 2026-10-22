@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
@@ -258,22 +258,37 @@ export function deleteMonitor(store: WorkspaceStore, id: string): void {
 
 const resultsFile = (store: WorkspaceStore, id: string) => store.path('runs', 'monitors', `${id.replace(/[^\w.-]/g, '_')}.jsonl`);
 
+/*
+ * A monitor's results file parsed once per change of it (newest first) and kept: the list, the status, the daily uptime
+ * and the scheduler's tick each ask for it several times a minute, and the file holds up to a thousand lines.
+ */
+const parsedResults = new Map<string, { mtimeMs: number; size: number; results: MonitorResult[] }>();
+const PARSED_RESULTS_MAX = 500;
+
 /** Results of a monitor, newest first. */
 export function monitorResults(store: WorkspaceStore, id: string, limit = 50): MonitorResult[] {
   const f = resultsFile(store, id);
-  if (!existsSync(f)) return [];
-  // newest are last: parse from the end and stop at the limit (lists ask for one or a few)
+  const st = statSync(f, { throwIfNoEntry: false });
+  if (!st) {
+    parsedResults.delete(f);
+    return [];
+  }
+  const hit = parsedResults.get(f);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return limit >= hit.results.length ? hit.results : hit.results.slice(0, limit);
+  // newest are last: parsed from the end
   const lines = readFileSync(f, 'utf8').split('\n');
-  const out: MonitorResult[] = [];
-  for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+  const results: MonitorResult[] = [];
+  for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i]!.trim()) continue;
     try {
-      out.push(JSON.parse(lines[i]!) as MonitorResult);
+      results.push(JSON.parse(lines[i]!) as MonitorResult);
     } catch {
       /* a partly written last line */
     }
   }
-  return out;
+  if (parsedResults.size >= PARSED_RESULTS_MAX) parsedResults.clear();
+  parsedResults.set(f, { mtimeMs: st.mtimeMs, size: st.size, results });
+  return limit >= results.length ? results : results.slice(0, limit);
 }
 
 /** One day of a monitor's runs (see monitorDaily). */

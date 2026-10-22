@@ -281,7 +281,11 @@ export function WebSocketView() {
   const listClusterTopics = () =>
     session && void call<Array<{ name: string; partitions: number }>>('kafka.topics', { id: session }).then(setClusterTopics, (e) => toastError(e));
   const [direction, setDirection] = useState<'all' | 'sent' | 'received'>('all');
-  const shown = messages.filter((m) => (direction === 'all' || m.direction === direction) && (!filter || `${m.topic ?? ''} ${m.event ?? ''} ${m.data}`.toLowerCase().includes(filter.toLowerCase())));
+  // filtered once per change of the log or the filter, not on every keystroke in the composer (the log holds up to 20,000)
+  const shown = useMemo(() => {
+    const needle = filter.toLowerCase();
+    return direction === 'all' && !needle ? messages : messages.filter((m) => (direction === 'all' || m.direction === direction) && (!needle || `${m.topic ?? ''} ${m.event ?? ''} ${m.data}`.toLowerCase().includes(needle)));
+  }, [messages, direction, filter]);
   // the down arrow of the message log: every kept message (not only the filtered ones)
   const logSpec = useMemo<OutputSpec>(() => {
     const iso = (t: number) => new Date(t).toISOString();
@@ -308,12 +312,14 @@ export function WebSocketView() {
       ],
     };
   }, [messages, kafka, mqtt, sio, d.url]);
-  let parsed: unknown;
-  try {
-    parsed = selected ? JSON.parse(selected.data) : undefined;
-  } catch {
-    parsed = undefined;
-  }
+  // parsed once per selected message: a new value each render would fold its tree up again on every message that arrives
+  const parsed = useMemo(() => {
+    try {
+      return selected ? (JSON.parse(selected.data) as unknown) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [selected]);
   // this editor's tab in the shared tab strip
   const saveTest = () => {
     const parsed = (() => {
@@ -633,7 +639,7 @@ export function WebSocketView() {
               <OutputHeader
                 spec={logSpec}
                 title="Messages"
-                left={<MessageRate messages={messages} />}
+                left={<MessageRate messages={messages} live={status === 'open' && active} />}
                 actions={
                   <>
                     <Select className="h-6 min-h-6 py-0 text-xs w-28" aria-label="Direction" value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>

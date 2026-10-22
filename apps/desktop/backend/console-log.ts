@@ -36,7 +36,8 @@ export interface ConsoleEntry {
 /** What the console needs of the backend. */
 interface ConsoleHost {
   consoleBuffer: ConsoleEntry[];
-  host: { emit(channel: string, payload: unknown): void };
+  /** The `console` event, batched: a run's test-ends reach the window a few at a time, not one event each. */
+  consoleEvents: { push(e: ConsoleEntry): void };
 }
 
 /** A body for the console: kept up to 16,000 characters. */
@@ -55,7 +56,7 @@ export function consoleRefs(o: { collectionId?: string; requestId?: string; hist
 export function pushConsole(be: ConsoleHost, e: ConsoleEntry): void {
   be.consoleBuffer.push(e);
   if (be.consoleBuffer.length > CONSOLE_MAX) be.consoleBuffer.splice(0, be.consoleBuffer.length - CONSOLE_MAX);
-  be.host.emit('console', e);
+  be.consoleEvents.push(e);
 }
 
 /** Console entry for an MCP or WebSocket action; bodies are redacted and clipped. */

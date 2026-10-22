@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pin, PinOff } from 'lucide-react';
 import { usePersisted } from '../lib/sticky';
 import { cx, IconButton } from './ui';
@@ -162,7 +162,10 @@ export function PinnablePanel({
   };
 
   const w = dragWidth ?? width;
-  const api: PinnablePanelApi = { close: () => close(), pinned, open: shown };
+  // one value per change of what it says: a render of the panel reaches no consumer through a new object
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  const api = useMemo<PinnablePanelApi>(() => ({ close: () => closeRef.current(), pinned, open: shown }), [pinned, shown]);
   const right = side === 'right';
   return (
     <Ctx.Provider value={api}>

@@ -87,6 +87,31 @@ describe('desktop backend', () => {
     }
   });
 
+  it('a WebSocket that fails to connect, or that the server closes, leaves no session behind', async () => {
+    const { WebSocketServer } = await import('ws');
+    const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+    await new Promise((r) => wss.once('listening', r));
+    const port = (wss.address() as AddressInfo).port;
+    const before = be.wsSessions.size;
+    try {
+      // nothing listens on the port of a closed server
+      const dead = createServer();
+      await new Promise<void>((r) => dead.listen(0, '127.0.0.1', r));
+      const deadPort = (dead.address() as AddressInfo).port;
+      await new Promise((r) => dead.close(r));
+      for (let i = 0; i < 20; i++) await expect(Promise.resolve().then(() => call('wsock.connect', { url: `ws://127.0.0.1:${deadPort}` }))).rejects.toBeTruthy();
+      expect(be.wsSessions.size).toBe(before);
+      expect(be.wsConsole.size).toBe(before);
+      // the server closes an open session
+      wss.on('connection', (ws) => setTimeout(() => ws.close(), 50));
+      await call('wsock.connect', { url: `ws://127.0.0.1:${port}` });
+      for (let i = 0; i < 80 && be.wsSessions.size > before; i++) await new Promise((r) => setTimeout(r, 25));
+      expect(be.wsSessions.size).toBe(before);
+    } finally {
+      wss.close();
+    }
+  });
+
   it('settings.save refuses malformed certificates and proxy URLs', async () => {
     const current = (await call('settings.get')) as Record<string, unknown>;
     await expect(Promise.resolve().then(() => call('settings.save', { ...current, tls: { extraCa: '-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----' } }))).rejects.toThrow(/Extra CA certificates/);

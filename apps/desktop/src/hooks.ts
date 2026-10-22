@@ -11,7 +11,8 @@ const handled = new Map<string, number>();
  * (e.g. inside a tab): the intent it already handled isn't handled a second time.
  */
 export function useIntent(view: ViewId, handler: (payload: any) => void, key?: string): void {
-  const intent = useApp((s) => s.intent);
+  // only this view's intents (a stored reference, or nothing): an intent for another view renders nothing here
+  const intent = useApp((s) => (s.intent?.view === view ? s.intent : undefined));
   // in a multi-document editor only the targeted document (or the one on screen) handles it
   const doc = useDoc();
   const last = useRef(0);

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
 import { deleteWithUndo } from '../../lib/undo-delete';
+import { useDoc } from '../../lib/docs';
 import { Button, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, type EmptyAction, type MenuItem } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
@@ -24,12 +25,14 @@ export function deleteRuleWithUndo(r: Rule, at: number, onChange: (s: RulesState
   });
 }
 
-/** The hits keep counting while traffic flows: the rule panels read them again every two seconds. */
+/** The hits keep counting while traffic flows: the rule panels read them again every two seconds, while the Debugger is on screen. */
 export function useLiveRules(onChange: (s: RulesState) => void) {
+  const { active } = useDoc();
   useEffect(() => {
+    if (!active) return;
     const t = setInterval(() => void call<RulesState>('debug.rules').then(onChange, () => undefined), 2000);
     return () => clearInterval(t);
-  }, [onChange]);
+  }, [onChange, active]);
 }
 
 /**

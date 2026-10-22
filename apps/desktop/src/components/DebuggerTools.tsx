@@ -1,6 +1,6 @@
 import { CodeBlock } from './CodeBlock';
 import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
 import { Badge, Button, Busy, Empty, IconButton, Menu, Modal, Select, Textarea } from './ui';
@@ -275,12 +275,14 @@ export interface StreamEvent {
   data: string;
 }
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour12: false }) + '.' + String(new Date(iso).getMilliseconds()).padStart(3, '0');
+// one formatter for every row (making one per row, twice, was the cost of drawing 500 frames on every capture sync)
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+const time = (iso: string) => TIME_FORMAT.format(new Date(iso));
 
 /** A WebSocket's frames, both directions, newest last; control frames can be hidden. */
-export function FramesView({ frames, open }: { frames: Frame[]; open?: boolean }) {
+export const FramesView = memo(function FramesView({ frames, open }: { frames: Frame[]; open?: boolean }) {
   const [show, setShow] = useState<'all' | 'data' | 'sent' | 'received'>('data');
-  const list = frames.filter((f) => (show === 'all' ? true : show === 'data' ? f.opcode === 'text' || f.opcode === 'binary' || f.opcode === 'continuation' : f.direction === show));
+  const list = useMemo(() => frames.filter((f) => (show === 'all' ? true : show === 'data' ? f.opcode === 'text' || f.opcode === 'binary' || f.opcode === 'continuation' : f.direction === show)), [frames, show]);
   return (
     <div className="p-3 grid gap-2">
       <div className="flex items-center gap-2 text-xs">
@@ -317,7 +319,7 @@ export function FramesView({ frames, open }: { frames: Frame[]; open?: boolean }
       )}
     </div>
   );
-}
+});
 
 /** Server-Sent Events as they came. */
 export function EventsView({ events, open }: { events: StreamEvent[]; open?: boolean }) {

@@ -12,6 +12,8 @@ import { MonitorRequests } from '../components/MonitorRequests';
 import { FolderList, type FolderListOps } from '../components/FolderList';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDoc } from '../lib/docs';
+import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
@@ -146,8 +148,17 @@ export function MonitorsView() {
   }, []);
 
   useEffect(() => void load(), [load]);
-  // monitors saved elsewhere (the sidebar, the CLI, an AI agent through MCP) show up here
-  useEffect(() => on('data.changed', () => void load()), [load]);
+  // monitors saved elsewhere (the sidebar, the CLI, an AI agent through MCP) show up here: a change of the library
+  // (the monitors live there), once a burst of saves settled; a run's results or a request sent change nothing here
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const off = on<DataChangedEvent>('data.changed', (e) => {
+      if (!touchesFiles(e, ['library'])) return;
+      clearTimeout(t);
+      t = setTimeout(() => void load(), 300);
+    });
+    return () => (clearTimeout(t), off());
+  }, [load]);
   useEffect(() => void loadResults(sel), [sel, loadResults]);
   // scheduled runs finish in the background: refresh the list and the open monitor
   useEffect(() => {
@@ -164,12 +175,15 @@ export function MonitorsView() {
     if (sel && !openIds.includes(sel)) setOpenIds((ids) => (ids.includes(sel) ? ids : [...ids, sel]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sel]);
-  // "next run in …" stays current
+  // "next run in …" stays current while the view is on screen
+  const { active } = useDoc();
   const [, tick] = useState(0);
   useEffect(() => {
+    if (!active) return;
+    tick((n) => n + 1);
     const t = setInterval(() => tick((n) => n + 1), 30_000);
     return () => clearInterval(t);
-  }, []);
+  }, [active]);
 
   useIntent(
     'monitors',

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
-import { Badge, cx, Empty, Segmented, Split, Tabs } from './ui';
+import { Badge, cx, Empty, Segmented, Split, Tabs, VirtualList } from './ui';
 import { treeKeys } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
 import { jsonPretty, outputFileName } from '@testpion/shared';
@@ -73,6 +73,21 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
   const total = Math.max(1, end - start);
   const span = trace.spans.find((s) => s.spanId === sel);
   const tokens = trace.spans.reduce((a, s) => a + (Number(s.attributes.inputTokens) || 0) + (Number(s.attributes.outputTokens) || 0), 0);
+  // the tree's value is made once per span and tab: a new object each render would fold the tree up again whenever the
+  // list around it renders (a search keystroke, a live run's batch)
+  const tabData = useMemo(
+    () =>
+      !span || tab === 'payload'
+        ? undefined
+        : tab === 'attributes'
+          ? JSON.parse(JSON.stringify({ spanId: span.spanId, parentSpanId: span.parentSpanId, startTime: new Date(span.startTime).toISOString(), status: span.status, ...span.attributes }))
+          : tab === 'input'
+            ? (span.input ?? null)
+            : tab === 'output'
+              ? (span.output ?? null)
+              : (span.events ?? []),
+    [span, tab],
+  );
   return (
     <div className="h-full flex flex-col min-h-0" data-trace-view={trace.traceId}>
       <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
@@ -87,13 +102,21 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
         </span>
       </div>
       <Split id="trace" direction="vertical" initial={55}>
-        {/* the one row (TreeRowShell, without a menu: a span is not an item), nested by depth: click or Enter shows the span, ↑ ↓ move */}
-        <div className="overflow-auto h-full" role="tree" aria-label="Spans" onKeyDown={treeKeys}>
-          {rows.map(({ span: s, depth }) => {
+        {/* the one row (TreeRowShell, without a menu: a span is not an item), nested by depth, only the rows on screen: click or Enter shows the span, ↑ ↓ move */}
+        <div className="h-full" onKeyDown={treeKeys}>
+        <VirtualList
+          className="h-full"
+          items={rows}
+          rowHeight={28}
+          keyOf={(r) => r.span.spanId}
+          name="TraceSpans"
+          role="tree"
+          label="Spans"
+          render={({ span: s, depth }) => {
             const left = ((s.startTime - start) / total) * 100;
             const width = Math.max(0.4, (((s.endTime ?? end) - s.startTime) / total) * 100);
             return (
-              <TreeRowShell key={s.spanId} nodeId={`span:${s.spanId}`} label={s.name} depth={depth} active={sel === s.spanId} onClick={() => setSel(s.spanId)} onOpen={() => setSel(s.spanId)} className="mx-0 rounded-none border-b border-line/60" attrs={{ 'data-span': s.spanId }}>
+              <TreeRowShell key={s.spanId} nodeId={`span:${s.spanId}`} label={s.name} depth={depth} active={sel === s.spanId} onClick={() => setSel(s.spanId)} onOpen={() => setSel(s.spanId)} className="mx-0 h-full rounded-none border-b border-line/60" attrs={{ 'data-span': s.spanId }}>
                 <span className="w-[38%] shrink-0 truncate flex items-center gap-1.5" style={{ paddingLeft: 8 + depth * 14 }}>
                   <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: spanColor(s) }} />
                   <span className={cx('truncate', s.status === 'error' && 'text-bad')}>{s.name}</span>
@@ -106,7 +129,8 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                 </span>
               </TreeRowShell>
             );
-          })}
+          }}
+        />
         </div>
         <div className="h-full flex flex-col min-h-0" data-output="trace.span">
           {span ? (
@@ -134,17 +158,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                 {tab === 'payload' ? (
                   <PayloadPanel key={span.spanId} span={span} />
                 ) : (
-                <JsonTree
-                  data={
-                    tab === 'attributes'
-                      ? JSON.parse(JSON.stringify({ spanId: span.spanId, parentSpanId: span.parentSpanId, startTime: new Date(span.startTime).toISOString(), status: span.status, ...span.attributes }))
-                      : tab === 'input'
-                        ? span.input ?? null
-                        : tab === 'output'
-                          ? span.output ?? null
-                          : span.events ?? []
-                  }
-                />
+                <JsonTree data={tabData} />
                 )}
               </div>
             </>
@@ -195,8 +209,9 @@ function parsed(body: unknown): { json?: unknown; text: string; markup?: boolean
   return { text: body };
 }
 
+const ENCODER = new TextEncoder();
 const sizeOf = (text: string) => {
-  const n = new TextEncoder().encode(text).length;
+  const n = ENCODER.encode(text).length;
   return n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 };
 
@@ -206,6 +221,10 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
   const body = payload?.body;
   // parsed once per body: a new value each render would fold the tree up again whenever the panel re-renders
   const p = useMemo(() => (body === undefined ? undefined : parsed(body)), [body]);
+  // the size and the pretty text once per body, not on every render (a copy toggle, the panel around it)
+  const size = useMemo(() => (p ? sizeOf(p.text) : ''), [p]);
+  const contentType = payload?.contentType;
+  const prettyText = useMemo(() => (p && !raw && p.json === undefined ? prettyBody(p.text, contentType) : undefined), [p, raw, contentType]);
   const copy = () => p && void copyToClipboard(p.text);
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -213,7 +232,7 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
         <span className="font-semibold text-fg">{title}</span>
         {payload?.status !== undefined && <Badge>{String(payload.status)}</Badge>}
         {payload?.contentType && <span className="mono text-muted truncate">{payload.contentType.split(';')[0]}</span>}
-        {p && <span className="text-muted">{sizeOf(p.text)}{typeof body === 'string' && body.endsWith('…') ? ' · preview' : ''}</span>}
+        {p && <span className="text-muted">{size}{typeof body === 'string' && body.endsWith('…') ? ' · preview' : ''}</span>}
         {p && (
           <div className="ml-auto flex items-center gap-1">
             {(p.json !== undefined || p.markup) && (
@@ -241,7 +260,7 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
           <JsonTree data={p.json} />
         ) : (
           // the response viewer's: line numbers, search, colours; Pretty lays HTML and XML out by nesting
-          <RawView text={raw ? p.text : prettyBody(p.text, payload?.contentType)} language={payload?.contentType} />
+          <RawView text={raw ? p.text : (prettyText ?? p.text)} language={payload?.contentType} />
         )}
       </div>
     </div>

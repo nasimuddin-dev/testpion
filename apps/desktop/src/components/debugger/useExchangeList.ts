@@ -23,6 +23,9 @@ interface Changes {
   total: number;
 }
 
+/** How often at most a search in bodies runs again for rows that arrived while capturing. */
+const DEEP_SEARCH_EVERY_MS = 2000;
+
 const statusOk = (e: Exchange, st: ListFilter['status']) => {
   const s = e.status ?? 0;
   return st === 'ok' ? s >= 200 && s < 300 : st === 'redirect' ? s >= 300 && s < 400 : st === 'client-error' ? s >= 400 && s < 500 : st === 'server-error' ? s >= 500 : !!e.error;
@@ -56,7 +59,7 @@ export function filterRows(all: Exchange[], f: ListFilter, deepIds?: Set<string>
  * every new one). Rows are lean: headers as sizes, no bodies; the selected exchange is read whole on its own.
  */
 export function useExchangeList(filter: ListFilter) {
-  const store = useRef({ epoch: -1, rev: 0, byId: new Map<string, Exchange>(), busy: false, again: false });
+  const store = useRef({ epoch: -1, rev: 0, byId: new Map<string, Exchange>(), list: [] as Exchange[], busy: false, again: false });
   const [all, setAll] = useState<Exchange[]>([]);
   const sync = useCallback(async () => {
     const s = store.current;
@@ -66,19 +69,32 @@ export function useExchangeList(filter: ListFilter) {
       do {
         s.again = false;
         const d = await call<Changes>('debug.changes', { epoch: s.epoch, since: s.rev });
-        if (d.reset) s.byId.clear();
-        for (const r of d.rows) s.byId.set(r.id, r);
-        let dropped = false;
-        if (d.firstSeq !== undefined)
-          for (const [id, r] of s.byId)
-            if ((r.seq ?? 0) < d.firstSeq) {
-              s.byId.delete(id);
-              dropped = true;
-            }
-        if (!d.total && s.byId.size) (s.byId.clear(), (dropped = true));
         s.epoch = d.epoch;
         s.rev = d.rev;
-        if (d.reset || d.rows.length || dropped) setAll([...s.byId.values()].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)));
+        // the list stays in seq order: a changed row takes its place, a new one goes at the end (seq is monotonic, so
+        // the 5,000 rows are not sorted again on every sync); only a row that arrives out of order sorts it once
+        if (d.reset) (s.byId.clear(), (s.list = []));
+        const list = d.rows.length ? s.list.slice() : s.list;
+        let unordered = false;
+        for (const r of d.rows) {
+          if (s.byId.has(r.id)) {
+            let i = list.length - 1;
+            while (i >= 0 && list[i]!.id !== r.id) i--;
+            if (i >= 0) list[i] = r;
+            else list.push(r);
+          } else {
+            if (list.length && (r.seq ?? 0) < (list[list.length - 1]!.seq ?? 0)) unordered = true;
+            list.push(r);
+          }
+          s.byId.set(r.id, r);
+        }
+        if (unordered) list.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+        // the oldest rows left the session (its cap): they are the front of the list
+        let drop = 0;
+        if (d.firstSeq !== undefined) while (drop < list.length && (list[drop]!.seq ?? 0) < d.firstSeq) s.byId.delete(list[drop++]!.id);
+        s.list = drop ? list.slice(drop) : list;
+        if (!d.total && s.byId.size) (s.byId.clear(), (s.list = []), (drop = 1));
+        if (d.reset || d.rows.length || drop) setAll(s.list);
       } while (s.again);
     } finally {
       s.busy = false;
@@ -97,16 +113,19 @@ export function useExchangeList(filter: ListFilter) {
   // a search in headers and bodies runs in the backend (the rows here have no bodies); the rest filters here
   const [deepIds, setDeepIds] = useState<Set<string>>();
   const deepText = filter.deep ? filter.text.trim() : '';
+  // a new text is searched a moment after typing stops; rows that arrive during a capture are searched too, but at most
+  // once every two seconds (the backend scans every body of the session for it)
+  const deepAt = useRef(0);
   useEffect(() => {
     if (!deepText) return setDeepIds(undefined);
-    const t = setTimeout(
-      () =>
-        void call<string[]>('debug.exchanges', { text: deepText, deep: true, idsOnly: true }).then(
-          (ids) => setDeepIds(new Set(ids)),
-          () => setDeepIds(new Set()),
-        ),
-      250,
-    );
+    const wait = Math.max(250, DEEP_SEARCH_EVERY_MS - (Date.now() - deepAt.current));
+    const t = setTimeout(() => {
+      deepAt.current = Date.now();
+      void call<string[]>('debug.exchanges', { text: deepText, deep: true, idsOnly: true }).then(
+        (ids) => setDeepIds(new Set(ids)),
+        () => setDeepIds(new Set()),
+      );
+    }, wait);
     return () => clearTimeout(t);
   }, [deepText, all]);
   const rows = useMemo(() => filterRows(all, filter, deepIds), [all, filter, deepIds]);

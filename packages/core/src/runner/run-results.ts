@@ -1,6 +1,5 @@
-import { createReadStream, existsSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import type { ResultReview, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -94,6 +93,81 @@ export function reviewCounts(reviews: Record<string, ResultReview>, total: numbe
   return { good, bad, unreviewed: Math.max(0, total - v.filter((r) => r.rating).length) };
 }
 
+/* ------------------------------------------------------------------ the results index */
+
+/** One line of a results file: where it is, and what a page's filters look at. */
+interface IndexRow {
+  offset: number;
+  length: number;
+  id: string;
+  name: string;
+  status: string;
+}
+
+interface ResultsIndex {
+  mtimeMs: number;
+  size: number;
+  rows: IndexRow[];
+}
+
+/**
+ * The index of a results file (its lines' byte positions, ids, names and statuses), built by one pass over the file and
+ * kept while the file is unchanged: a page, a filter keystroke or a count then reads only the lines it shows, not the
+ * whole file again. A few files are kept (the runs open on screen); a run still writing is indexed again as it grows.
+ */
+const indexes = new Map<string, ResultsIndex>();
+const INDEXED_FILES = 4;
+
+async function resultsIndex(file: string): Promise<ResultsIndex> {
+  const st = statSync(file);
+  const hit = indexes.get(file);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit;
+  const rows: IndexRow[] = [];
+  const add = (line: Buffer, offset: number) => {
+    const text = line.toString('utf8');
+    if (!text.trim()) return;
+    try {
+      const r = JSON.parse(text) as Partial<TestResult>;
+      rows.push({ offset, length: line.length, id: String(r.id ?? ''), name: String(r.name ?? ''), status: String(r.status ?? '') });
+    } catch {
+      /* a torn line (the run was interrupted while writing) */
+    }
+  };
+  let base = 0;
+  let carry: Buffer[] = [];
+  let carried = 0;
+  for await (const chunk of createReadStream(file) as AsyncIterable<Buffer>) {
+    let start = 0;
+    for (let nl = chunk.indexOf(10, start); nl !== -1; nl = chunk.indexOf(10, start)) {
+      const piece = chunk.subarray(start, nl);
+      add(carry.length ? Buffer.concat([...carry, piece]) : piece, base + start - carried);
+      carry = [];
+      carried = 0;
+      start = nl + 1;
+    }
+    if (start < chunk.length) {
+      const rest = chunk.subarray(start);
+      carry.push(rest);
+      carried += rest.length;
+    }
+    base += chunk.length;
+  }
+  if (carry.length) add(Buffer.concat(carry), base - carried);
+  const index = { mtimeMs: st.mtimeMs, size: st.size, rows };
+  indexes.delete(file);
+  indexes.set(file, index);
+  for (const k of indexes.keys()) {
+    if (indexes.size <= INDEXED_FILES) break;
+    indexes.delete(k);
+  }
+  return index;
+}
+
+/** Forget the indexes (tests). */
+export function resetResultsIndexForTest(): void {
+  indexes.clear();
+}
+
 /**
  * A page of a run's results, filtered by status ('failed' means failed or error; 'reviewed' / 'unreviewed' by a
  * person's rating) and a name substring. Each result carries its review.
@@ -107,24 +181,38 @@ export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: {
   const offset = q.cursor !== undefined ? offsetOfCursor(q.cursor) : Math.max(0, q.offset ?? 0);
   const limit = pageLimit(q.limit, RESULTS_PAGE);
   const needle = q.query?.toLowerCase();
-  const rl = createInterface({ input: createReadStream(file, 'utf8'), crlfDelay: Infinity });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    let r: TestResult;
-    try {
-      r = JSON.parse(line) as TestResult;
-    } catch {
-      continue; // a torn line (the run was interrupted while writing)
-    }
-    const review = reviews[r.id];
-    if (q.status === 'reviewed' ? !review?.rating : q.status === 'unreviewed' ? !!review?.rating : q.status && q.status !== 'all' && (q.status === 'failed' ? r.status !== 'failed' && r.status !== 'error' : r.status !== q.status)) continue;
+  const index = await resultsIndex(file);
+  const page: IndexRow[] = [];
+  for (const row of index.rows) {
+    const review = reviews[row.id];
+    if (q.status === 'reviewed' ? !review?.rating : q.status === 'unreviewed' ? !!review?.rating : q.status && q.status !== 'all' && (q.status === 'failed' ? row.status !== 'failed' && row.status !== 'error' : row.status !== q.status)) continue;
     // by name (a part of it), or by the test's id exactly (a link to one result)
-    if (needle && !r.name.toLowerCase().includes(needle) && r.id.toLowerCase() !== needle) continue;
-    if (total >= offset && items.length < limit) items.push(review ? { ...r, review } : r);
+    if (needle && !row.name.toLowerCase().includes(needle) && row.id.toLowerCase() !== needle) continue;
+    if (total >= offset && page.length < limit) page.push(row);
     total++;
   }
-  const truncated = offset + items.length < total;
-  return { items, total, limit, truncated, ...(truncated ? { nextCursor: cursorOf(offset + items.length) } : {}) };
+  // only the lines of the page are read (by their byte positions)
+  if (page.length) {
+    const fd = openSync(file, 'r');
+    try {
+      for (const row of page) {
+        const buf = Buffer.alloc(row.length);
+        const n = readSync(fd, buf, 0, row.length, row.offset);
+        let r: TestResult;
+        try {
+          r = JSON.parse(buf.subarray(0, n).toString('utf8')) as TestResult;
+        } catch {
+          continue; // the file changed under the index (a run still writing): the next page reads it again
+        }
+        const review = reviews[r.id];
+        items.push(review ? { ...r, review } : r);
+      }
+    } finally {
+      closeSync(fd);
+    }
+  }
+  const truncated = offset + page.length < total;
+  return { items, total, limit, truncated, ...(truncated ? { nextCursor: cursorOf(offset + page.length) } : {}) };
 }
 
 /** Latency histogram, slowest results, results per type and most failed checks of a finished run. */

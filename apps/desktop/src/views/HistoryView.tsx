@@ -1,6 +1,6 @@
 import { CompareView, type Compared } from '../components/ResponseHistory';
 import { Database, History, RotateCcw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { useApp } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
@@ -66,8 +66,8 @@ function bucket(status: Entry['status']): (typeof MIX)[number]['key'] {
   return status === undefined || status === '' || /^(ok|passed|success|connected|closed|saved)$/i.test(status) ? 'ok' : 'error';
 }
 
-/** The outcomes of the entries shown, as one bar with a count per kind (hover a part for its share). */
-function StatusMix({ items }: { items: Entry[] }) {
+/** The outcomes of the entries shown, as one bar with a count per kind (hover a part for its share); counted once per change of the list. */
+const StatusMix = memo(function StatusMix({ items }: { items: Entry[] }) {
   if (items.length < 2) return null;
   const counts = Object.fromEntries(MIX.map((m) => [m.key, 0])) as Record<(typeof MIX)[number]['key'], number>;
   for (const e of items) counts[bucket(e.status)]++;
@@ -90,7 +90,7 @@ function StatusMix({ items }: { items: Entry[] }) {
       </div>
     </div>
   );
-}
+});
 
 /** The timing phases kept with a response (timingSummary in core). */
 interface Timing {

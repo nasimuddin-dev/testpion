@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { call, on } from '../api';
+import { appendCapped } from './capped';
 
 /**
  * The answer of one RPC call, made when the component mounts and again when the params change or one of the
@@ -42,13 +43,14 @@ export function useRpc<T>(method: string, params?: unknown, opts: { fallback?: T
 
 /**
  * The last `max` events of a channel, oldest first, after the ones the backend kept (`initial`: the method that
- * lists them). The setter clears or replaces the list (Clear buttons).
+ * lists them). An event may carry one entry or a batch of them (the backend sends `console` and `log` in batches).
+ * The setter clears or replaces the list (Clear buttons).
  */
 export function useEventLog<T>(channel: string, max: number, initial?: string): [T[], Dispatch<SetStateAction<T[]>>] {
   const [list, setList] = useState<T[]>([]);
   useEffect(() => {
     if (initial) void call<T[]>(initial).then(setList, () => undefined);
-    return on<T>(channel, (e) => setList((l) => [...l.slice(1 - max), e]));
+    return on<T | T[]>(channel, (e) => setList((l) => appendCapped(l, Array.isArray(e) ? e : [e], max)));
   }, [channel, max, initial]);
   return [list, setList];
 }

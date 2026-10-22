@@ -42,6 +42,8 @@ const LOG_PAGE = 500;
  */
 const PRETTY_RATIO = 8;
 const PRETTY_FLOOR = 4 * 1024 * 1024;
+/** The text re-indented in one go (one synchronous step of the backend's event loop). */
+const PRETTY_SLICE = 64 * 1024;
 
 const consoleLine = (e: ConsoleLine) =>
   [e.time, e.kind ?? 'http', e.method, e.url, e.status ?? '', e.durationMs !== undefined ? `${e.durationMs} ms` : '', e.error ? `error: ${e.error}` : ''].filter((x) => x !== '').join(' ') +
@@ -119,10 +121,12 @@ function responseSource(src: Extract<OutputSource, { kind: 'response' }>, deps: 
     });
   };
   if (src.part === 'pretty' && (format === 'json' || format === 'json-min')) {
-    // a 50 MB body is re-indented as it is read: no parse, no copy of the whole value
+    // a 50 MB body is re-indented as it is read: no parse, no copy of the whole value. In slices of 64 KB: the desktop
+    // backend runs on Electron's main thread, where a 256 KB slice took up to 35 ms and held the window's next frame back
+    // (perf-output-download); 64 KB is at most a few ms, and faster in all
     async function* pretty(): Chunks {
       const p: { push(c: string): string; end?(): string } = format === 'json' ? createJsonPrettyPrinter() : createJsonMinifier();
-      const stream = createReadStream(path, { encoding: 'utf8', highWaterMark: 256 * 1024 });
+      const stream = createReadStream(path, { encoding: 'utf8', highWaterMark: PRETTY_SLICE });
       const most = Math.max(size * PRETTY_RATIO, PRETTY_FLOOR);
       let written = 0;
       for await (const chunk of stream) {

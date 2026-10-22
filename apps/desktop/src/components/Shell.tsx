@@ -32,7 +32,7 @@ import {
   MessageSquare,
   Bug,
 } from 'lucide-react';
-import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, on } from '../api';
 import { useGitBar } from '../lib/git';
 import wordmarkUrl from '../../build/wordmark-nav.png';
@@ -310,10 +310,33 @@ export function LogsPanel() {
   );
 }
 
+interface LogLine {
+  time: string;
+  level: string;
+  scope: string;
+  message: string;
+  data?: unknown;
+}
+
+/** A log line's key: a number given on first sight (the lines keep their identity as the buffer slides), never its position. */
+const logKeys = new WeakMap<LogLine, number>();
+let logKeySeq = 0;
+const logKey = (l: LogLine) => logKeys.get(l) ?? (logKeys.set(l, ++logKeySeq), logKeySeq);
+
+/** One log line, memoised: the lines already shown are not rendered (nor their data stringified) again when one arrives. */
+const LogRow = memo(function LogRow({ l }: { l: LogLine }) {
+  return (
+    <div className="whitespace-pre-wrap">
+      <span className="text-muted">{l.time.slice(11, 23)}</span> <span className={cx(l.level === 'ERROR' && 'text-bad', l.level === 'WARN' && 'text-warn')}>{l.level.padEnd(5)}</span> {l.message}
+      {l.data !== undefined && <span className="text-muted"> {JSON.stringify(l.data)}</span>}
+    </div>
+  );
+});
+
 function AppLogs() {
-  const [logs] = useEventLog<{ time: string; level: string; scope: string; message: string; data?: unknown }>('log', 500, 'logs.recent');
+  const [logs] = useEventLog<LogLine>('log', 500, 'logs.recent');
   const [level, setLevel] = useState('ALL');
-  const shown = logs.filter((l) => level === 'ALL' || l.level === level);
+  const shown = useMemo(() => (level === 'ALL' ? logs : logs.filter((l) => l.level === level)), [logs, level]);
   // the application log the backend holds (redacted by default), whatever the level filter shows
   const spec = useMemo<OutputSpec>(
     () => ({
@@ -343,11 +366,8 @@ function AppLogs() {
         </OutputActions>
       </div>
       <div className="flex-1 overflow-auto mono text-[0.8rem] px-3 py-1" data-output="logs">
-        {shown.map((l, i) => (
-          <div key={i} className="whitespace-pre-wrap">
-            <span className="text-muted">{l.time.slice(11, 23)}</span> <span className={cx(l.level === 'ERROR' && 'text-bad', l.level === 'WARN' && 'text-warn')}>{l.level.padEnd(5)}</span> {l.message}
-            {l.data !== undefined && <span className="text-muted"> {JSON.stringify(l.data)}</span>}
-          </div>
+        {shown.map((l) => (
+          <LogRow key={logKey(l)} l={l} />
         ))}
       </div>
     </>
