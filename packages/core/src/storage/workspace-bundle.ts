@@ -91,6 +91,7 @@ export function bundleFilePath(asked: unknown, roots: readonly string[] = BUNDLE
   for (const n of names) {
     if (n === '..') return { why: '".." leaves the folder' };
     if (n === '') return { why: 'an empty folder name' };
+    if (n.toLowerCase() === '.local') return { why: '".local" holds this computer\'s own state and is never imported' };
     if (/[<>:"|?*]/.test(n)) return { why: `"${n}" holds a character Windows does not allow in file names` };
     if (/[. ]$/.test(n)) return { why: `"${n}" ends with a dot or a space` };
     if (RESERVED.test(n)) return { why: `"${n}" is a device name on Windows` };
