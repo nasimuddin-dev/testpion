@@ -43,3 +43,15 @@ describe('LatencyRecorder at load-test scale', () => {
     expect(ms).toBeLessThan(100 * Number(process.env.TESTPION_PERF_SLACK ?? 1));
   });
 });
+
+// P-4: above 256 virtual users the rest queued inside the shared pool and the wait was counted as server time
+import { widePoolSize } from '../../packages/core/src/protocols/http/client.js';
+describe('connection pool for a load test', () => {
+  it('is wider than the shared one only when the virtual users need it', () => {
+    expect(widePoolSize(undefined)).toBeUndefined();
+    expect(widePoolSize(100)).toBeUndefined();
+    expect(widePoolSize(256)).toBeUndefined();
+    expect(widePoolSize(400)).toBe(512);
+    expect(widePoolSize(1000)).toBe(1024);
+  });
+});

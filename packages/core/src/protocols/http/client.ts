@@ -31,6 +31,8 @@ export interface HttpExecOptions extends AuthContext {
   signal?: AbortSignal;
   /** When set, the full response body is streamed to a file in this directory. */
   payloadDir?: string;
+  /** A pool of at least this many connections per origin (a load test with more virtual users than the shared pool's 256 would queue the rest inside undici, counted as server time). */
+  poolConnections?: number;
   maxPreviewBytes?: number;
   /** Receives decoded chunks while the body streams (SSE, chunked responses). */
   onChunk?: (chunk: string) => void;
@@ -66,6 +68,14 @@ export interface PreparedRequest {
 let undiciMod: Promise<typeof import('undici')> | undefined;
 const undici = () => (undiciMod ??= import('undici'));
 
+/** The shared pool's connections per origin (net/proxy.ts). */
+const BASE_POOL_CONNECTIONS = 256;
+
+/** The pool a run with this many concurrent requests needs when the shared one is too small: a multiple of 256, or undefined when the shared pool does. */
+export function widePoolSize(connections: number | undefined): number | undefined {
+  return connections && connections > BASE_POOL_CONNECTIONS ? Math.ceil(connections / BASE_POOL_CONNECTIONS) * BASE_POOL_CONNECTIONS : undefined;
+}
+
 /** Connection pools by TLS / proxy settings: at most this many are kept, the least recently used is closed (a host that serves many users with different client certificates must not collect pools without end). */
 const DISPATCHERS_MAX = 32;
 const dispatchers = new Map<string, Dispatcher>();
@@ -83,12 +93,14 @@ subscribe('undici:client:connected', (message) => {
 });
 
 /** Reuse connection pools per TLS / proxy / HTTP version configuration (the app-wide proxy settings apply; see net/proxy.ts). */
-function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): Dispatcher | undefined {
+function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>, connections?: number): Dispatcher | undefined {
   const s = spec.settings ?? {};
+  const wide = widePoolSize(connections);
+  if (wide && !pool) pool = { connections: wide, pipelining: 1, keepAliveTimeout: 10_000, shared: wide };
   // (a pool of its own, e.g. one connection for NTLM, is never shared: see executeHttpAttempt)
-  if (!pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
-  const key = JSON.stringify([proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
-  let d = pool ? undefined : dispatchers.get(key);
+  if (!wide && !pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
+  const key = JSON.stringify([wide, proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
+  let d = pool && !wide ? undefined : dispatchers.get(key);
   if (d) {
     // most recently used last
     dispatchers.delete(key);
@@ -106,8 +118,9 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): D
       if (s.clientCert.caPath) connect.ca = readFileSync(s.clientCert.caPath);
       if (s.clientCert.passphrase) connect.passphrase = s.clientCert.passphrase;
     }
-    d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...pool });
-    if (!pool) {
+    const { shared: _shared, ...poolOptions } = (pool ?? {}) as Record<string, unknown>;
+    d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...poolOptions });
+    if (!pool || wide) {
       dispatchers.set(key, d);
       while (dispatchers.size > DISPATCHERS_MAX) {
         const oldest = dispatchers.keys().next().value!;
@@ -465,7 +478,7 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
         body: (ntlmStage === 1 ? undefined : curBody) as never,
         redirect: follow && !jar && !guarded && !custom ? 'follow' : 'manual',
         signal: opts.signal,
-        dispatcher: pool ?? dispatcherFor(spec),
+        dispatcher: pool ?? dispatcherFor(spec, undefined, opts.poolConnections),
         // duplex is required by undici for streamed (Blob/FormData) bodies
         ...({ duplex: 'half' } as object),
       });

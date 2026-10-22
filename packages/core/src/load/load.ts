@@ -269,7 +269,7 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
     const t0 = performance.now();
     const row = per[i]!;
     try {
-      const { response } = await executeHttp(request, { signal, discardBody: true, redactor: deps.redactor, cookieJar });
+      const { response } = await executeHttp(request, { signal, discardBody: true, redactor: deps.redactor, cookieJar, poolConnections: cfg.virtualUsers });
       const ms = performance.now() - t0;
       recordHttp(response);
       bytes += response.size;
@@ -362,7 +362,7 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
           if (r.codeName === 'UNAVAILABLE' || r.codeName === 'DEADLINE_EXCEEDED') connFail++;
         }
       } else if (cfg.target.kind === 'http') {
-        const { response } = await executeHttp(cfg.target.request, { signal, discardBody: true, redactor: deps.redactor });
+        const { response } = await executeHttp(cfg.target.request, { signal, discardBody: true, redactor: deps.redactor, poolConnections: cfg.virtualUsers });
         const ms = performance.now() - t0;
         recordHttp(response);
         bytes += response.size;
