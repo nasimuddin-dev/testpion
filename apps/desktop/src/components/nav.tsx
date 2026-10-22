@@ -21,8 +21,8 @@ export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: str
   { id: 'ai', label: 'AI Lab', icon: <Sparkles size={18} />, group: 'AI', hint: 'Prompts and model comparison' },
   { id: 'evaluations', label: 'Evaluations', icon: <FlaskConical size={18} />, group: 'AI', hint: 'LLM, RAG and agent evaluations' },
   { id: 'environments', label: 'Environments', icon: <KeyRound size={18} />, group: 'Workspace', hint: 'Environments and variables' },
-  { id: 'history', label: 'History', icon: <History size={18} />, group: 'Workspace' },
-  { id: 'traces', label: 'Traces', icon: <Activity size={18} />, group: 'Workspace', hint: 'Traces of every request and run' },
+  { id: 'history', label: 'History', icon: <History size={18} />, group: 'Workspace', hint: 'What you sent, with the response (send it again)' },
+  { id: 'traces', label: 'Traces', icon: <Activity size={18} />, group: 'Workspace', hint: 'Timing waterfall of each send and run step' },
   { id: 'git', label: 'Git', icon: <FolderGit2 size={18} />, group: 'Workspace', hint: 'Git: changes, commit, branches, pull and push' },
 ];
 

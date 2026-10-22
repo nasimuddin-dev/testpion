@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Friendlier for people and agents
+
+- **Collection settings no longer vanish.** What you type in a collection's Variables, Headers, Authorization, Scripts, Settings and Docs is kept when the collection is read again (a request saved in a tab, a pull, the file watcher, an applied AI proposal); the tab shows *Unsaved changes*, Save is off until something changed, **Ctrl+S** saves, and leaving the view asks (Save / Don't save / Cancel). A field changed on disk and in the editor at once asks which to keep.
+- **Errors say what to do.** A failure toast shows the engine's reason and the first thing to try; `ECONNREFUSED`, `ENOENT` and the other system codes are said in words ("Nothing is listening at 127.0.0.1:3000"), the code stays in the error's details for support and agents. Every "Could not …" toast goes through the same path.
+- **First launch.** The Examples workspace (where a new window starts) shows Get started with steps in its own words, offers the tour once, keeps the walk-throughs on Home (they no longer disappear with the card), and has **Open My Workspace**. A new request tab puts the cursor in the URL field; Get started's *Save it as a test* opens the Save as test dialog.
+- **The CLI is one contract.** `--json` on every command (22 refused it), `--dry-run` on every writer (git commands print a plan instead of running), `--yes` on every command whose MCP twin confirms (a non-interactive run refuses with `{ confirmationRequired, wouldDo }` and exit 2), `--max-cost` on the AI commands, a hint when a command is misspelt, `node dist/index.js` prints usage. `lint`, `mock` and `openapi` are groups (`lint tests`, `mock mcp`, `mock graphql`, `openapi diff` …); the old spellings keep working. The list page is 100 (at most 500) in the CLI and MCP alike.
+- **Settings and OAuth from the CLI and MCP.** `testpion settings get | set | reset` and the tools `get_settings` / `set_settings`; **Get token** in the OAuth 2.0 Authorization tab (and `testpion auth token`, `auth_token`) runs the grant and shows when the token ends, its scope and the token masked. "Inherit" now says which auth it inherits and from where.
+- **AI cost is visible.** The response bar's Explain / Generate tests / Suggest checks ask first ("Ready to send", with the estimate) like every other AI launch; an answer shows its tokens and cost; every AI MCP tool returns `usage` and `costUsd` and takes `max_cost_usd`.
+- **Agents.** MCP tool errors carry `{ code, message, hint, retryable }` as structured content; descriptions stay under 1,200 characters (the rest is in the guide under *Tool details*); `list_kinds` is in the minimal profile; `create_collection` / `create_folder` / `save_request` say what a second call does (`if_exists`). `llms.txt` starts with *Start here* and lists every kind, tool and command (generated, tested).
+- **Postman users.** A Postman-word map (Runner, Newman, Mock servers, Flows, Globals, Vault, Interceptor …) in the migrate page, the Import dialog and the command palette (type "runner"). A Postman script that is switched off (`disabled: true`) is no longer imported as active, and the report says so.
+- **Honest Privacy tab.** *What leaves this computer* lists the update check (GitHub, on by default, with its switch), AI actions and feedback; the AI agents tab says its toggles only change the command. The docs say Settings ▸ About where they said Workspace, and every `Settings ▸ tab` in the docs is checked against the real tabs.
+- **Plain words.** *Pattern (regular expression)* for regex, *body* for payload, *check* for assertion, *run* for execution, *Recently deleted* in CLI help; one name for capturing traffic for one API and one for the AI prompt versus the AI test file; the palette says *Run all tests*.
+- **Smaller things.** Dark-mode primary buttons meet 4.5:1 contrast (checked by a test); the collection runner cannot start a second run; the mock server has **Use as {{baseUrl}}**; the e2e accessibility step covers more views and no longer counts a placeholder as a name.
+
 ## 0.54.1 — 2026-10-21
 
 Importing a file with thousands of folders nested inside each other now says so in plain words on every Node version, instead of failing with a stack overflow while the import report was being built. Nothing else changes.

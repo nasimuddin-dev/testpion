@@ -4,6 +4,7 @@ import { KeyboardSettings } from '../components/KeyboardSettings';
 import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLeaveGuard } from '../lib/leave-guard';
 import { asError, call } from '../api';
 import { pickTextFile } from '../lib/files';
 import { toastError, useApp } from '../store';
@@ -51,19 +52,25 @@ export function SettingsView() {
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then(setProviders);
   }, []);
+  // leaving Settings with changes that are not saved asks first (lib/leave-guard.ts)
+  const [unsaved, setUnsaved] = useState(false);
+  const saveRef = useRef<() => Promise<boolean>>(async () => true);
+  useLeaveGuard('settings', unsaved, 'Settings', () => saveRef.current());
   if (!s) return null;
   const set = (p: Partial<AppSettings>) => {
     for (const k of Object.keys(p)) dirty.current.add(k as keyof AppSettings);
+    setUnsaved(true);
     setS({ ...s, ...p });
   };
-  const save = () =>
+  const save = (): Promise<boolean> =>
     useApp
       .getState()
       .saveSettings({ ...(useApp.getState().settings ?? s), ...Object.fromEntries([...dirty.current].map((k) => [k, s[k]])) })
       .then(
-        () => (dirty.current.clear(), useApp.getState().toast('Settings saved', 'success')),
-        (e) => toastError(e),
+        () => (dirty.current.clear(), setUnsaved(false), useApp.getState().toast('Settings saved', 'success'), true),
+        (e) => (toastError(e), false),
       );
+  saveRef.current = save;
   const setPrice = (i: number, p: Partial<PriceEntry>) => set({ pricing: s.pricing.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   return (
     <div className="h-full flex flex-col">
@@ -87,7 +94,7 @@ export function SettingsView() {
         ]}
         right={
           tab !== 'storage' && tab !== 'agents' && tab !== 'keyboard' && (
-            <Button size="sm" variant="primary" icon={<Save size={12} />} onClick={save}>
+            <Button size="sm" variant="primary" icon={<Save size={12} />} onClick={() => void save()}>
               Save settings
             </Button>
           )
@@ -154,7 +161,7 @@ export function SettingsView() {
             </>
           )}
           {tab === 'git' && (
-            <Field label="Fetch in the background every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off.">
+            <Field label="Check the git remote every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off.">
               <Input type="number" min={0} max={1440} aria-label="Background fetch minutes" value={s.git?.autoFetchMinutes ?? 5} onChange={(e) => set({ git: { ...s.git, autoFetchMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
             </Field>
           )}
@@ -206,8 +213,8 @@ export function SettingsView() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted">
-                    <th className="py-1">Provider (kind/id or *)</th>
-                    <th>Model (glob)</th>
+                    <th className="py-1">Provider (name, or * for any)</th>
+                    <th>Model (name; * matches a family)</th>
                     <th>Input $/1M</th>
                     <th>Output $/1M</th>
                     <th>Version</th>

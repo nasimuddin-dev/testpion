@@ -13,7 +13,7 @@ const slowModel = (ws) => {
   for (const h of c.providers.find((x) => x.id === 'demo').headers) if (h.key === 'x-mock-latency-ms') h.value = '1500';
   // "Generate GraphQL query" gets an operation in a code block (the request carries the current query)
   const rules = c.providers.find((x) => x.id === 'demo').headers.find((h) => h.key === 'x-mock-rules');
-  // and "Suggest assertions" / "Generate tests" for the demo server's /health get checks and tp tests as JSON
+  // and "Suggest checks" / "Generate tests" for the demo server's /health get checks and tp tests as JSON
   rules.value = JSON.stringify([
     { match: 'currentQuery', response: 'Here it is:\n\n```graphql\nquery Generated { countries { code name } }\n```' },
     { match: '"gaps"', response: 'Tests for the most important gaps:\n\n```yaml\ntests:\n  - id: pet-not-found\n    type: http\n    request: { method: GET, url: "{{baseUrl}}/pet/0" }\n    checks:\n      - { type: status, expected: 404 }\n```' },
@@ -22,7 +22,7 @@ const slowModel = (ws) => {
       match: '"timeMs"',
       response: JSON.stringify({ tests: [{ name: 'is ok', code: 'tp.response.to.have.status(200);' }, { name: 'is created', code: 'tp.response.to.have.status(201);' }] }),
     },
-    // "Suggest assertions": two checks hold, one pins the server's time (fails, a safer form is offered)
+    // "Suggest checks": two checks hold, one pins the server's time (fails, a safer form is offered)
     {
       match: '127.0.0.1:4010/health',
       response: JSON.stringify({
@@ -122,7 +122,7 @@ const steps = [
     const tests = () => [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Tests'))?.textContent.trim();
     const before = tests();
     [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Send')?.click(); await __t.sleep(2000);
-    if (!(await __t.responseAction('Suggest assertions'))) return 'NO BUTTON Suggest assertions';
+    if (!(await __t.responseAction('Suggest checks'))) return 'NO BUTTON Suggest checks';
     // the checks come as a proposal that opens by itself: each verified against this response; the one that pins the
     // server's time fails, is unticked, and offers safer forms — switching to one checks it again
     const modal = await __t.waitFor(() => document.querySelector('[data-proposal]'), 12000); if (!modal) return 'NO REVIEW';

@@ -330,3 +330,13 @@ describe('the mock server can become {{baseUrl}} (P1)', () => {
     expect(t).toContain("name: 'Mock'");
   });
 });
+
+describe('leaving a view with unsaved changes asks first (P0/P1)', () => {
+  it('Collections and Settings register the one leave guard, and the app\'s navigation honours it', () => {
+    for (const v of ['views/CollectionsView.tsx', 'views/SettingsView.tsx']) expect(readFileSync(join(SRC, v), 'utf8'), v).toContain('useLeaveGuard(');
+    const store = readFileSync(join(SRC, 'store.ts'), 'utf8');
+    for (const fn of ['setView', 'openIntent']) expect(store).toMatch(new RegExp(`${fn}: \\([^)]*\\) => \\{\\s*if \\(dirtyGuard\\(get\\(\\)\\.view\\)`));
+    expect(store).toContain('guardLeave(get().view, to.view');
+    expect(readFileSync(join(SRC, 'views/CollectionsView.tsx'), 'utf8')).toContain("useSaveShortcut('collections'");
+  });
+});

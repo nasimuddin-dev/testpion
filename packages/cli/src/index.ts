@@ -229,4 +229,4 @@ export async function main(args = process.argv): Promise<number> {
 }
 
 // `node dist/index.js …` works like `node bin/testpion.js …` (the library module used to print nothing and exit 0)
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) process.exitCode = await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) void main().then((code) => (process.exitCode = code));

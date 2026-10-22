@@ -223,7 +223,7 @@ export function HistoryView() {
     <Split id="history" initial={45}>
       <div className="h-full flex flex-col" onKeyDown={treeKeys} data-output="history">
         <div className="flex gap-2 p-2 border-b border-line">
-          <Input className="flex-1" placeholder="Search history (name, URL, method, status)" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <Input className="flex-1" aria-label="Search history" placeholder="Search history (name, URL, method, status)" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
             <option value="">All</option>
             {KINDS.map(([k, label]) => (
