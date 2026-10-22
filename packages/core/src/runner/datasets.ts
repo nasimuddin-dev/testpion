@@ -1,5 +1,5 @@
 import { csvRecords, parseCsvLine } from '@testpion/shared';
-import { assertUrlAllowed } from '../net/policy.js';
+import { assertHostPath, assertUrlAllowed } from '../net/policy.js';
 import { appendFileSync, closeSync, createReadStream, existsSync, mkdirSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
@@ -87,6 +87,7 @@ async function* rawRecords(src: DatasetSource): AsyncGenerator<DatasetRecord> {
     return;
   }
   if (!src.path) throw new ApsError('ConfigurationError', 'Dataset needs `path`, `url` or `records`');
+  assertHostPath(src.path, 'Data file');
   if (fmt === 'sqlite') {
     yield* sqliteRecords(src.path, src.query, src.params);
     return;

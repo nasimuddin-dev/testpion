@@ -29,6 +29,9 @@ import {
   breakdownOfRun,
   type RunBreakdown,
   createEngineContext,
+  assertHostPath,
+  setNetworkPolicy,
+  scriptTrustFor,
   expandDataset,
   fileSink,
   loadSuite,
@@ -125,7 +128,7 @@ import { outputHandlers } from './handlers/output.js';
 import { kindHandlers } from './handlers/kinds.js';
 import { importHandlers } from './handlers/import.js';
 import { bundleHandlers } from './handlers/bundle.js';
-import { checkRpcParams, guardHandler } from './rpc-params.js';
+import { checkRpcParams, guardHandler, hostPathsOf } from './rpc-params.js';
 import { forgetProductionSessions, guardProduction } from './production-guard.js';
 import { VizPages } from './viz-pages.js';
 import { OwnWrites, type OwnWriteBatch } from './own-writes.js';
@@ -161,6 +164,14 @@ export interface BackendHost {
   mcpCommand?: { command: string; args: string[] };
   /** Real shells for the Terminal panel (desktop only: node-pty); its presence is `capabilities.shell` (terminal.ts). */
   terminal?: TerminalHost;
+  /**
+   * A shared server, not one person's computer: no files outside `userRoot` (the host capability `localFiles` is off — every RPC
+   * that takes a path on the host goes through `hostPath`/`assertHostPath`), and the window cannot let `{{$env.NAME}}` read the
+   * server's own environment (Settings ▸ Privacy is ignored).
+   */
+  serverMode?: boolean;
+  /** Server mode: the folder of the signed-in user, the only place files can be read or written (default: the data folder). */
+  userRoot?: string;
 }
 
 export type Handler = (params: any) => Promise<unknown> | unknown;
@@ -239,7 +250,9 @@ export class Backend {
       },
     });
     this.manager = new WorkspaceManager(host.appDir);
+    if (host.serverMode) setNetworkPolicy({ allowLocalFiles: false, localFileRoots: [host.userRoot ?? host.appDir] });
     this.settings = this.manager.loadSettings();
+    if (host.serverMode) this.settings = { ...this.settings, envVariables: [] };
     const stores: SecretStore[] = [];
     if (host.cipher) stores.push(new EncryptedFileSecretStore(join(host.appDir, 'secrets.json'), host.cipher));
     else stores.push(new MemorySecretStore());
@@ -549,6 +562,7 @@ export class Backend {
     };
     try {
       params = checkRpcParams(method, params); // "<method>: missing <param>" before anything runs
+      for (const p of hostPathsOf(method, params)) assertHostPath(p, method); // a place on this computer: only where the host allows local files
       await prefetchSecretsFor(this, params); // the environment's secret manager references, before they're needed
       // the proxy settings apply from the first method that may go over the network (start-up's reads don't wait)
       if (!LOCAL_READS.test(method)) await ensureProxyApplied();
@@ -577,6 +591,15 @@ export class Backend {
     return this.settings.assistantProvider === APP_CLAUDE_ID && this.settings.assistantModel ? this.settings.assistantModel : DEFAULT_CLAUDE_MODEL;
   }
 
+  /** What scripts were refused in this session (one message each: the window offers to allow it, it does not ask on every send). */
+  private scriptTold = new Set<string>();
+  private scriptBlocked(b: { kind: 'host'; host: string } | { kind: 'secrets'; keys: string[] }): void {
+    const key = b.kind === 'host' ? `host:${b.host}` : 'secrets';
+    if (this.scriptTold.has(key)) return;
+    this.scriptTold.add(key);
+    this.host.emit('scripts.blocked', b);
+  }
+
   /** Engine services for an environment; `allowProduction` overrides the consent of the call (production-guard.ts). */
   context(opts: { environment?: string; collectionId?: string; allowProduction?: boolean }) {
     const ctx = createEngineContext({
@@ -592,6 +615,7 @@ export class Backend {
       cookieJar: this.cookieStore?.jar,
       allowProduction: opts.allowProduction,
       aiSurface: 'app',
+      scriptTrust: scriptTrustFor(this.ws, { onBlocked: (b) => this.scriptBlocked(b) }),
     });
     // Postman-style current values: set by scripts, kept on this machine, override stored values
     const cv = this.currentValues;

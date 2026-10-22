@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
-import { RPC_PARAMS } from '../../apps/desktop/backend/rpc-params.js';
+import { RPC_PARAMS, hostPathsOf } from '../../apps/desktop/backend/rpc-params.js';
 
 // Every RPC handler checks its parameters before it runs (rpc-params.ts), so a host that is not the window (the web
 // bridge, a cloud server, an agent) gets "<method>: missing <param>" instead of a TypeError from deep inside. A handler
@@ -37,6 +37,29 @@ describe('RPC parameter tables', () => {
   it('the handlers the security review named have entries (RAG, bundle imports, large files)', () => {
     for (const m of ['rag.estimate', 'rag.metricCheck', 'rag.metric.try', 'rag.matrix', 'rag.sample', 'rag.compare', 'rag.rescore', 'rag.columns', 'rag.importBeir', 'bundle.imports', 'git.large', 'git.largeCheck'])
       expect(RPC_PARAMS[m], m).toBeDefined();
+  });
+
+  it('every parameter that names a place on the host computer is typed p (a path) or pn (a name or a path): the host-path gate enumerates them', () => {
+    const expected: Array<[string, string, string]> = [
+      ['git.clone', 'dest', 'p?'],
+      ['git.openFolder', 'path', 'p'],
+      ['ws.open', 'ref', 'pn?'],
+      ['col.previewDataFile', 'path', 'p'],
+      ['terminal.create', 'cwd', 'p?'],
+      ['bundle.preview', 'path', 'p?'],
+    ];
+    for (const [m, k, t] of expected) expect(RPC_PARAMS[m]?.[k], `${m}.${k}`).toBe(t);
+    // whatever else is named like a host path (a working folder, a destination, a certificate or key file, proto files) must be one of them
+    const hostNamed = /^(dest|cwd|certPath|keyPath|caPath|protoFiles)$/;
+    const missing = Object.entries(RPC_PARAMS).flatMap(([m, spec]) => Object.entries(spec).filter(([k, t]) => hostNamed.test(k) && !/^(p|pn)\??$/.test(t) && !(m === 'grpc.grpcurl' && k === 'protoFiles')).map(([k]) => `${m}.${k}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('hostPathsOf lists the values of p parameters, and the values of pn parameters only when they look like a path', () => {
+    expect(hostPathsOf('git.clone', { url: 'u', dest: '/tmp/x' })).toEqual(['/tmp/x']);
+    expect(hostPathsOf('git.clone', { url: 'u' })).toEqual([]);
+    expect(hostPathsOf('ws.open', { ref: 'My workspace' })).toEqual([]);
+    for (const ref of ['/home/a/w', 'C:\\w', '\\\\server\\share', '~/w', 'file:///w']) expect(hostPathsOf('ws.open', { ref }), ref).toEqual([ref]);
   });
 
   it('no entry is for a handler that does not exist, and the list only shrinks: a handler that got an entry or went away is taken off it', () => {

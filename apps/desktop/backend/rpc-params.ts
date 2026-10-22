@@ -1,10 +1,11 @@
-import { ApsError, HISTORY_KINDS, normalizeError, type ErrorKind } from '@testpion/core';
+import { ApsError, HISTORY_KINDS, looksLikeHostPath, normalizeError, type ErrorKind } from '@testpion/core';
 
 /**
  * A light check of the parameters of RPC calls, before the handler runs: every host (the window, the web bridge, a
  * future cloud server, an agent over MCP) gets "<method>: missing <param>" instead of a TypeError from deep inside.
  *
- * A type is one of s (string), n (number), b (boolean), o (object, not an array), a (array), sa (array of strings),
+ * A type is one of s (string), p (a path on the host computer: gated by the host's localFiles capability, see hostPathsOf), pn (a
+ * name or such a path), n (number), b (boolean), o (object, not an array), a (array), sa (array of strings),
  * x (any value but undefined); `|null` also allows null; a trailing `?` makes the parameter optional (null then counts as
  * absent and is dropped before the call).
  */
@@ -64,7 +65,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'app.openExternal': { url: 's' },
   'asyncapi.outline': { path: 's?', text: 's?' },
   'bundle.export': { selection: 'a?', section: 's?', folder: 'o?', all: 'b?', uses: 'b?', datasets: 's?', providers: 'b?', format: 's?', title: 's?', dryRun: 'b?', workspaceVariables: 'b?', exclude: 'sa?' },
-  'bundle.preview': { pick: 'b?', base64: 's?', path: 's?', fileName: 's?' },
+  'bundle.preview': { pick: 'b?', base64: 's?', path: 'p?', fileName: 's?' },
   'bundle.apply': { planId: 's', onConflict: 's?', decisions: 'o?', only: 'sa?', workspaceVariables: 's?', into: 'o?' },
   'bundle.undo': { importId: 's', planId: 's?' },
   'eval.compare': { run: 's', baseline: 's', threshold: 'n?', maxRegressions: 'n?', failOnMissing: 'b?', limit: 'n?' },
@@ -82,7 +83,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'col.get': { id: 's' },
   'col.import': { text: 's', fileName: 's?', keepPm: 'b?' },
   'col.importBrunoFolder': { name: 's?', files: 'a' },
-  'col.previewDataFile': { path: 's', query: 's?' },
+  'col.previewDataFile': { path: 'p', query: 's?' },
   'col.replace': { collectionId: 's', find: 's', replace: 's', fields: 'a?' },
   'col.run': { collectionId: 's', selection: 'sa?', dataPath: 's?', dataQuery: 's?', iterations: 'n?', delayMs: 'n?', name: 's?' },
   'col.save': { id: 's', name: 's?', items: 'a?', variables: 'a?' },
@@ -172,7 +173,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'flows.webhooks.start': { port: 'n?', host: 's?' },
   'flows.webhooks.status': {},
   'flows.webhooks.stop': {},
-  'git.clone': { url: 's', dest: 's?', branch: 's?' },
+  'git.clone': { url: 's', dest: 'p?', branch: 's?' },
   'git.commit': { message: 's', paths: 'sa?' },
   'git.deleteBranch': { branch: 's' },
   'git.diff': { path: 's' },
@@ -200,7 +201,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'git.target': { ref: 'x?', itemId: 's?', file: 's?' },
   'git.undo': { id: 's?' },
   'git.init': { remote: 's?' },
-  'git.openFolder': { path: 's' },
+  'git.openFolder': { path: 'p' },
   'git.renameBranch': { from: 's', to: 's' },
   'git.resolve': { path: 's', side: 's?', resolutions: 'o?' },
   'git.stage': { paths: 'sa' },
@@ -272,13 +273,16 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'runs.scoreTrend': { runIds: 'sa?', name: 's?', limit: 'n?' },
   'runs.setBreakpoints': { runId: 's', ids: 'sa' },
   'schema.validate': { schema: 'o|b', data: 'x?' },
+  'scripts.allow': { host: 's?', secrets: 'b?' },
+  'scripts.forget': {},
+  'scripts.trust': {},
   'secrets.allow': { environment: 's', refs: 'sa?' },
   'secrets.refs': { environment: 's' },
   'settings.describeCertificates': { pem: 's' },
   'sio.connect': { url: 's', path: 's?', headers: 'a?', auth: 's?' },
   'stats.requests': { collectionId: 's' },
   'terminal.ack': { id: 's', parsed: 'n', epoch: 'n?' },
-  'terminal.create': { shell: 's?', cols: 'n?', rows: 'n?', cwd: 's?' },
+  'terminal.create': { shell: 's?', cols: 'n?', rows: 'n?', cwd: 'p?' },
   'terminal.kill': { id: 's' },
   'terminal.list': { withOutput: 'b?' },
   'terminal.resize': { id: 's', cols: 'n', rows: 'n' },
@@ -333,7 +337,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'ws.export': { ref: 's?', format: 's?', legacy: 'b?' },
   'ws.import': { bundle: 'o', name: 's?' },
   'ws.importFile': { text: 's?', base64: 's?', fileName: 's?', keepPm: 'b?' },
-  'ws.open': { ref: 's?' },
+  'ws.open': { ref: 'pn?' },
   'ws.rename': { ref: 's', name: 's' },
   'ws.search': { query: 's' },
   'output.save': { surface: 's', format: 's', suggestedName: 's', label: 's?', content: 'o?', source: 'o?', includeSecrets: 'b?', jobId: 's?' },
@@ -352,11 +356,31 @@ export const RPC_VALUES: Record<string, Record<string, readonly string[]>> = {
   'history.exportHar': { kind: HISTORY_KINDS },
 };
 
-const NAMES: Record<string, string> = { s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
+/**
+ * The places on the host computer a call names (the `p` and `pn` parameters): checked by the backend against the host's
+ * `localFiles` capability (assertHostPath) before the handler runs. `p` is always a host path; `pn` is a name, and a host
+ * path only when it looks like one (an absolute path, ~, a UNC or file: path).
+ */
+export function hostPathsOf(method: string, params: unknown): string[] {
+  const spec = RPC_PARAMS[method];
+  if (!spec || !params || typeof params !== 'object') return [];
+  const out: string[] = [];
+  for (const [key, raw] of Object.entries(spec)) {
+    const types = raw.replace(/\?$/, '').split('|');
+    const v = (params as Record<string, unknown>)[key];
+    if (typeof v !== 'string' || !v) continue;
+    if (types.includes('p') || (types.includes('pn') && looksLikeHostPath(v))) out.push(v);
+  }
+  return out;
+}
+
+const NAMES: Record<string, string> = { p: 'a path', pn: 'a name or a path', s: 'a string', n: 'a number', b: 'true or false', o: 'an object', a: 'a list', sa: 'a list of strings', x: 'a value', null: 'null' };
 
 function isType(v: unknown, t: string): boolean {
   switch (t) {
     case 's':
+    case 'p':
+    case 'pn':
       return typeof v === 'string';
     case 'n':
       return typeof v === 'number' && Number.isFinite(v);

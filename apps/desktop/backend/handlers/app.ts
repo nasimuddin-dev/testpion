@@ -30,7 +30,7 @@ export function appHandlers(be: Backend): Handlers {
       node: process.versions.node,
       electron: process.versions.electron,
       /** What this host can do beyond the shared RPCs: `shell` (real shells in the Terminal panel) only in the desktop app. */
-      capabilities: { shell: be.terminals.available },
+      capabilities: { shell: be.terminals.available, localFiles: !be.host.serverMode },
     }),
     'settings.get': () => be.settings,
     /** Forget cached OAuth 2.0 tokens (Auth tab ▸ Forget tokens); returns how many there were. */
@@ -52,7 +52,8 @@ export function appHandlers(be: Backend): Handlers {
           throw new ApsError('ValidationError', `The proxy URL "${s.proxy.url}" is not a URL (e.g. http://proxy.example.com:8080)`, { suggestions: [] });
         }
       }
-      be.settings = be.manager.saveSettings({ ...defaultSettings(), ...normalizeUiPrefs(s), telemetry: false });
+      // on a shared server `{{$env.NAME}}` would read the server's own environment (its cloud keys): the window cannot allow any
+      be.settings = be.manager.saveSettings({ ...defaultSettings(), ...normalizeUiPrefs(s), telemetry: false, ...(be.host.serverMode ? { envVariables: [] } : {}) });
       be.logger.setLevel(be.settings.logLevel);
       be.logger.redactor.setFields(be.settings.redactFields);
       be.applyProxy();
