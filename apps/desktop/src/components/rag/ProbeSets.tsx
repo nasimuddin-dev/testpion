@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { Plus, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import type { ProbeSetInfo } from '@testpion/core';
@@ -19,7 +20,7 @@ export function ProbeSets() {
     setBusy(ids?.join(',') ?? 'all');
     try {
       const r = await call<{ written: string[]; skipped: string[] }>('rag.probeSets.add', { sets: ids });
-      useApp.getState().toast(r.written.length ? `Added ${r.written.length} probe set${r.written.length === 1 ? '' : 's'} to datasets/` : 'Nothing to add: the files are already there', 'success');
+      useApp.getState().toast(r.written.length ? `Added ${plural(r.written.length, 'probe set')} to datasets/` : 'Nothing to add: the files are already there', 'success');
       setStamp((s) => s + 1);
     } catch (e) {
       toastError(e);

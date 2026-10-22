@@ -9,7 +9,7 @@ import { useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { refreshEnvironments } from '../lib/environments-store';
 import { openDocs } from '../lib/docs-link';
-import { Badge, Button, cx, LinkButton } from './ui';
+import { Badge, Button, cx, LinkButton, SectionTitle } from './ui';
 import { Callout } from '../components/ui';
 
 /** Normalised error display: what happened, why, and how to fix it (spec §45). */
@@ -110,9 +110,9 @@ export function ErrorPanel({ error, context, raw = true }: { error: NormalizedEr
           )}
           {error.suggestions.length > 0 && (
             <div className="mt-3">
-              <div className="flex items-center gap-1 text-muted text-xs font-semibold uppercase tracking-wider mb-1">
-                <Lightbulb size={12} /> Troubleshooting
-              </div>
+              <SectionTitle size="sm" className="justify-start mb-1">
+                <Lightbulb size={12} className="inline" /> Troubleshooting
+              </SectionTitle>
               <ul className="list-disc ml-5 space-y-0.5">
                 {error.suggestions.map((s) => (
                   <li key={s}>{s}</li>

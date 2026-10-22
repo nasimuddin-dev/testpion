@@ -101,11 +101,11 @@ export function TidyDialog({ collection, onClose, onDone, onReplace }: { collect
                         )}
                       </div>
                       {f.where.slice(0, 3).map((w, j) => (
-                        <div key={j} className="text-[0.7rem] text-muted truncate pl-2">
+                        <div key={j} className="text-2xs text-muted truncate pl-2">
                           {w}
                         </div>
                       ))}
-                      {f.where.length > 3 && <div className="text-[0.7rem] text-muted pl-2">… and {f.where.length - 3} more</div>}
+                      {f.where.length > 3 && <div className="text-2xs text-muted pl-2">… and {f.where.length - 3} more</div>}
                     </li>
                   ))}
                 </ul>

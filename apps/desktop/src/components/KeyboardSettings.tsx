@@ -1,4 +1,4 @@
-import { Download, Keyboard, RotateCcw, Search, Upload } from 'lucide-react';
+import { Download, Keyboard, RotateCcw, Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { isMac } from '../api';
 import { downloadContent, pickTextFile } from '../lib/files';
@@ -6,7 +6,7 @@ import { KEY_NAMES, saveBindings, useBindings } from '../lib/keybindings';
 import { bindingProblem, COMMANDS, comboKeys, comboLabel, comboOf, effectiveBindings, exportBindings, importBindings, shortcutGroups, type Combo } from '../lib/shortcuts';
 import { railItem, useRail } from '../lib/use-rail';
 import { toastError, useApp, attempt } from '../store';
-import { Button, cx, IconButton, Input, Kbd } from './ui';
+import { Button, cx, FilterInput, IconButton, Kbd, SectionTitle } from './ui';
 
 const DEFAULTS = effectiveBindings();
 const LABEL = new Map(COMMANDS.map((c) => [c.id, c.label]));
@@ -79,10 +79,7 @@ export function KeyboardSettings() {
         for this computer; the tooltips, menus, the command palette and the shortcuts list (<Kbd>?</Kbd>) show your keys.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="relative flex-1 min-w-48 max-w-96">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          <Input className="w-full pl-8" placeholder="Search shortcuts by what they do or their keys" aria-label="Search shortcuts" value={q} onChange={(e) => setQ(e.target.value)} />
-        </span>
+        <FilterInput className="flex-1 min-w-48 max-w-96" placeholder="Search shortcuts by what they do or their keys" label="Search shortcuts" value={q} onChange={setQ} />
         <Button size="sm" icon={<Download size={13} />} onClick={() => downloadContent('testpion-keybindings.json', exportBindings(overrides), { type: 'application/json' })}>
           Export…
         </Button>
@@ -122,7 +119,7 @@ export function KeyboardSettings() {
       )}
       {shown.map((g) => (
         <section key={g.title}>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">{g.title}</h3>
+          <SectionTitle size="sm" as="h3" className="mb-1.5">{g.title}</SectionTitle>
           <div className="rounded-lg border border-line divide-y divide-line">
             {g.items.map((it, i) => (
               <div key={`${g.title}-${i}`} className="flex items-center gap-3 px-3 py-1.5 text-sm" data-shortcut-row={it.ids?.join(',') ?? ''}>
@@ -153,10 +150,11 @@ export function KeyboardSettings() {
                         </button>
                         <IconButton
                           label={`Reset ${LABEL.get(id)} to ${comboKeys(DEFAULTS[id]!, KEY_NAMES).join('+')}`}
-                          className={cx('h-7 w-7', bindings[id] === DEFAULTS[id] && 'invisible')}
+                          size="md"
+                          className={cx(bindings[id] === DEFAULTS[id] && 'invisible')}
                           onClick={() => save({ ...bindings, [id]: DEFAULTS[id]! })}
                         >
-                          <RotateCcw size={12} />
+                          <RotateCcw />
                         </IconButton>
                       </span>
                     ))}

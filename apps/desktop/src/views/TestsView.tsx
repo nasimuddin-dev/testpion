@@ -34,7 +34,7 @@ import { EnvironmentsPane } from '../components/SidebarPanes';
 import { finishSave, type SaveResult } from '../lib/files';
 import { saveRunReport } from '../components/output/run-specs';
 import { dataLanguageOf } from '../data-languages';
-import { Badge, Button, Empty, IconButton, Input, SectionTitle, Spinner, Split, VirtualList } from '../components/ui';
+import { Badge, Bar, Button, Empty, FilterInput, IconButton, Input, SectionTitle, Spinner, Split, VirtualList } from '../components/ui';
 import { NoOpenItems } from '../components/LibraryTabStrip';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { RunList } from './TestsRunsList';
@@ -749,11 +749,11 @@ export function TestsView() {
                 {/* the keyboard moves through the header and the tree as one list (↑ from the first file reaches the header) */}
                 <div className="flex-1 min-h-0 flex flex-col" onKeyDown={treeKeys}>
                 <TreeRowShell kind="section:test" nodeId="tests:section" label="Tests" header ctx={testsMenu} className="mx-0 pl-3 shrink-0">
-                  <span className="text-[0.82rem] font-semibold truncate">Tests</span>
+                  <span className="text-xs font-semibold truncate">Tests</span>
                 </TreeRowShell>
                 {tree.length > 0 && (
                   <div className="px-2 pb-2">
-                    <Input className="w-full h-7 min-h-7 text-sm" placeholder="Filter test files" aria-label="Filter test files" value={treeFilter} onChange={(e) => setTreeFilter(e.target.value)} />
+                    <FilterInput className="w-full" placeholder="Filter test files" label="Filter test files" value={treeFilter} onChange={setTreeFilter} />
                   </div>
                 )}
                 {testsArea.menu}
@@ -862,7 +862,7 @@ export function TestsView() {
                 </Button>
                 {/\.(ya?ml|json)$/.test(file) && !/\.suite\./.test(file) && (
                   <IconButton label="Run with data or in environments…" data-run-with-data-open onClick={() => void openScaling(file, 'data')}>
-                    <FileSpreadsheet size={13} />
+                    <FileSpreadsheet />
                   </IconButton>
                 )}
                 {/* Delete… (with Undo, like the tree's) is in the file's ⋯ on the breadcrumb below, the same menu as its row */}
@@ -1005,12 +1005,12 @@ export function TestsView() {
             )
           ) : scaleId ? (
             <div className="h-full flex flex-col min-h-0">
-              <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs">
+              <Bar className="text-xs">
                 <button className="text-accent hover:underline" onClick={() => setScaleId(undefined)}>
                   ← Test runs
                 </button>
                 <span className="text-muted">Data runs and environment matrices</span>
-              </div>
+              </Bar>
               <div className="flex-1 min-h-0">
                 <ScaleRunPanel id={scaleId} onSelect={setScaleId} />
               </div>

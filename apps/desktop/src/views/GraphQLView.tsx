@@ -28,7 +28,7 @@ import { JsonTree, RawView } from '../components/JsonView';
 import { JsonTable, tableRowsOf } from '../components/JsonTable';
 import { CheckList, ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Input, Select, Split, statusTone, Tabs, Tooltip, VirtualList } from '../components/ui';
+import { Badge, Bar, Button, cx, Empty, FilterInput, SECTION_LABEL, SectionTitle, Select, Split, statusTone, Tabs, Tooltip, VirtualList } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { currentCollectionTree, refreshCollections, useCollectionTree } from '../lib/collections-store';
@@ -495,7 +495,7 @@ export function GraphQLView() {
         <Split id="gql-schema" initial={74} min={40} collapsedSecond={!schemaOpen}>
           <ResponseSplit id="gql-main" initialSide={50}>
             <div className="h-full flex flex-col">
-              <div className="flex items-center h-8 px-2 border-b border-line gap-1 text-xs text-muted shrink-0">
+              <Bar className="text-xs text-muted">
                 <span className="font-medium text-fg">{d.name}</span>
                 {operations[0] && <Badge>{operations[0].type}</Badge>}
                 <Button size="sm" variant="ghost" className="ml-auto" icon={<Wand2 size={12} />} onClick={prettify}>
@@ -512,12 +512,12 @@ export function GraphQLView() {
                     apply: { label: 'Use this query', run: (code) => (/^\s*(query|mutation|subscription|fragment|\{)/.test(code) ? set({ query: code }) : 'it has no GraphQL operation') },
                   })}
                 />
-              </div>
+              </Bar>
               <div className="flex-1 min-h-0">
                 <Split id="gql-editor-vars" direction="vertical" initial={65}>
                   <CodeEditor language="graphql" path="query.graphql" value={d.query} onChange={(query) => set({ query })} />
                   <div className="h-full flex flex-col">
-                    <Tabs
+                    <Tabs label="Query"
                       value={sub}
                       onChange={setSub}
                       tabs={[
@@ -589,12 +589,12 @@ export function GraphQLView() {
                 <ErrorPanel error={result.error} context={{ endpoint: d.endpoint, query: d.query }} />
               ) : result?.response ? (
                 <>
-                  <div className="flex items-center gap-3 px-3 h-9 border-b border-line text-sm shrink-0">
+                  <Bar className="text-sm">
                     <Badge tone={statusTone(result.response.status)}>{result.response.status}</Badge>
                     <span className="text-muted">{formatMs(result.response.durationMs)}</span>
                     {!!result.errors?.length && <Badge tone="bad">{result.errors.length} GraphQL error(s)</Badge>}
-                  </div>
-                  <Tabs
+                  </Bar>
+                  <Tabs label="Response"
                     value={resTab}
                     onChange={setResTab}
                     tabs={[
@@ -637,12 +637,12 @@ export function GraphQLView() {
             </div>
           </ResponseSplit>
           <div className="h-full flex flex-col min-h-0 bg-panel/50">
-            <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs font-semibold uppercase tracking-wider text-muted shrink-0">
+            <Bar className={SECTION_LABEL}>
               <Network size={13} /> Schema
               <button className="ml-auto normal-case font-normal text-muted hover:text-fg" onClick={() => setSchemaOpen(false)} aria-label="Hide the schema">
                 Hide
               </button>
-            </div>
+            </Bar>
             <div className="flex-1 min-h-0">
               <SchemaExplorer schema={schema} error={schemaError} sdl={sdl} onInsert={(f) => set({ query: d.query.replace(/\}\s*$/, `  ${f}\n}\n`) })} onBuild={(f) => void buildOperation(f)} onIntrospect={introspectNow} loading={introspecting} />
             </div>
@@ -683,7 +683,7 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
             Back
           </Button>
         )}
-        <Input className="flex-1 h-6 min-h-6 text-xs" placeholder="Search types and fields" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <FilterInput className="flex-1" placeholder="Search types and fields" label="Search types and fields" value={filter} onChange={setFilter} />
         <Button size="sm" variant="ghost" onClick={() => setShowSdl(!showSdl)}>
           SDL
         </Button>
@@ -737,22 +737,22 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
           </div>
         ) : (
           <div className="py-1">
-            <div className="px-3 py-1 text-[0.7rem] uppercase text-muted tracking-wider">Root types</div>
+            <SectionTitle size="sm" className="px-3 py-1">Root types</SectionTitle>
             {roots.map((r) => (
               <button key={r} className="w-full text-left px-3 py-1 hover:bg-hover mono" onClick={() => setStack([r])}>
                 {r}
               </button>
             ))}
-            <div className="px-3 py-1 mt-2 text-[0.7rem] uppercase text-muted tracking-wider">All types ({schema.types.length})</div>
+            <SectionTitle size="sm" className="px-3 py-1 mt-2">All types ({schema.types.length})</SectionTitle>
             {schema.types
               .filter((t) => !roots.includes(t.name) && (!f || t.name.toLowerCase().includes(f) || t.fields?.some((x) => x.name.toLowerCase().includes(f))))
               .map((t) => (
                 <button key={t.name} className="w-full text-left px-3 py-1 hover:bg-hover flex items-center gap-2" onClick={() => setStack([t.name])}>
                   <span className="mono">{t.name}</span>
-                  <span className="text-[0.7rem] text-muted">{t.kind.toLowerCase().replace('_', ' ')}</span>
+                  <span className="text-2xs text-muted">{t.kind.toLowerCase().replace('_', ' ')}</span>
                 </button>
               ))}
-            <div className="px-3 py-1 mt-2 text-[0.7rem] uppercase text-muted tracking-wider">Directives</div>
+            <SectionTitle size="sm" className="px-3 py-1 mt-2">Directives</SectionTitle>
             {schema.directives.map((dr) => (
               <div key={dr.name} className="px-3 py-0.5 mono text-xs" title={dr.description}>
                 @{dr.name}

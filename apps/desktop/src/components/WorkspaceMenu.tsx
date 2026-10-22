@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Copy, Download, FolderOpen, FolderPlus, GitBranch, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { Check, ChevronDown, Copy, Download, FolderOpen, FolderPlus, GitBranch, Layers, MoreHorizontal, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { runMenuCommand } from '../menu-commands';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
@@ -7,7 +7,7 @@ import { hasNativeDialogs, pickBinaryFile } from '../lib/files';
 import { IMPORT_FILE_ACCEPT } from '@testpion/shared';
 import { exportWorkspace as exportWorkspaceFile, toastWorkspaceImported } from '../lib/workspace-export';
 import { toastSpecKeptBoth } from '../lib/spec-import';
-import { Badge, Button, cx, IconButton, Input, Menu, Modal, Spinner, type MenuItem } from './ui';
+import { Badge, Button, cx, FilterInput, IconButton, Input, Menu, type MenuItem, Modal, Spinner } from './ui';
 import { plural } from '../lib/format';
 import { convertedScriptsText, toastImportNotes, toastUnchangedScripts, type ImportScriptsSummary } from '../lib/import-scripts';
 
@@ -143,13 +143,9 @@ export function WorkspaceMenu() {
             onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
           >
             <div className="flex items-center gap-2 p-2 border-b border-line">
-              <div className="relative flex-1">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                <Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a workspace" aria-label="Find a workspace" className="w-full h-8 min-h-0 pl-8"
-                  onKeyDown={(e) => e.key === 'Enter' && shown[0] && switchTo(shown[0])} />
-              </div>
+              <FilterInput autoFocus value={q} onChange={setQ} placeholder="Find a workspace" label="Find a workspace" className="flex-1" onKeyDown={(e) => e.key === 'Enter' && shown[0] && switchTo(shown[0])} />
               <IconButton label="New workspace" onClick={() => setNameDialog({ mode: 'create', value: '' })}>
-                <Plus size={16} />
+                <Plus />
               </IconButton>
             </div>
             <div className="max-h-[340px] overflow-auto p-1" role="list">
@@ -172,7 +168,7 @@ export function WorkspaceMenu() {
                       <span className={cx('truncate', isCurrent(w) && 'font-medium')}>{w.name}</span>
                       {isCurrent(w) && <Badge tone="accent">current</Badge>}
                     </span>
-                    <span className="block truncate text-[0.72rem] text-muted">{w.path}</span>
+                    <span className="block truncate text-2xs text-muted">{w.path}</span>
                   </span>
                   <Menu
                     open={menuFor === w.path}

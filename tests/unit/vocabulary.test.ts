@@ -123,6 +123,40 @@ describe('vocabulary', () => {
     expect(found).toEqual([]);
   });
 
+  it('what a screen says is in sentence case: a label, a title, a placeholder, an option, a button (UI audit H1)', () => {
+    // names of products, formats and the app's own named places keep their capitals; everything else after the first word is lower case
+    const PHRASES = ['TestPion HTTP Debugger Root', 'Claude Code', 'Claude Desktop', 'VS Code', 'GitHub Actions', 'Azure Pipelines', 'Azure DevOps', 'JSON Schema', 'JSON Lines', 'AWS Signature', 'Basic Auth', 'AI Lab', 'HTTP Debugger', 'REST Client', 'Socket.IO', 'Quick Open', 'Collections explorer'];
+    const PROPER = new Set(
+      'TestPion Postman Insomnia Bruno Hoppscotch GraphQL OpenAPI AsyncAPI WebSocket Kafka Claude Cursor Windsurf Codex Copilot GitHub GitLab Bitbucket Azure Jenkins Windows Linux Firefox Chrome Fiddler Markdown Python Node Docker OpenSSL JetBrains Ragas DeepEval PowerShell Git Ollama OpenAI Anthropic Gemini Authorization You'.split(' '),
+    );
+    // a short label (a long text with a full stop, a colon, brackets or ▸ is a sentence or a hint, not a label)
+    const PATTERNS = [/\b(?:label|title|hint|placeholder|empty)(?:=|: )'([^'\n]+)'/g, /\b(?:label|title|placeholder|aria-label)="([^"\n]+)"/g, /<option\b[^>]*>([^<{]+)<\/option>/g, />([A-Z][^<>{}\n]*?)</g];
+    const found: string[] = [];
+    for (const f of files(SRC)) {
+      const rel = f.slice(SRC.length + 1).replace(/\\/g, '/');
+      if (rel === 'monaco.ts') continue;
+      const code = readFileSync(f, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .split('\n')
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join('\n');
+      for (const re of PATTERNS)
+        for (const m of code.matchAll(re)) {
+          const text = m[1]!.trim();
+          if (/[(▸:;?!—]|\. |https?|\$\{|\{\{/.test(text) || text.split(/\s+/).length > 6) continue;
+          let s = text.replace(/^[^A-Za-z]+/, '');
+          for (const p of PHRASES) s = s.split(p).join('x');
+          const capitalised = s
+            .split(/[\s/]+/)
+            .slice(1)
+            .map((w) => w.replace(/[^A-Za-z0-9.'’-]/g, ''))
+            .filter((w) => /^[A-Z][a-z]+$/.test(w) && !PROPER.has(w));
+          if (capitalised.length) found.push(`${rel}: "${text}" (${capitalised.join(', ')})`);
+        }
+    }
+    expect(found).toEqual([]);
+  });
+
   it('stage, set aside and bundle are explained once, in plain words', () => {
     expect(STAGE_HINT).toMatch(/^Stage means choose what the next commit includes/);
     expect(SET_ASIDE_HINT).toMatch(/^Set aside puts your uncommitted changes away/);

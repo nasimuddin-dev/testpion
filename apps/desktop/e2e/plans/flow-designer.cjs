@@ -181,7 +181,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'empty-flow-starts-the-designer': /Add blocks \| API example \| Create from collection \| Record from the Debugger \| Generate with AI/,
+  'empty-flow-starts-the-designer': /Add blocks \| API example \| Create from collection \| Record from the debugger \| Generate with AI/,
   'add-from-a-collection': /^nodes: a-user-s-carts \| dialog closed: true$/,
   'add-a-blank-http-step': /^nodes: a-user-s-carts,http-request \| edges: 0$/,
   'connect-port-to-port': /^edge: true \| yaml dependsOn: true$/,

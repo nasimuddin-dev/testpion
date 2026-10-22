@@ -46,7 +46,7 @@ Secrets (tokens, API keys, secret variables) are encrypted with **Windows DPAPI*
 
 ## Updating
 
-TestPion checks GitHub for a newer version a few seconds after it starts. When there is one, it asks: **Update now** downloads the new version and restarts TestPion; **Later** asks again next time; **Skip This Version** stops asking about that version. **Help ▸ Check for Updates** checks at any time, and **Settings ▸ About** can turn the check off.
+TestPion checks GitHub for a newer version a few seconds after it starts. When there is one, it asks: **Update now** downloads the new version and restarts TestPion; **Later** asks again next time; **Skip this version** stops asking about that version. **Help ▸ Check for Updates** checks at any time, and **Settings ▸ About** can turn the check off.
 
 If the window can't show the question (for example it failed to open properly), TestPion asks with a regular Windows dialog instead, so a fixed version can always be installed.
 

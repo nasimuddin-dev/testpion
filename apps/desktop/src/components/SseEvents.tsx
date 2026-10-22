@@ -3,7 +3,7 @@ import { ArrivalSpark } from './charts';
 import { useId, useMemo, useState } from 'react';
 import { Radio, Square } from 'lucide-react';
 import type { SseEvent } from '../types';
-import { Badge, Button, cx, Empty, Input, Split, VirtualList } from './ui';
+import { Badge, Button, cx, Empty, FilterInput, SECTION_LABEL, Split, VirtualList } from './ui';
 import { JsonTree, RawView } from './JsonView';
 import { prettyBody } from '../lib/pretty';
 import { plural } from '../lib/format';
@@ -65,7 +65,7 @@ export function SseEvents({ events, live, onStop, stopped, dropped, stateKey, ou
         }
         actions={
           <>
-            <Input className="field-sm h-7 w-48 text-xs" placeholder="Filter type, id or data" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter events" />
+            <FilterInput className="w-48" placeholder="Filter type, id or data" label="Filter events" value={filter} onChange={setFilter} />
             {live && onStop && (
               <Button size="sm" variant="danger" icon={<Square size={11} />} onClick={onStop}>
                 Stop
@@ -83,7 +83,7 @@ export function SseEvents({ events, live, onStop, stopped, dropped, stateKey, ou
           {/* the list and the selected event, with the divider between them dragged like every other split */}
           <Split id="sse-events" direction="vertical" initial={55} collapsedSecond={!sel}>
             <div className="h-full min-h-0 flex flex-col">
-              <div className="grid grid-cols-[80px_120px_90px_1fr] gap-2 px-3 py-1 text-[11px] uppercase tracking-wide text-muted border-b border-line shrink-0">
+              <div className={cx(SECTION_LABEL, 'grid grid-cols-[80px_120px_90px_1fr] gap-2 px-3 py-1 border-b border-line shrink-0')}>
                 <span>Time</span>
                 <span>Event</span>
                 <span>Id</span>

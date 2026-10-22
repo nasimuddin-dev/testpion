@@ -420,7 +420,7 @@ export function EvaluationsView() {
             </Field>
           </div>
         </div>
-        <Tabs
+        <Tabs label="Evaluation"
           value={sub}
           onChange={setSub}
           tabs={[

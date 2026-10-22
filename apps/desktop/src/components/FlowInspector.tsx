@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { AlignCenterVertical, AlignHorizontalSpaceAround, AlignStartHorizontal, AlignStartVertical, Bug, ClipboardPaste, Copy, CopyPlus, FileCode2, Frame, GanttChart, History, StepForward, Trash2 } from 'lucide-react';
 import type { FlowGroup, FlowStep } from '@testpion/shared';
 import type { TestResult } from '../types';
@@ -211,7 +212,7 @@ export function FlowInspector({
           <div className="p-3 grid gap-2 text-xs text-muted">
             <SectionTitle>Flow</SectionTitle>
             <p>
-              {flow.steps.length} step{flow.steps.length === 1 ? '' : 's'}, {edgeCount} connection{edgeCount === 1 ? '' : 's'}.{' '}
+              {plural(flow.steps.length, 'step')}, {plural(edgeCount, 'connection')}.{' '}
               {sel.edge ? (
                 <>
                   <b className="text-fg">{sel.edge.to}</b> waits for <b className="text-fg">{sel.edge.from}</b>: Delete removes the connection.
@@ -238,7 +239,7 @@ export function FlowInspector({
             </ul>
             {copied && (
               <LinkButton icon={<ClipboardPaste size={12} />} onClick={onPaste}>
-                Paste {copied.ids.length} copied step{copied.ids.length === 1 ? '' : 's'}
+                Paste {plural(copied.ids.length, 'copied step')}
               </LinkButton>
             )}
             <FlowOutputEditor key={`output:${version}`} output={flow.output} update={onSetOutput} />

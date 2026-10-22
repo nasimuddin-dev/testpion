@@ -5,7 +5,7 @@ import { promptText, toastError, attempt } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
 import { LABEL } from '../lib/vocabulary';
 import { deleteRuleWithUndo } from './debugger/DockRules';
-import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea } from './ui';
+import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
 
 /**
@@ -199,17 +199,17 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
                   {r.summary}
                 </td>
                 <td className="py-1 whitespace-nowrap text-right">
-                  <IconButton label="Earlier (the first matching reply, redirect or breakpoint wins)" className="h-7 w-7" disabled={i === 0} reason="It is the first rule already" onClick={() => void act('debug.moveRule', { id: r.id, to: i - 1 })}>
-                    <ArrowUp size={12} />
+                  <IconButton size="md" label="Earlier (the first matching reply, redirect or breakpoint wins)" disabled={i === 0} reason="It is the first rule already" onClick={() => void act('debug.moveRule', { id: r.id, to: i - 1 })}>
+                    <ArrowUp />
                   </IconButton>
-                  <IconButton label="Later" className="h-7 w-7" disabled={i === state.rules.length - 1} reason="It is the last rule already" onClick={() => void act('debug.moveRule', { id: r.id, to: i + 1 })}>
-                    <ArrowDown size={12} />
+                  <IconButton size="md" label="Later" disabled={i === state.rules.length - 1} reason="It is the last rule already" onClick={() => void act('debug.moveRule', { id: r.id, to: i + 1 })}>
+                    <ArrowDown />
                   </IconButton>
                   <Button size="sm" variant="ghost" icon={<Pencil size={12} />} onClick={() => setEditing(r)}>
                     Edit
                   </Button>
-                  <IconButton label="Remove the rule" className="h-7 w-7" onClick={() => void deleteRuleWithUndo(r, i, onChange)}>
-                    <Trash2 size={12} />
+                  <IconButton size="md" label="Remove the rule" onClick={() => void deleteRuleWithUndo(r, i, onChange)}>
+                    <Trash2 />
                   </IconButton>
                 </td>
               </tr>
@@ -218,7 +218,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
         </table>
       )}
       <section className="grid gap-1">
-        <div className="text-xs font-semibold text-muted uppercase tracking-wide">What would happen to a URL</div>
+        <SectionTitle size="sm">What would happen to a URL</SectionTitle>
         <div className="flex gap-2">
           <Input
             className="flex-1 mono"
@@ -329,7 +329,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
             </Select>
           </Field>
         </div>
-        <div className="text-xs font-semibold text-muted uppercase tracking-wide">Matches</div>
+        <SectionTitle size="sm">Matches</SectionTitle>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Host" hint="Glob: api.test, *.example.com; empty: any">
             <Input className="mono" value={r.match?.host ?? ''} onChange={(e) => match({ host: e.target.value || undefined })} placeholder="*.example.com" />

@@ -6,7 +6,7 @@ import { type AssistantApplied, toastError } from '../store';
 import { openRef } from '../lib/open-ref';
 import { parseYaml } from '../lib/yaml';
 import { SidePicker, type Side } from './OpenApiDiffDialog';
-import { Badge, Button, cx, Field, Input, Metric, MetricGrid, ModalOrPanel, Select, Toggle } from './ui';
+import { Badge, Button, cx, Field, Input, Metric, MetricGrid, ModalOrPanel, Select, StatusDot, Toggle } from './ui';
 import { BarRow, ChartCard, Swatch } from './charts';
 import { ApiReportBar } from './ApiReportBar';
 import type { ApiReport } from './output/api-report-specs';
@@ -191,8 +191,8 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
                     <tr key={`${o.method} ${o.path}`} className="border-t border-line/60 align-top">
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className={cx('w-2 h-2 rounded-full shrink-0', !o.covered ? 'bg-bad' : o.untestedStatuses.length ? 'bg-warn' : 'bg-ok')} title={!o.covered ? 'Never called' : o.untestedStatuses.length ? 'Some documented responses not seen' : 'Covered'} />
-                          <span className={cx('mono text-[0.72rem] font-bold w-14 shrink-0', `method-${o.method}`)}>{o.method}</span>
+                          <StatusDot tone={!o.covered ? 'bad' : o.untestedStatuses.length ? 'warn' : 'ok'} label={!o.covered ? 'Never called' : o.untestedStatuses.length ? 'Some documented responses not seen' : 'Covered'} />
+                          <span className={cx('mono text-2xs font-bold w-14 shrink-0', `method-${o.method}`)}>{o.method}</span>
                           <span className="mono text-xs truncate">{o.path}</span>
                           {o.deprecated && <Badge tone="warn">deprecated</Badge>}
                         </div>

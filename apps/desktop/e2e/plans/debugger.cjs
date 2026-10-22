@@ -192,7 +192,7 @@ const steps = [
       if (!area) return 'NO DECODE';
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
       setter.call(area, 'aGVsbG8gd29ybGQ='); area.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(300);
-      const b64 = document.querySelector('main [data-convert] [data-decode="Base64 Decode"] pre')?.textContent;
+      const b64 = document.querySelector('main [data-convert] [data-decode="Base64 decode"] pre')?.textContent;
       return 'decrypt on: ' + st.decrypt + ' | label: ' + label + ' | fingerprint: ' + !!fp + ' | base64: ' + b64;
     })()`,
   ],

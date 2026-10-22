@@ -7,7 +7,7 @@ import type { Collection } from '../types';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 import { Markdown } from './Markdown';
-import { Segmented, useDebounced, Textarea } from './ui';
+import { Bar, Segmented, Textarea, useDebounced } from './ui';
 
 /**
  * Postman-style collection documentation: the collection description plus every folder and request
@@ -40,7 +40,7 @@ export function CollectionDocs({ collection, onDescription }: { collection: Coll
 
   return (
     <div className="h-full flex flex-col min-h-0" data-output="collection.docs">
-      <div className="flex items-center gap-2 px-3 h-10 border-b border-line shrink-0">
+      <Bar>
         <Segmented
           label="Documentation mode"
           value={mode}
@@ -52,7 +52,7 @@ export function CollectionDocs({ collection, onDescription }: { collection: Coll
         />
         <span className="text-xs text-muted ml-2">Sensitive values are masked. Request docs are written in each request’s Docs tab.</span>
         <OutputActions spec={spec} />
-      </div>
+      </Bar>
       {mode === 'edit' ? (
         <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 p-3">
           <Textarea autoGrow={false}

@@ -44,7 +44,7 @@ export function RequestEditor({
   const count = (a?: Array<{ enabled?: boolean }>) => a?.filter((x) => x.enabled !== false).length || undefined;
   return (
     <div className="h-full flex flex-col min-h-0">
-      <Tabs
+      <Tabs label="Request"
         value={sub}
         onChange={setSub}
         tabs={[
@@ -63,11 +63,11 @@ export function RequestEditor({
       <div className="flex-1 min-h-0 overflow-auto">
         {sub === 'params' && (
           <div className="p-2">
-            <div className="text-xs font-semibold text-muted px-1 pb-1">Query Params</div>
+            <div className="text-xs font-semibold text-muted px-1 pb-1">Query params</div>
             <KeyValueEditor rows={r.params ?? []} onChange={setParams} keyPlaceholder="Key" bulkEdit />
             {!!r.pathVariables?.length && (
               <>
-                <div className="text-xs font-semibold text-muted px-1 pt-4 pb-1">Path Variables</div>
+                <div className="text-xs font-semibold text-muted px-1 pt-4 pb-1">Path variables</div>
                 <KeyValueEditor rows={r.pathVariables} onChange={(pathVariables) => setReq({ pathVariables: pathVariables.filter((v) => r.pathVariables!.some((x) => x.key === v.key)) })} keyPlaceholder="Key" fixedKeys />
               </>
             )}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { outputFileName } from '@testpion/shared';
 import { OutputActions } from './output/OutputFrame';
+import { SectionTitle } from './ui';
 import type { OutputSpec } from './output/output-core';
 import { chartPng, chartSvg } from './output/chart-image';
 
@@ -40,7 +41,7 @@ export function ChartCard({ title, aside, legend, children, className }: { title
   return (
     <section ref={card} className={'rounded-xl border border-line bg-panel/40 p-3 min-w-0 ' + (className ?? '')} data-output="chart">
       <div className="flex items-center gap-2 mb-2">
-        <h3 className="text-xs font-semibold text-muted uppercase tracking-wide">{title}</h3>
+        <SectionTitle size="sm" as="h3">{title}</SectionTitle>
         <div className="ml-auto flex items-center gap-2 min-w-0">
           {aside && <div className="text-xs text-muted truncate">{aside}</div>}
           <OutputActions spec={spec} />

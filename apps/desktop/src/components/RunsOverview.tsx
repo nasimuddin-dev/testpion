@@ -3,7 +3,7 @@ import { Play } from 'lucide-react';
 import { call } from '../api';
 import { formatMs, plural } from '../lib/format';
 import { axisMs, ChartCard, chartKeys, ChartTip, PointLine, RecentRuns, Swatch, useWidth } from './charts';
-import { Empty } from './ui';
+import { Empty, SectionTitle } from './ui';
 import { OutputHeader } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 import { outputFileName } from '@testpion/shared';
@@ -193,7 +193,7 @@ function ScoreTrends({ runIds, onSelect }: { runIds: string[]; onSelect?(id: str
   if (points.length < 2 || !evaluators.length) return null;
   return (
     <div className="mt-3">
-      <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Scores by run</div>
+      <SectionTitle size="sm" className="mb-2">Scores by run</SectionTitle>
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
         {evaluators.map((e) => {
           const series = points.filter((p) => p.scores[e] !== undefined);

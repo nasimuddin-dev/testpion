@@ -1,6 +1,6 @@
 // Pinnable side panels (as in Visual Studio): the request Scripts tab's Snippets unpin into a tab on the edge and slide
 // over the editor on hover / click; inserting a snippet closes it; Ctrl+Shift+I picks a snippet by name; the pin is
-// remembered; a narrow Scripts tab shows Pre-request / Post-response as tabs; the Debugger's dock unpins and pins too.
+// remembered; Pre-request / Post-response are the shared tab strip at every width; the Debugger's dock unpins and pins too.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, stepOf } = require('../lib.cjs');
 
@@ -121,7 +121,7 @@ const steps = [
     `await __t.sleep(500); return 'layout: ' + layout() + ' | tabs: ' + vis('main [role=tab]').map((t) => t.textContent.trim()).filter((t) => /^(Pre-request|Post-response)/.test(t)).join(',') + ' | packages: ' + !!vis('main button').find((b) => b.textContent.trim() === 'Packages…');`,
   ),
   resize('wide-window', 1440),
-  step('wide-shows-column', `await __t.sleep(500); const r = 'layout: ' + layout(); await pickLayout('Auto'); return r;`),
+  step('wide-shows-tabs-too', `await __t.sleep(500); const r = 'layout: ' + layout(); await pickLayout('Auto'); return r;`),
   step(
     'debugger-dock-unpins',
     `await __t.view('Debugger'); await __t.sleep(800);
@@ -139,7 +139,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'scripts-tab-pinned': /^pinned=true open=true \| layout: column \| help icon: About scripts \| described: Runs after the response/,
+  'scripts-tab-pinned': /^pinned=true open=true \| layout: tabs \| help icon: About scripts \| described: Runs after the response/,
   'unpin-widens-the-editor': /^pinned=false open=false \| wider by >150 \| tab: false \| stored: 0$/,
   'hover-opens-overlay': /^after 100 ms open=false \| pinned=false open=true \| expanded: true \| no layout shift: true \| snippets shown: true$/,
   'insert-closes-overlay': /^pinned=false open=false \| editor has tp\.test: true \| focus on tab: true$/,
@@ -147,10 +147,10 @@ module.exports = withExpect(steps, {
   'focus-the-editor': /^focused: true$/,
   'quick-pick-inserts': /^first: Status code: Code is 200.* \| closed: true \| inserted after the comment: true \| editor focused: true$/,
   'esc-returns-to-editor': /^closed: true \| editor focused: true$/,
-  'palette-offers-insert-snippet': /^first command: Insert Snippet…/,
+  'palette-offers-insert-snippet': /^first command: Insert snippet…/,
   'pin-persists': /^pinned: pinned=true open=true \| after the view came back: pinned=true open=true \| stored: 1$/,
   'narrow-shows-tabs': /^layout: tabs \| tabs: Pre-request,Post-response \| packages: true$/,
-  'wide-shows-column': /^layout: column$/,
+  'wide-shows-tabs-too': /^layout: tabs$/,
   'debugger-dock-unpins':
     /^start: pinned=true open=true \| unpinned: pinned=false open=false \| rail: pinned=false open=true dock=timeline \| Esc: pinned=false open=false \| rail again: pinned=false open=true \| pinned: pinned=true open=true$/,
 });

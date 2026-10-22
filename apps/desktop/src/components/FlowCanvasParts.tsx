@@ -2,12 +2,13 @@
  * The flow canvas's own parts (drawn by FlowDiagram, the one canvas): sticky notes, coloured frames around steps, the
  * minimap, the Start node (and the empty flow's suggestions), and where the hover card goes.
  */
+import { plural } from '../lib/format';
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Play, Plus, X } from 'lucide-react';
 import type { FlowFrameBox, FlowFrameDef, FlowNote, FlowStep } from '@testpion/shared';
 import { Markdown } from './Markdown';
 import { fitText, type TextFont } from '../lib/fit-text';
-import { cx, Menu, type MenuItem } from './ui';
+import { Bar, cx, Menu, type MenuItem } from './ui';
 
 /** A step's outline by the latest run's status. */
 export const STATUS_STROKE: Record<string, string> = { passed: 'stroke-ok', failed: 'stroke-bad', error: 'stroke-bad', skipped: 'stroke-muted', running: 'stroke-accent' };
@@ -57,7 +58,7 @@ export function UserFrame({ frame: f, editable, onMenu, part }: { frame: FlowFra
   if (part === 'body')
     return (
       <g data-flow-frame-body={f.id} onContextMenu={menu}>
-        <title>{`${f.title}: a frame around ${f.steps.length} step${f.steps.length === 1 ? '' : 's'} (only drawn; it does not change how they run)${editable ? '. Drag its title to move them; right-click to rename, recolour or remove it' : ''}`}</title>
+        <title>{`${f.title}: a frame around ${plural(f.steps.length, 'step')} (only drawn; it does not change how they run)${editable ? '. Drag its title to move them; right-click to rename, recolour or remove it' : ''}`}</title>
         <rect x={f.x} y={f.y} width={f.w} height={f.h} rx={14} style={{ fill: c.soft, stroke: c.stroke }} strokeWidth={1.5} />
       </g>
     );
@@ -66,7 +67,7 @@ export function UserFrame({ frame: f, editable, onMenu, part }: { frame: FlowFra
       <g data-flow-frame-handle={editable ? f.id : undefined} className={editable ? 'cursor-move' : undefined}>
         <rect x={f.x} y={f.y} width={f.w} height={FRAME_TITLE_H} rx={14} style={{ fill: c.stroke }} opacity={0.9} />
         <rect x={f.x} y={f.y + FRAME_TITLE_H - 8} width={f.w} height={8} style={{ fill: c.stroke }} opacity={0.9} />
-        <text x={f.x + 12} y={f.y + 16} className="fill-bg text-[11.5px] font-semibold" data-flow-frame-title>
+        <text x={f.x + 12} y={f.y + 16} className="fill-bg text-xs font-semibold" data-flow-frame-title>
           {title}
         </text>
       </g>
@@ -328,12 +329,12 @@ export function StartNode({ x, y, spec, editable }: { x: number; y: number; spec
       <rect width={START_W} height={h} rx={10} className="fill-panel stroke-accent" strokeWidth={1.5} />
       <foreignObject x={0} y={0} width={START_W} height={h}>
         <div className="h-full flex flex-col text-xs text-fg select-none" onPointerDown={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-2 px-3 h-11 border-b border-line">
+          <Bar>
             <span className="grid place-items-center w-6 h-6 rounded-md bg-accent text-bg">
               <Play size={12} />
             </span>
-            <span className="font-semibold text-[13px]">Start</span>
-          </div>
+            <span className="font-semibold text-sm">Start</span>
+          </Bar>
           <div className="px-3 pt-2 flex items-center gap-2">
             <span className="text-muted">Trigger</span>
             {editable ? (

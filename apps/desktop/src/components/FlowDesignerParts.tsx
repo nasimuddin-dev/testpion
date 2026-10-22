@@ -23,7 +23,7 @@ import { asMap, asRows, asText, BlockFields, RunControlFields, useCommitted } fr
 import { ControlBlockFields, GroupFields, UntilFields } from './FlowControlFields';
 import { KeyValueEditor } from './KeyValueEditor';
 import { VarInput } from './VarInput';
-import { Badge, Button, cx, Field, Input, LinkButton, Modal, SectionTitle, Select, statusTone, Textarea, NamedOptions } from './ui';
+import { Badge, Button, cx, Field, FilterInput, Input, LinkButton, Modal, NamedOptions, SectionTitle, Select, statusTone, Textarea } from './ui';
 
 /* ------------------------------------------------------------------ the hover card */
 
@@ -78,7 +78,7 @@ export function StepPreview({ step, result, runId }: { step: FlowStep; result?: 
       {r.input && <div className="px-3 pt-2 mono text-muted truncate">{r.input}</div>}
       {r.error && <div className="px-3 pt-2 text-bad line-clamp-2">{r.error.message}</div>}
       {body ? (
-        <CodeBlock className="mono text-[11px] whitespace-pre-wrap break-all m-0 px-3 py-2 max-h-56 overflow-hidden" text={body} data-flow-preview-body />
+        <CodeBlock className="mono text-xs whitespace-pre-wrap break-all m-0 px-3 py-2 max-h-56 overflow-hidden" text={body} data-flow-preview-body />
       ) : (
         <div className="px-3 py-2 text-muted">No response body.</div>
       )}
@@ -634,12 +634,12 @@ export function BlockPalette({ onAdd }: { onAdd(block: PaletteBlock): void }) {
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-flow-palette>
       <div className="p-2 border-b border-line">
-        <Input className="h-7 min-h-7 text-sm" placeholder="Search blocks" aria-label="Search blocks" value={q} onChange={(e) => setQ(e.target.value)} />
+        <FilterInput placeholder="Search blocks" label="Search blocks" value={q} onChange={setQ} />
       </div>
       <div className="flex-1 overflow-auto py-1">
         {shown.map((p, i) => (
           <div key={p.type}>
-            {p.group !== shown[i - 1]?.group && <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">{p.group}</div>}
+            {p.group !== shown[i - 1]?.group && <SectionTitle size="sm" className="px-3 pt-2 pb-1">{p.group}</SectionTitle>}
             <button
               draggable
               data-flow-palette-block={p.type}

@@ -20,7 +20,7 @@ const listed = (r: Report): ProposalFinding[] =>
     title: `${f.title}: ${f.operation}${f.status ? ` ${f.status}` : ''}${f.pointer ? ` ${f.pointer}` : ''}`,
     kind: 'drift',
     explanation: f.expected ? `The document says ${f.expected}.` : undefined,
-    evidence: [{ text: `Seen ${f.observed.join(', ')} in ${f.count} of ${f.of} ${f.of === 1 ? 'response' : 'responses'}.` }],
+    evidence: [{ text: `Seen ${f.observed.join(', ')} in ${f.count} of ${plural(f.of, 'response')}.` }],
     count: f.count,
   }));
 
@@ -151,7 +151,7 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
               value={kind}
               onChange={(v) => setKind(v as Kind)}
               options={[
-                { value: 'history', label: 'History', title: 'The newest responses of History' },
+                { value: 'history', label: 'History', title: 'The newest responses of history' },
                 { value: 'har', label: 'HAR file', title: 'A saved Debugger session or a browser export' },
                 { value: 'run', label: 'A run', title: 'The responses the HTTP results of a run stored' },
               ]}

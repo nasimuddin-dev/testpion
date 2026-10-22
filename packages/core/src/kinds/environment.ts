@@ -15,7 +15,7 @@ export const environmentKinds: KindDefs = {
       const r = ref as EnvRef;
       if (!r.environmentId) return ok(r, r.scope === 'globals' ? 'Globals' : r.scope === 'workspace' ? 'Workspace variables' : r.scope === 'collection' ? 'Collection variables' : 'Environments');
       const e = environmentIndex(store, r.environmentId);
-      return e ? ok(r, e.name, 'Environment') : missing(r, 'That environment no longer exists (deleted or renamed in another workspace).', { label: 'Open Environments', view: 'environments' });
+      return e ? ok(r, e.name, 'Environment') : missing(r, 'That environment no longer exists (deleted or renamed in another workspace).', { label: 'Open environments', view: 'environments' });
     },
     ops: {
       remove: (store, id) => {
@@ -32,7 +32,7 @@ export const environmentKinds: KindDefs = {
       const r = ref as VarRef;
       if (!r.environmentId) return ok(r, r.key, 'Variable');
       const e = environmentIndex(store, r.environmentId);
-      if (!e) return missing(r, 'The environment of that variable no longer exists.', { label: 'Open Environments', view: 'environments' });
+      if (!e) return missing(r, 'The environment of that variable no longer exists.', { label: 'Open environments', view: 'environments' });
       return e.byId.has(`var:${r.key}`)
         ? ok(r, r.key, `Variable in ${e.name}`)
         : missing(r, `"${r.key}" is no longer a variable of ${e.name}.`, { label: `Open ${e.name}`, ref: { kind: 'environment', environmentId: r.environmentId } });

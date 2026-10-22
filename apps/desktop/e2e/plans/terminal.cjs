@@ -5,11 +5,11 @@ const { withExpect, step } = require('../lib.cjs');
 
 const H = `
   const box = () => document.querySelector('[data-terminal-box]');
-  const tabs = () => [...document.querySelectorAll('[data-terminal-tab]')];
+  const tabs = () => [...document.querySelectorAll('[data-terminal-strip] [role=tab]')];
   // the shown terminal's text with its scrollback, a line the width wrapped joined back (the rows on screen depend on
   // the panel's size and the length of the prompt: the workspace's path)
   const screen = () => {
-    const id = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.terminalTab;
+    const id = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.tabId;
     const t = (window.__tpTerminals?.(true) ?? []).find((x) => x.id === id);
     return t?.text ?? (box()?.querySelector('.xterm-rows')?.innerText ?? '').replace(/\\u00a0/g, ' ');
   };
@@ -22,7 +22,7 @@ const H = `
     let lastSent = -1;
     for (const end = performance.now() + ms; performance.now() < end; ) {
       if (await __t.waitFor(() => /^BURST-DONE\\s*$/m.test(screen()), Math.min(10000, end - performance.now()))) return { done: true, timeline };
-      const id = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.terminalTab;
+      const id = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.tabId;
       const l = (await sessions()).find((x) => x.id === id);
       const stalled = l && !l.detached && l.sent === lastSent && !/^BURST-DONE\\s*$/m.test(screen());
       lastSent = l?.sent ?? -1;
@@ -118,19 +118,19 @@ const steps = [
     'second-session',
     `document.querySelector('[data-terminal-strip] button[aria-label="New terminal"]')?.click();
      await __t.waitFor(() => tabs().length === 2, 15000);
-     const active = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.terminalTab;
+     const active = tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.tabId;
      await waitText(/\\S/, 20000);
-     return 'tabs: ' + tabs().length + ' | sessions: ' + (await sessions()).length + ' | the new one is active: ' + (active === tabs()[1]?.dataset.terminalTab);`,
+     return 'tabs: ' + tabs().length + ' | sessions: ' + (await sessions()).length + ' | the new one is active: ' + (active === tabs()[1]?.dataset.tabId);`,
   ),
   s(
     'survives-tab-switch',
-    `const before = tabs().map((t) => t.dataset.terminalTab).join();
+    `const before = tabs().map((t) => t.dataset.tabId).join();
      document.querySelector('[data-bottom-tab="console"]')?.click(); await __t.sleep(500);
      const gone = !document.querySelector('[data-terminal-box]');
      document.querySelector('[data-bottom-tab="terminal"]')?.click();
      await __t.waitFor(() => box()?.querySelector('.xterm'), 5000);
      tabs()[0]?.click(); await __t.sleep(500);
-     return 'hidden on Console: ' + gone + ' | same terminals after: ' + (tabs().map((t) => t.dataset.terminalTab).join() === before) + ' | first still shows its output: ' + /hello-from-tp/.test(screen());`,
+     return 'hidden on Console: ' + gone + ' | same terminals after: ' + (tabs().map((t) => t.dataset.tabId).join() === before) + ' | first still shows its output: ' + /hello-from-tp/.test(screen());`,
   ),
   s(
     'kill',
@@ -220,13 +220,13 @@ const steps = [
        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
        const wait = async (fn, ms) => { for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (fn()) return true; return false; };
        // (the reloaded page may still be starting: ask until the Terminal is there)
-       for (let i = 0; i < 30 && !document.querySelector('[data-terminal-tab]'); i++) {
+       for (let i = 0; i < 30 && !document.querySelector('[data-terminal-strip] [role=tab]'); i++) {
          if (!document.querySelector('[data-bottom-tab="terminal"][aria-selected="true"]')) window.dispatchEvent(new KeyboardEvent('keydown', { key: '\\u0060', code: 'Backquote', ctrlKey: true, bubbles: true }));
-         await wait(() => document.querySelectorAll('[data-terminal-tab]').length > 0, 1000);
+         await wait(() => document.querySelectorAll('[data-terminal-strip] [role=tab]').length > 0, 1000);
        }
        const text = () => (document.querySelector('[data-terminal-box] .xterm-rows')?.innerText ?? '').replace(/ /g, ' ');
        const back = await wait(() => /BURST-DONE/.test(text()), 10000);
-       const tabs = document.querySelectorAll('[data-terminal-tab]').length;
+       const tabs = document.querySelectorAll('[data-terminal-strip] [role=tab]').length;
        return 'tabs ' + tabs + ' | sessions ' + (await window.aps.invoke('terminal.list', {})).length + ' | output back: ' + back + (back ? '' : ' | shows: ' + text().replace(/\\s+/g, ' ').slice(-200));
      })()`,
   ],
@@ -234,9 +234,9 @@ const steps = [
     'close-all',
     `(async () => {
        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-       for (const t of [...document.querySelectorAll('[data-terminal-tab]')]) { t.parentElement.querySelector('button[aria-label^="Close"]')?.click(); await sleep(200); }
+       for (const t of [...document.querySelectorAll('[data-terminal-strip] [role=tab]')]) { t.querySelector('button[aria-label^="Close"]')?.click(); await sleep(200); }
        await sleep(800);
-       return 'tabs: ' + document.querySelectorAll('[data-terminal-tab]').length + ' | sessions: ' + (await window.aps.invoke('terminal.list', {})).length;
+       return 'tabs: ' + document.querySelectorAll('[data-terminal-strip] [role=tab]').length + ' | sessions: ' + (await window.aps.invoke('terminal.list', {})).length;
      })()`,
   ],
   [
@@ -246,18 +246,18 @@ const steps = [
        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
        const wait = async (fn, ms) => { for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await fn()) return true; return false; };
        document.querySelector('[data-terminal-strip] button[aria-label="New terminal"]')?.click();
-       await wait(() => document.querySelectorAll('[data-terminal-tab]').length === 1, 15000);
+       await wait(() => document.querySelectorAll('[data-terminal-strip] [role=tab]').length === 1, 15000);
        const before = (await window.aps.invoke('terminal.list', {})).length;
        const first = (await window.aps.invoke('ws.current')).name;
        await window.aps.invoke('ws.create', { name: 'Terminal other' });
        await window.aps.invoke('ws.open', { ref: 'Terminal other' });
-       await wait(async () => document.querySelectorAll('[data-terminal-tab]').length === 0, 15000);
+       await wait(async () => document.querySelectorAll('[data-terminal-strip] [role=tab]').length === 0, 15000);
        const after = (await window.aps.invoke('terminal.list', {})).length;
-       const tabs = document.querySelectorAll('[data-terminal-tab]').length;
+       const tabs = document.querySelectorAll('[data-terminal-strip] [role=tab]').length;
        // back to the first workspace: it starts with no terminals either (none came back)
        await window.aps.invoke('ws.open', { ref: first });
        await sleep(2000);
-       return 'before ' + before + ' | after: sessions ' + after + ', tabs ' + tabs + ' | back: tabs ' + document.querySelectorAll('[data-terminal-tab]').length + ', sessions ' + (await window.aps.invoke('terminal.list', {})).length;
+       return 'before ' + before + ' | after: sessions ' + after + ', tabs ' + tabs + ' | back: tabs ' + document.querySelectorAll('[data-terminal-strip] [role=tab]').length + ', sessions ' + (await window.aps.invoke('terminal.list', {})).length;
      })()`,
   ],
 ];

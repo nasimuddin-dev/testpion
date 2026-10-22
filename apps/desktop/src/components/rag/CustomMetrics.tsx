@@ -7,10 +7,9 @@ import { confirmDelete } from '../../lib/undo-delete';
 import { useRpc } from '../../lib/use-rpc';
 import { touchesFiles, type DataChangedEvent } from '../../lib/data-changed';
 import { plural } from '../../lib/format';
-import { useDebounced } from '../ui';
 import { AiAction } from '../ai/AiAction';
 import { CodeEditor } from '../CodeEditor';
-import { Badge, Button, Callout, Empty, Field, Input, Modal, Select, Spinner, cx } from '../ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Modal, SectionTitle, Select, Spinner, useDebounced } from '../ui';
 import { DagTreeEditor } from './DagTreeEditor';
 import { RagTryDialog } from './RagTryDialog';
 
@@ -53,7 +52,7 @@ function useCustomMetrics() {
   return useRpc<{ kinds: typeof CUSTOM_METRIC_KINDS; metrics: CustomMetricRow[] }>('rag.customMetrics', undefined, { reloadOn: ['data.changed'], reloadIf: metricFilesChanged, keep: true });
 }
 
-const KIND_LABEL = Object.fromEntries(CUSTOM_METRIC_KINDS.map((k) => [k.id, k.label])) as Record<string, string>;
+const METRIC_KIND_LABEL = Object.fromEntries(CUSTOM_METRIC_KINDS.map((k) => [k.id, k.label])) as Record<string, string>;
 
 /** The list of the workspace's custom metrics, with New. Opening one (or New) opens the editor. */
 export function CustomMetricsList({ selected, onSelect, onNew }: { selected?: string; onSelect(id: string): void; onNew(): void }) {
@@ -67,7 +66,7 @@ export function CustomMetricsList({ selected, onSelect, onNew }: { selected?: st
   return (
     <div className="flex flex-col min-h-0 h-full" data-rag-metrics-list>
       <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line">
-        <span className="text-xs font-semibold text-muted uppercase tracking-wide">Custom metrics</span>
+        <SectionTitle size="sm" as="span">Custom metrics</SectionTitle>
         <Button size="sm" className="ml-auto" icon={<Plus size={12} />} onClick={onNew} data-rag-metric-new>
           New metric
         </Button>
@@ -77,11 +76,11 @@ export function CustomMetricsList({ selected, onSelect, onNew }: { selected?: st
           <button key={m.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', selected === m.id ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => onSelect(m.id)} data-rag-metric-row={m.id}>
             <div className="flex items-center gap-1.5">
               <span className="truncate font-medium">{m.name}</span>
-              {m.kind && <Badge tone={m.kind === 'judge' || m.kind === 'checklist' || m.kind === 'dag' ? 'judge' : 'ok'}>{KIND_LABEL[m.kind]}</Badge>}
+              {m.kind && <Badge tone={m.kind === 'judge' || m.kind === 'checklist' || m.kind === 'dag' ? 'judge' : 'ok'}>{METRIC_KIND_LABEL[m.kind]}</Badge>}
               {!m.registered && <Badge tone="bad">not usable</Badge>}
             </div>
             <div className="text-xs text-muted truncate">
-              custom/{m.id} · v{m.version ?? '?'} · {m.examples} example{m.examples === 1 ? '' : 's'}
+              custom/{m.id} · v{m.version ?? '?'} · {plural(m.examples, 'example')}
             </div>
             {m.problems[0] && <div className={cx('text-xs truncate', m.problems[0].level === 'error' ? 'text-bad' : 'text-warn')}>{m.problems[0].message}</div>}
           </button>

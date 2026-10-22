@@ -33,7 +33,7 @@ export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: 
     { id: 'submitter', label: 'Submitter', hint: 'Send custom requests to a server: the selected one, ready to change, or a new one.', icon: Send, onClick: onSubmit },
     { id: 'filter', label: 'Filter', hint: 'Filter out requests you do not need, or capture only the ones you do: rules you make.', icon: Filter, panel: 'filter' },
     { id: 'highlight', label: 'Highlight', hint: 'Highlight important requests: by status, URL, time, size, program.', icon: Highlighter, panel: 'highlight' },
-    { id: 'auto-reply', label: 'Auto-Reply', hint: 'Automatically reply to requests: the server never sees them.', icon: Reply, panel: 'auto-reply' },
+    { id: 'auto-reply', label: 'Auto-reply', hint: 'Automatically reply to requests: the server never sees them.', icon: Reply, panel: 'auto-reply' },
     {
       id: 'modify',
       label: 'Modify',
@@ -49,7 +49,7 @@ export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: 
     { id: 'structure', label: 'Structure', hint: 'See the structure of the requests: domains and their paths, with counts and sizes.', icon: ListTree, panel: 'structure', shortcut: 'F6' },
     { id: 'performance', label: 'Performance', hint: 'Reveal response time and payload bottlenecks.', icon: Gauge, panel: 'performance', separator: true },
     { id: 'convert', label: 'Convert', hint: 'Decode and encode: URL, Base64, hex, JWT, timestamps, JSON.', icon: ArrowRightLeft, panel: 'convert' },
-    { id: 'export', label: 'Export / Import', hint: 'Export or import traffic: sessions, HAR, Fiddler SAZ.', icon: Download, items: exportItems },
+    { id: 'export', label: 'Export / import', hint: 'Export or import traffic: sessions, HAR, Fiddler SAZ.', icon: Download, items: exportItems },
   ];
   const lit = (i: RailItem) => !!active && (i.panel === active || (i.id === 'highlight' && active === 'highlight-rule') || (i.id === 'modify' && active === 'modify'));
   const button = (i: RailItem, extra: Record<string, unknown> = {}) => (
@@ -59,7 +59,7 @@ export function ToolRail({ active, onPanel, onSubmit, exportItems }: { active?: 
       aria-pressed={lit(i)}
       className={cx(
         'inline-flex items-center justify-center rounded-md text-muted transition-colors hover:text-fg hover:bg-hover',
-        labels ? 'h-12 w-[4.5rem] flex-col gap-0.5 text-[10px] leading-none' : 'h-9 w-9',
+        labels ? 'h-12 w-[4.5rem] flex-col gap-0.5 text-2xs leading-none' : 'h-9 w-9',
         lit(i) && 'bg-accent-soft text-accent',
       )}
       onClick={i.panel ? () => onPanel(i.panel!) : i.onClick}

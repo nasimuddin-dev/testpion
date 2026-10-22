@@ -83,7 +83,7 @@ export function TrashDialog({ kinds, onClose, onRestored }: { kinds?: readonly T
                 Restore
               </Button>
               <IconButton label="Delete for good" onClick={() => void purge(it)}>
-                <Trash2 size={14} />
+                <Trash2 />
               </IconButton>
             </li>
           ))}

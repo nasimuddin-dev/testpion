@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { FileSpreadsheet, Layers, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
@@ -96,7 +97,7 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" icon={<Play size={12} />} loading={starting} disabled={mode === 'matrix' && !chosen.length} reason="Tick at least one environment" data-scale-start onClick={() => void start()}>
-            {mode === 'data' ? 'Run per row' : `Run in ${chosen.length} environment${chosen.length === 1 ? '' : 's'}`}
+            {mode === 'data' ? 'Run per row' : `Run in ${plural(chosen.length, 'environment')}`}
           </Button>
         </>
       }

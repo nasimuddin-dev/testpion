@@ -2,6 +2,7 @@ import { toast as sonner } from 'sonner';
 import { OUTPUT_FORMATS, CLIENT_OUTPUT_LIMIT, COPY_LIMIT, PROGRESS_THRESHOLD, bytesToBase64, formatBytes, outputSurface, type OutputFormatId, type OutputSource, type OutputSurfaceId } from '@testpion/shared';
 import { call, on } from '../../api';
 import { confirmAction, toastError, useApp, attempt } from '../../store';
+import { writeClipboard } from '../../lib/clipboard';
 import { downloadContent } from '../../lib/files';
 
 /**
@@ -170,7 +171,7 @@ export async function copyOutput(spec: OutputSpec, f: OutputFormatSpec): Promise
       redacted = r.redacted;
     }
     if (text.length > COPY_LIMIT) throw new Error(`Too large to copy (${formatBytes(text.length)}): download it instead`);
-    await navigator.clipboard.writeText(text);
+    await writeClipboard(text);
     useApp.getState().toast(`Copied the ${spec.what} as ${formatLabel(f)}${redacted ? ' (secrets masked)' : ''}`, 'success');
   });
 }

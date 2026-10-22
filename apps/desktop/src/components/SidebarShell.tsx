@@ -1,6 +1,7 @@
-import { type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { cx, Tooltip } from './ui';
 import { usePersisted } from '../lib/sticky';
+import { focusTab, tabKeyTarget } from '../lib/tablist-keys';
 
 export interface SidebarPane {
   id: string;
@@ -25,15 +26,32 @@ export function SidebarShell({ id, panes, value, onChange }: { id: string; panes
     onChange?.(p);
   };
   const pane = panes.find((p) => p.id === active) ?? panes[0]!;
+  const listRef = useRef<HTMLDivElement>(null);
   return (
     <div className="h-full flex flex-col bg-panel/50 border-r border-line min-w-0">
       {/* labels show (two panes always; more when the sidebar is wide enough, a container query), otherwise icons with tooltips */}
-      <div role="tablist" aria-label="Sidebar" className="@container flex items-center gap-0.5 px-2 pt-2 pb-2 shrink-0">
+      <div
+        ref={listRef}
+        role="tablist"
+        aria-label="Sidebar"
+        className="@container flex items-center gap-0.5 px-2 pt-2 pb-2 shrink-0"
+        onKeyDown={(e) => {
+          // ← → Home End, as every tab strip (lib/tablist-keys.ts)
+          const next = tabKeyTarget(e.key, panes.map((p) => p.id), pane.id);
+          if (next === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
+          e.preventDefault();
+          pick(next);
+          focusTab(listRef.current, next);
+        }}
+      >
         {panes.map((p) => (
           <Tooltip key={p.id} content={p.label}>
             <button
+              type="button"
               role="tab"
+              data-tab-id={p.id}
               aria-selected={pane.id === p.id}
+              tabIndex={pane.id === p.id ? 0 : -1}
               aria-label={p.label}
               onClick={() => pick(p.id)}
               className={cx(

@@ -2,7 +2,7 @@ import { FolderPlus, Plus } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { KIND_INFO, savedItemRef, toItemRef, type ItemRef, type KindId } from '@testpion/shared';
 import { deleteWithUndo, putBack } from '../lib/undo-delete';
-import { Button, cx, Input } from './ui';
+import { Button, cx, FilterInput } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, moveToFolderItem, OPEN_ICON, treeKeys } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
@@ -198,12 +198,12 @@ export function FolderList({
     // the keyboard moves through the header and the rows as one list (↑ from the first row reaches the header)
     <div className="h-full flex flex-col min-h-0" onKeyDown={treeKeys} role="tree" aria-label={title}>
       <TreeRowShell kind={`section:${kind}` as NodeKind} nodeId={treeKey(id, 'section')} label={title} header ctx={headerCtx} className="mx-0 pl-3 shrink-0">
-        <span className="text-[0.82rem] font-semibold truncate">{title}</span>
+        <span className="text-xs font-semibold truncate">{title}</span>
         {items.length > 0 && <CountPill n={items.length} />}
       </TreeRowShell>
       {items.length > 0 && (
         <div className="px-2 pb-2 shrink-0">
-          <Input className="w-full h-7 min-h-7 text-sm" placeholder={`Filter ${itemNoun}s`} aria-label={`Filter ${itemNoun}s`} value={q} onChange={(e) => setQ(e.target.value)} />
+          <FilterInput className="w-full" placeholder={`Filter ${itemNoun}s`} label={`Filter ${itemNoun}s`} value={q} onChange={setQ} />
         </div>
       )}
       <div className="flex-1 overflow-auto pb-2" onContextMenu={area.onContextMenu}>

@@ -109,7 +109,7 @@ export function ModelPicker({ providers, provider, model, onChange }: { provider
         ))}
       </datalist>
       <IconButton label="Fetch model list" onClick={refresh}>
-        <RefreshCw size={13} />
+        <RefreshCw />
       </IconButton>
     </div>
   );
@@ -159,7 +159,7 @@ export function PromptEditor({ d, set }: { d: Draft; set(p: Partial<Draft>): voi
   const vars = useMemo(() => [...new Set([...templateVars(d.prompt), ...templateVars(d.system)])], [d.prompt, d.system]);
   return (
     <div className="h-full flex flex-col">
-      <Tabs
+      <Tabs label="Prompt"
         value={sub}
         onChange={setSub}
         tabs={[
@@ -247,7 +247,7 @@ export function NoProviders({ onSetUp }: { onSetUp(): void }) {
     <Empty
       icon={<WifiOff size={26} />}
       title="Set up an AI provider first"
-      actions={[{ label: 'Open Providers', onClick: onSetUp }]}
+      actions={[{ label: 'Open providers', onClick: onSetUp }]}
     >
       Prompts are sent to a provider you choose: OpenAI-compatible, Azure OpenAI, Anthropic, Gemini, Amazon Bedrock or Ollama. The built-in "mock" provider works fully offline, for trying things out.
     </Empty>

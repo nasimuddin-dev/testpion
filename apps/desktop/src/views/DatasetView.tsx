@@ -163,7 +163,7 @@ export function DatasetView() {
           </Button>
         )}
       </div>
-      <Tabs
+      <Tabs label="Dataset"
         value={tab}
         onChange={setTab}
         tabs={[

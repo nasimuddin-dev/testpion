@@ -3,7 +3,7 @@ import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from '
 import { memo, useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import { Badge, Button, Busy, Empty, IconButton, Menu, Modal, Select, Textarea } from './ui';
+import { Badge, Busy, Button, Empty, IconButton, Menu, Modal, SectionTitle, Select, Textarea } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
 import { copyText } from '../lib/clipboard';
@@ -99,13 +99,13 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
             </Button>
           </div>
           <div>
-            <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">By hand</div>
+            <SectionTitle size="sm" className="mb-1">By hand</SectionTitle>
             <ul className="grid gap-1 text-xs">
               {info.instructions.map((line) => (
                 <li key={line} className="flex gap-2 items-start">
                   <span className="mono break-all flex-1">{line}</span>
-                  <IconButton label="Copy the line" className="h-7 w-7" onClick={() => void copyText(line, 'the line')}>
-                    <Copy size={12} />
+                  <IconButton size="md" label="Copy the line" onClick={() => void copyText(line, 'the line')}>
+                    <Copy />
                   </IconButton>
                 </li>
               ))}
@@ -167,20 +167,20 @@ const htmlEncode = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 
 /** The conversions of the Convert panel: decoders read a value, encoders write one. */
 const DECODERS: Array<{ id: string; label: string; run(s: string): string }> = [
-  { id: 'url', label: 'URL Decode', run: (s) => decodeURIComponent(s.replace(/\+/g, ' ')) },
-  { id: 'base64', label: 'Base64 Decode', run: b64decode },
-  { id: 'hex', label: 'Hex Decode', run: fromHex },
-  { id: 'html', label: 'HTML Decode', run: htmlDecode },
-  { id: 'jwt', label: 'JWT Decode', run: jwtOf },
+  { id: 'url', label: 'URL decode', run: (s) => decodeURIComponent(s.replace(/\+/g, ' ')) },
+  { id: 'base64', label: 'Base64 decode', run: b64decode },
+  { id: 'hex', label: 'Hex decode', run: fromHex },
+  { id: 'html', label: 'HTML decode', run: htmlDecode },
+  { id: 'jwt', label: 'JWT decode', run: jwtOf },
   { id: 'timestamp', label: 'Timestamp', run: timeOf },
-  { id: 'json', label: 'JSON Format', run: jsonOf },
+  { id: 'json', label: 'JSON format', run: jsonOf },
 ];
 const ENCODERS: Array<{ id: string; label: string; run(s: string): string }> = [
-  { id: 'url', label: 'URL Encode', run: encodeURIComponent },
-  { id: 'base64', label: 'Base64 Encode', run: b64encode },
-  { id: 'hex', label: 'Hex Encode', run: hexOf },
-  { id: 'html', label: 'HTML Encode', run: htmlEncode },
-  { id: 'json-min', label: 'JSON Minify', run: (s) => JSON.stringify(JSON.parse(s)) },
+  { id: 'url', label: 'URL encode', run: encodeURIComponent },
+  { id: 'base64', label: 'Base64 encode', run: b64encode },
+  { id: 'hex', label: 'Hex encode', run: hexOf },
+  { id: 'html', label: 'HTML encode', run: htmlEncode },
+  { id: 'json-min', label: 'JSON minify', run: (s) => JSON.stringify(JSON.parse(s)) },
 ];
 
 /**
@@ -228,10 +228,10 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
         aria-label="Text to convert"
       />
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-muted uppercase tracking-wide">{out?.label ?? 'Result'}</span>
+        <SectionTitle size="sm" as="span">{out?.label ?? 'Result'}</SectionTitle>
         {out?.value !== undefined && (
-          <IconButton label="Copy the result" className="h-7 w-7" onClick={() => void copyText(out.value!, out.label.toLowerCase())}>
-            <Copy size={12} />
+          <IconButton size="md" label="Copy the result" onClick={() => void copyText(out.value!, out.label.toLowerCase())}>
+            <Copy />
           </IconButton>
         )}
       </div>
@@ -243,9 +243,9 @@ export function ConvertTool({ initial = '' }: { initial?: string }) {
             {readings.map(([label, value]) => (
               <div key={label} data-decode={label}>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">{label}</span>
-                  <IconButton label={`Copy the ${label.toLowerCase()} reading`} className="h-7 w-7" onClick={() => void copyText(value!, label.toLowerCase())}>
-                    <Copy size={12} />
+                  <SectionTitle size="sm" as="span">{label}</SectionTitle>
+                  <IconButton size="md" label={`Copy the ${label.toLowerCase()} reading`} onClick={() => void copyText(value!, label.toLowerCase())}>
+                    <Copy />
                   </IconButton>
                 </div>
                 <CodeBlock className="mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel max-h-40 overflow-auto" text={value ?? ''} />
@@ -381,9 +381,9 @@ export function GrpcView({ call: g, open }: { call: GrpcCall; open?: boolean }) 
         ] as Array<[string, unknown[]]>
       ).map(([title, list]) => (
         <section key={title}>
-          <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">
+          <SectionTitle size="sm" className="mb-1">
             {title} · {plural(list.length, 'message')}
-          </div>
+          </SectionTitle>
           {list.map((m, i) => (
             <CodeBlock key={i} className="text-xs mono whitespace-pre-wrap break-all rounded border border-line p-2 bg-panel mb-1" data-grpc-message={title} language="json" text={JSON.stringify(m, null, 2)} />
           ))}
@@ -431,8 +431,7 @@ export function ConnectionsView({ rows, onPick }: { rows: ConnectionRow[]; onPic
             <span className="font-medium truncate">{g.host}</span>
             <span className="text-xs text-muted">{g.application ?? ''}</span>
             <span className="ml-auto text-xs text-muted">
-              {g.list.length} {g.h2 ? 'stream' : 'request'}
-              {g.list.length === 1 ? '' : 's'}
+              {plural(g.list.length, g.h2 ? 'stream' : 'request')}
             </span>
           </header>
           <table className="text-xs w-full">

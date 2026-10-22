@@ -43,7 +43,7 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
         </>
       }
     >
-      <Tabs
+      <Tabs label="Folder settings"
         value={tab}
         onChange={setTab}
         tabs={[

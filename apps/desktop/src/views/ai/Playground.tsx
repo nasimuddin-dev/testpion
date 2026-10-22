@@ -301,7 +301,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                   />
                   {r && d.format !== 'text' && <Metric label="Structured output" value={r.schemaValid === false ? 'invalid' : r.isJson ? 'valid' : 'not JSON'} tone={r.schemaValid === false || !r.isJson ? 'bad' : 'ok'} />}
                 </div>
-                <Tabs
+                <Tabs label="Result"
                   value={resTab}
                   onChange={setResTab}
                   tabs={[

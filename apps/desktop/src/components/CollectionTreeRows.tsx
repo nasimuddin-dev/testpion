@@ -7,7 +7,7 @@ import { categoryCounts, type RequestCategory } from '../lib/collection-filter';
 import { examplesOpenKey, folderOpenKey, scopedNodeId, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 import { CLOSED_ICON, CountPill, FOLDER_ICON, KIND_COLOR, OPEN_ICON, TreeBadge } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
-import { Button, cx } from './ui';
+import { Button, cx, StatusDot } from './ui';
 
 /*
  * The rows of the Collections tree (CollectionTree draws them through a VirtualList): a collection, a protocol
@@ -156,7 +156,7 @@ export const FolderRow = memo(function FolderRow({ c, n, depth, open, renaming, 
       {open ? OPEN_ICON : CLOSED_ICON}
       {FOLDER_ICON}
       <span className="truncate">{n.name}</span>
-      {(n.preRequestScript || n.testScript || n.variables?.length || (n as { logic?: true }).logic) && <span className="w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" title="Has folder scripts or variables" />}
+      {(n.preRequestScript || n.testScript || n.variables?.length || (n as { logic?: true }).logic) && <StatusDot tone="accent" label="Has folder scripts or variables" />}
       <span className="ml-auto pl-1">
         <CountPill n={counts.rest + counts.soap + counts.graphql} />
       </span>
@@ -213,13 +213,13 @@ export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dr
         {c.name}
       </span>
       {failing ? (
-        <span className="shrink-0 text-[0.65rem] font-semibold px-1 rounded bg-bad/15 text-bad" title={`${failing} of ${sent} sent requests: the latest response failed`}>
+        <span className="shrink-0 text-3xs font-semibold px-1 rounded bg-bad/15 text-bad" title={`${failing} of ${sent} sent requests: the latest response failed`}>
           {failing}
         </span>
       ) : null}
       {/* two collections with one name (an import done twice): their ids tell them apart */}
       {duplicate && (
-        <span className="text-[0.7rem] text-muted font-normal mono truncate shrink-0 max-w-[40%]" title="Another collection has this name; this is its id">
+        <span className="text-2xs text-muted font-normal mono truncate shrink-0 max-w-[40%]" title="Another collection has this name; this is its id">
           {c.id}
         </span>
       )}

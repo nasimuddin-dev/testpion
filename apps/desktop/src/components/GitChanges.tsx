@@ -263,7 +263,7 @@ function FileRow({
           {g.items.length > 1 && <span className="text-xs text-muted shrink-0">{plural(g.items.length, 'change')}</span>}
         </span>
       )}
-      <button className="font-mono text-[0.7rem] text-muted truncate max-w-[30%] text-left hover:underline" title={`${f.path}: show the line diff`} onClick={() => showDiff(f)}>
+      <button className="font-mono text-2xs text-muted truncate max-w-[30%] text-left hover:underline" title={`${f.path}: show the line diff`} onClick={() => showDiff(f)}>
         {f.path}
       </button>
       {f.staged && <Badge tone="accent" title="Staged: chosen for the next commit">{f.alsoUnstaged ? 'partly staged' : 'staged'}</Badge>}

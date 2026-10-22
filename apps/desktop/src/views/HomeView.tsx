@@ -12,7 +12,7 @@ import { promptText, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
 import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
-import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, statusTone } from '../components/ui';
+import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, StatusDot, statusTone } from '../components/ui';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
@@ -283,7 +283,7 @@ export function HomeView() {
           <div aria-hidden className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-[image:var(--brand-gradient)] opacity-20 blur-3xl" />
           <div aria-hidden className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-[var(--brand-from)] opacity-10 blur-3xl" />
           <p className="relative text-sm font-medium text-accent">{greeting()} 👋</p>
-          <h1 className="relative text-[1.75rem] font-semibold tracking-tight mt-1">{ws ? ws.name : 'Welcome to TestPion'}</h1>
+          <h1 className="relative text-hero font-semibold tracking-tight mt-1">{ws ? ws.name : 'Welcome to TestPion'}</h1>
           <p className="relative text-sm text-muted mt-1.5 max-w-2xl">Build, test and debug REST, GraphQL, gRPC, WebSocket, MCP and AI APIs. Everything stays on this computer.</p>
           {ws?.id === EXAMPLES_ID ? (
             <p className="relative text-sm mt-3 max-w-3xl">
@@ -412,7 +412,7 @@ export function HomeView() {
                       {health[c.id]!.failing} failing
                     </Badge>
                   ) : health[c.id]?.sent ? (
-                    <span className="w-2 h-2 rounded-full bg-ok shrink-0" title={`${health[c.id]!.sent} sent requests, all passing`} aria-label="all sent requests passing" />
+                    <StatusDot tone="ok" label={`${health[c.id]!.sent} sent requests, all passing`} />
                   ) : null}
                   <button className="opacity-0 group-hover:opacity-100 text-muted hover:text-accent" title="Run collection" aria-label={`Run ${c.name}`} onClick={() => open('collections', { collectionId: c.id, run: true })}>
                     <Play size={13} />
@@ -457,7 +457,7 @@ export function HomeView() {
                   const r = m.lastResult;
                   return (
                     <button key={m.id} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => setView('monitors')}>
-                      <span className={cx('w-2 h-2 rounded-full shrink-0', !r ? 'bg-muted/50' : r.status === 'passed' ? 'bg-ok' : 'bg-bad')} />
+                      <StatusDot tone={!r ? 'muted' : r.status === 'passed' ? 'ok' : 'bad'} />
                       <span className="truncate flex-1">{m.name}</span>
                       {m.enabled && <RecentRuns statuses={m.recent ?? []} className="hidden sm:inline-flex" />}
                       {!m.enabled ? <Badge>paused</Badge> : r ? <Badge tone={r.status === 'passed' ? 'ok' : 'bad'}>{r.status === 'passed' ? `${r.passed}/${r.total}` : r.status === 'failed' ? (r.failed + r.errors ? `${r.failed + r.errors} failed` : r.reason?.startsWith('p95') ? 'too slow' : 'attention') : 'error'}</Badge> : <span className="text-xs text-muted">not run yet</span>}
@@ -473,7 +473,7 @@ export function HomeView() {
                   const bad = r.failed + r.errors;
                   return (
                     <button key={r.id} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => open('tests', { runId: r.id })}>
-                      <span className={cx('w-2 h-2 rounded-full shrink-0', bad ? 'bg-bad' : 'bg-ok')} />
+                      <StatusDot tone={bad ? 'bad' : 'ok'} />
                       <span className="truncate flex-1">{r.name}</span>
                       <Badge tone={bad ? 'bad' : 'ok'}>{bad ? `${bad} failed` : `${r.passed}/${r.total} passed`}</Badge>
                       <span className="text-xs text-muted shrink-0 w-16 text-right">{timeAgo(r.startedAt)}</span>
@@ -490,7 +490,7 @@ export function HomeView() {
           <Card title="Certificates" icon={<LockKeyhole size={15} />} action={<span className="text-xs text-muted">{plural(certs.length, 'host')}</span>}>
             {certs.slice(0, 6).map((c) => (
               <div key={c.host} className="flex items-center gap-2 px-2 py-1.5 text-sm" title={`${c.host}: valid until ${c.validTo ? new Date(c.validTo).toLocaleDateString() : '?'}${c.issuer ? `, issued by ${c.issuer}` : ''} · last seen ${timeAgo(c.lastSeen)}`}>
-                <span className={cx('w-2 h-2 rounded-full shrink-0', c.daysLeft === undefined ? 'bg-muted/50' : c.daysLeft < 14 ? 'bg-bad' : c.daysLeft < 30 ? 'bg-warn' : 'bg-ok')} />
+                <StatusDot tone={c.daysLeft === undefined ? 'muted' : c.daysLeft < 14 ? 'bad' : c.daysLeft < 30 ? 'warn' : 'ok'} />
                 <span className="truncate mono text-xs flex-1">{c.host}</span>
                 <span className="text-xs text-muted truncate max-w-[40%] hidden sm:inline">{c.issuer}</span>
                 <Badge tone={c.daysLeft === undefined ? 'default' : c.daysLeft < 14 ? 'bad' : c.daysLeft < 30 ? 'warn' : 'ok'}>{c.daysLeft === undefined ? '?' : c.daysLeft < 0 ? 'expired' : `${c.daysLeft} days`}</Badge>

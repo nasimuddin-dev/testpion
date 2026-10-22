@@ -280,7 +280,7 @@ async function reopenHistory(historyId: string): Promise<boolean> {
       ref: { kind: 'history', historyId },
       reason: 'missing',
       message: 'That history entry is gone (cleared, or from another workspace).',
-      next: { label: 'Open History', view: 'history' },
+      next: { label: 'Open history', view: 'history' },
     });
     return false;
   }
@@ -301,7 +301,7 @@ export function openHistoryEntry(e: { kind: string; name?: string; request?: unk
   }
   useApp
     .getState()
-    .toast(`${e.name ?? 'This entry'} has no request kept to send again`, 'warning', historyId ? { ref: { kind: 'history', historyId }, label: 'Show in History' } : undefined);
+    .toast(`${e.name ?? 'This entry'} has no request kept to send again`, 'warning', historyId ? { ref: { kind: 'history', historyId }, label: 'Show in history' } : undefined);
   return false;
 }
 

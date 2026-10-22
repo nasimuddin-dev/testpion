@@ -23,7 +23,7 @@ import {
   type Tree,
   type TreeNode,
 } from '../../lib/dag-tree';
-import { Badge, Button, IconButton, Input, Select, cx } from '../ui';
+import { Badge, Button, cx, IconButton, Input, SectionTitle, Select } from '../ui';
 
 /** Where a branch goes: to another node, or to a leaf with a score from 0 to 10 and the reason for it. */
 function BranchField({ label, branch, nodes, self, onChange, name }: { label: string; branch: Branch; nodes: string[]; self: string; onChange(b: Branch): void; name: string }) {
@@ -131,7 +131,7 @@ export function DagTreeEditor({ text, onText }: { text: string; onText(text: str
   return (
     <section className="border border-line rounded-lg p-2 grid gap-2" data-dag-editor>
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-muted uppercase tracking-wide">Decision tree</span>
+        <SectionTitle size="sm" as="span">Decision tree</SectionTitle>
         {t && (
           <label className="flex items-center gap-1 text-xs">
             starts at
@@ -184,7 +184,7 @@ export function DagTreeEditor({ text, onText }: { text: string; onText(text: str
                 {t.root === id && <Badge tone="accent">first</Badge>}
                 {!reached && <Badge tone="warn" title="No answer leads here">not reached</Badge>}
                 <IconButton label={`Remove the node ${id}`} className="ml-auto" onClick={() => write(removeNode(t, id))} data-dag-remove={id}>
-                  <X size={12} />
+                  <X />
                 </IconButton>
               </div>
               {node.type !== 'rule' && (
@@ -219,7 +219,7 @@ export function DagTreeEditor({ text, onText }: { text: string; onText(text: str
                   </div>
                   {node.type === 'choice' && Object.keys(node.options).length > 2 && (
                     <IconButton label={`Remove the option ${s.label}`} onClick={() => write(removeOption(t, id, s.label))}>
-                      <X size={11} />
+                      <X />
                     </IconButton>
                   )}
                 </div>

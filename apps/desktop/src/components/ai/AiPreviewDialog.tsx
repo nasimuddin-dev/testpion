@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { Eye, Laptop, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AiTaskResult } from '@testpion/core';
@@ -167,13 +168,13 @@ export function AiPreviewDialog({
               <div className="rounded-lg border border-warn/50 bg-warn/5 p-2 grid gap-1.5" data-ai-images>
                 <div className="text-xs">
                   <b>
-                    {preview.images.length} picture{preview.images.length === 1 ? '' : 's'} ({Math.max(1, Math.round(preview.images.reduce((a, i) => a + i.bytes, 0) / 1024)).toLocaleString()} KB)
+                    {plural(preview.images.length, 'picture')} ({Math.max(1, Math.round(preview.images.reduce((a, i) => a + i.bytes, 0) / 1024)).toLocaleString()} KB)
                   </b>{' '}
                   will be sent to {preview.providerName} as data{preview.local ? ' (it stays on this computer)' : ''}. A picture cannot be masked: what it shows is what the model sees.
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {preview.images.map((im) => (
-                    <figure key={im.sha256} className="m-0 w-24 text-[10px] text-muted" title={`${im.mime} · ${im.bytes.toLocaleString()} bytes · sha256 ${im.sha256}`}>
+                    <figure key={im.sha256} className="m-0 w-24 text-2xs text-muted" title={`${im.mime} · ${im.bytes.toLocaleString()} bytes · sha256 ${im.sha256}`}>
                       {im.thumb ? <img src={im.thumb} alt="" className="w-24 h-20 object-contain rounded border border-line bg-surface" /> : <div className="w-24 h-20 grid place-items-center rounded border border-line">no preview</div>}
                       <figcaption className="mono truncate">{im.sha256.slice(0, 10)}</figcaption>
                     </figure>

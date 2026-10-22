@@ -235,7 +235,7 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
             <div data-rag-testset-estimate>
               {estimate.corpus && (
                 <p className="text-xs text-muted mb-2">
-                  {estimate.corpus.documents} document{estimate.corpus.documents === 1 ? '' : 's'}, {estimate.corpus.passages} passages
+                  {plural(estimate.corpus.documents, 'document')}, {estimate.corpus.passages} passages
                   {estimate.corpus.skipped.length ? `; skipped: ${estimate.corpus.skipped.join('; ')}` : ''}
                 </p>
               )}

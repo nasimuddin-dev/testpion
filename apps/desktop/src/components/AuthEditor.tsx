@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import type { AuthConfig } from '../types';
 import { Button, Field, Input, Select, Textarea } from './ui';
 import { call } from '../api';
@@ -242,7 +243,7 @@ export function AuthEditor({
             <Button
               size="sm"
               onClick={() =>
-                void call<number>('auth.clearTokens').then((n) => useApp.getState().toast(n ? `Forgot ${n} cached token${n > 1 ? 's' : ''}: the next request gets a new one` : 'No cached tokens', 'info'))
+                void call<number>('auth.clearTokens').then((n) => useApp.getState().toast(n ? `Forgot ${plural(n, 'cached token')}: the next request gets a new one` : 'No cached tokens', 'info'))
               }
             >
               Forget tokens

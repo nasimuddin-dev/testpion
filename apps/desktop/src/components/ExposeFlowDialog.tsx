@@ -185,7 +185,7 @@ export function ExposeFlowDialog({ path, onClose, onChanged }: { path: string; o
                     </td>
                     <td className="w-8">
                       <IconButton label="Remove input" onClick={() => setInputs(inputs.filter((_, j) => j !== n))}>
-                        <Trash2 size={13} />
+                        <Trash2 />
                       </IconButton>
                     </td>
                   </tr>

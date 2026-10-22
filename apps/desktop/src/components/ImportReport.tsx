@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Download, Sparkles } from 'lucide-react';
 import type { ImportFinding, ImportReport as Report, PlanNode } from '../types';
@@ -27,16 +28,16 @@ export function ImportReportView({ report, markdown, onFixWithAi }: { report: Re
     <div className="flex flex-col gap-2 text-sm" data-import-report>
       <div className="flex flex-wrap gap-x-4 gap-y-1" data-import-summary>
         <span>
-          <b>{c.requests}</b> request{c.requests === 1 ? '' : 's'} in <b>{c.folders}</b> folder{c.folders === 1 ? '' : 's'}
+          <b>{plural(c.requests, 'request')}</b> in <b>{plural(c.folders, 'folder')}</b>
         </span>
         {c.environments > 0 && (
           <span>
-            <b>{c.environments}</b> environment{c.environments === 1 ? '' : 's'}
+            <b>{plural(c.environments, 'environment')}</b>
           </span>
         )}
-        {c.specs > 0 && <span>{c.specs} API definition{c.specs === 1 ? '' : 's'}</span>}
-        {c.flows > 0 && <span>{c.flows} flow{c.flows === 1 ? '' : 's'}</span>}
-        {c.libraryItems > 0 && <span>{c.libraryItems} gRPC call{c.libraryItems === 1 ? '' : 's'} / connection{c.libraryItems === 1 ? '' : 's'}</span>}
+        {c.specs > 0 && <span>{plural(c.specs, 'API definition')}</span>}
+        {c.flows > 0 && <span>{plural(c.flows, 'flow')}</span>}
+        {c.libraryItems > 0 && <span>{plural(c.libraryItems, 'gRPC call / connection', 'gRPC calls / connections')}</span>}
       </div>
       <div className="flex flex-wrap gap-2 items-center">
         <Badge tone="ok" title="Came over as it was">
@@ -48,7 +49,7 @@ export function ImportReportView({ report, markdown, onFixWithAi }: { report: Re
         <Badge tone={s.notImported ? 'bad' : 'default'} title="Left out: the findings say why">
           {s.notImported} not imported
         </Badge>
-        {s.valuesNeeded > 0 && <Badge tone="accent">{s.valuesNeeded} value{s.valuesNeeded === 1 ? '' : 's'} to enter</Badge>}
+        {s.valuesNeeded > 0 && <Badge tone="accent">{plural(s.valuesNeeded, 'value')} to enter</Badge>}
         {report.scripts && (report.scripts.converted > 0 || report.scripts.kept > 0 || report.scripts.todo > 0) && (
           <span className="text-xs text-muted">
             scripts: {report.scripts.converted} converted to tp.*{report.scripts.kept ? `, ${report.scripts.kept} kept as written` : ''}
@@ -130,7 +131,7 @@ function TreeRow({ node, depth }: { node: PlanNode; depth: number }) {
           </button>
         ) : (
           <>
-            <span className={cx('mono w-12 shrink-0 text-[10px]', METHOD_TONE[node.method ?? ''] ?? 'text-muted')}>{node.kind === 'graphql' ? 'GQL' : node.method}</span>
+            <span className={cx('mono w-12 shrink-0 text-2xs', METHOD_TONE[node.method ?? ''] ?? 'text-muted')}>{node.kind === 'graphql' ? 'GQL' : node.method}</span>
             <span>{node.name}</span>
           </>
         )}

@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { ArrowDown, ArrowUp, EyeOff, Eye, MoreHorizontal, RotateCcw, Rows3, Settings } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { modKey } from '../api';
@@ -11,13 +12,13 @@ import { cx, Menu, Tooltip, type MenuItem } from './ui';
 /** A small count on a rail icon (the Git view's commits to pull): one look for every rail item that needs one. */
 function RailCount({ n }: { n: number }) {
   return (
-    <span data-rail-count="" className="absolute top-0 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-[0.6rem] font-bold leading-4 text-center pointer-events-none">
+    <span data-rail-count="" className="absolute top-0 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-white text-3xs font-bold leading-4 text-center pointer-events-none">
       {n > 99 ? '99+' : n}
     </span>
   );
 }
 
-const ITEM = 'group relative w-full flex flex-col items-center gap-0.5 py-1 [@media(max-height:680px)]:py-0.5 rounded-xl text-[0.72rem] font-medium transition-colors duration-150';
+const ITEM = 'group relative w-full flex flex-col items-center gap-0.5 py-1 [@media(max-height:680px)]:py-0.5 rounded-xl text-2xs font-medium transition-colors duration-150';
 const ICON =
   'grid place-items-center h-8 w-12 rounded-lg transition-[background-color,color,transform] duration-150 group-active:scale-90 [&>svg]:h-[22px] [&>svg]:w-[22px] [@media(max-height:680px)]:[&>svg]:h-5 [@media(max-height:680px)]:[&>svg]:w-5';
 
@@ -79,7 +80,7 @@ export function Sidebar() {
   const [menuFor, setMenuFor] = useState<RailId>();
   // the team pushed commits this branch does not have yet (the backend fetches in the background): a count on Git
   const behind = useGitBehind();
-  const counts: Partial<Record<RailId, { n: number; title: string }>> = behind > 0 ? { git: { n: behind, title: `${behind} new commit${behind === 1 ? '' : 's'} on the remote to pull` } } : {};
+  const counts: Partial<Record<RailId, { n: number; title: string }>> = behind > 0 ? { git: { n: behind, title: `${plural(behind, 'new commit')} on the remote to pull` } } : {};
   const here = railIdOf(view);
   const inRequests = isRequestView(view);
   // a view opened from More… (or a link, Ctrl+K) shows on the rail while it is open: you always see where you are

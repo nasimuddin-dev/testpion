@@ -43,7 +43,7 @@ export const fileKinds: KindDefs = {
       const r = ref as Extract<ItemRef, { kind: 'capture' }>;
       return fileIn(store, store.path(CAPTURE_SESSIONS_DIR), captureSessionFileName(r.name))
         ? ok(r, r.name, `${CAPTURE_SESSIONS_DIR}/${captureSessionFileName(r.name)}`)
-        : missing(r, `The capture session ${r.name} is no longer saved (deleted or renamed).`, { label: 'Open the Debugger', view: 'debugger' });
+        : missing(r, `The capture session ${r.name} is no longer saved (deleted or renamed).`, { label: 'Open the debugger', view: 'debugger' });
     },
   },
 };
@@ -51,5 +51,5 @@ export const fileKinds: KindDefs = {
 function resolveTestFile(store: Parameters<NonNullable<NonNullable<KindDefs['test']>['resolve']>>[0], r: TestRef) {
   return fileIn(store, store.path('tests'), r.path)
     ? ok(r, r.path.replace(/^.*\//, ''), `tests/${r.path}`)
-    : missing(r, `tests/${r.path} is no longer there (deleted, renamed or moved).`, { label: 'Open Tests', view: 'tests' });
+    : missing(r, `tests/${r.path} is no longer there (deleted, renamed or moved).`, { label: 'Open tests', view: 'tests' });
 }

@@ -64,7 +64,7 @@ export function KeyValueEditor({
       ))}
       <table className="w-full border-collapse table-fixed">
         <thead>
-          <tr className="text-[0.72rem] text-muted text-left">
+          <tr className="text-2xs text-muted text-left">
             <th className="w-7" />
             <th className="font-medium px-1.5 py-1 w-[35%]">{keyPlaceholder}</th>
             <th className="font-medium px-1.5 py-1">{valuePlaceholder}</th>

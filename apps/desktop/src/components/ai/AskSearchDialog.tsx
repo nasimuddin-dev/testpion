@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { Plus, Search, Sparkles, Square, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SearchAnswer, SearchCondition, SearchFieldDef, SearchQuery, SearchRow } from '@testpion/core';
@@ -154,7 +155,7 @@ function QueryChips({
             )}
             {d?.unit && <span className="text-xs text-muted">{d.unit}</span>}
             <IconButton label="Remove this filter" onClick={() => onRows(rows.filter((_, j) => j !== i))}>
-              <X size={14} />
+              <X />
             </IconButton>
           </div>
         );
@@ -416,7 +417,7 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
             {o && (
               <section aria-label="Results" className="grid gap-1" data-ask-results>
                 <div className="text-xs text-muted">
-                  {o.rows.length < o.matched ? `${o.rows.length} of ${o.matched} matches` : `${o.matched} ${o.matched === 1 ? 'match' : 'matches'}`} · {o.ms} ms
+                  {o.rows.length < o.matched ? `${o.rows.length} of ${o.matched} matches` : `${plural(o.matched, 'match', 'matches')}`} · {o.ms} ms
                 </div>
                 {o.notes.map((n) => (
                   <p key={n} className="text-xs text-warn">

@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { CircleAlert, CircleCheck, FileUp, GitCompare } from 'lucide-react';
 import { AiAction } from './ai/AiAction';
 import { useEffect, useMemo, useState } from 'react';
@@ -133,7 +134,7 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
             {result.breaking.length ? (
               <div>
                 <div className="text-sm font-medium text-bad flex items-center gap-1.5 mb-1">
-                  <CircleAlert size={14} /> {result.breaking.length} breaking change{result.breaking.length > 1 ? 's' : ''}
+                  <CircleAlert size={14} /> {plural(result.breaking.length, 'breaking change')}
                 </div>
                 <ul className="text-sm flex flex-col gap-1">
                   {result.breaking.map((c, i) => (
@@ -151,7 +152,7 @@ export function OpenApiDiffDialog({ onClose, inline, before: fixedBefore }: { on
             {!!result.nonBreaking.length && (
               <div>
                 <div className="text-sm font-medium mb-1">
-                  {result.nonBreaking.length} other change{result.nonBreaking.length > 1 ? 's' : ''}
+                  {plural(result.nonBreaking.length, 'other change')}
                 </div>
                 <ul className="text-sm text-muted flex flex-col gap-1">
                   {result.nonBreaking.map((c, i) => (

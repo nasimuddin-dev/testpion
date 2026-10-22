@@ -1,3 +1,4 @@
+import { plural } from './format';
 import { call } from '../api';
 import { useApp } from '../store';
 import { deliverSave, type SaveResult } from './files';
@@ -33,7 +34,7 @@ export async function exportWorkspace(ref?: string, opts: { legacy?: boolean } =
 /** After a workspace export was imported (it opened as a new workspace): what was skipped, and the values to fill in. */
 export function toastWorkspaceImported(r: { name?: string; files?: number; notes?: string[]; valuesNeeded?: string[] }): void {
   const { toast } = useApp.getState();
-  toast(`Workspace "${r.name ?? ''}" imported and opened${r.files ? ` with ${r.files} file${r.files === 1 ? '' : 's'} of specs/, datasets/, mocks/ and protos/` : ''}`, 'success');
+  toast(`Workspace "${r.name ?? ''}" imported and opened${r.files ? ` with ${plural(r.files, 'file')} of specs/, datasets/, mocks/ and protos/` : ''}`, 'success');
   const notes = r.notes ?? [];
   if (notes.length) toast(`Not imported (${notes.length}): ${notes.slice(0, 5).join(' ')}${notes.length > 5 ? ` … and ${notes.length - 5} more` : ''}`, 'warning');
   const needed = r.valuesNeeded ?? [];
@@ -41,6 +42,6 @@ export function toastWorkspaceImported(r: { name?: string; files?: number; notes
     toast(
       `Values needed (secrets are never in an export; set them as secret variables of an environment): ${needed.slice(0, 8).join(', ')}${needed.length > 8 ? ` … and ${needed.length - 8} more` : ''}`,
       'warning',
-      { label: 'Open Environments', onClick: () => useApp.getState().openIntent('environments', {}) },
+      { label: 'Open environments', onClick: () => useApp.getState().openIntent('environments', {}) },
     );
 }

@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { formatBytes, formatMs } from '@testpion/shared';
-import { cx, Empty } from '../ui';
+import { cx, Empty, SectionTitle } from '../ui';
 import { headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
 
 const pathOf = (url: string) => {
@@ -57,7 +57,7 @@ export function TimelinePanel({ picked }: { picked: Exchange[] }) {
                       <td className="px-2 py-1">
                         <div className="relative h-4">
                           <div className={cx('absolute top-0.5 h-3 rounded-sm', BAR[k])} style={{ left: `${left}%`, width: `max(2px, ${(p[k] / total) * 100}%)` }} />
-                          <span className="absolute top-0 text-[10px] tabular-nums" style={{ left: `min(calc(${left + (p[k] / total) * 100}% + 4px), calc(100% - 3rem))` }}>
+                          <span className="absolute top-0 text-2xs tabular-nums" style={{ left: `min(calc(${left + (p[k] / total) * 100}% + 4px), calc(100% - 3rem))` }}>
                             {formatMs(p[k])}
                           </span>
                         </div>
@@ -89,22 +89,22 @@ export function TimelinePanel({ picked }: { picked: Exchange[] }) {
                 );
               })}
           <tr className="font-semibold border-b border-line/60">
-            <td className="px-2 py-1">Selected Items</td>
+            <td className="px-2 py-1">Selected items</td>
             <td className="px-2 py-1 tabular-nums">{picked.length}</td>
           </tr>
           <tr className="font-semibold border-b border-line/60">
-            <td className="px-2 py-1">Total Time (sec)</td>
+            <td className="px-2 py-1">Total time (s)</td>
             <td className="px-2 py-1 tabular-nums" data-total-time>
               {(picked.length === 1 ? (one!.durationMs ?? 0) / 1000 : span / 1000).toFixed(3)}
             </td>
           </tr>
           <tr className="font-semibold border-b border-line/60">
-            <td className="px-2 py-1">Total Size (kb)</td>
+            <td className="px-2 py-1">Total size (KB)</td>
             <td className="px-2 py-1 tabular-nums">{kb(bytes)}</td>
           </tr>
         </tbody>
       </table>
-      <div className="flex gap-3 px-2 py-2 text-[11px] text-muted">
+      <div className="flex gap-3 px-2 py-2 text-xs text-muted">
         {(Object.keys(BAR) as Array<keyof typeof BAR>).map((k) => (
           <span key={k} className="flex items-center gap-1 capitalize">
             <span className={cx('inline-block w-3 h-2 rounded-sm', BAR[k])} /> {k}
@@ -170,8 +170,8 @@ export function SummaryPanel({ e }: { e?: Exchange }) {
               ['PID', e.pid],
               ['Application', e.application ?? `unknown (client port ${e.clientPort})`],
               ['User', e.user],
-              ['IP Address', e.serverAddress],
-              ['Total Size (kb)', kb(e.requestBodyBytes + e.responseBodyBytes + reqHead + resHead)],
+              ['IP address', e.serverAddress],
+              ['Total size (KB)', kb(e.requestBodyBytes + e.responseBodyBytes + reqHead + resHead)],
             ],
           },
           {
@@ -185,7 +185,7 @@ export function SummaryPanel({ e }: { e?: Exchange }) {
             ],
           },
           {
-            title: 'Request Details',
+            title: 'Request details',
             rows: [
               ['Method', e.method],
               ['URL', e.url],
@@ -195,7 +195,7 @@ export function SummaryPanel({ e }: { e?: Exchange }) {
             ],
           },
           {
-            title: 'Response Details',
+            title: 'Response details',
             rows: [
               ['Status', e.error ? `error: ${e.error}` : e.status ? `${e.status} ${e.statusText ?? ''}` : 'waiting'],
               ['Header Size (kb)', kb(resHead)],
@@ -293,7 +293,7 @@ export function StructurePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: 
           </tr>
         </tbody>
       </table>
-      <p className="px-2 py-2 text-[11px] text-muted">Double-click a domain or a path to select its first request.</p>
+      <p className="px-2 py-2 text-xs text-muted">Double-click a domain or a path to select its first request.</p>
     </div>
   );
 }
@@ -365,7 +365,7 @@ export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id
       </tbody>
     </table>
   );
-  const title = (t: string) => <div className="px-2 pt-2 pb-1 text-[11px] font-semibold text-muted uppercase tracking-wide">{t}</div>;
+  const title = (t: string) => <SectionTitle size="sm" className="px-2 pt-2 pb-1">{t}</SectionTitle>;
   return (
     <div className="flex-1 min-h-0 overflow-auto" data-performance>
       <p className="px-2 pt-2 text-xs">

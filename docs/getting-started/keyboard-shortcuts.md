@@ -11,7 +11,7 @@ On macOS use <kbd>⌘</kbd> for <kbd>Ctrl</kbd> and <kbd>⌥</kbd> for <kbd>Alt<
 
 ## Change the keys {#change-the-keys}
 
-**Settings ▸ Keyboard** (also **Change the keys…** in the <kbd>?</kbd> list, and <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Keyboard Shortcuts: Change the Keys…*) lists every shortcut with a search box (by what it does or by its keys). The ones under **Anywhere** can be changed, except <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> (the rail's), <kbd>F12</kbd> and <kbd>Ctrl</kbd>+<kbd>Z</kbd>:
+**Settings ▸ Keyboard** (also **Change the keys…** in the <kbd>?</kbd> list, and <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Keyboard shortcuts: Change the keys…*) lists every shortcut with a search box (by what it does or by its keys). The ones under **Anywhere** can be changed, except <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> (the rail's), <kbd>F12</kbd> and <kbd>Ctrl</kbd>+<kbd>Z</kbd>:
 
 1. Click a shortcut's keys: it says **Press keys…**. Press the new combination (<kbd>Esc</kbd> cancels, <kbd>Backspace</kbd> turns the shortcut off).
 2. Keys another command has are named (*Ctrl+P is already “Quick Open”*): **Use it here** moves them to this command and gives the other one this command's old keys. Keys an editor or the system keeps (<kbd>Ctrl</kbd>+<kbd>S</kbd>, <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> …) and a key alone that typing needs (a letter, <kbd>Shift</kbd>+a letter) are refused with the reason.
@@ -34,7 +34,7 @@ Your keys are this computer's (the app's `settings.json`, `keybindings`), and th
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | Search the workspace. |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> | Run the last run again, as it ran (same files or collection, same environment). |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | Reopen the tab you closed last, in whichever tab bar it was. |
-| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Download the output you are in (a response, a result, a log) in its default format; the command palette's **Download Output…** offers the other formats. See [Save and export results](/getting-started/save-and-export-results). |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Download the output you are in (a response, a result, a log) in its default format; the command palette's **Download output…** offers the other formats. See [Save and export results](/getting-started/save-and-export-results). |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> | Back / forward to where you were (also the mouse's back and forward buttons). |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>9</kbd> | Go to a view shown on the rail, in its order: by default 1 Home, 2 Collections, 3 Tests, 4 Environments, 5 History (the rail's tooltips show each; [rearrange the rail](/getting-started/finding-your-way#choose-what-the-rail-shows) and the numbers follow). |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> | Show or hide the Collections explorer (in **Tests**, beside the flow designer, to drag requests onto the canvas). |

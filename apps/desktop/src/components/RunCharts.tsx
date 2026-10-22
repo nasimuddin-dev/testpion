@@ -1,3 +1,4 @@
+import { trafficKindLabel } from '../lib/traffic-kinds';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { formatMs, plural } from '../lib/format';
@@ -93,7 +94,7 @@ function ScoreBars({ s }: { s: NonNullable<Breakdown['scores']>[number] }) {
           </span>
         ))}
       </div>
-      <div className="flex gap-1 text-[0.65rem] text-muted mt-0.5">
+      <div className="flex gap-1 text-3xs text-muted mt-0.5">
         {labels.map((l) => (
           <span key={l} className="flex-1 text-center">
             {l}
@@ -104,18 +105,6 @@ function ScoreBars({ s }: { s: NonNullable<Breakdown['scores']>[number] }) {
   );
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  http: 'REST',
-  graphql: 'GraphQL',
-  grpc: 'gRPC',
-  mcp: 'MCP',
-  llm: 'AI',
-  websocket: 'WebSocket',
-  script: 'Script',
-  evaluation: 'Evaluation',
-  rag: 'RAG',
-  agent: 'Agent',
-};
 /** Round bounds read better short: 250 ms, 1 s, 2.5 s. */
 const bound = (ms: number) => (ms < 1000 ? `${ms} ms` : `${ms / 1000} s`);
 const bucketLabel = (b: Breakdown['histogram'][number]) => (b.toMs === undefined ? `≥ ${bound(b.fromMs)}` : b.fromMs === 0 ? `< ${bound(b.toMs)}` : `${bound(b.fromMs)}–${bound(b.toMs)}`);
@@ -176,7 +165,7 @@ function ByType({ byType }: { byType: Breakdown['byType'] }) {
           return (
             <BarRow
               key={t}
-              label={TYPE_LABEL[t] ?? t}
+              label={trafficKindLabel(t)}
               segments={[
                 { value: v.passed, color: 'var(--ok)' },
                 { value: v.failed, color: 'var(--bad)' },
@@ -184,7 +173,7 @@ function ByType({ byType }: { byType: Breakdown['byType'] }) {
               ]}
               of={max}
               right={`${v.passed}/${total}`}
-              title={`${TYPE_LABEL[t] ?? t}: ${v.passed} passed, ${v.failed} failed, ${v.skipped} skipped`}
+              title={`${trafficKindLabel(t)}: ${v.passed} passed, ${v.failed} failed, ${v.skipped} skipped`}
             />
           );
         })}

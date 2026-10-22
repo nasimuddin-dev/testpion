@@ -46,7 +46,7 @@ Pick one:
 
 - **A new repository for the open workspace.** Open the **Git** view (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Git*) and click **Initialize repository**. TestPion runs `git init`, writes `.gitignore` and `.gitattributes`, and sets up merging by request (see [Merging](#merging-collections-request-by-request)).
 - **Connect to a remote.** In the Git view click **Connect to a remote…** (or **⋯ ▸ Change remote…** later) and paste the URL of an empty repository, for example `https://github.com/team/api-tests.git` or `git@github.com:team/api-tests.git`.
-- **Clone a repository that already holds a workspace.** Open the workspace switcher (top left) and click **Clone**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Clone Workspace from Git…*. Paste the URL, choose a parent folder; TestPion clones into a folder named after the repository and opens the workspace. When the workspace is in a sub-folder (`api-tests/`), it is found; when the repository holds several, you choose one.
+- **Clone a repository that already holds a workspace.** Open the workspace switcher (top left) and click **Clone**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Clone workspace from Git…*. Paste the URL, choose a parent folder; TestPion clones into a folder named after the repository and opens the workspace. When the workspace is in a sub-folder (`api-tests/`), it is found; when the repository holds several, you choose one.
 - **A workspace in your code repository.** Create the workspace in a folder of the checkout (**New**, then *in a folder*), or **Open folder** for one that is there already. TestPion only looks at the workspace folder: the rest of the repository is never listed or committed by it.
 - **From a terminal:** `git init` in the workspace folder, then `testpion git setup` (writes the git files and registers the merge driver; safe to run again).
 
@@ -54,7 +54,7 @@ An existing workspace you started before this version: workspace switcher ▸ **
 
 ## Fix git setup
 
-The Git view shows a strip when the workspace's git setup is not complete: *Git setup is not complete: 3 things to fix*. **Fix git setup…** (the strip, the Git view's **⋯** menu, the workspace switcher's **⋯** menu, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Fix Git Setup*) opens one dialog that **previews every step before anything is written**, applies them together, says what it changed, and offers **Undo**:
+The Git view shows a strip when the workspace's git setup is not complete: *Git setup is not complete: 3 things to fix*. **Fix git setup…** (the strip, the Git view's **⋯** menu, the workspace switcher's **⋯** menu, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Fix Git setup*) opens one dialog that **previews every step before anything is written**, applies them together, says what it changed, and offers **Undo**:
 
 | Step | What it does |
 |---|---|

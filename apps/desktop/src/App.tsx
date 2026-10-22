@@ -391,82 +391,82 @@ export default function App() {
   const commands = useMemo<PaletteCommand[]>(() => {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
-      { id: 'new-graphql', label: 'New GraphQL Request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
-      { id: 'new-ai', label: 'New AI Test', hint: 'AI Lab', run: () => s.openIntent('ai', { reset: true }) },
-      { id: 'run-test', label: 'Run Test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
-      { id: 'run-suite', label: 'Run Suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
-      { id: 'rerun-last', label: 'Rerun Last Run', hint: keyLabel('rerun-last', bindings), run: () => void runAgain('last') },
-      { id: 'reopen-tab', label: 'Reopen Closed Tab', hint: keyLabel('reopen-tab', bindings), run: () => void reopenClosedTab() },
+      { id: 'new-graphql', label: 'New GraphQL request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
+      { id: 'new-ai', label: 'New AI test', hint: 'AI Lab', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'run-test', label: 'Run test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
+      { id: 'run-suite', label: 'Run suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
+      { id: 'rerun-last', label: 'Rerun last run', hint: keyLabel('rerun-last', bindings), run: () => void runAgain('last') },
+      { id: 'reopen-tab', label: 'Reopen closed tab', hint: keyLabel('reopen-tab', bindings), run: () => void reopenClosedTab() },
       // the format menu of the output nearest to the focus (Ctrl+Shift+S saves its default format at once)
-      { id: 'download-output', label: 'Download Output…', hint: keyLabel('download-output', bindings), run: () => setTimeout(() => downloadFocusedOutput(true), 0) },
-      { id: 'open-recent', label: 'Open Recent…', hint: keyLabel('quick-open', bindings), run: () => setTimeout(() => s.set({ paletteOpen: true, paletteQuery: '' }), 0) },
-      { id: 'ci-last', label: 'Run Last Run in CI…', hint: 'Tests', run: () => void runInCi('last') },
-      { id: 'cli-last', label: 'Copy CLI Command of Last Run', hint: 'Tests', run: () => void copyRunCommand('last') },
-      { id: 'search-history', label: 'Open History', hint: 'History', run: () => s.setView('history') },
-      { id: 'open-settings', label: 'Open Settings', hint: keyLabel('settings', bindings), run: () => s.setView('settings') },
-      { id: 'export-results', label: 'Export Results', hint: 'Tests', run: () => s.openIntent('tests', { exportLatest: true }) },
-      { id: 'search', label: 'Search Workspace', hint: keyLabel('search', bindings), run: () => s.set({ searchOpen: true }) },
-      { id: 'tab-close', label: 'Close Tab', hint: 'Ctrl+W', run: () => s.openIntent('rest', { tabCommand: 'close' }) },
-      { id: 'tab-close-others', label: 'Close Other Tabs', hint: 'Requests', run: () => s.openIntent('rest', { tabCommand: 'closeOthers' }) },
-      { id: 'tab-close-all', label: 'Close All Tabs', hint: 'Ctrl+Shift+W', run: () => s.openIntent('rest', { tabCommand: 'closeAll' }) },
-      { id: 'toggle-console', label: 'Show Console', hint: keyLabel('toggle-console', bindings), run: () => s.set({ logsOpen: true, bottomTab: 'console' }) },
-      { id: 'toggle-logs', label: 'Show Application Logs', run: () => s.set({ logsOpen: true, bottomTab: 'logs' }) },
+      { id: 'download-output', label: 'Download output…', hint: keyLabel('download-output', bindings), run: () => setTimeout(() => downloadFocusedOutput(true), 0) },
+      { id: 'open-recent', label: 'Open recent…', hint: keyLabel('quick-open', bindings), run: () => setTimeout(() => s.set({ paletteOpen: true, paletteQuery: '' }), 0) },
+      { id: 'ci-last', label: 'Run last run in CI…', hint: 'Tests', run: () => void runInCi('last') },
+      { id: 'cli-last', label: 'Copy CLI command of last run', hint: 'Tests', run: () => void copyRunCommand('last') },
+      { id: 'search-history', label: 'Open history', hint: 'History', run: () => s.setView('history') },
+      { id: 'open-settings', label: 'Open settings', hint: keyLabel('settings', bindings), run: () => s.setView('settings') },
+      { id: 'export-results', label: 'Export results', hint: 'Tests', run: () => s.openIntent('tests', { exportLatest: true }) },
+      { id: 'search', label: 'Search workspace', hint: keyLabel('search', bindings), run: () => s.set({ searchOpen: true }) },
+      { id: 'tab-close', label: 'Close tab', hint: 'Ctrl+W', run: () => s.openIntent('rest', { tabCommand: 'close' }) },
+      { id: 'tab-close-others', label: 'Close other tabs', hint: 'Requests', run: () => s.openIntent('rest', { tabCommand: 'closeOthers' }) },
+      { id: 'tab-close-all', label: 'Close all tabs', hint: 'Ctrl+Shift+W', run: () => s.openIntent('rest', { tabCommand: 'closeAll' }) },
+      { id: 'toggle-console', label: 'Show console', hint: keyLabel('toggle-console', bindings), run: () => s.set({ logsOpen: true, bottomTab: 'console' }) },
+      { id: 'toggle-logs', label: 'Show application logs', run: () => s.set({ logsOpen: true, bottomTab: 'logs' }) },
       ...(shellCapable
         ? [
             { id: 'terminal-new', label: 'Terminal: New', hint: keyLabel('new-terminal', bindings), run: newTerminal },
             { id: 'terminal-focus', label: 'Terminal: Focus', hint: keyLabel('terminal', bindings), run: focusTerminal },
           ]
         : []),
-      ...(aiOn ? [{ id: 'assistant', label: 'Ask AI Assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() }] : []),
-      { id: 'feedback', label: 'Send Feedback or Report a Problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
-      { id: 'agents', label: 'Connect an AI Agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
-      { id: 'load', label: 'New Load Test', run: () => s.setView('load') },
-      { id: 'compare', label: 'Compare Models', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'compare' }) },
-      { id: 'ai-usage', label: 'AI Usage: tokens and cost per model', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'usage' }) },
-      { id: 'mcp-usage', label: 'MCP Tool Usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
-      { id: 'eval', label: 'New Evaluation', hint: 'Evaluations', run: () => s.setView('evaluations') },
-      { id: 'shortcuts', label: 'Keyboard Shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
-      { id: 'keyboard-settings', label: 'Keyboard Shortcuts: Change the Keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },
-      { id: 'git-ready', label: 'Make Workspace Ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
-      { id: 'git-fix', label: 'Fix Git Setup', hint: 'Workspace', run: () => void runMenuCommand('git-fix') },
-      { id: 'git-clone', label: 'Clone Workspace from Git…', hint: 'Workspace', run: () => void runMenuCommand('git-clone') },
-      { id: 'git-view', label: 'Git: Changes, Commit, Pull and Push', hint: 'Workspace', run: () => useApp.getState().setView('git') },
-      { id: 'git-codeowners', label: 'Create CODEOWNERS: Who Must Review Which Changes…', hint: 'Workspace', run: () => useApp.getState().openIntent('git', { codeowners: true }) },
-      { id: 'share-session', label: 'Share a Debugger Session with the Team…', hint: 'Debugger', run: () => void pickAndShareSession() },
-      { id: 'layout-side', label: 'Response Layout: Side by Side', hint: 'View', run: () => setResponseLayout('side') },
-      { id: 'layout-below', label: 'Response Layout: Response Below', hint: 'View', run: () => setResponseLayout('below') },
-      { id: 'layout-auto', label: 'Response Layout: Auto', hint: 'View', run: () => setResponseLayout('auto') },
-      { id: 'update', label: 'Check for Updates', hint: 'Help', run: () => void checkForUpdates({ manual: true }) },
-      { id: 'm-new-http', label: 'New HTTP Request', hint: 'File', run: () => void runMenuCommand('new-http') },
-      { id: 'm-new-grpc', label: 'New gRPC Request', hint: 'File', run: () => void runMenuCommand('new-grpc') },
-      { id: 'm-new-ws', label: 'New WebSocket Connection', hint: 'File', run: () => void runMenuCommand('new-websocket') },
-      { id: 'm-new-mcp', label: 'Add MCP Server', hint: 'File', run: () => void runMenuCommand('new-mcp-server') },
-      { id: 'm-new-col', label: 'New Collection', hint: 'File', run: () => void runMenuCommand('new-collection') },
-      { id: 'm-new-env', label: 'New Environment', hint: 'File', run: () => void runMenuCommand('new-environment') },
-      { id: 'm-open-examples', label: 'Open Examples Workspace', hint: 'Help', run: () => void runMenuCommand('open-examples') },
+      ...(aiOn ? [{ id: 'assistant', label: 'Ask AI assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() }] : []),
+      { id: 'feedback', label: 'Send feedback or report a problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
+      { id: 'agents', label: 'Connect an AI agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
+      { id: 'load', label: 'New load test', run: () => s.setView('load') },
+      { id: 'compare', label: 'Compare models', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'compare' }) },
+      { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'usage' }) },
+      { id: 'mcp-usage', label: 'MCP tool usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
+      { id: 'eval', label: 'New evaluation', hint: 'Evaluations', run: () => s.setView('evaluations') },
+      { id: 'shortcuts', label: 'Keyboard shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
+      { id: 'keyboard-settings', label: 'Keyboard shortcuts: Change the keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },
+      { id: 'git-ready', label: 'Make workspace ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
+      { id: 'git-fix', label: 'Fix Git setup', hint: 'Workspace', run: () => void runMenuCommand('git-fix') },
+      { id: 'git-clone', label: 'Clone workspace from Git…', hint: 'Workspace', run: () => void runMenuCommand('git-clone') },
+      { id: 'git-view', label: 'Git: Changes, commit, pull and push', hint: 'Workspace', run: () => useApp.getState().setView('git') },
+      { id: 'git-codeowners', label: 'Create CODEOWNERS: Who must review which changes…', hint: 'Workspace', run: () => useApp.getState().openIntent('git', { codeowners: true }) },
+      { id: 'share-session', label: 'Share a debugger session with the team…', hint: 'Debugger', run: () => void pickAndShareSession() },
+      { id: 'layout-side', label: 'Response layout: Side by side', hint: 'View', run: () => setResponseLayout('side') },
+      { id: 'layout-below', label: 'Response layout: Response below', hint: 'View', run: () => setResponseLayout('below') },
+      { id: 'layout-auto', label: 'Response layout: Auto', hint: 'View', run: () => setResponseLayout('auto') },
+      { id: 'update', label: 'Check for updates', hint: 'Help', run: () => void checkForUpdates({ manual: true }) },
+      { id: 'm-new-http', label: 'New HTTP request', hint: 'File', run: () => void runMenuCommand('new-http') },
+      { id: 'm-new-grpc', label: 'New gRPC request', hint: 'File', run: () => void runMenuCommand('new-grpc') },
+      { id: 'm-new-ws', label: 'New WebSocket connection', hint: 'File', run: () => void runMenuCommand('new-websocket') },
+      { id: 'm-new-mcp', label: 'Add MCP server', hint: 'File', run: () => void runMenuCommand('new-mcp-server') },
+      { id: 'm-new-col', label: 'New collection', hint: 'File', run: () => void runMenuCommand('new-collection') },
+      { id: 'm-new-env', label: 'New environment', hint: 'File', run: () => void runMenuCommand('new-environment') },
+      { id: 'm-open-examples', label: 'Open examples workspace', hint: 'Help', run: () => void runMenuCommand('open-examples') },
       { id: 'm-ci', label: 'Run in CI (GitHub Actions, GitLab, Azure, Jenkins)…', hint: 'Tests', run: () => useApp.getState().set({ ci: {} }) },
-      { id: 'm-record', label: 'Capture: Reverse Proxy for One API…', hint: 'Debugger', run: () => openReverseProxyCapture() },
+      { id: 'm-record', label: 'Capture: Reverse proxy for one API…', hint: 'Debugger', run: () => openReverseProxyCapture() },
       { id: 'm-var-usages', label: 'Find variable usages / rename a variable everywhere…', hint: 'Environments', run: () => useApp.getState().set({ variableUsages: true }) },
       { id: 'm-openapi-diff', label: 'Compare OpenAPI versions (breaking changes)…', hint: 'Tests', run: () => useApp.getState().set({ openapiDiff: true }) },
       { id: 'm-api-coverage', label: 'API coverage (OpenAPI operations tested)…', hint: 'Tests', run: () => useApp.getState().set({ apiCoverage: {} }) },
-      { id: 'm-new-monitor', label: 'New Monitor', hint: 'File', run: () => void runMenuCommand('new-monitor') },
-      { id: 'm-new-workspace', label: 'New Workspace', hint: 'File', run: () => void runMenuCommand('new-workspace') },
-      { id: 'm-open-ws', label: 'Open Workspace Folder', hint: 'File', run: () => void runMenuCommand('open-workspace') },
+      { id: 'm-new-monitor', label: 'New monitor', hint: 'File', run: () => void runMenuCommand('new-monitor') },
+      { id: 'm-new-workspace', label: 'New workspace', hint: 'File', run: () => void runMenuCommand('new-workspace') },
+      { id: 'm-open-ws', label: 'Open workspace folder', hint: 'File', run: () => void runMenuCommand('open-workspace') },
       { id: 'm-import', label: 'Import (Postman, Insomnia, Bruno, OpenAPI, HAR, cURL …)', hint: 'File', run: () => void runMenuCommand('import') },
-      { id: 'm-exp-col', label: 'Export Collection (Postman)', hint: 'File', run: () => void runMenuCommand('export-collection') },
-      { id: 'm-exp-env', label: 'Export Current Environment', hint: 'File', run: () => void runMenuCommand('export-environment') },
-      { id: 'm-exp-ws', label: 'Export Workspace (older format)', hint: 'File', run: () => void runMenuCommand('export-workspace') },
-      { id: 'm-exp-bundle', label: 'Export a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
-      { id: 'm-import-bundle', label: 'Import a TestPion Bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
-      { id: 'm-migrate', label: 'Migrate from Another Tool (Postman, Insomnia, Bruno …)…', hint: 'File', run: () => openImport({ migrate: true }) },
+      { id: 'm-exp-col', label: 'Export collection (Postman)', hint: 'File', run: () => void runMenuCommand('export-collection') },
+      { id: 'm-exp-env', label: 'Export current environment', hint: 'File', run: () => void runMenuCommand('export-environment') },
+      { id: 'm-exp-ws', label: 'Export workspace (older format)', hint: 'File', run: () => void runMenuCommand('export-workspace') },
+      { id: 'm-exp-bundle', label: 'Export a TestPion bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
+      { id: 'm-import-bundle', label: 'Import a TestPion bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
+      { id: 'm-migrate', label: 'Migrate from another tool (Postman, Insomnia, Bruno …)…', hint: 'File', run: () => openImport({ migrate: true }) },
     ];
     // every command has an icon: its own, or a generic one for a command added without
     for (const c of cmds) c.icon = createElement(PALETTE_ICONS[c.id] ?? TerminalSquare, { size: 16 });
     // "Go to" commands use the navigation's own icons, with the rail's shortcut when the view is on the rail
     for (const n of NAV) cmds.push({ id: `go-${n.id}`, label: `Go to ${n.label}`, icon: n.icon, hint: railShortcut(rail.visible, n.id, modKey), run: () => s.setView(n.id) });
-    cmds.push({ id: 'density', label: 'Density: Switch Compact / Comfortable', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void saveUiPrefs({ density: useApp.getState().settings?.density === 'compact' ? 'comfortable' : 'compact' }) });
-    cmds.push({ id: 'rail-all', label: 'Rail: Show Every View', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void resetRail(true) });
-    cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the Default Views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });
+    cmds.push({ id: 'density', label: 'Density: Switch compact / comfortable', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void saveUiPrefs({ density: useApp.getState().settings?.density === 'compact' ? 'comfortable' : 'compact' }) });
+    cmds.push({ id: 'rail-all', label: 'Rail: Show every view', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void resetRail(true) });
+    cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the default views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
     return cmds;
@@ -476,7 +476,7 @@ export default function App() {
   const hereCommands = useMemo<PaletteCommand[]>(() => {
     const ed = paletteOpen ? focusedScriptEditor() : undefined;
     const here = paletteOpen ? focusedPaletteCommands() : [];
-    return ed ? [{ id: 'insert-snippet', label: 'Insert Snippet…', hint: 'Ctrl+Shift+I', icon: <Code2 size={16} />, run: () => ed.insertSnippet() }, ...here] : here;
+    return ed ? [{ id: 'insert-snippet', label: 'Insert snippet…', hint: 'Ctrl+Shift+I', icon: <Code2 size={16} />, run: () => ed.insertSnippet() }, ...here] : here;
   }, [paletteOpen]);
   const paletteCommands = useMemo<PaletteCommand[]>(() => (hereCommands.length ? [...hereCommands, ...commands] : commands), [hereCommands, commands]);
 

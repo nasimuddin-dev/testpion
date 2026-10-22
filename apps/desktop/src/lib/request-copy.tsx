@@ -1,6 +1,7 @@
 import { Braces, Code2, Link2, SquareTerminal, Terminal, TerminalSquare } from 'lucide-react';
 import { asError, call } from '../api';
 import { useApp } from '../store';
+import { writeClipboard } from './clipboard';
 import type { Collection, SavedHttpRequest } from '../types';
 import type { MenuItem } from '../components/ui';
 import { fullCollection } from './collections-store';
@@ -19,7 +20,7 @@ async function copyRequestAs(c: Collection, shown: SavedHttpRequest, language: s
       requestId: n.id,
       language,
     });
-    await navigator.clipboard.writeText(r.text);
+    await writeClipboard(r.text);
     useApp.getState().toast(`Copied ${what}${r.containsSecrets ? ' (it includes secret values such as tokens)' : ''}`, 'success');
   } catch (e) {
     useApp.getState().toast(`Couldn't copy: ${asError(e).message}`, 'error');

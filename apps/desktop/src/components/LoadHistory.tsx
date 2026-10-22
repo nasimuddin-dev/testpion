@@ -64,9 +64,9 @@ function Trend({ runs, title, value, format, axis }: { runs: LoadRun[]; title: s
 function Delta({ value, base, higherIsBetter }: { value: number; base?: number; higherIsBetter: boolean }) {
   if (base === undefined || !base) return null;
   const pctChange = Math.round(((value - base) / base) * 100);
-  if (!pctChange) return <span className="text-muted text-[0.7rem] ml-1">±0%</span>;
+  if (!pctChange) return <span className="text-muted text-2xs ml-1">±0%</span>;
   const better = higherIsBetter ? pctChange > 0 : pctChange < 0;
-  return <span className={cx('text-[0.7rem] ml-1', better ? 'text-ok' : 'text-bad')}>{pctChange > 0 ? `+${pctChange}` : pctChange}%</span>;
+  return <span className={cx('text-2xs ml-1', better ? 'text-ok' : 'text-bad')}>{pctChange > 0 ? `+${pctChange}` : pctChange}%</span>;
 }
 
 export function LoadHistory({ savedId }: { savedId?: string }) {

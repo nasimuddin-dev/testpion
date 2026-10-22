@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pin, PinOff } from 'lucide-react';
 import { usePersisted } from '../lib/sticky';
-import { cx, IconButton } from './ui';
+import { Bar, cx, IconButton } from './ui';
 
 /** What a panel's content can do with the panel it is in (a snippet inserted from the overlay closes it). */
 export interface PinnablePanelApi {
@@ -216,19 +216,19 @@ export function PinnablePanel({
           )}
           style={pinned ? undefined : { width: w }}
         >
-          <div className="flex items-center gap-1 h-8 pl-3 pr-1 border-b border-line bg-panel/60 shrink-0">
+          <Bar className="bg-panel/60">
             <span className="text-sm font-semibold truncate">{title}</span>
             <span className="ml-auto" />
             {actions}
-            <IconButton
+            <IconButton size="sm"
               label={pinned ? `Unpin ${title}: hide it at the edge, show it on hover` : `Pin ${title}: keep it docked`}
               data-pin-toggle
-              className="h-6 w-6"
+             
               onClick={() => setPinned(!pinned)}
             >
-              {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+              {pinned ? <PinOff /> : <Pin />}
             </IconButton>
-          </div>
+          </Bar>
           <div className="flex-1 min-h-0 flex flex-col">{typeof children === 'function' ? children(api) : children}</div>
           <div
             role="separator"

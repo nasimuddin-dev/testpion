@@ -1,13 +1,13 @@
+import { plural } from '../../lib/format';
 import { Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { MetricChange, MetricComparison, MetricMatrix, MetricPivot, RunEstimate } from '@testpion/core';
 import type { RagJudgeSetup } from '@testpion/shared';
 import { asError, call } from '../../api';
 import { toastError } from '../../store';
-import { useDebounced, NamedOptions } from '../ui';
 import type { CheckConfig, ProviderConfig } from '../../types';
 import { ChartCard } from '../charts';
-import { Badge, Button, Callout, Empty, Field, Input, Modal, Select, Spinner, cx } from '../ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Modal, NamedOptions, SectionTitle, Select, Spinner, useDebounced } from '../ui';
 import { RagEstimateView } from './RagEstimate';
 import { RagJudgeOptions } from './RagJudgeOptions';
 
@@ -27,7 +27,7 @@ export function RagCharts({ m }: { m: MetricMatrix }) {
   return (
     <div className="p-3 overflow-auto h-full grid gap-4" data-rag-charts>
       <div>
-        <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Score distribution per metric</div>
+        <SectionTitle size="sm" className="mb-2">Score distribution per metric</SectionTitle>
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
           {m.columns.map((c) => {
             const a = m.aggregates.find((x) => x.key === c.key);
@@ -37,12 +37,12 @@ export function RagCharts({ m }: { m: MetricMatrix }) {
               <ChartCard key={c.key} title={c.key} aside={a.mean !== undefined ? <span>mean <b>{a.mean}</b></span> : undefined}>
                 <div className="flex items-end gap-1 h-24" role="img" aria-label={`${c.key} score distribution, ${a.n} samples`} data-rag-histogram={c.key}>
                   {a.distribution.map((n, i) => (
-                    <div key={i} className="flex-1 flex flex-col justify-end items-center h-full" title={`${(i / 10).toFixed(1)}–${((i + 1) / 10).toFixed(1)}: ${n} sample${n === 1 ? '' : 's'}`}>
+                    <div key={i} className="flex-1 flex flex-col justify-end items-center h-full" title={`${(i / 10).toFixed(1)}–${((i + 1) / 10).toFixed(1)}: ${plural(n, 'sample')}`}>
                       <div className={cx('w-full rounded-t', c.threshold !== undefined && (c.direction === 'lower' ? (i + 1) / 10 <= c.threshold + 1e-9 : i / 10 >= c.threshold - 1e-9) ? 'bg-ok/70' : 'bg-bad/60')} style={{ height: `${Math.max(n ? 6 : 0, (n / max) * 100)}%` }} />
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between text-[10px] text-muted mt-0.5">
+                <div className="flex justify-between text-2xs text-muted mt-0.5">
                   <span>0</span>
                   <span>{a.naCount ? `${a.naCount} n/a` : ''}</span>
                   <span>1</span>
@@ -62,7 +62,7 @@ export function RagByTag({ m }: { m: MetricMatrix }) {
   if (!m.byTag.length) return <div className="text-xs text-muted" data-rag-bytag-empty>The records have no tags: add a "tags" column to the dataset to see the metrics by kind of question.</div>;
   return (
     <div data-rag-bytag>
-      <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Mean by tag</div>
+      <SectionTitle size="sm" className="mb-2">Mean by tag</SectionTitle>
       <table className="text-xs border-separate border-spacing-0">
         <thead>
           <tr>
@@ -138,7 +138,7 @@ export function RagCompare({ runId, runs }: { runId: string; runs: RunChoice[] }
         </label>
         {cmp && (
           <span className="text-xs ml-auto" data-rag-compare-summary>
-            <span className={cmp.regressions.length ? 'text-bad' : 'text-ok'}>{cmp.regressions.length} regression{cmp.regressions.length === 1 ? '' : 's'}</span> · <span className={cmp.improvements.length ? 'text-ok' : 'text-muted'}>{cmp.improvements.length} improvement{cmp.improvements.length === 1 ? '' : 's'}</span> · {cmp.samples.shared} shared samples
+            <span className={cmp.regressions.length ? 'text-bad' : 'text-ok'}>{plural(cmp.regressions.length, 'regression')}</span> · <span className={cmp.improvements.length ? 'text-ok' : 'text-muted'}>{plural(cmp.improvements.length, 'improvement')}</span> · {cmp.samples.shared} shared samples
           </span>
         )}
       </div>
@@ -240,7 +240,7 @@ export function RagPivot({ runs }: { runs: RunChoice[] }) {
                   {pivot.cells[i]!.map((c, v) => (
                     <td key={v} className={cx('px-2 py-1 border-b border-l border-line/60 text-right tabular-nums', pivot.best[i] === v && 'font-bold')} style={{ background: tint(c?.mean, mt.direction === 'lower') }}>
                       {c ? c.mean : '–'}
-                      {c?.ci && <div className="font-normal text-muted text-[10px]">{c.ci[0]}–{c.ci[1]}</div>}
+                      {c?.ci && <div className="font-normal text-muted text-2xs">{c.ci[0]}–{c.ci[1]}</div>}
                     </td>
                   ))}
                 </tr>

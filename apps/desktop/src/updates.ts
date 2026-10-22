@@ -60,8 +60,8 @@ async function install(version: string, downloadUrl: string): Promise<void> {
       detail: `${asError(e).message}\n\nThis is usually a brief network problem. Try again, or download the installer from the website and run it: your workspaces, settings and secrets are kept either way. Details are in Logs.`,
       buttons: [
         { id: 'close', label: 'Close' },
-        { id: 'web', label: 'Download from Website' },
-        { id: 'retry', label: 'Try Again', variant: 'primary' },
+        { id: 'web', label: 'Download from the website' },
+        { id: 'retry', label: 'Try again', variant: 'primary' },
       ],
       cancelId: 'close',
     });
@@ -108,7 +108,7 @@ export async function checkForUpdates({ manual }: { manual: boolean }): Promise<
         ? 'Update now to download and install it. The download is verified, then it replaces your current version; your workspaces, settings and secrets are kept, and the app restarts.'
         : 'Download the new version and install it over this one; your workspaces, settings and secrets are kept.'),
     buttons: [
-      { id: 'skip', label: 'Skip This Version' },
+      { id: 'skip', label: 'Skip this version' },
       { id: 'later', label: 'Later' },
       { id: 'install', label: found.installable ? 'Update Now' : 'Download', variant: 'primary' },
     ],

@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { ChevronDown, KeyRound, TriangleAlert } from 'lucide-react';
 import { selectEnvironments, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
@@ -135,9 +136,9 @@ function UndefinedVariablesBadge({ variant, environment }: { variant: 'topbar' |
         <button
           ref={anchor}
           data-undefined-vars={names.length}
-          aria-label={`${names.length} undefined variable${names.length === 1 ? '' : 's'} in this request`}
+          aria-label={`${plural(names.length, 'undefined variable')} in this request`}
           title={`Not defined in ${where}: ${names.slice(0, 8).join(', ')}${names.length > 8 ? ' …' : ''}. Click to add them.`}
-          className={cx('inline-flex items-center gap-1 rounded-full font-semibold text-white bg-bad tabular-nums', variant === 'status' ? 'h-4 px-1.5 text-[0.65rem]' : 'h-5 px-1.5 text-[0.7rem]')}
+          className={cx('inline-flex items-center gap-1 rounded-full font-semibold text-white bg-bad tabular-nums', variant === 'status' ? 'h-4 px-1.5 text-3xs' : 'h-5 px-1.5 text-2xs')}
         >
           <TriangleAlert size={variant === 'status' ? 10 : 11} aria-hidden />
           {names.length > 99 ? '99+' : names.length}

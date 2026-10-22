@@ -98,7 +98,7 @@ export function EnvCompare({ environments, initialLeft, onClose }: { environment
         <div className="flex items-center gap-2">
           {picker(left, setLeft, 'Left environment')}
           <IconButton label="Swap" onClick={() => (setLeft(right), setRight(left))}>
-            <ArrowLeftRight size={14} />
+            <ArrowLeftRight />
           </IconButton>
           {picker(right, setRight, 'Right environment')}
         </div>

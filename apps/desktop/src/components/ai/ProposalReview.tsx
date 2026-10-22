@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Copy, FlaskConical, Play, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react';
 import { copyText } from '../../lib/clipboard';
 import { useMemo, useState, type ReactNode } from 'react';
@@ -11,7 +12,7 @@ import { Findings } from './Findings';
 import { OutputActions } from '../output/OutputFrame';
 import { proposalOutputSpec } from '../output/ai-specs';
 
-const KIND_LABEL: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', collection: 'collection change', spec: 'API definition change', metric: 'custom metric', 'dataset-row': 'test question', evaluation: 'evaluation', text: 'text' };
+const ITEM_WORD: Record<ProposalItem['kind'], string> = { file: 'test file', flow: 'flow', assertion: 'check', script: 'script', request: 'request', patch: 'request change', variable: 'variable', collection: 'collection change', spec: 'API definition change', metric: 'custom metric', 'dataset-row': 'test question', evaluation: 'evaluation', text: 'text' };
 
 /** One verification badge: the verifier's verdict in words, its detail on hover. */
 export function VerificationBadgeView({ b }: { b: VerificationBadge }) {
@@ -175,7 +176,7 @@ export function ProposalReview({
             {proposal.provider} · {proposal.model} · task {proposal.task} v{proposal.taskVersion}
           </span>
           <span>
-            · {proposal.items.length} item{proposal.items.length === 1 ? '' : 's'}
+            · {plural(proposal.items.length, 'item')}
             {failing ? ` · ${failing} failed verification (unticked)` : ' · all verified'}
           </span>
           <OutputActions spec={spec}>
@@ -269,14 +270,14 @@ function ItemRow({
   busy?: boolean;
   onAlternative?(a: NonNullable<ProposalItem['alternatives']>[number]): void;
 }) {
-  const diff = useMemo(() => (open ? unifiedDiff(item.before ?? null, item.after, item.path ?? KIND_LABEL[item.kind]) : ''), [open, item]);
+  const diff = useMemo(() => (open ? unifiedDiff(item.before ?? null, item.after, item.path ?? ITEM_WORD[item.kind]) : ''), [open, item]);
   return (
     <li className={cx('rounded-lg border min-w-0', picked ? 'border-accent/50' : 'border-line')} data-proposal-item={item.id}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 min-w-0">
         {item.kind !== 'text' ? <input type="checkbox" checked={picked} onChange={onPick} aria-label={`Apply ${item.title}`} /> : <span className="w-[13px]" />}
         <button className="flex items-center gap-1 min-w-0 flex-1 basis-48 text-left hover:text-fg" onClick={onOpen} aria-expanded={open} title={item.title}>
           {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          <Badge>{KIND_LABEL[item.kind]}</Badge>
+          <Badge>{ITEM_WORD[item.kind]}</Badge>
           <span className="truncate mono text-xs">{item.title}</span>
         </button>
         <span className="flex gap-1 flex-wrap justify-end min-w-0 max-w-full ml-auto">

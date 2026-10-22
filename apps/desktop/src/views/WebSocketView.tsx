@@ -16,7 +16,7 @@ import { CodeEditor } from '../components/CodeEditor';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { JsonTree } from '../components/JsonView';
 import { VarInput } from '../components/VarInput';
-import { Badge, Button, cx, Empty, Input, Segmented, Select, Split, Tabs, VirtualList, IconButton } from '../components/ui';
+import { Badge, Button, cx, Empty, FilterInput, IconButton, Input, Segmented, Select, Split, Tabs, VirtualList } from '../components/ui';
 import { MessageRate } from '../components/MessageRate';
 import { saveAsTestFile, saveAsTestMenuItem } from '../lib/save-test';
 import { useExternalChange } from '../lib/external-change';
@@ -404,7 +404,7 @@ export function WebSocketView() {
       <div className="flex-1 min-h-0">
         <Split id="ws-main" initial={40}>
           <div className="h-full flex flex-col">
-            <Tabs
+            <Tabs label="Message"
               value={tab}
               onChange={setTab}
               tabs={[
@@ -466,12 +466,12 @@ export function WebSocketView() {
                     Save message
                   </Button>
                   {pickedMessage && (
-                    <IconButton label={`Delete the saved message "${pickedMessage}"`} className="h-7 w-7" onClick={deleteMessage}>
-                      <Trash2 size={12} />
+                    <IconButton size="md" label={`Delete the saved message "${pickedMessage}"`} onClick={deleteMessage}>
+                      <Trash2 />
                     </IconButton>
                   )}
                 </div>
-                {sio && <div className="px-2 pt-1 text-[11px] text-muted">Arguments as JSON; a JSON list sends several arguments.</div>}
+                {sio && <div className="px-2 pt-1 text-xs text-muted">Arguments as JSON; a JSON list sends several arguments.</div>}
                 <div className="flex-1 min-h-0">
                   <CodeEditor language="json" value={d.message} onChange={(message) => setD({ ...d, message })} />
                 </div>
@@ -517,8 +517,8 @@ export function WebSocketView() {
                       <div key={r.topic} className="flex items-center gap-2 px-2 h-8 border-b border-line/50 text-sm" data-kafka-read={r.topic}>
                         <span className="mono text-xs truncate flex-1">{r.topic}</span>
                         <Badge>{r.fromBeginning ? 'from the beginning' : 'new messages'}</Badge>
-                        <IconButton label={status === 'open' ? `Stop reading ${r.topic} and remove it` : `Remove ${r.topic}`} className="h-7 w-7" onClick={() => removeRead(r.topic)}>
-                          <X size={12} />
+                        <IconButton size="md" label={status === 'open' ? `Stop reading ${r.topic} and remove it` : `Remove ${r.topic}`} onClick={() => removeRead(r.topic)}>
+                          <X />
                         </IconButton>
                       </div>
                     ))
@@ -561,8 +561,8 @@ export function WebSocketView() {
                       <div key={s.topic} className="flex items-center gap-2 px-2 h-8 border-b border-line/50 text-sm">
                         <span className="mono text-xs truncate flex-1">{s.topic}</span>
                         <Badge>QoS {s.qos}</Badge>
-                        <IconButton label={status === 'open' ? `Unsubscribe from ${s.topic} and remove it` : `Remove ${s.topic}`} className="h-7 w-7" onClick={() => removeSubscription(s.topic)}>
-                          <X size={12} />
+                        <IconButton size="md" label={status === 'open' ? `Unsubscribe from ${s.topic} and remove it` : `Remove ${s.topic}`} onClick={() => removeSubscription(s.topic)}>
+                          <X />
                         </IconButton>
                       </div>
                     ))
@@ -647,7 +647,7 @@ export function WebSocketView() {
                       <option value="sent">Sent</option>
                       <option value="received">Received</option>
                     </Select>
-                    <Input className="field-sm h-6 min-h-6 text-xs w-40" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
+                    <FilterInput className="w-40" placeholder="Filter" label="Filter messages" value={filter} onChange={setFilter} />
                     <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => setMessages([])}>
                       Clear
                     </Button>

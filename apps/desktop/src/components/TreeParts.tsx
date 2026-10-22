@@ -49,7 +49,7 @@ export function RowMenu({ label, items, open, onOpenChange, header }: { label: s
 
 /** A count beside a title or folder name. */
 export const CountPill = memo(function CountPill({ n }: { n: number }) {
-  return <span className="text-[0.7rem] px-1.5 rounded-full bg-panel2 text-muted tabular-nums shrink-0">{n}</span>;
+  return <span className="text-2xs px-1.5 rounded-full bg-panel2 text-muted tabular-nums shrink-0">{n}</span>;
 });
 
 /** The header of a sidebar list: title, count, + (new) and ⋯ (also on right-click). */
@@ -83,7 +83,7 @@ export function TreeHeader({
       }}
     >
       {icon && <span className="text-muted shrink-0 mr-1">{icon}</span>}
-      <span className="text-[0.82rem] font-semibold truncate">{title}</span>
+      <span className="text-xs font-semibold truncate">{title}</span>
       {count !== undefined && count > 0 && (
         <span className="ml-1.5">
           <CountPill n={count} />
@@ -116,7 +116,7 @@ const SHORT_METHOD: Record<string, string> = { DELETE: 'DEL', OPTIONS: 'OPT' };
 export const TreeBadge = memo(function TreeBadge({ label, className }: { label: string; className?: string }) {
   const text = SHORT_METHOD[label.toUpperCase()] ?? label.slice(0, 5);
   return (
-    <span className={cx('mono method-badge text-[0.64rem] font-bold w-[2.375rem] shrink-0 text-center', className)} title={label}>
+    <span className={cx('mono method-badge text-3xs font-bold w-[2.375rem] shrink-0 text-center', className)} title={label}>
       {text}
     </span>
   );

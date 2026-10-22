@@ -10,7 +10,7 @@ export function RunInTerminalButton({ command, execute, className }: { command: 
   if (!useShellCapable() || !command.trim() || command.includes('\n')) return null;
   return (
     <IconButton label="Run in terminal" className={className} data-run-in-terminal="" onClick={() => runInTerminal(command, { execute })}>
-      <SquareTerminal size={13} />
+      <SquareTerminal />
     </IconButton>
   );
 }

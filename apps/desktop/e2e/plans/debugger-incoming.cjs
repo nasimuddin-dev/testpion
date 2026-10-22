@@ -1,5 +1,5 @@
 // The Debugger's Incoming tab: a request a program sends to one of TestPion's mock servers is listed with the example
-// that answered, and opens in Request Details / Response Details (secrets masked), with Open and Ask AI only.
+// that answered, and opens in Request details / Response details (secrets masked), with Open and Ask AI only.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, stepOf } = require('../lib.cjs');
 

@@ -1,8 +1,9 @@
+import { plural } from '../../lib/format';
 import { Database, Radio } from 'lucide-react';
 import { useState } from 'react';
 import { useRpc } from '../../lib/use-rpc';
 import { AiAction } from '../ai/AiAction';
-import { Badge, Button, Empty, Spinner, cx } from '../ui';
+import { Badge, Button, cx, Empty, SectionTitle, Spinner } from '../ui';
 import { RagCaptureDialog } from './RagCaptureDialog';
 import { RagTestsetDialog } from './RagTestsetDialog';
 
@@ -27,7 +28,7 @@ export function RagDatasetsList() {
     );
   return (
     <div className="flex flex-col min-h-0 h-full" data-rag-datasets-list>
-      <div className="px-2 py-1.5 border-b border-line text-xs font-semibold text-muted uppercase tracking-wide">Datasets</div>
+      <SectionTitle size="sm" className="px-2 py-1.5 border-b border-line">Datasets</SectionTitle>
       <div className="flex-1 min-h-0 overflow-auto">
         {data.datasets.map((d) => (
           <div key={d.path} className={cx('px-3 py-2 border-b border-line/60 text-sm')} data-rag-dataset-row={d.name}>
@@ -36,7 +37,7 @@ export function RagDatasetsList() {
               <span className="truncate font-medium">{d.name}</span>
               <Badge>{d.format}</Badge>
             </div>
-            <div className="text-xs text-muted">{d.records !== undefined ? `${d.records} record${d.records === 1 ? '' : 's'}` : 'records not counted'}</div>
+            <div className="text-xs text-muted">{d.records !== undefined ? `${plural(d.records, 'record')}` : 'records not counted'}</div>
             {d.format === 'jsonl' && (
               <AiAction
                 variant="link"

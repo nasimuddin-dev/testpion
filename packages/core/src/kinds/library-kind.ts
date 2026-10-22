@@ -31,7 +31,7 @@ export const libraryKinds: KindDefs = {
       // a monitor ref, or a library item of `monitors` (toItemRef turns those into monitor refs)
       const r = ref as Extract<ItemRef, { kind: 'monitor' }>;
       const it = libraryIndex(store, 'monitors')?.byId.get(r.monitorId);
-      return it ? ok(r, it.name, 'Monitor') : missing(r, 'That monitor no longer exists (deleted, or in another workspace).', { label: 'Open Monitors', view: 'monitors' });
+      return it ? ok(r, it.name, 'Monitor') : missing(r, 'That monitor no longer exists (deleted, or in another workspace).', { label: 'Open monitors', view: 'monitors' });
     },
   },
 };

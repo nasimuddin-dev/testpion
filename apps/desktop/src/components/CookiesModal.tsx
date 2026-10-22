@@ -4,7 +4,7 @@ import { call } from '../api';
 import { promptText, useApp, attempt } from '../store';
 import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
 import { plural } from '../lib/format';
-import { Badge, Button, cx, Empty, Field, IconButton, Input, Modal, Toggle } from './ui';
+import { Badge, Bar, Button, cx, Empty, Field, FilterInput, IconButton, Input, Modal, Toggle } from './ui';
 
 export interface JarCookie {
   name: string;
@@ -111,12 +111,12 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
     >
       <div className="flex gap-3 h-[52vh]">
         <div className="w-60 shrink-0 flex flex-col border border-line rounded-md">
-          <div className="flex items-center justify-between px-3 h-9 border-b border-line text-xs font-medium text-muted">
+          <Bar className="justify-between text-xs font-medium text-muted">
             Domains
             <IconButton label="Add domain" onClick={() => void addDomain()}>
-              <Plus size={14} />
+              <Plus />
             </IconButton>
-          </div>
+          </Bar>
           <div role="listbox" aria-label="Cookie domains" className="flex-1 overflow-auto py-1">
             {domains.map((d) => (
               <button
@@ -145,7 +145,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
           ) : (
             <>
               <div className="flex items-center gap-2 mb-2">
-                <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter cookies" aria-label="Filter cookies" className="max-w-56" />
+                <FilterInput className="max-w-56" placeholder="Filter cookies" label="Filter cookies" value={filter} onChange={setFilter} />
                 <span className="mr-auto" />
                 <Button size="sm" icon={<Plus size={13} />} onClick={() => setEditing({ draft: blank(domain) })}>
                   Add cookie
@@ -171,8 +171,8 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                         <tr key={`${c.name}|${c.path}`} className="border-t border-line hover:bg-hover cursor-pointer" onClick={() => setEditing({ original: c, draft: { ...c } })}>
                           <td className="px-3 py-1.5 mono">
                             {c.name}
-                            {c.httpOnly && <span className="ml-1.5 text-[10px] text-muted">HttpOnly</span>}
-                            {c.secure && <span className="ml-1.5 text-[10px] text-muted">Secure</span>}
+                            {c.httpOnly && <span className="ml-1.5 text-2xs text-muted">HttpOnly</span>}
+                            {c.secure && <span className="ml-1.5 text-2xs text-muted">Secure</span>}
                           </td>
                           <td className="mono truncate max-w-64" title={c.value}>
                             {c.value}
@@ -192,7 +192,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                                 });
                               }}
                             >
-                              <Trash2 size={14} />
+                              <Trash2 />
                             </IconButton>
                           </td>
                         </tr>

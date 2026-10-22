@@ -24,14 +24,14 @@ export const recordKinds: KindDefs = {
     resolve: (store, ref) => {
       const r = ref as Extract<ItemRef, { kind: 'history' }>;
       const h = store.meta.getHistory(r.historyId);
-      return h ? ok(r, h.name, `${h.kind} · ${h.timestamp}`) : missing(r, 'That history entry is gone (cleared, or from another workspace).', { label: 'Open History', view: 'history' });
+      return h ? ok(r, h.name, `${h.kind} · ${h.timestamp}`) : missing(r, 'That history entry is gone (cleared, or from another workspace).', { label: 'Open history', view: 'history' });
     },
   },
   trace: {
     resolve: (store, ref) => {
       const r = ref as Extract<ItemRef, { kind: 'trace' }>;
       const t = store.meta.getTrace(r.traceId);
-      return t ? ok(r, t.name, 'Trace') : missing(r, 'That trace is gone (cleared, or from another workspace).', { label: 'Open Traces', view: 'traces' });
+      return t ? ok(r, t.name, 'Trace') : missing(r, 'That trace is gone (cleared, or from another workspace).', { label: 'Open traces', view: 'traces' });
     },
   },
   exchange: { resolve: (_store, ref) => ok(ref, (ref as Extract<ItemRef, { kind: 'exchange' }>).exchangeId, ITEM_KIND_LABEL.exchange) },

@@ -6,7 +6,7 @@ import type { TestResult } from '../types';
 import { formatMs, plural, timeAgo } from '../lib/format';
 import { StatusIcon } from './Results';
 import { ResultDetail } from './RunPanel';
-import { Badge, Button, cx, Empty, Segmented, Spinner, Split, VirtualList } from './ui';
+import { Badge, Button, cx, Empty, SECTION_LABEL, Segmented, Spinner, Split, VirtualList } from './ui';
 import { usePagedRows } from '../lib/paged-rows';
 import { htmlDocument, jsonPretty, outputFileName, rowsFromObjects, scaleRunStatus, toCsv, type FlowRunStatus } from '@testpion/shared';
 import { OutputActions, OutputHeader } from './output/OutputFrame';
@@ -274,7 +274,7 @@ export function FlowDataGrid({ id }: { id: string }) {
             />
             <span className="ml-auto text-xs text-muted tabular-nums">{plural(matched, 'row')}</span>
           </div>
-          <div className="grid gap-2 px-3 h-7 items-center text-[11px] uppercase tracking-wide text-muted border-b border-line" style={{ gridTemplateColumns: grid }}>
+          <div className={cx(SECTION_LABEL, 'grid gap-2 px-3 py-1.5 items-center border-b border-line')} style={{ gridTemplateColumns: grid }}>
             <span>Row</span>
             <span />
             <span className="text-right">Time</span>
@@ -480,7 +480,7 @@ export function FlowMatrixGrid({ id }: { id: string }) {
         <div className="h-full overflow-auto">
           <table className="w-full text-sm border-collapse">
             <thead className="sticky top-0 bg-bg z-10">
-              <tr className="text-[11px] uppercase tracking-wide text-muted">
+              <tr className={SECTION_LABEL}>
                 <th className="text-left font-medium px-3 py-1.5 border-b border-line">Step</th>
                 {cols.map((c) => (
                   <th key={c.environment} className="text-left font-medium px-3 py-1.5 border-b border-line normal-case" data-matrix-column={c.environment} data-status={c.status}>
@@ -540,7 +540,7 @@ export function FlowMatrixGrid({ id }: { id: string }) {
           {!!m.outputs?.length && (
             <table className="w-full text-xs border-collapse mt-3">
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-muted">
+                <tr className={SECTION_LABEL}>
                   <th className="text-left font-medium px-3 py-1.5 border-b border-line">Value</th>
                   {m.environments.map((e) => (
                     <th key={e} className="text-left font-medium px-3 py-1.5 border-b border-line normal-case">

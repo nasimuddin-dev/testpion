@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { CheckConfig } from '../types';
-import { Button, cx, IconButton } from './ui';
+import { Button, cx, IconButton, Select } from './ui';
 
 interface CheckDef {
   type: string;
@@ -87,7 +87,7 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
         const def = CHECK_DEFS.find((d) => d.type === c.type) ?? { type: c.type, label: c.type, group: '', fields: ['path', 'expected'] as CheckDef['fields'] };
         return (
           <div key={i} className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel px-2 py-1.5">
-            <select className="field h-7 min-h-7 py-0" value={c.type} onChange={(e) => set(i, { type: e.target.value })} aria-label="Check type">
+            <Select className="h-7 min-h-7 py-0" value={c.type} onChange={(e) => set(i, { type: e.target.value })} aria-label="Check type">
               {Object.entries(byGroup).map(([g, ds]) => (
                 <optgroup key={g} label={g}>
                   {ds.map((d) => (
@@ -97,7 +97,7 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
                   ))}
                 </optgroup>
               ))}
-            </select>
+            </Select>
             {def.fields.includes('path') && <input className="field h-7 min-h-7 mono w-44" placeholder="$.path (optional)" value={c.path ?? ''} onChange={(e) => set(i, { path: e.target.value || undefined })} />}
             {def.fields.includes('header') && <input className="field h-7 min-h-7 mono w-40" placeholder="header name" value={String(c.header ?? '')} onChange={(e) => set(i, { header: e.target.value })} />}
             {def.fields.includes('tool') && <input className="field h-7 min-h-7 mono w-40" placeholder="tool name" value={String(c.tool ?? '')} onChange={(e) => set(i, { tool: e.target.value })} />}
@@ -110,11 +110,11 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
               <input className="field h-7 min-h-7 w-24" type="number" step="0.05" placeholder="threshold" value={String(c.threshold ?? '')} onChange={(e) => set(i, { threshold: e.target.value === '' ? undefined : Number(e.target.value) })} />
             )}
             {def.fields.includes('method') && (
-              <select className="field h-7 min-h-7 py-0" value={String(c.method ?? 'lexical')} onChange={(e) => set(i, { method: e.target.value })}>
+              <Select className="h-7 min-h-7 py-0" value={String(c.method ?? 'lexical')} onChange={(e) => set(i, { method: e.target.value })}>
                 <option value="lexical">lexical</option>
                 <option value="f1">token F1</option>
                 <option value="embedding">embedding</option>
-              </select>
+              </Select>
             )}
             {def.fields.includes('values') && (
               <input
@@ -158,10 +158,10 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
             )}
             {def.fields.includes('snapshot') && (
               <>
-                <select className="field h-7 min-h-7 py-0" value={c.mode === 'values' ? 'values' : 'shape'} onChange={(e) => set(i, { mode: e.target.value })} title={def.hint} aria-label="Snapshot comparison">
+                <Select className="h-7 min-h-7 py-0" value={c.mode === 'values' ? 'values' : 'shape'} onChange={(e) => set(i, { mode: e.target.value })} title={def.hint} aria-label="Snapshot comparison">
                   <option value="shape">same shape</option>
                   <option value="values">same values</option>
-                </select>
+                </Select>
                 <input
                   className="field h-7 min-h-7 mono flex-1 min-w-40"
                   placeholder="ignore, e.g. $.id, $..updatedAt, $.items[*].price"
@@ -189,7 +189,7 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
               />
             )}
             <IconButton label="Remove check" className={cx('ml-auto')} onClick={() => onChange(checks.filter((_, j) => j !== i))}>
-              <Trash2 size={13} />
+              <Trash2 />
             </IconButton>
           </div>
         );

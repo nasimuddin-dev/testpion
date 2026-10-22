@@ -44,7 +44,7 @@ export function AiLabView() {
   });
   return (
     <div className="h-full flex flex-col">
-      <Tabs
+      <Tabs label="AI Lab"
         value={tab}
         onChange={setTab}
         tabs={[

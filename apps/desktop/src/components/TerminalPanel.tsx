@@ -2,18 +2,20 @@ import '@xterm/xterm/css/xterm.css';
 import { Terminal, type ILink, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { Eraser, Plus, SquareTerminal, Trash2, X } from 'lucide-react';
+import { Eraser, Plus, SquareTerminal, Trash2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { outputFileName } from '@testpion/shared';
 import { bridge, call, on } from '../api';
 import { toastError, useApp } from '../store';
+import { copyQuietly, writeClipboard } from '../lib/clipboard';
 import { useTerminals, type TerminalSessionInfo } from '../lib/terminal';
 import { AckCounter } from '../lib/terminal-flow';
 import { terminalLinks } from '../lib/terminal-links';
 import { openRef } from '../lib/open-ref';
 import { afterScopeChange, scopedKey } from '../lib/ws-scope';
-import { cx, Empty, IconButton, Select } from './ui';
-import { OutputActions, OutputBarStart } from './output/OutputFrame';
+import { Empty, IconButton, Select } from './ui';
+import { DocTabStrip } from './DocTabStrip';
+import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
 
 /**
@@ -205,13 +207,14 @@ function make(info: TerminalSessionInfo): Live {
   // copy on selection (as in most terminals); Ctrl+Shift+C / V copy and paste; Ctrl+C goes to the shell
   term.onSelectionChange(() => {
     const t = term.getSelection();
-    if (t) void navigator.clipboard.writeText(t).catch(() => undefined);
+    // copied as it is made: best effort, no message (an explicit copy says when the clipboard refused)
+    if (t) void writeClipboard(t).catch(() => undefined);
   });
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
     if (e.code === 'KeyC') {
       const t = term.getSelection();
-      if (t) void navigator.clipboard.writeText(t).catch(() => undefined);
+      if (t) void copyQuietly(t);
       return false;
     }
     if (e.code === 'KeyV') {
@@ -515,35 +518,28 @@ export default function TerminalPanel() {
 
   return (
     <>
-      <div className="flex items-center gap-1 px-2 h-8 border-b border-line text-xs shrink-0 min-w-0 overflow-clip" data-terminal-strip="">
-        <OutputBarStart className="gap-1">
-          <div role="tablist" aria-label="Terminals" className="flex items-center gap-1 min-w-0 overflow-x-auto [scrollbar-width:none]">
-            {sessions.map((s, i) => (
-              <span key={s.id} className={cx('group flex items-center rounded-md shrink-0', s.id === active ? 'bg-hover text-fg' : 'text-muted hover:text-fg')}>
-                <button
-                  role="tab"
-                  aria-selected={s.id === active}
-                  data-terminal-tab={s.id}
-                  className={cx('pl-2 pr-1 h-6 font-medium flex items-center gap-1', s.exitCode !== undefined && 'line-through opacity-70')}
-                  title={`${s.label} · ${s.cwd}${s.exitCode !== undefined ? ` · exited (${s.exitCode})` : ''}`}
-                  onClick={() => useTerminals.setState({ active: s.id })}
-                >
-                  <SquareTerminal size={12} />
-                  {s.label}
-                  {sessions.filter((x) => x.label === s.label).length > 1 ? ` ${sessions.filter((x, j) => x.label === s.label && j <= i).length}` : ''}
-                </button>
-                <IconButton label={`Close ${s.label}`} className={cx('h-5 w-5', s.id === active ? 'opacity-70' : 'opacity-0 group-hover:opacity-100')} onClick={() => kill(s.id)}>
-                  <X size={11} />
-                </IconButton>
-              </span>
-            ))}
-          </div>
-          <IconButton label="New terminal" onClick={() => void create()} disabled={!shells?.available} reason="No shell was found: install PowerShell or bash">
-            <Plus size={13} />
+      {/* the terminals are document tabs (the one strip of every view's open items): ✕ or middle-click kills one */}
+      <div className="contents" data-terminal-strip="">
+        <DocTabStrip
+          label="Terminals"
+          tabs={sessions.map((s, i) => ({
+            id: s.id,
+            title: `${s.label}${sessions.filter((x) => x.label === s.label).length > 1 ? ` ${sessions.filter((x, j) => x.label === s.label && j <= i).length}` : ''}${s.exitCode !== undefined ? ' (exited)' : ''}`,
+            tooltip: `${s.label} · ${s.cwd}${s.exitCode !== undefined ? ` · exited (${s.exitCode})` : ''}`,
+            badge: <SquareTerminal size={12} className="shrink-0 text-muted" aria-hidden />,
+          }))}
+          activeId={active}
+          onSelect={(t) => useTerminals.setState({ active: t.id })}
+          onClose={(ids) => ids.forEach(kill)}
+          countMenu={false}
+          afterTabs={
+            <div className="flex items-center gap-1 self-center px-1 shrink-0">
+          <IconButton size="md" label="New terminal" onClick={() => void create()} disabled={!shells?.available} reason="No shell was found: install PowerShell or bash">
+            <Plus />
           </IconButton>
           <Select
             aria-label="Shell of new terminals"
-            className="h-6 min-h-0 text-xs w-auto py-0"
+            className="field-sm text-xs w-auto"
             value={chosen ?? ''}
             onChange={(e) => {
               setShell(e.target.value);
@@ -561,15 +557,19 @@ export default function TerminalPanel() {
               </option>
             ))}
           </Select>
-        </OutputBarStart>
+            </div>
+          }
+          actions={
         <OutputActions spec={spec}>
           <IconButton label="Clear terminal" disabled={!activeLive} reason="No terminal is open" onClick={() => (activeLive?.term.clear(), activeLive?.term.focus())}>
-            <Eraser size={13} />
+            <Eraser />
           </IconButton>
           <IconButton label="Kill terminal" disabled={!activeLive} reason="No terminal is open" onClick={() => active && kill(active)}>
-            <Trash2 size={13} />
+            <Trash2 />
           </IconButton>
         </OutputActions>
+          }
+        />
       </div>
       <div
         ref={box}
@@ -583,10 +583,7 @@ export default function TerminalPanel() {
           e.preventDefault();
           const sel = t.getSelection();
           if (sel)
-            void navigator.clipboard.writeText(sel).then(
-              () => t.clearSelection(),
-              () => undefined,
-            );
+            void copyQuietly(sel).then((ok) => ok && t.clearSelection());
           else void paste(t);
         }}
         onKeyDown={(e) => {

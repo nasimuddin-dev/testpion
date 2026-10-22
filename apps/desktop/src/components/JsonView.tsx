@@ -1,8 +1,8 @@
 import { detectLanguage, highlight as syntaxTokens, type CodeLanguage } from '../lib/highlight';
-import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Search, Shapes, Variable, WrapText } from 'lucide-react';
+import { Camera, ChevronDown, ChevronRight, ChevronUp, CircleCheck, Copy, Equal, ListChecks, ListOrdered, Shapes, Variable, WrapText } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { JSONPath } from 'jsonpath-plus';
-import { cx, IconButton, Input, Menu, useDebounced, VirtualList, type MenuItem } from './ui';
+import { cx, FilterInput, IconButton, Menu, type MenuItem, SECTION_LABEL, useDebounced, VirtualList } from './ui';
 import { SuggestInput } from './SuggestInput';
 import { OutputToolbar } from './output/OutputToolbar';
 import { ExpandCollapseToggle } from './ExpandCollapseToggle';
@@ -211,7 +211,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
             onKeyDown={(e) => e.key === 'Escape' && filter && (e.preventDefault(), setFilter(''))}
           />
         }
-        status={filtered && (filtered.error ? `Not a valid JSONPath: ${filtered.error}` : `${(filtered.data ?? []).length} match${(filtered.data ?? []).length === 1 ? '' : 'es'}`)}
+        status={filtered && (filtered.error ? `Not a valid JSONPath: ${filtered.error}` : plural((filtered.data ?? []).length, 'match', 'matches'))}
         statusTitle={filtered?.error}
         statusTone={filtered?.error ? 'bad' : undefined}
         hint={
@@ -286,7 +286,7 @@ export function JsonTree({ data: full, query, onAssert: assertOnFull, onSaveVari
                     </span>
                   )}
                   {r.embeddedRoot && (
-                    <span className="ml-2 text-[10px] uppercase tracking-wide text-muted align-middle" title="This text value holds JSON; it is shown as what it holds">
+                    <span className={cx(SECTION_LABEL, 'ml-2 align-middle')} title="This text value holds JSON; it is shown as what it holds">
                       JSON in text
                     </span>
                   )}
@@ -394,29 +394,29 @@ export function RawView({ text, language }: { text: string; language?: string })
   return (
     <div className="h-full flex flex-col min-h-0" data-raw-view>
       <div className="flex items-center gap-1 px-2 py-1 shrink-0 border-b border-line">
-        <Search size={13} className="text-muted" />
-        <Input
-          className="h-6 min-h-6 text-xs w-56"
+        <FilterInput
+          className="w-56"
           placeholder="Search response"
+          label="Search the response"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && matches.length) setActive((a) => (e.shiftKey ? (a - 1 + matches.length) % matches.length : (a + 1) % matches.length));
           }}
         />
         {query && <span className="text-xs text-muted tabular-nums">{matches.length ? `${active + 1}/${matches.length}${matches.length >= 10000 ? '+' : ''}` : 'no matches'}</span>}
         <IconButton label="Previous match" onClick={() => matches.length && setActive((a) => (a - 1 + matches.length) % matches.length)}>
-          <ChevronUp size={14} />
+          <ChevronUp />
         </IconButton>
         <IconButton label="Next match" onClick={() => matches.length && setActive((a) => (a + 1) % matches.length)}>
-          <ChevronDown size={14} />
+          <ChevronDown />
         </IconButton>
         <div className="ml-auto flex items-center gap-1">
           <IconButton label="Wrap long lines" active={wrapAt} onClick={() => setWrapAt(!wrapAt)}>
-            <WrapText size={14} />
+            <WrapText />
           </IconButton>
-          <IconButton label="Copy" onClick={() => void copyText(text)}>
-            <Copy size={14} />
+          <IconButton label="Copy the text" onClick={() => void copyText(text, 'the text')}>
+            <Copy />
           </IconButton>
         </div>
       </div>

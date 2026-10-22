@@ -352,7 +352,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
         <AiEstimateLine className="flex items-center gap-2 text-xs text-muted min-h-5" estimate={estimate} waiting={ready} data-flow-estimate="">
           {(mode === 'collection' || mode === 'security') && col && (
             <Badge>
-              {folder ? <FolderTree size={10} /> : <Workflow size={10} />} {requests} request{requests === 1 ? '' : 's'}
+              {folder ? <FolderTree size={10} /> : <Workflow size={10} />} {plural(requests, 'request')}
             </Badge>
           )}
           {mode === 'spec' && spec && (

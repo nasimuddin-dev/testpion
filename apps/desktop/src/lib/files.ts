@@ -79,7 +79,7 @@ export async function generateFlows(source: { path: string } | { collectionId: s
             ? `Every file exists already: ${r.skipped.join(', ')}`
             : 'No resource to make a flow of: the API needs a POST with a sibling GET / PUT / DELETE /{id} path',
         r.written.length ? 'success' : 'warning',
-        r.written.length ? { label: 'Open Tests', onClick: () => useApp.getState().setView('tests') } : undefined,
+        r.written.length ? { label: 'Open tests', onClick: () => useApp.getState().setView('tests') } : undefined,
       );
   });
 }

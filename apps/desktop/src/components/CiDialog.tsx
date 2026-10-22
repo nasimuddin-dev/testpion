@@ -1,5 +1,5 @@
 import { CodeBlock } from './CodeBlock';
-import { Check, Copy, Download, TerminalSquare } from 'lucide-react';
+import { Copy, Download, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { selectEnvironments, useApp, attempt } from '../store';
@@ -8,7 +8,7 @@ import { Button, Field, Input, Modal, Select, Tabs } from './ui';
 import { useCollectionTree } from '../lib/collections-store';
 import { usePersisted } from '../lib/sticky';
 import { useLibrary } from '../lib/library';
-import { copyText, useCopied } from '../lib/clipboard';
+import { copyText } from '../lib/clipboard';
 import { runInTerminal, useShellCapable } from '../lib/terminal';
 
 interface CiConfig {
@@ -73,7 +73,6 @@ export function CiDialog() {
   const collections = useCollectionTree();
   const [cfg, setCfg] = useState<CiConfig>();
   const [error, setError] = useState<string>();
-  const { copied, copy: copyToClipboard } = useCopied();
 
   useEffect(() => {
     void call<TreeNode[]>('tests.tree').then((t) => (setSuites(suitesOf(t)), setFiles(filesOf(t))));
@@ -124,7 +123,7 @@ export function CiDialog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, target, environment, workspaceDir, openapi, flowRun, dataFile, matrix.join(','), allowProduction, timeline, JSON.stringify(rag)]);
 
-  const copy = () => (cfg ? copyToClipboard(cfg.content) : undefined);
+  const copy = () => (cfg ? copyText(cfg.content, 'the pipeline file') : undefined);
   const save = async () => {
     await attempt(async () => {
       finishSave(await call<SaveResult>('ci.save', options()), 'Pipeline');
@@ -140,8 +139,8 @@ export function CiDialog() {
       footer={
         <>
           <span className="text-xs text-muted mr-auto">{cfg && <>Put it at <code>{cfg.path}</code> in your repository.</>}</span>
-          <Button icon={copied ? <Check size={14} /> : <Copy size={14} />} onClick={() => void copy()} disabled={!cfg} reason="The file is not ready yet">
-            {copied ? 'Copied' : 'Copy'}
+          <Button icon={<Copy size={14} />} onClick={() => void copy()} disabled={!cfg} reason="The file is not ready yet">
+            Copy
           </Button>
           <Button variant="primary" icon={<Download size={14} />} onClick={() => void save()} disabled={!cfg} reason="The file is not ready yet">
             Save file…
@@ -150,7 +149,7 @@ export function CiDialog() {
       }
     >
       <div className="flex flex-col gap-3">
-        <Tabs tabs={PROVIDERS} value={provider} onChange={setProvider} />
+        <Tabs label="CI provider" tabs={PROVIDERS} value={provider} onChange={setProvider} />
         <div className="grid grid-cols-3 gap-3">
           <Field label="Run">
             <Select value={target} onChange={(e) => setTarget(e.target.value)}>

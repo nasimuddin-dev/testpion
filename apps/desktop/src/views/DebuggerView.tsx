@@ -31,7 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
-import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
+import { Badge, Button, cx, Empty, FilterInput, Menu, type MenuItem, PageHeader, SectionTitle, Select, Split, Tabs } from '../components/ui';
 import { formatBytes, formatMs, outputFileName } from '@testpion/shared';
 import { pickBinaryFile, pickTextFile } from '../lib/files';
 import { OutputActions } from '../components/output/OutputFrame';
@@ -623,7 +623,7 @@ export function DebuggerView() {
           </Button>
         </div>
       )}
-      <Tabs
+      <Tabs label="Debugger"
         value={tab}
         onChange={setTab}
         tabs={[
@@ -705,31 +705,31 @@ export function DebuggerView() {
                   </div>
                 )}
                 <div className="flex gap-1.5 p-2 border-b border-line items-center flex-wrap text-xs" data-filter-bar>
-                  <Input
+                  <FilterInput
                     ref={filterBox}
-                    className="h-7 min-h-7 w-44 text-xs"
+                    className="w-44"
                     placeholder={filter.deep ? 'Find in URLs, headers and bodies' : 'Filter requests'}
-                    aria-label="Filter exchanges"
+                    label="Filter exchanges"
                     value={filter.text}
-                    onChange={(e) => setFilter({ ...filter, text: e.target.value })}
+                    onChange={(text) => setFilter({ ...filter, text })}
                   />
                   <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Search headers and bodies too">
                     <input type="checkbox" checked={filter.deep} onChange={(e) => setFilter({ ...filter, deep: e.target.checked })} /> In bodies
                   </label>
                   <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Application" value={filter.application} onChange={(e) => setFilter({ ...filter, application: e.target.value })}>
-                    <option value="">All Applications</option>
+                    <option value="">All applications</option>
                     {seen.apps.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
                   <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Host" value={filter.host} onChange={(e) => setFilter({ ...filter, host: e.target.value })}>
-                    <option value="">All Domains</option>
+                    <option value="">All domains</option>
                     {seen.hosts.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
                   </Select>
                   <Select className="h-7 min-h-7 py-0 text-xs" aria-label="Type" value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value })}>
-                    <option value="">All Types</option>
+                    <option value="">All types</option>
                     {seen.types.map((h) => (
                       <option key={h}>{h}</option>
                     ))}
@@ -796,7 +796,7 @@ export function DebuggerView() {
                       type="button"
                       className="flex items-center gap-1 text-xs text-muted hover:text-fg"
                       onClick={() => openDock('filter')}
-                      title="Filter Out and Capture Only rules on"
+                      title="Filter-out and capture-only rules on"
                       data-filter-rule-count
                     >
                       <Filter size={12} /> {(rules?.rules ?? []).filter((r) => r.enabled && (r.kind === 'ignore' || r.kind === 'only')).length}
@@ -916,7 +916,7 @@ export function DebuggerView() {
         />
       )}
       {flowFrom && <CreateFlowDialog ids={flowFrom.ids} since={flowFrom.since} onClose={() => setFlowFrom(undefined)} />}
-      {datasetFrom && <RagCaptureDialog initial={{ from: 'exchanges', exchanges: datasetFrom.ids, label: `${datasetFrom.ids.length} exchange${datasetFrom.ids.length === 1 ? '' : 's'} of the Debugger` }} onClose={() => setDatasetFrom(undefined)} />}
+      {datasetFrom && <RagCaptureDialog initial={{ from: 'exchanges', exchanges: datasetFrom.ids, label: `${plural(datasetFrom.ids.length, 'exchange')} of the Debugger` }} onClose={() => setDatasetFrom(undefined)} />}
       {saveFrom && <SaveToCollectionDialog ids={saveFrom.ids} since={saveFrom.since} onClose={() => setSaveFrom(undefined)} />}
       {comparePair && <CompareExchangesDialog a={comparePair.a} b={comparePair.b} onClose={() => setComparePair(undefined)} />}
     </div>
@@ -948,7 +948,7 @@ function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Sta
         {stats.firstAt && stats.lastAt ? ` · ${new Date(stats.firstAt).toLocaleTimeString()} – ${new Date(stats.lastAt).toLocaleTimeString()}` : ''}
       </div>
       <section>
-        <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Requests over time</div>
+        <SectionTitle size="sm" className="mb-1">Requests over time</SectionTitle>
         <div className="flex items-end gap-px h-20 border-b border-line" role="img" aria-label="Requests per time slice">
           {stats.timeline.map((b, i) => (
             <div key={i} className="flex-1 flex flex-col justify-end h-full" title={`${new Date(b.t).toLocaleTimeString()}: ${b.count} requests, ${b.errors} errors`}>
@@ -958,7 +958,7 @@ function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Sta
         </div>
       </section>
       <section>
-        <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Status mix</div>
+        <SectionTitle size="sm" className="mb-1">Status mix</SectionTitle>
         <div className="flex h-3 rounded overflow-hidden border border-line" role="img" aria-label="Status mix">
           {Object.entries(stats.statuses).map(([k, n]) => (
             <div key={k} className={cx(STATUS_TONE[k] ?? 'bg-muted')} style={{ width: `${(n / statusTotal) * 100}%` }} title={`${k}: ${n}`} />
@@ -980,7 +980,7 @@ function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Sta
         ] as Array<[string, Array<{ name: string; count: number; bytes: number }>]>
       ).map(([title, list]) => (
         <section key={title}>
-          <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">{title}</div>
+          <SectionTitle size="sm" className="mb-1">{title}</SectionTitle>
           <table className="text-sm w-full">
             <tbody>
               {list.map((x) => (
@@ -1001,7 +1001,7 @@ function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Sta
         ] as Array<[string, Array<{ id: string; method: string; url: string; value: string }>]>
       ).map(([title, list]) => (
         <section key={title}>
-          <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">{title}</div>
+          <SectionTitle size="sm" className="mb-1">{title}</SectionTitle>
           <table className="text-sm w-full">
             <tbody>
               {list.map((x) => (

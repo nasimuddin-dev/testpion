@@ -31,7 +31,7 @@ export function FlowFrame({ group: g, editable }: { group: FlowGroup; editable?:
       <rect x={g.x} y={g.y} width={g.w} height={g.h} rx={12} className={cx(fin ? 'fill-warn/5 stroke-warn' : 'fill-accent/5 stroke-accent')} strokeWidth={1.25} strokeDasharray="6 4" />
       <g data-flow-group-handle={editable ? groupKey(g) : undefined} className={editable ? 'cursor-move' : undefined}>
         <rect x={g.x + 8} y={g.y + 3} width={Math.max(0, pill)} height={15} rx={7.5} className={fin ? 'fill-warn' : 'fill-accent'} />
-        <text x={g.x + 15} y={g.y + 14} className="fill-bg text-[10px] font-semibold" data-flow-group-title>
+        <text x={g.x + 15} y={g.y + 14} className="fill-bg text-2xs font-semibold" data-flow-group-title>
           {text}
         </text>
       </g>
@@ -97,14 +97,14 @@ export function FlowFindBar({
       <span className="text-muted tabular-nums whitespace-nowrap" data-flow-find-count>
         {query.trim() ? `${current ? matches.indexOf(current) + 1 : 0} of ${matches.length}` : ''}
       </span>
-      <IconButton label="Previous match (Shift+Enter)" className="h-6 w-6" onClick={() => onJump(-1)} disabled={!matches.length} reason="No step matches">
-        <ChevronUp size={13} />
+      <IconButton size="sm" label="Previous match (Shift+Enter)" onClick={() => onJump(-1)} disabled={!matches.length} reason="No step matches">
+        <ChevronUp />
       </IconButton>
-      <IconButton label="Next match (Enter)" className="h-6 w-6" onClick={() => onJump(1)} disabled={!matches.length} reason="No step matches">
-        <ChevronDown size={13} />
+      <IconButton size="sm" label="Next match (Enter)" onClick={() => onJump(1)} disabled={!matches.length} reason="No step matches">
+        <ChevronDown />
       </IconButton>
-      <IconButton label="Close (Esc)" className="h-6 w-6" onClick={onClose}>
-        <X size={13} />
+      <IconButton size="sm" label="Close (Esc)" onClick={onClose}>
+        <X />
       </IconButton>
     </div>
   );
@@ -168,16 +168,16 @@ export function FlowToolbarFrame({
         <div className="flex items-center gap-1 shrink-0">
           {toolbarRight}
           <span className="hidden @[760px]:inline-flex">
-            <IconButton label="Zoom out" className="h-7 w-7" onClick={() => onZoom(zoom / 1.25)} data-flow-zoom="out">
-              <Minus size={13} />
+            <IconButton size="md" label="Zoom out" onClick={() => onZoom(zoom / 1.25)} data-flow-zoom="out">
+              <Minus />
             </IconButton>
           </span>
           <button type="button" className="hidden @[480px]:block h-7 min-w-11 px-1 rounded text-xs tabular-nums text-muted hover:bg-hover hover:text-fg" onClick={() => onZoom(1)} title="Zoom: click for 100%" aria-label="Zoom to 100%" data-flow-zoom-level>
             {Math.round(zoom * 100)}%
           </button>
           <span className="hidden @[760px]:inline-flex">
-            <IconButton label="Zoom in" className="h-7 w-7" onClick={() => onZoom(zoom * 1.25)} data-flow-zoom="in">
-              <Plus size={13} />
+            <IconButton size="md" label="Zoom in" onClick={() => onZoom(zoom * 1.25)} data-flow-zoom="in">
+              <Plus />
             </IconButton>
           </span>
           <Button size="sm" icon={<Maximize2 size={12} />} onClick={onFit} title="Show the whole flow" aria-label="Fit">

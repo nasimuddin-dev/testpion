@@ -2,9 +2,10 @@ import { ArrowRightToLine, ChevronLeft, ChevronRight, ListX, Pencil, Pin, Rotate
 import { reopenClosedTab, useClosedTabs } from '../lib/closed-tabs';
 import { LABEL } from '../lib/vocabulary';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { cx, Menu, type MenuItem } from './ui';
+import { cx, Menu, StatusDot, type MenuItem } from './ui';
 import { InlineRename, TreeBadge } from './TreeParts';
 import { TabOverflow } from './TabOverflow';
+import { focusTab, tabKeyTarget } from '../lib/tablist-keys';
 
 /**
  * One tab of a document strip: a request, a test file, a monitor. The strip draws it from this model alone; what
@@ -238,7 +239,15 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
                 if (e.key === 'F2') {
                   e.preventDefault();
                   startRename(t);
+                  return;
                 }
+                // ← → Home End, as every tab strip (lib/tablist-keys.ts)
+                const next = e.altKey || e.ctrlKey || e.metaKey ? undefined : tabKeyTarget(e.key, tabs.map((x) => x.id), t.id);
+                const to = next === undefined ? undefined : tabs.find((x) => x.id === next);
+                if (!to) return;
+                e.preventDefault();
+                if (to.id !== activeId) onSelect(to);
+                focusTab(stripRef.current, to.id);
               }}
               onAuxClick={(e) => e.button === 1 && closable(t) && close([t])}
               onContextMenu={(e) => {
@@ -271,9 +280,9 @@ export function DocTabStrip<D = unknown>({ tabs: given, activeId, label, onSelec
                 <span className={cx('truncate flex-1 min-w-0', t.preview && 'italic')}>{t.title}</span>
               )}
               {t.count !== undefined && t.count !== null && t.count !== 0 && (
-                <span className={cx('text-[0.7rem] leading-4 px-1.5 rounded-full tabular-nums shrink-0', active ? 'bg-accent-soft text-accent' : 'bg-panel2 text-muted')}>{t.count}</span>
+                <span className={cx('text-2xs leading-4 px-1.5 rounded-full tabular-nums shrink-0', active ? 'bg-accent-soft text-accent' : 'bg-panel2 text-muted')}>{t.count}</span>
               )}
-              {t.dirty && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-label="Unsaved changes" />}
+              {t.dirty && <StatusDot tone="accent" label="Unsaved changes" />}
               {closable(t) && (
                 <button
                   aria-label={`Close ${t.title}`}

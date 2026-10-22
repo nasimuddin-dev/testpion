@@ -49,5 +49,5 @@ const steps = [
 module.exports = withExpect(steps, {
   'recent-first': /^groups: Recently opened \| first: Custom headers$/,
   'find-by-name': /^hit: .*Say hello.* \| view: grpc$/,
-  'commands-and-environments': /^cmd: New HTTP Request \| env rows: .+ \| ctrl\+k: Send Feedback or Report a Problem…$/,
+  'commands-and-environments': /^cmd: New HTTP request \| env rows: .+ \| ctrl\+k: Send feedback or report a problem…$/,
 });

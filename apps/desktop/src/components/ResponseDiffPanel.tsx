@@ -5,7 +5,7 @@ import { asError, call } from '../api';
 import { comparable, previousResponse } from '../lib/response-memory';
 import type { HttpResponseData } from '../types';
 import { CompareView, type Compared } from './ResponseHistory';
-import { Empty, IconButton, Spinner } from './ui';
+import { Bar, Empty, IconButton, Spinner } from './ui';
 
 /**
  * Diff vs previous: this response against the request's previous one — the one sent before it this session, else (a
@@ -67,16 +67,16 @@ export function ResponseDiffPanel({
   const c = local?.c ?? fromHistory?.c;
   return (
     <div className="h-full flex flex-col min-h-0" data-response-diff>
-      <div className="flex items-center gap-2 px-3 h-8 border-b border-line text-xs text-muted shrink-0">
+      <Bar className="text-xs text-muted">
         <GitCompareArrows size={13} />
         <span className="flex-1 truncate">
           Diff vs previous response{local?.cut ? ' (long bodies: their first 512 KB compared)' : ''}
           {!local && c ? ' (from History)' : ''}
         </span>
-        <IconButton label="Close the diff" className="h-6 w-6" onClick={onClose}>
-          <X size={13} />
+        <IconButton size="sm" label="Close the diff" onClick={onClose}>
+          <X />
         </IconButton>
-      </div>
+      </Bar>
       <div className="flex-1 min-h-0">
         {c ? (
           <CompareView c={c} labels={['Previous response', 'This response']} />

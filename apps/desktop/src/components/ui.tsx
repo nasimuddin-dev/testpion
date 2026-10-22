@@ -1,13 +1,14 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type HTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { ChevronDown, CircleHelp, Loader2, MoreHorizontal, X } from 'lucide-react';
+import { ChevronDown, CircleHelp, Loader2, MoreHorizontal, Search, X } from 'lucide-react';
 import { iconForLabel, textOf } from './action-icons';
 import { TabOverflow } from './TabOverflow';
 import { cx } from '../lib/cx';
+import { focusTab, tabKeyTarget } from '../lib/tablist-keys';
 import { openDocs } from '../lib/docs-link';
 import { Menu, type MenuItem } from './Menu';
 
@@ -95,17 +96,29 @@ export function Tooltip({ content, children, side = 'bottom' }: { content?: Reac
 /**
  * An icon-only button: `label` names it (its tooltip and its name for screen readers). Disabled, it says why: `reason`
  * is the tooltip then (a disabled button gets no pointer events, so the box around it carries the tooltip and takes
- * the keyboard focus, which shows it too).
+ * the keyboard focus, which shows it too). Its `size` sizes the icon too (K3): one icon size per button size, whatever
+ * size the icon was given.
  */
-export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean; tooltipSide?: 'top' | 'bottom' | 'left' | 'right'; reason?: string }>(
-  ({ label, children, className, active, tooltipSide, title: _title, reason, disabled, ...p }, ref) => {
+const ICON_BUTTON_SIZE = {
+  xs: ['h-5 [&_svg]:size-[11px]', 'w-5'],
+  sm: ['h-6 [&_svg]:size-[12px]', 'w-6'],
+  md: ['h-7 [&_svg]:size-[13px]', 'w-7'],
+  lg: ['h-8 [&_svg]:size-[14px]', 'w-8'],
+} as const;
+export const IconButton = forwardRef<
+  HTMLButtonElement,
+  ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean; tooltipSide?: 'top' | 'bottom' | 'left' | 'right'; reason?: string; size?: keyof typeof ICON_BUTTON_SIZE; /** The ▾ half of a split button: narrower than square. */ narrow?: boolean }
+>(
+  ({ label, children, className, active, tooltipSide, title: _title, reason, disabled, size = 'lg', narrow, ...p }, ref) => {
     const button = (
       <button
         ref={ref}
         aria-label={label}
         disabled={disabled}
         className={cx(
-          'inline-flex items-center justify-center rounded-md h-8 w-8 text-muted transition-colors duration-150 hover:text-fg hover:bg-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
+          'inline-flex items-center justify-center rounded-md text-muted transition-colors duration-150 hover:text-fg hover:bg-hover active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
+          ICON_BUTTON_SIZE[size][0],
+          narrow ? 'w-5' : ICON_BUTTON_SIZE[size][1],
           active && 'bg-hover text-fg',
           className,
         )}
@@ -135,7 +148,7 @@ IconButton.displayName = 'IconButton';
 export function HelpLink({ page, what, className }: { page: string; what?: string; className?: string }) {
   return (
     <IconButton label={what ? `Help: ${what} in the docs` : 'Help: this page in the docs'} className={className} onClick={() => openDocs(page)} data-help={page}>
-      <CircleHelp size={16} />
+      <CircleHelp />
     </IconButton>
   );
 }
@@ -149,6 +162,36 @@ export const rowActionClass = (header = false) =>
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => <input ref={ref} className={cx('field', className)} {...p} />);
 Input.displayName = 'Input';
+
+/**
+ * The filter box of a list or an output bar, the one way everywhere (D1): one height, the search icon, a name for a
+ * screen reader (`label`), and Esc clears it (with nothing typed, Esc goes on to whatever is around: a dialog closes).
+ * `className` places and sizes the box (flex-1, w-48 …).
+ */
+export const FilterInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'size'> & { value: string; onChange(v: string): void; label: string }>(
+  ({ value, onChange, label, className, onKeyDown, ...p }, ref) => (
+    <span className={cx('relative inline-flex items-center min-w-0', className)} data-filter-input="">
+      <Search size={12} aria-hidden className="absolute left-2 text-muted pointer-events-none" />
+      <input
+        ref={ref}
+        type="text"
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          onKeyDown?.(e);
+          if (e.defaultPrevented || e.key !== 'Escape' || !value) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onChange('');
+        }}
+        className="field w-full min-w-0 h-7 min-h-7 text-sm pl-7"
+        {...p}
+      />
+    </span>
+  ),
+);
+FilterInput.displayName = 'FilterInput';
 
 /**
  * The one multi-line text field: it grows with its text, from `rows` (or its min-height) up to `maxRows` lines, then
@@ -236,8 +279,27 @@ export function Toggle({ checked, onChange, label, title, ...data }: { checked: 
   );
 }
 
-/** A tab strip. A tab with `onClose` has a × (and middle-click closes it), like the request tabs; `title` names it in full. */
-export function Tabs<T extends string>({ tabs, value, onChange, className, right }: { tabs: Array<{ id: NoInfer<T>; label: ReactNode; badge?: ReactNode; title?: string; onClose?(): void }>; value: T; onChange(v: NoInfer<T>): void; className?: string; right?: ReactNode }) {
+/**
+ * A tab strip, the one way to show a row of tabs (a view's sections, the bottom panel, the scripts): `label` names it
+ * for a screen reader. ← / → / Home / End move between the tabs (the WAI-ARIA tabs pattern: the chosen tab is the one
+ * Tab key stop). A tab with `onClose` has a × (and middle-click closes it), like the request tabs; `title` names it in
+ * full; `data` puts data-* attributes on its button.
+ */
+export function Tabs<T extends string>({
+  tabs,
+  value,
+  onChange,
+  label,
+  className,
+  right,
+}: {
+  tabs: Array<{ id: NoInfer<T>; label: ReactNode; badge?: ReactNode; title?: string; onClose?(): void; data?: Record<`data-${string}`, string> }>;
+  value: T;
+  onChange(v: NoInfer<T>): void;
+  label: string;
+  className?: string;
+  right?: ReactNode;
+}) {
   // tabs that don't fit (a narrow pane, side by side) stay reachable: the count button lists them, the wheel scrolls,
   // the chosen one is in view. A tab only partly in the box counts as not shown and is not drawn (data-overflow): a
   // strip never shows a cut-off name next to the count of the tabs it hides.
@@ -272,37 +334,52 @@ export function Tabs<T extends string>({ tabs, value, onChange, className, right
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(value)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [value]);
+  // the one Tab key stop of the strip: the chosen tab (the first when none is)
+  const stop = tabs.some((t) => t.id === value) ? value : tabs[0]?.id;
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || (e.target as HTMLElement).getAttribute('role') !== 'tab') return;
+    const next = tabKeyTarget(e.key, tabs.map((t) => t.id), value);
+    if (next === undefined) return;
+    e.preventDefault();
+    if (next !== value) onChange(next as T);
+    focusTab(listRef.current, next);
+  };
   return (
-    <div className={cx('flex items-center border-b border-line min-h-10 shrink-0 min-w-0', className)}>
+    <div className={cx('flex items-center border-b border-line h-9 shrink-0 min-w-0', className)}>
     <div
       ref={listRef}
       role="tablist"
+      aria-label={label}
+      onKeyDown={onKeyDown}
       onWheel={(e) => {
         if (e.deltaY && listRef.current && listRef.current.scrollWidth > listRef.current.clientWidth) listRef.current.scrollLeft += e.deltaY;
       }}
-      className="flex items-center gap-1 px-2 min-h-10 min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="flex items-center gap-1 px-2 h-full min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((t) => (
         <button
           key={t.id}
+          type="button"
           role="tab"
           data-tab-id={t.id}
           data-overflow={hiddenTabs.includes(t.id) || undefined}
           aria-selected={value === t.id}
+          tabIndex={t.id === stop ? 0 : -1}
           title={t.title}
           onClick={() => onChange(t.id)}
           onAuxClick={(e) => {
             if (e.button === 1 && t.onClose) (e.preventDefault(), t.onClose());
           }}
+          {...t.data}
           className={cx(
-            'group relative px-2.5 h-10 text-sm whitespace-nowrap flex items-center gap-1.5 transition-colors duration-150 data-[overflow]:invisible',
+            'group relative px-2.5 h-9 text-sm whitespace-nowrap flex items-center gap-1.5 transition-colors duration-150 data-[overflow]:invisible',
             'after:absolute after:left-2 after:right-2 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors after:duration-200',
             value === t.id ? 'text-fg font-medium after:bg-[image:var(--brand-gradient)]' : 'text-muted hover:text-fg after:bg-transparent hover:after:bg-line-strong',
           )}
         >
           {t.label}
           {t.badge !== undefined && t.badge !== null && t.badge !== 0 && (
-            <span className={cx('text-[0.7rem] leading-4 px-1.5 rounded-full tabular-nums', value === t.id ? 'bg-accent-soft text-accent' : 'bg-panel2 text-muted')}>{t.badge}</span>
+            <span className={cx('text-2xs leading-4 px-1.5 rounded-full tabular-nums', value === t.id ? 'bg-accent-soft text-accent' : 'bg-panel2 text-muted')}>{t.badge}</span>
           )}
           {t.onClose && (
             <span
@@ -343,11 +420,32 @@ export function Badge({ children, tone = 'default', title, className }: { childr
     judge: 'text-judge border-judge/25 bg-judge/10',
   };
   return (
-    <span title={title} className={cx('inline-flex items-center gap-1 rounded-full px-2 text-[0.72rem] leading-5 border font-medium whitespace-nowrap tabular-nums', tones[tone], className)}>
+    <span title={title} className={cx('inline-flex items-center gap-1 rounded-full px-2 text-2xs leading-5 border font-medium whitespace-nowrap tabular-nums', tones[tone], className)}>
       {children}
     </span>
   );
 }
+
+const DOT_TONE = { ok: 'bg-ok', bad: 'bg-bad', warn: 'bg-warn', accent: 'bg-accent', muted: 'bg-muted/50' } as const;
+
+/**
+ * A status dot (passing, failing, running, unsaved, has a script …): one size and one shape everywhere (B4). `label`
+ * names it (its tooltip and its name for a screen reader); without one it is decoration next to words that say it.
+ */
+export function StatusDot({ tone, label, pulse, className }: { tone: keyof typeof DOT_TONE; label?: string; pulse?: boolean; className?: string }) {
+  return <span role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} title={label} className={cx('inline-block w-2 h-2 rounded-full shrink-0', DOT_TONE[tone], pulse && 'animate-pulse', className)} data-status-dot={tone} />;
+}
+
+/** The classes of the one-line header bar of a pane (G1): one height (h-9, the tab strips' too), a line under it. */
+export const BAR_CLASS = 'flex items-center gap-2 px-3 h-9 border-b border-line shrink-0 min-w-0';
+
+/**
+ * The one-line header bar of a pane or panel (the bottom panel's Problems, Logs and Console, a payload's title, a
+ * schema's search): the same height everywhere, so switching panels never moves the content edge. `className` adds
+ * the text size, a background or `overflow-clip`; an output's bar is OutputHeader, which is made of it.
+ */
+export const Bar = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, string | undefined>>(({ className, ...p }, ref) => <div ref={ref} className={cx(BAR_CLASS, className)} {...p} />);
+Bar.displayName = 'Bar';
 
 export function statusTone(status?: number | string): 'ok' | 'bad' | 'warn' | 'default' {
   if (typeof status === 'string' && /^\d{3}$/.test(status)) status = Number(status);
@@ -380,7 +478,7 @@ export function Empty({ icon, title, children, actions, steps }: { icon?: ReactN
   return (
     <div className="h-full w-full flex flex-col items-center justify-center text-center gap-2 p-8 text-muted fade-in">
       {icon && <div className="mb-2 grid place-items-center h-14 w-14 rounded-2xl bg-accent-soft text-accent ring-1 ring-accent/20 shadow-sm">{icon}</div>}
-      <div className="text-fg font-semibold text-[1.05rem] tracking-tight">{title}</div>
+      <div className="text-fg font-semibold text-title tracking-tight">{title}</div>
       {children && <div className="text-sm max-w-md leading-relaxed text-pretty">{children}</div>}
       {actions && actions.length > 0 && (
         <div className="mt-2 flex flex-wrap justify-center gap-2">
@@ -538,7 +636,7 @@ export function Modal({ title, onClose, children, footer, width = 560, onSubmit,
           style={{ width, maxWidth: '94vw' }}
         >
           <div className="flex items-center justify-between gap-3 pl-5 pr-3 h-14 shrink-0">
-            <DialogPrimitive.Title className="font-semibold text-[1.05rem] truncate">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="font-semibold text-title truncate">{title}</DialogPrimitive.Title>
             <div className="flex items-center gap-0.5 shrink-0">
               {help && <HelpLink page={help} what={typeof title === 'string' ? title : undefined} />}
               <DialogPrimitive.Close asChild>
@@ -659,7 +757,7 @@ export function Segmented<T extends string | number>({
   disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className={cx('inline-flex rounded-lg border border-line p-0.5 font-normal shrink-0', size === 'xs' ? 'text-[11px]' : 'text-xs')}>
+    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className={cx('inline-flex rounded-lg border border-line p-0.5 font-normal shrink-0 text-xs')}>
       {options.map((o) => (
         <button
           key={String(o.value)}
@@ -684,15 +782,22 @@ export function Segmented<T extends string | number>({
 }
 
 export function Kbd({ children }: { children: ReactNode }) {
-  return <kbd className="text-[0.7rem] leading-none px-1.5 py-1 rounded-md border border-line border-b-2 bg-panel text-muted font-sans font-medium">{children}</kbd>;
+  return <kbd className="text-2xs leading-none px-1.5 py-1 rounded-md border border-line border-b-2 bg-panel text-muted font-sans font-medium">{children}</kbd>;
 }
 
-export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
+/** The look of a section's small capitals label (G2): one size, one letter-spacing. SectionTitle draws it; a table's header row may carry it. */
+export const SECTION_LABEL = 'text-2xs uppercase tracking-[0.08em] text-muted font-semibold';
+
+/**
+ * The title of a section of a pane or a card, in small capitals: the one way everywhere (G2). `size="sm"` sits inside a
+ * card or a list (no height, no padding of its own: `className` places it); `as` keeps a heading a heading.
+ */
+export function SectionTitle({ children, right, size = 'md', as: Tag = 'div', className, ...rest }: { children: ReactNode; right?: ReactNode; size?: 'sm' | 'md'; as?: 'div' | 'h2' | 'h3' | 'h4' | 'span'; className?: string; title?: string; id?: string } & Record<`data-${string}`, string | undefined>) {
   return (
-    <div className="flex items-center justify-between h-10 px-3 text-[0.72rem] uppercase tracking-[0.08em] text-muted font-semibold shrink-0">
-      <span>{children}</span>
+    <Tag className={cx('flex items-center justify-between gap-2', SECTION_LABEL, size === 'md' ? 'h-10 px-3 shrink-0' : undefined, className)} {...rest}>
+      <span className="min-w-0 truncate">{children}</span>
       {right}
-    </div>
+    </Tag>
   );
 }
 
@@ -703,8 +808,8 @@ export function MoreMenu({ label = 'More actions', items, width = 230 }: { label
       width={width}
       items={items}
       trigger={
-        <IconButton label={label} className="h-8 w-8 data-[state=open]:bg-hover data-[state=open]:text-fg">
-          <MoreHorizontal size={16} />
+        <IconButton label={label} className="data-[state=open]:bg-hover data-[state=open]:text-fg">
+          <MoreHorizontal />
         </IconButton>
       }
     />
@@ -793,7 +898,7 @@ export function Metric({ label, value, tone, sub }: { label: string; value: Reac
     <div className="rounded-xl border border-line bg-bg shadow-sm px-4 py-3 min-w-0">
       <div className="text-xs text-muted font-medium truncate" title={label}>{label}</div>
       <div className={cx('text-xl font-semibold tabular-nums tracking-tight mt-0.5 truncate', tone === 'ok' && 'text-ok', tone === 'bad' && 'text-bad', tone === 'warn' && 'text-warn')}>{value}</div>
-      {sub && <div className="text-[0.72rem] text-muted">{sub}</div>}
+      {sub && <div className="text-2xs text-muted">{sub}</div>}
     </div>
   );
 }
@@ -888,10 +993,10 @@ export function Coachmark({
         onKeyDown={keys}
       >
         <div className="flex items-center gap-2">
-          <span className="text-[0.7rem] font-medium text-muted tabular-nums">
+          <span className="text-2xs font-medium text-muted tabular-nums">
             {step + 1} of {total}
           </span>
-          {done && <span className="text-[0.7rem] text-ok">done</span>}
+          {done && <span className="text-2xs text-ok">done</span>}
           <button type="button" className="ml-auto text-xs text-muted hover:text-fg" onClick={onSkip}>
             Skip tour
           </button>

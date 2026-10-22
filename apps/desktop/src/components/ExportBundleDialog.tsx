@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { Download } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { KIND_INFO, type KindId } from '@testpion/shared';
@@ -80,7 +81,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
           .toast(
             [
               r.replaced.length
-                ? `${r.replaced.length} secret${r.replaced.length === 1 ? '' : 's'} replaced by variables: ${[...new Set(r.replaced.map((x) => `{{${x.variable}}}`))].join(', ')}.`
+                ? `${plural(r.replaced.length, 'secret')} replaced by variables: ${[...new Set(r.replaced.map((x) => `{{${x.variable}}}`))].join(', ')}.`
                 : '',
               r.missing.length ? `${r.missing.length} used item${r.missing.length === 1 ? ' is' : 's are'} not in the workspace.` : '',
             ]
@@ -169,7 +170,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
         {summary && (
           <div className="flex flex-col gap-2 text-sm" data-testid="export-bundle-summary">
             <div className="font-medium">
-              {summary.items.length} item{summary.items.length === 1 ? '' : 's'} · {kb(summary.size)} · {summary.format === 'zip' ? '.zip' : '.json'}
+              {plural(summary.items.length, 'item')} · {kb(summary.size)} · {summary.format === 'zip' ? '.zip' : '.json'}
             </div>
             <ul className="flex flex-col gap-1 max-h-56 overflow-auto rounded-lg border border-line p-2" data-testid="export-bundle-tree">
               {groups.map(([kind, n]) => {
@@ -221,7 +222,7 @@ export default function ExportBundleDialog({ request, onClose }: { request: Expo
             )}
             {summary.replaced.length > 0 && (
               <Callout tone="warn">
-                {summary.replaced.length} secret{summary.replaced.length === 1 ? '' : 's'} will be replaced by variables:{' '}
+                {plural(summary.replaced.length, 'secret')} will be replaced by variables:{' '}
                 {[...new Set(summary.replaced.map((x) => `{{${x.variable}}}`))].slice(0, 8).join(', ')}. Set them in the other workspace.
               </Callout>
             )}

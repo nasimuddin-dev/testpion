@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { call } from '../../api';
 import { selectEnvironments, toastError, useApp } from '../../store';
 import { openRef } from '../../lib/open-ref';
-import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, statusTone, useDebounced } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, SectionTitle, Select, Spinner, statusTone, useDebounced } from '../ui';
 import { plural } from '../../lib/format';
 
 interface Preview {
@@ -110,7 +110,7 @@ export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; sinc
         {preview && (
           <>
             <div>
-              <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Steps ({preview.steps.length})</div>
+              <SectionTitle size="sm" className="mb-1">Steps ({preview.steps.length})</SectionTitle>
               <div className="border border-line rounded-lg divide-y divide-line max-h-[34vh] overflow-auto" data-flow-steps>
                 {preview.steps.map((s, i) => (
                   <label key={s.id} className="flex items-start gap-2 px-2 py-1.5 hover:bg-hover cursor-pointer" data-flow-step={s.id}>
@@ -139,7 +139,7 @@ export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; sinc
               </div>
             </div>
             <div data-flow-links>
-              <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">Values passed between steps ({preview.links.length})</div>
+              <SectionTitle size="sm" className="mb-1">Values passed between steps ({preview.links.length})</SectionTitle>
               {preview.links.length ? (
                 <ul className="grid gap-0.5 text-xs">
                   {preview.links.map((l, i) => (
@@ -160,7 +160,7 @@ export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; sinc
             </div>
             {preview.variables.length > 0 && (
               <div className="grid gap-1 text-xs" data-flow-variables>
-                <div className="text-xs font-semibold text-muted uppercase tracking-wide">Variables</div>
+                <SectionTitle size="sm">Variables</SectionTitle>
                 {preview.variables.map((v) => (
                   <div key={v.name} className="flex items-center gap-2">
                     {v.kind === 'secret' ? <KeyRound size={12} className="text-warn" /> : <span className="w-3" />}

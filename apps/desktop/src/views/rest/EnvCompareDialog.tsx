@@ -84,7 +84,7 @@ export function EnvCompareDialog({ tab, onClose }: { tab: RestTab; onClose(): vo
           <div className="flex items-center gap-2">
             {picker(left, setLeft, 'First environment')}
             <IconButton label="Swap" onClick={() => (setLeft(right), setRight(left), setResult(undefined))}>
-              <ArrowLeftRight size={14} />
+              <ArrowLeftRight />
             </IconButton>
             {picker(right, setRight, 'Second environment')}
             <Button variant="primary" icon={<Play size={13} />} loading={running} disabled={!left || !right || left === right} reason="Choose two different environments" onClick={() => void run()}>

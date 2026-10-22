@@ -179,7 +179,7 @@ export function ResponseViewer({
         {checks && checks.length > 0 && <Badge tone={failed ? 'bad' : 'ok'}>{failed ? `${failed} failed` : `${checks.length} passed`}</Badge>}
         <OverflowActions items={actions} label="Response actions" variant="ghost" className="ml-auto" />
       </div>
-      <Tabs
+      <Tabs label="Response"
         value={tab}
         onChange={setTab}
         tabs={[

@@ -3,7 +3,7 @@ import { CodeBlock } from '../CodeBlock';
 import { Bot, ChevronDown, Copy, ExternalLink, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatBytes } from '@testpion/shared';
-import { Badge, Button, Empty, Input, Menu, Split, statusTone, Tabs } from '../ui';
+import { Badge, Button, Empty, FilterInput, Menu, SectionTitle, Split, statusTone, Tabs } from '../ui';
 import { JsonTree, RawView } from '../JsonView';
 import { JwtView } from '../JwtView';
 import { EventsView, FramesView, GrpcView } from '../DebuggerTools';
@@ -160,7 +160,7 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
         <Split id="debugger-panes" initial={50}>
           <DetailsPane
             exchangeId={e.id}
-            title="Request Details"
+            title="Request details"
             side="request"
             startLabel="[Request]"
             startLine={tunnel ? `CONNECT ${e.host}` : `${e.method} ${path} ${version}`}
@@ -180,7 +180,7 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
           />
           <DetailsPane
             exchangeId={e.id}
-            title="Response Details"
+            title="Response details"
             side="response"
             startLabel="[Response]"
             startLine={e.error ? `error: ${e.error}` : e.status ? `${version} ${e.status} ${e.statusText ?? ''}`.trim() : '(waiting for the response)'}
@@ -258,9 +258,9 @@ function DetailsPane({
   const current = extra.find((x) => x.id === tab);
   return (
     <div className="h-full flex flex-col min-h-0" data-details-pane={side}>
-      <div className="flex items-center gap-2 px-3 h-8 border-b border-line bg-panel/60 shrink-0">
+      <div className="flex items-center gap-2 px-3 h-9 border-b border-line bg-panel/60 shrink-0">
         <span className="text-sm font-semibold">{title}</span>
-        {tab === 'header' && <Input className="ml-auto w-48 h-6 text-xs" placeholder="Filter headers" aria-label={`Filter ${side} headers`} value={find} onChange={(ev) => setFind(ev.target.value)} />}
+        {tab === 'header' && <FilterInput className="ml-auto w-48" placeholder="Filter headers" label={`Filter ${side} headers`} value={find} onChange={setFind} />}
         {(tab === 'raw' || tab === 'content') && (
           <Button size="sm" variant="ghost" className="ml-auto" icon={<Copy size={12} />} onClick={() => void copyText(tab === 'raw' ? raw : (body ?? ''), `the ${tab} of the ${side}`)}>
             Copy
@@ -310,7 +310,7 @@ function DetailsPane({
         {tab === 'json' && (json !== undefined ? <JsonTree data={json} /> : <Empty title="Not JSON">{body ? 'The body is not JSON: see Content.' : bodyNote}</Empty>)}
         {current?.render()}
       </div>
-      <Tabs
+      <Tabs label="Message details"
         value={tab}
         onChange={setTab}
         tabs={[
@@ -341,7 +341,7 @@ function AuthView({ e }: { e: Exchange }) {
   const names = (title: string, list: string[]) =>
     list.length > 0 && (
       <div>
-        <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1">{title}</div>
+        <SectionTitle size="sm" className="mb-1">{title}</SectionTitle>
         <div className="flex gap-1 flex-wrap">
           {list.map((c) => (
             <Badge key={c}>{c}</Badge>

@@ -9,7 +9,7 @@ import { RunPanel } from './RunPanel';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { RunsOverview, type RunRow } from './RunsOverview';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
-import { LinkButton, Badge, Button, Empty, Field, Input, Modal, MoreMenu, Select, Split, Toggle, Textarea } from './ui';
+import { Badge, Bar, Button, Empty, Field, FilterInput, Input, LinkButton, Modal, MoreMenu, Select, Split, Textarea, Toggle } from './ui';
 import { RefLink } from './RefLink';
 import { KIND_COLOR, TreeBadge } from './TreeParts';
 import { EnvBadge, EnvSelect } from './EnvSelect';
@@ -406,13 +406,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                 </LinkButton>
               </div>
               {requests.length > 8 && (
-                <Input
-                  className="h-7 text-xs mb-1"
-                  placeholder={`Filter ${requests.length} requests by name, folder or method`}
-                  aria-label="Filter requests"
-                  value={reqFilter}
-                  onChange={(e) => setReqFilter(e.target.value)}
-                />
+                <FilterInput className="w-full mb-1" placeholder={`Filter ${requests.length} requests by name, folder or method`} label="Filter requests" value={reqFilter} onChange={setReqFilter} />
               )}
               <div className="rounded-md border border-line divide-y divide-line/60">
                 {shownRequests.map((r) => (
@@ -450,7 +444,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
         </div>
 
         <div className="h-full flex flex-col min-h-0 min-w-0">
-          <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm">
+          <Bar className="text-sm">
             <History size={13} className="text-muted" />
             <Select className="h-7 max-w-80" value={runId ?? ''} onChange={(e) => setRunId(e.target.value || undefined)} aria-label="Previous runs">
               <option value="">{runs.length ? 'Previous runs…' : 'No runs yet'}</option>
@@ -468,7 +462,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                 <MoreMenu label="Run actions" items={runCiMenuItems(runId)} />
               </span>
             )}
-          </div>
+          </Bar>
           <div className="flex-1 min-h-0">
             {runId ? (
               <RunPanel

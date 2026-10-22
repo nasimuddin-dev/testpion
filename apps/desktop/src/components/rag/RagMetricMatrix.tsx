@@ -5,8 +5,7 @@ import { outputFileName, type RagJudgeSetup } from '@testpion/shared';
 import { call } from '../../api';
 import { listWindow } from '../../lib/list-window';
 import type { CheckConfig, ProviderConfig } from '../../types';
-import { useDebounced } from '../ui';
-import { Badge, Button, Input, Segmented, Select, Spinner, cx } from '../ui';
+import { Badge, Button, cx, FilterInput, Segmented, Select, Spinner, useDebounced } from '../ui';
 import { OutputActions } from '../output/OutputFrame';
 import type { OutputSpec } from '../output/output-core';
 import { RagByTag, RagCharts, RagCompare, RagPivot, RagRescoreDialog, type RunChoice } from './RagResultViews';
@@ -320,7 +319,7 @@ export function RagMetricMatrix({
       )}
       {rescoring && <RagRescoreDialog runId={runId} evaluators={evaluators} evaluation={evaluation} judge={judge} providers={providers} onDone={(id) => onRescored?.(id)} onClose={() => setRescoring(false)} />}
       <div className={cx('flex items-center gap-2 p-2 border-b border-line flex-wrap', view !== 'samples' && 'hidden')}>
-        <Input className="w-56" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search samples, questions, tags" aria-label="Search samples" />
+        <FilterInput className="w-56" placeholder="Search samples, questions, tags" label="Search samples" value={query} onChange={setQuery} />
         <Select className="h-7 min-h-7 py-0 text-xs" value={failure} onChange={(e) => setFailure(e.target.value)} aria-label="Why a sample failed" data-rag-failure-filter>
           <option value="">All samples</option>
           <option value="passed">Passed</option>

@@ -55,7 +55,7 @@ export function Findings({ findings, fixes, title }: { findings: ProposalFinding
                 {Math.round(f.confidence * 100)}% sure
               </span>
             )}
-            {fixes && <span className="ml-auto text-xs text-muted">{fixes[f.id] ? `${fixes[f.id]} proposed ${fixes[f.id] === 1 ? 'change' : 'changes'}` : 'no change to the tests'}</span>}
+            {fixes && <span className="ml-auto text-xs text-muted">{fixes[f.id] ? plural(fixes[f.id]!, 'proposed change') : 'no change to the tests'}</span>}
           </div>
           {f.explanation && <p className="text-sm text-muted whitespace-pre-wrap break-words">{f.explanation}</p>}
           {f.evidence.length > 0 && (

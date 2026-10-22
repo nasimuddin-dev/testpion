@@ -65,7 +65,7 @@ function rows(views: string[]): Array<{ title: string; rows: Row[] }> {
         { ids: ['search'], text: 'Search the workspace' },
         { ids: ['rerun-last'], text: 'Run the last run again' },
         { ids: ['reopen-tab'], text: 'Reopen the tab closed last' },
-        { ids: ['download-output'], text: 'Download the output you are in (a response, a result, a log) in its default format; the command palette has Download Output… for the other formats' },
+        { ids: ['download-output'], text: 'Download the output you are in (a response, a result, a log) in its default format; the command palette has Download output… for the other formats' },
         { ids: ['back', 'forward'], text: 'Back / forward to where you were (also the mouse back and forward buttons)' },
         { ids: ['toggle-explorer'], text: 'Show or hide the Collections explorer' },
         { ids: ['next-problem', 'previous-problem'], text: 'Open the next / previous item of Problems (while a flow is paused in the debugger, F8 continues it)' },

@@ -12,7 +12,7 @@ import { CodeEditor } from '../CodeEditor';
 import { JsonSchemaForm } from '../JsonSchemaForm';
 import { ErrorPanel } from '../Results';
 import { ResponseSplit } from '../ResponseSplit';
-import { Badge, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, Split, Toggle, Textarea } from '../ui';
+import { Badge, Bar, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, Split, Textarea, Toggle } from '../ui';
 import { ToolResult, type ToolRun } from './ToolsPanel';
 import { useAiEnabled } from '../../lib/use-ai-enabled';
 import { LABEL } from '../../lib/vocabulary';
@@ -136,7 +136,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
       context: { file, name: def.name, instructions: def.instructions, existingTools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) },
       question: `${tools.length ? 'Add the tools an agent needs for' : 'Design the tools an agent needs for'}: ${job}`,
       apply: {
-        label: 'Review in the Tools tab',
+        label: 'Review in the tools tab',
         run: async (code) => {
           let d: McpMockDefinition;
           try {
@@ -234,7 +234,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
                     width={180}
                     trigger={
                       <IconButton label={`Actions for ${t.name}`} className="mt-1.5 mr-1 opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100">
-                        <MoreHorizontal size={14} />
+                        <MoreHorizontal />
                       </IconButton>
                     }
                     items={[
@@ -282,7 +282,7 @@ function ServeLine({ label, text, what, block }: { label: string; text: string; 
         <span className="flex-1">{label}</span>
         {!block && <RunInTerminalButton command={text} />}
         <IconButton label={`Copy ${what}`} onClick={() => void copyText(text, what)}>
-          <Copy size={13} />
+          <Copy />
         </IconButton>
       </div>
       <CodeBlock className={cx('mono text-xs rounded bg-panel2 px-2 py-1', block ? 'whitespace-pre' : 'whitespace-pre-wrap')} text={text} language={block ? 'json' : 'plain'} data-toolset-command="" />
@@ -403,13 +403,13 @@ function ToolForm({ tool, index, definition, onChange }: { tool: MockTool; index
         </div>
       </div>
       <div className="h-full flex flex-col min-h-0">
-        <div className="flex items-center gap-2 px-3 h-10 border-b border-line shrink-0">
+        <Bar>
           <span className="text-sm font-medium">Try</span>
           <span className="text-xs text-muted">Calls the tool on the definition as edited (not saved).</span>
           <Button size="sm" variant="primary" className="ml-auto" icon={<Play size={12} />} loading={running} onClick={() => void tryIt()} data-toolset-try>
             Try
           </Button>
-        </div>
+        </Bar>
         <Split id="mcp-toolset-result" initial={40}>
           <div className="h-full overflow-auto">
             <JsonSchemaForm schema={(tool.inputSchema ?? EMPTY_SCHEMA) as never} value={args} onChange={setArgs} />
@@ -477,7 +477,7 @@ function ResponseCard({ r, index, path, onChange, onDelete }: { r: McpMockRespon
         />
         <Toggle label="Tool error (isError)" checked={!!r.isError} onChange={(v) => onChange(v ? { ...r, isError: true } : (({ isError: _e, ...rest }) => rest)(r))} />
         <IconButton label="Delete this response" className="ml-auto" onClick={onDelete}>
-          <Trash2 size={13} />
+          <Trash2 />
         </IconButton>
       </div>
       {conditional && (

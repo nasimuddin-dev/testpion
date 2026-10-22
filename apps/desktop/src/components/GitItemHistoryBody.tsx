@@ -165,7 +165,7 @@ export function GitItemHistoryBody({ itemRef, name, tab: first = 'versions', onC
             </table>
           )
         ) : !history!.versions.length ? (
-          <Empty title="No commits changed this yet" actions={[{ label: 'Open Git', onClick: () => useApp.getState().setView('git') }]}>
+          <Empty title="No commits changed this yet" actions={[{ label: 'Open git', onClick: () => useApp.getState().setView('git') }]}>
             Its history starts with the first commit that changes it.
           </Empty>
         ) : (

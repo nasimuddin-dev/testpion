@@ -1,3 +1,4 @@
+import { plural } from '../../lib/format';
 import type { Proposal, ProposalFinding } from '@testpion/core';
 import { jsonPretty, objectsToCsv, outputFileName, unifiedDiff } from '@testpion/shared';
 import type { OutputSpec } from './output-core';
@@ -104,7 +105,7 @@ export function findingsOutputSpec(findings: ProposalFinding[], title: string): 
           `# ${title}\n\n${findings
             .map(
               (f) =>
-                `## ${f.title}\n\n**${f.kind}**${f.count !== undefined ? ` · ${f.count} failure${f.count === 1 ? '' : 's'}` : ''}${typeof f.confidence === 'number' ? ` · ${Math.round(f.confidence * 100)}% sure (the model's own)` : ''}\n${f.explanation ? `\n${f.explanation}\n` : ''}${f.evidence.length ? `\n${f.evidence.map((e) => `- ${e.text}`).join('\n')}\n` : ''}`,
+                `## ${f.title}\n\n**${f.kind}**${f.count !== undefined ? ` · ${plural(f.count, 'failure')}` : ''}${typeof f.confidence === 'number' ? ` · ${Math.round(f.confidence * 100)}% sure (the model's own)` : ''}\n${f.explanation ? `\n${f.explanation}\n` : ''}${f.evidence.length ? `\n${f.evidence.map((e) => `- ${e.text}`).join('\n')}\n` : ''}`,
             )
             .join('\n')}`,
       },

@@ -1,10 +1,10 @@
 import { CodeBlock } from './CodeBlock';
-import { Bot, Check, Copy, FileText, PlugZap, Workflow } from 'lucide-react';
+import { Bot, Copy, FileText, PlugZap, Workflow } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { toastError, useApp, attempt } from '../store';
 import { Badge, Button, Tabs, Toggle } from './ui';
-import { useCopied } from '../lib/clipboard';
+import { copyText } from '../lib/clipboard';
 import { RunInTerminalButton } from './RunInTerminal';
 
 interface AgentInfo {
@@ -73,7 +73,6 @@ export function AgentsPanel() {
   const [opts, setOpts] = useState({ readOnly: false, allowProduction: false });
   const [info, setInfo] = useState<AgentInfo>();
   const [client, setClient] = useState<Client>('claude-code');
-  const { copied, copy: copyToClipboard } = useCopied();
   const [test, setTest] = useState<{ busy?: boolean; result?: TestResult; error?: string }>({});
   const [flows, setFlows] = useState<ExposedFlow[]>([]);
   // the extra agent files to write beside AGENTS.md: those the workspace already has are ticked
@@ -93,7 +92,7 @@ export function AgentsPanel() {
   }, [ws?.id]);
   if (!info) return null;
   const s = snippet(client, info);
-  const copy = () => copyToClipboard(s.text);
+  const copy = () => copyText(s.text, 'the setup');
   const runTest = async () => {
     setTest({ busy: true });
     try {
@@ -137,7 +136,7 @@ export function AgentsPanel() {
       </div>
 
       <div className="rounded-xl border border-line overflow-hidden">
-        <Tabs
+        <Tabs label="Coding agent"
           value={client}
           onChange={setClient}
           tabs={[
@@ -154,8 +153,8 @@ export function AgentsPanel() {
             <CodeBlock className="mono text-xs bg-bg border border-line rounded-lg p-3 pr-28 whitespace-pre-wrap break-all" text={s.text} />
             <div className="absolute top-2 right-2 flex items-center gap-1">
               {client === 'claude-code' && <RunInTerminalButton command={s.text} />}
-              <Button size="sm" icon={copied ? <Check size={12} /> : <Copy size={12} />} onClick={() => void copy()}>
-                {copied ? 'Copied' : 'Copy'}
+              <Button size="sm" icon={<Copy size={12} />} onClick={() => void copy()}>
+                Copy
               </Button>
             </div>
           </div>

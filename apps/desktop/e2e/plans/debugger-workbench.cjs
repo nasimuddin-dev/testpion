@@ -40,7 +40,7 @@ const steps = [
      // several selected: one axis
      const r2 = row('a=2');
      r2?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true })); await __t.sleep(400);
-     const items = [...(dock()?.querySelectorAll('tr') ?? [])].find((t) => /Selected Items/.test(t.textContent));
+     const items = [...(dock()?.querySelectorAll('tr') ?? [])].find((t) => /Selected items/.test(t.textContent));
      const multi = items ? [...items.querySelectorAll('td')].map((c) => c.textContent.trim()).join(' ') : 'NONE';
      return 'summary: ' + summary + ' | phases: ' + phases + ' | multi: ' + multi;`,
   ),
@@ -109,7 +109,7 @@ const steps = [
     `rail('Convert')?.click(); await __t.sleep(400);
      const area = dock()?.querySelector('textarea[aria-label="Text to convert"]'); if (!area) return 'NO CONVERT';
      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, 'a%20b%26c'); area.dispatchEvent(new Event('input', { bubbles: true }));
-     [...dock().querySelectorAll('button')].find((b) => b.textContent.trim() === 'URL Decode')?.click(); await __t.sleep(300);
+     [...dock().querySelectorAll('button')].find((b) => b.textContent.trim() === 'URL decode')?.click(); await __t.sleep(300);
      const out = dock().querySelector('[data-convert-result]')?.value;
      vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Incoming requests'))?.click(); await __t.sleep(400);
      const incoming = !!document.querySelector('main [data-incoming]') || vis('main *').some((x) => x.children.length === 0 && x.textContent.trim() === 'No incoming requests');
@@ -120,8 +120,8 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'traffic-in-the-grid': /^columns: #,Offset \(s\),Duration \(s\),Method,Version,URL,Status,Type,Size \(KB\),Speed \(KB\/s\),Application,Domain,IP Address,User \| rows: 4 \| totals: true$/,
-  'rail-opens-summary-and-timeline': /^summary: summary:Main,Connection,Request Details,Response Details,Timing \| phases: sending,waiting,receiving \| multi: Selected Items 2$/,
+  'traffic-in-the-grid': /^columns: #,Offset \(s\),Duration \(s\),Method,Version,URL,Status,Type,Size \(KB\),Speed \(KB\/s\),Application,Domain,IP address,User \| rows: 4 \| totals: true$/,
+  'rail-opens-summary-and-timeline': /^summary: summary:Main,Connection,Request details,Response details,Timing \| phases: sending,waiting,receiving \| multi: Selected items 2$/,
   'structure-by-domain': /^domain: 127\.0\.0\.1:4010 \| Total 4 /,
   'row-menu-filters-out': /^added: true \| dock: filter \| filtered: true \| others listed: true \| hits: [1-9]\d*$/,
   'capture-only': /^outside hidden: true \| inside listed: true$/,
