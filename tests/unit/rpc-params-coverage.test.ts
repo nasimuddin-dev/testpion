@@ -50,9 +50,17 @@ describe('RPC parameter tables', () => {
     ];
     for (const [m, k, t] of expected) expect(RPC_PARAMS[m]?.[k], `${m}.${k}`).toBe(t);
     // whatever else is named like a host path (a working folder, a destination, a certificate or key file, proto files) must be one of them
-    const hostNamed = /^(dest|cwd|certPath|keyPath|caPath|protoFiles)$/;
-    const missing = Object.entries(RPC_PARAMS).flatMap(([m, spec]) => Object.entries(spec).filter(([k, t]) => hostNamed.test(k) && !/^(p|pn)\??$/.test(t) && !(m === 'grpc.grpcurl' && k === 'protoFiles')).map(([k]) => `${m}.${k}`));
-    expect(missing).toEqual([]);
+    const hostNamed = /^(dest|cwd|certPath|keyPath|caPath|protoFiles|path|paths|file|dir|dataPath|datasetPath)$/;
+    // named like a path but not one: a cookie's path, the URL path of a Socket.IO server, the gRPC proto text of a generated command, a sort direction
+    const NOT_A_PATH = new Set(['cookies.delete.path', 'sio.connect.path', 'grpc.grpcurl.protoFiles', 'eval.matrix.dir']);
+    const untyped = Object.entries(RPC_PARAMS).flatMap(([m, spec]) =>
+      Object.entries(spec)
+        .filter(([k, t]) => hostNamed.test(k) && !/^(p|pn|wp|wpa)\??$/.test(t) && !NOT_A_PATH.has(`${m}.${k}`))
+        .map(([k, t]) => `${m}.${k} is ${t}`),
+    );
+    // a path-like parameter must say whether it is a place on the host (p, pn) or inside the workspace (wp, wpa)
+    expect(untyped).toEqual([]);
+    for (const k of NOT_A_PATH) expect(RPC_PARAMS[k.slice(0, k.lastIndexOf('.'))]?.[k.slice(k.lastIndexOf('.') + 1)], k).toBeDefined();
   });
 
   it('numbers that size work or time are bounded wherever a method takes them', async () => {
