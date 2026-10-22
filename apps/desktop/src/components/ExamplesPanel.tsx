@@ -1,5 +1,5 @@
 import { editorLanguageOfText } from '../data-languages';
-import { BookmarkPlus, Pencil, Trash2 } from 'lucide-react';
+import { BookmarkPlus, Pencil, Save, Send, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { call } from '../api';
 import { attempt } from '../store';
@@ -22,7 +22,23 @@ const languageOf = (ex: SavedExample) => {
  * The saved examples of a request (Postman "examples"): a list on the left, the selected example's
  * status, headers and body on the right. Changes are saved to the collection straight away.
  */
-export function ExamplesPanel({ collectionId, requestId, examples, onChange }: { collectionId?: string; requestId?: string; examples: SavedExample[]; onChange(examples: SavedExample[]): void }) {
+export function ExamplesPanel({
+  collectionId,
+  requestId,
+  examples,
+  onChange,
+  onSend,
+  onSave,
+}: {
+  collectionId?: string;
+  requestId?: string;
+  examples: SavedExample[];
+  onChange(examples: SavedExample[]): void;
+  /** Send the request (the first step to an example). */
+  onSend?(): void;
+  /** Save the request to a collection (an unsaved request has no examples). */
+  onSave?(): void;
+}) {
   const [selected, setSelected] = useState<string | undefined>(examples[0]?.id);
   /** The example whose name is being edited in place (the pencil, or F2 on it in the list). */
   const [renaming, setRenaming] = useState<string>();
@@ -40,13 +56,17 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
 
   if (!examples.length)
     return (
-      <Empty icon={<BookmarkPlus size={26} />} title="No examples yet">
+      <Empty
+        icon={<BookmarkPlus size={26} />}
+        title="No examples yet"
+        actions={collectionId ? (onSend ? [{ label: 'Send', icon: <Send size={13} />, onClick: onSend }] : undefined) : onSave ? [{ label: 'Save to collection…', icon: <Save size={13} />, onClick: onSave }] : undefined}
+      >
         {collectionId ? (
           <>
-            Send the request, then click <b>Save as example</b> above the response. Examples document the API and are served by the mock server.
+            Then click <b>Save as example</b> above the response. Examples document the API and are served by the mock server.
           </>
         ) : (
-          <>Save this request to a collection first, then save responses as examples.</>
+          <>A request saved to a collection keeps its responses as examples.</>
         )}
       </Empty>
     );
@@ -72,7 +92,7 @@ export function ExamplesPanel({ collectionId, requestId, examples, onChange }: {
                 }}
                 data-rename-id={ex.id}
                 title="F2 renames"
-                className={cx('w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm', ex.id === current?.id ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-hover')}
+                className={cx('w-full flex items-center gap-2 text-left px-3 py-1.5 text-sm', ex.id === current?.id ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-hover')}
               >
                 <Badge tone={statusTone(ex.status)}>{ex.status}</Badge>
                 <span className="truncate">{ex.name}</span>

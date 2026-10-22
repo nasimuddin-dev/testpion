@@ -106,7 +106,7 @@ export function ScriptsPanel({ pre, post, onPre, onPost, ai }: { pre: string; po
       {!narrow && (
         <div className="w-40 shrink-0 border-r border-line py-1 text-sm flex flex-col" role="tablist" aria-label="Script">
           {kinds.map(([id, label, code]) => (
-            <button key={id} role="tab" aria-selected={which === id} onClick={() => setWhich(id)} className={cx('w-full text-left px-3 py-1.5 flex items-center gap-2', which === id ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-hover')}>
+            <button key={id} role="tab" aria-selected={which === id} onClick={() => setWhich(id)} className={cx('w-full text-left px-3 py-1.5 flex items-center gap-2', which === id ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-hover')}>
               {label}
               {code.trim() && dot}
             </button>

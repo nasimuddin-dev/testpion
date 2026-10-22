@@ -42,7 +42,7 @@ const steps = [
      await __t.real.dblclick(row); await __t.sleep(700);
      const before = strip('Open environments').length;
      if (!(await closeAt('Open environments', 0))) return 'NO ✕';
-     return 'tabs ' + before + ' → ' + strip('Open environments').length + ' | ' + (/Select an environment|No environments yet/.test(document.body.innerText) ? 'empty state' : 'NO empty state');`,
+     return 'tabs ' + before + ' → ' + strip('Open environments').length + ' | ' + (/No open environments/.test(document.body.innerText) ? 'empty state' : 'NO empty state');`,
   ),
   // monitors and test files open from their list; the ✕ closes the tab
   step(

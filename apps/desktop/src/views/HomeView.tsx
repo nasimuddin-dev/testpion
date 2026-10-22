@@ -14,6 +14,7 @@ import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, statusTone } from '../components/ui';
 import { CheckCircle2, Circle } from 'lucide-react';
+import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
@@ -419,7 +420,9 @@ export function HomeView() {
                 </div>
               ))
             ) : (
-              <Empty title="No collections yet">Create one, or import from Postman or OpenAPI.</Empty>
+              <Empty title="No collections yet" actions={[newCollectionAction(), importAction()]}>
+                A collection groups requests that share a base URL, auth and scripts; import one from Postman, OpenAPI, Insomnia or Bruno.
+              </Empty>
             )}
           </Card>
           <Card title="Environments" icon={<KeyRound size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('environments')}>Manage</LinkButton>}>
@@ -439,7 +442,9 @@ export function HomeView() {
                 </button>
               ))
             ) : (
-              <Empty title="No environments">Environments hold variables like baseUrl and tokens.</Empty>
+              <Empty title="No environments" actions={[newEnvironmentAction()]}>
+                Environments hold variables like baseUrl and tokens.
+              </Empty>
             )}
           </Card>
         </div>

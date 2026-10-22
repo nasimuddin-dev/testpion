@@ -2,10 +2,27 @@ import { Check, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
+import { deleteWithUndo } from '../../lib/undo-delete';
 import { Button, cx, Empty, Field, IconButton, Input, Menu, Segmented, Select, type EmptyAction, type MenuItem } from '../ui';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
+
+/**
+ * THE delete of a Debugger rule (the rules page and the dock's rule panels): at once, with Undo in the message; Undo
+ * saves the rule again as it was and puts it back at its place in the order (the first matching reply, redirect or
+ * breakpoint wins, so the place matters). `onChange` gets the rules as the engine keeps them after each step.
+ */
+export function deleteRuleWithUndo(r: Rule, at: number, onChange: (s: RulesState) => void): Promise<boolean> {
+  return deleteWithUndo({
+    what: `the rule "${r.name}"`,
+    run: async () => onChange(await call<RulesState>('debug.deleteRule', { id: r.id })),
+    undo: async () => {
+      const saved = await call<RulesState & { rule?: Rule }>('debug.saveRule', { rule: r });
+      onChange(await call<RulesState>('debug.moveRule', { id: saved.rule?.id ?? r.id, to: Math.max(0, at) }));
+    },
+  });
+}
 
 /** The hits keep counting while traffic flows: the rule panels read them again every two seconds. */
 export function useLiveRules(onChange: (s: RulesState) => void) {
@@ -100,7 +117,7 @@ export function RuleList({
                 <button type="button" className="p-0.5 text-muted hover:text-fg" aria-label={`Edit ${r.name}`} onClick={() => onEdit(r)}>
                   <Pencil size={12} />
                 </button>
-                <button type="button" className="p-0.5 text-muted hover:text-bad" aria-label={`Remove ${r.name}`} onClick={() => act(call<RulesState>('debug.deleteRule', { id: r.id }))}>
+                <button type="button" className="p-0.5 text-muted hover:text-bad" aria-label={`Remove ${r.name}`} onClick={() => void deleteRuleWithUndo(r, (state?.rules ?? []).findIndex((x) => x.id === r.id), onChange)}>
                   <Trash2 size={12} />
                 </button>
               </span>

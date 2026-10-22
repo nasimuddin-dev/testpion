@@ -299,7 +299,7 @@ export function FlowDataGrid({ id }: { id: string }) {
                     data-data-row={r.index}
                     data-status={r.status}
                     onClick={() => setSel(r)}
-                    className={cx('w-full h-full grid gap-2 px-3 items-center text-sm text-left border-b border-line/50 hover:bg-hover', sel?.index === r.index && 'bg-accent/10')}
+                    className={cx('w-full h-full grid gap-2 px-3 items-center text-sm text-left border-b border-line/50 hover:bg-hover', sel?.index === r.index && 'bg-accent-soft')}
                     style={{ gridTemplateColumns: grid }}
                   >
                     <span className="tabular-nums text-muted">{r.index}</span>
@@ -371,7 +371,7 @@ function DataRowDetail({ id, row, steps }: { id: string; row: DataRow; steps?: A
             key={st.id}
             data-row-step={st.id}
             onClick={() => setPick(st.id)}
-            className={cx('w-full flex items-center gap-2 px-3 h-7 text-sm text-left hover:bg-hover border-b border-line/40', pick === st.id && 'bg-accent/10')}
+            className={cx('w-full flex items-center gap-2 px-3 h-7 text-sm text-left hover:bg-hover border-b border-line/40', pick === st.id && 'bg-accent-soft')}
           >
             <StatusIcon status={st.status} />
             <span className="truncate flex-1">{nameOf(st.id)}</span>
@@ -609,7 +609,7 @@ export function ScaleRunPanel({ file, id, onSelect }: { file?: string; id: strin
             key={r.id}
             data-scale-run={r.id}
             onClick={() => onSelect(r.id)}
-            className={cx('w-full text-left px-3 py-2 border-b border-line/50 hover:bg-hover text-sm', r.id === id && 'bg-accent/10')}
+            className={cx('w-full text-left px-3 py-2 border-b border-line/50 hover:bg-hover text-sm', r.id === id && 'bg-accent-soft')}
           >
             <div className="flex items-center gap-1.5">
               {r.kind === 'data' ? <FileSpreadsheet size={12} className="text-muted shrink-0" /> : <Layers size={12} className="text-muted shrink-0" />}

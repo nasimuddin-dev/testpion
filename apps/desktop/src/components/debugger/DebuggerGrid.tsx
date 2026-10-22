@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent 
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
 import { useApp, toastError } from '../../store';
+import { confirmDelete } from '../../lib/undo-delete';
 import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui';
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
 import { curlOf, kb, speedOf, toRequest, versionOf, type Exchange, type IncomingRequest } from './model';
@@ -487,7 +488,8 @@ export function TrafficSide({ side, onSide, incoming }: { side: 'outgoing' | 'in
 /** Requests the workspace's mock servers received, as they come. */
 export function useIncoming() {
   const [list, setList] = useEventLog<IncomingRequest>('debug.incoming', 2000, 'debug.incoming');
-  return { list, clear: () => void call('debug.clearIncoming').then(() => setList([]), toastError) };
+  // as the outgoing side's Clear: it asks first (the requests cannot be put back), through the one helper
+  return { list, clear: () => void confirmDelete({ what: 'every incoming request listed', title: 'Clear incoming requests', message: 'Forget every request the mock servers received?', confirmLabel: 'Clear', done: 'Incoming requests cleared', run: async () => (await call('debug.clearIncoming'), setList([])) }) };
 }
 
 export function IncomingList({ list, onClear, selected, onSelect }: { list: IncomingRequest[]; onClear(): void; selected?: string; onSelect(id: string): void }) {

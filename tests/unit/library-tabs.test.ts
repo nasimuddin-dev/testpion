@@ -52,7 +52,7 @@ describe('library tabs', () => {
   // B-08b: the AI prompts tab never closed its last tab (the view had no empty state); every view whose tabs can all be
   // closed shows the shared NoOpenItems, and the UI plan tab-close-button closes the last tab of each
   it('a view that can close every tab draws the shared empty state', () => {
-    const views = ['views/ai/Playground.tsx', 'views/EvaluationsView.tsx', 'views/LoadView.tsx'];
+    const views = ['views/ai/Playground.tsx', 'views/EvaluationsView.tsx', 'views/LoadView.tsx', 'views/EnvironmentsView.tsx'];
     const withEmpty = views.filter((v) => /canBeEmpty: true/.test(readFileSync(join(__dirname, '../../apps/desktop/src', v), 'utf8')));
     expect(withEmpty).toEqual(views);
     for (const v of withEmpty) {
@@ -60,5 +60,31 @@ describe('library tabs', () => {
       expect(src, v).toMatch(/tabs\.empty/);
       expect(src, v).toContain('<NoOpenItems');
     }
+    // the tab views with their own tab state (DocTabStrip) draw the same one when their last tab closes; the Debugger's
+    // first tab is the live capture, which never closes (`fixed`), so it is never empty
+    for (const v of ['views/TestsView.tsx', 'views/MonitorsView.tsx']) expect(readFileSync(join(__dirname, '../../apps/desktop/src', v), 'utf8'), v).toContain('<NoOpenItems');
+    expect(readFileSync(join(__dirname, '../../apps/desktop/src/views/DebuggerView.tsx'), 'utf8')).toMatch(/fixed=\{\(t\) => !t\.savedId\}/);
+  });
+
+  // UI audit I1: the open item's ⋯ is its node menu (lib/item-menu.ts → buildNodeMenu), with the kind's Delete…, in every editor
+  it('every item editor builds its ⋯ from the node menu of its kind', () => {
+    const editors: Record<string, string> = {
+      'views/MonitorsView.tsx': 'monitor',
+      'views/LoadView.tsx': 'load-test',
+      'views/EvaluationsView.tsx': 'evaluation',
+      'views/ai/Playground.tsx': 'prompt',
+      'views/McpView.tsx': 'mcp-server',
+      'views/CollectionsView.tsx': 'collection',
+      'views/TestsView.tsx': 'test',
+      'views/DatasetView.tsx': 'dataset',
+      'views/ApiDefinitionView.tsx': 'spec',
+    };
+    for (const [v, kind] of Object.entries(editors)) {
+      const src = readFileSync(join(__dirname, '../../apps/desktop/src', v), 'utf8');
+      expect(src, v).toContain(`openItemMenu('${kind}'`);
+      // no "Delete monitor", "Delete file" or a red Delete button of its own: the menu's Delete… is the one
+      expect(src, v).not.toMatch(/label[:=] ?["'`]Delete (monitor|file)|className="text-bad"\s+icon=\{<Trash2/);
+    }
+    expect(readFileSync(join(__dirname, '../../apps/desktop/src/views/EnvironmentsView.tsx'), 'utf8')).toMatch(/buildNodeMenu\(\s*'environment'/);
   });
 });

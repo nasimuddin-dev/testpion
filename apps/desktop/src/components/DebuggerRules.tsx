@@ -1,8 +1,11 @@
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Play, Scale, Trash2, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { confirmAction, promptText, toastError, attempt } from '../store';
-import { Badge, Button, cx, Empty, Field, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea, IconButton } from './ui';
+import { promptText, toastError, attempt } from '../store';
+import { confirmDelete } from '../lib/undo-delete';
+import { LABEL } from '../lib/vocabulary';
+import { deleteRuleWithUndo } from './debugger/DockRules';
+import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, Modal, Select, Toggle, type MenuItem, Textarea } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
 
 /**
@@ -65,7 +68,7 @@ export const HIGHLIGHT_CLASS: Record<string, string> = {
   orange: 'border-l-2 border-l-warn bg-warn/10',
   yellow: 'border-l-2 border-l-warn bg-warn/5',
   green: 'border-l-2 border-l-ok bg-ok/10',
-  blue: 'border-l-2 border-l-accent bg-accent/10',
+  blue: 'border-l-2 border-l-accent bg-accent-soft',
   purple: 'border-l-2 border-l-accent bg-accent/15',
   grey: 'border-l-2 border-l-muted bg-hover',
 };
@@ -115,13 +118,13 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
       onSelect: async () => void (await promptText('Rename profile', { value: state?.active ?? '' }).then((n) => void (n && act('debug.profile', { action: 'rename', name: n, from: state?.active })))),
     },
     {
-      label: 'Delete this profile',
+      label: LABEL.delete,
       icon: <Trash2 size={14} />,
       danger: true,
       disabled: (state?.profiles.length ?? 0) <= 1,
-      onSelect: async () =>
-        (await confirmAction({ title: `Delete ${state?.active ?? ''}`, message: 'Its rules go with it.', confirmLabel: 'Delete', danger: true })) &&
-        void act('debug.profile', { action: 'delete', name: state?.active }),
+      reason: 'The only profile: make another one first',
+      // a profile and its rules cannot be put back: it asks first, through the one helper
+      onSelect: () => void confirmDelete({ what: `the profile "${state?.active ?? ''}"`, detail: 'Its rules go with it.', run: () => act('debug.profile', { action: 'delete', name: state?.active }) }),
     },
   ];
   const testUrl = async () => {
@@ -170,8 +173,15 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
         and URLs. The profile is saved in <span className="mono">debugger/rules.json</span>, committed with the workspace.
       </p>
       {!state?.rules.length ? (
-        <Empty icon={<Scale size={26} />} title="No rules in this profile">
-          Add a preset or a new rule.
+        <Empty
+          icon={<Scale size={26} />}
+          title="No rules in this profile"
+          actions={[
+            { label: 'New rule', icon: <Plus size={13} />, onClick: () => setEditing({ kind: 'modify', enabled: true, match: host ? { host } : {} }) },
+            { label: 'Presets', icon: <Zap size={13} />, items: presets.map<MenuItem>((p) => ({ label: p.label, icon: <Zap size={14} />, onSelect: () => void act('debug.addPreset', { preset: p.id, host }) })) },
+          ]}
+        >
+          A rule filters, highlights, changes, answers, redirects or pauses the traffic it matches.
         </Empty>
       ) : (
         <table className="text-sm w-full">
@@ -198,7 +208,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
                   <Button size="sm" variant="ghost" icon={<Pencil size={12} />} onClick={() => setEditing(r)}>
                     Edit
                   </Button>
-                  <IconButton label="Remove the rule" className="h-7 w-7" onClick={() => void act('debug.deleteRule', { id: r.id })}>
+                  <IconButton label="Remove the rule" className="h-7 w-7" onClick={() => void deleteRuleWithUndo(r, i, onChange)}>
                     <Trash2 size={12} />
                   </IconButton>
                 </td>
@@ -509,7 +519,7 @@ export function CompareExchangesDialog({ a, b, onClose }: { a: string; b: string
   return (
     <Modal title="Compare two exchanges" onClose={onClose} width={960}>
       <div className="h-[60vh] min-h-0">
-        {error ? <p className="p-3 text-sm text-bad">{error}</p> : c ? <CompareView c={c} labels={[c.before.label ?? 'A', c.after.label ?? 'B']} /> : <Empty title="Comparing…" />}
+        {error ? <p className="p-3 text-sm text-bad">{error}</p> : c ? <CompareView c={c} labels={[c.before.label ?? 'A', c.after.label ?? 'B']} /> : <Busy>Comparing…</Busy>}
       </div>
     </Modal>
   );

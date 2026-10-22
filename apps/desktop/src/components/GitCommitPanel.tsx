@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { plural } from '../lib/format';
 import { diffRowOfLine } from '../lib/diff-line';
-import { Badge, cx, Empty, IconButton, Spinner } from './ui';
+import { Badge, cx, Busy, Empty, IconButton } from './ui';
 import { useRpc } from '../lib/use-rpc';
 
 interface CommitDetail {
@@ -64,7 +64,7 @@ export function GitCommitPanel({ hash, onClose }: { hash: string; onClose(): voi
     });
   }, [hash]);
   const diff = useRpc<string>('git.commitDiff', { hash, path: file }, { fallback: '', enabled: !!file });
-  if (detail === undefined) return <Empty icon={<Spinner size={20} />} title="Reading the commit…" />;
+  if (detail === undefined) return <Busy>Reading the commit…</Busy>;
   if (!detail) return <Empty title="Commit not found">It may be on another branch, or the repository changed.</Empty>;
   const added = detail.files.reduce((n, f) => n + f.additions, 0);
   const removed = detail.files.reduce((n, f) => n + f.deletions, 0);
@@ -93,7 +93,7 @@ export function GitCommitPanel({ hash, onClose }: { hash: string; onClose(): voi
         {detail.files.map((f) => (
           <li key={f.path}>
             <button
-              className={cx('w-full flex items-center gap-2 px-4 py-1 text-left hover:bg-hover', file === f.path && 'bg-accent/10')}
+              className={cx('w-full flex items-center gap-2 px-4 py-1 text-left hover:bg-hover', file === f.path && 'bg-accent-soft')}
               onClick={() => setFile(f.path)}
               aria-current={file === f.path || undefined}
             >
@@ -108,7 +108,7 @@ export function GitCommitPanel({ hash, onClose }: { hash: string; onClose(): voi
         ))}
         {!detail.files.length && <li className="px-4 py-2 text-muted text-sm">This commit changed nothing in this workspace's folder.</li>}
       </ul>
-      <div className="flex-1 min-h-0 overflow-auto">{file && (diff === undefined ? <Empty icon={<Spinner size={18} />} title="Reading the diff…" /> : <DiffText text={diff} />)}</div>
+      <div className="flex-1 min-h-0 overflow-auto">{file && (diff === undefined ? <Busy>Reading the diff…</Busy> : <DiffText text={diff} />)}</div>
     </div>
   );
 }

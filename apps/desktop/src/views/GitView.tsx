@@ -3,10 +3,13 @@ import { ArrowDown, ArrowDownUp, ArrowUp, ExternalLink, FolderGit2, GitBranch, G
 import { useCallback, useEffect, useState } from 'react';
 import { asError, call, on } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
+import { confirmDelete } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
 import type { ItemRef, KindId } from '@testpion/shared';
 import { useEditorTabsStore } from '../components/EditorTabs';
-import { Button, Callout, cx, Empty, Menu, PageHeader, SectionTitle, Spinner, Split, Textarea } from '../components/ui';
+import { Busy, Button, Callout, Empty, Menu, PageHeader, SectionTitle, Split, Textarea } from '../components/ui';
+import { treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
 import { GitCommitPanel } from '../components/GitCommitPanel';
 import { plural } from '../lib/format';
 import { GitItemDiffDialog } from '../components/GitItemDiffDialog';
@@ -235,11 +238,15 @@ export function GitView() {
     }
   };
 
-  if (!status) return <Empty icon={<Spinner size={20} />} title="Reading git…" />;
+  if (!status) return <Busy>Reading git…</Busy>;
   if (!status.available)
     return (
-      <Empty icon={<FolderGit2 size={26} />} title="Git is not installed">
-        TestPion uses the git installed on this computer (with your SSH keys and sign-in). Install it from git-scm.com, then restart TestPion.
+      <Empty
+        icon={<FolderGit2 size={26} />}
+        title="Git is not installed"
+        actions={[{ label: 'Open git-scm.com', onClick: () => void call('app.openExternal', { url: 'https://git-scm.com/downloads' }).catch(() => window.open('https://git-scm.com/downloads', '_blank', 'noopener')) }]}
+      >
+        TestPion uses the git installed on this computer (with your SSH keys and sign-in). Install it, then restart TestPion.
       </Empty>
     );
   if (!status.repository)
@@ -303,18 +310,26 @@ export function GitView() {
                 label: b,
                 icon: <GitBranch size={14} />,
                 danger: true,
-                onSelect: async () => {
-                  if (!(await confirmAction({ title: `Delete ${b}`, message: `Delete the local branch ${b}?`, detail: 'Commits that are not merged anywhere else are lost; git refuses then, and TestPion asks again.', confirmLabel: 'Delete', danger: true }))) return;
-                  try {
-                    await call('git.deleteBranch', { branch: b });
-                    useApp.getState().toast(`Deleted ${b}`, 'success');
-                    void load();
-                  } catch (e) {
-                    if (!/not fully merged/i.test(asError(e).message)) return toastError(e);
-                    if (await confirmAction({ title: `${b} is not merged`, message: `${b} has commits no other branch has. Delete it anyway?`, confirmLabel: 'Delete anyway', danger: true }))
-                      await run('delete', () => call('git.deleteBranch', { branch: b, force: true }), `Deleted ${b}`);
-                  }
-                },
+                // a branch cannot be put back: it asks first, through the one helper (and again when git refuses an unmerged one)
+                onSelect: () =>
+                  void confirmDelete({
+                    what: `the local branch ${b}`,
+                    title: `Delete ${b}`,
+                    message: `Delete the local branch ${b}?`,
+                    detail: 'Commits that are not merged anywhere else are lost; git refuses then, and TestPion asks again.',
+                    done: false,
+                    run: async () => {
+                      try {
+                        await call('git.deleteBranch', { branch: b });
+                        useApp.getState().toast(`Deleted ${b}`, 'success');
+                        void load();
+                      } catch (e) {
+                        if (!/not fully merged/i.test(asError(e).message)) throw e;
+                        if (await confirmAction({ title: `${b} is not merged`, message: `${b} has commits no other branch has. Delete it anyway?`, confirmLabel: 'Delete anyway', danger: true }))
+                          await run('delete', () => call('git.deleteBranch', { branch: b, force: true }), `Deleted ${b}`);
+                      }
+                    },
+                  }),
               })),
           },
         ]
@@ -483,26 +498,29 @@ export function GitView() {
         <section>
           <SectionTitle>History</SectionTitle>
           {!log.length ? (
-            <div className="text-sm text-muted py-2">No commits yet.</div>
+            <Empty title="No commits yet">The commits of this workspace are listed here once there are some: stage changes above and commit them.</Empty>
           ) : (
-            <ul className="grid gap-0.5 text-sm" aria-label="Commits">
+            // the one row (TreeRowShell, without a menu: a commit is not an item): click or Enter shows what it changed, ↑ ↓ move
+            <div className="grid gap-0.5 text-sm" role="tree" aria-label="Commits" onKeyDown={treeKeys}>
               {log.map((c) => (
-                <li key={c.hash}>
-                  <button
-                    className={cx('w-full flex items-center gap-2 py-0.5 px-1 rounded text-left hover:bg-hover', selectedCommit === c.hash && 'bg-accent/10')}
-                    aria-current={selectedCommit === c.hash || undefined}
-                    title="What this commit changed"
-                    onClick={() => setSelectedCommit(selectedCommit === c.hash ? undefined : c.hash)}
-                  >
-                    <span className="font-mono text-xs text-muted">{c.short}</span>
-                    <span className="truncate">{c.subject}</span>
-                    <span className="ml-auto text-xs text-muted whitespace-nowrap">
-                      {c.author} · {new Date(c.date).toLocaleString()}
-                    </span>
-                  </button>
-                </li>
+                <TreeRowShell
+                  key={c.hash}
+                  nodeId={`commit:${c.hash}`}
+                  label={c.subject}
+                  active={selectedCommit === c.hash}
+                  onClick={() => setSelectedCommit(selectedCommit === c.hash ? undefined : c.hash)}
+                  onOpen={() => setSelectedCommit(c.hash)}
+                  className="mx-0 pl-1"
+                  attrs={{ 'data-commit': c.hash }}
+                >
+                  <span className="font-mono text-xs text-muted">{c.short}</span>
+                  <span className="truncate">{c.subject}</span>
+                  <span className="ml-auto text-xs text-muted whitespace-nowrap">
+                    {c.author} · {new Date(c.date).toLocaleString()}
+                  </span>
+                </TreeRowShell>
               ))}
-            </ul>
+            </div>
           )}
         </section>
         <div className="text-xs text-muted">git {status.version} · sign-in uses your git setup (SSH keys or the credential manager)</div>

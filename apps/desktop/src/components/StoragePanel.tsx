@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { HardDrive, Trash2 } from 'lucide-react';
 import { call } from '../api';
-import { confirmAction, toastError, useApp, attempt } from '../store';
+import { toastError, useApp } from '../store';
+import { confirmDelete } from '../lib/undo-delete';
 import { formatBytes, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, StatTile } from './charts';
 import { Button, Input } from './ui';
@@ -23,21 +24,36 @@ export function StoragePanel() {
   useEffect(load, []);
   if (!u) return <p className="text-sm text-muted">Measuring…</p>;
   const max = Math.max(1, ...u.parts.map((p) => p.bytes));
-  const deleteOld = async () => {
+  // neither can be put back (the registry's delete policy of runs and history entries): both ask first, through the one helper
+  const deleteOld = () => {
     const n = Math.max(1, Number(days) || 30);
-    if (!(await confirmAction({ title: 'Delete older runs', message: `Delete runs that started more than ${plural(n, 'day')} ago?`, detail: 'Their results and reports are removed; baselines and monitor history stay.', confirmLabel: 'Delete runs', danger: true }))) return;
-    await attempt(async () => {
-      const r = await call<{ deleted: number; bytes: number }>('storage.deleteRunsBefore', { days: n });
-      useApp.getState().toast(r.deleted ? `Deleted ${plural(r.deleted, 'run')} (${formatBytes(r.bytes)})` : 'No runs that old', 'success');
-      load();
+    return confirmDelete({
+      what: `the runs that started more than ${plural(n, 'day')} ago`,
+      title: 'Delete older runs',
+      message: `Delete runs that started more than ${plural(n, 'day')} ago?`,
+      detail: 'Their results and reports are removed; baselines and monitor history stay.',
+      confirmLabel: 'Delete runs',
+      done: false,
+      run: async () => {
+        const r = await call<{ deleted: number; bytes: number }>('storage.deleteRunsBefore', { days: n });
+        useApp.getState().toast(r.deleted ? `Deleted ${plural(r.deleted, 'run')} (${formatBytes(r.bytes)})` : 'No runs that old', 'success');
+        load();
+      },
     });
   };
-  const clearHistory = async () => {
-    if (!(await confirmAction({ title: 'Clear history', message: 'Delete the whole request history of this workspace?', detail: 'Saved response bodies go too. Collections, tests and runs are kept.', confirmLabel: 'Clear history', danger: true }))) return;
-    await call('history.clear');
-    useApp.getState().toast('History cleared', 'success');
-    load();
-  };
+  const clearHistory = () =>
+    confirmDelete({
+      what: 'the whole request history of this workspace',
+      title: 'Clear history',
+      message: 'Delete the whole request history of this workspace?',
+      detail: 'Saved response bodies go too. Collections, tests and runs are kept.',
+      confirmLabel: 'Clear history',
+      done: 'History cleared',
+      run: async () => {
+        await call('history.clear');
+        load();
+      },
+    });
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

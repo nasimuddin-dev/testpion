@@ -89,6 +89,17 @@ export type Capability = (typeof CAPABILITIES)[number];
 export type CapabilityState = true | { na: string } | { planned: `0.${number}` };
 export type Capabilities = Readonly<Record<Capability, CapabilityState>>;
 
+/**
+ * How items of a kind are deleted, wherever the delete is asked for (a row's Delete, the editor's ⋯, the CLI, an agent):
+ * `undo` deletes at once and the message offers Undo (nothing is asked first); `confirm` asks first because the item
+ * cannot be put back. The reason says which. The window's lib/undo-delete.ts helpers enforce it, and `testpion kinds`
+ * prints it so an agent knows which deletes are reversible before calling them.
+ */
+export interface DeletePolicy {
+  mode: 'undo' | 'confirm';
+  reason: string;
+}
+
 type KindStorage =
   | { layout: 'file-per-item'; dir: string; ext: readonly string[] }
   | { layout: 'nested'; in: KindId }
@@ -143,6 +154,8 @@ export interface ItemKindInfo {
   /** A path of this kind in tests/fixtures/kinds/workspace (the completeness test checks kindOfPath on it). */
   sample?: string;
   capabilities: Capabilities;
+  /** How its items are deleted (every kind whose `delete` capability is true says; the others have no delete). */
+  deletes?: DeletePolicy;
 }
 
 const kinds = KIND_LIST;
@@ -160,6 +173,17 @@ export const can = (kind: KindId, cap: Capability): boolean => KIND_INFO[kind]?.
 
 /** The live kinds with a capability. */
 export const kindsWith = (cap: Capability): ItemKindInfo[] => liveKinds().filter((k) => k.capabilities[cap] === true);
+
+/**
+ * How a kind's items are deleted: its policy (`undo` or `confirm`), or `none` with the registry's reason when the kind
+ * has no delete (a record cleared from its view, a part of another item, one per workspace).
+ */
+export function deletePolicy(kind: KindId): { mode: 'undo' | 'confirm' | 'none'; reason: string } {
+  const k = KIND_INFO[kind];
+  if (k.deletes) return k.deletes;
+  const d = k.capabilities.delete;
+  return { mode: 'none', reason: d === true ? 'no delete policy declared' : 'na' in d ? d.na : `planned for ${d.planned}` };
+}
 
 /** A kind by its id or one of its aliases (`library:grpc`, `test-file`, `history-entry` …); undefined for an unknown name. */
 export function kindByName(name: string): ItemKindInfo | undefined {

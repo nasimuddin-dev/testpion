@@ -25,7 +25,12 @@ export function RequestEditor({
   setParams,
   setExamples,
   scriptAi,
+  onSend,
+  onSave,
 }: {
+  /** Send the request, and save it (to a collection when it is not in one): the Examples tab's empty state offers them. */
+  onSend?(): void;
+  onSave?(): void;
   tab: RestTab;
   update(p: Partial<RestTab>): void;
   setReq(p: Partial<HttpRequestSpec>): void;
@@ -88,7 +93,7 @@ export function RequestEditor({
         )}
         {sub === 'scripts' && <ScriptsPanel pre={tab.preRequestScript ?? ''} post={tab.testScript ?? ''} onPre={(v) => update({ preRequestScript: v })} onPost={(v) => update({ testScript: v })} ai={scriptAi} />}
         {sub === 'docs' && <DocsEditor value={tab.description ?? ''} onChange={(description) => update({ description })} />}
-        {sub === 'examples' && <ExamplesPanel key={tab.id} collectionId={tab.collectionId} requestId={tab.requestId} examples={tab.examples ?? []} onChange={setExamples} />}
+        {sub === 'examples' && <ExamplesPanel key={tab.id} collectionId={tab.collectionId} requestId={tab.requestId} examples={tab.examples ?? []} onChange={setExamples} onSend={onSend} onSave={onSave} />}
         {sub === 'tests' && <AssertionEditor checks={tab.assertions} onChange={(assertions) => update({ assertions })} groups={['Response', 'Body']} />}
         {sub === 'settings' && <RequestSettings settings={r.settings ?? {}} onChange={(settings) => setReq({ settings })} />}
       </div>

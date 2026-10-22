@@ -1,4 +1,4 @@
-import { Bot, FileCode2, FilePlus2, FileSpreadsheet, History, KeyRound, Layers, Play, Save, ShieldCheck, Trash2, Workflow } from 'lucide-react';
+import { Bot, FileCode2, FilePlus2, FileSpreadsheet, History, KeyRound, Layers, Play, Save, ShieldCheck, Workflow } from 'lucide-react';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -24,6 +24,7 @@ import { TreeRowShell } from '../components/TreeRowShell';
 import { useAreaMenu } from '../components/AreaMenu';
 import { useTreeOpen } from '../lib/tree-state';
 import { deleteWithUndo } from '../lib/undo-delete';
+import { openItemMenu } from '../lib/item-menu';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { copyText } from '../lib/clipboard';
 import { FlowDiagram } from '../components/FlowDiagram';
@@ -40,6 +41,16 @@ import { RunList } from './TestsRunsList';
 import { NoTestFiles, TestFileBadge, TestFileTree, type TestNode, type TestsHost } from './TestsTreeRows';
 
 type Node = TestNode;
+
+/** The node of a path in the tests tree (a file or a folder), or undefined when the tree does not hold it (yet). */
+function findNode(nodes: Node[], path: string): Node | undefined {
+  for (const n of nodes) {
+    if (n.path === path) return n;
+    const inside = n.children && path.startsWith(`${n.path}/`) ? findNode(n.children, path) : undefined;
+    if (inside) return inside;
+  }
+  return undefined;
+}
 
 const TEMPLATES: Record<string, string> = {
   http: `name: Health check
@@ -787,6 +798,7 @@ export function TestsView() {
                     setTab('run');
                   }}
                   onRerunFailed={rerunFailed}
+                  onRunAll={() => void run([], 'All tests')}
                 />
               </div>
             ),
@@ -853,17 +865,7 @@ export function TestsView() {
                     <FileSpreadsheet size={13} />
                   </IconButton>
                 )}
-                <IconButton
-                  label="Delete file"
-                  onClick={async () => {
-                    if (!(await confirmAction({ title: 'Delete test file', message: `Delete tests/${file}?`, detail: 'This cannot be undone (unless the workspace is in git).', confirmLabel: 'Delete file', danger: true }))) return;
-                    await call('tests.delete', { path: file });
-                    await closeFile(file, false);
-                    void loadTree();
-                  }}
-                >
-                  <Trash2 size={13} />
-                </IconButton>
+                {/* Delete… (with Undo, like the tree's) is in the file's ⋯ on the breadcrumb below, the same menu as its row */}
               </>
             )
           }
@@ -874,7 +876,9 @@ export function TestsView() {
           const parts = file.split('/');
           const step = tab === 'flow' && flowSel && flow && !('error' in flow) ? flow.steps.find((s) => s.id === flowSel) : undefined;
           const crumbs: Crumb[] = [{ label: 'Tests', view: 'tests' }, ...parts.slice(0, -1).map((label) => ({ label })), ...(step ? [{ label: parts[parts.length - 1]!, ref: { kind: 'test' as const, path: file } }] : [])];
-          return <ItemBreadcrumb crumbs={crumbs} name={step ? step.name : parts[parts.length - 1]!} dirty={dirty} />;
+          // the file's ⋯: its menu as its row in the tree has it (run, copy, rename, Delete… with Undo), built by lib/node-menu.ts
+          const node = findNode(tree, file) ?? { kind: 'file' as const, name: parts[parts.length - 1]!, path: file };
+          return <ItemBreadcrumb crumbs={crumbs} name={step ? step.name : parts[parts.length - 1]!} dirty={dirty} actions={openItemMenu('test', { ...fileMenu(node), ref: { kind: 'test', path: file } })} />;
         })()}
         <div className="flex-1 min-h-0">
           {/* ONE editor for every open file (a model each, the editor swaps them): it stays mounted, hidden, while the
@@ -1013,7 +1017,7 @@ export function TestsView() {
             </div>
           ) : runId ? (
             <Split id="tests-runs" initial={22} min={12}>
-              <RunList runs={runs} active={runId} onSelect={setRunId} onOverview={() => setRunId(undefined)} onRerunFailed={rerunFailed} />
+              <RunList runs={runs} active={runId} onSelect={setRunId} onOverview={() => setRunId(undefined)} onRerunFailed={rerunFailed} onRunAll={() => void run([], 'All tests')} />
               <RunPanel
                 key={runId}
                 runId={runId}
@@ -1023,8 +1027,8 @@ export function TestsView() {
             </Split>
           ) : (
             <Split id="tests-runs" initial={22} min={12}>
-              <RunList runs={runs} active={runId} onSelect={setRunId} onRerunFailed={rerunFailed} />
-              <RunsOverview flaky runs={runs} onSelect={setRunId} />
+              <RunList runs={runs} active={runId} onSelect={setRunId} onRerunFailed={rerunFailed} onRunAll={() => void run([], 'All tests')} />
+              <RunsOverview flaky runs={runs} onSelect={setRunId} onRun={{ label: 'Run all tests', run: () => void run([], 'All tests') }} />
             </Split>
           )}
         </div>

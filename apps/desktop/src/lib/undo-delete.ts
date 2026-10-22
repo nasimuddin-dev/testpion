@@ -1,6 +1,6 @@
-import { KIND_INFO, type KindId } from '@testpion/shared';
+import { deletePolicy, KIND_INFO, type KindId } from '@testpion/shared';
 import { call } from '../api';
-import { toastError, useApp } from '../store';
+import { attempt, confirmAction, toastError, useApp } from '../store';
 import { closeTabsFor } from '../components/EditorTabs';
 import { focusRow } from '../components/TreeParts';
 
@@ -14,11 +14,27 @@ export function deletedNoun(kind: KindId): string {
 }
 
 /**
+ * What is deleted, in words: "the MCP server “name”" from the registry, or the caller's words for what is not an item
+ * of a kind ("the example “200 OK”", "the rule “Slow network”").
+ */
+type Deleted = { kind: KindId; name: string } | { what: string };
+const wordsFor = (o: Deleted) => ('what' in o ? o.what : `${deletedNoun(o.kind)} "${o.name}"`);
+
+/** The registry's delete policy is the rule: a kind deleted through the wrong helper is a programming error (said in dev, never to the user). */
+function checkPolicy(o: Deleted, mode: 'undo' | 'confirm'): void {
+  if (!('kind' in o) || !import.meta.env?.DEV) return;
+  const p = deletePolicy(o.kind);
+  if (p.mode !== mode) console.error(`${KIND_INFO[o.kind].label}: the registry says its delete is "${p.mode}" (${p.reason}), but it was deleted with ${mode === 'undo' ? 'deleteWithUndo' : 'confirmDelete'}`);
+}
+
+/**
  * Deletes that can be taken back (lib/undo.ts): no "Are you sure?" first; the item goes at once and the message says
- * so with Undo (8 s, Ctrl/Cmd+Z). Deletes that cannot be undone (git branches, secrets, cookies, history, runs, the
- * workspace, Delete for good) keep their confirmation. One helper, so every list behaves the same: the message is
- * "Deleted the <kind> “name”" from the item kinds registry (lib/node-menu.ts names rows the same way), the Recently
- * deleted note is one constant, and Undo puts the keyboard back on the restored row.
+ * so with Undo (8 s, Ctrl/Cmd+Z). Deletes that cannot be undone (git branches, secrets, history, runs, captured
+ * exchanges, the workspace, Delete for good) ask first through `confirmDelete`. Which one a kind gets is the registry's
+ * `deletes` policy (packages/shared/src/item-kind-list.ts), the same for a row, an editor's ⋯, the CLI and an agent.
+ * One helper, so every list behaves the same: the message is "Deleted the <kind> “name”" from the item kinds registry
+ * (lib/node-menu.ts names rows the same way), the Recently deleted note is one constant, and Undo puts the keyboard
+ * back on the restored row.
  */
 export async function deleteWithUndo(
   o: {
@@ -32,18 +48,9 @@ export async function deleteWithUndo(
     note?: string;
     /** The row's `data-node-id`: after Undo the keyboard is back on it (the row that had it is gone). */
     focus?: string;
-  } & (
-    | {
-        /** What is deleted: its kind (the message's noun comes from the registry) and its name. */
-        kind: KindId;
-        name: string;
-      }
-    | {
-        /** What is deleted, in words, where it is not an item of a kind ("the example “200 OK”"). */
-        what: string;
-      }
-  ),
+  } & Deleted,
 ): Promise<boolean> {
+  checkPolicy(o, 'undo');
   let undo = o.undo;
   try {
     const r = await o.run();
@@ -53,13 +60,48 @@ export async function deleteWithUndo(
     return false;
   }
   const back = undo;
-  const what = 'what' in o ? o.what : `${deletedNoun(o.kind)} "${o.name}"`;
+  const what = wordsFor(o);
   const notes = [o.trash ? TRASH_NOTE : undefined, o.note].filter(Boolean);
   useApp.getState().toast(`Deleted ${what}${notes.map((n) => `. ${n}`).join('')}`, 'info', undefined, {
     undo: back && (o.focus ? async () => (await back(), focusRow(o.focus!)) : back),
     restored: `Restored ${what}`,
   });
   return true;
+}
+
+/**
+ * The other delete: one that cannot be taken back (a history entry, captured exchanges, a git branch, every cookie of
+ * a domain, runs older than a month). It asks first, in one wording everywhere ("Delete the history entry “GET /pets”?
+ * This cannot be undone."), runs the delete through `attempt` (a failure is a toast, never an unhandled rejection) and
+ * says what was deleted. `title`, `message`, `detail` and `confirmLabel` word a clear ("Clear history") or add what else
+ * goes; `done` is the message afterwards (default "Deleted …"; `false`: none, the caller's own follows). Resolves true
+ * when the delete happened.
+ */
+export async function confirmDelete(
+  o: {
+    run(): unknown;
+    title?: string;
+    message?: string;
+    detail?: string;
+    confirmLabel?: string;
+    done?: string | false;
+  } & Deleted,
+): Promise<boolean> {
+  checkPolicy(o, 'confirm');
+  const what = wordsFor(o);
+  const yes = await confirmAction({
+    title: o.title ?? `Delete ${what}`,
+    message: o.message ?? `Delete ${what}? This cannot be undone.`,
+    detail: o.detail,
+    confirmLabel: o.confirmLabel ?? 'Delete',
+    danger: true,
+  });
+  if (!yes) return false;
+  const ok = await attempt(async () => {
+    await o.run();
+  });
+  if (ok && o.done !== false) useApp.getState().toast(o.done ?? `Deleted ${what}`, 'info');
+  return ok;
 }
 
 export type TrashedKind = 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server';

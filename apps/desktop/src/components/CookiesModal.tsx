@@ -1,7 +1,9 @@
 import { Cookie, Lock, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, promptText, useApp, attempt } from '../store';
+import { promptText, useApp, attempt } from '../store';
+import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
+import { plural } from '../lib/format';
 import { Badge, Button, cx, Empty, Field, IconButton, Input, Modal, Toggle } from './ui';
 
 export interface JarCookie {
@@ -98,7 +100,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
             <Lock size={12} />
             {persistent ? 'Kept on this machine only, encrypted with the OS credential store. Never written to workspace files.' : 'No OS credential store available: cookies are kept in memory until the app closes. Never written to workspace files.'}
           </span>
-          <Button variant="ghost" disabled={!cookies.length} reason="There are no cookies" onClick={async () => (await confirmAction({ title: 'Delete all cookies', message: 'Delete every cookie saved for this workspace?', detail: 'Sites will ask you to sign in again where a cookie kept you signed in.', confirmLabel: 'Delete all cookies', danger: true })) && void act(() => call('cookies.clear', {}), 'All cookies deleted')}>
+          <Button variant="ghost" disabled={!cookies.length} reason="There are no cookies" onClick={() => void confirmDelete({ what: 'every cookie saved for this workspace', title: 'Delete all cookies', message: 'Delete every cookie saved for this workspace?', detail: 'Sites will ask you to sign in again where a cookie kept you signed in.', confirmLabel: 'Delete all cookies', done: 'All cookies deleted', run: () => act(() => call('cookies.clear', {})) })}>
             Clear all
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -125,7 +127,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                   setDomain(d);
                   setEditing(null);
                 }}
-                className={cx('w-full flex items-center justify-between gap-2 text-left px-3 py-1.5 text-sm', d === domain ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-hover')}
+                className={cx('w-full flex items-center justify-between gap-2 text-left px-3 py-1.5 text-sm', d === domain ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-hover')}
               >
                 <span className="truncate mono">{d}</span>
                 <Badge>{count(d)}</Badge>
@@ -148,7 +150,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                 <Button size="sm" icon={<Plus size={13} />} onClick={() => setEditing({ draft: blank(domain) })}>
                   Add cookie
                 </Button>
-                <Button size="sm" variant="ghost" disabled={!count(domain)} reason="This domain has no cookies" onClick={() => void act(() => call('cookies.clear', { domain }), `Cookies of ${domain} deleted`)}>
+                <Button size="sm" variant="ghost" disabled={!count(domain)} reason="This domain has no cookies" onClick={() => void confirmDelete({ what: `the ${plural(count(domain), 'cookie')} of ${domain}`, done: `Cookies of ${domain} deleted`, run: () => act(() => call('cookies.clear', { domain })) })}>
                   Clear domain
                 </Button>
               </div>
@@ -182,7 +184,12 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                               label={`Delete ${c.name}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void act(() => call('cookies.delete', { domain: c.domain, name: c.name, path: c.path }));
+                                // at once, with Undo in the message: the cookie is set again as it was
+                                void deleteWithUndo({
+                                  what: `the cookie "${c.name}"`,
+                                  run: () => act(() => call('cookies.delete', { domain: c.domain, name: c.name, path: c.path })),
+                                  undo: () => act(() => call('cookies.set', { cookie: c })),
+                                });
                               }}
                             >
                               <Trash2 size={14} />

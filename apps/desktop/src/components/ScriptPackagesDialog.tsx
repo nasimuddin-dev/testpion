@@ -1,7 +1,8 @@
 import { Package, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, promptText, useApp, attempt } from '../store';
+import { promptText, useApp, attempt } from '../store';
+import { confirmDelete } from '../lib/undo-delete';
 import { CodeEditor } from './CodeEditor';
 import { Button, cx, Empty, Modal } from './ui';
 
@@ -52,13 +53,20 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
     await reload();
     setSel(name);
   };
-  const remove = async () => {
-    if (!sel || !(await confirmAction({ title: `Delete ${sel}?`, message: 'Scripts that tp.require it will fail.', danger: true, confirmLabel: 'Delete' }))) return;
-    await call('packages.delete', { name: sel });
-    setSel(undefined);
-    setCode('');
-    await reload();
-  };
+  // a package cannot be put back (the registry's delete policy): it asks first, through the one helper
+  const remove = () =>
+    sel &&
+    confirmDelete({
+      kind: 'script-package',
+      name: sel,
+      detail: 'Scripts that tp.require it will fail.',
+      run: async () => {
+        await call('packages.delete', { name: sel });
+        setSel(undefined);
+        setCode('');
+        await reload();
+      },
+    });
   return (
     <Modal
       title="Script packages"
@@ -90,7 +98,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
           </div>
           <div className="flex-1 overflow-auto py-1">
             {list.map((p) => (
-              <button key={p.name} className={cx('w-full text-left px-3 py-1.5 text-sm mono truncate flex items-center gap-2', sel === p.name ? 'bg-accent/10 text-accent' : 'hover:bg-hover')} onClick={() => setSel(p.name)}>
+              <button key={p.name} className={cx('w-full text-left px-3 py-1.5 text-sm mono truncate flex items-center gap-2', sel === p.name ? 'bg-accent-soft text-accent' : 'hover:bg-hover')} onClick={() => setSel(p.name)}>
                 <Package size={12} className="shrink-0 text-muted" />
                 {p.name}
               </button>

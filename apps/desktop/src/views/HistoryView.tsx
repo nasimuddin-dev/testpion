@@ -2,7 +2,8 @@ import { CompareView, type Compared } from '../components/ResponseHistory';
 import { Database, History, RotateCcw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
-import { confirmAction, useApp } from '../store';
+import { useApp } from '../store';
+import { confirmDelete } from '../lib/undo-delete';
 import { useFilteredLoad, useIntent } from '../hooks';
 import { openRef } from '../lib/open-ref';
 import { formatBytes, formatMs, groupByDay } from '../lib/format';
@@ -10,7 +11,7 @@ import { DurationBar } from '../components/charts';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
 import { JsonTree } from '../components/JsonView';
-import { Badge, Button, Empty, IconButton, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
+import { Badge, Busy, Button, Empty, IconButton, Input, Select, Split, statusTone, VirtualList } from '../components/ui';
 import { NodeMenu, TreeBadge, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
@@ -199,11 +200,17 @@ export function HistoryView() {
   const maxMs = useMemo(() => Math.max(1, ...items.map((e) => e.durationMs ?? 0)), [items]);
   // in the editor of its kind, with what was sent (the whole entry is read: the list holds previews)
   const reopen = (e: Entry) => void openRef({ kind: 'history', historyId: e.id }, { edit: true });
-  const remove = async (e: Entry) => {
-    await call('history.delete', { id: e.id });
-    if (sel?.id === e.id) setSel(undefined);
-    void load(true);
-  };
+  // a history entry cannot be put back (the registry's delete policy): it asks first, through the one helper
+  const remove = (e: Entry) =>
+    confirmDelete({
+      kind: 'history',
+      name: e.name,
+      run: async () => {
+        await call('history.delete', { id: e.id });
+        if (sel?.id === e.id) setSel(undefined);
+        await load(true);
+      },
+    });
   // one menu for an entry, on its row (right-click, ⋯) and above its details: open · related items · test · delete
   /** An entry's menu (lib/node-menu.ts builds it; the details header shows it without Open, which is the details themselves). */
   const entryMenu = (e: Entry, o: { details?: boolean } = {}): NodeMenuCtx => ({
@@ -239,11 +246,21 @@ export function HistoryView() {
           <Button
             variant="ghost"
             icon={<Trash2 size={13} />}
-            onClick={async () => {
-              if (!(await confirmAction({ title: 'Clear history', message: 'Clear the request history of this workspace?', detail: 'Saved requests, collections and run reports are not affected.', confirmLabel: 'Clear history', danger: true }))) return;
-              await call('history.clear');
-              void load(true);
-            }}
+            onClick={() =>
+              void confirmDelete({
+                what: 'the request history of this workspace',
+                title: 'Clear history',
+                message: 'Clear the request history of this workspace?',
+                detail: 'Saved requests, collections and run reports are not affected.',
+                confirmLabel: 'Clear history',
+                done: 'History cleared',
+                run: async () => {
+                  await call('history.clear');
+                  setSel(undefined);
+                  await load(true);
+                },
+              })
+            }
           >
             Clear
           </Button>
@@ -351,7 +368,7 @@ export function HistoryView() {
               </Button>
             </div>
             <div className="flex-1 min-h-0 overflow-auto">
-              {pair.error ? <p className="p-3 text-sm text-bad">{pair.error}</p> : pair.result ? <CompareView c={pair.result} labels={[`${pair.before.name} · ${new Date(pair.before.timestamp).toLocaleString()}`, `${pair.after.name} · ${new Date(pair.after.timestamp).toLocaleString()}`]} /> : <Empty title="Comparing…" />}
+              {pair.error ? <p className="p-3 text-sm text-bad">{pair.error}</p> : pair.result ? <CompareView c={pair.result} labels={[`${pair.before.name} · ${new Date(pair.before.timestamp).toLocaleString()}`, `${pair.after.name} · ${new Date(pair.after.timestamp).toLocaleString()}`]} /> : <Busy>Comparing the two responses…</Busy>}
             </div>
           </>
         ) : sel ? (

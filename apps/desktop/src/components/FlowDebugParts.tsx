@@ -44,12 +44,15 @@ export function FlowHistoryList({
   onSelect,
   onReplay,
   onClose,
+  onRun,
 }: {
   runs: FlowRunRow[] | undefined;
   selected?: string;
   onSelect(runId: string | undefined): void;
   onReplay(run: FlowRunRow): void;
   onClose(): void;
+  /** Run the flow (the empty list's first step). */
+  onRun(): void;
 }) {
   return (
     <div className="h-full flex flex-col min-h-0" data-flow-history>
@@ -67,7 +70,9 @@ export function FlowHistoryList({
         {!runs ? (
           <p className="p-3 text-xs text-muted">Reading the runs…</p>
         ) : !runs.length ? (
-          <Empty title="No runs yet">Run the flow: every run is kept here with each step's request, response and variables.</Empty>
+          <Empty title="No runs yet" actions={[{ label: 'Run the flow', icon: <Play size={13} />, onClick: onRun }]}>
+            Every run is kept here with each step's request, response and variables.
+          </Empty>
         ) : (
           runs.map((r) => (
             <div

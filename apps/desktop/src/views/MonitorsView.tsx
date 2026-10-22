@@ -1,11 +1,11 @@
 import { RecentRuns } from '../components/charts';
 import { AiAction } from '../components/ai/AiAction';
-import { AlarmClock, Folder, KeyRound, Pause, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { AlarmClock, Folder, KeyRound, Pause, Pencil, Play, Plus } from 'lucide-react';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { LABEL } from '../lib/vocabulary';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
-import { refMenu } from '../components/RefLink';
+import { openItemMenu } from '../lib/item-menu';
 import { SidebarShell } from '../components/SidebarShell';
 import { MonitorCharts } from '../components/MonitorCharts';
 import { MonitorRequests } from '../components/MonitorRequests';
@@ -15,14 +15,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
-import { toastError, useApp, attempt } from '../store';
+import { promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
-import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip, NamedOptions } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, Metric, MetricGrid, ModalOrPanel, PageHeader, Select, Split, Toggle, Tooltip, NamedOptions, type MenuItem } from '../components/ui';
+import { NoOpenItems } from '../components/LibraryTabStrip';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
 import { VarInput } from '../components/VarInput';
@@ -216,6 +217,24 @@ export function MonitorsView() {
   };
   /** At once, with Undo in the message (the same as the list's Delete). */
   const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: m.name, run: () => monitorOps.deleteItem(m.id), note: 'Its past runs stay in the Tests view' });
+  /** The open monitor's ⋯ (its breadcrumb): its menu as its row in the list has it (lib/node-menu.ts): edit, run, pause, rename, duplicate, Delete… with Undo. */
+  const monitorMenu = (m: MonitorRow): MenuItem[] =>
+    openItemMenu('monitor', {
+      ref: { kind: 'monitor', monitorId: m.id },
+      name: m.name,
+      on: {
+        edit: () => setEditing(m),
+        run: () => void run(m),
+        ...(m.enabled ? { pause: () => void toggle(m) } : { resume: () => void toggle(m) }),
+        rename: async () => {
+          const name = (await promptText('Rename monitor', { message: 'Monitor name', value: m.name, okLabel: 'Rename' }))?.trim();
+          if (name && name !== m.name) await update(m.id, { name });
+        },
+        duplicate: () => void monitorOps.duplicateItem?.(m.id),
+        delete: () => void remove(m),
+      },
+      disabled: busy.includes(m.id) || m.running ? { run: 'It is running now' } : {},
+    });
 
   const newDraft = (): MonitorDraft => ({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment });
   /** Change the monitors library directly (folders): monitors keep their data, only folders change. */
@@ -370,14 +389,15 @@ export function MonitorsView() {
             onRun={() => void run(current)}
             onEdit={() => setEditing(current)}
             onToggle={() => void toggle(current)}
-            onDelete={() => void remove(current)}
+            menu={monitorMenu(current)}
           />
         ) : (
           loaded &&
           (rows.length > 0 ? (
-            <Empty title="Select a monitor" actions={[{ label: 'New monitor', icon: <Plus size={13} />, onClick: () => setEditing(newDraft()) }]}>
-              Its uptime, response times and runs show here.
-            </Empty>
+            // every tab closed: the shared empty state of a tab view (Tests, Load tests, Evaluations, Playground, Environments)
+            <NoOpenItems icon={AlarmClock} title="No open monitors" newLabel="New monitor" onNew={() => setEditing(newDraft())}>
+              Open a monitor from the list: its uptime, response times and runs show here.
+            </NoOpenItems>
           ) : (
             <Empty
               icon={<AlarmClock size={24} />}
@@ -412,7 +432,8 @@ function MonitorDetail(p: {
   onRun(): void;
   onEdit(): void;
   onToggle(): void;
-  onDelete(): void;
+  /** The monitor's ⋯ (lib/node-menu.ts builds it): rename, duplicate, Delete… with Undo, as its row in the list. */
+  menu: MenuItem[];
 }) {
   const { m, results } = p;
   // the monitor's runs as the backend keeps them (the newest 100), not only the page on screen
@@ -441,7 +462,7 @@ function MonitorDetail(p: {
     <div className="p-4 pt-1 flex flex-col gap-4 max-w-6xl">
       {/* WF-11: the same line as every item view; the large header keeps its actions */}
       <div className="-mx-3">
-        <ItemBreadcrumb label="Where this monitor is" crumbs={[{ label: 'Monitors', view: 'monitors' }]} name={m.name} actions={refMenu({ kind: 'monitor', monitorId: m.id })} />
+        <ItemBreadcrumb label="Where this monitor is" crumbs={[{ label: 'Monitors', view: 'monitors' }]} name={m.name} actions={p.menu} />
       </div>
       <PageHeader
         help="test-runner/monitors"
@@ -481,8 +502,6 @@ function MonitorDetail(p: {
             </Button>
           </>
         }
-        menuLabel="More monitor actions"
-        menu={[{ label: 'Delete monitor', icon: <Trash2 size={14} />, danger: true, onSelect: p.onDelete }]}
       />
 
       <MetricGrid compact>
@@ -540,7 +559,9 @@ function MonitorDetail(p: {
             </tbody>
           </table>
         ) : (
-          <div className="text-sm text-muted">No runs yet. {m.enabled ? 'It runs when it is due while TestPion is open, or click Run now.' : 'Resume it, or click Run now.'}</div>
+          <Empty title="No runs yet" actions={[{ label: LABEL.runNow, icon: <Play size={13} />, onClick: p.onRun, disabled: p.busy, title: 'It is running' }, ...(m.enabled ? [] : [{ label: LABEL.resume, icon: <AlarmClock size={13} />, onClick: p.onToggle, primary: false }])]}>
+            {m.enabled ? 'It runs when it is due while TestPion is open.' : 'It is paused: resume it to run on its schedule.'}
+          </Empty>
         )}
       </div>
       <p className="text-xs text-muted">

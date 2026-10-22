@@ -3,7 +3,7 @@ import { call } from '../api';
 import { formatMs, plural } from '../lib/format';
 import { BarRow, ChartCard, StackedColumns, Swatch } from './charts';
 import { StatusIcon } from './Results';
-import { Empty } from './ui';
+import { Busy, Empty } from './ui';
 
 /** From `runs.breakdown` (runBreakdown in core). */
 interface Breakdown {
@@ -200,7 +200,7 @@ export function RunCharts({ runId, onPick }: { runId: string; onPick?(name: stri
     setData(undefined);
     void call<Breakdown>('runs.breakdown', { runId }).then(setData, () => setData(undefined));
   }, [runId]);
-  if (!data) return <Empty title="Loading…" />;
+  if (!data) return <Busy>Loading the charts…</Busy>;
   if (!data.timed && !Object.keys(data.byType).length) return <Empty title="No results in this run" />;
   return (
     <div className="h-full overflow-auto p-3">

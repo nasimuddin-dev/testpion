@@ -66,12 +66,15 @@ const steps = [
       const auth = [...document.querySelectorAll('main *')].some((x) => x.children.length === 0 && /No credentials in this exchange/.test(x.textContent ?? ''));
       tab('response', 'Hex')?.click(); await __t.sleep(400);
       const hex = [...document.querySelectorAll('main pre')].some((p) => /^00000000  /.test(p.textContent));
-      // keyboard: the grid takes the focus; Delete removes the selected row
+      // keyboard: the grid takes the focus; Delete removes the selected row, after asking (an exchange cannot be put back)
       const grid = document.querySelector('main [aria-label="Captured exchanges"]');
       grid.focus();
-      grid.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })); await __t.sleep(800);
+      grid.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      const ask = await __t.waitFor(() => document.querySelector('[role=alertdialog], [role=dialog]'), 3000);
+      const asked = !!ask && /cannot be undone/.test(document.body.innerText);
+      [...document.querySelectorAll('[role=alertdialog] button, [role=dialog] button')].find((b) => b.textContent.trim() === 'Delete')?.click(); await __t.sleep(800);
       const gone = ![...document.querySelectorAll('main [role=row]')].some((r) => r.textContent.includes('/health'));
-      return 'raw request line: ' + /GET \\/health HTTP\\/1\\.1/.test(raw) + ' | raw response line: ' + /HTTP\\/1\\.1 200/.test(raw) + ' | auth: ' + auth + ' | hex: ' + hex + ' | delete key: ' + gone;
+      return 'raw request line: ' + /GET \\/health HTTP\\/1\\.1/.test(raw) + ' | raw response line: ' + /HTTP\\/1\\.1 200/.test(raw) + ' | auth: ' + auth + ' | hex: ' + hex + ' | delete key asks: ' + asked + ' | gone: ' + gone;
     })()`,
   ],
   [
@@ -240,7 +243,7 @@ module.exports = withExpect(steps, {
   'home-tile-opens-the-debugger': /^tile: true \| icon: true \| opens: true$/,
   start: /^listening \| port: \d+$/,
   'exchange-listed-and-opens': /^row: GET true 200 true \| detail tabs: true \| body shown: true \| opened as request: true$/,
-  'inspectors-and-keyboard': /^raw request line: true \| raw response line: true \| auth: true \| hex: true \| delete key: true$/,
+  'inspectors-and-keyboard': /^raw request line: true \| raw response line: true \| auth: true \| hex: true \| delete key asks: true \| gone: true$/,
   'session-saved-and-opened': /^saved: true \| cleared: true \| opened: true \| in its tab: true$/,
   'rule-replies-without-the-server': /^rule listed: true \| bar: true \| status: 503 \| row 503: true \| badge: true$/,
   'websocket-frames-and-sse-events': /^ws sent: true \| ws received: true \| sse events: 3 \| ws closed: true$/,

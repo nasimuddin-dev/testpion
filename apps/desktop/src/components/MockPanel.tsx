@@ -29,7 +29,7 @@ const portKey = (id: string) => `aps.mockPort.${id}`;
  * Mock server for a collection: serves the collection's saved examples on localhost, picking the
  * example by method and path (and `x-mock-response-name` / `x-mock-response-code` headers).
  */
-export function MockPanel({ collectionId, onOpenRequest }: { collectionId: string; onOpenRequest(requestId: string): void }) {
+export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { collectionId: string; onOpenRequest(requestId: string): void; /** The collection's requests (the empty route list's first step: send one, save an example). */ onShowRequests(): void }) {
   const toast = useApp((s) => s.toast);
   const [info, setInfo] = useState<MockInfo>({ running: false, routes: [] });
   const [port, setPort] = usePersisted(portKey(collectionId), '', { text: true });
@@ -135,7 +135,9 @@ export function MockPanel({ collectionId, onOpenRequest }: { collectionId: strin
             </tbody>
           </table>
         ) : (
-          <Empty title="No examples to serve">Open a request, send it and click “Save as example”. Every example becomes a route.</Empty>
+          <Empty title="No examples to serve" actions={[{ label: 'Show the requests', onClick: onShowRequests }]}>
+            Every example becomes a route: open a request, send it and click “Save as example”.
+          </Empty>
         )}
       </section>
 

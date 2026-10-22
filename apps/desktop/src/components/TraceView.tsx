@@ -3,7 +3,9 @@ import { useMemo, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { Span, Trace } from '../types';
 import { formatMs } from '../lib/format';
-import { Badge, cx, Segmented, Split, Tabs } from './ui';
+import { Badge, cx, Empty, Segmented, Split, Tabs } from './ui';
+import { treeKeys } from './TreeParts';
+import { TreeRowShell } from './TreeRowShell';
 import { jsonPretty, outputFileName } from '@testpion/shared';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
@@ -85,27 +87,24 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
         </span>
       </div>
       <Split id="trace" direction="vertical" initial={55}>
-        <div className="overflow-auto h-full">
+        {/* the one row (TreeRowShell, without a menu: a span is not an item), nested by depth: click or Enter shows the span, ↑ ↓ move */}
+        <div className="overflow-auto h-full" role="tree" aria-label="Spans" onKeyDown={treeKeys}>
           {rows.map(({ span: s, depth }) => {
             const left = ((s.startTime - start) / total) * 100;
             const width = Math.max(0.4, (((s.endTime ?? end) - s.startTime) / total) * 100);
             return (
-              <button
-                key={s.spanId}
-                onClick={() => setSel(s.spanId)}
-                className={cx('w-full flex items-center h-7 text-sm border-b border-line/60 text-left hover:bg-hover', sel === s.spanId && 'bg-accent/10')}
-              >
-                <div className="w-[38%] shrink-0 truncate flex items-center gap-1.5" style={{ paddingLeft: 8 + depth * 14 }}>
+              <TreeRowShell key={s.spanId} nodeId={`span:${s.spanId}`} label={s.name} depth={depth} active={sel === s.spanId} onClick={() => setSel(s.spanId)} onOpen={() => setSel(s.spanId)} className="mx-0 rounded-none border-b border-line/60" attrs={{ 'data-span': s.spanId }}>
+                <span className="w-[38%] shrink-0 truncate flex items-center gap-1.5" style={{ paddingLeft: 8 + depth * 14 }}>
                   <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: spanColor(s) }} />
                   <span className={cx('truncate', s.status === 'error' && 'text-bad')}>{s.name}</span>
-                </div>
-                <div className="flex-1 relative h-full mr-3">
-                  <div className="absolute top-1.5 h-4 rounded-sm opacity-80" style={{ left: `${left}%`, width: `${width}%`, background: s.status === 'error' ? 'var(--bad)' : spanColor(s) }} />
-                  <span className="absolute top-1 text-[0.72rem] text-muted tabular-nums" style={{ left: `min(${left + width}% + 4px, calc(100% - 60px))` }}>
+                </span>
+                <span className="flex-1 relative h-full mr-3">
+                  <span className="absolute top-2 h-4 rounded-sm opacity-80" style={{ left: `${left}%`, width: `${width}%`, background: s.status === 'error' ? 'var(--bad)' : spanColor(s) }} />
+                  <span className="absolute top-1.5 text-[0.72rem] text-muted tabular-nums" style={{ left: `min(${left + width}% + 4px, calc(100% - 60px))` }}>
                     {formatMs(s.durationMs)}
                   </span>
-                </div>
-              </button>
+                </span>
+              </TreeRowShell>
             );
           })}
         </div>
@@ -150,7 +149,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
               </div>
             </>
           ) : (
-            <div className="p-4 text-muted text-sm">Select a span</div>
+            <Empty title="Select a span">Pick a span in the waterfall above: its payload, attributes, input, output and events show here.</Empty>
           )}
         </div>
       </Split>

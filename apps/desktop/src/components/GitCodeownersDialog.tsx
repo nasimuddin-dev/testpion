@@ -4,7 +4,7 @@ import type { CodeownersPlan, CodeownersResult } from '@testpion/core';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { copyText } from '../lib/clipboard';
-import { Button, Empty, FooterHint, Input, Modal } from './ui';
+import { Button, Busy, FooterHint, Input, Modal } from './ui';
 
 /**
  * A starter CODEOWNERS (release C of planning/git-everything.md §3): one line per kind folder of the workspace, so a team can
@@ -66,7 +66,7 @@ export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDo
       }
     >
       {!plan ? (
-        <Empty title="Reading the workspace…" />
+        <Busy>Reading the workspace…</Busy>
       ) : (
         <div className="grid gap-3" data-codeowners="">
           <p className="text-sm text-muted">

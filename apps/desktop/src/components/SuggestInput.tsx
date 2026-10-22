@@ -72,7 +72,7 @@ export const SuggestInput = forwardRef<
               aria-selected={i === Math.min(index, rows.length - 1)}
               onMouseDown={(e) => (e.preventDefault(), take(s))}
               {...hoverSelect(() => setIndex(i))}
-              className={cx('px-3 py-1 cursor-default truncate', i === Math.min(index, rows.length - 1) && 'bg-accent/10')}
+              className={cx('px-3 py-1 cursor-default truncate', i === Math.min(index, rows.length - 1) && 'bg-accent-soft')}
             >
               {renderSuggestion ? renderSuggestion(s) : <span className="mono text-fg">{s}</span>}
             </div>

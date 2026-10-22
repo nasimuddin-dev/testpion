@@ -4,7 +4,7 @@ import { call } from '../api';
 import { confirmAction, toastError } from '../store';
 import { toastWithUndo } from '../lib/git-items';
 import { plural } from '../lib/format';
-import { Badge, Button, Empty, Modal, Segmented, Textarea, Toggle } from './ui';
+import { Badge, Button, Busy, Empty, Modal, Segmented, Textarea, Toggle } from './ui';
 import { PartsTable } from './PartsTable';
 
 /**
@@ -174,7 +174,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
       }
     >
       {!detail ? (
-        <Empty title="Reading the three versions…" />
+        <Busy>Reading the three versions…</Busy>
       ) : detail.mode === 'binary' ? (
         <div className="grid gap-3" data-conflict-binary>
           <Segmented

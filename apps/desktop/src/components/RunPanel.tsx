@@ -22,7 +22,7 @@ import { viewContent } from '../lib/files';
 import { runOutputSpec } from './output/run-specs';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
-import { Badge, Button, cx, Empty, Field, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea, IconButton } from './ui';
+import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Metric, Modal, Segmented, Select, Split, Tabs, VirtualList, MetricGrid, MoreMenu, Textarea } from './ui';
 import { usePersisted } from '../lib/sticky';
 
 interface Progress {
@@ -304,7 +304,7 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
                       title={r.name}
                       data-result={`${r.id}:${r.attempts ?? ''}`}
                       onClick={() => setSel(r)}
-                      className={cx('w-full h-full flex items-center gap-2 px-3 border-b border-line/50 text-sm text-left hover:bg-hover', sel?.id === r.id && sel.attempts === r.attempts && 'bg-accent/10')}
+                      className={cx('w-full h-full flex items-center gap-2 px-3 border-b border-line/50 text-sm text-left hover:bg-hover', sel?.id === r.id && sel.attempts === r.attempts && 'bg-accent-soft')}
                     >
                       <StatusIcon status={r.status} />
                       <span className="truncate flex-1 min-w-0">{r.name}</span>
@@ -486,7 +486,7 @@ export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { 
           </div>
         )}
         {tab === 'variables' && <VariablesTable vars={r.variables ?? {}} empty="No variables after this step." />}
-        {tab === 'trace' && (trace ? <TraceView trace={trace} /> : trace === null ? <Empty title="No trace stored for this result" /> : <Empty title="Loading…" />)}
+        {tab === 'trace' && (trace ? <TraceView trace={trace} /> : trace === null ? <Empty title="No trace stored for this result" /> : <Busy>Loading the trace…</Busy>)}
         {tab === 'history' && runId && <TestHistory id={r.id} name={r.name} runId={runId} />}
         {tab === 'meta' && <CodeBlock className="p-3 mono text-xs whitespace-pre-wrap" language={'json'} text={JSON.stringify(r.metadata ?? {}, null, 2)} />}
       </div>

@@ -1,4 +1,5 @@
 import { Database, FileSpreadsheet, History, ListChecks, Play, Wand2, X } from 'lucide-react';
+import { LABEL } from '../lib/vocabulary';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asError, call, on } from '../api';
 import { promptText, toastError, useApp, attempt } from '../store';
@@ -486,7 +487,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
               />
             ) : runs.length ? (
               // earlier runs of this collection: pass rate and duration, click one to open it
-              <RunsOverview runs={runs} onSelect={setRunId} hint="Click a bar or point, or pick a run above, to see its results. Run the collection again with the button on the left." />
+              <RunsOverview runs={runs} onSelect={setRunId} onRun={{ label: LABEL.runCollection, run: () => void start() }} hint="Click a bar or point, or pick a run above, to see its results. Run the collection again with the button on the left." />
             ) : (
               <Empty icon={<Play size={26} />} title="Run this collection">
                 Requests run one at a time, in order. Variables set by scripts carry over to later requests, and <span className="mono">tp.execution.setNextRequest()</span> changes the order. Results,

@@ -42,6 +42,10 @@ describe('kind colours are tokens', () => {
     expect(fresh).toEqual([]);
   });
 
+  it('one selected-row colour: the bg-accent-soft token (light and dark), never the accent at 10 % over whatever is behind', () => {
+    expect(sources.filter((s) => s.text.includes('bg-accent/10')).map((s) => s.file)).toEqual([]);
+  });
+
   it('the list of files not done yet only shrinks', () => {
     expect(Object.keys(NOT_YET).filter((f) => !offenders.has(f))).toEqual([]);
     for (const why of Object.values(NOT_YET)) expect(why).toMatch(/.{12,}/);

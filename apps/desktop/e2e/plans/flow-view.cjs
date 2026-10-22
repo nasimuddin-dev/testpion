@@ -102,7 +102,7 @@ const steps = [
   step(
     'result-selected-in-runs',
     `document.querySelector('main [role=tab][data-tab-id="run"]')?.click(); await __t.sleep(1500);
-     const picked = [...document.querySelectorAll('main button')].find((x) => x.classList.contains('bg-accent/10') && x.textContent.includes('A later test uses an extracted value'));
+     const picked = [...document.querySelectorAll('main button')].find((x) => x.classList.contains('bg-accent-soft') && x.textContent.includes('A later test uses an extracted value'));
      return 'result shown: ' + !!picked;`,
   ),
 ];

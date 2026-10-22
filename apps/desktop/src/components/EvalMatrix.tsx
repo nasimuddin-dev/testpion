@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Grid3x3, Search, Target, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Grid3x3, Play, Search, Target, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import type { EvalColumnStats, EvalMatrixColumn, EvalMatrixPage, EvalMatrixQuery, EvalMatrixRow, EvalMatrixRowCell } from '@testpion/core';
 import { call } from '../api';
@@ -46,7 +46,7 @@ function cellTone(c: EvalMatrixRowCell): string {
     case 'missing':
       return 'bg-warn/10 text-warn';
     case 'new':
-      return 'bg-accent/10 text-accent';
+      return 'bg-accent-soft text-accent';
   }
   if (c.status === 'passed') return 'bg-ok/[0.07] text-fg';
   if (c.status === 'failed' || c.status === 'error') return 'bg-bad/10 text-bad';
@@ -183,7 +183,7 @@ function CellDetail({ sel, onClose }: { sel: { runId: string; resultId: string; 
  * cell opens the case (input, output, expected, the judge's reasoning). The backend holds the matrix and answers
  * pages, so 5,000 cases × 10 variants costs the renderer the rows on screen.
  */
-export function EvalMatrix({ runs: all }: { runs: RunRow[] }) {
+export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the evaluation (the empty matrix's first step). */ onRun(): void }) {
   // finished runs only: a run still going (the view lists it at once, without a duration) has no results to compare yet
   const runs = useMemo(() => all.filter((r) => r.durationMs !== undefined), [all]);
   const [picked, setPicked] = useSticky<string[] | undefined>('eval:matrix:runs', undefined, { persist: true });
@@ -268,8 +268,8 @@ export function EvalMatrix({ runs: all }: { runs: RunRow[] }) {
 
   if (!runs.length)
     return (
-      <Empty icon={<Grid3x3 size={26} />} title="No evaluation runs yet">
-        Run an evaluation (or several: one per prompt or model) and compare them here case by case.
+      <Empty icon={<Grid3x3 size={26} />} title="No evaluation runs yet" actions={[{ label: 'Run this evaluation', icon: <Play size={13} />, onClick: onRun }]}>
+        Each run (one per prompt or model) is compared here case by case.
       </Empty>
     );
 
@@ -401,7 +401,7 @@ export function EvalMatrix({ runs: all }: { runs: RunRow[] }) {
               <button
                 key={c.key}
                 type="button"
-                className={cx('px-2 py-1 text-right border-l border-line/60 hover:bg-hover min-w-0', sort.column === k && 'bg-accent/10')}
+                className={cx('px-2 py-1 text-right border-l border-line/60 hover:bg-hover min-w-0', sort.column === k && 'bg-accent-soft')}
                 title={`${c.label}${c.startedAt ? ` · ${new Date(c.startedAt).toLocaleString()}` : ''}\nClick to sort by this column`}
                 onClick={() => sortBy(k)}
                 data-matrix-column={c.key}

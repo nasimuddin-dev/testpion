@@ -2,7 +2,8 @@ import { useLibraryTabs } from '../lib/library-tabs';
 import { AiAction } from '../components/ai/AiAction';
 import { LibraryTabStrip, NoOpenItems } from '../components/LibraryTabStrip';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
-import { refMenu } from '../components/RefLink';
+import { openItemMenu } from '../lib/item-menu';
+import { deleteWithUndo } from '../lib/undo-delete';
 import { AlertTriangle, Bookmark, Gauge, KeyRound, Play, Save, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call, on } from '../api';
@@ -165,6 +166,29 @@ export function LoadView() {
   const saved = useLibrary<Draft>('load-tests');
   const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
+  /** The open load test's ⋯ (its breadcrumb): its menu as its row in the list has it (lib/node-menu.ts): rename, duplicate, Delete… with Undo (its tab closes). */
+  const currentMenu = (c: NonNullable<typeof current>) =>
+    openItemMenu('load-test', {
+      ref: { kind: 'saved', library: 'load-tests', itemId: c.id },
+      name: c.name,
+      on: {
+        rename: async () => {
+          const name = (await promptText('Rename load test', { message: 'Load test name', value: c.name, okLabel: 'Rename' }))?.trim();
+          if (name && name !== c.name) await saved.ops.renameItem(c.id, name);
+        },
+        duplicate: () => void saved.ops.duplicateItem?.(c.id),
+        delete: () =>
+          void deleteWithUndo({
+            kind: 'load-test',
+            name: c.name,
+            run: async () => {
+              const undo = await saved.ops.deleteItem(c.id);
+              tabs.close(tabs.tabs.filter((t) => t.savedId === c.id).map((t) => t.id), drafts.defaults);
+              return undo;
+            },
+          }),
+      },
+    });
   const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(d);
   const [startWhenReady, setStartWhenReady] = useState(false);
   const openSaved = async (savedItem: string, thenRun = false, preview = false) => {
@@ -381,7 +405,7 @@ export function LoadView() {
             crumbs={[{ label: 'Load tests' }, ...(current?.folder ? [{ label: current.folder }] : [])]}
             name={current ? current.name : 'Not saved yet'}
             dirty={dirty}
-            actions={current ? refMenu({ kind: 'saved', library: 'load-tests', itemId: current.id }) : undefined}
+            actions={current ? currentMenu(current) : undefined}
           />
         </div>
         <PageHeader
@@ -644,7 +668,7 @@ export function LoadView() {
         ) : (
           !error && (
             <div className="flex flex-col gap-4">
-              <Empty icon={<Gauge size={28} />} title="Configure and start a load test">
+              <Empty icon={<Gauge size={28} />} title="Configure and start a load test" actions={[{ label: 'Start load test', icon: <Play size={13} />, loading: preparing, onClick: () => void start() }]}>
                 Reports throughput, p50/p90/p95/p99 latency, error rate, status distribution and — for LLM targets — tokens/sec, time to first token and cost.
               </Empty>
               <div className="px-3">

@@ -563,7 +563,7 @@ export function GraphQLView() {
                   <Split id="gql-sub-events" direction="vertical" initial={45}>
                     <div className="h-full overflow-auto">
                       {events.map((e, i) => (
-                        <button key={i} onClick={() => setEventSel(i)} className={cx('w-full flex items-center gap-2 px-3 py-1 text-left text-sm border-b border-line/50 hover:bg-hover', eventSel === i && 'bg-accent/10')}>
+                        <button key={i} onClick={() => setEventSel(i)} className={cx('w-full flex items-center gap-2 px-3 py-1 text-left text-sm border-b border-line/50 hover:bg-hover', eventSel === i && 'bg-accent-soft')}>
                           <span className="text-xs text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>
                           <Badge tone={e.type === 'next' ? 'accent' : e.type === 'error' ? 'bad' : 'default'}>{e.type}</Badge>
                           <span className="mono text-xs truncate">{e.message ?? JSON.stringify(e.data)}</span>
@@ -649,10 +649,8 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
   if (error) return <div className="overflow-auto">{<ErrorPanel error={error} />}</div>;
   if (!schema)
     return (
-      <Empty icon={<BookOpen size={24} />} title="No schema loaded">
-        <Button className="mt-2" onClick={onIntrospect} loading={loading}>
-          Introspect schema
-        </Button>
+      <Empty icon={<BookOpen size={24} />} title="No schema loaded" actions={[{ label: 'Introspect schema', icon: <RefreshCw size={13} />, loading, onClick: onIntrospect }]}>
+        The server describes its types and fields; the explorer and the editor's completion use them.
       </Empty>
     );
   const current = stack.length ? schema.types.find((t) => t.name === stack[stack.length - 1]) : undefined;

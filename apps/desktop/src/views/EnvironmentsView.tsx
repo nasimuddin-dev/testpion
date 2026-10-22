@@ -7,7 +7,7 @@ import { useCollectionTree } from '../lib/collections-store';
 import { call } from '../api';
 import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import { useLibraryTabs } from '../lib/library-tabs';
-import { LibraryTabStrip } from '../components/LibraryTabStrip';
+import { LibraryTabStrip, NoOpenItems } from '../components/LibraryTabStrip';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
 import type { Environment, KeyValue } from '../types';
@@ -183,6 +183,8 @@ export function EnvironmentsView() {
   // a variable to add (from the variables overview: "{{name}} is not defined anywhere ▸ Add"): a row ready for its value
   const pendingAdd = useRef<{ envId: string; key: string } | undefined>(undefined);
   useIntent('environments', (p) => {
+    // the New environment button of an empty state elsewhere (Home): lib/empty-actions.ts
+    if (p?.create) (setScope('environment'), void newEnvironment());
     if (p?.environmentId && p.addVariable) {
       const key = String(p.addVariable);
       // already open: the row goes into the draft now (selecting it again changes nothing)
@@ -434,6 +436,11 @@ export function EnvironmentsView() {
                   </span>
                 </div>
               </div>
+            ) : tabs.empty && envs.length ? (
+              // every tab closed: the shared empty state of a tab view (Tests, Monitors, Load tests, Evaluations, Playground)
+              <NoOpenItems icon={KeyRound} title="No open environments" newLabel="New environment" onNew={() => void newEnvironment()}>
+                Open an environment from the list to edit its variables; the top bar switches the active one.
+              </NoOpenItems>
             ) : (
               <Empty
                 title={envs.length ? 'Select an environment' : 'No environments yet'}

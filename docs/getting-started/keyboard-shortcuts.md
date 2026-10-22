@@ -128,7 +128,7 @@ In the review of suggested checks, tests, a flow, a request, or the fixes for a 
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Move through the exchanges. |
 | <kbd>Enter</kbd> | **Open as request**: the selected exchange in a request tab. |
 | <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click | Select several exchanges (for **Save to collection…** or **Create flow from selection…**). |
-| <kbd>Delete</kbd> | Delete the selected exchanges. |
+| <kbd>Delete</kbd> | Delete the selected exchanges (it asks first: they cannot be put back). |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | The filter box. |
 | <kbd>Ctrl</kbd>+<kbd>E</kbd> | Clear the session (it asks first). |
 | <kbd>F5</kbd> / <kbd>F6</kbd> | The **Timeline** / **Structure** panel. |

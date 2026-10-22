@@ -186,7 +186,7 @@ export function VarInput({
               role="option"
               aria-selected={i === suggest.index}
               onMouseDown={(e) => (e.preventDefault(), pick(v))}
-              className={cx('w-full text-left px-3 py-1.5 flex items-center gap-2', i === suggest.index && 'bg-accent/10')}
+              className={cx('w-full text-left px-3 py-1.5 flex items-center gap-2', i === suggest.index && 'bg-accent-soft')}
             >
               <span className="mono">{v.name}</span>
               <span className="ml-auto text-xs text-muted truncate max-w-48">{v.secret ? '••••••' : v.value}</span>

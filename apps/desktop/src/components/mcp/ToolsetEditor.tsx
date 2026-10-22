@@ -221,7 +221,7 @@ export const ToolsetEditor = forwardRef<ToolsetEditorHandle, { file: string; ser
           <div className="h-full flex flex-col">
             <div className="flex-1 overflow-auto">
               {tools.map((t, i) => (
-                <div key={i} className={cx('group flex items-start border-b border-line/60', sel === i ? 'bg-accent/10' : 'hover:bg-hover')}>
+                <div key={i} className={cx('group flex items-start border-b border-line/60', sel === i ? 'bg-accent-soft' : 'hover:bg-hover')}>
                   <button onClick={() => setSel(i)} className="flex-1 min-w-0 text-left px-3 py-2" data-toolset-tool={t.name}>
                     <div className="flex items-center gap-1.5 text-sm font-medium mono truncate">
                       <Wrench size={12} className="text-muted shrink-0" />

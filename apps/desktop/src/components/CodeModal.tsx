@@ -73,7 +73,7 @@ export function CodeModal({ request, collectionId, requestId, onClose }: { reque
       <div className="flex gap-3 h-[55vh]">
         <div role="listbox" aria-label="Language" className="w-52 shrink-0 overflow-auto border border-line rounded-md py-1">
           {langs.map((l) => (
-            <button key={l.id} role="option" aria-selected={l.id === lang} onClick={() => setLang(l.id)} className={cx('w-full text-left px-3 py-1.5 text-sm', l.id === lang ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-hover')}>
+            <button key={l.id} role="option" aria-selected={l.id === lang} onClick={() => setLang(l.id)} className={cx('w-full text-left px-3 py-1.5 text-sm', l.id === lang ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-hover')}>
               {l.label}
             </button>
           ))}
