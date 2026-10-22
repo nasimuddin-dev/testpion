@@ -151,32 +151,17 @@ export function GitView() {
     refreshToFix();
     // a quiet fetch as the view opens: the team's new commits show at once (git.remoteChanged reloads)
     void call('git.autoFetch').catch(() => undefined);
-    // a git event (a commit, a pull, a branch switch) reads everything again; a save or an edit outside the app, while
-    // the view is shown, reads only the shared status at once (one single-flight `git.changes`, lib/git) — the branches,
-    // the log and the pull request follow when the head changes (below). Hidden, the shared read settles it later.
+    // a save, or an edit outside the app: read again at once and once the files settled (a merge writes several).
+    // While the view is hidden `load` only notes that it is out of date; it reads when the view shows again (below)
     let settle: ReturnType<typeof setTimeout> | undefined;
-    const statusNow = () => void (activeRef.current ? refreshGit() : undefined);
-    const offs = [
-      on('git.changed', () => void load()),
-      on('git.remoteChanged', () => void load()),
-      on('data.changed', statusNow),
-      on('workspace.changedOnDisk', () => (clearTimeout(settle), (settle = setTimeout(statusNow, 400)))),
-    ];
+    const later = () => (clearTimeout(settle), (settle = setTimeout(() => void load(), 2200)));
+    const offs = [on('git.changed', () => void load()), on('git.remoteChanged', () => void load()), on('data.changed', () => (void load(), later())), on('workspace.changedOnDisk', later)];
     return () => (clearTimeout(settle), offs.forEach((o) => o()));
   }, [load, refreshToFix]);
-  // shown again: everything is read (what happened meanwhile is not known here)
-  const shownBefore = useRef(active);
+  // shown again after an event it skipped while hidden: read once
   useEffect(() => {
-    if (active && (!shownBefore.current || stale.current)) void load();
-    shownBefore.current = active;
+    if (active && stale.current) void load();
   }, [active, load]);
-  // the branch, its upstream or its distance to the remote changed in the shared status: the branches and the log follow
-  const head = status ? `${status.branch ?? ''}|${status.upstream ?? ''}|${status.ahead}|${status.behind}|${status.repository}` : '';
-  const seenHead = useRef<string>(undefined);
-  useEffect(() => {
-    if (seenHead.current !== undefined && seenHead.current !== head) void load();
-    seenHead.current = head;
-  }, [head, load]);
   // what a sync that stopped on conflicts said, shown with the Conflicts list
   const [syncNote, setSyncNote] = useState<string>();
   useEffect(() => {
