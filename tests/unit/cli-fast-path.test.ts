@@ -82,9 +82,10 @@ describe.skipIf(!built || !existsSync(resolve('packages/cli/dist/bundle.js')))('
     }
   });
 
-  it('starts fast: collections --json in under 300 ms (best of three; bare node is about 50)', () => {
+  it('starts fast: collections --json within 6x of bare node (best of three each; 160 ms against 46 ms measured on an idle box, 281-365 ms before)', () => {
     const ms = best(['collections', '--json', '-w', examples], false, 3);
     console.log(`testpion collections --json: ${ms.toFixed(0)} ms`);
-    expect(ms).toBeLessThan(300 * Number(process.env.TESTPION_PERF_SLACK ?? 1));
+    const bare = Math.min(...Array.from({ length: 3 }, () => { const t0 = performance.now(); spawnSync(process.execPath, ['-e', '0']); return performance.now() - t0; }));
+    expect(ms, `bare node ${bare.toFixed(0)} ms`).toBeLessThan(Math.max(6 * bare, 150));
   });
 });

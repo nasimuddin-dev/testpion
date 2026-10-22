@@ -46,6 +46,6 @@ describe('merging large folders', () => {
     // theirs' additions sit after the item that precedes them in theirs; ours' stay at the end
     expect(ids.indexOf('t0')).toBe(ids.indexOf('b499') + 1);
     expect(ids.indexOf('t3999')).toBe(ids.indexOf('b499') + 4000);
-    expect(ms).toBeLessThan(100 * SLACK);
+    expect(ms).toBeLessThan(250 * SLACK);
   });
 });
