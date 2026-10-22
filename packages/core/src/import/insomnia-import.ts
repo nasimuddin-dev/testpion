@@ -158,7 +158,9 @@ function insomniaSavedItems(res: Any[]): SavedItems | undefined {
   };
   const protos = new Map(res.filter((r) => r._type === 'proto_file' && typeof r.protoText === 'string').map((r) => [r._id, { name: /\.proto$/.test(String(r.name ?? '')) ? String(r.name) : `${r.name || 'service'}.proto`, text: String(r.protoText) }]));
   const grpc = res.filter((r) => r._type === 'grpc_request').map((r) => grpcItem(r, folderOf(r.parentId), protos.get(r.protoFileId)));
-  const websocket = res.filter((r) => r._type === 'websocket_request').map((r) => wsItem(r, folderOf(r.parentId), res.find((p) => p._type === 'websocket_payload' && p.parentId === r._id)?.value));
+  const payloadOf = new Map<unknown, unknown>();
+  for (const p of res) if (p._type === 'websocket_payload' && !payloadOf.has(p.parentId)) payloadOf.set(p.parentId, p.value);
+  const websocket = res.filter((r) => r._type === 'websocket_request').map((r) => wsItem(r, folderOf(r.parentId), payloadOf.get(r._id) as never));
   return grpc.length || websocket.length ? { ...(grpc.length ? { grpc } : {}), ...(websocket.length ? { websocket } : {}) } : undefined;
 }
 

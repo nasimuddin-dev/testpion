@@ -236,9 +236,17 @@ export function parseThunder(text: string): ImportDocument {
   };
 
   const folderHeaders = (f: Any) => kv(f.settings?.headers ?? f.headers);
+  // grouped by container once (each folder used to filter every folder and every request)
+  const groupBy = (list: Any[]) => {
+    const m = new Map<string, Any[]>();
+    for (const x of list) (m.get(String(x.containerId ?? '')) ?? m.set(String(x.containerId ?? ''), []).get(String(x.containerId ?? ''))!).push(x);
+    return m;
+  };
+  const foldersIn = groupBy(folders);
+  const requestsIn = groupBy(requests);
   const build = (parent: string): CollectionNode[] => {
-    const subs = folders.filter((f) => String(f.containerId ?? '') === parent).map((f) => ({ sort: sortOf(f), node: f as Any }));
-    const reqs = requests.filter((r) => String(r.containerId ?? '') === parent).map((r) => ({ sort: sortOf(r), node: r as Any }));
+    const subs = (foldersIn.get(parent) ?? []).map((f) => ({ sort: sortOf(f), node: f as Any }));
+    const reqs = (requestsIn.get(parent) ?? []).map((r) => ({ sort: sortOf(r), node: r as Any }));
     // folders and requests share one order (sortNum)
     const items = [...subs.map((x) => ({ ...x, folder: true })), ...reqs.map((x) => ({ ...x, folder: false }))].sort((a, b) => a.sort - b.sort);
     return items.map((it): CollectionNode => {
@@ -255,7 +263,8 @@ export function parseThunder(text: string): ImportDocument {
   };
   // requests of a collection export with no folder id match: the ones at the root have containerId ''
   const items = build('');
-  const orphans = requests.filter((r) => String(r.containerId ?? '') !== '' && !folders.some((f) => String(f._id) === String(r.containerId)));
+  const folderIds = new Set(folders.map((f) => String(f._id)));
+  const orphans = requests.filter((r) => String(r.containerId ?? '') !== '' && !folderIds.has(String(r.containerId)));
   if (orphans.length) {
     findings.add({ code: 'NOT_IMPORTED', severity: 'changed', where: [], message: `${orphans.length} request${orphans.length > 1 ? 's name' : ' names'} a folder that is not in the file: ${orphans.length > 1 ? 'they were' : 'it was'} put at the top of the collection` });
     items.push(...orphans.map(request));

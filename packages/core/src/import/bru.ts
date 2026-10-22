@@ -185,11 +185,12 @@ export function bruFilesToBrunoExport(files: Array<{ path: string; text: string 
   // the collection's .env ({{process.env.X}}): its values become secret variables on import (never workspace files)
   const dotenv = norm.find((f) => f.path === '.env');
   const root: Any = { name: collectionName ?? 'Bruno collection', version: '1', items: [], environments: [], ...(collectionFile ? { root: rootOf(parseBru(collectionFile.text)) } : {}), ...(dotenv ? { dotenv: dotenv.text } : {}) };
+  const byPath = new Map(norm.map((f) => [f.path, f] as const));
   const folders = new Map<string, Any>([['', root]]);
   const folderOf = (dir: string): Any => {
     if (folders.has(dir)) return folders.get(dir);
     const parent = folderOf(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '');
-    const settings = norm.find((f) => f.path === `${dir}/folder.bru`);
+    const settings = byPath.get(`${dir}/folder.bru`);
     const blocks = settings ? parseBru(settings.text) : [];
     const meta = dict(blocks.find((b) => b.name === 'meta'));
     const folder = { type: 'folder', name: meta.name || dir.split('/').pop(), seq: Number(meta.seq) || Number.MAX_SAFE_INTEGER, items: [] as Any[], ...(settings ? { root: rootOf(blocks) } : {}) };

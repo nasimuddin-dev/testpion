@@ -72,8 +72,10 @@ export function postmanV1ToV21(d: Any): Any {
     });
   const folders: Any[] = Array.isArray(d.folders) ? d.folders : [];
   const folderOrder: unknown[] = Array.isArray(d.folders_order) ? d.folders_order : folders.map((f) => f.id);
+  const folderById = new Map<string, Any>();
+  for (const x of folders) if (!folderById.has(String(x.id))) folderById.set(String(x.id), x);
   const folderItems = folderOrder.flatMap((id) => {
-    const f = folders.find((x) => String(x.id) === String(id));
+    const f = folderById.get(String(id));
     return f ? [{ name: f.name, ...(f.description ? { description: f.description } : {}), item: byOrder(f.order) }] : [];
   });
   const rest = byOrder(d.order);
@@ -281,24 +283,36 @@ function postmanV3ToV21(files: V3File[], name: string, findings: Findings): Any 
     return typeof o === 'number' ? o : typeof o === 'string' ? o : fallback;
   };
   const sortKey = (a: { o: number | string; n: string }, b: { o: number | string; n: string }) => (typeof a.o === 'number' && typeof b.o === 'number' ? a.o - b.o : String(a.o).localeCompare(String(b.o))) || a.n.localeCompare(b.n);
+  // the tree of directories, found once (build() used to scan every file, and every request, for each directory)
+  const requestsIn = new Map<string, V3File[]>();
+  const childDirs = new Map<string, Set<string>>();
+  const requestDirs = new Set<string>();
+  for (const r of requests) (requestsIn.get(dirOf(r.path)) ?? requestsIn.set(dirOf(r.path), []).get(dirOf(r.path))!).push(r);
+  for (const file of files) {
+    const parts = file.path.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const parent = parts.slice(0, i - 1).join('/');
+      const dirName = parts[i - 1]!;
+      if (dirName.endsWith('.resources') || dirName === '.resources') continue;
+      (childDirs.get(parent) ?? childDirs.set(parent, new Set()).get(parent)!).add(parts.slice(0, i).join('/'));
+    }
+  }
+  for (const r of requests) {
+    const parts = r.path.split('/');
+    for (let i = 1; i < parts.length; i++) requestDirs.add(parts.slice(0, i).join('/'));
+  }
   const build = (dir: string): Any[] => {
     const here: Array<{ o: number | string; n: string; node: Any }> = [];
-    for (const f of requests.filter((x) => dirOf(x.path) === dir)) {
+    for (const f of requestsIn.get(dir) ?? []) {
       const y = yaml(f);
       const fname = base(f.path).replace(/\.request\.ya?ml$/i, '');
       const name = String(y.name ?? fname);
       here.push({ o: order(y, ''), n: name, node: v3Item({ ...y, name }, exampleFiles.get(f.path.replace(/\.request\.ya?ml$/i, '')) ?? [], findings, name) });
     }
-    const subdirs = new Set<string>();
-    for (const f of files) {
-      if (!f.path.startsWith(dir ? `${dir}/` : '')) continue;
-      const rest = dir ? f.path.slice(dir.length + 1) : f.path;
-      const first = rest.split('/')[0]!;
-      if (rest.includes('/') && !first.endsWith('.resources') && first !== '.resources') subdirs.add(dir ? `${dir}/${first}` : first);
-    }
+    const subdirs = childDirs.get(dir) ?? new Set<string>();
     for (const sub of subdirs) {
       // a folder of shared files (what a `$ref` points to) is no folder of the collection: it needs a definition or a request below it
-      if (!defs.has(sub) && !requests.some((r) => r.path.startsWith(`${sub}/`))) continue;
+      if (!defs.has(sub) && !requestDirs.has(sub)) continue;
       const def = defs.get(sub) ?? {};
       const auth = v3Auth(def.auth);
       here.push({
