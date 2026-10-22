@@ -52,12 +52,26 @@ export function rerunSetupRequests(collection: Collection, selection: string[]):
   const running = new Set(collectionRequests(collection, selection).map((r) => r.id));
   const setup = new Set<string>();
   const queue = all.map((r, i) => (running.has(r.id) ? i : -1)).filter((i) => i >= 0);
-  while (queue.length) {
-    const i = queue.shift()!;
+  // for each variable the requests that set it, in collection order: "the latest one before this request" is a binary search, not a walk back
+  const settersOf = new Map<string, number[]>();
+  sets.forEach((names, i) => names.forEach((n) => (settersOf.get(n) ?? settersOf.set(n, []).get(n)!).push(i)));
+  const latestBefore = (name: string, i: number): number => {
+    const at = settersOf.get(name);
+    if (!at) return -1;
+    let lo = 0;
+    let hi = at.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (at[mid]! < i) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo ? at[lo - 1]! : -1;
+  };
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head]!;
     for (const name of uses[i]!) {
       // the latest request before this one that sets it
-      let j = i - 1;
-      while (j >= 0 && !sets[j]!.has(name)) j--;
+      const j = latestBefore(name, i);
       if (j < 0 || running.has(all[j]!.id) || setup.has(all[j]!.id)) continue;
       setup.add(all[j]!.id);
       queue.push(j);
@@ -176,10 +190,13 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
   opts.signal?.addEventListener('abort', onAbort, { once: true });
   const waitFor = (id: string) => new Promise<TestResult | undefined>((resolve) => (stopped || opts.signal?.aborted ? resolve(undefined) : waiters.set(id, resolve)));
   // setNextRequest takes a request id or name
-  const find = (target: string) => {
-    const byId = refs.findIndex((r) => r.id === target);
-    return byId >= 0 ? byId : refs.findIndex((r) => r.name === target);
-  };
+  const indexById = new Map<string, number>();
+  const indexByName = new Map<string, number>();
+  refs.forEach((r, i) => {
+    if (!indexById.has(r.id)) indexById.set(r.id, i);
+    if (!indexByName.has(r.name)) indexByName.set(r.name, i);
+  });
+  const find = (target: string) => indexById.get(target) ?? indexByName.get(target) ?? -1;
 
   const tests = async function* (): AsyncGenerator<TestCase> {
     let first = true;
