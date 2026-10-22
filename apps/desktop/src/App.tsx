@@ -65,6 +65,8 @@ const TidyImportDialog = lazy(async () => ({ default: (await import('./component
 const AiAnalysisDialog = lazy(async () => ({ default: (await import('./components/ai/AiAnalysisDialog')).AiAnalysisDialog }));
 const DriftDialog = lazy(async () => ({ default: (await import('./components/ai/DriftDialog')).DriftDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
+import { SaveConflictDialog } from './components/SaveConflictDialog';
+import './lib/save-conflict'; // registers the answer to a refused save
 const FeedbackDialog = lazy(async () => ({ default: (await import('./components/FeedbackDialog')).FeedbackDialog }));
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
 const OpenApiDiffDialog = lazy(async () => ({ default: (await import('./components/OpenApiDiffDialog')).OpenApiDiffDialog }));
@@ -237,6 +239,7 @@ export default function App() {
   const variableUsages = useApp((s) => s.variableUsages);
   const recordOpen = useApp((s) => s.recordOpen);
   const feedback = useApp((s) => s.feedback);
+  const saveConflict = useApp((s) => s.saveConflict);
   const shortcutsOpen = useApp((s) => s.shortcutsOpen);
   const logsOpen = useApp((s) => s.logsOpen);
   const workspace = useApp((s) => s.workspace);
@@ -278,6 +281,7 @@ export default function App() {
       s.toast(`${p.message}: TestPion shows the new version.`);
     });
     // the disk, the history store or the file watcher has a problem (full disk, damaged database, a watch that stopped): said once, with what to do
+    const offInternal = on<{ message: string }>('app.internalError', (p) => useApp.getState().toast(`An internal error was logged (${p.message}). Help > Send feedback or report a problem includes it.`, 'error'));
     const offProblem = on<{ message: string; hint?: string }>('workspace.problem', (p) => useApp.getState().toast(`${p.message}${p.hint ? ` ${p.hint}` : ''}`, 'error'));
     // environments (and workspace.json) written by anyone through the app — this window, an agent over MCP, the
     // assistant, a generator: the environment picker and every dialog listing them read the workspace again (once per
@@ -309,6 +313,7 @@ export default function App() {
       offUpdate();
       offDisk();
       offProblem();
+      offInternal();
       offData();
       offTabs();
       offMenu();
@@ -626,6 +631,7 @@ export default function App() {
           close({ importBundle: undefined }),
         )}
       {guard('MCP requests', <McpClientRequests />)}
+      {saveConflict && guard('save conflict', <SaveConflictDialog request={saveConflict} />, close({ saveConflict: undefined }))}
       {feedback &&
         guard(
           'feedback dialog',

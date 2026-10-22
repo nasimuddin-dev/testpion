@@ -79,11 +79,13 @@ export function workspaceHandlers(be: Backend): Handlers {
   };
   return {
     'ws.list': () => be.manager.list(),
+    /** Why no workspace is open after the start, if the last one could not be opened. */
+    'ws.openProblem': () => be.startupProblem ?? null,
     'ws.current': () =>
       be.store && {
         ...be.store.workspace,
         path: be.store.root,
-        environments: be.store.listEnvironments(),
+        environments: be.store.listEnvironments({ etag: true }),
         migrations: be.store.migrationsApplied,
       },
     'ws.create': ({ name }: { name: string }) => {
@@ -278,14 +280,14 @@ export function workspaceHandlers(be: Backend): Handlers {
     'packages.get': ({ name }: { name: string }) => be.ws.readScriptPackage(name) ?? null,
     'packages.save': ({ name, code }: { name: string; code: string }) => be.ws.saveScriptPackage(name, code),
     'packages.delete': ({ name }: { name: string }) => be.ws.deleteScriptPackage(name),
-    'lib.get': ({ kind }: { kind: string }) => be.ws.getLibrary(kind),
-    'lib.save': ({ kind, library }: { kind: string; library: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; collectionId?: string; data: unknown }> } }) => {
+    'lib.get': ({ kind }: { kind: string }) => be.ws.getLibrary(kind, { etag: true }),
+    'lib.save': async ({ kind, library }: { kind: string; library: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; collectionId?: string; data: unknown }> } }) => {
       const current = be.ws.getLibrary(kind).items;
       const before = new Map(current.map((i) => [i.id, JSON.stringify(i.data)]));
       // a gRPC call or connection is saved in a collection (new ones, and ones moved: never out of one)
       const had = new Map(current.map((i) => [i.id, i.collectionId]));
       requireCollectionFor(be.ws, kind, library.items.filter((i) => !had.has(i.id) || (had.get(i.id) && !i.collectionId)));
-      const saved = be.ws.saveLibrary(kind, library);
+      const saved = await be.ws.saveLibraryAsync(kind, library);
       // workspace files are shared (git, exports): point out credentials typed in instead of {{variables}}
       // (only for new or changed items, so renaming or moving doesn't repeat the warning)
       const warnings = library.items
@@ -293,10 +295,10 @@ export function workspaceHandlers(be: Backend): Handlers {
         .flatMap((i) => findLiteralSecrets(i.data, be.logger.redactor).map((where) => `${i.name}: ${where}`));
       return { ...saved, warnings };
     },
-    'env.list': () => be.ws.listEnvironments(),
+    'env.list': () => be.ws.listEnvironments({ etag: true }),
     'env.save': async ({ env, secrets }: { env: Environment; secrets?: Record<string, string> }) => {
       for (const [k, v] of Object.entries(secrets ?? {})) if (v) await be.secrets.set(secretKeys.envVar(env.id, k), v);
-      return be.ws.saveEnvironment(env);
+      return be.ws.saveEnvironmentAsync(env);
     },
     /** Set one variable in an environment (from the {{variable}} popover): updates it, or adds it; secret ones stay in the secret store. */
     /** Variables defined in this environment (or, without one, in the workspace) that nothing in the workspace reads. */

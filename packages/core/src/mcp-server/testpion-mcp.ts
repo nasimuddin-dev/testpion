@@ -5,6 +5,7 @@ import type { AppSettings, Collection } from '../model/types.js';
 import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
 import { ApsError, normalizeError } from '../errors.js';
+import { errorEnvelope } from '../errors-envelope.js';
 import { Redactor } from '../util/redact.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
@@ -151,7 +152,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   });
   server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
     const tool = tools.find((t) => t.name === req.params.name);
-    if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }] };
+    if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }], structuredContent: { error: errorEnvelope(new ApsError('ValidationError', `Unknown tool ${req.params.name}`, { suggestions: ['List the tools and use one of their names.'] })) } };
     try {
       const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
       if (isContractResult(r)) return contractCallResult(r);
@@ -163,7 +164,11 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       return { ...(structured.isError === true ? { isError: true } : {}), content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], structuredContent: structured };
     } catch (e) {
       const err = normalizeError(e);
-      return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }] };
+      // the text for every client, and { error: { code, message, hint, retryable } } (the CLI envelope's mapping) for the ones that read structured content.
+      // A tool that declares an outputSchema cannot carry it there (clients validate structuredContent against the schema): it goes in _meta.error.
+      const envelope = errorEnvelope(err);
+      const declared = !!listed.find((t) => t.name === req.params.name)?.outputSchema;
+      return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }], ...(declared ? {} : { structuredContent: { error: envelope } }), _meta: { error: envelope } };
     }
   });
   // a deleting or overwriting call without confirm: true asks the user when the client can (MCP elicitation)

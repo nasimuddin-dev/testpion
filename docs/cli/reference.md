@@ -296,6 +296,7 @@ What a workspace holds, for scripts and AI agents (`--json`), the same as the `l
 ```bash
 testpion collections                     # each collection: requests, gRPC calls, connections
 testpion doctor -w my-workspace          # Node.js, SQLite, secrets, proxy, certificates, workspace files (exit 1 on errors)
+testpion runs prune --dry-run --json    # delete runs beyond the retention (newest 500, none older than 90 days; --keep, --days)
 testpion diagnostics --json              # for a bug report: versions, settings without secrets, the last 500 log records, workspace size (masked)
 testpion storage -w my-workspace --delete-runs-older-than 30   # disk use; clean up old runs
 testpion load-history -w my-workspace          # earlier load tests: req/s, p95 (and server p95), errors, pass rules

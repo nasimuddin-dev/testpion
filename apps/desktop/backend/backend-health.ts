@@ -1,4 +1,4 @@
-import { normalizeError, sweepWorkspace, type WorkspaceStore } from '@testpion/core';
+import { EncryptedFileSecretStore, normalizeError, sweepWorkspace, type WorkspaceStore } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 /**
@@ -86,6 +86,41 @@ export function recordBestEffort(be: Backend, what: string, fn: () => void): { o
   }
 }
 
+/** The last workspace could not be opened at the start: remembered (`ws.startupProblem`) and told to the window, which may not be listening yet. */
+export function reportStartupProblem(be: Backend, path: string | undefined, e: unknown): void {
+  const err = normalizeError(e);
+  const message = `Could not open ${path ?? 'the workspace'}: ${err.message}`;
+  be.startupProblem = { path, message };
+  noteProblem(be, message);
+  const say = () => {
+    if (!be.store) be.host.emit('workspace.problem', { kind: 'open', code: err.kind, message: `${message}.`, hint: 'Open another workspace, or fix the file named above.' });
+  };
+  for (const ms of [0, 4000]) {
+    const t = setTimeout(say, ms);
+    t.unref();
+    be.deferred.push(t);
+  }
+}
+
+/** The encrypted secret store, with its problems (a damaged file, values of another user) told to the window. */
+export function encryptedSecrets(be: Backend, file: string, cipher: ConstructorParameters<typeof EncryptedFileSecretStore>[1]): EncryptedFileSecretStore {
+  const enc = new EncryptedFileSecretStore(file, cipher);
+  enc.onProblem = (m) => reportSecretsProblem(be, m);
+  if (enc.problem) setImmediate(() => reportSecretsProblem(be, enc.problem!));
+  return enc;
+}
+
+/** Secrets read as empty (a damaged secrets.json, values encrypted for another user): logged, kept for the diagnostics, told to the window (again later: it may not be listening yet). */
+export function reportSecretsProblem(be: Backend, message: string): void {
+  be.logger.error(message);
+  noteProblem(be, message);
+  for (const ms of [0, 4000]) {
+    const t = setTimeout(() => be.host.emit('workspace.problem', { kind: 'secrets', code: 'secrets', message }), ms);
+    t.unref();
+    be.deferred.push(t);
+  }
+}
+
 /** Keeps the 100 slowest calls of the session (no I/O). */
 export function noteSlowCall(be: Backend, method: string, ms: number): void {
   if (ms < 50 || (be.slowRpcs.length >= 100 && ms <= be.slowRpcs[be.slowRpcs.length - 1]!.ms)) return;
@@ -99,8 +134,8 @@ export function scheduleSweep(be: Backend, store: WorkspaceStore, afterMs = 5000
   const t = setTimeout(() => {
     try {
       if (be.store !== store) return;
-      const r = sweepWorkspace(store, { keepRuns: be.runs.keys() });
-      if (r.tmp + r.payloads + r.runs + r.inline + r.trash) be.logger.info('Removed leftovers from earlier sessions', { ...r });
+      const r = sweepWorkspace(store, { keepRuns: be.runs.keys(), retention: be.settings.retention });
+      if (r.tmp + r.payloads + r.runs + r.inline + r.trash + r.pruned) be.logger.info('Removed leftovers from earlier sessions', { ...r });
     } catch (e) {
       be.logger.warn(`Clean-up of leftovers failed: ${(e as Error).message}`);
     }

@@ -1,4 +1,5 @@
 import { ApsError } from '../errors.js';
+import { copyFileSync } from 'node:fs';
 import { atomicWrite, readJson } from './fsutil.js';
 import type { SecretReader } from '../vars/variables.js';
 
@@ -90,9 +91,25 @@ export class EncryptedFileSecretStore implements SecretStore {
     this.kind = `encrypted (${cipher.backend ?? 'os'})`;
     try {
       this.raw = readJson<{ secrets?: Record<string, string> }>(path, {}).secrets ?? {};
-    } catch {
+    } catch (e) {
       this.raw = {};
+      // every secret would read as "not set" and retyping one would overwrite the file: keep a copy, and say so
+      try {
+        copyFileSync(path, `${path}.broken-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+      } catch {
+        /* the copy is best effort */
+      }
+      this.problem = `The secrets file could not be read (${(e as Error).message}). A copy was kept as secrets.json.broken-*; secrets must be entered again.`;
     }
+  }
+
+  /** Why secrets read as empty (a damaged file, values encrypted by another user or installation); the backend tells the window. */
+  problem?: string;
+  onProblem?: (message: string) => void;
+  private cannotRead(message: string): void {
+    if (this.problem) return;
+    this.problem = message;
+    this.onProblem?.(message);
   }
 
   get(name: string): string | undefined {
@@ -104,6 +121,7 @@ export class EncryptedFileSecretStore implements SecretStore {
       this.cache.set(name, v);
       return v;
     } catch {
+      this.cannotRead('Saved secrets cannot be read on this computer (they were encrypted by another user or installation). Enter them again in Settings or the environment.');
       return undefined;
     }
   }

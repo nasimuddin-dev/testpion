@@ -6,7 +6,8 @@
  */
 import { ApsError } from '../errors.js';
 import type { ReplacedSecret } from '../storage/bundle-secrets.js';
-import type { WorkspaceManager, WorkspaceStore } from '../storage/workspace.js';
+import type { WorkspaceStore } from '../storage/workspace.js';
+import type { WorkspaceManager } from '../storage/workspace-manager.js';
 import { applyImport, type ImportOutcome } from './apply.js';
 import { buildBundleAsync, type BuildOptions, type BuildResult } from './export.js';
 import type { BundleKindId, ParsedBundle } from './format.js';

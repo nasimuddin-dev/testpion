@@ -117,7 +117,7 @@ describe('C-2 a stale whole-collection save', () => {
     } catch (e) {
       err = e;
     }
-    expect(err).toMatchObject({ kind: 'ValidationError', details: { code: 'Conflict', theirs: v2.version, mine: v1.version } });
+    expect(err).toMatchObject({ kind: 'ConflictError', details: { code: 'Conflict', theirs: v2.version, mine: v1.version } });
     expect(ws.getCollection('a').name).toBe('theirs');
     expect(ws.saveCollection({ ...v2, name: 'merged' }, { expectedVersion: v2.version }).name).toBe('merged'); // a current copy saves
     ws.close();

@@ -200,7 +200,7 @@ export async function main(argv = process.argv): Promise<number> {
       const err = normalizeError(e);
       console.error(red(`${err.kind}: ${err.message}`));
       for (const s of err.suggestions) console.error(dim(`  → ${s}`));
-      code = e instanceof ApsError && (err.kind === 'ConfigurationError' || err.kind === 'ValidationError' || err.kind === 'SchemaError') ? EXIT.CONFIG_ERROR : EXIT.EXECUTION_ERROR;
+      code = e instanceof ApsError && (err.kind === 'ConfigurationError' || err.kind === 'ValidationError' || err.kind === 'SchemaError' || err.kind === 'ConflictError') ? EXIT.CONFIG_ERROR : EXIT.EXECUTION_ERROR;
       error = e;
     }
   }

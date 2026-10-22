@@ -7,6 +7,7 @@ export * from './model/history-kinds.js';
 export * from './model/ui-prefs.js';
 export * from './errors.js';
 export * from './util/ids.js';
+export * from './errors-envelope.js';
 export * from './storage/housekeeping.js';
 export * from './util/concurrency.js';
 // yaml loaded at first use (keeps it off the app's startup path): use these instead of importing 'yaml'
@@ -242,6 +243,7 @@ export * from './agents/agent-files.js';
 export * from './mcp-server/mcp-mock.js';
 
 export * from './storage/fsutil.js';
+export * from './storage/workspace-manager.js';
 export * from './storage/template-update.js';
 export * from './storage/node-ids.js';
 export * from './storage/git-ready.js';

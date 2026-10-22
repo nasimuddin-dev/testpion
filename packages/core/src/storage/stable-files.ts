@@ -163,18 +163,19 @@ function withList(v: Json, top: readonly string[], listKey: string, itemOrder: r
 /** A collection as its file holds it: no `version` / `updatedAt` (they are this computer's, see `.local/meta.json`). */
 export function collectionFileValue(c: Json): Json {
   if (!isRecord(c)) return c;
-  const { version: _v, updatedAt: _u, problem: _p, ...rest } = c;
+  const { version: _v, updatedAt: _u, problem: _p, etag: _e, ...rest } = c;
+  void _e;
   void _v;
   void _u;
   void _p;
   return stableValue(rest, COLLECTION_KEY_ORDER);
 }
 
-export const environmentFileValue = (e: Json): Json => (isRecord(e) ? stableValue(Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'problem')), ENVIRONMENT_KEY_ORDER) : e);
+export const environmentFileValue = (e: Json): Json => (isRecord(e) ? stableValue(Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'problem' && k !== 'etag')), ENVIRONMENT_KEY_ORDER) : e);
 export const workspaceFileValue = (w: Json): Json => stableValue(w, WORKSPACE_KEY_ORDER);
 /** A library file: folders sorted, items by their order, no `updatedAt` on an item. */
 export function libraryFileValue(lib: Json): Json {
-  const out = withList(lib, LIBRARY_KEY_ORDER, 'items', LIBRARY_ITEM_KEY_ORDER, ['updatedAt']);
+  const out = withList(isRecord(lib) ? Object.fromEntries(Object.entries(lib).filter(([k]) => k !== 'etag')) : lib, LIBRARY_KEY_ORDER, 'items', LIBRARY_ITEM_KEY_ORDER, ['updatedAt']);
   if (isRecord(out) && Array.isArray(out.folders)) out.folders = [...(out.folders as string[])].sort(byCode);
   return out;
 }

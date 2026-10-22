@@ -1,4 +1,5 @@
 import { jsonPretty, outputFileName } from '@testpion/shared';
+import { call } from '../../api';
 import type { OutputSpec } from './output-core';
 
 /** What Settings ▸ About knows of the app, for a bug report: versions, platform, storage backends, the workspace (the home folder replaced with ~). */
@@ -33,6 +34,13 @@ export function diagnosticsOutputSpec(d: Diagnostics): OutputSpec {
     what: 'diagnostics',
     name: outputFileName({ name: 'testpion-diagnostics', ext: '' }),
     formats: [
+      // the full bundle, built by the backend (the last 500 log records, settings without secrets, the workspace's size, the slowest calls; all masked)
+      {
+        key: 'zip',
+        format: 'zip',
+        label: 'Diagnostics bundle (ZIP, for a bug report)',
+        build: async () => Uint8Array.from(atob((await call<{ content: string }>('diagnostics.zip')).content), (c) => c.charCodeAt(0)),
+      },
       { key: 'text', format: 'text', label: 'Diagnostics (text)', default: true, build: () => `${diagnosticsText(d)}\n` },
       {
         key: 'json',

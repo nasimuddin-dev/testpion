@@ -5,6 +5,7 @@ import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
 import type { AppSettings, WorkspaceCurrent } from './types';
 import type { FeedbackRequest } from './components/FeedbackDialog';
+import type { SaveConflictRequest } from './lib/save-conflict';
 import { asError, call } from './api';
 import { loadDraft, saveDraft } from './lib/draft-store';
 import { setDraftScope } from './lib/ws-scope';
@@ -236,6 +237,8 @@ interface AppState {
   cookiesOpen?: boolean;
   /** Help ▸ Send feedback, with what to start from (a crash's error, a kind). */
   feedback?: FeedbackRequest;
+  /** A save that would overwrite what changed on disk: the choice is asked (components/SaveConflictDialog.tsx). */
+  saveConflict?: SaveConflictRequest;
   /** Bumped when environments change outside the Environments view (e.g. a variable renamed everywhere). */
   envsVersion?: number;
   toasts: Toast[];

@@ -5,7 +5,7 @@ import { AiSettingsPanel } from '../components/ai/AiSettingsPanel';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { asError, call } from '../api';
-import { finishSave, pickTextFile, type SaveResult } from '../lib/files';
+import { pickTextFile } from '../lib/files';
 import { toastError, useApp } from '../store';
 import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
@@ -190,18 +190,6 @@ export function SettingsView() {
                   Secrets are stored using <b>{info?.secretBackend}</b>. Workspace files only contain references, so workspaces are safe to commit to git.
                 </p>
               </div>
-              <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-2">
-                <div className="font-medium">Diagnostics</div>
-                <p className="text-muted">
-                  Save a file for a bug report: versions, your settings without secrets, the last 500 log records, the size of the workspace and the slowest calls. Home folders, tokens and passwords are masked. Nothing is sent: you
-                  attach the file yourself.
-                </p>
-                <div>
-                  <Button icon={<Save size={13} />} onClick={() => void call<SaveResult>('diagnostics.bundle').then((r) => finishSave(r, 'Diagnostics'), toastError)}>
-                    Save diagnostics
-                  </Button>
-                </div>
-              </div>
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
                 <div className="font-medium">Script sandbox</div>
                 <p className="text-muted">Pre-request and test scripts run in an isolated QuickJS (WebAssembly) interpreter with time and memory limits and no filesystem, network or process access.</p>
@@ -261,7 +249,19 @@ export function SettingsView() {
             </>
           )}
           {tab === 'keyboard' && <KeyboardSettings />}
-          {tab === 'storage' && <StoragePanel />}
+          {tab === 'storage' && (
+            <>
+              <div className="grid grid-cols-2 gap-3 max-w-xl">
+                <Field label="Keep the newest runs" hint="Older runs are deleted when a workspace opens. 500 unless changed; 0 keeps all.">
+                  <Input type="number" min={0} placeholder="500" aria-label="Runs to keep" value={s.retention?.keepRuns ?? ''} onChange={(e) => set({ retention: { ...s.retention, keepRuns: e.target.value.trim() === '' ? undefined : Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
+                </Field>
+                <Field label="Keep runs for (days)" hint="Runs older than this are deleted too. 90 unless changed; 0 keeps any age.">
+                  <Input type="number" min={0} placeholder="90" aria-label="Days to keep runs" value={s.retention?.keepDays ?? ''} onChange={(e) => set({ retention: { ...s.retention, keepDays: e.target.value.trim() === '' ? undefined : Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
+                </Field>
+              </div>
+              <StoragePanel />
+            </>
+          )}
           {tab === 'agents' && <AgentsPanel />}
           {tab === 'load' && (
             <>
@@ -297,7 +297,7 @@ export function SettingsView() {
               {!!ws?.migrations.length && <div>Migrations applied on open: {ws.migrations.join(', ')}</div>}
               <div className="text-muted">Available check types: {info?.checkTypes.join(', ')}</div>
               <div>
-                <span className="inline-flex align-middle" data-output="settings.diagnostics" title="Versions, platform and storage backends, for a bug report (your home folder is replaced with ~)">
+                <span className="inline-flex align-middle" data-output="settings.diagnostics" title="For a bug report: versions and storage backends as text or JSON, or the full bundle as a ZIP (settings without secrets, the last 500 log records, workspace size, slowest calls). Home folders and tokens are masked.">
                   <OutputActions spec={diagnosticsSpec} />
                 </span>
                 <Button size="sm" className="ml-2" onClick={() => useApp.getState().set({ feedback: {} })}>

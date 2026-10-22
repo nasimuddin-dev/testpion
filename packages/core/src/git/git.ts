@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 
@@ -70,6 +70,22 @@ export function runGitBytes(cwd: string, args: string[], opts: { input?: string;
   return execGit(cwd, args, opts, 'buffer');
 }
 
+/**
+ * After git was stopped for taking too long (a remote that hangs, a dropped VPN): execFile's SIGTERM ends `git` but, on Windows, its helper
+ * (git-remote-https, a credential manager) can live on holding the index; end the whole tree, and remove an index.lock that is older than the
+ * timeout (the process that took it is gone).
+ */
+function cleanAfterTimeout(cwd: string, pid: number | undefined, timeoutMs: number): void {
+  try {
+    if (process.platform === 'win32' && pid) execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => undefined);
+    const lock = join(cwd, '.git', 'index.lock');
+    const st = statSync(lock, { throwIfNoEntry: false });
+    if (st && Date.now() - st.mtimeMs > timeoutMs) rmSync(lock, { force: true });
+  } catch {
+    /* best effort */
+  }
+}
+
 function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts: { input?: string; timeoutMs?: number; env?: Record<string, string> }, encoding: E): Promise<E extends 'buffer' ? Buffer : string> {
   type Out = E extends 'buffer' ? Buffer : string;
   gitSpawns.count++;
@@ -85,6 +101,7 @@ function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts:
       { cwd, maxBuffer: MAX_BUFFER, encoding, timeout: opts.timeoutMs ?? 120_000, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0', ...opts.env } },
       (err, stdout, stderr) => {
         if (!err) return done(stdout as Out);
+        if ((err as { killed?: boolean }).killed) cleanAfterTimeout(cwd, child.pid, opts.timeoutMs ?? 120_000);
         const text = String(stderr);
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
         fail(

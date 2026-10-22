@@ -1,6 +1,7 @@
 import { closeSync, copyFileSync, cpSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { copyFile, mkdir, open as openFile, rename as renameFile, rm } from 'node:fs/promises';
 import { ApsError } from '../errors.js';
 import { sha1Hex } from '../util/hash.js';
 
@@ -423,6 +424,84 @@ function renameWithRetry(from: string, to: string): void {
 }
 
 /**
+ * `atomicWrite` for the app: the same write (temp file, sync, rename, the same fallbacks), but a busy file (an antivirus scan, an indexer)
+ * is waited for with timers, so the thread that serves the window is never blocked. The CLI, the tests and the store's other writers use
+ * the synchronous one.
+ */
+export async function atomicWriteAsync(path: string, data: string | Buffer): Promise<void> {
+  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
+  const fh = await openFile(tmp, 'w');
+  try {
+    await fh.write(bytes);
+    await fh.sync();
+  } catch (e) {
+    await fh.close().catch(() => undefined);
+    await rm(tmp, { force: true });
+    throw e;
+  }
+  await fh.close();
+  try {
+    await renameWithRetryAsync(tmp, path);
+  } catch (e) {
+    await rm(tmp, { force: true });
+    throw e;
+  } finally {
+    forgetText(path);
+  }
+  recordOwn(path, contentFingerprint(bytes));
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function renameWithRetryAsync(from: string, to: string): Promise<void> {
+  let copied = false;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await renameFile(from, to);
+      syncFolder(to);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (!code || !BUSY.has(code)) throw e;
+      if (!copied) {
+        copied = true;
+        const second = `${to}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
+        try {
+          await copyFile(from, second);
+          try {
+            await renameFile(second, to);
+            syncFolder(to);
+            await rm(from, { force: true });
+            return;
+          } catch {
+            await rm(second, { force: true });
+          }
+        } catch {
+          /* the copy itself failed: the pauses below */
+        }
+        continue;
+      }
+      // here the waits can be longer than the synchronous ones: nothing is blocked
+      const wait = [50, 100, 200, 400, 700][attempt - 1];
+      if (wait === undefined) {
+        await copyFile(from, to);
+        await rm(from, { force: true }).catch(() => undefined);
+        return;
+      }
+      await sleep(wait);
+    }
+  }
+}
+
+/** `writeJson` without blocking on a busy file (see atomicWriteAsync). */
+export async function writeJsonAsync(path: string, value: unknown): Promise<void> {
+  keepBrokenFile(path);
+  await atomicWriteAsync(path, JSON.stringify(value, null, 2) + '\n');
+}
+
+/**
  * Plain write for derived files (traces, caches) that can be produced again: no fsync, no temp file and rename,
  * and each folder is created once per process. Several times cheaper than `atomicWrite` on Windows.
  */
@@ -482,10 +561,42 @@ export function deepFreeze<T>(v: T): T {
   return v;
 }
 
+/** A workspace file bigger than this is read every time instead of kept (one big file would push every other out of the cache). */
+const TEXT_CACHE_MAX_FILE = 8 * 1024 * 1024;
+/** A workspace file bigger than this is not loaded at all: it is listed with why. */
+export const MAX_WORKSPACE_FILE = 256 * 1024 * 1024;
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+const bigNoted = new Set<string>(); // bounded: cleared above 100 files
+/** Told once per big file (the backend logs it): the app keeps working, it is only slower. */
+export let onBigFile: ((path: string, bytes: number) => void) | undefined;
+export function setBigFileNotifier(fn: ((path: string, bytes: number) => void) | undefined): void {
+  onBigFile = fn;
+}
+
+/** A workspace file's text: UTF-8 or refused (a Latin-1 file would be read as U+FFFD and written back as such: the original bytes lost). */
+function readWorkspaceText(path: string, size: number): string {
+  if (size > MAX_WORKSPACE_FILE)
+    throw new ApsError('ValidationError', `${basename(path)} is ${Math.round(size / 1048576)} MB: too large to load (the limit is ${MAX_WORKSPACE_FILE / 1048576} MB)`, { suggestions: ['Split it into smaller files, or keep the data outside the workspace folders TestPion reads.'] });
+  const bytes = readFileSync(path);
+  try {
+    return strictUtf8.decode(bytes);
+  } catch {
+    throw new ApsError('ValidationError', `${basename(path)} is not valid UTF-8 text`, { suggestions: ['Open it in an editor and save it as UTF-8. TestPion leaves the file as it is until then.'] });
+  }
+}
+
 function cachedText(path: string, mtimeMs: number, size: number): string {
   const hit = textCache.get(path);
   if (hit && hit.mtimeMs === mtimeMs && hit.size === size) return hit.text;
-  const text = readFileSync(path, 'utf8');
+  const text = readWorkspaceText(path, size);
+  if (size > TEXT_CACHE_MAX_FILE) {
+    if (!bigNoted.has(path)) {
+      if (bigNoted.size > 100) bigNoted.clear();
+      bigNoted.add(path);
+      onBigFile?.(path, size);
+    }
+    return text;
+  }
   forgetText(path);
   textCache.set(path, { mtimeMs, size, text });
   textCacheBytes += text.length;

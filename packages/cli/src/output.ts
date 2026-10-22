@@ -9,7 +9,7 @@
  * as it happens, and the last line is the envelope with `type: 'result'`. The envelope is written when the command
  * ends, so its status follows the exit code: 0 ok, 1 failed (a test or check failed), 2 / 3 error.
  */
-import { ApsError, normalizeError } from '@testpion/core';
+import { ApsError, normalizeError, RETRYABLE_KINDS } from '@testpion/core';
 
 export const SCHEMA_VERSION = 1;
 
@@ -126,7 +126,7 @@ export function noteError(e: unknown): void {
   cli.error ??= e;
 }
 
-const RETRYABLE = new Set(['NetworkError', 'TimeoutError', 'RateLimitError', 'ServerError']);
+const RETRYABLE = RETRYABLE_KINDS;
 
 /** An error as the envelope lists it: a stable code, the message, what to do, and whether trying again may help. */
 function envelopeError(e: unknown, exitCode?: number): EnvelopeError {

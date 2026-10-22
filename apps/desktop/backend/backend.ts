@@ -10,7 +10,6 @@ import {
   ApsError,
   ENGINE_VERSION,
   ChainSecretStore,
-  EncryptedFileSecretStore,
   EnvSecretStore,
   Logger,
   McpSession,
@@ -31,6 +30,7 @@ import {
   createEngineContext,
   expandDataset,
   fileSink,
+  setBigFileNotifier,
   loadSuite,
   normalizeError,
   type Recorder,
@@ -88,7 +88,7 @@ import {
   samePath,
   type OutputDeps,
 } from '@testpion/core';
-import { closeStoreAfterRuns, noteProblem, noteSlowCall, recordBestEffort, reportMetaProblem, scheduleSweep, settleWithin } from './backend-health.js';
+import { encryptedSecrets, reportStartupProblem, closeStoreAfterRuns, noteProblem, noteSlowCall, recordBestEffort, reportMetaProblem, scheduleSweep, settleWithin } from './backend-health.js';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
 import { collectionsHandlers } from './handlers/collections.js';
@@ -253,12 +253,12 @@ export class Backend {
     this.manager = new WorkspaceManager(host.appDir);
     this.settings = this.manager.loadSettings();
     const stores: SecretStore[] = [];
-    if (host.cipher) stores.push(new EncryptedFileSecretStore(join(host.appDir, 'secrets.json'), host.cipher));
-    else stores.push(new MemorySecretStore());
+    stores.push(host.cipher ? encryptedSecrets(this, join(host.appDir, 'secrets.json'), host.cipher) : new MemorySecretStore());
     stores.push(new EnvSecretStore());
     this.secrets = new ChainSecretStore(stores);
     this.logger = new Logger(this.settings.logLevel, new Redactor(this.settings.redactFields));
     this.logger.addSink(fileSink(join(host.appDir, 'logs', 'app.log')));
+    setBigFileNotifier((p, b) => this.logger.warn(`${p} is ${Math.round(b / 1048576)} MB: it is read from disk each time (consider splitting it)`));
     this.logger.addSink((rec) => {
       this.logBuffer.push(rec);
       if (this.logBuffer.length > 500) this.logBuffer.shift();
@@ -364,8 +364,11 @@ export class Backend {
       this.openStore(examples?.path ?? this.manager.resolve('My Workspace')!);
     } catch (e) {
       this.logger.error('Failed to open workspace', normalizeError(e));
+      reportStartupProblem(this, this.settings.lastWorkspace, e);
     }
   }
+  /** Why no workspace is open after the start (the last one is broken or newer than this app): shown to the window, never silent. */
+  startupProblem?: { path?: string; message: string };
 
   /** Watches the open workspace's folder (GIT-103): call it to stop. */
   private stopWatching?: WorkspaceWatch;
@@ -449,6 +452,8 @@ export class Backend {
     if (this.settings.lastWorkspace !== this.store.root) this.settings = this.manager.saveSettings({ ...this.settings, lastWorkspace: this.store.root });
     this.logger.info(`Opened workspace ${this.store.workspace.name}`, { migrations: this.store.migrationsApplied });
     reportMetaProblem(this, this.store);
+    this.store.onWarn = (m) => this.logger.warn(m);
+    for (const m of this.store.warnings) this.logger.warn(m);
     scheduleSweep(this, this.store);
   }
 

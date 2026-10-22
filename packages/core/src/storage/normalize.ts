@@ -67,14 +67,20 @@ export function assertNotNewerOnDisk(file: string, what: string): void {
 
 const str = (v: unknown, fallback: string): string => (typeof v === 'string' ? v : v === undefined || v === null ? fallback : String(v));
 
+/** Folders inside folders: the deepest a collection file may nest. */
+export const MAX_FOLDER_DEPTH = 64;
+
 /** A collection as the rest of the engine expects it, from a file that is valid JSON but incomplete (no items, a numeric name …). */
 export function normalizeCollection(c: Collection): Collection {
   const raw = (c && typeof c === 'object' && !Array.isArray(c) ? c : {}) as Collection;
   assertSchemaSupported(raw.schemaVersion, `The collection "${str(raw.name, str(raw.id, ''))}"`);
-  const items = (nodes: unknown): CollectionNode[] =>
-    (Array.isArray(nodes) ? nodes : [])
+  const items = (nodes: unknown, depth = 0): CollectionNode[] => {
+    // a file nested thousands of levels (an import gone wrong, a script, a corruption) would overflow the stack: refused with the depth, not an InternalError
+    if (depth > MAX_FOLDER_DEPTH) throw new ApsError('ValidationError', `The collection "${str(raw.name, str(raw.id, ''))}" has folders nested deeper than ${MAX_FOLDER_DEPTH} levels`, { suggestions: ['Flatten the folders in the file, or restore it from git.'] });
+    return (Array.isArray(nodes) ? nodes : [])
       .filter((n): n is CollectionNode => !!n && typeof n === 'object')
-      .map((n) => (n.kind === 'folder' ? { ...n, name: str(n.name, 'Folder'), items: items(n.items) } : { ...n, name: str(n.name, 'Request') }));
+      .map((n) => (n.kind === 'folder' ? { ...n, name: str(n.name, 'Folder'), items: items(n.items, depth + 1) } : { ...n, name: str(n.name, 'Request') }));
+  };
   return { ...raw, id: str(raw.id, ''), name: str(raw.name, str(raw.id, 'Collection')), variables: Array.isArray(raw.variables) ? raw.variables : [], items: items(raw.items) };
 }
 

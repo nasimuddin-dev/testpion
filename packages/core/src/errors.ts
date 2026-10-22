@@ -46,6 +46,7 @@ const defaultWhy: Record<ErrorKind, string> = {
   ConfigurationError: 'The configuration is incomplete or invalid.',
   CancelledError: 'The operation was cancelled.',
   ScriptError: 'A user script threw an exception.',
+  ConflictError: 'It was changed by someone else since you opened it.',
   InternalError: 'Something went wrong inside TestPion.',
 };
 
@@ -74,6 +75,7 @@ const defaultSuggestions: Record<ErrorKind, string[]> = {
   ConfigurationError: ['Review the configuration referenced in the message.'],
   CancelledError: [],
   ScriptError: ['Check the script for exceptions; scripts run in a sandbox without filesystem or process access.'],
+  ConflictError: ['Read it again and apply your change to the new version, or choose which version to keep.'],
   InternalError: ['Report the problem (Help ▸ Report a problem) with the steps that led to it.'],
 };
 

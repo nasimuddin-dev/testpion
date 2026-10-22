@@ -53,6 +53,8 @@ export function feedbackHandlers(be: Backend): Handlers {
     },
     /** The diagnostics as data (an agent, the window). */
     'diagnostics.get': () => gather(),
+    /** The diagnostics zip as base64 (the shared download control builds the file from it). */
+    'diagnostics.zip': async () => ({ content: diagnosticsZip(await gather()).toString('base64') }),
     /** Save the diagnostics as a zip: attach it to a bug report; nothing is sent. */
     'diagnostics.bundle': async () => {
       const d = await gather();

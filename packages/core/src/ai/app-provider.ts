@@ -38,7 +38,7 @@ export async function checkAnthropicKey(key: string, opts: { signal?: AbortSigna
   try {
     res = await fetch(`${(opts.baseUrl ?? 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/models?limit=1`, {
       headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01' },
-      signal: opts.signal ?? AbortSignal.timeout(15_000),
+      signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
     });
   } catch (e) {
     throw new ApsError('NetworkError', `Couldn't reach the Anthropic API: ${(e as Error).message}`, {

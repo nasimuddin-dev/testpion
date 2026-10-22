@@ -4,8 +4,8 @@ import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate } from '@testpion/core';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
@@ -278,6 +278,31 @@ export function registerDataCommands(program: Command): void {
         console.log(dim(`${u.runs} runs, ${u.history} history entries, ${u.traces} traces`));
       });
     });
+  const runsGroup = program.command('runs').description('the run history kept on disk');
+  runsGroup
+    .command('prune')
+    .description('delete old runs by the retention (the newest N, none older than D days; defaults 500 and 90, Settings > Storage); baselines stay. --dry-run lists what would go')
+    .option(...WORKSPACE_OPTION)
+    .option('--keep <n>', 'keep the newest n runs (0 = no limit on the count)')
+    .option('--days <d>', 'delete runs older than d days (0 = no limit on the age)')
+    .option('--dry-run', 'change nothing: say what would be deleted')
+    .option(...JSON_OPTION)
+    .action((o: { workspace?: string; keep?: string; days?: string; dryRun?: boolean; json?: boolean }) =>
+      withWorkspace(groupOptions(runsGroup, o), (store) => {
+        const num = (v: string | undefined, flag: string) => {
+          if (v === undefined) return undefined;
+          const n = Number(v);
+          if (!(n >= 0)) throw new CliError(`${flag} needs a number (0 or more)`, EXIT.CONFIG_ERROR);
+          return n;
+        };
+        const settings = new WorkspaceManager().loadSettings();
+        const plan = retentionOf({ ...settings.retention, ...(num(o.keep, '--keep') !== undefined ? { keepRuns: num(o.keep, '--keep') } : {}), ...(num(o.days, '--days') !== undefined ? { keepDays: num(o.days, '--days') } : {}) });
+        const r = pruneRuns(store, plan, { dryRun: o.dryRun });
+        if (o.json) return printJson({ ...plan, dryRun: !!o.dryRun, ...r });
+        console.log(o.dryRun ? `Would delete ${r.deleted} run${r.deleted === 1 ? '' : 's'} (${(r.bytes / 1048576).toFixed(1)} MB)` : green(`Deleted ${r.deleted} run${r.deleted === 1 ? '' : 's'} (${(r.bytes / 1048576).toFixed(1)} MB)`));
+        console.log(dim(`Keeping the newest ${plan.keepRuns || 'all'} runs, none older than ${plan.keepDays || 'any'} days`));
+      }),
+    );
   program
     .command('jwt')
     .description('decode a JSON Web Token (header, claims, expiry); the signature is not verified. Reads stdin when the token is -')

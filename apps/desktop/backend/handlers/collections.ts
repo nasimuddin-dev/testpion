@@ -47,7 +47,7 @@ export function collectionsHandlers(be: Backend): Handlers {
     return rows;
   };
   return {
-    'col.list': () => be.ws.listCollections(),
+    'col.list': () => be.ws.listCollections({ etag: true }),
     /** Every collection as a tree (ids, names, methods, folders; no bodies, headers or scripts): what the explorer lists. */
     'col.tree': ({ ids }: { ids?: string[] } = {}) =>
       ids
@@ -60,20 +60,20 @@ export function collectionsHandlers(be: Backend): Handlers {
           })
         : be.ws.listCollections().map(collectionTreeOf),
     /** One collection (a view that needs one does not read them all). */
-    'col.get': ({ id }: { id: string }) => be.ws.getCollection(id),
+    'col.get': ({ id }: { id: string }) => be.ws.getCollection(id, { etag: true }),
     /** Several whole collections in one call (the window's list of them), undefined for one that is gone. */
     'col.getMany': ({ ids }: { ids: string[] }) =>
       ids.map((id) => {
         try {
-          return be.ws.getCollection(id);
+          return be.ws.getCollection(id, { etag: true });
         } catch {
           return undefined;
         }
       }),
-    'col.save': ({ expectedVersion, ...c }: Collection & { expectedVersion?: number }) => {
+    'col.save': async ({ expectedVersion, ...c }: Collection & { expectedVersion?: number }) => {
       // a tree (col.tree) saved as a collection would drop every body and script: never
       if ((c as { slim?: boolean }).slim) throw new ApsError('ValidationError', 'That is the outline of the collection, not the collection: read it (col.get) before saving it');
-      const r = be.ws.saveCollection(c, { expectedVersion });
+      const r = await be.ws.saveCollectionAsync(c, { expectedVersion });
       be.refreshMock(c.id);
       return r;
     },

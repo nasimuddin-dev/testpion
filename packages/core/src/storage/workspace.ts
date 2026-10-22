@@ -1,24 +1,21 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { tmpdir } from 'node:os';
-import type { AppSettings, Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
-import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
-import { normalizeUiPrefs } from '../model/ui-prefs.js';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import type { Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
+import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, deepFreeze, isInside, readJson, readJsonShared, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
+import { onOwnWrite, writeJsonAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
 import { assertNotNewerOnDisk, looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
 import { openMetaStore, type MetaStore } from './metastore.js';
 import type { Baseline } from '../report/regression.js';
 import { moveToTrash } from './trash.js';
-import { markTemplateInstalled } from './template-update.js';
 import { writeGitFiles } from './git-files.js';
 import { collectionFileValue, environmentFileValue, libraryFileValue, mcpServersFileValue, normalizeText, providersFileValue, workspaceFileValue } from './stable-files.js';
 import { adoptLooseRequests, describeAdoption, type AdoptedRequests } from './loose-requests.js';
-import { exportWorkspaceBundle, importWorkspaceBundle, type WorkspaceBundle } from './workspace-bundle.js';
+import { exportWorkspaceBundle, type WorkspaceBundle } from './workspace-bundle.js';
 
 export { WORKSPACE_FORMATS } from './workspace-formats.js';
 export type { WorkspaceBundle } from './workspace-bundle.js';
@@ -35,6 +32,10 @@ export interface TestFileNode {
   kind: 'file' | 'dir';
   children?: TestFileNode[];
 }
+
+/** The longest path a save can write on Windows (the 260-character limit less the temp-file suffix). */
+const MAX_WINDOWS_PATH = 236;
+const WINDOWS_PATHS = process.platform === 'win32';
 
 /** At most this many read-only views are kept per workspace (one per collection, the least recently used go first). */
 const VIEWS_MAX = 64;
@@ -65,6 +66,70 @@ export class WorkspaceStore {
     this.fileUpdatedAt = ws.updatedAt;
     for (const d of ['collections', 'environments', 'tests', 'datasets', 'traces', 'payloads', 'reports', 'runs', 'baselines']) mkdirSync(join(root, d), { recursive: true });
     this.meta = openMetaStore(root);
+    this.offOwnWrites = onOwnWrite((abs) => this.ownWrote(abs));
+  }
+
+  /*
+   * Versions of files handed out (etags), so a save over a file that someone else changed since it was read is refused with a ConflictError.
+   * A version is the file's size and time. Per file a chain of the versions this app produced after the one it handed out: a stale copy
+   * that was only overtaken by this app's own writes (another call of the same window) may still save, one overtaken by anyone else may not.
+   */
+  private etags = new Map<string, string[]>(); // bounded: 8 versions per file, 500 files
+  private offOwnWrites: () => void;
+  private static stamp(file: string): string | undefined {
+    try {
+      const st = statSync(file);
+      return `${st.size}:${Math.round(st.mtimeMs)}`;
+    } catch {
+      return undefined;
+    }
+  }
+  private handOut(file: string): string | undefined {
+    const s = WorkspaceStore.stamp(file);
+    if (!s) return undefined;
+    const k = resolve(file);
+    const chain = this.etags.get(k);
+    if (!chain || chain[chain.length - 1] !== s) {
+      this.etags.delete(k);
+      this.etags.set(k, [s]);
+      if (this.etags.size > 500) this.etags.delete(this.etags.keys().next().value as string);
+    }
+    return s;
+  }
+  private ownWrote(abs: string): void {
+    const k = resolve(abs);
+    const chain = this.etags.get(k);
+    if (!chain) return;
+    const s = WorkspaceStore.stamp(k);
+    if (s && chain[chain.length - 1] !== s) {
+      chain.push(s);
+      if (chain.length > 8) chain.shift();
+    }
+  }
+  /** Throws a ConflictError when `expected` (the etag the caller read) is not the file's version and not one only this app has overtaken. */
+  private checkEtag(file: string, expected: string | undefined, what: string): void {
+    if (!expected) return;
+    const cur = WorkspaceStore.stamp(file);
+    if (!cur || cur === expected) return;
+    const chain = this.etags.get(resolve(file));
+    if (chain && chain[chain.length - 1] === cur && chain.includes(expected)) return;
+    throw new ApsError('ConflictError', `${what} was changed outside this window since you opened it`, {
+      suggestions: ['Keep your version, take the one on disk, or keep both.'],
+      details: { code: 'Conflict', file: relative(this.root, file).split(sep).join('/'), what },
+    });
+  }
+
+  /**
+   * Things that went wrong without stopping anything (an unreadable file that is skipped): kept (the last 20) and passed to `onWarn` once
+   * someone listens (the backend logs them), so a skipped file is never silent.
+   */
+  readonly warnings: string[] = [];
+  onWarn?: (message: string) => void;
+  warn(message: string): void {
+    if (this.warnings.includes(message)) return;
+    this.warnings.push(message);
+    if (this.warnings.length > 20) this.warnings.shift();
+    this.onWarn?.(message);
   }
 
   static create(root: string, name: string): WorkspaceStore {
@@ -106,8 +171,9 @@ export class WorkspaceStore {
         store.adoptedRequests = adopted;
         store.migrationsApplied.push(describeAdoption(adopted));
       }
-    } catch {
-      /* an unreadable library file: the workspace still opens; the next open tries again */
+    } catch (e) {
+      // an unreadable library file: the workspace still opens; the next open tries again
+      store.warn(`Saved requests outside a collection could not be moved into one: ${(e as Error).message}`);
     }
     return store;
   }
@@ -152,7 +218,10 @@ export class WorkspaceStore {
     const root = resolve(base);
     const inside = relativeInside(root, resolve(root, rel), { orSame: true });
     if (inside === undefined) throw new ApsError('ValidationError', `Path escapes the workspace: ${rel}`);
-    return join(root, inside);
+    const full = join(root, inside);
+    // Windows stops at 260 characters, and a write adds a temp-file suffix (about 24): refuse early, saying why, instead of an ENAMETOOLONG from the middle of a save
+    if (WINDOWS_PATHS && full.length > MAX_WINDOWS_PATH) throw new ApsError('ValidationError', `The path is too long for Windows (${full.length} characters, the limit is ${MAX_WINDOWS_PATH} here): ${rel}`, { suggestions: ['Use shorter folder or file names, or move the workspace closer to the drive root.'] });
+    return full;
   }
 
   /** Whether an absolute path is inside one of the workspace's folders (e.g. `payloads`), named as given or really (`relativeInside`). */
@@ -161,7 +230,7 @@ export class WorkspaceStore {
   }
 
   /* collections */
-  listCollections(): Array<Collection & { problem?: string }> {
+  listCollections(o: { etag?: boolean } = {}): Array<Collection & { problem?: string }> {
     const dir = this.path('collections');
     const out: Array<Collection & { problem?: string }> = [];
     const seen = new Set<string>();
@@ -174,7 +243,8 @@ export class WorkspaceStore {
         const base = f.slice(0, -'.json'.length);
         if (!c.id || seen.has(c.id)) c.id = base;
         seen.add(c.id);
-        out.push(this.withLocalMeta(c, meta));
+        const etag = o.etag ? this.handOut(join(dir, f)) : undefined;
+        out.push(etag ? { ...this.withLocalMeta(c, meta), etag } : this.withLocalMeta(c, meta));
       } catch (e) {
         // listed every time, with why, and left where it is: the user fixes it (or saves over it, which keeps a copy)
         const named = scanString(readTextCached(join(dir, f)), 'name');
@@ -211,11 +281,15 @@ export class WorkspaceStore {
     return relative(this.root, this.collectionFile(id)).split(sep).join('/');
   }
 
-  getCollection(id: string): Collection {
+  /** The collection as the file holds it; with `etag` it carries the version read, so a later save of it can be refused when someone else changed the file (the app's window uses this). */
+  getCollection(id: string, o: { etag?: boolean } = {}): Collection {
     if (typeof id !== 'string' || !id) throw new ApsError('ValidationError', 'A collection id is required');
-    const c = normalizeCollection(readJson<Collection>(this.collectionFile(id)));
+    const file = this.collectionFile(id);
+    const c = normalizeCollection(readJson<Collection>(file));
+    const etag = o.etag ? this.handOut(file) : undefined;
     // a de-duplicated id (see listCollections) is the file name: the copy says so too
-    return this.withLocalMeta(c.id === id ? c : { ...c, id });
+    const out = this.withLocalMeta(c.id === id ? c : { ...c, id });
+    return etag ? { ...out, etag } : out;
   }
 
   /*
@@ -284,7 +358,9 @@ export class WorkspaceStore {
     try {
       const m = readJson<LocalMeta>(this.localMetaFile());
       return { collections: m.collections ?? {} };
-    } catch {
+    } catch (e) {
+      // a damaged .local/meta.json: counters start from 0 until the next save repairs it (the damaged copy is kept by writeJson)
+      if (existsSync(this.localMetaFile())) this.warn(`.local/meta.json could not be read (${(e as Error).message}): save counters start again`);
       return { collections: {} };
     }
   }
@@ -329,25 +405,57 @@ export class WorkspaceStore {
    * 'Conflict', with the version on disk); without it the save is last-writer-wins as before.
    */
   saveCollection(c: Collection, o: { expectedVersion?: number } = {}): Collection {
+    const p = this.planCollectionSave(c, o);
+    writeJson(p.file, p.content);
+    this.views.delete(`c:${c.id}`);
+    mkdirSync(join(this.root, '.local'), { recursive: true });
+    writeJson(this.localMetaFile(), p.meta);
+    return p.next;
+  }
+
+  /** `saveCollection` for the app: the files are written without blocking the thread on a busy file (fsutil atomicWriteAsync). */
+  saveCollectionAsync(c: Collection, o: { expectedVersion?: number } = {}): Promise<Collection> {
+    return this.serial(async () => {
+      const p = this.planCollectionSave(c, o);
+      await writeJsonAsync(p.file, p.content);
+      this.views.delete(`c:${c.id}`);
+      mkdirSync(join(this.root, '.local'), { recursive: true });
+      await writeJsonAsync(this.localMetaFile(), p.meta);
+      return this.collectionSaved(p);
+    });
+  }
+
+  /** Asynchronous saves run one after another: each plans its write from what the one before left on disk. */
+  private saves: Promise<unknown> = Promise.resolve();
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.saves.then(fn, fn);
+    this.saves = run.catch(() => undefined);
+    return run;
+  }
+
+  private collectionSaved(p: { file: string; next: Collection }): Collection {
+    const fresh = WorkspaceStore.stamp(p.file);
+    return fresh ? { ...p.next, etag: fresh } : p.next;
+  }
+
+  /** The checks of a save and what to write (shared by the synchronous and the asynchronous save). */
+  private planCollectionSave(c: Collection, o: { expectedVersion?: number }): { file: string; content: Record<string, unknown>; meta: LocalMeta; next: Collection } {
     if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !c.id) throw new ApsError('ValidationError', 'A collection to save needs an id');
     const meta = this.readLocalMeta();
     const before = meta.collections[c.id];
     if (typeof o.expectedVersion === 'number' && (before?.version ?? 0) > o.expectedVersion)
-      throw new ApsError('ValidationError', `"${c.name}" was changed since you opened it (version ${before!.version}, you have ${o.expectedVersion})`, {
+      throw new ApsError('ConflictError', `"${c.name}" was changed since you opened it (version ${before!.version}, you have ${o.expectedVersion})`, {
         suggestions: ['Read the collection again, apply your change to the new version, and save.'],
         details: { code: 'Conflict', theirs: before!.version, mine: o.expectedVersion },
       });
-    const { problem: _problem, ...rest } = c as Collection & { problem?: string };
+    const { problem: _problem, etag, ...rest } = c as Collection & { problem?: string };
     void _problem;
-    const next: Collection = { ...rest, schemaVersion: SCHEMA_VERSION, version: Math.max(before?.version ?? 0, c.version ?? 0) + 1, updatedAt: new Date().toISOString() };
     const file = this.collectionFile(c.id);
+    this.checkEtag(file, etag, `"${c.name}"`);
+    const next: Collection = { ...rest, schemaVersion: SCHEMA_VERSION, version: Math.max(before?.version ?? 0, c.version ?? 0) + 1, updatedAt: new Date().toISOString() };
     assertNotNewerOnDisk(file, `The collection "${c.name}"`);
-    writeJson(file, collectionFileContent(next));
-    this.views.delete(`c:${c.id}`);
     meta.collections[c.id] = { version: next.version, updatedAt: next.updatedAt };
-    mkdirSync(join(this.root, '.local'), { recursive: true });
-    writeJson(this.localMetaFile(), meta);
-    return next;
+    return { file, content: collectionFileContent(next), meta, next };
   }
 
   /** Moves the collection to the trash (restorable for 30 days; see trash.ts). */
@@ -374,7 +482,7 @@ export class WorkspaceStore {
   }
 
   /** Every environment; one whose file cannot be read is listed too, with `problem` saying why (and no variables). */
-  listEnvironments(): Environment[] {
+  listEnvironments(o: { etag?: boolean } = {}): Environment[] {
     const dir = this.path('environments');
     const envs = readdirSync(dir)
       .filter((f) => f.endsWith('.json'))
@@ -382,7 +490,9 @@ export class WorkspaceStore {
       .map((f): Environment => {
         const base = f.slice(0, -'.json'.length);
         try {
-          return normalizeEnvironment(readJson<Environment>(join(dir, f)), base);
+          const e = normalizeEnvironment(readJson<Environment>(join(dir, f)), base);
+          const etag = o.etag ? this.handOut(join(dir, f)) : undefined;
+          return etag ? { ...e, etag } : e;
         } catch (e) {
           const text = readTextCached(join(dir, f));
           return { id: scanString(text, 'id') ?? base, name: scanString(text, 'name') ?? base, variables: [], problem: (e as Error).message };
@@ -413,8 +523,28 @@ export class WorkspaceStore {
 
   /** Secret variable values must already have been moved to the secret store — they are stripped here. */
   saveEnvironment(env: Environment): Environment {
+    const p = this.planEnvironmentSave(env);
+    writeJson(p.file, p.content);
+    return p.clean;
+  }
+
+  /** `saveEnvironment` for the app (see saveCollectionAsync). */
+  saveEnvironmentAsync(env: Environment): Promise<Environment> {
+    return this.serial(async () => {
+      const p = this.planEnvironmentSave(env);
+      await writeJsonAsync(p.file, p.content);
+      return this.environmentSaved(p);
+    });
+  }
+
+  private environmentSaved(p: { file: string; clean: Environment }): Environment {
+    const fresh = WorkspaceStore.stamp(p.file);
+    return fresh ? { ...p.clean, etag: fresh } : p.clean;
+  }
+
+  private planEnvironmentSave(env: Environment): { file: string; content: Record<string, unknown>; clean: Environment } {
     if (!env || typeof env !== 'object' || typeof env.id !== 'string' || !env.id) throw new ApsError('ValidationError', 'An environment to save needs an id');
-    const { problem: _problem, ...rest } = env;
+    const { problem: _problem, etag, ...rest } = env;
     void _problem;
     const clean: Environment = { ...rest, name: typeof env.name === 'string' ? env.name : env.id, variables: (Array.isArray(env.variables) ? env.variables : []).map((v) => (v.secret ? { ...v, value: '' } : v)) };
     // the position is owned by reorderEnvironments; a save from a stale editor copy must not move it
@@ -429,9 +559,9 @@ export class WorkspaceStore {
       if (order === undefined) delete clean.order;
       else clean.order = order;
     }
+    this.checkEtag(file, etag, `The environment "${clean.name}"`);
     assertNotNewerOnDisk(file, `The environment "${clean.name}"`);
-    writeJson(file, environmentFileValue(clean));
-    return clean;
+    return { file, content: environmentFileValue(clean) as Record<string, unknown>, clean };
   }
 
   /** Moves the environment to the trash (restorable for 30 days; its secret values stay in the secret store). */
@@ -476,18 +606,39 @@ export class WorkspaceStore {
   }
 
   /* saved items with folders (WebSocket connections, AI prompts, MCP server folders …), one file per kind */
-  getLibrary<T = unknown>(kind: string): Library<T> {
+  getLibrary<T = unknown>(kind: string, o: { etag?: boolean } = {}): Library<T> {
     const lib = readJson<Partial<Library<T>>>(this.libraryPath(kind), {});
-    return { schemaVersion: SCHEMA_VERSION, folders: lib.folders ?? [], items: lib.items ?? [] };
+    const etag = o.etag ? this.handOut(this.libraryPath(kind)) : undefined;
+    return { schemaVersion: SCHEMA_VERSION, folders: lib.folders ?? [], items: lib.items ?? [], ...(etag ? { etag } : {}) };
   }
 
-  saveLibrary<T = unknown>(kind: string, lib: Pick<Library<T>, 'folders' | 'items'>): Library<T> {
+  saveLibrary<T = unknown>(kind: string, lib: Pick<Library<T>, 'folders' | 'items'> & { etag?: string }): Library<T> {
+    const p = this.planLibrarySave(kind, lib);
+    writeJson(p.file, p.content);
+    return p.next;
+  }
+
+  /** `saveLibrary` for the app (see saveCollectionAsync). */
+  saveLibraryAsync<T = unknown>(kind: string, lib: Pick<Library<T>, 'folders' | 'items'> & { etag?: string }): Promise<Library<T>> {
+    return this.serial(async () => {
+      const p = this.planLibrarySave(kind, lib);
+      await writeJsonAsync(p.file, p.content);
+      return this.librarySaved(p);
+    });
+  }
+
+  private librarySaved<T>(p: { file: string; next: Library<T> }): Library<T> {
+    const fresh = WorkspaceStore.stamp(p.file);
+    return fresh ? { ...p.next, etag: fresh } : p.next;
+  }
+
+  private planLibrarySave<T>(kind: string, lib: Pick<Library<T>, 'folders' | 'items'> & { etag?: string }): { file: string; content: Record<string, unknown>; next: Library<T> } {
     const folders = [...new Set([...(lib.folders ?? []), ...lib.items.map((i) => i.folder).filter((f): f is string => !!f)])].sort((a, b) => a.localeCompare(b));
     const next: Library<T> = { schemaVersion: SCHEMA_VERSION, folders, items: lib.items.map((i) => ({ ...i, id: i.id || shortId('lib-'), name: i.name || 'Untitled' })) };
     mkdirSync(this.path('library'), { recursive: true });
     assertNotNewerOnDisk(this.libraryPath(kind), `library/${kind}.json`);
-    writeJson(this.libraryPath(kind), libraryFileValue(next));
-    return next;
+    this.checkEtag(this.libraryPath(kind), lib.etag, `The ${kind} list`);
+    return { file: this.libraryPath(kind), content: libraryFileValue(next) as Record<string, unknown>, next };
   }
 
   private libraryPath(kind: string): string {
@@ -653,218 +804,12 @@ export class WorkspaceStore {
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.offOwnWrites();
     this.meta.close();
   }
 }
 
-/* ------------------------------------------------------------------ app-level manager */
-
-export interface WorkspaceInfo {
-  id: string;
-  name: string;
-  path: string;
-  updatedAt: string;
-}
-
 export { defaultAppDir } from './app-dir.js';
-import { defaultAppDir } from './app-dir.js';
-
-/** Manages the list of workspaces and global settings under the app directory. */
-export class WorkspaceManager {
-  constructor(readonly appDir = defaultAppDir()) {
-    mkdirSync(join(appDir, 'workspaces'), { recursive: true });
-  }
-
-  get settingsPath(): string {
-    return join(this.appDir, 'settings.json');
-  }
-
-  /** Problem found while loading settings (e.g. a broken file: defaults are used until settings are saved). */
-  settingsProblem?: string;
-
-  loadSettings(): AppSettings {
-    let s: Partial<AppSettings> = {};
-    try {
-      s = readJson<Partial<AppSettings>>(this.settingsPath, {});
-      // a file that is JSON but not an object (null, a list, a string) holds no settings: defaults, like a broken file
-      if (!s || typeof s !== 'object' || Array.isArray(s)) {
-        this.settingsProblem = 'settings.json is not a JSON object';
-        s = {};
-      }
-    } catch (e) {
-      // a broken settings.json stays as it is; start from defaults (saving settings keeps a copy, settings.json.broken-<ts>)
-      this.settingsProblem = (e as Error).message;
-    }
-    // revision 2 (redesigned UI): the default font size went from 13 to 14px — move people still on the old default
-    if ((s.settingsRevision ?? 1) < 2 && s.fontSize === 13) s.fontSize = 14;
-    // forget workspaces that lived in the system temp folder and are gone (test runs used to add them);
-    // other missing paths stay listed, e.g. a workspace on a drive that isn't connected right now
-    if (Array.isArray(s.workspacePaths)) {
-      // the temp folder as named and really (macOS: /var/folders/… is /private/var/folders/…, as a CLI run records it)
-      const tmps = [...new Set([tmpdir(), realPathOf(tmpdir())].map((t) => t.toLowerCase()))];
-      s.workspacePaths = s.workspacePaths.filter((p) => !(typeof p === 'string' && tmps.some((t) => p.toLowerCase().startsWith(t)) && !existsSync(p)));
-    }
-    return { ...defaultSettings(), ...normalizeUiPrefs(s), settingsRevision: 2 };
-  }
-
-  saveSettings(s: AppSettings): AppSettings {
-    writeJson(this.settingsPath, s);
-    return s;
-  }
-
-  list(): WorkspaceInfo[] {
-    const dirs = readdirSync(join(this.appDir, 'workspaces'), { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => join(this.appDir, 'workspaces', d.name));
-    const extra = this.loadSettings().workspacePaths ?? [];
-    const out: WorkspaceInfo[] = [];
-    for (const p of [...dirs, ...extra]) {
-      try {
-        const w = readJson<Workspace>(join(p, 'workspace.json'));
-        if (!looksLikeWorkspace(w)) continue;
-        // the same folder listed twice (by a link to it and by its real path, as an older version could add it): once
-        if (out.some((x) => x.id === w.id && samePath(x.path, p))) continue;
-        out.push({ id: w.id, name: w.name, path: p, updatedAt: w.updatedAt });
-      } catch {
-        /* skip invalid */
-      }
-    }
-    return out.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  /** Resolve a workspace by id, name, slug or filesystem path. */
-  resolve(ref: string): string | undefined {
-    if (existsSync(join(ref, 'workspace.json'))) return resolve(ref);
-    const r = ref.toLowerCase();
-    return this.list().find((w) => w.id === ref || w.name.toLowerCase() === r || basename(w.path) === slugify(ref))?.path;
-  }
-
-  create(name: string, path?: string): WorkspaceStore {
-    let root = path ?? join(this.appDir, 'workspaces', slugify(name));
-    if (!path) {
-      let i = 2;
-      while (existsSync(root)) root = join(this.appDir, 'workspaces', `${slugify(name)}-${i++}`);
-    }
-    const s = WorkspaceStore.create(root, name);
-    if (path) this.rememberWorkspacePath(root);
-    return s;
-  }
-
-  /** Add a folder the user opened, cloned or created to the workspace list, once (by any name: a link, its real path). */
-  rememberWorkspacePath(dir: string): AppSettings {
-    const settings = this.loadSettings();
-    if (settings.workspacePaths.some((p) => typeof p === 'string' && samePath(p, dir))) return settings;
-    return this.saveSettings({ ...settings, workspacePaths: [...settings.workspacePaths, dir] });
-  }
-
-  open(ref: string): WorkspaceStore {
-    const p = this.resolve(ref);
-    if (!p) throw new ApsError('ConfigurationError', `Workspace "${ref}" not found`, { suggestions: [`Known workspaces: ${this.list().map((w) => w.name).join(', ') || 'none'}`] });
-    return WorkspaceStore.open(p);
-  }
-
-  duplicate(ref: string, newName: string): WorkspaceInfo {
-    const src = this.resolve(ref);
-    if (!src) throw new ApsError('ConfigurationError', `Workspace "${ref}" not found`);
-    let dest = join(this.appDir, 'workspaces', slugify(newName));
-    let i = 2;
-    while (existsSync(dest)) dest = join(this.appDir, 'workspaces', `${slugify(newName)}-${i++}`);
-    cpSync(src, dest, {
-      recursive: true,
-      // copy definitions, not execution artefacts
-      filter: (s) => {
-        const top = relative(src, s).split(/[\\/]/)[0] ?? '';
-        return !['runs', 'traces', 'payloads', 'reports', 'trash'].includes(top) && !/^(database\.sqlite.*|metadata\.jsonl)$/.test(basename(s));
-      },
-    });
-    const w = readJson<Workspace>(join(dest, 'workspace.json'));
-    const next = { ...w, id: shortId('ws-'), name: newName, updatedAt: new Date().toISOString() };
-    writeJson(join(dest, 'workspace.json'), workspaceFileValue(next));
-    return { id: next.id, name: newName, path: dest, updatedAt: next.updatedAt };
-  }
-
-  /**
-   * Copy a bundled workspace (such as the examples that ship with the app) into the data folder, once:
-   * if a workspace with the same id is already there, that one is returned untouched, so the user's
-   * edits survive app updates. Execution artefacts are never copied.
-   */
-  installTemplate(templateDir: string): WorkspaceInfo {
-    const w = readJson<Workspace>(join(templateDir, 'workspace.json'));
-    const existing = this.list().find((x) => x.id === w.id);
-    if (existing) return existing;
-    let dest = join(this.appDir, 'workspaces', slugify(w.name));
-    let i = 2;
-    while (existsSync(dest)) dest = join(this.appDir, 'workspaces', `${slugify(w.name)}-${i++}`);
-    cpSync(templateDir, dest, {
-      recursive: true,
-      filter: (s) => {
-        const top = relative(templateDir, s).split(/[\\/]/)[0] ?? '';
-        return !['runs', 'traces', 'payloads', 'reports', 'baselines', 'trash', '.local'].includes(top) && !/^(database\.sqlite.*|metadata\.jsonl)$/.test(basename(s));
-      },
-    });
-    // everything in the template was offered: later versions add only what is new (addTemplateAdditions)
-    markTemplateInstalled(templateDir, dest);
-    return { id: w.id, name: w.name, path: dest, updatedAt: w.updatedAt };
-  }
-
-  /** Whether the app created this workspace (in its data folder's workspaces/, as named or really) rather than a folder the user opened. */
-  isManaged(path: string): boolean {
-    return isInside(resolve(this.appDir, 'workspaces'), path);
-  }
-
-  /** A workspace with counts of what it holds, e.g. for a delete confirmation. */
-  details(ref: string): WorkspaceInfo & { managed: boolean; collections: number; environments: number; tests: number } {
-    const p = this.resolve(ref);
-    if (!p) throw new ApsError('ConfigurationError', `Workspace "${ref}" not found`);
-    const w = readJson<Workspace>(join(p, 'workspace.json'));
-    const count = (dir: string, re: RegExp): number => {
-      const d = join(p, dir);
-      if (!existsSync(d)) return 0;
-      let n = 0;
-      for (const e of readdirSync(d, { withFileTypes: true })) n += e.isDirectory() ? count(join(dir, e.name), re) : re.test(e.name) ? 1 : 0;
-      return n;
-    };
-    return { id: w.id, name: w.name, path: p, updatedAt: w.updatedAt, managed: this.isManaged(p), collections: count('collections', /\.json$/), environments: count('environments', /\.json$/), tests: count('tests', /\.ya?ml$/) };
-  }
-
-  /** Rename a workspace that isn't open (the open one is renamed through its store). */
-  rename(ref: string, name: string): WorkspaceInfo {
-    const p = this.resolve(ref);
-    if (!p) throw new ApsError('ConfigurationError', `Workspace "${ref}" not found`);
-    if (!name.trim()) throw new ApsError('ValidationError', 'The workspace name is empty');
-    const file = join(p, 'workspace.json');
-    const w = { ...readJson<Workspace>(file), name: name.trim(), updatedAt: new Date().toISOString() };
-    writeJson(file, workspaceFileValue(w));
-    return { id: w.id, name: w.name, path: p, updatedAt: w.updatedAt };
-  }
-
-  /**
-   * Remove a workspace. Folders the app created are deleted; folders the user opened are only removed
-   * from the list (their files stay). Close the workspace first if it is open.
-   */
-  delete(ref: string): { deletedFiles: boolean } {
-    const p = this.resolve(ref);
-    if (!p) throw new ApsError('ConfigurationError', `Workspace "${ref}" not found`);
-    const managed = this.isManaged(p);
-    // only delete files for workspaces the app created; external folders are just unregistered
-    if (managed) {
-      try {
-        // Windows: files can be briefly locked (SQLite, antivirus, an indexer); retry before giving up
-        rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-      } catch (e) {
-        throw new ApsError('ConfigurationError', `Could not delete the workspace folder ${p}: ${e instanceof Error ? e.message : String(e)}. Close programs using it and try again.`);
-      }
-    }
-    const settings = this.loadSettings();
-    this.saveSettings({ ...settings, workspacePaths: settings.workspacePaths.filter((x) => !samePath(x, p)), ...(settings.lastWorkspace && samePath(settings.lastWorkspace, p) ? { lastWorkspace: undefined } : {}) });
-    return { deletedFiles: managed };
-  }
-
-  /** Import an export as a new workspace (workspace-bundle.ts; `importWorkspaceBundle` also says what was skipped and what to fill in). */
-  importBundle(bundle: WorkspaceBundle, name?: string): WorkspaceStore {
-    return importWorkspaceBundle(this, bundle, name).store;
-  }
-}
 
 /** Save counters and times of this computer's saves (`.local/meta.json`, not shared). */
 interface LocalMeta {

@@ -45,6 +45,8 @@ export interface HttpSettings {
   retries?: number;
   /** First wait between attempts in ms (doubles each time, max 10 s; Retry-After wins). Default 500. */
   retryDelayMs?: number;
+  /** An event stream whose server sends nothing for this long (ms) ends with the events it had and `streamStopped` (never an error). 0 or unset: it stays open until cancelled. */
+  streamIdleMs?: number;
   /** Spread the waits between retries randomly (default on): parallel requests that failed together do not retry together. false: exactly base * 2^attempt. */
   retryJitter?: boolean;
   /** Use HTTP/1.1 only. By default HTTP/2 is offered over https (ALPN) and used when the server supports it. */
@@ -563,6 +565,8 @@ export type ErrorKind =
   | 'ConfigurationError'
   | 'CancelledError'
   | 'ScriptError'
+  /** A save over a newer version of the same thing (another window, a git pull, the CLI): nothing was written. details: { theirs, mine }. */
+  | 'ConflictError'
   /** A bug in TestPion itself (a TypeError, an unexpected exception): not the user's request or server. */
   | 'InternalError';
 
@@ -628,6 +632,8 @@ export interface EnvironmentVariable {
 }
 
 export interface Environment {
+  /** The version of the file this was read from (never written to it): a save that carries it is refused when someone else changed the file since. */
+  etag?: string;
   id: string;
   name: string;
   variables: EnvironmentVariable[];
@@ -705,6 +711,8 @@ export interface CollectionFolder {
 export type CollectionNode = CollectionFolder | SavedHttpRequest | SavedGraphQLRequest;
 
 export interface Collection {
+  /** The version of the file this was read from (never written to it): a save that carries it is refused when someone else changed the file since. */
+  etag?: string;
   schemaVersion: string;
   id: string;
   name: string;
@@ -791,6 +799,8 @@ export interface AppSettings {
   assistantModel?: string;
   /** AI features: small/large models, local only, privacy level, cost caps (ai/ai-settings.ts). */
   ai?: import('../ai/ai-settings.js').AiSettings;
+  /** How long a workspace keeps its runs: the newest `keepRuns` (default 500) and none older than `keepDays` (default 90); 0 = no limit on that one. Applied when a workspace opens and by `testpion runs prune`. */
+  retention?: { keepRuns?: number; keepDays?: number };
   workspacePaths: string[];
   /** Lowest-precedence variables shared by all workspaces. */
   globalVariables: KeyValue[];
@@ -866,6 +876,8 @@ export interface LibraryItem<T = unknown> {
 }
 
 export interface Library<T = unknown> {
+  /** The version of the file this was read from (never written to it); see Collection.etag. */
+  etag?: string;
   schemaVersion: string;
   /** Every folder, including empty ones. */
   folders: string[];

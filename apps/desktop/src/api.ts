@@ -93,10 +93,26 @@ export function setCallRecovery(fn: Recovery | undefined): void {
   recovery = fn;
 }
 
+/**
+ * A whole-document save refused with a ConflictError (the file changed outside this window since it was read): the handler asks the
+ * person and answers the parameters to save again with (Keep mine), a result to hand the caller instead (Take theirs, Open both), or
+ * undefined to fail (Cancel). One for the whole window (lib/save-conflict.ts).
+ */
+type ConflictHandler = (info: { method: string; params: unknown; error: NormalizedError }) => Promise<{ params: unknown } | { result: unknown } | undefined>;
+let conflictHandler: ConflictHandler | undefined;
+export function setConflictHandler(fn: ConflictHandler | undefined): void {
+  conflictHandler = fn;
+}
+
 export async function call<T = any>(method: string, params?: unknown): Promise<T> {
   try {
     return await bridge.invoke(method, params);
   } catch (e) {
+    if ((e as { kind?: string })?.kind === 'ConflictError' && conflictHandler) {
+      const answer = await conflictHandler({ method, params, error: asError(e) });
+      if (!answer) throw e;
+      return 'result' in answer ? (answer.result as T) : bridge.invoke(method, answer.params);
+    }
     const again = recovery && (await recovery(e, method, params));
     if (again === undefined) throw e;
     return bridge.invoke(method, again);

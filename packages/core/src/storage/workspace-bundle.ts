@@ -21,7 +21,8 @@ import { adoptLooseRequests } from './loose-requests.js';
 import { SecretStripper, type ReplacedSecret } from './bundle-secrets.js';
 import { SCRIPT_PACKAGE_NAME } from './script-package-name.js';
 import { migrateWorkspace } from './workspace-migrate.js';
-import type { TestFileNode, WorkspaceManager, WorkspaceStore } from './workspace.js';
+import type { TestFileNode, WorkspaceStore } from './workspace.js';
+import type { WorkspaceManager } from './workspace-manager.js';
 import { isRecord } from '@testpion/shared';
 
 /** Size limits of an export, in one place: a file over `fileBytes`, or past `totalBytes` in all, is left out with a note. */

@@ -73,6 +73,14 @@ export function AiSettingsPanel({ s, set, providers }: { s: AppSettings; set(p: 
           <Input type="number" min={0} step="0.01" value={ai.dailyBudgetUsd ?? ''} onChange={(e) => put({ dailyBudgetUsd: num(e.target.value) })} />
         </Field>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Wait for a model (ms)" hint="The longest wait for a provider's answer, or the first bytes of a stream. 120000 unless changed; 0 waits forever.">
+          <Input type="number" min={0} step={1000} placeholder="120000" aria-label="Wait for a model in milliseconds" value={ai.requestTimeoutMs ?? ''} onChange={(e) => put({ requestTimeoutMs: num(e.target.value) })} />
+        </Field>
+        <Field label="Silence in a stream (ms)" hint="A stream that sends nothing for this long ends with what it had. 60000 unless changed; 0 waits forever.">
+          <Input type="number" min={0} step={1000} placeholder="60000" aria-label="Silence in a stream in milliseconds" value={ai.idleTimeoutMs ?? ''} onChange={(e) => put({ idleTimeoutMs: num(e.target.value) })} />
+        </Field>
+      </div>
       <p className="text-xs text-muted">
         A call over a cap is refused with what to do; nothing is sent. Every call is counted —{' '}
         <LinkButton onClick={() => useApp.getState().openIntent('ai', { tab: 'usage' })}>see AI usage</LinkButton> (CLI: testpion ai usage).

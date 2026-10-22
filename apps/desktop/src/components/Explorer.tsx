@@ -361,7 +361,7 @@ export function Explorer() {
   const editLibrary = async (kind: 'grpc' | 'websocket', fn: (items: Array<LibraryItem<unknown>>) => Array<LibraryItem<unknown>>) => {
     await attempt(async () => {
       const lib = await call<Library<unknown>>('lib.get', { kind });
-      await call('lib.save', { kind, library: { folders: lib.folders, items: fn(lib.items) } });
+      await call('lib.save', { kind, library: { etag: lib.etag, folders: lib.folders, items: fn(lib.items) } });
       await load(false, LIBRARY);
     });
   };
@@ -459,7 +459,7 @@ export function Explorer() {
   const editFolderLib = async (kind: 'mcp-folders' | 'spec-folders' | 'dataset-folders', fn: (lib: Library<unknown>) => Pick<Library<unknown>, 'folders' | 'items'>) => {
     await attempt(async () => {
       const lib = await call<Library<unknown>>('lib.get', { kind });
-      await call('lib.save', { kind, library: fn(lib) });
+      await call('lib.save', { kind, library: { etag: lib.etag, ...fn(lib) } });
       await load(false, LIBRARY);
     });
   };

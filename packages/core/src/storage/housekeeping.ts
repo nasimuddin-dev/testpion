@@ -2,6 +2,7 @@ import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { WorkspaceStore } from './workspace.js';
 import { expireTrash } from './trash.js';
+import { pruneRuns, retentionOf } from './storage-usage.js';
 
 /**
  * What a crash, a cancelled run or a failed rename leaves behind, removed (planning/review-2026-10-22-robustness.md R-2, R-4, C-3):
@@ -15,6 +16,8 @@ export interface SweepResult {
   runs: number;
   inline: number;
   trash: number;
+  /** Runs deleted by the retention setting (newest N, none older than D days). */
+  pruned: number;
 }
 
 const HOUR = 3_600_000;
@@ -80,13 +83,14 @@ function sweepTmp(root: string, now: number): number {
 }
 
 /** `keepRuns`: runs in progress (a run paused at a breakpoint writes nothing for a long time). */
-export function sweepWorkspace(store: WorkspaceStore, o: { now?: number; keepRuns?: Iterable<string> } = {}): SweepResult {
+export function sweepWorkspace(store: WorkspaceStore, o: { now?: number; keepRuns?: Iterable<string>; retention?: { keepRuns?: number; keepDays?: number } } = {}): SweepResult {
   const now = o.now ?? Date.now();
   const keep = new Set(o.keepRuns ?? []);
-  const out: SweepResult = { tmp: 0, payloads: 0, runs: 0, inline: 0, trash: 0 };
+  const out: SweepResult = { tmp: 0, payloads: 0, runs: 0, inline: 0, trash: 0, pruned: 0 };
   const root = store.root;
   out.tmp = sweepTmp(root, now);
   out.trash = expireTrash(store, now);
+  out.pruned = pruneRuns(store, retentionOf(o.retention), { now, keep }).deleted;
 
   const refs = store.meta.referencedFiles();
   // response bodies that no history row points at (a send that failed after its body arrived, a deleted row whose file was in use)

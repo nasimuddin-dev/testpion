@@ -55,15 +55,19 @@ Response bodies stream to disk, and the viewer only shows a preview (2 MB by def
 
 ## Where is my data stored?
 
-In `~/.testpion` (`%USERPROFILE%\.testpion` on Windows): settings, logs, encrypted secrets and workspaces. A workspace can also live in any folder you open, such as one in a git repository. **Settings ▸ Storage** shows how much the open workspace keeps besides its definitions (runs, traces, response bodies, history) and deletes old runs; `testpion storage --delete-runs-older-than 30` does the same from a terminal.
+In `~/.testpion` (`%USERPROFILE%\.testpion` on Windows): settings, logs, encrypted secrets and workspaces. A workspace can also live in any folder you open, such as one in a git repository. **Settings ▸ Storage** shows how much the open workspace keeps besides its definitions (runs, traces, response bodies, history) and deletes old runs; `testpion storage --delete-runs-older-than 30` does the same from a terminal. A workspace keeps its newest 500 runs and none older than 90 days: older ones are deleted a few seconds after it opens (change both numbers in **Settings ▸ Storage**, 0 keeps all). `testpion runs prune [--keep 200] [--days 30] [--dry-run] --json` applies the same rule on demand.
 
 ## Something doesn't work. Where do I start?
 
 Run `testpion doctor -w <workspace>`: it checks Node.js, SQLite, the app folder, secrets from the environment, proxy and certificate settings, and whether every collection of the workspace can be read (`--json` for scripts and bug reports). The app's logs are under **Logs** in the status bar.
 
-To send everything a bug report needs at once, use **Settings ▸ Privacy & security ▸ Save diagnostics** (a zip) or `testpion diagnostics --json`: versions, your settings without secrets, the last 500 log records, the size of the workspace and the slowest calls. Home folders, tokens and passwords are masked, and nothing is sent: you attach the file yourself.
+To send everything a bug report needs at once, use **Settings ▸ About ▸ Download** (choose *Diagnostics bundle (ZIP)*) or `testpion diagnostics --json`: versions, your settings without secrets, the last 500 log records, the size of the workspace and the slowest calls. Home folders, tokens and passwords are masked, and nothing is sent: you attach the file yourself.
 
-**"The history database was damaged"**: TestPion set the damaged `database.sqlite` aside as `database.sqlite.broken-<time>` (keep it if you need the old entries; it opens with any SQLite tool) and started a new one, so History, Runs and Traces start empty. A database written by a newer TestPion, or locked by another program, is left untouched and history is not saved until it can be opened. **"The disk is full"** and **"The folder is read-only"** are said as such: a request that succeeded still shows its response, only its history entry is missing.
+**"The history database was damaged"**: TestPion set the damaged `database.sqlite` aside as `database.sqlite.broken-<time>` (keep it if you need the old entries; it opens with any SQLite tool) and started a new one, so History, Runs and Traces start empty. A database written by a newer TestPion, or locked by another program, is left untouched and history is not saved until it can be opened. **"Changed on disk"** when you save: the collection, environment or list was changed by another program (a git pull, another window, the command line) after you opened it. **Take theirs** shows the version on disk and drops your edit, **Keep mine** saves your version over it, **Open both** saves yours as a copy named *(my changes)* and shows the one on disk. Nothing is saved until you choose. From a script, a refused save is a `ConflictError` (`code` in the `--json` envelope, `structuredContent.error.code` for MCP tools).
+
+**"Could not open …"** (the workspace's name or folder follows) at the start: the last workspace is broken (a damaged `workspace.json`) or written by a newer TestPion; TestPion does not hide it behind another workspace. Fix the file named in the message (git can restore it) or open another workspace. **"Saved secrets cannot be read on this computer"**: `secrets.json` is damaged (a copy is kept as `secrets.json.broken-*`) or was encrypted by another user; enter the secrets again.
+
+**"The disk is full"** and **"The folder is read-only"** are said as such: a request that succeeded still shows its response, only its history entry is missing.
 
 ## Why does Windows or macOS warn me when installing?
 

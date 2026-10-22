@@ -89,6 +89,39 @@ function usageOf(store: Pick<WorkspaceStore, 'meta'>, parts: StorageUsage['parts
   };
 }
 
+/** Defaults of Settings > Storage > Keep runs: the newest 500, and none older than 90 days. */
+export const DEFAULT_RETENTION = { keepRuns: 500, keepDays: 90 };
+
+export interface RetentionPlan {
+  keepRuns: number;
+  keepDays: number;
+}
+
+export const retentionOf = (r?: { keepRuns?: number; keepDays?: number }): RetentionPlan => ({
+  keepRuns: r?.keepRuns !== undefined && r.keepRuns >= 0 ? Math.floor(r.keepRuns) : DEFAULT_RETENTION.keepRuns,
+  keepDays: r?.keepDays !== undefined && r.keepDays >= 0 ? Math.floor(r.keepDays) : DEFAULT_RETENTION.keepDays,
+});
+
+/**
+ * Deletes the runs beyond the retention: older than `keepDays` days, or not among the newest `keepRuns` (0 = no limit on that one). A run in
+ * `keep` (in progress, or named as a baseline) stays. With `dryRun` nothing is deleted and the answer says what would be.
+ */
+export function pruneRuns(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, plan: RetentionPlan, o: { now?: number; keep?: Iterable<string>; dryRun?: boolean } = {}): { deleted: number; bytes: number; ids: string[] } {
+  const keep = new Set(o.keep ?? []);
+  const cutoff = plan.keepDays > 0 ? new Date((o.now ?? Date.now()) - plan.keepDays * 86_400_000).toISOString() : undefined;
+  const all = store.meta.listRuns({ limit: 100_000 }).items; // newest first
+  const doomed = all.filter((r, i) => !keep.has(r.id) && ((plan.keepRuns > 0 && i >= plan.keepRuns) || (cutoff !== undefined && r.startedAt < cutoff)));
+  let bytes = 0;
+  for (const r of doomed) {
+    const dir = store.runDir(r.id);
+    bytes += sizeOf(dir).bytes;
+    if (o.dryRun) continue;
+    rmSync(dir, { recursive: true, force: true });
+    store.meta.deleteRun(r.id);
+  }
+  return { deleted: doomed.length, bytes, ids: doomed.map((r) => r.id) };
+}
+
 /** Delete the runs (results, reports, index rows) that started before `before` (ISO time). Baselines are kept. */
 export function deleteRunsBefore(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, before: string): { deleted: number; bytes: number } {
   let deleted = 0;

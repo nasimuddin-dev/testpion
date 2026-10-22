@@ -103,6 +103,17 @@ backendReady.catch(() => undefined);
 // An exception nobody catches in the main process (a socket callback in the proxy, a timer) is logged and the app goes
 // on. Electron's default is a native error box, and its modal loop stops the backend (every request, the proxy, the
 // window's calls) until someone closes it: the HTTP Debugger's self-test froze the app that way.
+// the window hears of it at most once a minute (one toast), the log has every one
+let internalErrorSaid = 0;
+function tellWindow(message: string): void {
+  if (Date.now() - internalErrorSaid < 60_000) return;
+  internalErrorSaid = Date.now();
+  try {
+    if (win && !win.isDestroyed() && backend) emit('app.internalError', { message: message.split('\n')[0]!.slice(0, 200) });
+  } catch {
+    /* the window is gone */
+  }
+}
 process.on('uncaughtException', (e) => {
   try {
     backend?.appLog('error', `Uncaught in the main process: ${e?.stack ?? String(e)}`);
@@ -110,6 +121,7 @@ process.on('uncaughtException', (e) => {
     /* the log itself failed */
   }
   console.error('[aps] uncaught exception', e);
+  tellWindow(String(e?.message ?? e));
 });
 process.on('unhandledRejection', (e) => {
   try {
@@ -117,6 +129,7 @@ process.on('unhandledRejection', (e) => {
   } catch {
     /* the log itself failed */
   }
+  tellWindow(e instanceof Error ? e.message : String(e));
 });
 
 // A dead page is a white window the user cannot use: log it (stderr is nowhere in the packaged app), reload it once; a second crash

@@ -139,7 +139,7 @@ const SURFACES = [
   s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', { cli: 'output', sources: ['runs-overview'] }),
   s('workspace.report', 'Workspace report', ['html'], 'none', { cli: 'workspace-report', sources: ['workspace-report'] }),
   s('collection.docs', 'Collection documentation', ['md', 'html'], 'redacted-default', { cli: 'docs', capturedRedacted: true }),
-  s('settings.diagnostics', 'Settings diagnostics', ['text', 'json'], 'redacted-default', { capturedRedacted: true }),
+  s('settings.diagnostics', 'Settings diagnostics', ['text', 'json', 'zip'], 'redacted-default', { capturedRedacted: true }),
 ] as const;
 
 export const OUTPUT_SURFACES: readonly OutputSurfaceInfo[] = SURFACES;

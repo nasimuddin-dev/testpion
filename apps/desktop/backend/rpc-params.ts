@@ -170,6 +170,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'rag.map': { response: 'o', mapping: 'o' },
   'rag.probe': { target: 'o', question: 's', environment: 's?' },
   'diagnostics.get': {},
+  'diagnostics.zip': {},
+  'ws.openProblem': {},
   'diagnostics.bundle': {},
   'feedback.compose': { kind: 's', title: 's', description: 's', steps: 's?', expected: 's?', where: 's?', diagnostics: 'sa?', errors: 'sa?' },
   'flows.webhooks.start': { port: 'n?', host: 's?' },

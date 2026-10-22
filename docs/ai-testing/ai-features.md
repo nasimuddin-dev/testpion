@@ -468,6 +468,7 @@ Agents: `search_ask` (`question`, or a `query` object; `sources`, `noAi`, `dryRu
 
 - **Before sending**: the estimate in **What will be sent…**, in the flow dialog and on hover over an AI button (≈ tokens in, the most the answer may cost).
 - **Caps**: **Settings ▸ AI assistant ▸ Limits** — **Tokens per call**, **Tokens per day** and **Cost per day ($)**, per workspace; empty is no cap. A call over a cap is refused with *Over an AI limit … Nothing was sent.* and **Change the limits**. The CLI, MCP and CI calls count and are capped too.
+- **Waits**: the same panel has **Wait for a model (ms)** (the longest wait for a provider's answer, or for the first bytes of a stream; 120000 unless changed) and **Silence in a stream (ms)** (a stream that sends nothing for this long ends with what it had and *The model stopped sending*; 60000 unless changed). 0 waits forever. Cancel always works. In settings.json: `ai.requestTimeoutMs`, `ai.idleTimeoutMs`.
 - **AI Lab ▸ Usage ▸ AI features**: calls, tokens and cost today and over 30 days, what is left of the daily caps, tokens per task, calls per model and per surface (*App*, *CLI*, *MCP agents*, *CI*), and the latest calls with their outcome (*ok*, *accepted*, *discarded*, *error*). The AI Lab's own prompts follow below it.
 
 <figure class="aps-screenshot">

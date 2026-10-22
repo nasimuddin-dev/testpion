@@ -543,11 +543,30 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
 
   if (res.body && method !== 'HEAD') {
     const reader = res.body.getReader();
+    // an event stream whose server went silent (a half-open connection) ends after settings.streamIdleMs with what it had (0 = never)
+    const idleMs = sse && s.streamIdleMs && s.streamIdleMs > 0 ? s.streamIdleMs : 0;
+    let idled = false;
+    const readStep = async (): ReturnType<typeof reader.read> => {
+      if (!idleMs) return reader.read();
+      let t: NodeJS.Timeout | undefined;
+      const quiet = new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve) => {
+        t = setTimeout(() => {
+          idled = true;
+          void reader.cancel().catch(() => undefined);
+          resolve({ done: true, value: undefined } as Awaited<ReturnType<typeof reader.read>>);
+        }, idleMs);
+      });
+      try {
+        return await Promise.race([reader.read(), quiet]);
+      } finally {
+        clearTimeout(t);
+      }
+    };
     try {
       for (;;) {
         let step;
         try {
-          step = await reader.read();
+          step = await readStep();
         } catch (e) {
           if (sse && opts.signal?.aborted) {
             streamStopped = true;
@@ -556,7 +575,10 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
           throw bodyDecodeError(e, res.headers.get('content-encoding')) ?? e;
         }
         const { done, value } = step;
-        if (done) break;
+        if (done) {
+          if (idled) streamStopped = true;
+          break;
+        }
         if (sse) {
           const atMs = round(performance.now() - t0);
           for (const ev of sse.parser.push(sse.decoder.decode(value, { stream: true }), atMs)) {
