@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Safer
+
+A security review of the whole code base; everything it found is fixed.
+
+- **A cloned or imported collection can no longer run code on your computer through a visualizer.** The Handlebars template of `tp.visualizer.set(…)` is now compiled and rendered inside the script sandbox, never in the app; Handlebars is updated to 4.7.10 (two critical advisories on 4.7.9) and the MCP SDK to 1.32.1.
+- **A repository cannot ship its own trust.** The programs, hosts and secret reads a workspace may use are remembered in TestPion's data folder by the workspace's real path, not in `.local/trust.json` inside it (which is ignored now: you are asked again, once). Imports and bundles refuse anything under `.local/`.
+- **Scripts need your say to read secrets or send elsewhere.** Until you allow it, a workspace's scripts see variables except the secret ones and may send only to the request's own host, localhost and hosts you allowed (a toast offers **Allow…**). Command line and CI: `--trust-scripts` or `TESTPION_TRUST_SCRIPTS=1`.
+- **Capturing a phone is no longer an open proxy.** The Debugger on the network needs pairing (scan the QR code, or the password in the dialog), and no device can reach this computer's localhost or the cloud metadata address through it.
+- **MCP agents.** Clients that cannot ask you get a one-time confirmation code in the server's log instead of a `confirm: true` an injected prompt could pass; sends and AI calls stop at a session budget; AI calls from agents have default caps ($5 a day, 50,000 tokens a call); MCP HTTP servers cannot redirect your headers to another origin; resources obey the size caps.
+- **Files on this computer.** One gate for every call that names a path on the host (clone, open, data file, terminal folder, client certificate), behind a `localFiles` capability a shared server turns off; a server also ignores the *Environment variables* allow-list.
+- **Private files.** `secrets.json`, current values, the log and saved Debugger sessions are readable by your account only. On Linux with no keyring, TestPion no longer saves secrets under Electron's public fallback key unless you opt in.
+- **Also.** Regexes in Debugger rules, regex checks and Find and replace are refused when they can freeze the app and run under a deadline when they can be slow; a variable that doubles at every level no longer expands forever; localhost servers (recorder, mock, webhooks) refuse a foreign `Host` and cross-site pages; monitor webhooks and trace export follow the network policy; `tests.delete` refuses `tests/` itself; the background git fetch runs for remotes you push to; the installed app ignores `TESTPION_CAPTURE_SCRIPT` without `--testpion-capture`, grants only the web permissions it uses and checks `app.asar` (ASAR integrity); actions are pinned by commit, CI fails on a high advisory in a production dependency, and `SHA256SUMS.txt` is signed with Sigstore. See [Trust and permissions](https://nasimuddin-dev.github.io/testpion/security/trust).
+
 ## 0.54.1 — 2026-10-21
 
 Importing a file with thousands of folders nested inside each other now says so in plain words on every Node version, instead of failing with a stack overflow while the import report was being built. Nothing else changes.

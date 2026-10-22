@@ -106,7 +106,7 @@ A variable can point at a secret kept in a secret manager instead of holding it.
 
 `{{apiKey}}` then sends the value the manager's own command-line tool reads, signed in as you. The reference holds no secret, so the environment file can be committed and shared; each person, and each CI job, reads the secret with their own access. The value stays in memory for ten minutes and is never written to a file, a log or a report; it is redacted like any secret.
 
-Reading a reference runs a program on your computer, so a workspace from git or a teammate doesn't do it unasked. The first time, TestPion shows the exact commands and asks; **Allow on this computer** is remembered for that workspace (in `.local/trust.json`, never committed). Under the variables, the environment shows which ones come from a manager and whether they were read; **Read again** fetches them anew after a secret is rotated.
+Reading a reference runs a program on your computer, so a workspace from git or a teammate doesn't do it unasked. The first time, TestPion shows the exact commands and asks; **Allow on this computer** is remembered for that workspace (in TestPion's data folder, never in the workspace: [Trust and permissions](/security/trust)). Under the variables, the environment shows which ones come from a manager and whether they were read; **Read again** fetches them anew after a secret is rotated.
 
 The CLI reads every reference of the environment it runs with, as it reads `{{$env.NAME}}`. `testpion secrets <environment>` checks them without sending anything (exit 1 when one can't be read, `--json` for scripts). For agents, `testpion mcp-server` reads only the references already allowed in the app.
 
