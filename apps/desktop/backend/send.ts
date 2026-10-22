@@ -1,5 +1,5 @@
 /** Sending a request: HTTP (httpSend), GraphQL (gqlSend) and the code snippet of a request. The Backend methods are one-line delegates. */
-import { ApsError, Tracer, executeHttp, executeGraphQL, inheritedAuthFor, normalizeError, runChecks, runScript, scriptScopes, applyScriptOutput, responseCookies, applyCookieJarOps, folderChain, withFolderDefaults, withInheritedHeaders, inheritedHeaders, folderVariables, scriptRequestSender, shortId, prepareHttpRequest, renderVisualizer, generateCode, type SnippetRequest, type CheckContext, type HttpRequestSpec, recordCertificate, timingSummary, timingSpans, requireEnvironment, assertProductionStep, isDataChangingMethod } from '@testpion/core';
+import { ApsError, hostOfUrl, Tracer, executeHttp, executeGraphQL, inheritedAuthFor, normalizeError, runChecks, runScript, scriptScopes, applyScriptOutput, responseCookies, applyCookieJarOps, folderChain, withFolderDefaults, withInheritedHeaders, inheritedHeaders, folderVariables, scriptRequestSender, shortId, prepareHttpRequest, renderVisualizer, generateCode, type SnippetRequest, type CheckContext, type HttpRequestSpec, recordCertificate, timingSummary, timingSpans, requireEnvironment, assertProductionStep, isDataChangingMethod } from '@testpion/core';
 import { clipConsole, consoleRefs } from './console-log.js';
 import type { GqlSendParams, HttpSendParams } from './params.js';
 import type { Backend } from './backend.js';
@@ -12,12 +12,13 @@ type ScriptResult = Awaited<ReturnType<typeof runScript>>;
  * The scripts of one send (HTTP and GraphQL run them the same way): `run` executes one script with what it sees of the request
  * (and response), hands its output to `collect` (the logs, the visualizer), then applies the variables and cookie-jar changes it made.
  */
-function scriptHost(be: Backend, ctx: Ctx, signal: AbortSignal, info: { requestName?: string; requestId?: string; environmentName?: string }) {
+function scriptHost(be: Backend, ctx: Ctx, signal: AbortSignal, info: { requestName?: string; requestId?: string; environmentName?: string }, ownUrl?: () => string) {
   const saved = ctx.services.savedRequest ? { find: ctx.services.savedRequest, resolve: (s: HttpRequestSpec) => ctx.vars.resolveDeep(s) } : undefined;
-  const sendRequest = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal, timeoutMs: be.settings.defaultTimeoutMs, production: ctx.services.production, saved });
+  const trust = ctx.services.scriptTrust;
+  const sendRequest = scriptRequestSender({ redactor: ctx.redactor, cookieJar: ctx.services.cookieJar, signal, timeoutMs: be.settings.defaultTimeoutMs, production: ctx.services.production, saved, trust, ownHost: ownUrl && (() => hostOfUrl(ownUrl())) });
   return {
     async run(script: string, view: ScriptView, collect: (out: ScriptResult) => void): Promise<ScriptResult> {
-      const out = await runScript(script, { ...scriptScopes(ctx.vars), ...view, jar: ctx.services.cookieJar?.list(), info }, { sendRequest, requirePackage: (n) => be.ws.readScriptPackage(n) });
+      const out = await runScript(script, { ...scriptScopes(ctx.vars, undefined, trust), ...view, jar: ctx.services.cookieJar?.list(), info }, { sendRequest, requirePackage: (n) => be.ws.readScriptPackage(n) });
       collect(out);
       applyScriptOutput(out, [ctx.vars], { redactor: ctx.redactor, persist: ctx.services.persistVariable });
       if (ctx.services.cookieJar) applyCookieJarOps(ctx.services.cookieJar, out.jarOps);
@@ -51,7 +52,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
   const sseEvents = be.batched<unknown>('http.sse', 100);
   let scriptLogs: string[] = [];
   let preLogCount: number | undefined;
-  const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name, requestId: p.requestId, environmentName: ctx.environment?.name });
+  const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name, requestId: p.requestId, environmentName: ctx.environment?.name }, () => ctx.vars.resolve(p.request.url));
   const sentLogs =(o: { sentRequests?: Array<{ method: string; url: string; status?: number; error?: string; durationMs?: number }> }) =>
     (o.sentRequests ?? []).map((r) => `tp.sendRequest ${r.method} ${ctx.redactor.redactUrl(r.url)} → ${r.error ? `error: ${r.error}` : `${r.status} (${r.durationMs} ms)`}`);
   const logsOf = () => scriptLogs.map((message, i) => ({ phase: i < (preLogCount ?? scriptLogs.length) ? ('pre-request' as const) : ('test' as const), message: ctx.redactor.redactString(message) }));
@@ -278,7 +279,7 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
   const span = tracer.start('graphql', 'graphql', { input: { query: p.request.query, variables: p.request.variables } });
   const scriptLogs: Array<{ phase: 'pre-request' | 'test'; message: string }> = [];
   const folders = ctx.collection && p.requestId ? folderChain(ctx.collection, p.requestId) : [];
-  const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name ?? p.operationName, requestId: p.requestId, environmentName: ctx.environment?.name });
+  const scripts = scriptHost(be, ctx, ctrl.signal, { requestName: p.name ?? p.operationName, requestId: p.requestId, environmentName: ctx.environment?.name }, () => ctx.vars.resolve(p.request.endpoint));
   try {
     // collection, folder (outer to inner) and request pre-request scripts, as for REST requests
     let request = p.request;

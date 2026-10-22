@@ -269,6 +269,7 @@ export * from './git/staged-fix.js';
 export * from './git/fix-setup.js';
 export * from './debugger/share-session.js';
 export * from './storage/trust.js';
+export * from './scripts/script-trust.js';
 export * from './storage/secrets.js';
 export * from './storage/metastore.js';
 export * from './storage/storage-usage.js';

@@ -84,7 +84,7 @@ export async function runCondition(test: ConditionTest, scope: VariableScope, sp
 /* ------------------------------------------------------------------ script and log steps */
 
 export async function runScriptStep(test: ScriptTest, scope: VariableScope, svc: ExecServices, extra: { sendRequest: ScriptRequestSender; info: ScriptInput['info'] }): BlockRunner {
-  const s = await runScript(test.script, { ...scriptScopes(scope, test.variables), info: extra.info }, { sendRequest: extra.sendRequest, requirePackage: svc.scriptPackage });
+  const s = await runScript(test.script, { ...scriptScopes(scope, test.variables, svc.scriptTrust), info: extra.info }, { sendRequest: extra.sendRequest, requirePackage: svc.scriptPackage });
   applyScriptOutput(s, [scope, svc.vars], { redactor: svc.redactor, persist: svc.persistVariable });
   if (s.error) throw new ApsError('ScriptError', `Script failed: ${s.error}`);
   const set = { ...s.vars, ...s.scopeSets.environment, ...s.scopeSets.collectionVariables, ...s.scopeSets.globals };

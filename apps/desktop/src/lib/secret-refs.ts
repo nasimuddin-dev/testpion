@@ -35,7 +35,8 @@ export async function allowSecretRefs(environment: string, refs: Blocked[]): Pro
  * read on this computer yet: say so once, with a way to allow it (the backend reads allowed ones before each request).
  */
 export function watchSecretRefs(): () => void {
-  return on<{ environment: string; refs: Blocked[] }>('secrets.blocked', ({ environment, refs }) => {
+  const offScripts = watchScriptBlocks();
+  const offRefs = on<{ environment: string; refs: Blocked[] }>('secrets.blocked', ({ environment, refs }) => {
     const tools = [...new Set(refs.map((r) => r.label))].join(', ');
     useApp
       .getState()
@@ -43,5 +44,39 @@ export function watchSecretRefs(): () => void {
         label: 'Allow…',
         onClick: () => void allowSecretRefs(environment, refs),
       });
+  });
+  return () => {
+    offScripts();
+    offRefs();
+  };
+}
+
+/** A script of the workspace was refused something it needs (a host to send to, a secret to read): say so, with a way to allow it. */
+async function allowScript(b: { kind: 'host'; host: string } | { kind: 'secrets'; keys: string[] }): Promise<void> {
+  const ok =
+    b.kind === 'host'
+      ? await confirmAction({
+          title: `Let scripts send requests to ${b.host}?`,
+          message: `A script in this workspace tried to send a request to ${b.host}. Scripts can send any variable they can read, including secrets, to the host they choose. Allow it only if you know where this workspace comes from.`,
+          confirmLabel: 'Allow this host',
+        })
+      : await confirmAction({
+          title: 'Let scripts read secrets?',
+          message: `Scripts in this workspace read secret variables (${b.keys.slice(0, 5).join(', ')}${b.keys.length > 5 ? ', …' : ''}). Until you allow it, scripts do not see the values; requests still use them. Allow it only if you know where this workspace comes from.`,
+          confirmLabel: 'Allow on this computer',
+        });
+  if (!ok) return;
+  await attempt(async () => {
+    await call('scripts.allow', b.kind === 'host' ? { host: b.host } : { secrets: true });
+    useApp.getState().toast('Allowed: send again', 'success');
+  });
+}
+
+function watchScriptBlocks(): () => void {
+  return on<{ kind: 'host'; host: string } | { kind: 'secrets'; keys: string[] }>('scripts.blocked', (b) => {
+    useApp.getState().toast(b.kind === 'host' ? `A script tried to send a request to ${b.host}, not yet allowed in this workspace` : 'A script read secret variables, not yet allowed in this workspace', 'warning', {
+      label: 'Allow…',
+      onClick: () => void allowScript(b),
+    });
   });
 }

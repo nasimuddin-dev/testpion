@@ -98,8 +98,13 @@ export function buildProgram(): Command {
   // environment marked as production (GETs still run, so a smoke run against production works as before)
   const all = (c: Command): Command[] => [c, ...c.commands.flatMap(all)];
   const path = (c: Command): string => (c.parent && c.parent !== program ? `${path(c.parent)} ${c.name()}` : c.name());
-  for (const c of all(program)) if (SENDING_COMMANDS.has(path(c))) c.option('--allow-production', 'allow data-changing requests (POST, PUT, PATCH, DELETE, mutations …) to an environment marked as production');
+  for (const c of all(program)) {
+    if (!SENDING_COMMANDS.has(path(c))) continue;
+    c.option('--allow-production', 'allow data-changing requests (POST, PUT, PATCH, DELETE, mutations …) to an environment marked as production');
+    c.option('--trust-scripts', "let the workspace's scripts read secret variables and send requests to any host (otherwise only hosts the workspace was allowed to reach; or set TESTPION_TRUST_SCRIPTS=1)");
+  }
   program.hook('preAction', (_cmd, action) => {
+    if ((action.opts() as { trustScripts?: unknown }).trustScripts === true) process.env.TESTPION_TRUST_SCRIPTS = '1';
     // `mcp-server --allow-production` is the server's own gate (each tool call still passes allowProduction)
     if (path(action) !== 'mcp-server') setProductionAllowedByDefault((action.opts() as { allowProduction?: unknown }).allowProduction === true);
   });

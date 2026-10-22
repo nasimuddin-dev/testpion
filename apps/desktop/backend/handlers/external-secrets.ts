@@ -4,7 +4,7 @@
  * manager's command-line tool, so a workspace's references run only once the person allows them on this computer
  * (the trust list, like a stdio MCP server); then they are read before any request or run with that environment.
  */
-import { ApsError, environmentSecretRefs, externalSecrets, isCommandTrusted, prefetchEnvironmentSecrets, secretRefCommand, commandLine, trustCommand } from '@testpion/core';
+import { ApsError, areSecretReadsTrusted, forgetTrustedCommands, trustHost, trustSecretReads, trustedHosts, environmentSecretRefs, externalSecrets, isCommandTrusted, prefetchEnvironmentSecrets, secretRefCommand, commandLine, trustCommand } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 /** References already reported as not allowed in this session (one message each, not one per request). */
@@ -62,6 +62,22 @@ export function externalSecretsHandlers(be: Backend): Handlers {
         told.delete(ref);
       }
       return prefetchEnvironmentSecrets(be.ws, environment);
+    },
+    /** What this workspace's scripts were allowed on this computer: the hosts `tp.sendRequest` may reach, and reading secrets. */
+    'scripts.trust': () => ({ hosts: trustedHosts(be.ws), secretReads: areSecretReadsTrusted(be.ws) }),
+    /** The person's answer to "a script was refused": allow a host (`*` = any host) or reading secrets for this workspace. */
+    'scripts.allow': ({ host, secrets }: { host?: string; secrets?: boolean }) => {
+      if (host !== undefined) {
+        if (typeof host !== 'string' || !host.trim() || host.length > 253) throw new ApsError('ValidationError', 'Name the host to allow, for example api.example.com');
+        trustHost(be.ws, host);
+      }
+      if (secrets) trustSecretReads(be.ws);
+      return { hosts: trustedHosts(be.ws), secretReads: areSecretReadsTrusted(be.ws) };
+    },
+    /** Forget everything this workspace's scripts and programs were allowed on this computer. */
+    'scripts.forget': () => {
+      forgetTrustedCommands(be.ws);
+      return { hosts: [], secretReads: false };
     },
     /** Forget the values read (they are read again on the next request), e.g. after rotating a secret. */
     'secrets.refresh': async ({ environment }: { environment?: string }) => {
