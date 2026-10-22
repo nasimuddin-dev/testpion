@@ -14,6 +14,7 @@ import {
   openTerminalWithProxy,
   proxyShellLines,
   regenerateRootCertificate,
+  rootStanding,
   removeRootCertificate,
   restoreSystemProxy,
   rootCertificateTrusted,
@@ -594,7 +595,7 @@ export function debuggerHandlers(be: Backend): Handlers {
         return { ...r, fingerprint: root.fingerprint };
       }
       const trusted = await rootCertificateTrusted(root);
-      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, trusted, instructions: trustInstructions(root.path), note, platform: process.platform };
+      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, instructions: trustInstructions(root.path), note, platform: process.platform };
     },
     /** Switch the system proxy to ours (every program that honours it) and back. */
     'debug.systemProxy': async ({ on }: { on: boolean }) => {

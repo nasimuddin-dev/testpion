@@ -20,6 +20,10 @@ interface CertInfo {
   path: string;
   fingerprint: string;
   notAfter: string;
+  daysLeft?: number;
+  /** A root of earlier versions, valid for ten years. */
+  longLived?: boolean;
+  renewSoon?: boolean;
   trusted?: boolean;
   instructions: string[];
   note?: string;
@@ -60,6 +64,13 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
             {info.trusted === true ? <Badge tone="ok">trusted</Badge> : info.trusted === false ? <Badge tone="warn">not trusted yet</Badge> : <Badge>unknown here</Badge>}
             <span className="text-muted">valid until {new Date(info.notAfter).toLocaleDateString()}</span>
           </div>
+          {(info.renewSoon || info.longLived) && (
+            <p className="text-xs text-warn" data-cert-notice>
+              {info.renewSoon
+                ? `This root expires in ${Math.max(info.daysLeft ?? 0, 0)} day${info.daysLeft === 1 ? '' : 's'}. TestPion makes a new one when it runs out; you then trust the new one again (and on a phone, install it again). Regenerate it now to choose the time.`
+                : 'This root was made by an earlier version and is valid for ten years. A copy of its key would let anyone intercept your HTTPS for that long. Regenerate it for a root that lasts one year; you then trust the new one again (and on a phone, install it again).'}
+            </p>
+          )}
           <div className="text-xs">
             <div className="text-muted">SHA-256 fingerprint</div>
             <div className="mono break-all">{info.fingerprint}</div>
@@ -95,7 +106,7 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
                 })) && void act('regenerate')
               }
             >
-              New certificate
+              Regenerate certificate
             </Button>
           </div>
           <div>
