@@ -36,3 +36,27 @@ describe('a long data-driven run', () => {
     expect(peak - before, `the heap grew ${Math.round(peak - before)} MB`).toBeLessThan(12); // (15 MB before: a Deferred per result)
   }, 180_000);
 });
+
+// A-6: the tracker copied every scope after every step, whether or not a step had changed a variable
+import { VariableScope, VariableTracker } from '../../packages/core/src/index.js';
+describe('variable tracking per step', () => {
+  it('is free while nothing changes and exact when something does', () => {
+    const vars = new VariableScope();
+    vars.setScope('environment', Object.fromEntries(Array.from({ length: 3000 }, (_, i) => [`v${i}`, `value ${i}`])));
+    const tracker = new VariableTracker(vars);
+    expect(tracker.raw()).toBeUndefined();
+    const t0 = performance.now();
+    for (let i = 0; i < 20_000; i++) tracker.raw();
+    const ms = performance.now() - t0;
+    console.log(`20,000 raw() with 3,000 variables: ${ms.toFixed(0)} ms`);
+    expect(ms).toBeLessThan(200 * Number(process.env.TESTPION_PERF_SLACK ?? 1));
+    vars.set('token', 'abc', 'runtime');
+    vars.set('v5', 'changed', 'environment');
+    expect(tracker.raw()).toEqual({ token: 'abc', v5: 'changed' });
+    const a = tracker.raw()!;
+    a.token = 'mutated'; // callers get a copy
+    expect(tracker.raw()!.token).toBe('abc');
+    vars.unset('token', 'runtime');
+    expect(tracker.raw()).toEqual({ v5: 'changed' });
+  });
+});
