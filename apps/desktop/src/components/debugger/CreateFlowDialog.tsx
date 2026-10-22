@@ -1,7 +1,7 @@
 import { ArrowRight, KeyRound, Workflow } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { call } from '../../api';
-import { toastError, useApp } from '../../store';
+import { selectEnvironments, toastError, useApp } from '../../store';
 import { openRef } from '../../lib/open-ref';
 import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, statusTone, useDebounced } from '../ui';
 import { plural } from '../../lib/format';
@@ -28,7 +28,9 @@ const defaultName = () => `recorded-${new Date().toISOString().slice(0, 16).repl
  * Tests view's Flow tab (the designer).
  */
 export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; since?: string; onClose(): void }) {
-  const environments = useApp((s) => s.workspace?.environments ?? []).filter((e) => !e.problem);
+  // the stored list (the same one while no workspace is open: a new [] per read renders forever), filtered once per change
+  const all = useApp(selectEnvironments);
+  const environments = useMemo(() => all.filter((e) => !e.problem), [all]);
   const [environment, setEnvironment] = useState<string>(() => useApp.getState().environment ?? '');
   const [name, setName] = useState(defaultName);
   const [drop, setDrop] = useState<string[]>([]);

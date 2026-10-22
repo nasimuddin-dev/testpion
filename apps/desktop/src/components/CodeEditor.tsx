@@ -97,7 +97,8 @@ export function CodeEditor({
   // A hidden tab (a GraphQL, gRPC, WebSocket or MCP document that is open but not shown) keeps its state and its
   // connection, but not a live editor: every open tab's editors took part in every layout and every keystroke
   // (kept mounted while hidden: the tab comes back as it was, cursor and scroll included)
-  if (!doc.active) return <div style={{ height }} />;
+  // (a document tab only: a hidden view keeps its editors, and their undo history, as it always did)
+  if (doc.docId !== undefined && !doc.active) return <div style={{ height }} />;
   if (!ready) return <div className="h-full w-full grid place-items-center"><Spinner /></div>;
   // Monaco only accepts text: a value that arrives as an object (e.g. GraphQL variables saved as JSON) would
   // throw inside createModel and take the whole window down, so show it as formatted JSON instead

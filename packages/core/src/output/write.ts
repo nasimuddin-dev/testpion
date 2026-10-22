@@ -2,7 +2,8 @@
  * Writing an output into a file, the one way: to `<name>.part` beside it and renamed when complete, so a cancel or a
  * failure leaves no half file. The window's Save as…, `testpion output --out` and MCP `save_output` all write here.
  */
-import { createWriteStream, renameSync, rmSync } from 'node:fs';
+import { createWriteStream, rmSync } from 'node:fs';
+import { rename } from 'node:fs/promises';
 import { once } from 'node:events';
 import { basename, dirname, join } from 'node:path';
 import { ApsError } from '../errors.js';
@@ -55,7 +56,9 @@ export async function writeChunks(chunks: Chunks, dest: string, o: { signal?: Ab
     out.end();
     await Promise.race([once(out, 'close'), failed]);
     if (o.signal?.aborted) throw new ApsError('CancelledError', 'Saving was cancelled');
-    renameSync(part, dest);
+    // not renameSync: on Windows the rename of a file just written waits for the virus scanner to let go of it, and the
+    // desktop backend runs on Electron's main thread, where that wait held the window's frame (perf-output-download)
+    await rename(part, dest);
   } catch (e) {
     out.destroy();
     // closed before it is removed: an open handle can keep the name (or fail the removal) on some file systems

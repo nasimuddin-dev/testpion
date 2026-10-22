@@ -315,12 +315,13 @@ export default function App() {
     };
   }, []);
 
-  // editors with an open tab stay mounted (their tabs, drafts and live connections); the rest once visited
+  // editors with an open tab stay mounted (their tabs, drafts and live connections), REST always (it owns the tab
+  // commands: Close all from any editor closes its tabs too)
   const openEditors = useEditorTabsStore((s) => s.openViews);
   const docs = useDocs((s) => s.docs);
   const activeDocs = useDocs((s) => s.active);
   const docViews = DOC_VIEWS.filter((v) => (docs[v] ?? []).length);
-  const mounted = useMemo(() => [...new Set<ViewId>([...visited, ...openEditors, ...docViews])], [visited, openEditors, docViews.join()]);
+  const mounted = useMemo(() => [...new Set<ViewId>([...visited, 'rest', ...openEditors, ...docViews])], [visited, openEditors, docViews.join()]);
   // the code editor (Monaco, a long task to parse) is warmed in idle time once a view that shows one opened
   const warmed = useRef(false);
   useEffect(() => {

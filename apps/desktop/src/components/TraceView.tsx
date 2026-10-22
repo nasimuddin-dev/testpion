@@ -188,8 +188,9 @@ function parsed(body: unknown): { json?: unknown; text: string; markup?: boolean
   return { text: body };
 }
 
+const ENCODER = new TextEncoder();
 const sizeOf = (text: string) => {
-  const n = new TextEncoder().encode(text).length;
+  const n = ENCODER.encode(text).length;
   return n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 };
 
@@ -199,6 +200,10 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
   const body = payload?.body;
   // parsed once per body: a new value each render would fold the tree up again whenever the panel re-renders
   const p = useMemo(() => (body === undefined ? undefined : parsed(body)), [body]);
+  // the size and the pretty text once per body, not on every render (a copy toggle, the panel around it)
+  const size = useMemo(() => (p ? sizeOf(p.text) : ''), [p]);
+  const contentType = payload?.contentType;
+  const prettyText = useMemo(() => (p && !raw && p.json === undefined ? prettyBody(p.text, contentType) : undefined), [p, raw, contentType]);
   const copy = () => p && void copyToClipboard(p.text);
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -206,7 +211,7 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
         <span className="font-semibold text-fg">{title}</span>
         {payload?.status !== undefined && <Badge>{String(payload.status)}</Badge>}
         {payload?.contentType && <span className="mono text-muted truncate">{payload.contentType.split(';')[0]}</span>}
-        {p && <span className="text-muted">{sizeOf(p.text)}{typeof body === 'string' && body.endsWith('…') ? ' · preview' : ''}</span>}
+        {p && <span className="text-muted">{size}{typeof body === 'string' && body.endsWith('…') ? ' · preview' : ''}</span>}
         {p && (
           <div className="ml-auto flex items-center gap-1">
             {(p.json !== undefined || p.markup) && (
@@ -234,7 +239,7 @@ function PayloadBox({ title, payload, emptyText }: { title: string; payload?: { 
           <JsonTree data={p.json} />
         ) : (
           // the response viewer's: line numbers, search, colours; Pretty lays HTML and XML out by nesting
-          <RawView text={raw ? p.text : prettyBody(p.text, payload?.contentType)} language={payload?.contentType} />
+          <RawView text={raw ? p.text : (prettyText ?? p.text)} language={payload?.contentType} />
         )}
       </div>
     </div>

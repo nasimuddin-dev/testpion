@@ -88,7 +88,8 @@ export function requestsHandlers(be: Backend): Handlers {
       if (!payloadPath || !be.ws.isInside(payloadPath, 'payloads')) throw new ApsError('ValidationError', 'Unknown payload');
       return be.saveOrDownload(name ?? 'response.bin', undefined, (dest) => copyFileSync(payloadPath, dest), () => readFileSync(payloadPath));
     },
-    'history.list': (q: { query?: string; kind?: string; failed?: boolean; limit?: number; offset?: number }) => be.ws.meta.listHistory(q),
+    // a page of at most 1,000 entries (each carries its request): the window asks for 200
+    'history.list': (q: { query?: string; kind?: string; failed?: boolean; limit?: number; offset?: number; brief?: boolean }) => be.ws.meta.listHistory({ ...q, limit: Math.min(Math.max(1, q.limit ?? 100), 1000) }),
     /** Per-day requests, failures and runs for the Home dashboard charts. */
     'stats.activity': (q: { days?: number; tzOffsetMin?: number } = {}) => be.ws.meta.activity(q),
     /** Per saved request of a collection: responses, failures, latest status and median time (collection Overview). */
@@ -218,10 +219,22 @@ export function requestsHandlers(be: Backend): Handlers {
         b.push({ id: s.id, message: m });
         if (m.direction === 'received') counts.received++;
       });
+      // a session that ended (closed by either side, or never opened) leaves nothing behind: its entries, its last
+      // messages, its engine context
+      let ended = false;
+      const end = () => {
+        if (ended) return;
+        ended = true;
+        b.flush();
+        if (be.wsSessions.get(s.id) === s) (be.wsSessions.delete(s.id), be.wsConsole.delete(s.id));
+        void ctx.dispose();
+      };
       s.onStatus((st) => {
         be.host.emit('wsock.status', { id: s.id, status: st });
-        if (st === 'closed' && counts.opened)
+        if (st === 'closed' && counts.opened) {
           be.consoleProtocol('websocket', ctx.redactor, { name: shown, method: 'CLOSE', url: shown, status: 'closed', durationMs: Date.now() - counts.opened, logs: [`${counts.sent} sent · ${counts.received} received`] });
+          end();
+        }
       });
       be.wsSessions.set(s.id, s);
       be.wsConsole.set(s.id, { url: shown, redactor: ctx.redactor, counts });
@@ -231,6 +244,7 @@ export function requestsHandlers(be: Backend): Handlers {
       } catch (e) {
         const err = normalizeError(e);
         be.consoleProtocol('websocket', ctx.redactor, { name: shown, method: 'CONNECT', url: shown, status: err.kind, durationMs: Date.now() - started, error: err.message });
+        end();
         throw e;
       }
       counts.opened = Date.now();
