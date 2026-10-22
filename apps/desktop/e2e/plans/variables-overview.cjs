@@ -20,7 +20,7 @@ const steps = [
     `await __t.requests(); if (!(await openRow('List posts of a user'))) return 'NO ROW';
      const cell = [...document.querySelectorAll('main input')].find((x) => x.offsetParent && x.value.includes('{{userId}}')); if (!cell) return 'NO INPUT';
      clickVar(cell, 'userId'); const p = await __t.waitFor(pop, 2500); if (!p) return 'NO DIALOG';
-     return 'scope: ' + p.querySelector('.text-\\\\[0\\\\.7rem\\\\]')?.textContent.trim() + ' | buttons: ' + [...p.querySelectorAll('button')].map((b) => b.textContent.trim()).filter(Boolean).join(' / ');`,
+     return 'scope: ' + p.querySelector('.text-2xs')?.textContent.trim() + ' | buttons: ' + [...p.querySelectorAll('button')].map((b) => b.textContent.trim()).filter(Boolean).join(' / ');`,
   ),
   step(
     'go-to-collection-variables',

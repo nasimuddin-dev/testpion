@@ -65,9 +65,10 @@ const steps = [
   step(
     'capture-menu-has-reverse-proxy',
     `await __t.view('Debugger');
-     const b = [...document.querySelectorAll('main button')].find((x) => /^Capture/.test(x.textContent.trim()));
+     // the Capture menu's button (History rows of capture sessions also start with the word)
+     const b = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((x) => x.offsetParent && x.textContent.trim() === 'Capture'), 5000);
      if (!b) return 'NO CAPTURE BUTTON';
-     b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); b.click();
+     await __t.real.click(b); await __t.sleep(300);
      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Reverse proxy for one API/.test(m.textContent)), 3000);
      await __t.esc();
      return 'reverse proxy: ' + !!item;`,

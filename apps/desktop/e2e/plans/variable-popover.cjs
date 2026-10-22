@@ -7,7 +7,7 @@ const H = `
   const pop = () => document.querySelector('[role=dialog][aria-label^="Variable "]');
   const read = async () => {
     const p = await __t.waitFor(pop, 2500); if (!p) return 'NO DIALOG';
-    const r = p.getAttribute('aria-label') + ' | ' + (p.querySelector('.text-\\\\[0\\\\.7rem\\\\]')?.textContent.trim() ?? '') + ' | value: ' + (p.querySelector('input')?.value ?? p.querySelector('.field')?.textContent.trim() ?? '');
+    const r = p.getAttribute('aria-label') + ' | ' + (p.querySelector('.text-2xs')?.textContent.trim() ?? '') + ' | value: ' + (p.querySelector('input')?.value ?? p.querySelector('.field')?.textContent.trim() ?? '');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await __t.sleep(300);
     return r + ' | closed: ' + !pop();
   };
