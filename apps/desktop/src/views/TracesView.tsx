@@ -11,8 +11,9 @@ import { TraceView } from '../components/TraceView';
 import { DurationBar } from '../components/charts';
 import { AskSearchButton } from '../components/ai/AskSearchButton';
 import { ASK_SCOPE } from '../components/ai/ask-search';
-import { Badge, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList } from '../components/ui';
-import { NodeMenu } from '../components/TreeParts';
+import { Badge, Busy, Button, cx, Empty, IconButton, Input, Modal, Select, Split, VirtualList } from '../components/ui';
+import { treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { openRef, copyRefLink } from '../lib/open-ref';
 import { outputFileName } from '@testpion/shared';
@@ -89,8 +90,7 @@ export function TracesView() {
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [sel, setSel] = useState<string>();
   const [trace, setTrace] = useState<Trace | null>();
-  // a trace's menu (right-click or ⋯): open · its run · copy link
-  const [menuFor, setMenuFor] = useState<string>();
+  // a trace's menu (right-click, ⋯, Shift+F10): open · its run · copy link (lib/node-menu.ts builds it)
   const traceMenu = (t: TraceMeta): NodeMenuCtx => ({
     ref: { kind: 'trace', traceId: t.id },
     name: t.name,
@@ -134,7 +134,7 @@ export function TracesView() {
   }, [query, kind, errorsOnly, sel, total]);
   return (
     <Split id="traces" initial={32}>
-      <div className="h-full flex flex-col" data-output="traces">
+      <div className="h-full flex flex-col" data-output="traces" onKeyDown={treeKeys}>
         <div className="flex gap-2 p-2 border-b border-line">
           <Input className="flex-1" placeholder="Filter traces" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind">
@@ -165,33 +165,38 @@ export function TracesView() {
             className="flex-1"
             items={items}
             rowHeight={44}
+            role="tree"
+            label="Traces"
             onEndReached={items.length < total ? () => void load(false) : undefined}
+            // the one row (TreeRowShell, as History's): click or Enter shows the trace, keys and ⋯ open its menu, it drags onto a flow canvas
             render={(t) => (
-              <div
-                className={cx('group relative w-full h-full border-b border-line/60', sel === t.id ? 'bg-accent/10' : menuFor === t.id ? 'bg-hover' : 'hover:bg-hover')}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setMenuFor(t.id);
-                }}
+              <TreeRowShell
+                kind="trace"
+                nodeId={`trace:${t.id}`}
+                label={t.name}
+                tall
+                active={sel === t.id}
+                onClick={() => setSel(t.id)}
+                onOpen={() => setSel(t.id)}
+                ctx={() => traceMenu(t)}
+                drag={[{ kind: 'trace', traceId: t.id }]}
+                className="h-full pl-3 border-b border-line/60"
               >
-              <button onClick={() => setSel(t.id)} onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(t.id))} className="w-full h-full text-left pl-3 pr-8 flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={cx('w-1.5 h-1.5 rounded-full', t.status === 'ok' ? 'bg-ok' : 'bg-bad')} />
-                  <span className="truncate min-w-0" title={t.name}>{t.name}</span>
-                  <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted tabular-nums whitespace-nowrap shrink-0 pl-2">
-                    <DurationBar ms={t.durationMs} max={maxMs} bad={t.status !== 'ok'} />
-                    {formatMs(t.durationMs)}
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-2 text-sm">
+                    <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', t.status === 'ok' ? 'bg-ok' : 'bg-bad')} />
+                    <span className="truncate min-w-0">{t.name}</span>
+                    <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted tabular-nums whitespace-nowrap shrink-0 pl-2">
+                      <DurationBar ms={t.durationMs} max={maxMs} bad={t.status !== 'ok'} />
+                      {formatMs(t.durationMs)}
+                    </span>
                   </span>
-                </div>
-                <div className="text-xs text-muted flex gap-2 pl-3.5">
-                  <Badge>{t.kind}</Badge>
-                  {plural(t.spanCount, 'span')} · {timeAgo(t.startTime)}
-                </div>
-              </button>
-              <span className="absolute right-1 top-1/2 -translate-y-1/2">
-                <NodeMenu kind="trace" label={t.name} ctx={() => traceMenu(t)} open={menuFor === t.id} onOpenChange={(o) => setMenuFor(o ? t.id : undefined)} />
-              </span>
-              </div>
+                  <span className="text-xs text-muted flex gap-2 pl-3.5">
+                    <Badge>{t.kind}</Badge>
+                    {plural(t.spanCount, 'span')} · {timeAgo(t.startTime)}
+                  </span>
+                </span>
+              </TreeRowShell>
             )}
           />
         ) : (
@@ -204,7 +209,7 @@ export function TracesView() {
           </Empty>
         )}
       </div>
-      <div className="h-full min-h-0">{trace ? <TraceView trace={trace} /> : sel ? <Empty title={trace === null ? 'Trace not found' : 'Loading…'} /> : <Empty icon={<Activity size={24} />} title="Select a trace">See its spans as a waterfall: timing phases, checks, errors and attributes.</Empty>}</div>
+      <div className="h-full min-h-0">{trace ? <TraceView trace={trace} /> : sel ? trace === null ? <Empty title="Trace not found" /> : <Busy>Loading the trace…</Busy> : <Empty icon={<Activity size={24} />} title="Select a trace">See its spans as a waterfall: timing phases, checks, errors and attributes.</Empty>}</div>
     </Split>
   );
 }

@@ -105,7 +105,7 @@ export function LoadHistory({ savedId }: { savedId?: string }) {
           {runs.map((r) => (
             <tr
               key={r.id}
-              className={cx('border-t border-line cursor-pointer', r.id === refId ? 'bg-accent/10' : 'hover:bg-hover')}
+              className={cx('border-t border-line cursor-pointer', r.id === refId ? 'bg-accent-soft' : 'hover:bg-hover')}
               title={`${r.target}${r.environment ? ` · ${r.environment}` : ''}\n${r.id === refId ? 'The reference: click again to stop comparing' : 'Click to compare the other runs with this one'}`}
               onClick={() => setRefId((x) => (x === r.id ? undefined : r.id))}
             >

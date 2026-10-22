@@ -34,9 +34,8 @@ describe('vocabulary', () => {
     expect(LABEL.delete).toBe('Delete…');
   });
 
-  it('tree and list menus are built by lib/node-menu.ts only: no menu literals in the views that show nodes', () => {
-    // the files whose rows are nodes (MENU-1…3): their menus come from buildNodeMenu, labels from LABEL
-    const NODE_VIEWS = [
+  // the files whose rows are nodes (MENU-1…3): their menus come from buildNodeMenu, labels from LABEL
+  const NODE_VIEWS = [
       'components/CollectionTree.tsx',
       'components/Explorer.tsx',
       'components/ExplorerParts.tsx',
@@ -54,9 +53,34 @@ describe('vocabulary', () => {
       'views/TracesView.tsx',
       'views/EnvironmentsView.tsx',
       'views/ai/Providers.tsx',
+      // UI audit 2026-10-21 A1-A5: their lists were rows of their own
+      'views/McpView.tsx',
+      'views/CollectionsView.tsx',
+      'views/GitView.tsx',
+      'components/TraceView.tsx',
     ];
+
+  it('every list of items draws the one row: TreeRowShell (or FolderList, which is made of it), no row of its own', () => {
+    // a list's own right-click handler or treeitem role is a row that is not TreeRowShell (an area's empty-space menu, `onContextMenu={area…}`, is allowed)
+    const own = /onContextMenu=\{\(|role="treeitem"/;
+    const off = NODE_VIEWS.filter((rel) => {
+      const text = readFileSync(join(SRC, rel), 'utf8');
+      return !/\b(TreeRowShell|FolderList|CollectionTreeRows)\b/.test(text) || (rel !== 'components/TreeRowShell.tsx' && own.test(text));
+    });
+    expect(off).toEqual([]);
+    // the same selected colour everywhere: the token TreeRowShell paints (bg-accent-soft), never accent at an alpha
+    const tinted = files(SRC).filter((f) => readFileSync(f, 'utf8').includes('bg-accent/10'));
+    expect(tinted.map((f) => f.slice(SRC.length + 1))).toEqual([]);
+  });
+
+  it('tree and list menus are built by lib/node-menu.ts only: no menu literals in the views that show nodes', () => {
     const LITERAL = /label: (['"])(Open|Open in new tab|Rename|Rename folder|Duplicate|Delete|Delete…|Delete folder…|Move to…|Move to folder|Expand all|Collapse all|Expand|Collapse|Copy link|Run|Run now|Run folder|Run collection|Monitor on a schedule…|Run in CI…|History in git…|Make active|Edit|Pause|Resume|Settings)\1/;
-    const found = NODE_VIEWS.filter((rel) => LITERAL.test(readFileSync(join(SRC, rel), 'utf8')));
+    // (a tab of a view's tab strip, `{ id: 'run', label: 'Run' }`, names a page, not a menu item)
+    const found = NODE_VIEWS.filter((rel) =>
+      readFileSync(join(SRC, rel), 'utf8')
+        .split('\n')
+        .some((line) => LITERAL.test(line) && !/\bid: '[\w-]+'(?: as const)?, label:/.test(line)),
+    );
     expect(found).toEqual([]);
   });
 

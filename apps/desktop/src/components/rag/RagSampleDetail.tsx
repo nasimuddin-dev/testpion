@@ -180,7 +180,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                       const cid = c.id ?? `doc-${i + 1}`;
                       const v = verdicts.get(cid);
                       return (
-                        <tr key={cid} className={cx('border-t border-line/60 align-top', doc === cid && 'bg-accent/10')} data-rag-chunk={cid}>
+                        <tr key={cid} className={cx('border-t border-line/60 align-top', doc === cid && 'bg-accent-soft')} data-rag-chunk={cid}>
                           <td className="py-1 pr-2 text-muted tabular-nums">{i + 1}</td>
                           <td className="pr-2 mono whitespace-nowrap">{cid}</td>
                           <td className="pr-2 text-muted tabular-nums">{c.score ?? ''}</td>

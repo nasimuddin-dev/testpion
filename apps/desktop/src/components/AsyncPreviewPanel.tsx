@@ -1,7 +1,7 @@
 import { CodeBlock } from './CodeBlock';
-import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, FlaskConical, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
-import { Badge, Button, Empty } from './ui';
+import { Badge, Busy, Button, Empty } from './ui';
 import { generateTestsFromDefinition } from '../lib/spec-tests';
 
 import { refOfWorkspacePath } from '@testpion/shared';
@@ -85,9 +85,14 @@ function ChannelRow({ c }: { c: Channel }) {
 }
 
 /** An AsyncAPI definition as its readers see it: servers, channels with what the API does on them, messages; Generate tests. */
-export function AsyncPreviewPanel({ outline, error, spec }: { outline?: AsyncOutline; error?: string; spec: string }) {
-  if (error) return <Empty title="Couldn't read the document">{error}</Empty>;
-  if (!outline) return <Empty title="Reading the document…" />;
+export function AsyncPreviewPanel({ outline, error, spec, onRetry }: { outline?: AsyncOutline; error?: string; spec: string; /** Read the document again. */ onRetry(): void }) {
+  if (error)
+    return (
+      <Empty title="Couldn't read the document" actions={[{ label: 'Retry', icon: <RotateCcw size={13} />, onClick: onRetry }]}>
+        {error}
+      </Empty>
+    );
+  if (!outline) return <Busy>Reading the document…</Busy>;
   const generate = () =>
     generateTestsFromDefinition(spec, {
       message: 'A realtime test per channel: its example message sent through the broker or server and read back, checked against this document. The suite runs with the servers environment its import made. Test files that exist are kept.',

@@ -307,7 +307,7 @@ export function Badge({ children, tone = 'default', title, className }: { childr
     ok: 'text-ok border-ok/25 bg-ok/10',
     bad: 'text-bad border-bad/25 bg-bad/10',
     warn: 'text-warn border-warn/25 bg-warn/10',
-    accent: 'text-accent border-accent/25 bg-accent/10',
+    accent: 'text-accent border-accent/25 bg-accent-soft',
     judge: 'text-judge border-judge/25 bg-judge/10',
   };
   return (
@@ -407,6 +407,28 @@ export function Callout({
 
 export function Spinner({ size = 14 }: { size?: number }) {
   return <Loader2 size={size} className="spin text-muted" />;
+}
+
+/**
+ * A wait, the one way everywhere (F1): the spinner and what is going on ("Loading the trace…", "Comparing…"), announced
+ * to a screen reader (`role="status"`). Fills its pane, centred; `inline` sits in a line of a form or a dialog (what the
+ * AI dialogs show while a run is on). Never an `Empty` with a title that ends in "…": an empty state is a place with
+ * nothing in it, a wait is not.
+ */
+export function Busy({ children, inline, size = 14 }: { children: ReactNode; inline?: boolean; size?: number }) {
+  if (inline)
+    return (
+      <div className="flex items-center gap-2 text-muted" role="status">
+        <Spinner size={size} /> {children}
+      </div>
+    );
+  return (
+    <div className="h-full w-full grid place-items-center p-8 text-muted text-sm fade-in" role="status">
+      <span className="inline-flex items-center gap-2">
+        <Spinner size={size} /> {children}
+      </span>
+    </div>
+  );
 }
 
 /** A dialog, or the same content inline in an editor tab (its actions then sit in a toolbar on top). */

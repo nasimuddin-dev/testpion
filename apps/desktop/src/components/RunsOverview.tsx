@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Play } from 'lucide-react';
 import { call } from '../api';
 import { formatMs, plural } from '../lib/format';
 import { axisMs, ChartCard, chartKeys, ChartTip, PointLine, RecentRuns, Swatch, useWidth } from './charts';
@@ -239,9 +240,29 @@ const RUNS_SPEC: OutputSpec = {
   ],
 };
 
-export function RunsOverview({ runs, onSelect, hint = 'Click a bar or point, or a run in the list, to see its results.', flaky, scores }: { runs: RunRow[]; onSelect?(id: string): void; hint?: string; flaky?: boolean; scores?: boolean }) {
+export function RunsOverview({
+  runs,
+  onSelect,
+  hint = 'Click a bar or point, or a run in the list, to see its results.',
+  flaky,
+  scores,
+  onRun,
+}: {
+  runs: RunRow[];
+  onSelect?(id: string): void;
+  hint?: string;
+  flaky?: boolean;
+  scores?: boolean;
+  /** What a first run is here (Run all tests, Run collection): the empty state offers it. */
+  onRun?: { label: string; run(): void };
+}) {
   const last = runs.slice(0, 40).reverse();
-  if (!last.length) return <Empty title="No runs yet">Run tests, a suite or a collection; each run is listed here with its results and charts.</Empty>;
+  if (!last.length)
+    return (
+      <Empty title="No runs yet" actions={onRun ? [{ label: onRun.label, icon: <Play size={13} />, onClick: onRun.run }] : undefined}>
+        Each run of tests, a suite or a collection is listed here with its results and charts.
+      </Empty>
+    );
   return (
     <div className="h-full flex flex-col min-h-0" data-output="runs.overview">
       <OutputHeader spec={RUNS_SPEC} title="Runs at a glance" />

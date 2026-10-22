@@ -1,5 +1,5 @@
 import { diffResponses } from '@testpion/shared';
-import { GitCompareArrows, X } from 'lucide-react';
+import { GitCompareArrows, RotateCcw, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { comparable, previousResponse } from '../lib/response-memory';
@@ -42,6 +42,8 @@ export function ResponseDiffPanel({
     };
   }, [kept, response, sendId]);
   const [fromHistory, setFromHistory] = useState<{ c?: Compared; error?: string; none?: boolean }>();
+  // Retry after an error reads History again
+  const [attemptNo, setAttemptNo] = useState(0);
   useEffect(() => {
     if (local || !requestId || !historyId) return;
     let live = true;
@@ -60,7 +62,7 @@ export function ResponseDiffPanel({
     return () => {
       live = false;
     };
-  }, [local, requestId, historyId]);
+  }, [local, requestId, historyId, attemptNo]);
 
   const c = local?.c ?? fromHistory?.c;
   return (
@@ -79,7 +81,7 @@ export function ResponseDiffPanel({
         {c ? (
           <CompareView c={c} labels={['Previous response', 'This response']} />
         ) : fromHistory?.error ? (
-          <Empty icon={<GitCompareArrows size={24} />} title="Couldn't load the previous response">
+          <Empty icon={<GitCompareArrows size={24} />} title="Couldn't load the previous response" actions={[{ label: 'Retry', icon: <RotateCcw size={13} />, onClick: () => setAttemptNo((n) => n + 1) }]}>
             {fromHistory.error}
           </Empty>
         ) : requestId && historyId && !fromHistory ? (

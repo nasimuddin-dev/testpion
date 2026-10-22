@@ -472,7 +472,14 @@ export function GrpcView() {
                     ))}
                   </div>
                 ) : !d.protoFiles.length ? (
-                  <Empty icon={<Waypoints size={26} />} title="Describe the service with .proto files">
+                  <Empty
+                    icon={<Waypoints size={26} />}
+                    title="Describe the service with .proto files"
+                    actions={[
+                      { label: 'Add .proto file…', icon: <FileCode2 size={13} />, onClick: () => void addProto() },
+                      { label: 'Use server reflection', icon: <ScanSearch size={13} />, loading: reflecting, disabled: !d.target.trim(), title: d.target.trim() ? undefined : 'Enter the server address first', onClick: () => void reflect() },
+                    ]}
+                  >
                     Add the service's .proto file and the files it imports. Imports are matched by path, so name each file as the import statement does (e.g. <span className="mono">vet/v1/common.proto</span>). Google's well-known types are built in.
                   </Empty>
                 ) : (

@@ -624,7 +624,7 @@ export function RestView() {
         </Button>
       </div>
       <ResponseSplit id="rest-req-res" initialBelow={45}>
-        <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} scriptAi={scriptAi} />
+        <RequestEditor tab={tab} update={update} setReq={setReq} setParams={setParams} setExamples={setExamples} scriptAi={scriptAi} onSend={() => void send()} onSave={() => void quickSave()} />
         <div className="h-full min-h-0 flex flex-col">
           {sending[tab.id] && liveEvents[sending[tab.id]!] ? (
             <SseEvents events={liveEvents[sending[tab.id]!]!} live onStop={cancel} stateKey={tab.id} />

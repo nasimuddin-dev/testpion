@@ -105,7 +105,7 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
           {tools
             .filter((t) => !filter || t.name.toLowerCase().includes(filter.toLowerCase()))
             .map((t) => (
-              <button key={t.name} onClick={() => setSel(t.name)} className={cx('w-full text-left px-3 py-2 border-b border-line/60', sel === t.name ? 'bg-accent/10' : 'hover:bg-hover')}>
+              <button key={t.name} onClick={() => setSel(t.name)} className={cx('w-full text-left px-3 py-2 border-b border-line/60', sel === t.name ? 'bg-accent-soft' : 'hover:bg-hover')}>
                 <div className="flex items-center gap-1.5 text-sm font-medium mono">
                   <Wrench size={12} className="text-muted" />
                   {t.name}

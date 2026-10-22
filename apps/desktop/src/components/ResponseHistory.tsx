@@ -91,7 +91,12 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p.slice(-1), id]));
 
-  if (error) return <Empty icon={<HistoryIcon size={24} />} title="Couldn't load the history">{error}</Empty>;
+  if (error)
+    return (
+      <Empty icon={<HistoryIcon size={24} />} title="Couldn't load the history" actions={[{ label: 'Retry', icon: <RefreshCw size={13} />, onClick: load }]}>
+        {error}
+      </Empty>
+    );
   if (!entries) return <div className="h-full grid place-items-center"><Spinner /></div>;
   if (!entries.length)
     return (
@@ -171,7 +176,7 @@ export function ResponseHistory({ requestId, latestId }: { requestId: string; la
           </div>
         ) : (
           <Empty icon={<GitCompareArrows size={24} />} title="Compare responses">
-            Click a response to view it, or pick two and press <b>Compare selected</b> (or use the compare button on a row to compare it with the one before) to see what changed.
+            Pick a response in the list to view it, or pick two and press <b>Compare selected</b> (or use the compare button on a row to compare it with the one before) to see what changed.
           </Empty>
         )}
       </div>

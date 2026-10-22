@@ -1,4 +1,5 @@
 import { Copy, ExternalLink, Save } from 'lucide-react';
+import { importAction, newCollectionAction } from '../lib/empty-actions';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCollectionTree, type CollectionOutline } from '../lib/collections-store';
 import { call } from '../api';
@@ -96,8 +97,8 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
 
   if (!cols.length)
     return (
-      <Empty title="No collections yet" icon={<ExternalLink size={22} />}>
-        Collection variables belong to a collection: create or import one in Collections first.
+      <Empty title="No collections yet" icon={<ExternalLink size={22} />} actions={[newCollectionAction(), importAction()]}>
+        Collection variables belong to a collection.
       </Empty>
     );
   return (

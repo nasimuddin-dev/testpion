@@ -452,7 +452,7 @@ export function CommandPalette({
                 data-command={c.id}
                 {...hoverSelect(() => setIdx(i))}
                 onClick={() => run(c)}
-                className={cx('w-full text-left px-4 text-sm flex items-center gap-3', c.detail ? 'py-1.5' : 'py-2', i === idx && 'bg-accent/10')}
+                className={cx('w-full text-left px-4 text-sm flex items-center gap-3', c.detail ? 'py-1.5' : 'py-2', i === idx && 'bg-accent-soft')}
               >
                 <span aria-hidden className={cx('w-[18px] h-[18px] shrink-0 grid place-items-center [&_svg]:w-4 [&_svg]:h-4', i === idx ? 'text-accent' : 'text-muted')}>
                   {c.icon}
@@ -566,7 +566,7 @@ export function SearchDialog() {
         <div className="max-h-[55vh] overflow-auto py-1" role="listbox">
           {q && !hits.length && <div className="px-4 py-3 text-sm text-muted">No matching items</div>}
           {shown.map((h, i) => (
-            <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} {...hoverSelect(() => setIdx(i))} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent/10')}>
+            <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} {...hoverSelect(() => setIdx(i))} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent-soft')}>
               <span className="text-muted">{iconOf(h)}</span>
               <span className="min-w-0">
                 <div className="text-sm truncate">{h.title}</div>

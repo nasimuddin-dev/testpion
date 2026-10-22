@@ -513,7 +513,9 @@ export function WebSocketView() {
                       </div>
                     ))
                   ) : (
-                    <Empty title="No topics read">Add a topic to see its messages; you can produce without reading.</Empty>
+                    <Empty title="No topics read" actions={[{ label: 'Add a topic', icon: <Plus size={13} />, onClick: () => document.querySelector<HTMLInputElement>('input[aria-label="Topic to read"]')?.focus() }]}>
+                      Its messages show here; you can produce without reading.
+                    </Empty>
                   )}
                   {clusterTopics && (
                     <div className="px-2 py-2 text-xs text-muted border-t border-line" data-cluster-topics>
@@ -553,7 +555,9 @@ export function WebSocketView() {
                       </div>
                     ))
                   ) : (
-                    <Empty title="No subscriptions">Add a topic filter to receive messages; you can publish without subscribing.</Empty>
+                    <Empty title="No subscriptions" actions={[{ label: 'Add a topic filter', icon: <Plus size={13} />, onClick: () => document.querySelector<HTMLInputElement>('input[aria-label="Topic filter"]')?.focus() }]}>
+                      The messages it receives show here; you can publish without subscribing.
+                    </Empty>
                   )}
                 </div>
               </div>
@@ -644,7 +648,7 @@ export function WebSocketView() {
                   items={shown}
                   rowHeight={26}
                   render={(m) => (
-                    <button onClick={() => setSelected(m)} className={cx('w-full h-full flex items-center gap-2 px-2 text-sm border-b border-line/50 text-left hover:bg-hover', selected?.id === m.id && 'bg-accent/10')}>
+                    <button onClick={() => setSelected(m)} className={cx('w-full h-full flex items-center gap-2 px-2 text-sm border-b border-line/50 text-left hover:bg-hover', selected?.id === m.id && 'bg-accent-soft')}>
                       {m.direction === 'sent' ? <ArrowUpRight size={13} className="text-accent shrink-0" /> : m.direction === 'received' ? <ArrowDownLeft size={13} className="text-ok shrink-0" /> : <Info size={13} className="text-muted shrink-0" />}
                       <span className="text-xs text-muted tabular-nums shrink-0">{new Date(m.time).toLocaleTimeString()}</span>
                       {m.event && <Badge tone={m.ack ? 'ok' : 'accent'}>{m.ack ? `ack ${m.event}` : m.event}</Badge>}

@@ -146,7 +146,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
       <div className="h-full overflow-auto">
         <SectionTitle>Resources</SectionTitle>
         {disc.resources.map((r) => (
-          <button key={r.uri} className={cx('w-full text-left px-3 py-1.5 hover:bg-hover', uri === r.uri && 'bg-accent/10')} onClick={() => (setTemplate(undefined), setUri(r.uri), void read(r.uri))}>
+          <button key={r.uri} className={cx('w-full text-left px-3 py-1.5 hover:bg-hover', uri === r.uri && 'bg-accent-soft')} onClick={() => (setTemplate(undefined), setUri(r.uri), void read(r.uri))}>
             <div className="text-sm flex items-center gap-1.5">
               <FileText size={12} className="text-muted" /> {r.name}
             </div>
@@ -157,7 +157,7 @@ export function ResourcesPanel({ serverId, disc }: { serverId: string; disc: Dis
         {disc.resourceTemplates.map((r) => (
           <button
             key={r.uriTemplate}
-            className={cx('w-full text-left px-3 py-1.5 hover:bg-hover', template === r.uriTemplate && 'bg-accent/10')}
+            className={cx('w-full text-left px-3 py-1.5 hover:bg-hover', template === r.uriTemplate && 'bg-accent-soft')}
             onClick={() => (setTemplate(r.uriTemplate), setParams({}), setUri(fillTemplate(r.uriTemplate, {})))}
           >
             <div className="text-sm flex items-center gap-1.5">
@@ -253,7 +253,7 @@ export function PromptsPanel({ serverId, prompts }: { serverId: string; prompts:
         {prompts.map((x) => (
           <button
             key={x.name}
-            className={cx('w-full text-left px-3 py-2 border-b border-line/60', sel === x.name ? 'bg-accent/10' : 'hover:bg-hover')}
+            className={cx('w-full text-left px-3 py-2 border-b border-line/60', sel === x.name ? 'bg-accent-soft' : 'hover:bg-hover')}
             onClick={() => (setSel(x.name), setOut(undefined))}
           >
             <div className="text-sm font-medium flex items-center gap-1.5">

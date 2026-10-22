@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { AiAction } from './ai/AiAction';
 import { ApiReportBar } from './ApiReportBar';
 import { lintReport } from './output/api-report-specs';
-import { Badge, Empty } from './ui';
+import { Badge, Busy, Empty } from './ui';
 import { plural } from '../lib/format';
 
 export interface ApiLintProblem {
@@ -33,7 +33,7 @@ const TONE = { error: 'bad', warning: 'warn', info: 'default' } as const;
 /** The lint problems of an API definition: one row per problem (opens its place in the document), and AI advice on fixing them. */
 export function ApiLintPanel({ spec, text, result, onOpen }: { spec: string; text: string; result?: ApiLintResult; onOpen(p: ApiLintProblem): void }) {
   const report = useMemo(() => (result ? lintReport(spec, result) : undefined), [spec, result]);
-  if (!result) return <Empty title="Checking the document…" />;
+  if (!result) return <Busy>Checking the document…</Busy>;
   const { counts, problems } = result;
   if (!problems.length)
     return (

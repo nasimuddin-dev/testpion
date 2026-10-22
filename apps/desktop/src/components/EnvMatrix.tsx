@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react';
+import { Lock, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { plural } from '../lib/format';
@@ -25,7 +25,9 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
   const [m, setM] = useState<Matrix>();
   const [error, setError] = useState<string>();
   const [onlyIncomplete, setOnlyIncomplete] = useState(true);
-  useEffect(() => {
+  const load = () => {
+    setError(undefined);
+    setM(undefined);
     void call<Matrix>('env.matrix').then(
       (r) => {
         setM(r);
@@ -33,7 +35,8 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
       },
       (e) => setError(asError(e).message),
     );
-  }, []);
+  };
+  useEffect(load, []);
   const rows = m ? (onlyIncomplete ? m.rows.filter((r) => r.incompleteIn.length) : m.rows) : [];
   // the rows as shown (statuses, never values)
   const spec = useMemo(
@@ -52,7 +55,9 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
   return (
     <Modal title="Variables across environments" onClose={onClose} width={Math.min(1100, 360 + (m?.environments.length ?? 2) * 120)}>
       {error ? (
-        <Empty title="Couldn't build the matrix">{error}</Empty>
+        <Empty title="Couldn't build the matrix" actions={[{ label: 'Retry', icon: <RotateCcw size={13} />, onClick: load }]}>
+          {error}
+        </Empty>
       ) : !m ? (
         <div className="h-40 grid place-items-center">
           <Spinner />

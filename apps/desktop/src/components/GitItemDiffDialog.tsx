@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { toastError } from '../store';
-import { Empty, Modal } from './ui';
+import { Busy, Modal } from './ui';
 import { PartsTable } from './PartsTable';
 
 /**
@@ -23,7 +23,7 @@ export function GitItemDiffDialog({ file, itemId, onClose }: { file: string; ite
   return (
     <Modal title={d ? `What changed: ${d.title}` : 'What changed'} onClose={onClose} width={960}>
       {!d ? (
-        <Empty title="Reading both versions…" />
+        <Busy>Reading both versions…</Busy>
       ) : (
         <div className="grid gap-2">
           <label className="flex items-center gap-1 text-xs text-muted justify-end">

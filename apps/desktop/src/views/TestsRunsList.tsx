@@ -1,7 +1,7 @@
 import { AskSearchButton } from '../components/ai/AskSearchButton';
 import { ASK_SCOPE } from '../components/ai/ask-search';
 import { useState } from 'react';
-import { BarChart3, History } from 'lucide-react';
+import { BarChart3, History, Play } from 'lucide-react';
 import { Empty, Input } from '../components/ui';
 import { treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
@@ -15,7 +15,7 @@ import { timeAgo } from '../lib/format';
 import { copyRunCommand, runInCi } from '../lib/run-ci';
 
 /** The Tests view's list of runs: each row the `run` kind's node on the one row (TreeRowShell), with the one menu (lib/node-menu.ts). */
-export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void }) {
+export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onRunAll }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void; onRunAll(): void }) {
   // filter by name / environment, and only the runs where something failed
   const [query, setQuery] = useState('');
   const [failedOnly, setFailedOnly] = useState(false);
@@ -99,8 +99,8 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed }: {
           </TreeRowShell>
         ))}
         {!runs.length && (
-          <Empty icon={<History size={22} />} title="No runs yet">
-            Run a test file (▶ on its row, or <b>Run all tests</b>) and its results are listed here.
+          <Empty icon={<History size={22} />} title="No runs yet" actions={[{ label: 'Run all tests', icon: <Play size={13} />, onClick: onRunAll }]}>
+            Run every test file (or one, with ▶ on its row) and its results are listed here.
           </Empty>
         )}
         {runs.length > 0 && !shown.length && (

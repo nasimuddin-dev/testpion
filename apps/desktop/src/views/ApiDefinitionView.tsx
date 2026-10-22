@@ -1,6 +1,6 @@
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
-import { refMenu } from '../components/RefLink';
-import { FileCode2, Save, Sparkles, Upload } from 'lucide-react';
+import { openItemMenu } from '../lib/item-menu';
+import { FileCode2, RotateCcw, Save, Sparkles, Upload } from 'lucide-react';
 import { startFlowGenerate } from '../components/ai/flow-generate';
 import { startAiAnalysis } from '../components/ai/ai-analysis';
 import { useAiEnabled } from '../lib/use-ai-enabled';
@@ -8,6 +8,7 @@ import { LABEL } from '../lib/vocabulary';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OnMount } from '@monaco-editor/react';
 import { asError, call } from '../api';
+import { copyText } from '../lib/clipboard';
 import { persisted, useApp, attempt } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
 import { useDoc } from '../lib/docs';
@@ -66,6 +67,9 @@ export function ApiDefinitionView() {
   const [text, setText] = useState('');
   const [saved, setSaved] = useState('');
   const [error, setError] = useState<string>();
+  // Retry (after the document or its outline could not be read) reads them again
+  const [attemptNo, setAttemptNo] = useState(0);
+  const retry = () => setAttemptNo((n) => n + 1);
   useEffect(() => {
     if (!spec) return;
     setError(undefined);
@@ -76,7 +80,7 @@ export function ApiDefinitionView() {
       },
       (e) => setError(asError(e).message),
     );
-  }, [spec]);
+  }, [spec, attemptNo]);
   const dirty = text !== saved;
   const save = async () => {
     if (!spec || !dirty) return;
@@ -100,6 +104,7 @@ export function ApiDefinitionView() {
   const [outline, setOutline] = useState<{ outline?: ApiOutline; async?: AsyncOutline; error?: string }>({});
   useEffect(() => {
     if (!text || tab !== 'preview') return;
+    setOutline((o) => (o.error ? {} : o));
     const t = setTimeout(() => {
       const p = isAsync
         ? call<AsyncOutline>('asyncapi.outline', { text }).then((o) => setOutline({ async: o }))
@@ -107,7 +112,7 @@ export function ApiDefinitionView() {
       void p.catch((e) => setOutline({ error: asError(e).message }));
     }, 300);
     return () => clearTimeout(t);
-  }, [text, tab, isAsync]);
+  }, [text, tab, isAsync, attemptNo]);
   const editor = useRef<{ ed: Parameters<OnMount>[0]; monaco: Parameters<OnMount>[1] }>(undefined);
   const reveal = useRef<ApiLintProblem>(undefined);
   const mark = () => {
@@ -164,7 +169,8 @@ export function ApiDefinitionView() {
         crumbs={[{ label: 'API definitions' }, ...name!.split('/').slice(0, -1).map((f) => ({ label: f }))]}
         name={name!.split('/').pop()!}
         dirty={dirty}
-        actions={refMenu({ kind: 'spec', path: spec })}
+        // its ⋯: the API definition's menu as its row in the explorer has it (lib/node-menu.ts)
+        actions={openItemMenu('spec', { ref: { kind: 'spec', path: spec }, name: name!, on: { revealFile: () => void attempt(() => call('workspace.revealFile', { path: spec })), copyPath: () => void copyText(spec, 'the path') } })}
       />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0 min-w-0">
         <FileCode2 size={16} className="text-muted shrink-0" />
@@ -216,7 +222,9 @@ export function ApiDefinitionView() {
       <div className="flex-1 min-h-0">
         {tab === 'definition' ? (
           error ? (
-            <Empty title="Couldn't open the document">{error}</Empty>
+            <Empty title="Couldn't open the document" actions={[{ label: 'Retry', icon: <RotateCcw size={13} />, onClick: retry }]}>
+              {error}
+            </Empty>
           ) : (
             <CodeEditor
               language={/\.json$/i.test(spec) ? 'json' : 'yaml'}
@@ -230,9 +238,9 @@ export function ApiDefinitionView() {
             />
           )
         ) : tab === 'preview' && isAsync ? (
-          <AsyncPreviewPanel outline={outline.async} error={outline.error} spec={spec} />
+          <AsyncPreviewPanel outline={outline.async} error={outline.error} spec={spec} onRetry={retry} />
         ) : tab === 'preview' ? (
-          <ApiPreviewPanel outline={outline.outline} error={outline.error} spec={spec} />
+          <ApiPreviewPanel outline={outline.outline} error={outline.error} spec={spec} onRetry={retry} />
         ) : tab === 'lint' ? (
           <ApiLintPanel spec={spec} text={text} result={lint} onOpen={openProblem} />
         ) : tab === 'fuzz' ? (

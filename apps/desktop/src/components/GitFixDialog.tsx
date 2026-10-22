@@ -6,7 +6,7 @@ import { toastError, useApp } from '../store';
 import { plural } from '../lib/format';
 import { toastWithUndo } from '../lib/git-items';
 import { asError } from '../api';
-import { Badge, Button, Callout, Empty, Modal, Toggle } from './ui';
+import { Badge, Button, Callout, Busy, Modal, Toggle } from './ui';
 
 const STATE: Record<GitFixStep['state'], { label: string; tone: 'accent' | 'warn' | undefined }> = {
   todo: { label: 'Will fix', tone: 'accent' },
@@ -97,7 +97,7 @@ export function GitFixDialog({ onClose, onDone }: { onClose(): void; onDone(): v
           Could not look at the workspace: {problem}. Check that git is installed and the workspace folder is readable, then retry.
         </Callout>
       ) : !shown ? (
-        <Empty title="Looking at the workspace…" />
+        <Busy>Looking at the workspace…</Busy>
       ) : (
         <div className="grid gap-3" data-fix-dialog="">
           <p className="text-sm text-muted">

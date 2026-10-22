@@ -3,7 +3,7 @@
  * label, storage, folders, where it opens, its watch kinds, git merge mode and a complete capability map. A new kind is
  * an entry here, plus its engine facets in packages/core/src/kinds/ and its fixture in tests/fixtures/kinds/workspace.
  */
-import type { Capabilities, ItemKindInfo } from './item-kinds.js';
+import type { Capabilities, DeletePolicy, ItemKindInfo } from './item-kinds.js';
 
 /* ------------------------------------------------------------------ capability profiles (each one complete) */
 
@@ -110,6 +110,12 @@ const LIBRARY_ITEM: Capabilities = {
   import: true,
 };
 
+/* ------------------------------------------------------------------ delete policies shared by several kinds */
+
+const LIBRARY_DELETE: DeletePolicy = { mode: 'undo', reason: 'Undo saves it again in its library, in its place' };
+const TRASH_DELETE: DeletePolicy = { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo and the trash put it back' };
+const TEST_DELETE: DeletePolicy = { mode: 'undo', reason: 'its text is kept until the message goes (a folder of more than 200 files asks first instead)' };
+
 /* ------------------------------------------------------------------ the kinds */
 
 /** Every kind, in the registry's order (the order of `testpion kinds`, of Recently deleted, of the docs table). */
@@ -145,6 +151,7 @@ const KINDS: readonly ItemKindInfo[] = [
       import: true,
       versioned: true,
     },
+    deletes: { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo and the trash put it back' },
   },
   {
     id: 'folder',
@@ -180,6 +187,7 @@ const KINDS: readonly ItemKindInfo[] = [
       watch: { na: 'watched as its collection file' },
       search: { na: 'found through the requests it holds' },
     },
+    deletes: { mode: 'undo', reason: 'Undo puts the collection back as it was, the folder and its requests with it' },
   },
   {
     id: 'request',
@@ -213,6 +221,7 @@ const KINDS: readonly ItemKindInfo[] = [
       versioned: { na: 'versioned with its collection file' },
       watch: { na: 'watched as its collection file' },
     },
+    deletes: { mode: 'undo', reason: 'Undo puts the collection back as it was' },
   },
   {
     id: 'grpc-call',
@@ -231,6 +240,7 @@ const KINDS: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     sample: 'library/grpc.json',
     capabilities: { ...LIBRARY_ITEM, 'test-file': true, monitor: { planned: '0.58' } },
+    deletes: LIBRARY_DELETE,
   },
   {
     id: 'ws-connection',
@@ -249,6 +259,7 @@ const KINDS: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     sample: 'library/websocket.json',
     capabilities: { ...LIBRARY_ITEM, 'test-file': true },
+    deletes: LIBRARY_DELETE,
   },
   {
     id: 'environment',
@@ -274,6 +285,7 @@ const KINDS: readonly ItemKindInfo[] = [
       import: true,
       versioned: true,
     },
+    deletes: { mode: 'undo', reason: 'it goes to Recently deleted (30 days) with its secret values: Undo and the trash put it back' },
   },
   {
     id: 'workspace',
@@ -331,6 +343,7 @@ const KINDS: readonly ItemKindInfo[] = [
       import: true,
       versioned: true,
     },
+    deletes: TEST_DELETE,
   },
   {
     id: 'flow',
@@ -359,6 +372,7 @@ const KINDS: readonly ItemKindInfo[] = [
       versioned: true,
       search: { na: 'found as its test file' },
     },
+    deletes: TEST_DELETE,
   },
   {
     id: 'dataset',
@@ -379,6 +393,7 @@ const KINDS: readonly ItemKindInfo[] = [
     anyFile: true,
     sample: 'datasets/users.csv',
     capabilities: { ...FILE_ITEM, move: true, trash: true, run: { na: 'a dataset drives a run (Run a collection with it)' }, export: true, import: true, versioned: true },
+    deletes: TRASH_DELETE,
   },
   {
     id: 'spec',
@@ -410,6 +425,7 @@ const KINDS: readonly ItemKindInfo[] = [
       import: true,
       versioned: true,
     },
+    deletes: TRASH_DELETE,
   },
   {
     id: 'proto',
@@ -465,6 +481,7 @@ const KINDS: readonly ItemKindInfo[] = [
       versioned: true,
       search: { na: 'found by name in Settings' },
     },
+    deletes: { mode: 'confirm', reason: 'scripts that tp.require it fail, and the file cannot be put back' },
   },
   {
     id: 'mcp-server',
@@ -493,6 +510,7 @@ const KINDS: readonly ItemKindInfo[] = [
       'test-file': { planned: '0.58' },
       monitor: { planned: '0.58' },
     },
+    deletes: { mode: 'undo', reason: 'it goes to Recently deleted (30 days): Undo puts it back in its place and reconnects it' },
   },
   {
     id: 'mcp-mock',
@@ -537,6 +555,7 @@ const KINDS: readonly ItemKindInfo[] = [
     listed: true,
     sample: 'providers.json',
     capabilities: { ...FILE_ITEM, rename: { na: 'renamed in its settings' }, move: { na: 'providers have no folders' }, versioned: true, export: true, import: true },
+    deletes: { mode: 'undo', reason: 'Undo saves it again in its place (its key stays in the OS store)' },
   },
   {
     id: 'prompt',
@@ -555,6 +574,7 @@ const KINDS: readonly ItemKindInfo[] = [
     listed: true,
     sample: 'library/ai-prompts.json',
     capabilities: { ...LIBRARY_ITEM, 'test-file': { planned: '0.58' } },
+    deletes: LIBRARY_DELETE,
   },
   {
     id: 'load-test',
@@ -573,6 +593,7 @@ const KINDS: readonly ItemKindInfo[] = [
     listed: true,
     sample: 'library/load-tests.json',
     capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.58' } },
+    deletes: LIBRARY_DELETE,
   },
   {
     id: 'evaluation',
@@ -591,6 +612,7 @@ const KINDS: readonly ItemKindInfo[] = [
     listed: true,
     sample: 'library/evaluations.json',
     capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.58' }, monitor: { planned: '0.58' } },
+    deletes: LIBRARY_DELETE,
   },
   {
     id: 'monitor',
@@ -609,6 +631,7 @@ const KINDS: readonly ItemKindInfo[] = [
     listed: true,
     sample: 'library/monitors.json',
     capabilities: { ...LIBRARY_ITEM, run: true },
+    deletes: { mode: 'undo', reason: 'Undo saves it again under its id (schedule and settings); its past runs never went' },
   },
   {
     id: 'rag-target',
@@ -636,6 +659,7 @@ const KINDS: readonly ItemKindInfo[] = [
       import: { planned: '0.58' },
       uses: { planned: '0.58' },
     },
+    deletes: LIBRARY_DELETE,
   },
   {
     id: 'metric',
@@ -665,6 +689,7 @@ const KINDS: readonly ItemKindInfo[] = [
       trash: { na: 'deleted in the metric editor, after it says which evaluations use the metric' },
       search: { na: 'found by name in the metric picker' },
     },
+    deletes: { mode: 'confirm', reason: 'evaluations and formula metrics may name it: the dialog lists them first (its Undo puts the file back right away)' },
   },
   {
     id: 'debugger-rules',
@@ -752,6 +777,7 @@ const KINDS: readonly ItemKindInfo[] = [
     watch: 'none',
     git: { merge: 'none', ignored: true },
     capabilities: { ...RECORD, run: { na: 'a run is repeated with Rerun failed, or by running what it ran' }, delete: true, ci: true, ai: true },
+    deletes: { mode: 'confirm', reason: 'runs are deleted by age (Settings ▸ Storage): their results and reports cannot be put back' },
   },
   {
     id: 'history',
@@ -766,6 +792,7 @@ const KINDS: readonly ItemKindInfo[] = [
     watch: 'none',
     git: { merge: 'none', ignored: true },
     capabilities: { ...RECORD, delete: true, 'test-file': true },
+    deletes: { mode: 'confirm', reason: 'a history entry (and its kept response) cannot be put back' },
   },
   {
     id: 'trace',
@@ -793,7 +820,9 @@ const KINDS: readonly ItemKindInfo[] = [
     opens: { view: 'debugger' },
     watch: 'none',
     git: { merge: 'none', ignored: true },
-    capabilities: { ...RECORD, search: { na: 'filtered in the Debugger grid' } },
+    // the selected exchanges are deleted from the Debugger grid (Delete), the whole session with Clear
+    capabilities: { ...RECORD, delete: true, search: { na: 'filtered in the Debugger grid' } },
+    deletes: { mode: 'confirm', reason: 'a captured exchange cannot be put back (save the session first to keep it)' },
   },
   {
     id: 'proposal',

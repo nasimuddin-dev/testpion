@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### One row, one delete, one empty state
+
+- **Every list row is the same row.** Traces, the MCP protocol trace, the Collections list, Git's commits, a trace's spans and the sidebar's Environments and History panes now use the row every tree uses: ↑ ↓ Home End and typeahead move between rows, Enter opens, and where the row is an item, right-click, ⋯, Shift+F10, F2 and Delete work as they do in the explorer. A collection in the Collections list has the same menu as in the explorer. A selected row is one colour everywhere, in both themes.
+- **Delete the open item from its ⋯.** Monitors, collections, MCP servers, test files, load tests, evaluations, prompts, datasets and API definitions show the item's own menu (the same as its row's) in the editor, with **Delete…**. "Delete monitor", the red Delete button of a collection and the test file's "Delete file" button are gone.
+- **A delete behaves the same wherever you ask for it.** Each kind of item says how it is deleted: at once with **Undo** (collections, environments, requests, test files, monitors, saved items, MCP servers, Debugger rules and filter presets, a cookie), or after a question when it cannot be put back (history entries, captured exchanges, a git branch, runs, script packages). A test file deleted from its editor can now be undone, like one deleted from the tree; deleting history entries and captured exchanges asks first, and a failure says so instead of failing silently. `testpion kinds --json` and the MCP `list_kinds` tool show each kind's delete policy.
+- **Empty states offer the step they name.** Home's "No collections yet" (New collection, Import…), "No environments" (New environment), the Debugger's "Nothing captured yet" (Start the proxy, Record a flow…), "No runs yet" (Run all tests, Run collection, Run the flow), examples (Send, Save to collection…), gRPC proto files (Add .proto file…, Use server reflection), Load tests (Start load test), Debugger rules (New rule, Presets), RAG datasets, Git not installed (Open git-scm.com) and more. Every "Couldn't read…" state has **Retry**. A wait shows a spinner with what it is doing, not an empty page titled "Loading…".
+- **Closing the last tab** of Monitors or Environments shows the same "No open …" page as Tests, Load tests, Evaluations and the Playground, with a New button.
+
 ## 0.54.1 — 2026-10-21
 
 Importing a file with thousands of folders nested inside each other now says so in plain words on every Node version, instead of failing with a stack overflow while the import report was being built. Nothing else changes.

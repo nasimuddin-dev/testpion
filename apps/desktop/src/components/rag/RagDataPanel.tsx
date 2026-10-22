@@ -18,6 +18,7 @@ const useDatasets = () => useRpc<{ datasets: DatasetRow[] }>('rag.testset.source
 /** AI Lab ▸ RAG ▸ Data, the list: the datasets of the workspace with their record counts (the files of datasets/). */
 export function RagDatasetsList() {
   const data = useDatasets();
+  const [dialog, setDialog] = useState<'generate' | 'capture'>();
   if (!data)
     return (
       <div className="p-4 grid place-items-center">
@@ -46,7 +47,19 @@ export function RagDatasetsList() {
             )}
           </div>
         ))}
-        {!data.datasets.length && <Empty title="No datasets yet">Generate a test set from your documents, or build one from real calls. A dataset is a file in datasets/ that an evaluation runs.</Empty>}
+        {!data.datasets.length && (
+          <Empty
+            title="No datasets yet"
+            actions={[
+              { label: 'Generate a test set…', onClick: () => setDialog('generate') },
+              { label: 'From captured calls…', icon: <Radio size={13} />, onClick: () => setDialog('capture') },
+            ]}
+          >
+            A dataset is a file in datasets/ that an evaluation runs: made from your documents, or from real calls.
+          </Empty>
+        )}
+        {dialog === 'generate' && <RagTestsetDialog onClose={() => setDialog(undefined)} />}
+        {dialog === 'capture' && <RagCaptureDialog onClose={() => setDialog(undefined)} />}
       </div>
     </div>
   );

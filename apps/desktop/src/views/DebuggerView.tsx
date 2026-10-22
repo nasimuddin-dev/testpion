@@ -29,7 +29,8 @@ import { openReverseProxyCapture } from '../lib/capture';
 import { Database, Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
-import { confirmAction, persisted, promptText, toastError, useApp, attempt } from '../store';
+import { persisted, promptText, toastError, useApp, attempt } from '../store';
+import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
 import { Badge, Button, cx, Empty, Input, Menu, PageHeader, Select, Split, Tabs, type MenuItem } from '../components/ui';
 import { formatBytes, formatMs, outputFileName } from '@testpion/shared';
 import { pickBinaryFile, pickTextFile } from '../lib/files';
@@ -240,20 +241,33 @@ export function DebuggerView() {
     const { auth: _a, ...exchange } = e;
     startAi({ task: 'explain-exchange', title: `Explain ${e.method} ${e.host}`, context: { exchange } });
   };
-  const remove = async (ids: string[]) => {
-    await call('debug.delete', { ids });
-    if (selected && ids.includes(selected)) setSelected(undefined);
-    setSelectedIds((cur) => cur.filter((id) => !ids.includes(id)));
-    void load();
-  };
-  const clear = async () => {
-    if (await confirmAction({ title: 'Clear the session', message: 'Forget every captured exchange?', confirmLabel: 'Clear', danger: true })) {
-      setSelected(undefined);
-      setSelectedIds([]);
-      setStatus(await call<Status>('debug.clear'));
-      void load();
-    }
-  };
+  // captured exchanges cannot be put back (the registry's delete policy): both ask first, through the one helper
+  const remove = (ids: string[]) =>
+    confirmDelete({
+      ...(ids.length === 1 ? { kind: 'exchange' as const, name: rows.find((r) => r.id === ids[0])?.url ?? ids[0]! } : { what: `the ${plural(ids.length, 'captured exchange')} selected` }),
+      detail: 'Save the session first to keep them.',
+      run: async () => {
+        await call('debug.delete', { ids });
+        if (selected && ids.includes(selected)) setSelected(undefined);
+        setSelectedIds((cur) => cur.filter((id) => !ids.includes(id)));
+        await load();
+      },
+    });
+  const clear = () =>
+    confirmDelete({
+      what: 'every captured exchange of the session',
+      title: 'Clear the session',
+      message: 'Forget every captured exchange?',
+      detail: 'Save the session first to keep them.',
+      confirmLabel: 'Clear',
+      done: 'Session cleared',
+      run: async () => {
+        setSelected(undefined);
+        setSelectedIds([]);
+        setStatus(await call<Status>('debug.clear'));
+        await load();
+      },
+    });
   const saveSession = async () => {
     const name = await promptText('Save the session', {
       message: 'A name for this capture; it is saved as a HAR file in the workspace (debugger/, kept out of git: Share session puts a masked copy in git).',
@@ -588,7 +602,7 @@ export function DebuggerView() {
         ]}
       />
       {tab === 'stats' ? (
-        <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} />
+        <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} running={!!status?.running} onStart={() => void start()} onRecord={() => void startRecording()} />
       ) : tab === 'connections' ? (
         <ConnectionsView rows={rows} onPick={(id) => (setTab('traffic'), setSelected(id))} />
       ) : tab === 'rules' ? (
@@ -720,11 +734,23 @@ export function DebuggerView() {
                           if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), toastError);
                         },
                       },
+                      // at once, with Undo in the message (the preset is saved again as it was)
                       ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({
                         label: `Forget ${p.name}`,
                         icon: <Trash2 size={14} />,
                         danger: true,
-                        onSelect: () => void call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), toastError),
+                        onSelect: () =>
+                          void deleteWithUndo({
+                            what: `the filter preset "${p.name}"`,
+                            run: async () => {
+                              const fp = await call<RulesState['filterPresets']>('debug.deleteFilterPreset', { name: p.name });
+                              setRules((r) => r && { ...r, filterPresets: fp });
+                            },
+                            undo: async () => {
+                              const fp = await call<RulesState['filterPresets']>('debug.saveFilterPreset', { name: p.name, filter: p.filter });
+                              setRules((r) => r && { ...r, filterPresets: fp });
+                            },
+                          }),
                       })),
                     ]}
                     trigger={
@@ -884,12 +910,16 @@ export function DebuggerView() {
 const STATUS_TONE: Record<string, string> = { '2xx': 'bg-ok', '3xx': 'bg-accent', '4xx': 'bg-warn', '5xx': 'bg-bad', error: 'bg-bad', pending: 'bg-muted' };
 
 /** The session in numbers: the overview (requests over time, the status mix), by host, type and program, the largest and the slowest. */
-function StatsPanel({ stats, onPick }: { stats?: Stats; onPick(id: string): void }) {
+function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Stats; onPick(id: string): void; running: boolean; onStart(): void; onRecord(): void }) {
   if (!stats || !stats.total)
     return (
       <div className="flex-1 min-h-0 overflow-auto p-4">
-        <Empty icon={<Bug size={26} />} title="Nothing captured yet">
-          Start the proxy and send some traffic through it; the session's numbers appear here.
+        <Empty
+          icon={<Bug size={26} />}
+          title="Nothing captured yet"
+          actions={[...(running ? [] : [{ label: 'Start the proxy', onClick: onStart }]), { label: 'Record a flow…', onClick: onRecord, primary: running }]}
+        >
+          {running ? 'The proxy is on: send some traffic through it' : 'Send some traffic through the proxy'}; the session's numbers appear here.
         </Empty>
       </div>
     );

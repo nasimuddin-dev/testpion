@@ -15,7 +15,7 @@ import { JsonTree, RawView, type TreeAssertion, type TreeVariable } from './Json
 import { TraceView } from './TraceView';
 import { OutputActions } from './output/OutputFrame';
 import { responseBaseName, responseSpecs } from './output/response-specs';
-import { Badge, Button, cx, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
+import { Badge, Button, cx, Busy, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
 import { findDecodedJwts } from '@testpion/shared';
@@ -304,7 +304,7 @@ export function ResponseViewer({
         {tab === 'events' && response.events && <SseEvents events={response.events} stopped={response.streamStopped} dropped={response.eventsDropped} stateKey={eventsKey} outputName={responseBaseName(response, method, 'events')} />}
         {tab === 'trace' && (
           <div className="h-full min-h-0" data-output="response.trace">
-            {trace ? <TraceView trace={trace} /> : <Empty title="Loading trace…" />}
+            {trace ? <TraceView trace={trace} /> : <Busy>Loading trace…</Busy>}
           </div>
         )}
         {tab === 'code' && (

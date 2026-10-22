@@ -21,7 +21,6 @@ import {
   Replace,
   Send,
   ShieldCheck,
-  Trash2,
   Upload,
   FolderOpen,
   Workflow,
@@ -46,8 +45,10 @@ import { CollectionDocs } from '../components/CollectionDocs';
 import { addToFolder, CollectionTree } from '../components/CollectionTree';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from '../components/TrashDialog';
 import { KeyValueEditor } from '../components/KeyValueEditor';
-import { Badge, Button, cx, Empty, IconButton, Menu, SectionTitle, Split, Tabs } from '../components/ui';
-import { InlineRename } from '../components/TreeParts';
+import { Badge, Button, cx, Empty, IconButton, Menu, MoreMenu, SectionTitle, Split, Tabs, type MenuItem } from '../components/ui';
+import { InlineRename, treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
+import { openItemMenu, type OpenItemCtx } from '../lib/item-menu';
 import { closeTabsFor } from '../components/EditorTabs';
 import { subtreeIds } from '../components/MoveDialog';
 import { ImportModal } from './rest/dialogs';
@@ -100,6 +101,8 @@ export function CollectionsView() {
   useEffect(() => setDraft(stored && stored.id === sel ? stored : undefined), [sel, stored]);
   useIntent('collections', (p) => {
     if (p?.collectionId) setSel(p.collectionId);
+    // the New collection button of an empty state elsewhere (Home, the variables pane): lib/empty-actions.ts
+    if (p?.create) void newCollection();
     // straight to a part of the collection's settings (e.g. its variables, from the variable popover or the quick look)
     if (p?.tab === 'variables' || p?.tab === 'auth' || p?.tab === 'scripts' || p?.tab === 'docs' || p?.tab === 'overview') setTab(p.tab);
     if (p?.run) {
@@ -156,6 +159,69 @@ export function CollectionsView() {
   };
   const open = (c: Collection, n: CollectionNode) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id });
   const count = (nodes: CollectionNode[]): number => nodes.reduce((a, n) => a + (n.kind === 'folder' ? count(n.items) : 1), 0);
+  /** The export choices of a collection (the header's Export button and the Export ▸ submenu of its menu are one list). */
+  const exportItems = (c: { id: string }): MenuItem[] => [
+    { label: 'TestPion collection (.json)', icon: <FileJson size={14} />, onSelect: () => void exportAs(c.id, 'testpion') },
+    { label: 'Postman collection v2.1', icon: <Send size={14} />, onSelect: () => void exportAs(c.id, 'postman') },
+    { label: 'OpenAPI 3.1 (.yaml)', icon: <FileCode size={14} />, onSelect: () => void exportAs(c.id, 'openapi') },
+    { label: 'Bruno collection folder…', icon: <FolderOpen size={14} />, onSelect: () => void exportAs(c.id, 'bruno') },
+    { label: '.http file (REST Client, JetBrains)', icon: <FileCode size={14} />, onSelect: () => void exportAs(c.id, 'http') },
+    { label: 'AsyncAPI 3.0 (its connections)', icon: <Radio size={14} />, onSelect: () => void exportAs(c.id, 'asyncapi') },
+  ];
+  /** The collection being renamed in place in the list (F2, or Rename in its menu). */
+  const [renamingId, setRenamingId] = useState<string>();
+  /** Rename a collection from its row: only the name changes (the open one keeps its unsaved edits). */
+  const renameFromList = async (c: { id: string; name: string }, name?: string) => {
+    setRenamingId(undefined);
+    if (!name || name === c.name) return;
+    await attempt(async () => {
+      const whole = await call<Collection>('col.get', { id: c.id });
+      await call('col.save', { ...whole, name });
+      if (draft?.id === c.id) setDraft({ ...draft, name });
+      await load();
+    });
+  };
+  /** Move a collection to Recently deleted (restorable for 30 days); its tabs close; Undo in the message brings it back. */
+  const deleteCollection = (c: { id: string; name: string; items: CollectionNode[] }) =>
+    deleteWithUndo({
+      kind: 'collection',
+      name: c.name,
+      trash: true,
+      focus: `collection:${c.id}`,
+      run: async () => {
+        await call('col.delete', { id: c.id });
+        closeTabsFor(c.items.flatMap(subtreeIds));
+        setSel((s) => (s === c.id ? undefined : s));
+        await load();
+      },
+      undo: async () => {
+        await restoreDeleted('collection', c.id);
+        await load();
+      },
+    });
+  /**
+   * A collection's menu, the same on its row here, in the header's ⋯ and in the explorer (lib/node-menu.ts builds it):
+   * run, export, settings, monitor, CI, rename, duplicate, Delete… with Undo.
+   */
+  const collectionMenu = (c: { id: string; name: string; items: CollectionNode[] }): OpenItemCtx => ({
+    ref: { kind: 'collection', collectionId: c.id },
+    name: c.name,
+    on: {
+      run: () => (setSel(c.id), setRunFolder(undefined), setTab('run')),
+      export: exportItems(c),
+      collectionSettings: () => (setSel(c.id), setTab('settings')),
+      monitor: () => useApp.getState().openIntent('monitors', { create: { collectionId: c.id } }),
+      ci: () => useApp.getState().set({ ci: { collection: c.id } }),
+      rename: () => (draft?.id === c.id ? setRenamingName(true) : setRenamingId(c.id)),
+      duplicate: () =>
+        void attempt(async () => {
+          const copy = await call<Collection>('col.duplicate', { id: c.id });
+          await load();
+          setSel(copy.id);
+        }),
+      delete: () => void deleteCollection(c),
+    },
+  });
   return (
     <>
       <Split id="collections" sidebar collapsed initial={24}>
@@ -218,12 +284,28 @@ export function CollectionsView() {
           >
             Collections
           </SectionTitle>
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto" role="tree" aria-label="Collections" onKeyDown={treeKeys}>
+            {/* the one row (TreeRowShell): the same menu as the collection's row in the explorer (right-click, ⋯, Shift+F10), F2 renames, Delete deletes with Undo */}
             {cols.map((c) => (
-              <button key={c.id} onClick={() => setSel(c.id)} className={cx('w-full text-left px-3 py-2 border-b border-line/60', sel === c.id ? 'bg-accent/10' : 'hover:bg-hover')}>
-                <div className={cx('text-sm font-medium', c.problem && 'text-bad')}>{c.name}</div>
-                <div className="text-xs text-muted">{c.problem ? c.problem : `${plural(count(c.items), 'request')} · v${c.version} · ${c.updatedAt ? timeAgo(c.updatedAt) : ''}`}</div>
-              </button>
+              <TreeRowShell
+                key={c.id}
+                kind="collection"
+                nodeId={`collection:${c.id}`}
+                label={c.name}
+                tall
+                active={sel === c.id}
+                onClick={() => setSel(c.id)}
+                onOpen={() => setSel(c.id)}
+                ctx={() => collectionMenu(c)}
+                git={{ kind: 'collection', collectionId: c.id }}
+                rename={renamingId === c.id ? { value: c.name, label: 'Collection name', done: (name) => void renameFromList(c, name) } : undefined}
+                className="mx-0 rounded-none pl-3 border-b border-line/60"
+              >
+                <span className="flex-1 min-w-0">
+                  <span className={cx('block text-sm font-medium truncate', c.problem && 'text-bad')}>{c.name}</span>
+                  <span className="block text-xs text-muted truncate">{c.problem ? c.problem : `${plural(count(c.items), 'request')} · v${c.version} · ${c.updatedAt ? timeAgo(c.updatedAt) : ''}`}</span>
+                </span>
+              </TreeRowShell>
             ))}
             {!cols.length && (
               <Empty
@@ -295,41 +377,13 @@ export function CollectionsView() {
                       </Button>
                     }
                     width={230}
-                    items={[
-                      { label: 'TestPion collection (.json)', icon: <FileJson size={14} />, onSelect: () => void exportAs(draft.id, 'testpion') },
-                      { label: 'Postman collection v2.1', icon: <Send size={14} />, onSelect: () => void exportAs(draft.id, 'postman') },
-                      { label: 'OpenAPI 3.1 (.yaml)', icon: <FileCode size={14} />, onSelect: () => void exportAs(draft.id, 'openapi') },
-                      { label: 'Bruno collection folder…', icon: <FolderOpen size={14} />, onSelect: () => void exportAs(draft.id, 'bruno') },
-                      { label: '.http file (REST Client, JetBrains)', icon: <FileCode size={14} />, onSelect: () => void exportAs(draft.id, 'http') },
-                      { label: 'AsyncAPI 3.0 (its connections)', icon: <Radio size={14} />, onSelect: () => void exportAs(draft.id, 'asyncapi') },
-                    ]}
+                    items={exportItems(draft)}
                   />
                   <Button size="sm" variant="primary" onClick={() => save(draft)}>
                     Save
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-bad"
-                    icon={<Trash2 size={12} />}
-                    onClick={() =>
-                      void deleteWithUndo({
-                        kind: 'collection',
-                        name: draft.name,
-                        trash: true,
-                        run: async () => {
-                          await call('col.delete', { id: draft.id });
-                          closeTabsFor(draft.items.flatMap(subtreeIds));
-                          setSel(undefined);
-                          await load();
-                        },
-                        undo: async () => {
-                          await restoreDeleted('collection', draft.id);
-                          await load();
-                        },
-                      })
-                    }
-                  />
+                  {/* the collection's own menu (lib/node-menu.ts), the same as its row's: Delete… goes to Recently deleted, with Undo */}
+                  <MoreMenu label="More collection actions" items={openItemMenu('collection', collectionMenu(draft))} />
                 </div>
               </div>
               <Tabs
@@ -349,7 +403,7 @@ export function CollectionsView() {
                 ]}
               />
               <div className={cx('flex-1 min-h-0', tab !== 'run' && tab !== 'docs' && 'overflow-auto')}>
-                {tab === 'mock' && <MockPanel collectionId={draft.id} onOpenRequest={(requestId) => void openRef({ kind: 'request', collectionId: draft.id, requestId })} />}
+                {tab === 'mock' && <MockPanel collectionId={draft.id} onOpenRequest={(requestId) => void openRef({ kind: 'request', collectionId: draft.id, requestId })} onShowRequests={() => setTab('requests')} />}
                 {tab === 'overview' && (
                   <CollectionOverview
                     collection={draft}

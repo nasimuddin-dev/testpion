@@ -2,6 +2,7 @@ import { Bug, Circle, Copy, FolderPlus, Square, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp, attempt } from '../store';
+import { confirmDelete } from '../lib/undo-delete';
 import { plural } from '../lib/format';
 import { Badge, Button, Empty, Field, Input, Modal, VirtualList, statusTone } from './ui';
 import { useEventLog } from '../lib/use-rpc';
@@ -103,7 +104,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
             Show in Debugger
           </Button>
           {!!items.length && (
-            <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} className="ml-auto" onClick={() => void call('record.clear').then(() => setItems([]), toastError)}>
+            <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} className="ml-auto" onClick={() => void confirmDelete({ what: 'the recorded exchanges', title: 'Clear the recording', message: 'Forget every exchange recorded so far?', confirmLabel: 'Clear', done: 'Recording cleared', run: async () => (await call('record.clear'), setItems([])) })}>
               Clear
             </Button>
           )}

@@ -114,7 +114,7 @@ const steps = [
   [
     'commit-details',
     `(async () => {
-      document.querySelector('[aria-label="Commits"] li button')?.click();
+      document.querySelector('[aria-label="Commits"] [data-tree-row]')?.click();
       const panel = await __t.waitFor(() => document.querySelector('[data-commit-detail]'), 8000);
       const diff = await __t.waitFor(() => document.querySelector('[data-commit-detail] [aria-label="Diff"]'), 8000);
       const files = panel ? panel.querySelectorAll('[aria-label="Files changed"] li button').length : 0;

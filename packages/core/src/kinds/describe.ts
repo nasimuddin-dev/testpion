@@ -24,6 +24,8 @@ export interface KindDescription {
   capabilities: Record<string, CapabilityState>;
   /** The capabilities that are `true`, for a quick read. */
   can: string[];
+  /** How its items are deleted: at once with Undo, or after asking (it cannot be put back); absent when the kind has no delete. */
+  deletes?: ItemKindInfo['deletes'];
   /** The engine facets this version has for it (resolve, ops). */
   facets: string[];
   /**
@@ -57,6 +59,7 @@ const describe = (info: ItemKindInfo): KindDescription => {
     can: Object.entries(info.capabilities)
       .filter(([, s]) => s === true)
       .map(([c]) => c),
+    ...(info.deletes ? { deletes: info.deletes } : {}),
     facets: (['resolve', 'ops'] as const).filter((f) => !!def[f]),
     nodes: nodeMenusOf(info.id),
   };

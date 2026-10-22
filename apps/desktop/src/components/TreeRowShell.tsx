@@ -16,9 +16,13 @@ import { cx } from './ui';
  * the keyboard moves to the next row instead of nowhere.
  */
 export interface TreeRowShellProps {
-  kind: NodeKind;
-  /** What the row's menu can do (read only when the menu opens or a key asks). */
-  ctx: () => NodeMenuCtx;
+  /**
+   * The node kind of the row (its menu, its keys); absent for a row of something that is not a registered kind (a git
+   * commit, a span of a trace, a message of a protocol trace): the same look, keys and tree semantics, no menu.
+   */
+  kind?: NodeKind;
+  /** What the row's menu can do (read only when the menu opens or a key asks); nothing for a row without a kind. */
+  ctx?: () => NodeMenuCtx;
   /** The row's id in the whole tree (`data-node-id`); also what F2 focuses after a rename, and Undo after a delete. */
   nodeId: string;
   /** The row's name: the ⋯ button's label ("More actions for …"), typeahead, the tooltip when the name is cut. */
@@ -70,14 +74,16 @@ function targetOf(kind: NodeKind, git?: GitTarget): GitTarget | undefined {
   return can(base, 'versioned') ? { section: base } : undefined;
 }
 
-export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOpen, active, expanded, depth, rename, drag, onDragStart, onDragEnd, drop, mark, git, actions, header, tall, menu = true, onKeyDown, attrs, className, style }: TreeRowShellProps) {
+export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOpen, active, expanded, depth, rename, drag, onDragStart, onDragEnd, drop, mark, git, actions, header, tall, menu: wantsMenu = true, onKeyDown, attrs, className, style }: TreeRowShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const target = targetOf(kind, git);
+  // a row without a kind (or a context) has no menu to open and no menu item for a key to run
+  const menu = wantsMenu && !!kind && !!ctx;
+  const target = kind ? targetOf(kind, git) : git;
   const button = useRef<HTMLButtonElement>(null);
   /** The row's menu context, with Delete… putting the keyboard on the next row once this one is gone. */
   const menuCtx = (): NodeMenuCtx => {
     // a row that says what it is (its change mark's ref) gets that ref for the menu: git actions (History, Discard, Stage) need it
-    const raw = ctx();
+    const raw = ctx?.() ?? { on: {} };
     const own = git && 'kind' in git && !('folder' in git) ? (git as ItemRef) : undefined;
     const c = own && !raw.ref ? { ...raw, ref: own, name: raw.name ?? label } : raw;
     const del = c.on.delete;
@@ -97,13 +103,21 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
   };
   /** Run the row's menu item with this label (a key does what the menu does, or nothing). */
   const runItem = (test: (label: string) => boolean): boolean => {
+    if (!kind) return false;
     const it = buildNodeMenu(kind, withRefDefaults(menuCtx(), kind)).find((i) => !i.disabled && !i.items && test(i.label));
     if (!it) return false;
     it.onSelect();
     return true;
   };
   const keys = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (!menu) return onKeyDown?.(e);
+    if (!menu) {
+      // no menu: Enter still opens (the one key every row answers)
+      if (e.key === 'Enter' && onOpen) {
+        e.preventDefault();
+        onOpen();
+      } else onKeyDown?.(e);
+      return;
+    }
     if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') {
       e.preventDefault();
       e.stopPropagation();
@@ -192,7 +206,7 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
         </span>
       )}
       {actions}
-      {menu && <NodeMenu kind={kind} label={label} header={header} open={menuOpen} onOpenChange={setMenuOpen} ctx={menuCtx} />}
+      {menu && kind && <NodeMenu kind={kind} label={label} header={header} open={menuOpen} onOpenChange={setMenuOpen} ctx={menuCtx} />}
     </div>
   );
 }

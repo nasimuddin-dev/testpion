@@ -16,6 +16,9 @@ import { Button, Empty, LinkButton, Metric, Split, Tabs } from '../../components
 import { ChatResult, SavedPrompt, drafts, type Draft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
 import { useLibraryTabs } from '../../lib/library-tabs';
 import { LibraryTabStrip, NoOpenItems } from '../../components/LibraryTabStrip';
+import { ItemBreadcrumb } from '../../components/ItemBreadcrumb';
+import { openItemMenu } from '../../lib/item-menu';
+import { deleteWithUndo } from '../../lib/undo-delete';
 import { OutputActions } from '../../components/output/OutputFrame';
 import { answerOutputSpec } from '../../components/output/ai-specs';
 
@@ -43,6 +46,29 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
   const saved = useLibrary<SavedPrompt>('ai-prompts');
   const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
+  /** The open prompt's ⋯ (its breadcrumb): its menu as its row in Saved has it (lib/node-menu.ts): rename, duplicate, Delete… with Undo (its tab closes). */
+  const currentMenu = (c: NonNullable<typeof current>) =>
+    openItemMenu('prompt', {
+      ref: { kind: 'saved', library: 'ai-prompts', itemId: c.id },
+      name: c.name,
+      on: {
+        rename: async () => {
+          const name = (await promptText('Rename prompt', { message: 'Prompt name', value: c.name, okLabel: 'Rename' }))?.trim();
+          if (name && name !== c.name) await saved.ops.renameItem(c.id, name);
+        },
+        duplicate: () => void saved.ops.duplicateItem?.(c.id),
+        delete: () =>
+          void deleteWithUndo({
+            kind: 'prompt',
+            name: c.name,
+            run: async () => {
+              const undo = await saved.ops.deleteItem(c.id);
+              tabs.close(tabs.tabs.filter((t) => t.savedId === c.id).map((t) => t.id), drafts.defaults);
+              return undo;
+            },
+          }),
+      },
+    });
   const snapshot = (): SavedPrompt => ({ provider: d.provider, model: d.model, system: d.system, prompt: d.prompt, input: d.input, temperature: d.temperature, topP: d.topP, maxTokens: d.maxTokens, seed: d.seed, format: d.format, schema: d.schema, expected: d.expected, evaluators: d.evaluators });
   // compared when the draft or the saved prompt changes, not on every streamed token
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,6 +234,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
         onNew={() => tabs.newTab(drafts.defaults)}
         newLabel="New prompt"
       />
+      {/* WF-11: Prompts › folder › prompt, like every item view (its ⋯ is the prompt's menu) */}
+      {!tabs.empty && <ItemBreadcrumb label="Where this prompt is" crumbs={[{ label: 'Prompts' }, ...(current?.folder ? [{ label: current.folder }] : [])]} name={current ? current.name : 'Not saved yet'} dirty={dirty} actions={current ? currentMenu(current) : undefined} />}
       <div className="flex items-center gap-2 p-2 border-b border-line flex-wrap">
         <ModelPicker providers={providers} provider={d.provider} model={d.model} onChange={onModel} />
         {current && <span className="text-sm text-muted truncate">{current.name}{dirty ? ' · edited' : ''}</span>}

@@ -151,7 +151,6 @@ exports[`the item-kind registry is complete > every capability is declared; a na
   "exchange": {
     "ci": "a record of something that happened: it is kept or cleared, not edited",
     "container": "a record holds nothing to expand",
-    "delete": "records are cleared from their own view (Delete asks there)",
     "duplicate": "a record of something that happened: it is kept or cleared, not edited",
     "export": "records export as reports (HAR, HTML, JUnit), not bundles",
     "favorite": "favorites are saved requests (one click away in the sidebar)",

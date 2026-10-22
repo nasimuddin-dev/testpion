@@ -1,11 +1,10 @@
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
-import { refMenu } from '../components/RefLink';
-import { ArrowDownLeft, ArrowUpRight, Braces, CircleDot, Copy, MoreHorizontal, Plug, Plus, Radio, Save, Trash2, Unplug } from 'lucide-react';
+import { openItemMenu } from '../lib/item-menu';
+import { ArrowDownLeft, ArrowUpRight, Braces, CircleDot, Copy, Plug, Plus, Radio, Save, Trash2, Unplug } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
-import { LABEL } from '../lib/vocabulary';
 import { asError, call, on, type NormalizedError } from '../api';
-import { ask, persisted, toastError, useApp, attempt } from '../store';
+import { ask, persisted, promptText, toastError, useApp, attempt } from '../store';
 import { restoreFolder } from '../components/FolderList';
 import { deleteMcpServerWithUndo } from '../lib/undo-delete';
 import { useDoc, useDocs } from '../lib/docs';
@@ -20,7 +19,9 @@ import { ErrorPanel } from '../components/Results';
 import { type FolderListOps } from '../components/FolderList';
 import { NEW_TAB_TITLE, useSingleEditorTab } from '../components/EditorTabs';
 import { McpUsage } from '../components/McpUsage';
-import { Button, cx, Empty, Field, IconButton, Input, Menu, SectionTitle, Select, Split, Tabs, VirtualList, Textarea } from '../components/ui';
+import { Button, cx, Empty, Field, Input, MoreMenu, SectionTitle, Select, Split, Tabs, VirtualList, Textarea, type MenuItem } from '../components/ui';
+import { treeKeys } from '../components/TreeParts';
+import { TreeRowShell } from '../components/TreeRowShell';
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
@@ -291,6 +292,33 @@ It runs with your permissions. Allow it only if you know where this workspace co
     // the one Delete of an MCP server (the same as the sidebar's): Recently deleted, Undo puts it back and reconnects it
     if (await deleteMcpServerWithUndo({ id, name: current.name }, { after: load })) setSelected(undefined);
   };
+  /**
+   * The open server's ⋯ (the breadcrumb's and the toolbar's, one list): what this editor can do (ping, save as mock),
+   * then the server's node menu as the sidebar builds it (connect, copy its config, export, git, rename, duplicate,
+   * Delete… with Undo). A server being added only offers Discard.
+   */
+  const serverMenu = (): MenuItem[] => {
+    if (!current || !form) return [];
+    if (draft) return [{ label: 'Discard', icon: <Trash2 size={14} />, danger: true, onSelect: () => void removeCurrent() }];
+    const own: MenuItem[] = [
+      { label: 'Ping', icon: <Radio size={14} />, disabled: !server?.connected, onSelect: () => void call<number>('mcp.ping', { serverId: current.id }).then((ms) => useApp.getState().toast(`Ping ${ms} ms`)) },
+      { label: 'Save as mock', icon: <Copy size={14} />, disabled: !server?.connected || form.transport === 'mock', onSelect: () => void saveMock(current.id) },
+    ];
+    const node = openItemMenu('mcp-server', {
+      ref: { kind: 'mcp-server', serverId: current.id },
+      name: current.name,
+      on: {
+        ...(server?.connected ? { disconnect: () => void disconnect(current.id) } : { connect: () => void connectCurrent() }),
+        rename: async () => {
+          const name = (await promptText('Rename server', { message: 'Server name', value: current.name, okLabel: 'Rename' }))?.trim();
+          if (name && name !== current.name) await serverOps.renameItem(current.id, name);
+        },
+        duplicate: () => void serverOps.duplicateItem?.(current.id),
+        delete: () => void removeCurrent(),
+      },
+    });
+    return [...own, ...node.map((it, i) => (i === 0 ? { ...it, separator: true } : it))];
+  };
   // a mock server's Tools tab edits its toolset file: Ctrl+S saves that when it has changes, else the server
   const toolset = useRef<ToolsetEditorHandle>(null);
   useSaveShortcut('mcp', () => (tab === 'tools' && toolset.current?.dirty ? void toolset.current.save() : void saveForm()));
@@ -322,7 +350,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
             crumbs={[{ label: 'MCP servers' }, ...(form.folder ? [{ label: form.folder }] : [])]}
             name={form.name || NEW_TAB_TITLE.mcp}
             dirty={dirty}
-            actions={draft ? undefined : refMenu({ kind: 'mcp-server', serverId: current.id })}
+            actions={draft ? undefined : serverMenu()}
           />
           <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0">
             <Select className="w-44 shrink-0" aria-label="Transport" value={form.transport} onChange={(e) => setForm(withTransport(form, e.target.value as McpServerConfig['transport']))}>
@@ -345,19 +373,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
             <Button icon={<Save size={14} />} onClick={() => void saveForm()} title="Save (Ctrl+S)">
               Save
             </Button>
-            <Menu
-              width={230}
-              trigger={
-                <IconButton label="More server actions">
-                  <MoreHorizontal size={15} />
-                </IconButton>
-              }
-              items={[
-                { label: 'Ping', icon: <Radio size={14} />, disabled: !server?.connected || !!draft, onSelect: () => void call<number>('mcp.ping', { serverId: current.id }).then((ms) => useApp.getState().toast(`Ping ${ms} ms`)) },
-                { label: 'Save as mock', icon: <Copy size={14} />, disabled: !server?.connected || !!draft || form.transport === 'mock', onSelect: () => void saveMock(current.id) },
-                { label: draft ? 'Discard' : LABEL.delete, icon: <Trash2 size={14} />, danger: true, separator: true, onSelect: () => void removeCurrent() },
-              ]}
-            />
+            <MoreMenu label="More server actions" items={serverMenu()} />
           </div>
           <Tabs
             value={tab}
@@ -588,7 +604,7 @@ function McpTrace({ events, error, server }: { events: McpEvent[]; error?: Norma
   const spec = useMemo(() => traceOutputSpec(server, shown), [server, shown]);
   return (
     <Split id="mcp-trace" initial={55}>
-      <div className="h-full flex flex-col" data-output="mcp.trace">
+      <div className="h-full flex flex-col" data-output="mcp.trace" onKeyDown={treeKeys}>
         {error && <ErrorPanel error={error} />}
         <div className="flex items-center gap-2 px-2 h-9 border-b border-line text-xs">
           <Input className="h-6 min-h-6 w-48 text-xs" placeholder="Filter method (e.g. tools/call)" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -606,14 +622,19 @@ function McpTrace({ events, error, server }: { events: McpEvent[]; error?: Norma
           className="flex-1"
           items={shown}
           rowHeight={26}
+          role="tree"
+          label="Protocol trace"
+          // the one row (TreeRowShell, without a menu: a message is not an item): click or Enter shows it, ↑ ↓ move, one selected colour
           render={(e) => (
-            <button onClick={() => setSel(e)} className={cx('w-full h-full grid grid-cols-[70px_22px_1fr_80px_70px] items-center px-2 text-xs border-b border-line/50 text-left hover:bg-hover', sel?.id === e.id && 'bg-accent/10')}>
-              <span className="tabular-nums text-muted">{((e.timestamp - t0) / 1000).toFixed(3)}s</span>
-              {e.direction === 'outgoing' ? <ArrowUpRight size={12} className="text-accent" /> : e.direction === 'incoming' ? <ArrowDownLeft size={12} className="text-ok" /> : <CircleDot size={10} className="text-muted" />}
-              <span className={cx('mono truncate', e.kind === 'error' && 'text-bad')}>{e.method}</span>
-              <span className={cx(e.kind === 'error' ? 'text-bad' : 'text-muted')}>{e.kind}</span>
-              <span className="text-right tabular-nums">{e.durationMs !== undefined ? formatMs(e.durationMs) : ''}</span>
-            </button>
+            <TreeRowShell nodeId={`mcp-event:${e.id}`} label={e.method} active={sel?.id === e.id} onClick={() => setSel(e)} onOpen={() => setSel(e)} className="h-full mx-0 rounded-none border-b border-line/50 text-xs">
+              <span className="grid grid-cols-[70px_22px_1fr_80px_70px] items-center w-full px-1">
+                <span className="tabular-nums text-muted">{((e.timestamp - t0) / 1000).toFixed(3)}s</span>
+                {e.direction === 'outgoing' ? <ArrowUpRight size={12} className="text-accent" /> : e.direction === 'incoming' ? <ArrowDownLeft size={12} className="text-ok" /> : <CircleDot size={10} className="text-muted" />}
+                <span className={cx('mono truncate', e.kind === 'error' && 'text-bad')}>{e.method}</span>
+                <span className={cx(e.kind === 'error' ? 'text-bad' : 'text-muted')}>{e.kind}</span>
+                <span className="text-right tabular-nums">{e.durationMs !== undefined ? formatMs(e.durationMs) : ''}</span>
+              </span>
+            </TreeRowShell>
           )}
         />
       </div>

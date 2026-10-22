@@ -32,7 +32,7 @@ export function AlsoAddTo({ exclude, value, onChange, className }: { exclude?: s
         {others.map((e) => (
           <label
             key={e.id}
-            className={cx('inline-flex items-center gap-1 h-6 px-1.5 rounded-md border cursor-pointer', value.to.includes(e.name) ? 'border-accent bg-accent/10' : 'border-line hover:bg-hover')}
+            className={cx('inline-flex items-center gap-1 h-6 px-1.5 rounded-md border cursor-pointer', value.to.includes(e.name) ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover')}
           >
             <input type="checkbox" className="sr-only" checked={value.to.includes(e.name)} onChange={() => toggle(e.name)} />
             <span className="truncate max-w-32">{e.name}</span>

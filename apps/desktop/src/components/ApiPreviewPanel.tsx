@@ -1,9 +1,9 @@
 import { CodeBlock } from './CodeBlock';
-import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, Workflow } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, RotateCcw, Workflow } from 'lucide-react';
 import { useState } from 'react';
 import { confirmAction, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
-import { Badge, Button, Empty, Menu } from './ui';
+import { Badge, Busy, Button, Empty, Menu } from './ui';
 import { generateTestsFromDefinition } from '../lib/spec-tests';
 import { generateFlows } from '../lib/files';
 
@@ -126,9 +126,14 @@ export const generateSpecTests = (spec: string) =>
     onWritten: () => ({ label: 'Open Tests', onClick: () => useApp.getState().setView('tests') }),
   });
 
-export function ApiPreviewPanel({ outline, error, spec }: { outline?: ApiOutline; error?: string; spec?: string }) {
-  if (error) return <Empty title="Couldn't read the document">{error}</Empty>;
-  if (!outline) return <Empty title="Reading the document…" />;
+export function ApiPreviewPanel({ outline, error, spec, onRetry }: { outline?: ApiOutline; error?: string; spec?: string; /** Read the document again. */ onRetry(): void }) {
+  if (error)
+    return (
+      <Empty title="Couldn't read the document" actions={[{ label: 'Retry', icon: <RotateCcw size={13} />, onClick: onRetry }]}>
+        {error}
+      </Empty>
+    );
+  if (!outline) return <Busy>Reading the document…</Busy>;
   return (
     <div className="h-full overflow-auto" data-api-preview>
       <div className="px-3 py-3 border-b border-line grid gap-1">

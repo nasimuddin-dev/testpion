@@ -3,7 +3,7 @@ import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from '
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import { Badge, Button, Empty, Menu, Modal, Select, Textarea } from './ui';
+import { Badge, Button, Busy, Empty, Menu, Modal, Select, Textarea } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
 import { copyText } from '../lib/clipboard';
@@ -48,7 +48,7 @@ export function CertificateDialog({ onClose }: { onClose(): void }) {
   return (
     <Modal title="HTTPS decryption: the root certificate" onClose={onClose} width={680}>
       {!info ? (
-        <Empty title="Reading the certificate…" />
+        <Busy>Reading the certificate…</Busy>
       ) : (
         <div className="grid gap-3 text-sm">
           <p>
@@ -459,7 +459,7 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
   return (
     <Modal title="Capture a phone or another computer" onClose={onClose} width={720}>
       {!info ? (
-        <Empty title="Looking for this computer's addresses…" />
+        <Busy>Looking for this computer's addresses…</Busy>
       ) : !info.running ? (
         <p className="text-sm">Start capturing first.</p>
       ) : !info.lan ? (

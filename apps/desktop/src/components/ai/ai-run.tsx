@@ -4,7 +4,7 @@ import type { AiTaskResult, Proposal, ProposalItem } from '@testpion/core';
 import { asError, call } from '../../api';
 import { aiSetupAction } from '../../lib/ai-errors';
 import { toastError, useApp } from '../../store';
-import { Button, Callout, Field, Input, Segmented, Spinner } from '../ui';
+import { Busy, Button, Callout, Field, Input, Segmented } from '../ui';
 import { estimateOf, type EstimateState } from './AiEstimateLine';
 import { PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
 
@@ -126,11 +126,8 @@ export function AiPrivacyRow({ value, onChange }: { value: AiPrivacy; onChange(v
   );
 }
 
-export const AiBusyLine = ({ children }: { children: ReactNode }) => (
-  <div className="flex items-center gap-2 text-muted" role="status">
-    <Spinner /> {children}
-  </div>
-);
+/** The AI dialogs' wait line: the shared `Busy`, inline. */
+export const AiBusyLine = ({ children }: { children: ReactNode }) => <Busy inline>{children}</Busy>;
 
 /** The run's error with the setup action (no model set) and the dialog's own fallbacks (children). */
 export function AiErrorPanel({ error, onClose, children, ...rest }: { error: ReturnType<typeof asError>; onClose(): void; children?: ReactNode } & Record<`data-${string}`, string | undefined>) {

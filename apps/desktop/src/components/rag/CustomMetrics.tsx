@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CUSTOM_METRIC_KINDS, type CustomMetricKind } from '@testpion/shared';
 import { call } from '../../api';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../../store';
+import { confirmDelete } from '../../lib/undo-delete';
 import { useRpc } from '../../lib/use-rpc';
 import { touchesFiles, type DataChangedEvent } from '../../lib/data-changed';
 import { plural } from '../../lib/format';
@@ -73,7 +74,7 @@ export function CustomMetricsList({ selected, onSelect, onNew }: { selected?: st
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         {data.metrics.map((m) => (
-          <button key={m.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', selected === m.id ? 'bg-accent/10' : 'hover:bg-hover')} onClick={() => onSelect(m.id)} data-rag-metric-row={m.id}>
+          <button key={m.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', selected === m.id ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => onSelect(m.id)} data-rag-metric-row={m.id}>
             <div className="flex items-center gap-1.5">
               <span className="truncate font-medium">{m.name}</span>
               {m.kind && <Badge tone={m.kind === 'judge' || m.kind === 'checklist' || m.kind === 'dag' ? 'judge' : 'ok'}>{KIND_LABEL[m.kind]}</Badge>}
@@ -187,21 +188,28 @@ export function MetricEditor({ id: initial, kind: startKind, onClose, onSaved }:
     // only a workspace that is a repository keeps the file's history; elsewhere the Undo of the toast is the way back
     const inRepository = await call<{ repository: boolean }>('git.status').then((s) => s.repository, () => false);
     const where = [...used.evaluations.map((n) => `evaluation “${n}”`), ...used.formulas.map((n) => `formula metric ${n}`)];
-    const yes = await confirmAction({ title: `Delete ${id}?`, message: `metrics/${id}.yaml is deleted.${where.length ? ` It is used by ${where.join(', ')}; they will not find it.` : ''}`, detail: inRepository ? 'The file is in git: its history keeps it. Undo puts it back right away.' : 'Undo puts it back right away; after that the file is gone for good.', confirmLabel: 'Delete', danger: true });
-    if (!yes) return;
-    await attempt(async () => {
-      const was = saved;
-      await call('rag.customMetric.delete', { id });
-      onSaved?.(id);
-      onClose();
-      if (was)
-        useApp.getState().toast(`Deleted metrics/${id}.yaml`, 'info', undefined, {
-          undo: async () => {
-            await call('rag.customMetric.save', { id, text: was, overwrite: false });
-            onSaved?.(id);
-          },
-          restored: `metrics/${id}.yaml is back`,
-        });
+    // the registry's delete policy of a metric: it asks first (what names it is listed), then its message still offers Undo
+    await confirmDelete({
+      kind: 'metric',
+      name: id,
+      title: `Delete ${id}?`,
+      message: `metrics/${id}.yaml is deleted.${where.length ? ` It is used by ${where.join(', ')}; they will not find it.` : ''}`,
+      detail: inRepository ? 'The file is in git: its history keeps it. Undo puts it back right away.' : 'Undo puts it back right away; after that the file is gone for good.',
+      done: false,
+      run: async () => {
+        const was = saved;
+        await call('rag.customMetric.delete', { id });
+        onSaved?.(id);
+        onClose();
+        if (was)
+          useApp.getState().toast(`Deleted metrics/${id}.yaml`, 'info', undefined, {
+            undo: async () => {
+              await call('rag.customMetric.save', { id, text: was, overwrite: false });
+              onSaved?.(id);
+            },
+            restored: `metrics/${id}.yaml is back`,
+          });
+      },
     });
   };
   // the kind of the file in the editor: a saved one says it in its text, a new one is the chosen kind

@@ -1,6 +1,7 @@
 import { envColor } from './EnvSelect';
 import { Check, History, KeyRound, Plus } from 'lucide-react';
-import { NodeMenu, TreeBadge } from './TreeParts';
+import { TreeBadge, treeKeys } from './TreeParts';
+import { TreeRowShell } from './TreeRowShell';
 import { saveAsTest } from '../lib/save-test';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
@@ -14,7 +15,6 @@ export function EnvironmentsPane() {
   const ws = useApp((s) => s.workspace);
   const env = useApp((s) => s.environment);
   const [filter, setFilter] = useState('');
-  const [menuFor, setMenuFor] = useState<string>();
   const envs = (ws?.environments ?? []).filter((e) => !filter || e.name.toLowerCase().includes(filter.toLowerCase()));
   const create = async () => {
     const name = (await promptText('New environment', { message: 'Environment name', placeholder: 'Staging', okLabel: 'Create', icon: <KeyRound size={18} /> }))?.trim();
@@ -32,46 +32,39 @@ export function EnvironmentsPane() {
           <Plus size={14} />
         </IconButton>
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" role="tree" aria-label="Environments" onKeyDown={treeKeys}>
         <button className={cx('w-[calc(100%-0.5rem)] mx-1 rounded-md flex items-center gap-2 px-3 h-8 text-sm text-left transition-colors', !env ? 'bg-accent-soft text-accent' : 'hover:bg-hover text-muted')} onClick={() => useApp.getState().setEnvironment(undefined)}>
           <span className="w-2 h-2 rounded-full bg-[var(--line-strong)] shrink-0" />
           <span className="flex-1">No environment</span>
           {!env && <Check size={13} />}
         </button>
+        {/* the one row (TreeRowShell): click makes it active, Enter / double-click opens it, ⋯ / right-click / Shift+F10 its menu */}
         {envs.map((e) => (
-          <div
+          <TreeRowShell
             key={e.id}
-            className={cx('group flex items-center gap-2 mx-1 rounded-md px-3 h-8 text-sm transition-colors', e.name === env ? 'bg-accent-soft text-accent' : menuFor === e.id ? 'bg-hover' : 'hover:bg-hover')}
-            onContextMenu={(ev) => (ev.preventDefault(), setMenuFor(e.id))}
+            kind="environment"
+            git={{ kind: 'environment', environmentId: e.id }}
+            nodeId={`env-pane:${e.id}`}
+            label={e.name}
+            active={e.name === env}
+            onClick={() => !e.problem && useApp.getState().setEnvironment(e.name)}
+            onOpen={() => void openRef({ kind: 'environment', environmentId: e.id })}
+            ctx={() => ({
+              ref: { kind: 'environment', environmentId: e.id },
+              name: e.name,
+              on: { open: () => void openRef({ kind: 'environment', environmentId: e.id }), makeActive: () => useApp.getState().setEnvironment(e.name) },
+              disabled: e.name === env ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
+            })}
+            className={cx('pl-3', e.name === env && 'text-accent')}
           >
-            <button
-              onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(e.id))}
-              className={cx('flex-1 flex items-center gap-2 text-left min-w-0', e.problem && 'text-bad cursor-not-allowed')}
-              disabled={!!e.problem}
-              onClick={() => useApp.getState().setEnvironment(e.name)}
-              title={e.problem ? `This environment's file cannot be read: ${e.problem}` : 'Make this the active environment'}
-            >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
-              <span className="truncate">{e.name}</span>
-              {e.isProduction && <Badge tone="bad">prod</Badge>}
-              {e.name === env && <Check size={13} className="ml-auto shrink-0" />}
-            </button>
-            <NodeMenu
-              kind="environment"
-              label={e.name}
-              open={menuFor === e.id}
-              onOpenChange={(o) => setMenuFor(o ? e.id : undefined)}
-              ctx={() => ({
-                ref: { kind: 'environment', environmentId: e.id },
-                name: e.name,
-                on: { open: () => void openRef({ kind: 'environment', environmentId: e.id }), makeActive: () => useApp.getState().setEnvironment(e.name) },
-                disabled: e.name === env ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
-              })}
-            />
-          </div>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
+            <span className={cx('truncate', e.problem && 'text-bad')}>{e.name}</span>
+            {e.isProduction && <Badge tone="bad">prod</Badge>}
+            {e.name === env && <Check size={13} className="ml-auto shrink-0" />}
+          </TreeRowShell>
         ))}
         {!ws?.environments.length && (
-          <Empty icon={<KeyRound size={22} />} title="No environments">
+          <Empty icon={<KeyRound size={22} />} title="No environments" actions={[{ label: 'New environment', icon: <Plus size={13} />, onClick: () => void create() }]}>
             Environments hold variables such as <span className="mono">baseUrl</span> and tokens.
           </Empty>
         )}
@@ -105,43 +98,35 @@ export function HistoryPane({ kind = 'http', onOpen, noun = 'Requests you send' 
     return () => (clearTimeout(t), off());
   }, [filter, kind]);
   const rows = useMemo(() => groupByDay(items, (h) => h.timestamp), [items]);
-  const [menuFor, setMenuFor] = useState<string>();
   const open = (item: HistoryItem) => (onOpen ? onOpen(item) : void openRef({ kind: 'history', historyId: item.id }));
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="px-2 pb-2">
         <Input className="w-full h-7 min-h-7 text-sm" placeholder="Filter history" value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" role="tree" aria-label="History" onKeyDown={treeKeys}>
         {rows.map((r, i) =>
           'header' in r ? (
             <div key={`h-${i}`} className="px-3 pt-2.5 pb-1 text-xs font-semibold text-muted">
               {r.header}
             </div>
           ) : (
-            <div
+            // the one row (TreeRowShell): click or Enter opens it, ⋯ / right-click / Shift+F10 its menu, it drags onto a flow canvas
+            <TreeRowShell
               key={r.item.id}
-              className={cx('group mx-1 rounded-md flex items-center pr-1 transition-colors', menuFor === r.item.id ? 'bg-hover' : 'hover:bg-hover')}
-              onContextMenu={(ev) => (ev.preventDefault(), setMenuFor(r.item.id))}
+              kind="history"
+              nodeId={`history-pane:${r.item.id}`}
+              label={r.item.name}
+              onClick={() => open(r.item)}
+              onOpen={() => open(r.item)}
+              drag={[{ kind: 'history', historyId: r.item.id }]}
+              ctx={() => ({ ref: { kind: 'history', historyId: r.item.id }, name: r.item.name, on: { open: () => open(r.item), testFile: () => void saveAsTest({ ref: { kind: 'history', historyId: r.item.id }, name: r.item.name }) } })}
+              className="pl-2"
             >
-              <button
-                className="flex-1 min-w-0 flex items-center gap-2 px-2 h-8 text-sm text-left"
-                title={r.item.url}
-                onClick={() => open(r.item)}
-                onKeyDown={(ev) => ((ev.key === 'F10' && ev.shiftKey) || ev.key === 'ContextMenu') && (ev.preventDefault(), setMenuFor(r.item.id))}
-              >
-                {r.item.method && <TreeBadge label={r.item.method} className={`method-${r.item.method}`} />}
-                <span className="truncate flex-1">{kind === 'http' ? (r.item.url ?? r.item.name) : r.item.name}</span>
-                {r.item.status !== undefined && <Badge tone={statusTone(r.item.status)}>{r.item.status}</Badge>}
-              </button>
-              <NodeMenu
-                kind="history"
-                label={r.item.name}
-                open={menuFor === r.item.id}
-                onOpenChange={(o) => setMenuFor(o ? r.item.id : undefined)}
-                ctx={() => ({ ref: { kind: 'history', historyId: r.item.id }, name: r.item.name, on: { open: () => open(r.item), testFile: () => void saveAsTest({ ref: { kind: 'history', historyId: r.item.id }, name: r.item.name }) } })}
-              />
-            </div>
+              {r.item.method && <TreeBadge label={r.item.method} className={`method-${r.item.method}`} />}
+              <span className="truncate flex-1">{kind === 'http' ? (r.item.url ?? r.item.name) : r.item.name}</span>
+              {r.item.status !== undefined && <Badge tone={statusTone(r.item.status)}>{r.item.status}</Badge>}
+            </TreeRowShell>
           ),
         )}
         {!items.length && (

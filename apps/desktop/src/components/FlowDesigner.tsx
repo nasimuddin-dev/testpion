@@ -706,6 +706,7 @@ export function FlowDesigner({
                 selected={viewRun?.runId}
                 onSelect={showRun}
                 onReplay={(r) => void run({ seedRunId: r.runId })}
+                onRun={() => void run()}
                 onClose={() => {
                   setHistoryOpen(false);
                   setViewRun(undefined);

@@ -1,7 +1,8 @@
 import { useLibraryTabs } from '../lib/library-tabs';
 import { LibraryTabStrip, NoOpenItems } from '../components/LibraryTabStrip';
 import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
-import { refMenu } from '../components/RefLink';
+import { openItemMenu } from '../lib/item-menu';
+import { deleteWithUndo } from '../lib/undo-delete';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
 import { BarChart3, Bookmark, Database, FlaskConical, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -156,6 +157,29 @@ export function EvaluationsView() {
   };
   const savedId = tabs.active.savedId;
   const current = saved.lib.items.find((i) => i.id === savedId);
+  /** The open evaluation's ⋯ (its breadcrumb): its menu as its row in the list has it (lib/node-menu.ts): rename, duplicate, Delete… with Undo (its tab closes). */
+  const currentMenu = (c: NonNullable<typeof current>) =>
+    openItemMenu('evaluation', {
+      ref: { kind: 'saved', library: 'evaluations', itemId: c.id },
+      name: c.name,
+      on: {
+        rename: async () => {
+          const name = (await promptText('Rename evaluation', { message: 'Evaluation name', value: c.name, okLabel: 'Rename' }))?.trim();
+          if (name && name !== c.name) await saved.ops.renameItem(c.id, name);
+        },
+        duplicate: () => void saved.ops.duplicateItem?.(c.id),
+        delete: () =>
+          void deleteWithUndo({
+            kind: 'evaluation',
+            name: c.name,
+            run: async () => {
+              const undo = await saved.ops.deleteItem(c.id);
+              tabs.close(tabs.tabs.filter((t) => t.savedId === c.id).map((t) => t.id), drafts.defaults);
+              return undo;
+            },
+          }),
+      },
+    });
   const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(d), [current, d]);
   const openSaved = async (id: string, preview = false) => {
     const it = await saved.find(id);
@@ -264,7 +288,7 @@ export function EvaluationsView() {
                   </button>
                 )}
                 {evalRuns.map((r) => (
-                  <button key={r.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', runId === r.id ? 'bg-accent/10' : 'hover:bg-hover')} onClick={() => (setRunId(r.id), setPane('runs'))}>
+                  <button key={r.id} className={cx('w-full text-left px-3 py-2 border-b border-line/60 text-sm', runId === r.id ? 'bg-accent-soft' : 'hover:bg-hover')} onClick={() => (setRunId(r.id), setPane('runs'))}>
                     <div className="truncate">{r.name}</div>
                     <RunMiniBar r={r} />
                     <div className="text-xs text-muted flex gap-2">
@@ -325,7 +349,7 @@ export function EvaluationsView() {
           crumbs={[{ label: 'Evaluations' }, ...(current?.folder ? [{ label: current.folder }] : [])]}
           name={current ? current.name : 'Not saved yet'}
           dirty={dirty}
-          actions={current ? refMenu({ kind: 'saved', library: 'evaluations', itemId: current.id }) : undefined}
+          actions={current ? currentMenu(current) : undefined}
         />
         <div className="p-2 border-b border-line flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
@@ -595,7 +619,7 @@ export function EvaluationsView() {
           </div>
         ) : pane === 'matrix' && evalRuns.length > 0 ? (
           <div className="flex-1 min-h-0">
-            <EvalMatrix runs={evalRuns} />
+            <EvalMatrix runs={evalRuns} onRun={() => void run()} />
           </div>
         ) : runId ? (
           <RunPanel runId={runId} expectedTotal={d.limit ? Math.min(d.limit, count) : count} />
