@@ -24,6 +24,7 @@ import { webhookFlows, type WebhookFlow } from './flow-webhook-config.js';
 import { loadTestsFromFile } from './loader.js';
 import { recordRun } from './run-records.js';
 import { runTests } from './runner.js';
+import { isLoopbackHostHeader } from '../net/local-guard.js';
 
 interface FlowWebhookServerOptions {
   /** The open workspace (the app's), or `workspaceRoot` to open one (closed with the server). */
@@ -240,6 +241,8 @@ export async function startFlowWebhookServer(o: FlowWebhookServerOptions): Promi
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     const started = Date.now();
     const method = (req.method ?? 'GET').toUpperCase();
+    // bound to loopback (the default): a page that rebinds its own name to this computer is refused (DNS rebinding)
+    if (/^(127\.|localhost$|::1$)/i.test(host) && !isLoopbackHostHeader(req.headers.host)) return send(res, 421, { ok: false, error: 'This webhook server answers to localhost only' });
     let url: URL;
     try {
       url = new URL(req.url ?? '/', 'http://localhost');

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, shell, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, screen, session, shell, nativeTheme } from 'electron';
 import { existsSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import * as nodeModule from 'node:module';
@@ -10,6 +10,8 @@ import { installAppMenu, installTextContextMenu } from './app-menu.js';
 import { defaultAppDir, normalizeError, runMergeDriver, safeStorageCipher, textconvFile, type SafeStorageLike } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 import { ptyHost } from './pty-host.js';
+import { CAPTURE_SWITCH, captureScript } from './capture.js';
+import { permissionAllowed } from './permissions.js';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -127,7 +129,8 @@ if (mcpMode) {
 }
 
 // Documentation screenshot mode (scripts/capture.cjs): isolated profile, fixed size, dark theme.
-const capture = process.env.TESTPION_CAPTURE_SCRIPT;
+const { script: capture, ignored: ignoredCapture } = captureScript(process.env, process.argv, app.isPackaged);
+if (ignoredCapture) console.error(`TESTPION_CAPTURE_SCRIPT is ignored by an installed build unless the program is started with ${CAPTURE_SWITCH}`);
 if (capture) {
   app.setPath('userData', join(process.env.TESTPION_HOME!, 'electron-profile'));
   nativeTheme.themeSource = 'dark';
@@ -292,6 +295,9 @@ Data directory: ${process.env.TESTPION_HOME || defaultAppDir()}`);
  * constructed once the window's page is on its way, and the page's first calls wait for it (backendReady).
  */
 function start(): void {
+  // deny every web permission the app does not use (camera, microphone, location …), whatever page asks (electron/permissions.ts)
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => callback(permissionAllowed(permission, details.requestingUrl, process.env.VITE_DEV_SERVER_URL)));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permissionAllowed(permission, origin, process.env.VITE_DEV_SERVER_URL));
   ipcMain.handle('aps:rpc', async (e, method: string, params: unknown) => {
     // only the app's own page (the window's top frame) may call the backend, never an embedded frame
     if (!win || e.sender !== win.webContents || e.senderFrame !== win.webContents.mainFrame) return { ok: false, error: normalizeError(new Error('Not allowed')) };

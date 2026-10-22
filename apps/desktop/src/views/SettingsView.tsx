@@ -153,7 +153,7 @@ export function SettingsView() {
             </>
           )}
           {tab === 'git' && (
-            <Field label="Fetch in the background every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off.">
+            <Field label="Fetch in the background every (minutes)" hint="While a workspace in git with a remote is open, TestPion fetches quietly (it never asks you to sign in) and the Git view shows when your team pushed commits, so you pull before pushing. 0 turns it off. It runs for workspaces you have pushed from on this computer, not for a repository you only cloned.">
               <Input type="number" min={0} max={1440} aria-label="Background fetch minutes" value={s.git?.autoFetchMinutes ?? 5} onChange={(e) => set({ git: { ...s.git, autoFetchMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
             </Field>
           )}

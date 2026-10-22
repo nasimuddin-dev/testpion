@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
 import { ApsError } from '../errors.js';
+import { assertUrlAllowed } from '../net/policy.js';
 import { allowProductionFor, productionAllowed } from '../net/production-guard.js';
 import { shortId } from '../util/ids.js';
 import { recordRun } from './run-records.js';
@@ -102,8 +103,10 @@ export async function notifyMonitorWebhook(url: string, monitor: Pick<Monitor, '
   const why = bad && result.reason ? ` (${result.reason})` : '';
   try {
     if (!/^https?:\/\//i.test(url)) throw new Error('the webhook must be an http(s) URL');
+    await assertUrlAllowed(url); // a server must not let a webhook reach its internal network (169.254.169.254 …)
     const res = await fetch(url, {
       method: 'POST',
+      redirect: 'error', // a redirect would leave the address that was checked
       headers: { 'content-type': 'application/json' },
       // Slack and Teams show `text`, Discord shows `content`; the rest is for any other receiver
       body: JSON.stringify({ text: text + why + ragLines(result), content: text + why + ragLines(result), rag: result.rag, reason: result.reason, p95Ms: result.p95Ms, monitor: { id: monitor.id, name: monitor.name }, status: result.status, total: result.total, passed: result.passed, failed: result.failed, errors: result.errors, p50Ms: result.p50Ms, startedAt: result.startedAt, runId: result.runId, error: result.error }),

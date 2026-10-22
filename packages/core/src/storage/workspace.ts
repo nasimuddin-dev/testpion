@@ -448,7 +448,11 @@ export class WorkspaceStore {
   }
 
   deleteTestFile(rel: string): void {
-    removeOwned(this.safePath(rel, this.path('tests')), { recursive: true });
+    const base = this.path('tests');
+    const target = this.safePath(rel, base);
+    // "." or "" names the tests folder itself: a recursive delete of every test and flow, not of a file
+    if (relativeInside(base, target) === undefined) throw new ApsError('ValidationError', 'Name a test file or a folder inside tests/, not tests/ itself', { suggestions: ['Delete the files one by one, or a subfolder of tests/.'] });
+    removeOwned(target, { recursive: true });
   }
 
   /* traces */

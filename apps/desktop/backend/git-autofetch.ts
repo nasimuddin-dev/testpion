@@ -5,7 +5,8 @@
  * the backend, not the window, so a cloud host runs the same timer. It never runs while a pull, push or sync runs, never
  * asks for a sign-in (a remote that needs one just fails, quietly logged), and never changes the working folder.
  */
-import { gitFetch, gitRemoteUrl, gitStatus, repoRoot } from '@testpion/core';
+import { join } from 'node:path';
+import { atomicWrite, gitFetch, gitRemoteUrl, gitStatus, readJson, realPathOf, repoRoot } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 export const DEFAULT_AUTO_FETCH_MINUTES = 5;
@@ -55,7 +56,32 @@ export class GitAutoFetch {
   private async tick(): Promise<void> {
     const m = this.minutes();
     if (!m || Date.now() - this.lastFetch < m * 60_000) return;
+    // only a remote the person works with: a freshly cloned third-party repository is not pinged every few minutes
+    if (!this.optedIn()) return;
     await this.fetchNow();
+  }
+
+  /** Workspaces (real paths) whose remote the person has pushed to from this computer, or turned the background fetch on for. */
+  private file = () => join(this.be.host.appDir, 'git-autofetch.json');
+  private key = (root: string) => (process.platform === 'win32' || process.platform === 'darwin' ? realPathOf(root).toLowerCase() : realPathOf(root));
+  private list(): string[] {
+    try {
+      const v = readJson<{ workspaces?: string[] }>(this.file(), {}).workspaces;
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  optedIn(root = this.be.store?.root): boolean {
+    return !!root && this.list().includes(this.key(root));
+  }
+  /** The person pushed (or asked): this workspace's remote is theirs, so it is fetched in the background from now on. */
+  optIn(root = this.be.store?.root, on = true): void {
+    if (!root) return;
+    const k = this.key(root);
+    const cur = this.list();
+    if (cur.includes(k) === on) return;
+    atomicWrite(this.file(), JSON.stringify({ workspaces: on ? [...cur, k] : cur.filter((x) => x !== k) }, null, 2));
   }
 
   /**

@@ -15,9 +15,9 @@ The installed app: `%LOCALAPPDATA%\Programs\TestPion\TestPion.exe`. Its data: `~
    workspaces. Do it with a Python file (written with the Write tool), not a heredoc: Windows backslashes break heredocs.
 3. **Run in capture mode** with a script of steps:
    ```bash
-   TESTPION_HOME=<home> TESTPION_CAPTURE_SCRIPT=<steps.cjs> "$LOCALAPPDATA/Programs/TestPion/TestPion.exe"
+   TESTPION_HOME=<home> TESTPION_CAPTURE_SCRIPT=<steps.cjs> "$LOCALAPPDATA/Programs/TestPion/TestPion.exe" --testpion-capture
    ```
-   (or `npx electron apps/desktop` after `npm run build` to try the fix from source). Capture mode uses
+   (an installed build ignores the variable unless started with `--testpion-capture`; or `npx electron apps/desktop` after `npm run build` to try the fix from source). Capture mode uses
    `<home>/electron-profile`, skips the single-instance lock and calls `module.exports = async (win) => {…}` with the window.
    The e2e harness (`apps/desktop/e2e/harness.cjs`) is a ready example: set `E2E_PLAN` / `E2E_OUT` and use it as the capture script.
 4. **Evidence:** `win.webContents.on('console-message')`, `capturePage()` screenshots, and for stack traces

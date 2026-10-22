@@ -215,6 +215,7 @@ export * from './storage/history-har.js';
 export * from './storage/variable-refactor.js';
 export * from './storage/env-edit.js';
 export * from './net/policy.js';
+export * from './net/local-guard.js';
 export * from './net/proxy.js';
 export * from './net/certificate-check.js';
 export * from './net/production-guard.js';

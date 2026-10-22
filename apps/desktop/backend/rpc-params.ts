@@ -173,6 +173,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'flows.webhooks.start': { port: 'n?', host: 's?' },
   'flows.webhooks.status': {},
   'flows.webhooks.stop': {},
+  'git.autoFetchSet': { enabled: 'b' },
   'git.clone': { url: 's', dest: 'p?', branch: 's?' },
   'git.commit': { message: 's', paths: 'sa?' },
   'git.deleteBranch': { branch: 's' },

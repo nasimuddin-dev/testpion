@@ -198,12 +198,25 @@ export function gitHandlers(be: Backend): Handlers {
      * would refuse to pull over are set aside and put back (`setAside`, `message`).
      */
     'git.pull': ({ rebase }: { rebase?: boolean }) => be.gitAutoFetch.exclusive(() => rewritten(() => gitPull(ws(), { rebase }))),
-    'git.push': async () => changed(await be.gitAutoFetch.exclusive(() => gitPush(ws()))),
+    'git.push': async () => {
+      const r = changed(await be.gitAutoFetch.exclusive(() => gitPush(ws())));
+      be.gitAutoFetch.optIn(); // a remote the person pushes to is theirs: it is fetched in the background from now on
+      return r;
+    },
+    /** Turn the background fetch on or off for the open workspace (it is on for workspaces you have pushed from). */
+    'git.autoFetchSet': ({ enabled }: { enabled: boolean }) => {
+      be.gitAutoFetch.optIn(undefined, !!enabled);
+      return { enabled: be.gitAutoFetch.optedIn() };
+    },
     /**
      * Pull & push in one step: fetch, pull with a merge when the remote has new commits, push; stops on conflicts
      * (`state: 'conflicts'`, the files) without pushing. A push refused meanwhile is retried once after another pull.
      */
-    'git.sync': () => be.gitAutoFetch.exclusive(() => rewritten(() => gitSync(ws()))),
+    'git.sync': async () => {
+      const r = await be.gitAutoFetch.exclusive(() => rewritten(() => gitSync(ws())));
+      be.gitAutoFetch.optIn();
+      return r;
+    },
     /** Put the workspace under git: init (when not in a repository), the git files, the merge driver, optionally a remote. */
     'git.init': async ({ remote }: { remote?: string }) => {
       await gitInit(ws(), { remote });

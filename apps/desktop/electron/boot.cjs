@@ -9,7 +9,7 @@ try {
   // the profile main.ts picks: the test profile of screenshots and the UI regression suite (never the user's), or a
   // profile from before the TestPion name (creating a TestPion folder here would make main.ts stop using it)
   const legacy = !existsSync(join(appData, 'TestPion')) && ['FluxPion', 'ProtoPion', 'Protolens'].map((n) => join(appData, n)).find((d) => existsSync(d));
-  const capture = process.env.TESTPION_CAPTURE_SCRIPT && process.env.TESTPION_HOME;
+  const capture = process.env.TESTPION_CAPTURE_SCRIPT && process.env.TESTPION_HOME && (!app.isPackaged || process.argv.includes('--testpion-capture'));
   const dir = capture ? join(process.env.TESTPION_HOME, 'electron-profile') : legacy || app.getPath('userData');
   require('node:module').enableCompileCache?.(join(dir, 'v8-cache'));
 } catch {
