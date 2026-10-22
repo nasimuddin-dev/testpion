@@ -157,7 +157,7 @@ export function registerWorkspaceCommands(program: Command): void {
 
   registerGitCommands(git, program);
 
-  const trash = program.command('trash').description(`Recently deleted (the command is called trash): ${trashKindsText()} (kept ${TRASH_DAYS} days): list, restore, empty`);
+  const trash = program.command('trash').description(`recently deleted ${trashKindsText()} (kept ${TRASH_DAYS} days): list, restore, empty`);
   trash
     .command('list')
     .description('list what was deleted in the last 30 days (Recently deleted): id, kind, name, when; restore one with `trash restore <id>`')

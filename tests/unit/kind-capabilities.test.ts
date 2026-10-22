@@ -269,7 +269,7 @@ describe('the item-kind registry is complete', () => {
     expect(() => removeItem(store, SAMPLE_REF.test)).toThrow(/Test file: cannot be deleted to Recently deleted \(planned for 0\.\d\d\)/);
     expect(() => removeItem(store, SAMPLE_REF.request)).toThrow(/Request: cannot be deleted/);
     expect(() => removeItem(store, 'nonsense')).toThrow(/Not a ref/);
-    expect(() => restoreItem(store, 'nope/1--x.json')).toThrow(/Not a trash entry/);
+    expect(() => restoreItem(store, 'nope/1--x.json')).toThrow(/Not an entry of Recently deleted/);
   });
 });
 
