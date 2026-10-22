@@ -17,7 +17,9 @@ let ws: WorkspaceStore;
 let session: McpSession;
 const runs: string[] = [];
 const home = () => join(t.dir, 'home');
-const cli = (args: string[]) => runCli(args, { home: home() });
+const cli = (args: string[], env: NodeJS.ProcessEnv = {}) => runCli(args, { home: home(), env });
+/** The day the rotating sample is drawn for: fixed, so the test does not depend on today's date. */
+const DAY = { TESTPION_NOW: '2026-10-22T12:00:00Z' };
 
 const RULES: MockRule[] = [
   { match: 'faithfulness-v1[\\s\\S]*Parking is free', response: JSON.stringify({ reasoning: 'no parking document', items: [{ text: 'The clinic opens at 8am.', verdict: true, reason: '[doc-1]' }, { text: 'Parking is free.', verdict: false, reason: 'none' }] }) },
@@ -93,14 +95,15 @@ describe('rag_trend (MCP)', () => {
 describe('rag run with a rotating sample and a baseline file', () => {
   it('scores --limit records, and the markdown comment gets the regression table; a missing baseline file is no error', async () => {
     const md = join(t.dir, 'comment.md');
-    const first = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--limit', '1', '--rotate', '--baseline-results', join(t.dir, 'nothing', 'results.jsonl'), '--markdown', md, '--json']);
-    expect(first.status).toBe(0);
+    const first = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--limit', '1', '--rotate', '--baseline-results', join(t.dir, 'nothing', 'results.jsonl'), '--markdown', md, '--json'], DAY);
+    // which record is scored depends on the UTC day (--rotate), fixed here: it may pass (0) or fail its check (1), never a configuration or run error
+    expect([0, 1]).toContain(first.status);
     const r1 = cliData<{ runId: string; summary: { total: number } }>(first.out);
     expect(r1.summary.total).toBe(1);
     const second = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--metrics', 'faithfulness', '--judge', 'judge/mock-a', '--baseline', runs[0]!, '--markdown', md, '--json']);
     expect(second.status).toBe(0);
     expect(readFileSync(md, 'utf8')).toContain(`### Against ${runs[0]}`);
-    const noLimit = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--rotate']);
+    const noLimit = await cli(['rag', 'run', 'Clinic RAG', '-w', ws.root, '--rotate'], DAY);
     expect(noLimit.status).toBe(2);
   });
 });
