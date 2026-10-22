@@ -76,9 +76,9 @@ describe('CLI: testpion ai', () => {
     const r = cliData(run.out);
     expect(r.proposal.items[0].verification[0]).toMatchObject({ verifier: 'test-file', status: 'pass' });
 
-    const applied = cliData(runCliSync(['ai', 'apply', r.proposal.id, '--json', '-w', ws], { env }).out);
+    const applied = cliData(runCliSync(['ai', 'apply', r.proposal.id, '--json', '--yes', '-w', ws], { env }).out);
     expect(applied.applied[0].path).toBe('ai/smoke.yaml');
-    const undone = cliData(runCliSync(['ai', 'undo', r.proposal.id, '--json', '-w', ws], { env }).out);
+    const undone = cliData(runCliSync(['ai', 'undo', r.proposal.id, '--json', '--yes', '-w', ws], { env }).out);
     expect(undone.restored).toBe(1);
 
     const usage = cliData(runCliSync(['ai', 'usage', '--json', '-w', ws], { env }).out);
@@ -139,4 +139,27 @@ describe('CLI: testpion ai', () => {
     expect(keyless.status).toBe(2);
     expect(JSON.parse(keyless.out).errors[0].message).toMatch(/No API key for Cloud/);
   }, 120_000);
+});
+
+describe('AI calls report what they cost and can be capped (P1)', () => {
+  it('ai_run_task returns usage and costUsd; max_cost_usd refuses a call that could cost more, before it is sent', async () => {
+    const store = workspace('mcp-cost');
+    try {
+      const priced = { provider: '*', model: '*', inputPerMillion: 1_000_000, outputPerMillion: 1_000_000, version: 'test' };
+      const settings = { ...defaultSettings(), assistantProvider: 'mock-ai', assistantModel: 'mock-model', pricing: [priced] };
+      const tools = withToolContract(aiTools({ store, secrets: new MemorySecretStore(), settings }), { docs: TOOL_DOCS });
+      const run = tools.find((x) => x.name === 'ai_run_task')!;
+      expect(Object.keys(run.inputSchema.properties)).toContain('max_cost_usd');
+      const ok = unwrap(await run.run({ task: 'design-flow', question: 'smoke test', path: 'ai/cost.yaml' })) as { usage?: { inputTokens: number }; costUsd?: unknown; priceKnown?: unknown; model?: string };
+      expect(typeof ok.costUsd).toBe('number');
+      expect(ok.usage).toBeTruthy();
+      expect(ok.model).toMatch(/mock/);
+      // a model that is not on this computer, at a price: a cap far under the estimate refuses the call, and nothing is sent
+      store.saveProviders([{ id: 'remote', name: 'Remote', kind: 'openai-compatible', baseUrl: 'https://api.example.test/v1', defaultModel: 'big-model' }]);
+      const remote = withToolContract(aiTools({ store, secrets: new MemorySecretStore(), settings: { ...settings, assistantProvider: 'remote', assistantModel: 'big-model' } }), { docs: TOOL_DOCS });
+      await expect(remote.find((x) => x.name === 'ai_run_task')!.run({ task: 'design-flow', question: 'smoke test', max_cost_usd: 0.0001 })).rejects.toThrow(/could cost up to .* over the cap/);
+    } finally {
+      store.close();
+    }
+  });
 });

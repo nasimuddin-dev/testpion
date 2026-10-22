@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, importDocument, importIntoWorkspace, planImport, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
+import { WorkspaceStore, buildReport, importDocument, importIntoWorkspace, planImport, type CollectionNode, type SavedHttpRequest } from '../../packages/core/src/index.js';
 
 // Import compatibility leftovers: Yaak plugins, encrypted fields (HTTPie, Apidog), Postman v3 $ref, script lines in the update preview.
 
@@ -173,5 +173,48 @@ describe('the update preview shows the script lines that differ', () => {
     const item = plan.reimport![0]!.items.find((i) => i.path.join('/') === 'List')!;
     expect(item.action).toBe('replace');
     expect(item.scripts).toBeUndefined();
+  });
+});
+
+describe('Postman import: a script that is switched off stays off (P1)', () => {
+  const collection = JSON.stringify({
+    info: { name: 'Disabled scripts', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+    event: [{ listen: 'test', disabled: true, script: { exec: ["pm.test('collection', () => pm.expect(1).to.equal(2));"] } }],
+    item: [
+      {
+        name: 'Folder',
+        event: [{ listen: 'prerequest', disabled: true, script: { exec: ["pm.environment.set('x', '1');"] } }],
+        item: [
+          {
+            name: 'Request',
+            event: [
+              { listen: 'test', disabled: true, script: { exec: ["pm.test('off', () => pm.expect(1).to.equal(2));"] } },
+              { listen: 'prerequest', script: { exec: ["pm.variables.set('on', '1');"] } },
+            ],
+            request: { method: 'GET', url: { raw: 'https://a.test/x' } },
+          },
+        ],
+      },
+    ],
+  });
+
+  it('does not import event[].disabled scripts at request, folder and collection level, and reports each', () => {
+    const doc = importDocument(collection).document;
+    const c = doc.collections[0]!;
+    expect(c.testScript).toBeUndefined();
+    const folder = c.items[0] as { preRequestScript?: string; items: Array<{ preRequestScript?: string; testScript?: string }> };
+    expect(folder.preRequestScript).toBeUndefined();
+    const req = folder.items[0]!;
+    expect(req.testScript).toBeUndefined();
+    expect(req.preRequestScript).toContain('variables.set');
+    const found = doc.findings.filter((f) => f.code === 'SCRIPT_DISABLED');
+    expect(found).toHaveLength(3);
+    expect(found.every((f) => f.severity === 'not-imported')).toBe(true);
+  });
+
+  it('a Postman fixture whose "disabled": true comes over as disabled, or as a finding (never silently active)', () => {
+    const doc = importDocument(collection).document;
+    const report = buildReport(doc);
+    expect(JSON.stringify(report)).toContain('Scripts switched off in the source');
   });
 });

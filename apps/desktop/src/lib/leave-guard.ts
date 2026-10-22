@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import type { ViewId } from '../store';
-import { ask } from '../store';
 
 /**
  * One guard for a view that edits something it does not save as you type (collection settings, Settings): going to
@@ -35,6 +34,7 @@ export function registerLeaveGuard(view: ViewId, g: Guard): () => void {
 export async function confirmLeave(view: ViewId): Promise<boolean> {
   const g = dirtyGuard(view);
   if (!g) return true;
+  const { ask } = await import('../store');
   const id = await ask({
     title: 'Unsaved changes',
     message: `${g.subject} has unsaved changes.`,

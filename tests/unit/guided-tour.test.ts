@@ -29,11 +29,11 @@ describe('guided tour', () => {
     expect(TOUR_STEPS.every((s) => s.targets.length > 0)).toBe(true);
   });
 
-  it('opens by itself once per workspace, not in the examples, not when the loop is done, never without a workspace', () => {
+  it('opens by itself once per workspace (the examples too: a new window starts there), not when the loop is done, never without a workspace', () => {
     setDraftScope(undefined);
     expect(shouldAutoStart(progress([]), { examples: false })).toBe(false);
     setDraftScope('ws-a');
-    expect(shouldAutoStart(progress([]), { examples: true })).toBe(false);
+    expect(shouldAutoStart(progress([]), { examples: true })).toBe(true);
     expect(shouldAutoStart(progress(['send', 'save', 'test', 'run', 'ci']), { examples: false })).toBe(false);
     expect(shouldAutoStart(progress(['send']), { examples: false })).toBe(true);
     useTour.getState().start(progress(['send']), { intro: true });

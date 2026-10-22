@@ -80,7 +80,7 @@ describe('testpion import: the Globals and Import here', () => {
     expect(done.status).toBe(0);
     expect(done.env!.data.workspaceVariables).toEqual({ added: 1, replaced: 0, kept: 0 });
     expect(cli(['import', file, '--only', 'workspace', '--globals', 'sometimes', '--json', '-w', b.root]).status).toBe(2);
-    const undo = cli(['import', '--undo', done.env!.data.importId, '--json', '-w', b.root]);
+    const undo = cli(['import', '--undo', done.env!.data.importId, '--yes', '--json', '-w', b.root]);
     expect(undo.status).toBe(0);
   });
 
@@ -92,7 +92,7 @@ describe('testpion import: the Globals and Import here', () => {
     const bad = cli(['import', join(t.dir, 'one.testpion.json'), '--into', 'api/nope', '--json', '-w', b.root]);
     expect(bad.status).toBe(2);
     expect(bad.env!.errors[0]!.message).toMatch(/No folder "nope"/);
-    expect(cli(['import', '--undo', r.env!.data.importId, '--json', '-w', b.root]).status).toBe(0);
+    expect(cli(['import', '--undo', r.env!.data.importId, '--yes', '--json', '-w', b.root]).status).toBe(0);
     expect(readFileSync(join(b.root, b.collectionFileOf('api')), 'utf8')).toBe(before);
   });
 });

@@ -83,7 +83,7 @@ describe('testpion agents init', () => {
     expect(broken.status).toBe(2);
     expect(cliData(broken.out).files[0]).toMatchObject({ status: 'skipped', reason: expect.stringMatching(/without its end/) });
     expect(readFileSync(join(ws, 'AGENTS.md'), 'utf8')).toContain('half a block');
-    const forced = await cli('agents', 'init', '--force', '--json');
+    const forced = await cli('agents', 'init', '--force', '--yes', '--json');
     expect(forced.status).toBe(0);
     const text = readFileSync(join(ws, 'AGENTS.md'), 'utf8');
     expect(text.startsWith('# Our rules\r\n\r\nRun lint first.\r\nhalf a block\r\n\r\n<!-- testpion:begin -->\r\n')).toBe(true);

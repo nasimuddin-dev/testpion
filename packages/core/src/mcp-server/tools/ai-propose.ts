@@ -19,6 +19,9 @@ export const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ .
 /** A list as agents give it: an array, or a comma-separated string. */
 export const strings = (v: unknown): string[] | undefined => (Array.isArray(v) ? v.map(String).filter(Boolean) : typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
 
+/** What a finished AI call cost, as every AI tool reports it: model, usage and `costUsd` (0 with `priceKnown: false` when the price table has no entry). */
+export const spent = (r: { provider: string; model: string; usage: unknown; costUsd?: number; priceKnown?: boolean }) => ({ model: `${r.provider}/${r.model}`, usage: r.usage, costUsd: r.costUsd ?? 0, priceKnown: r.priceKnown ?? r.costUsd !== undefined });
+
 export const PRIVACY = { type: 'string', enum: ['full', 'metadata', 'names'], description: 'full (redacted, default), metadata (shapes and names; no body values), names' };
 
 interface ProposeCall {
@@ -63,6 +66,7 @@ export function createProposer({ store, secrets, settings }: { store: WorkspaceS
         const { preview, proposal, ...rest } = r;
         return {
           ...rest,
+          ...spent(r),
           sent: { privacy: preview.privacy, contextTokens: preview.context.tokens, masked: preview.redactionCount, local: preview.local },
           ...(proposal ? { proposal: forAgent(proposal), next: o.next(proposal) } : {}),
         };

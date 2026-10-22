@@ -85,6 +85,8 @@ export function workspaceHandlers(be: Backend): Handlers {
         path: be.store.root,
         environments: be.store.listEnvironments(),
         migrations: be.store.migrationsApplied,
+        // the examples workspace that ships with the app: Home shows its first-run help and a way out to the user's own
+        examples: be.isExamplesWorkspace(),
       },
     'ws.create': ({ name }: { name: string }) => {
       const s = be.manager.create(name);

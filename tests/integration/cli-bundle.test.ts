@@ -106,7 +106,7 @@ describe('testpion export / import with bundles', () => {
         .map((c) => c.id)
         .sort(),
     ).toEqual(['api', 'api-2']);
-    const undo = cli(['import', '--undo', both.env!.data.importId, '--json', '-w', b.root]);
+    const undo = cli(['import', '--undo', both.env!.data.importId, '--yes', '--json', '-w', b.root]);
     expect(undo.status).toBe(0);
     expect(b.listCollections().map((c) => c.id)).toEqual(['api']);
     const list = cli(['import', '--list', '--json', '-w', b.root]);

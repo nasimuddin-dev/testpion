@@ -16,6 +16,12 @@ import { AiPreviewDialog, taskParams, type AiPrivacy } from './ai/AiPreviewDialo
 import { AiEstimateLine, estimateOf, type EstimateState } from './ai/AiEstimateLine';
 import { ProposalReview, VerificationBadgeView } from './ai/ProposalReview';
 
+/** "≈ 1.2k tokens · $0.01" (no cost when the model has no price). */
+export function answerCostText(tokens: number, costUsd?: number): string {
+  const t = tokens >= 1000 ? `${(tokens / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(tokens);
+  return `≈ ${t} tokens${costUsd !== undefined ? ` · ${costUsd < 0.01 ? '<$0.01' : `$${costUsd.toFixed(2)}`}` : ''}`;
+}
+
 interface Turn {
   role: 'user' | 'assistant';
   content: string;
@@ -23,6 +29,9 @@ interface Turn {
   task?: boolean;
   provider?: string;
   model?: string;
+  /** What this answer used: tokens, and the cost from the price table (undefined: the model has no price). */
+  tokens?: number;
+  costUsd?: number;
   /** What the answer proposes (verified items to review and apply). */
   proposal?: Proposal;
   /** The answer stopped at the output limit. */
@@ -79,7 +88,7 @@ export function AssistantPanel() {
       // the core task runner (packages/core/src/ai/tasks): redaction, budgets, caps, verification and proposals happen there
       const r = await call<AiTaskResult>('ai.runTask', { ...taskParams({ ...req, context }, env), question: text, hint, history, requestId: id });
       if (mine !== conversation.current) return;
-      setTurns((t) => [...t, { role: 'assistant', content: r.text, provider: r.provider, model: r.model, proposal: r.proposal, truncated: r.truncated }]);
+      setTurns((t) => [...t, { role: 'assistant', content: r.text, provider: r.provider, model: r.model, tokens: r.usage?.totalTokens, costUsd: r.costUsd, proposal: r.proposal, truncated: r.truncated }]);
     } catch (e) {
       if (mine !== conversation.current) return;
       const err = asError(e);
@@ -449,6 +458,11 @@ const Answer = memo(function Answer({
               <BookOpen size={10} /> {turn.provider} · {turn.model}
             </Badge>
           </span>
+          {turn.tokens ? (
+            <span data-answer-cost title="What this answer used. The cost comes from your price table (Settings ▸ Model pricing).">
+              {answerCostText(turn.tokens, turn.costUsd)}
+            </span>
+          ) : null}
           <button className="inline-flex items-center gap-1 hover:text-fg" onClick={() => void copyText(turn.content, 'the answer')}>
             <Copy size={11} /> Copy
           </button>

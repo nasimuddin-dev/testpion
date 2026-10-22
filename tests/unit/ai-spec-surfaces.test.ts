@@ -160,7 +160,7 @@ describe('CLI: testpion generate gaps|tests and tidy --ai', () => {
 
     const applied = cliData(runCliSync(['tidy', 'imp', '--ai', '--apply', '--json', '-w', ws], { env }).out);
     expect(applied.applied.applied.length).toBeGreaterThan(5);
-    const undone = cliData(runCliSync(['ai', 'undo', applied.proposal.id, '--json', '-w', ws], { env }).out);
+    const undone = cliData(runCliSync(['ai', 'undo', applied.proposal.id, '--yes', '--json', '-w', ws], { env }).out);
     expect(undone.restored).toBeGreaterThan(0);
 
     const none = cliData(runCliSync(['tidy', 'imp', '--ai', '--no-model', '--json', '-w', ws], { env }).out);

@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('aps', {
   },
   startup: () => ipcRenderer.invoke('aps:startup'),
   /** The app draws the title bar (Windows, Linux): the top bar leaves room for the window buttons and has a ☰ menu. */
+  /** Documentation screenshots and the e2e suite: the first-run tour does not open by itself (it would cover every step). */
+  capture: process.argv?.includes('--tp-capture=1') === true,
   titleBar: titleBarArg ? titleBarArg.endsWith('=1') : ipcRenderer.sendSync('aps:titlebar') === true,
   titleBarColors: (color: string, symbolColor: string, height?: number) => ipcRenderer.send('aps:titlebar-colors', { color, symbolColor, height }),
   appMenu: (x: number, y: number) => ipcRenderer.send('aps:app-menu', { x, y }),

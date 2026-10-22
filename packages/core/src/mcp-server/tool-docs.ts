@@ -252,18 +252,18 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { collection: 'HAR import 2026-10-19', source: 'har', flow: true },
   },
   security_tests_generate: {
-    when: "Use it when the user wants security tests for an API they own: BOLA (a second user reading the first user's objects), broken authentication, mass assignment, function-level authorization. The model picks what to probe from the saved requests; TestPion writes the steps and every verdict is a check computed from the responses, never the model's opinion.",
-    whenNot: 'For schema fuzzing, use `api_fuzz`; to review a collection for leaked secrets and insecure settings, use `security_review`. Never against production. Apply the proposal with `ai_apply_proposal` after the user agrees, then run it with `security_tests_run` in a test environment.',
+    when: "Use it when the user wants security tests for an API they own: BOLA (a second user reading the first user's objects), broken authentication, mass assignment, function-level authorization. Every verdict is a check computed from the responses, never the model's opinion.",
+    whenNot: 'For schema fuzzing, use `api_fuzz`; for leaked secrets and insecure settings, use `security_review`. Never against production. Apply with `ai_apply_proposal` after the user agrees, then `security_tests_run`.',
     example: { collection: 'Veterinary API', identities: { owner: 'tokenA', other: 'tokenB' }, environment: 'staging' },
   },
   security_tests_run: {
     when: 'Use it to run a security test file that `security_tests_generate` wrote, in a test environment: one step at a time, paced, with a verdict per step (finding, pass, inconclusive) and the checks that failed.',
-    whenNot: 'To run other test files, use `run_tests`. Never against production. A finding is a fact about the API: report it to the user, do not change the checks to make it pass.',
+    whenNot: 'To run other test files, use `run_tests`. Never against production. A finding is a fact about the API: report it, do not change the checks to make it pass.',
     example: { path: 'security/veterinary-api.yaml', environment: 'staging' },
   },
   contract_drift: {
-    when: 'Use it when the user wants to know where real traffic (History, a HAR file, a run) differs from an OpenAPI document: undocumented fields, statuses and endpoints, type changes, missing required fields, nulls, enum values. With `ai: true`, also who is right and the fix as a verified proposal (a spec patch, a contract check).',
-    whenNot: 'To compare two versions of a document, use `openapi_diff`; to lint a document, use `openapi_lint`; to check one response against a document, add an `openapi` check to the request. Apply the proposal with `ai_apply_proposal` after the user agrees; `ai_undo_proposal` restores the file.',
+    when: 'Use it when the user wants to know where real traffic (History, a HAR file, a run) differs from an OpenAPI document: undocumented fields, statuses and endpoints, type changes, nulls, enum values. With `ai: true`, also who is right and a verified fix proposal.',
+    whenNot: 'To compare two versions of a document, use `openapi_diff`; to lint one, `openapi_lint`; to check one response, add an `openapi` check to the request. Apply with `ai_apply_proposal` after the user agrees.',
     example: { spec: 'specs/veterinary-api.yaml', source: 'history', limit: 200, ai: true },
   },
   write_script: {

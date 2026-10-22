@@ -53,7 +53,7 @@ describe('kinds for agents', () => {
 
   it('CLI item delete / restore (--json) and MCP delete_item / restore_item go through the same ops', async () => {
     store.saveEnvironment({ id: 'tmp-env', name: 'Tmp env', variables: [] });
-    const del = runCliSync(['item', 'delete', 'environment:tmp-env', '--json', '-w', store.root]);
+    const del = runCliSync(['item', 'delete', 'environment:tmp-env', '--yes', '--json', '-w', store.root]);
     expect(del.status).toBe(0);
     const gone = (JSON.parse(del.out) as { data: { trashId: string; kind: string; name: string } }).data;
     expect(gone).toMatchObject({ kind: 'environment', name: 'Tmp env' });

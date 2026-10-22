@@ -30,12 +30,12 @@ describe('testpion git conflicts / resolve, by step', () => {
     const env = JSON.parse(listed.out);
     const detail = env.data[0];
     expect(detail.steps.map((s: { key: string }) => s.key)).toEqual(['step:a', 'step:b']);
-    const bad = runCliSync(['git', 'resolve', 'tests/flows/two.yaml', '--edit', 'step:a=x', '--json', '-w', r.ws]);
+    const bad = runCliSync(['git', 'resolve', 'tests/flows/two.yaml', '--edit', 'step:a=x', '--yes', '--json', '-w', r.ws]);
     expect(bad.status).toBe(2);
     expect(JSON.parse(bad.out).errors[0].message).toMatch(/a step is settled with --pick step:a=ours\|theirs/);
-    const unknown = runCliSync(['git', 'resolve', 'tests/flows/two.yaml', '--pick', 'step:zzz=theirs', '--json', '-w', r.ws]);
+    const unknown = runCliSync(['git', 'resolve', 'tests/flows/two.yaml', '--pick', 'step:zzz=theirs', '--yes', '--json', '-w', r.ws]);
     expect(unknown.status).toBe(2);
-    const ok = runCliSync(['git', 'resolve', 'tests/flows/two.yaml', '--pick', 'step:a=theirs', '--pick', 'step:b=ours', '--json', '-w', r.ws]);
+    const ok = runCliSync(['git', 'resolve', 'tests/flows/two.yaml', '--pick', 'step:a=theirs', '--pick', 'step:b=ours', '--yes', '--json', '-w', r.ws]);
     expect(ok.status).toBe(0);
     const text = r.read('tests/flows/two.yaml');
     expect(text).toContain('/a-theirs"');

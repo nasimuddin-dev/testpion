@@ -9,7 +9,7 @@
  * as it happens, and the last line is the envelope with `type: 'result'`. The envelope is written when the command
  * ends, so its status follows the exit code: 0 ok, 1 failed (a test or check failed), 2 / 3 error.
  */
-import { ApsError, normalizeError } from '@testpion/core';
+import { errorEnvelope } from '@testpion/core';
 
 export const SCHEMA_VERSION = 1;
 
@@ -135,18 +135,8 @@ export function noteError(e: unknown): void {
   cli.error ??= e;
 }
 
-const RETRYABLE = new Set(['NetworkError', 'TimeoutError', 'RateLimitError', 'ServerError']);
-
-/** An error as the envelope lists it: a stable code, the message, what to do, and whether trying again may help. */
-function envelopeError(e: unknown, exitCode?: number): EnvelopeError {
-  const n = normalizeError(e);
-  const kind = e instanceof ApsError || n.kind !== 'InternalError' ? n.kind : undefined;
-  const code = kind ?? (exitCode === 2 ? 'ConfigurationError' : 'ExecutionError');
-  const own = (e as { hint?: unknown } | undefined)?.hint;
-  // the engine's suggestions; a CLI error carries its own hint (or none), never the "report a bug" of an unknown error
-  const hint = typeof own === 'string' ? own : e instanceof ApsError && n.suggestions?.length ? n.suggestions.join(' ') : undefined;
-  return { code, message: n.message, ...(hint ? { hint } : {}), retryable: RETRYABLE.has(code) };
-}
+/** An error as the envelope lists it: the one shape the MCP tools use too (errorEnvelope in @testpion/core). */
+const envelopeError = (e: unknown, exitCode?: number): EnvelopeError => errorEnvelope(e, { exitCode }) as EnvelopeError;
 
 const statusOf = (exitCode: number): Envelope['status'] => (exitCode === 0 ? 'ok' : exitCode === 1 ? 'failed' : 'error');
 

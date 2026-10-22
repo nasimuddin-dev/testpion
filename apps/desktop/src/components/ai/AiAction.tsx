@@ -14,7 +14,9 @@ import { AiPreviewDialog, taskParams } from './AiPreviewDialog';
  * here (or the AiAction button), so setup, privacy, cost and review behave the same everywhere.
  */
 export function startAi(req: AssistantRequest): void {
-  useApp.getState().set({ assistant: req });
+  // from a menu item or a button without an estimate: the panel opens on "Ready to send" (the estimate and "What will be sent"),
+  // so no model is called before the person has seen what goes and what it can cost; a free question is sent as it is typed
+  useApp.getState().set({ assistant: { ...req, preflight: req.preflight ?? req.task !== 'free' } });
 }
 
 /** The free question with what is on screen (the palette, the rail, Home, Ctrl+J). */
@@ -65,7 +67,8 @@ export function AiAction({
     if (open) return void (open(), onStart?.());
     void build().then((r) => {
       if (!r) return;
-      startAi(r);
+      // the button shows the estimate (hover, focus) and "What will be sent…" beside it: no second question
+      startAi({ ...r, preflight: r.preflight ?? false });
       onStart?.();
     });
   };
@@ -119,7 +122,7 @@ export function AiAction({
             const r = previewing;
             setPreviewing(undefined);
             if (open) open();
-            else startAi({ ...r, privacy });
+            else startAi({ ...r, privacy, preflight: false });
             onStart?.();
           }}
         />

@@ -17,6 +17,7 @@ import { LinkButton, Field, Input, Tabs, Textarea } from '../../components/ui';
 import { RequestSettings } from '../../components/RequestSettings';
 import { RestTab } from './types';
 import { switchBodyType, type BodyStash } from '../../lib/body';
+import { useInheritedAuth } from '../../lib/inherited-auth';
 
 export function RequestEditor({
   tab,
@@ -34,6 +35,7 @@ export function RequestEditor({
   /** What the script editor's AI menu knows about this request (RestView builds it). */
   scriptAi?: ScriptAiContext;
 }) {
+  const inheritedAuth = useInheritedAuth(tab.collectionId, tab.requestId, tab.request.auth?.type === 'inherit');
   const [sub, setSub] = useState<'params' | 'auth' | 'headers' | 'body' | 'cookies' | 'scripts' | 'tests' | 'examples' | 'docs' | 'settings'>('params');
   const r = tab.request;
   const count = (a?: Array<{ enabled?: boolean }>) => a?.filter((x) => x.enabled !== false).length || undefined;
@@ -71,7 +73,7 @@ export function RequestEditor({
             </p>
           </div>
         )}
-        {sub === 'auth' && <AuthEditor auth={r.auth} onChange={(auth) => setReq({ auth })} />}
+        {sub === 'auth' && <AuthEditor auth={r.auth} onChange={(auth) => setReq({ auth })} inherited={inheritedAuth} />}
         {sub === 'headers' && (
           <div className="p-2">
             <KeyValueEditor rows={r.headers ?? []} onChange={(headers) => setReq({ headers })} keyPlaceholder="Header" suggestions={COMMON_HEADERS} valueSuggestions={HEADER_VALUES} />

@@ -4,13 +4,13 @@ import { mcpServer, mcpServerStdio, mcpTypes } from './sdk.js';
 import type { AppSettings, Collection } from '../model/types.js';
 import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
-import { ApsError, normalizeError } from '../errors.js';
+import { ApsError, errorEnvelope, normalizeError } from '../errors.js';
 import { Redactor } from '../util/redact.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
-import { contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
+import { contractCallResult, elicitationConfirmer, isContractResult, TOOL_DETAILS, withToolContract, type Confirmer } from './tool-contract.js';
 import { TOOL_DOCS } from './tool-docs.js';
 import type { DebuggerExchange } from '../debugger/proxy.js';
 import { withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
@@ -49,6 +49,15 @@ interface TestPionMcpOptions {
   /** Allow sending to environments marked as production (off by default). */
   allowProduction?: boolean;
   version?: string;
+}
+
+/**
+ * The machine-readable error of a failed tool call: `structuredContent.error` ({ code, message, hint, retryable }, the
+ * CLI envelope's shape). A tool with an output schema cannot carry it there (clients check structured content against the
+ * schema, even in an error result), so it goes in `_meta['testpion/error']` instead.
+ */
+function errorContent(tool: { outputSchema?: unknown }, error: ReturnType<typeof errorEnvelope>) {
+  return tool.outputSchema ? { _meta: { 'testpion/error': error } } : { structuredContent: { error } };
 }
 
 export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
@@ -98,7 +107,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${opts.profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
+      instructions: `TestPion workspace "${store.workspace.name}". list_kinds says what every kind of item can do and which deletes can be undone. what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${opts.profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
     },
   );
   server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
@@ -126,7 +135,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   }));
   server.setRequestHandler(mcpTypes().ReadResourceRequestSchema, async (req) => {
     const uri = req.params.uri;
-    if (uri === 'testpion://guide') return { contents: [{ uri, mimeType: 'text/markdown', text: agentGuide({ workspace: store.workspace.name, checkTypes: checkTypes(), readOnly: opts.readOnly }) }] };
+    if (uri === 'testpion://guide') return { contents: [{ uri, mimeType: 'text/markdown', text: agentGuide({ workspace: store.workspace.name, checkTypes: checkTypes(), readOnly: opts.readOnly, toolDetails: TOOL_DETAILS }) }] };
     if (uri === 'testpion://workspace')
       return json(uri, { workspace: store.workspace.name, collections: await runTool('list_collections'), environments: await runTool('list_environments'), monitors: await runTool('list_monitors') });
     if (uri === 'testpion://attention') return json(uri, await runTool('what_needs_attention'));
@@ -151,7 +160,10 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   });
   server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
     const tool = tools.find((t) => t.name === req.params.name);
-    if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }] };
+    if (!tool) {
+      const hint = 'search_tools finds a tool by what you want to do.';
+      return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}. ${hint}` }], structuredContent: { error: { code: 'ConfigurationError', message: `Unknown tool ${req.params.name}`, hint, retryable: false } } };
+    }
     try {
       const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
       if (isContractResult(r)) return contractCallResult(r);
@@ -163,7 +175,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       return { ...(structured.isError === true ? { isError: true } : {}), content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], structuredContent: structured };
     } catch (e) {
       const err = normalizeError(e);
-      return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }] };
+      // the text for every client, and the same error as the CLI's envelope for the ones that read structured content: { code, message, hint, retryable }
+      return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }], ...errorContent(tool, errorEnvelope(e, { suggestionsAlways: true })) };
     }
   });
   // a deleting or overwriting call without confirm: true asks the user when the client can (MCP elicitation)

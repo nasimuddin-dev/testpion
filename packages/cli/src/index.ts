@@ -132,6 +132,34 @@ export function buildProgram(): Command {
   return program;
 }
 
+/** What to try after a wrong command or option: the nearest command (by spelling), and where the list is. */
+function commanderHint(program: Command, argv: string[], e: CommanderError): string {
+  const base = commandFromArgv(program, argv);
+  const at = base.split(' ').filter(Boolean).reduce<Command>((c, w) => c.commands.find((x) => x.name() === w) ?? c, program);
+  const help = `${['testpion', base].filter(Boolean).join(' ')} --help lists ${e.code === 'commander.unknownOption' ? 'the options' : 'the commands'}.`;
+  if (e.code !== 'commander.unknownCommand') return help;
+  const m = /unknown command '([^']+)'/.exec(e.message);
+  const word = m?.[1] ?? '';
+  const names = at.commands.flatMap((c) => [c.name(), ...c.aliases()]);
+  const near = names.map((n) => ({ n, d: editDistance(word.toLowerCase(), n.toLowerCase()) })).sort((a, b) => a.d - b.d)[0];
+  const maybe = near && near.d <= Math.max(2, Math.floor(word.length / 3)) ? `Did you mean ${['testpion', base, near.n].filter(Boolean).join(' ')}? ` : '';
+  return maybe + help;
+}
+
+function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0]!;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cur = row[j]!;
+      row[j] = Math.min(row[j]! + 1, row[j - 1]! + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+  }
+  return row[b.length]!;
+}
+
 export async function main(args = process.argv): Promise<number> {
   // the old spellings (`openapi-lint`, `lint-tests`, `mock-mcp` …) are the commands they became (groups.ts)
   const argv = rewriteLegacy(args);
@@ -166,7 +194,10 @@ export async function main(args = process.argv): Promise<number> {
       if (!cli.command && argv.includes('--json'))
         beginCommand(commandFromArgv(program, argv), { json: true }, true);
       code = EXIT.CONFIG_ERROR;
-      error = new CliError(e.message.replace(/^error: /, ''), code);
+      const msg = e.message.replace(/^error: /, '');
+      const hint = commanderHint(program, argv, e);
+      error = Object.assign(new CliError(msg, code), { hint });
+      if (!machine()) console.error(dim(`  → ${hint}`));
     } else if (e instanceof CliError) {
       console.error(red(e.message));
       const hint = (e as { hint?: unknown }).hint;

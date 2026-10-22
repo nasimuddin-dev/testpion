@@ -212,12 +212,29 @@ export function RestView() {
     setActive(t.id);
   };
 
+  // a tab opened to type into (New request, Ctrl+T, Home's card, the tour): the cursor is in its URL field, as in Postman
+  const focusUrlOf = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!focusUrlOf.current || focusUrlOf.current !== active) return;
+    focusUrlOf.current = undefined;
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('input[aria-label="Request URL"], [aria-label="Request URL"] input')?.focus());
+  }, [active, tabs]);
+  // Get started ▸ "Save it as a test" ▸ Show me: the request opens and the Save as test dialog with it
+  const saveAsTestOf = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const t = tabs.find((x) => x.id === active);
+    if (!saveAsTestOf.current || !t || t.requestId !== saveAsTestOf.current) return;
+    saveAsTestOf.current = undefined;
+    saveTabAsTest(t);
+  });
   useIntent('rest', async (p) => {
+    if (p?.saveAsTest && p.requestId) saveAsTestOf.current = String(p.requestId);
     if (p?.tabCommand) return runTabCommand(p.tabCommand);
     // "Describe with AI" from an empty GraphQL, gRPC, WebSocket or MCP view
     if (p?.describe) return aiOn ? void describeRequest() : undefined;
     if (p?.newTab) {
       const t = blankRequest();
+      focusUrlOf.current = t.id;
       setTabs((ts) => [...ts, t]);
       setActive(t.id);
     } else if (p?.collectionId) {

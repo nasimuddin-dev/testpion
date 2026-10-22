@@ -19,7 +19,7 @@ import { AttentionCard } from '../components/AttentionCard';
 import { RecentRuns } from '../components/charts';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { useRecentItems } from '../lib/recent-items';
-import { LOOP_STEPS, runStep, WALKTHROUGHS, walkthroughDocs, type OnboardingStep } from '../lib/onboarding';
+import { loopStep, runStep, WALKTHROUGHS, walkthroughDocs, type OnboardingStep } from '../lib/onboarding';
 import { shouldAutoStart, useTour } from '../lib/tour';
 import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
@@ -72,7 +72,6 @@ const greeting = () => {
  * collection, an environment, a test run); gone once all are done, or hidden with "Hide".
  */
 function GetStarted({ steps, onHide, onTour }: { steps: Array<{ id: string; label: string; text: string; done: boolean; onClick(): void }>; onHide(): void; onTour(): void }) {
-  const inExamples = useApp((s) => s.workspace?.id === EXAMPLES_ID);
   const done = steps.filter((s) => s.done).length;
   return (
     <Callout tone="accent" block as="section" className="rounded-2xl px-5 py-4" aria-label="Get started">
@@ -109,21 +108,50 @@ function GetStarted({ steps, onHide, onTour }: { steps: Array<{ id: string; labe
           </li>
         ))}
       </ol>
-      {/* WF-22: the other loops, as walk-throughs (in the Examples workspace, where there is something to try) */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs" data-walkthroughs>
-        <span className="text-muted">Then try:</span>
-        {WALKTHROUGHS.filter((w) => !inExamples || w.id !== 'git').map((w) => (
-          <span key={w.id} className="inline-flex items-center gap-1.5">
-            <LinkButton title={w.text} onClick={() => void w.start()}>
-              {w.title}
-            </LinkButton>
-            <LinkButton className="text-muted" title="The guide" onClick={() => void openRef(walkthroughDocs(w.docs))}>
-              (guide)
-            </LinkButton>
-          </span>
-        ))}
-      </div>
     </Callout>
+  );
+}
+
+/**
+ * WF-22: the other loops, as walk-throughs (debug a failing test, capture traffic, git). Always on Home, for the person
+ * who finished Get started too; "Hide" removes the row.
+ */
+function Walkthroughs({ inExamples }: { inExamples: boolean }) {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem('aps.home.walkthroughs') === 'hidden';
+    } catch {
+      return false;
+    }
+  });
+  if (hidden) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs px-1" data-walkthroughs>
+      <span className="text-muted">Learn by doing:</span>
+      {WALKTHROUGHS.filter((w) => !inExamples || w.id !== 'git').map((w) => (
+        <span key={w.id} className="inline-flex items-center gap-1.5">
+          <LinkButton title={w.text} onClick={() => void w.start()}>
+            {w.title}
+          </LinkButton>
+          <LinkButton className="text-muted" title="The guide" onClick={() => void openRef(walkthroughDocs(w.docs))}>
+            (guide)
+          </LinkButton>
+        </span>
+      ))}
+      <LinkButton
+        className="ml-auto text-muted"
+        onClick={() => {
+          setHidden(true);
+          try {
+            localStorage.setItem('aps.home.walkthroughs', 'hidden');
+          } catch {
+            /* storage unavailable */
+          }
+        }}
+      >
+        Hide
+      </LinkButton>
+    </div>
   );
 }
 
@@ -143,9 +171,6 @@ function Card({ title, icon, action, children }: { title: string; icon: ReactNod
 const count = (nodes: CollectionNode[]): number => nodes.reduce((a, n) => a + (n.kind === 'folder' ? count(n.items) : 1), 0);
 
 /** Postman-style home: quick actions, recent requests, collections and environments of the workspace. */
-/** Id of the examples workspace that ships with the app (examples/public-workspace). */
-const EXAMPLES_ID = 'ws-testpion-examples';
-
 interface HomeMonitor {
   id: string;
   name: string;
@@ -223,12 +248,40 @@ export function HomeView() {
   // the first loop's steps, done from what the workspace holds (ws.onboarding)
   const [loop, setLoop] = useState<OnboardingStep[]>([]);
   const allDone = loop.length > 0 && loop.every((s) => s.done);
-  const showGetStarted = !getStartedHidden && !allDone && loop.length > 0 && ws?.id !== EXAMPLES_ID;
+  // the examples workspace that ships with the app (the backend says so): a new window starts there, with the same first steps
+  const inExamples = ws?.examples === true;
+  const showGetStarted = !getStartedHidden && !allDone && loop.length > 0;
   // the guided tour of the first loop opens by itself once per workspace (lib/tour.ts), on Home, with Get started shown
   const view = useApp((s) => s.view);
   useEffect(() => {
-    if (showGetStarted && view === 'home' && !useTour.getState().open && shouldAutoStart(loop, { examples: ws?.id === EXAMPLES_ID })) useTour.getState().start(loop, { intro: true });
+    if (showGetStarted && view === 'home' && !useTour.getState().open && shouldAutoStart(loop)) useTour.getState().start(loop, { intro: true });
   }, [showGetStarted, view, loop, ws?.id]);
+  // the examples were opened once: the invitation to open them goes away
+  const [examplesSeen, setExamplesSeen] = useState(() => {
+    try {
+      return localStorage.getItem('aps.examplesSeen') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (!inExamples) return;
+    setExamplesSeen(true);
+    try {
+      localStorage.setItem('aps.examplesSeen', '1');
+    } catch {
+      /* storage unavailable */
+    }
+  }, [inExamples]);
+  // from the examples to the person's own workspace
+  const openOwn = async () => {
+    const list = await call<Array<{ id: string; name: string; path: string }>>('ws.list');
+    const own = list.find((w) => w.id !== ws?.id);
+    if (!own) return void runMenuCommand('new-workspace');
+    await call('ws.open', { ref: own.path });
+    await useApp.getState().refreshWorkspace();
+    useApp.getState().toast(`Switched to "${own.name}"`, 'success');
+  };
   const setView = useApp((s) => s.setView);
 
   const stale = useRef(false);
@@ -284,7 +337,7 @@ export function HomeView() {
           <p className="relative text-sm font-medium text-accent">{greeting()} 👋</p>
           <h1 className="relative text-[1.75rem] font-semibold tracking-tight mt-1">{ws ? ws.name : 'Welcome to TestPion'}</h1>
           <p className="relative text-sm text-muted mt-1.5 max-w-2xl">Build, test and debug REST, GraphQL, gRPC, WebSocket, MCP and AI APIs. Everything stays on this computer.</p>
-          {ws?.id === EXAMPLES_ID ? (
+          {inExamples ? (
             <p className="relative text-sm mt-3 max-w-3xl">
               These examples use free public APIs. Open a collection and press <b>Send</b>, run a whole collection, or run the <b>All examples</b> and <b>Offline</b> suites in{' '}
               <LinkButton  icon={<ArrowRight size={12} />} onClick={() => setView('tests')}>
@@ -292,10 +345,18 @@ export function HomeView() {
               </LinkButton>
               . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and AI Lab has prompts that run on an offline demo model.
             </p>
-          ) : (
+          ) : examplesSeen ? null : (
             <LinkButton className="relative block mt-3 text-sm" onClick={() => void runMenuCommand('open-examples')}>
               Explore the examples workspace: REST, GraphQL, gRPC, WebSocket, MCP and AI against public APIs →
             </LinkButton>
+          )}
+          {inExamples && (
+            <p className="relative text-sm mt-2">
+              Your own work lives in your other workspace:{' '}
+              <LinkButton icon={<ArrowRight size={12} />} onClick={() => void openOwn()} data-open-own-workspace>
+                Open My Workspace
+              </LinkButton>
+            </p>
           )}
           {env && (
             <p className="relative mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-bg/70 px-3 py-1 text-xs text-muted">
@@ -315,10 +376,11 @@ export function HomeView() {
                 /* storage unavailable */
               }
             }}
-            steps={loop.map((s) => ({ id: s.id, ...LOOP_STEPS[s.id], done: s.done, onClick: () => runStep(s) }))}
+            steps={loop.map((s) => ({ id: s.id, ...loopStep(s.id, inExamples), done: s.done, onClick: () => runStep(s) }))}
             onTour={() => useTour.getState().start(loop)}
           />
         )}
+        <Walkthroughs inExamples={inExamples} />
         <GuidedTour progress={loop} />
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
           <Action icon={<Network size={16} />} hue="blue" title="New HTTP request" text="Send a request, paste cURL or fetch from the browser, write tp.* scripts (scripts written for Postman run unchanged)." onClick={() => open('rest', { newTab: true })} />

@@ -44,6 +44,17 @@ function folderItems(c: Collection, path: string | undefined): CollectionNode[] 
   return items;
 }
 
+/** Whether the folder path names a folder that exists. */
+function hasFolder(c: Collection, path: string): boolean {
+  let items = c.items;
+  for (const part of path.split('/').map((p) => p.trim()).filter(Boolean)) {
+    const f = items.find((n): n is CollectionFolder => n.kind === 'folder' && n.name.toLowerCase() === part.toLowerCase());
+    if (!f) return false;
+    items = f.items;
+  }
+  return true;
+}
+
 /** Remove a node wherever it is; returns it. */
 function takeOut(items: CollectionNode[], id: string): CollectionNode | undefined {
   const i = items.findIndex((n) => n.id === id);
@@ -284,33 +295,39 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     {
       name: 'create_collection',
       write: true,
-      description: 'Create an empty collection (name, optional description and variables). save_request with `create: true` also creates one on the way.',
+      description: 'Create an empty collection (name, optional description and variables). A second call with the same name fails unless `if_exists: "reuse"`, which returns the one that is there. save_request with `create: true` also creates one on the way.',
       inputSchema: {
         type: 'object',
-        properties: { name: str('Collection name'), description: str('What the collection is for (Markdown)'), variables: { type: 'object', description: 'Collection variables {name: value} (plain values only; secrets belong in secret environment variables)' } },
+        properties: { name: str('Collection name'), if_exists: { type: 'string', enum: ['fail', 'reuse'], description: 'When it exists already: fail (refuse, the default) or reuse (return the existing one, nothing changes), so a retry after a timeout never makes a second' }, description: str('What the collection is for (Markdown)'), variables: { type: 'object', description: 'Collection variables {name: value} (plain values only; secrets belong in secret environment variables)' } },
         required: ['name'],
       },
       run: (a) => {
         const name = String(a.name ?? '').trim();
         if (!name) throw new ApsError('ValidationError', 'Give the collection a name');
-        if (d.collections().some((c) => c.name.toLowerCase() === name.toLowerCase())) throw new ApsError('ValidationError', `A collection named "${name}" exists already`);
+        const same = d.collections().find((c) => c.name.toLowerCase() === name.toLowerCase());
+        if (same && a.if_exists === 'reuse') return { id: same.id, name: same.name, variables: (same.variables ?? []).map((v) => v.key), created: false };
+        if (same) throw new ApsError('ValidationError', `A collection named "${name}" exists already`, { suggestions: ['Pass if_exists: "reuse" to use the existing one, or pick another name.'] });
         const variables: KeyValue[] = Object.entries((a.variables as Record<string, unknown>) ?? {}).map(([key, value]) => ({ key, value: String(value), enabled: true }));
         const saved = store.saveCollection({ schemaVersion: '1.0', id: shortId('col-'), name, description: a.description ? String(a.description) : undefined, version: 0, variables, items: [], updatedAt: new Date().toISOString() } as Collection);
-        return { id: saved.id, name: saved.name, variables: variables.map((v) => v.key) };
+        return { id: saved.id, name: saved.name, variables: variables.map((v) => v.key), created: true };
       },
     },
     {
       name: 'create_folder',
       write: true,
-      description: 'Create a folder (or a path of folders such as "Auth / Tokens") in a collection.',
-      inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), folder: str('Folder path, e.g. "Auth / Tokens"') }, required: ['collection', 'folder'] },
+      description: 'Create a folder (or a path of folders such as "Auth / Tokens") in a collection. A second call changes nothing and succeeds (`created: false`), unless `if_exists: "fail"`.',
+      inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), folder: str('Folder path, e.g. "Auth / Tokens"'), if_exists: { type: 'string', enum: ['reuse', 'fail'], description: 'When the folder exists already: reuse (the default, nothing changes) or fail' } }, required: ['collection', 'folder'] },
       run: (a) => {
         const c = structuredClone(findCollection(a.collection));
         const path = String(a.folder ?? '').trim();
         if (!path) throw new ApsError('ValidationError', 'Give the folder a name');
-        folderItems(c, path);
-        store.saveCollection(c);
-        return { collection: c.name, folder: path };
+        const existed = hasFolder(c, path);
+        if (existed && a.if_exists === 'fail') throw new ApsError('ValidationError', `The folder "${path}" exists already in "${c.name}"`, { suggestions: ['Leave out if_exists (or pass "reuse") to use it.'] });
+        if (!existed) {
+          folderItems(c, path);
+          store.saveCollection(c);
+        }
+        return { collection: c.name, folder: path, created: !existed };
       },
     },
     {

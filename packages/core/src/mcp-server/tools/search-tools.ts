@@ -10,6 +10,7 @@ import { str, type Tool } from '../tool.js';
 export const MINIMAL_TOOLS = new Set([
   'what_needs_attention',
   'testpion_guide',
+  'list_kinds',
   'search_tools',
   'list_collections',
   'list_requests',

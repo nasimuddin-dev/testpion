@@ -13,6 +13,7 @@ import { CodeModal } from '../components/CodeModal';
 import { formatMs, uid } from '../lib/format';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { AuthEditor } from '../components/AuthEditor';
+import { useInheritedAuth } from '../lib/inherited-auth';
 import { CodeEditor } from '../components/CodeEditor';
 import { addToFolder, findNode, mapNodes } from '../components/CollectionTree';
 import { SaveModal } from './rest/dialogs';
@@ -528,7 +529,7 @@ export function GraphQLView() {
                           <KeyValueEditor rows={d.headers} onChange={(headers) => set({ headers })} keyPlaceholder="Header" />
                         </div>
                       )}
-                      {sub === 'auth' && <AuthEditor auth={d.auth} onChange={(auth) => set({ auth })} />}
+                      {sub === 'auth' && <GraphQLAuth collectionId={d.collectionId} requestId={d.requestId} auth={d.auth} onChange={(auth) => set({ auth })} />}
                       {sub === 'connection' && (
                         <div className="h-full flex flex-col">
                           <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Payload of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
@@ -752,4 +753,10 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
       </div>
     </div>
   );
+}
+
+/** The Authorization tab of a GraphQL request: what "Inherit" gets from its folders and collection is shown. */
+function GraphQLAuth({ collectionId, requestId, auth, onChange }: { collectionId?: string; requestId?: string; auth?: import('../types').AuthConfig; onChange(a: import('../types').AuthConfig): void }) {
+  const inherited = useInheritedAuth(collectionId, requestId, auth?.type === 'inherit');
+  return <AuthEditor auth={auth} onChange={onChange} inherited={inherited} />;
 }

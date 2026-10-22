@@ -314,6 +314,19 @@ export class Backend {
     }
   }
 
+  private examplesId?: string;
+  /** Whether the open workspace is the examples workspace that ships with the app (its id is the shipped template's). */
+  isExamplesWorkspace(): boolean {
+    const dir = this.host.examplesDir;
+    if (!dir || !this.store) return false;
+    try {
+      this.examplesId ??= readJson<{ id: string }>(join(dir, 'workspace.json')).id;
+      return this.examplesId === this.store.workspace.id;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Examples that shipped with this version go into the user's copy: additions only, never a change
    * (addTemplateAdditions). Once per app version: the settings remember the version whose examples were offered.

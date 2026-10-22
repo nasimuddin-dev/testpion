@@ -3,7 +3,7 @@ import { createEngineContext } from '../../engine.js';
 import { withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import { addRequestToCollection, externalizeSecrets } from '../../import/save-request.js';
-import type { HttpRequestSpec, TestResult } from '../../model/types.js';
+import type { Collection, HttpRequestSpec, TestResult } from '../../model/types.js';
 import { assertProductionStep, isDataChangingMethod, isGrpcReadMethod } from '../../net/production-guard.js';
 import { describeRoot, executeGrpc, grpcRoot, parseGrpcTarget } from '../../protocols/grpc/grpc.js';
 import { reflectServer } from '../../protocols/grpc/reflection.js';
@@ -285,6 +285,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
         properties: {
           collection: str('Collection name or id'),
           create: { type: 'boolean', description: 'Create the collection when it does not exist (default false)' },
+          if_exists: { type: 'string', enum: ['add', 'fail'], description: 'When a request of this name is in the collection already: add another (the default) or fail, so a retry after a timeout never saves it twice' },
           folder: str('Folder path inside the collection, e.g. "Auth / Tokens" (created as needed)'),
           name: str('Request name (default: method and URL)'),
           description: str('Markdown documentation for the request'),
@@ -298,6 +299,11 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
       },
       run: (a) => {
         const { request, format } = requestFrom(a);
+        if (a.if_exists === 'fail' && typeof a.name === 'string' && a.name) {
+          const there = collections().find((c) => c.id === String(a.collection) || c.name.toLowerCase() === String(a.collection).toLowerCase());
+          const has = (items: Collection['items']): boolean => items.some((n) => (n.kind === 'folder' ? has(n.items) : n.name.toLowerCase() === String(a.name).toLowerCase()));
+          if (there && has(there.items)) throw new ApsError('ValidationError', `A request named "${String(a.name)}" is in "${there.name}" already`, { suggestions: ['Leave out if_exists to add another one, or use update_request to change it.'] });
+        }
         const { request: safe, placeholders } = externalizeSecrets(request, redactor);
         const { collection, node, created } = addRequestToCollection(collections(), {
           collection: String(a.collection),

@@ -12,6 +12,7 @@
  *   a hint instead.
  */
 import type { Command } from 'commander';
+import { setAiCostCap } from '@testpion/core';
 import { beginCommand, cli } from './output.js';
 import { CliError, EXIT } from './shared.js';
 import { startDryRun } from './dry-run.js';
@@ -84,6 +85,9 @@ export const WRITE_COMMANDS = new Set([
   'git undo',
 ]);
 
+/** The commands that call the user's AI model: each takes `--max-cost <usd>`, refused before anything is sent when one call could cost more. */
+export const AI_COMMANDS = new Set(['ai run', 'ai triage', 'ai script', 'ai attempt-fix', 'generate tests', 'tidy', 'flow generate', 'security generate', 'openapi drift', 'search', 'rag generate-dataset', 'rag draft-references', 'rag author']);
+
 const all = (c: Command): Command[] => [c, ...c.commands.flatMap(all)];
 
 /** A command's path from the program: "eval compare", "env set". */
@@ -106,6 +110,7 @@ export function applyCliContract(program: Command): void {
       c.option('--dry-run', 'change nothing: run against copies and list the files that would be added, changed or deleted');
     // every command takes --json, so an agent never has to know which ones do (a command that prints JSON already keeps its own)
     if (!hasOption(c, '--json') && !hasOption(c, '--jsonl')) c.option('--json', NO_ENVELOPE.has(path) ? 'accepted and ignored: the output of this command is not ours' : 'print the result as one JSON envelope (for scripts and AI agents)');
+    if (AI_COMMANDS.has(path) && !hasOption(c, '--max-cost')) c.option('--max-cost <usd>', 'refuse before anything is sent when one AI call could cost more than this many US dollars (the price table; a local model is free)');
     if (PLAN_ONLY[path] && !hasOption(c, '--dry-run')) c.option('--dry-run', 'change nothing: print what it would do (git is not run)');
     if (CLI_CONFIRM.some((e) => e.command === path) && !hasOption(c, '--yes')) c.option('--yes', 'confirm: required when it cannot ask (--non-interactive, CI); --dry-run shows what it would do first');
     if (!hasOption(c, '--non-interactive')) c.option('--non-interactive', 'never wait for input: fail with a hint instead (the default with CI or TESTPION_NON_INTERACTIVE=1)');
@@ -119,6 +124,12 @@ export function applyCliContract(program: Command): void {
       { ...o, json: NO_ENVELOPE.has(path) ? false : o.json, jsonl: o.jsonl === true || (JSON_MEANS_JSONL.has(path) && o.json === true) },
       [action, action.parent].some((c) => !!c && (hasOption(c, '--json') || hasOption(c, '--jsonl'))),
     );
+    // one AI call may not cost more than --max-cost
+    if (AI_COMMANDS.has(path) && typeof (o as { maxCost?: unknown }).maxCost === 'string') {
+      const cap = Number((o as { maxCost: string }).maxCost);
+      if (!(cap >= 0)) throw Object.assign(new CliError('--max-cost is an amount in US dollars, 0 or more', EXIT.CONFIG_ERROR), { hint: 'For example --max-cost 0.05.' });
+      setAiCostCap(cap);
+    }
     // a command that runs git prints its plan and does not run
     const run = async () => {
       if (o.dryRun === true && PLAN_ONLY[path]) {

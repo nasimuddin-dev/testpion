@@ -223,6 +223,26 @@ function isInternal(err: unknown, e: { name?: string } | undefined, code: string
   return !/protocol|handshake|frame|unexpected server response|status code|stream|socket|connection|closed|grpc|websocket|server/i.test(message);
 }
 
+/** An error as machines read it: a stable code, the message, what to do next, and whether trying again may help. The CLI envelope's `errors` and the MCP tools' `structuredContent.error` are this one shape. */
+export interface ErrorEnvelope {
+  code: string;
+  message: string;
+  hint?: string;
+  retryable: boolean;
+}
+
+const RETRYABLE_KINDS = new Set(['NetworkError', 'TimeoutError', 'RateLimitError', 'ServerError']);
+
+export function errorEnvelope(e: unknown, o: { exitCode?: number; suggestionsAlways?: boolean } = {}): ErrorEnvelope {
+  const n = normalizeError(e);
+  const kind = e instanceof ApsError || n.kind !== 'InternalError' ? n.kind : undefined;
+  const code = kind ?? (o.exitCode === 2 ? 'ConfigurationError' : 'ExecutionError');
+  const own = (e as { hint?: unknown } | undefined)?.hint;
+  // the engine's suggestions; a CLI error carries its own hint (or none), never the "report a bug" of an unknown error
+  const hint = typeof own === 'string' ? own : (e instanceof ApsError || o.suggestionsAlways) && n.suggestions?.length ? n.suggestions.join(' ') : undefined;
+  return { code, message: n.message, ...(hint ? { hint } : {}), retryable: RETRYABLE_KINDS.has(code) };
+}
+
 export function isAbortError(err: unknown): boolean {
   const e = err as { name?: string; kind?: string };
   return e?.name === 'AbortError' || e?.kind === 'CancelledError';
