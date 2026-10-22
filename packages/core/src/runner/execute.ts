@@ -25,7 +25,7 @@ import type {
 import { ApsError, normalizeError } from '../errors.js';
 import type { VariableScope } from '../vars/variables.js';
 import { timingSpans, type Tracer, type SpanHandle } from '../trace/tracer.js';
-import type { Redactor } from '../util/redact.js';
+import { redactedHead, type Redactor } from '../util/redact.js';
 import type { Logger } from '../log/logger.js';
 import { executeHttp, timingSummary } from '../protocols/http/client.js';
 import { detectOperation, executeGraphQL, type GraphQLResult } from '../protocols/graphql/graphql.js';
@@ -115,11 +115,29 @@ export interface ExecutionOutcome {
   context?: CheckContext;
 }
 
-const OUTPUT_SUMMARY_CHARS = 4000;
+/**
+ * A result row keeps this much of a response (the full body is in the trace when one is kept): 1,000 requests at the old 4,000 made
+ * a 5.4 MB results file, 4.8 KB of every row being this one field; the app shows 500 characters of it.
+ */
+const OUTPUT_SUMMARY_CHARS = 1500;
+/** A body this long is cut before it is parsed, copied or pretty-printed. */
+const BIG_BODY_CHARS = 32 * 1024;
 
 function summarize(v: unknown, n = OUTPUT_SUMMARY_CHARS): string {
   const s = typeof v === 'string' ? v : JSON.stringify(v, null, 2) ?? '';
   return s.length > n ? s.slice(0, n) + `… [${s.length - n} more chars]` : s;
+}
+
+/** The redacted summary of a text: a long one is cut first, so redacting it does not read (or copy) all of it. */
+function summarizeText(redactor: Redactor, text: string, n = OUTPUT_SUMMARY_CHARS): string {
+  const { head, rest } = redactedHead(redactor, text, n);
+  return rest ? `${head}… [${rest} more chars]` : head;
+}
+
+/** The summary of a response: its JSON pretty-printed when small; a big body is summarised from its text, never deep-copied whole. */
+function summarizeResponse(redactor: Redactor, r: { json?: unknown; bodyPreview: string }, n = OUTPUT_SUMMARY_CHARS): string {
+  if (r.bodyPreview.length > BIG_BODY_CHARS) return summarizeText(redactor, r.bodyPreview, n);
+  return summarize(redactor.redact(r.json ?? r.bodyPreview), n);
 }
 
 function sha(s: string): string {
@@ -326,7 +344,7 @@ export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { t
     tokens: ctx.tokens,
     costUsd: ctx.costUsd,
     model: partial.model,
-    output: partial.output ?? (ctx.text ? summarize(svc.redactor.redactString(ctx.text)) : undefined),
+    output: partial.output ?? (ctx.text ? summarizeText(svc.redactor, ctx.text) : undefined),
     input: partial.input,
     metadata,
     context: ctx,
@@ -418,7 +436,7 @@ async function runHttp(test: HttpTest, scope: VariableScope, svc: ExecServices, 
         certificate: response.connection?.certificate,
         readFile: svc.readFile,
       },
-      partial: { input: `${prepared.method} ${prepared.url}`, output: summarize(svc.redactor.redact(response.json ?? response.bodyPreview)) },
+      partial: { input: `${prepared.method} ${prepared.url}`, output: summarizeResponse(svc.redactor, response) },
       metadata: { url: prepared.url, method: prepared.method, status: response.status, size: response.size, truncated: response.truncated, timing: timingSummary(response) },
     };
   } catch (e) {

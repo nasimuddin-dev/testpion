@@ -1,6 +1,6 @@
 /** Sending a request: HTTP (httpSend), GraphQL (gqlSend) and the code snippet of a request. The Backend methods are one-line delegates. */
 import { ApsError, Tracer, executeHttp, executeGraphQL, inheritedAuthFor, normalizeError, runChecks, runScript, scriptScopes, applyScriptOutput, responseCookies, applyCookieJarOps, folderChain, withFolderDefaults, withInheritedHeaders, inheritedHeaders, folderVariables, scriptRequestSender, shortId, prepareHttpRequest, renderVisualizer, generateCode, type SnippetRequest, type CheckContext, type HttpRequestSpec, recordCertificate, timingSummary, timingSpans, requireEnvironment, assertProductionStep, isDataChangingMethod } from '@testpion/core';
-import { clipConsole, consoleRefs } from './console-log.js';
+import { clipConsole, consoleBody, consoleRefs } from './console-log.js';
 import type { GqlSendParams, HttpSendParams } from './params.js';
 import type { Backend } from './backend.js';
 
@@ -158,7 +158,6 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       responseMeta: { headers: ctx.redactor.redact(response.headers), contentType: response.contentType, truncated: response.truncated, timing: timingSummary(response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) },
     });
     recordCertificate(be.ws, prepared.url, response.connection?.certificate);
-    const clip = clipConsole;
     // values typed into sensitive headers are secrets too (e.g. echoed back in a response body)
     for (const h of spec.headers ?? [])
       if (h.enabled !== false && ctx.redactor.isSensitiveKey(h.key) && h.value.length >= 6) {
@@ -181,14 +180,6 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
         /* not JSON */
       }
     else if (spec.body && 'fields' in spec.body) for (const f of spec.body.fields) collect(f.value, f.key);
-    const safeBody = (t: string | undefined) => {
-      if (!t) return t;
-      try {
-        return JSON.stringify(ctx.redactor.redact(JSON.parse(t)), null, 2);
-      } catch {
-        return ctx.redactor.redactString(t);
-      }
-    };
     be.consoleEntry({
       id,
       time: new Date().toISOString(),
@@ -199,8 +190,8 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       status: response.status,
       durationMs: response.durationMs,
       size: response.size,
-      request: { headers: prepared.headers, body: clip(safeBody(prepared.bodyPreview)) },
-      response: { headers: ctx.redactor.redact(response.headers), body: clip(safeBody(response.bodyPreview)) },
+      request: { headers: prepared.headers, body: consoleBody(ctx.redactor, prepared.bodyPreview) },
+      response: { headers: ctx.redactor.redact(response.headers), body: consoleBody(ctx.redactor, response.bodyPreview) },
       logs: logsOf(),
       failedChecks: checks.filter((c) => !c.passed).length,
       refs: consoleRefs({ collectionId: p.collectionId, requestId: p.requestId, historyId, traceId: trace.traceId }),
@@ -339,7 +330,7 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
       durationMs: r.response.durationMs,
       size: r.response.size,
       request: { headers: r.prepared.headers, body: clip(JSON.stringify(ctx.redactor.redact({ query: spec.query, variables: spec.variables, operationName: spec.operationName }), null, 2)) },
-      response: { headers: ctx.redactor.redact(r.response.headers), body: clip(r.response.json !== undefined ? JSON.stringify(ctx.redactor.redact(r.response.json), null, 2) : ctx.redactor.redactString(r.response.bodyPreview)) },
+      response: { headers: ctx.redactor.redact(r.response.headers), body: r.response.bodyPreview.length > 64 * 1024 || r.response.json === undefined ? consoleBody(ctx.redactor, r.response.bodyPreview)! : clip(JSON.stringify(ctx.redactor.redact(r.response.json), null, 2)) },
       logs: scriptLogs,
       failedChecks: checks.filter((c) => !c.passed).length + (r.errors?.length ? 1 : 0),
       refs: consoleRefs({ collectionId: p.collectionId, requestId: p.requestId, historyId, traceId: trace.traceId }),
