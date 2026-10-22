@@ -423,8 +423,7 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
           signal: o.signal,
           resultsFile: join(dir, 'results.jsonl'),
           traceMode: 'failures',
-          onTrace: (t) => (o.onTrace ? o.onTrace(t, runId) : void store.saveTrace(t, 'test', runId)),
-          traceBatch: o.onTrace ? undefined : (fn) => store.meta.batch(fn),
+          ...(o.onTrace ? { onTrace: (t: Parameters<WorkspaceStore['saveTrace']>[0]) => o.onTrace!(t, runId) } : { onTraceBatch: (batch: Array<{ trace: Parameters<WorkspaceStore['saveTrace']>[0] }>) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))) }),
           environment: monitor.environment,
           onEvent: o.onEvent,
         });
@@ -490,8 +489,7 @@ async function runMonitorTestFile(o: ExecuteMonitorOptions, runId: string): Prom
       bail: monitor.bail,
       resultsFile: join(dir, 'results.jsonl'),
       traceMode: 'failures',
-      onTrace: (t) => (o.onTrace ? o.onTrace(t, runId) : void store.saveTrace(t, 'test', runId)),
-      traceBatch: o.onTrace ? undefined : (fn) => store.meta.batch(fn),
+      ...(o.onTrace ? { onTrace: (t: Parameters<WorkspaceStore['saveTrace']>[0]) => o.onTrace!(t, runId) } : { onTraceBatch: (batch: Array<{ trace: Parameters<WorkspaceStore['saveTrace']>[0] }>) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))) }),
       environment: monitor.environment ?? suite?.environment,
       onEvent: o.onEvent,
     });

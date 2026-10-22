@@ -53,6 +53,8 @@ export interface RunOptions {
   onTrace?: (trace: Trace, result: TestResult) => void | Promise<void>;
   /** Wraps each batch of `onTrace` calls, e.g. `(fn) => store.meta.batch(fn)` for one database transaction per batch. */
   traceBatch?: (fn: () => void) => void;
+  /** Persist a whole batch without blocking: replaces `onTrace` + `traceBatch` (files written off the main thread, rows in small transactions). */
+  onTraceBatch?: (batch: Array<{ trace: Trace; result: TestResult }>) => Promise<void>;
   onEvent?: (e: RunEvent) => void;
   environment?: string;
   bail?: boolean;
@@ -289,9 +291,18 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     if (traceTimer) clearTimeout(traceTimer);
     traceTimer = undefined;
     const batch = traceQueue.splice(0);
-    if (!batch.length || !opts.onTrace) return traceWrites;
+    if (!batch.length || !(opts.onTrace || opts.onTraceBatch)) return traceWrites;
     const onTrace = opts.onTrace;
+    const onTraceBatch = opts.onTraceBatch;
     traceWrites = traceWrites.then(async () => {
+      if (onTraceBatch) {
+        try {
+          await onTraceBatch(batch.map(([trace, result]) => ({ trace, result })));
+        } catch {
+          /* a failed batch loses its traces, not the run */
+        }
+      }
+      if (!onTrace) return; // (with a batch writer, `onTrace` is only for side effects such as exporting)
       const pending: Array<Promise<void>> = [];
       const all = () => {
         for (const [t, r] of batch) {
@@ -330,7 +341,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     statusById.set(r.id, r.status);
     dep(r.id).resolve(r.status);
     await write(redacted);
-    if (trace && opts.onTrace && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) queueTrace(trace, redacted);
+    if (trace && (opts.onTrace || opts.onTraceBatch) && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) queueTrace(trace, redacted);
     emit({ type: 'test-end', runId, result: redacted });
     progress();
     if (opts.bail && (r.status === 'failed' || r.status === 'error')) ctrl.abort();

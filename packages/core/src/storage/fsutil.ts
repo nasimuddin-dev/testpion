@@ -1,4 +1,5 @@
 import { closeSync, copyFileSync, cpSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { mkdir as mkdirP, writeFile as writeFileP } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { ApsError } from '../errors.js';
@@ -404,8 +405,25 @@ export function writeDerived(path: string, data: string | Buffer): void {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path, data);
   }
-  const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
-  recordOwn(path, contentFingerprint(bytes));
+  // no own-write fingerprint: derived files live under folders the watcher ignores (traces/), so hashing every one was wasted work
+  forgetText(path);
+}
+
+/** `writeDerived` without blocking the process: the folder is made once per process, the write goes through the thread pool. */
+export async function writeDerivedAsync(path: string, data: string | Buffer): Promise<void> {
+  const dir = dirname(path);
+  if (!madeDirs.has(dir)) {
+    await mkdirP(dir, { recursive: true });
+    if (madeDirs.size > 1000) madeDirs.clear();
+    madeDirs.add(dir);
+  }
+  try {
+    await writeFileP(path, data);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    await mkdirP(dir, { recursive: true });
+    await writeFileP(path, data);
+  }
   forgetText(path);
 }
 

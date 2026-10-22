@@ -7,7 +7,7 @@ import { SCHEMA_VERSION, defaultSettings } from '../model/types.js';
 import { normalizeUiPrefs } from '../model/ui-prefs.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { atomicWrite, deepFreeze, isInside, readJson, readJsonShared, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
+import { atomicWrite, deepFreeze, isInside, readJson, readJsonShared, realPathOf, relativeInside, readTextCached, samePath, writeDerived, writeDerivedAsync, writeJson, removeOwned } from './fsutil.js';
 import { looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -534,6 +534,29 @@ export class WorkspaceStore {
       path: rel,
     });
     return rel;
+  }
+
+  /**
+   * Persist many traces without holding the process: the files are written through the thread pool (32 at a time),
+   * then the rows go into the database in transactions of 50 with the event loop free in between. A 500-trace batch
+   * used to be 500 synchronous writes inside one transaction (about 750 ms in one block).
+   */
+  async saveTraces(items: ReadonlyArray<{ trace: Trace; kind: string; runId?: string }>): Promise<void> {
+    const rows = items.map(({ trace, kind, runId }) => {
+      const day = new Date(trace.startTime).toISOString().slice(0, 10);
+      const rel = join('traces', day, `${trace.traceId}.json`);
+      return { trace, rel, meta: { id: trace.traceId, name: trace.name, kind, status: trace.status, startTime: trace.startTime, durationMs: (trace.endTime ?? trace.startTime) - trace.startTime, spanCount: trace.spans.length, runId, path: rel } };
+    });
+    const FILES_AT_ONCE = 32;
+    const ROWS_PER_TRANSACTION = 50;
+    for (let i = 0; i < rows.length; i += FILES_AT_ONCE) {
+      const chunk = rows.slice(i, i + FILES_AT_ONCE);
+      await Promise.all(chunk.map((r) => writeDerivedAsync(this.path(r.rel), JSON.stringify(r.trace))));
+      this.meta.batch(() => {
+        for (const r of chunk) this.meta.addTrace(r.meta);
+      });
+      if ((i + FILES_AT_ONCE) % ROWS_PER_TRANSACTION === 0) await new Promise<void>((r) => setImmediate(r));
+    }
   }
 
   loadTrace(id: string): Trace | undefined {

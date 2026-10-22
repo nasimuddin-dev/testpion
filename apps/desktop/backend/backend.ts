@@ -774,9 +774,8 @@ export class Backend {
           signal: ctrl.signal,
           resultsFile: join(dir, 'results.jsonl'),
           traceMode: opts.traceMode ?? 'all',
-          onTrace: (t) => void store.saveTrace(t, 'test', runId),
-          // a run's traces go into the database in one transaction per batch, not one each
-          traceBatch: (fn) => store.meta.batch(fn),
+          // a run's traces are written off the main thread and go into the database in small transactions
+          onTraceBatch: (batch) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))),
           environment: opts.environment,
           // test-end events carry results; forward only compact info — the UI pages full results from disk
           onEvent: (e) => {

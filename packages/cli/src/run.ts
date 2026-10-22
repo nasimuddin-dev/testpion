@@ -207,11 +207,8 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
       resultsFile,
       resume: !!o.resume,
       traceMode: o.trace,
-      onTrace: (trace) => {
-        void store.saveTrace(trace, 'test', runId);
-        otlp.add(trace);
-      },
-      traceBatch: (fn) => store.meta.batch(fn),
+      onTrace: (trace) => otlp.add(trace),
+      onTraceBatch: (batch) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))),
       onEvent,
       environment,
       bail: o.bail,
@@ -460,11 +457,8 @@ export async function executeCollectionRun(ref: string, o: CollectionCliOptions)
       signal: ctrl.signal,
       resultsFile,
       traceMode: o.trace,
-      onTrace: (trace) => {
-        void store.saveTrace(trace, 'test', runId);
-        otlp.add(trace);
-      },
-      traceBatch: (fn) => store.meta.batch(fn),
+      onTrace: (trace) => otlp.add(trace),
+      onTraceBatch: (batch) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))),
       environment,
       onEvent: (e: RunEvent) => {
         if (e.type !== 'test-end' || (o.quiet && !cli.jsonl)) return;
