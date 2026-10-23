@@ -62,3 +62,61 @@ describe('runner trace persistence', () => {
     }
   });
 });
+
+// R-1: a 500-trace batch was 500 synchronous writes + SHA-1 inside one SQLite transaction (about 750 ms in one block on the main thread)
+describe('trace batch persistence', () => {
+  const makeTrace = (i: number) => ({
+    traceId: `batch-${i}`,
+    name: `Trace ${i}`,
+    startTime: Date.parse('2026-10-22T10:00:00Z') + i,
+    endTime: Date.parse('2026-10-22T10:00:00Z') + i + 5,
+    status: 'ok' as const,
+    spans: Array.from({ length: 3 }, (_, k) => ({ spanId: `s${k}`, name: `span ${k}`, kind: 'http', startTime: 0, endTime: 1, status: 'ok', attributes: { body: 'x'.repeat(3000) } })),
+  });
+
+  it('writes 500 traces with the event loop free: every file and row there, small transactions, no long block', async () => {
+    const store = WorkspaceStore.create(join(dir, 'ws-batch'), 'Batch');
+    try {
+      // rows added inside one transaction
+      let widest = 0;
+      let inBatch = 0;
+      const realBatch = store.meta.batch.bind(store.meta);
+      store.meta.batch = ((fn: () => unknown) => {
+        inBatch = 0;
+        return realBatch(fn);
+      }) as typeof store.meta.batch;
+      const realAdd = store.meta.addTrace.bind(store.meta);
+      store.meta.addTrace = (t) => {
+        widest = Math.max(widest, ++inBatch);
+        realAdd(t);
+      };
+      // the longest gap between two turns of the event loop, counted in this thread's CPU time (a thread kept off the CPU by other programs is not a block of ours)
+      const cpu = () => {
+        const u = process.threadCpuUsage?.();
+        return u ? (u.user + u.system) / 1000 : Infinity;
+      };
+      let worst = 0;
+      let last = performance.now();
+      let lastCpu = cpu();
+      const timer = setInterval(() => {
+        const n = performance.now();
+        const c = cpu();
+        worst = Math.max(worst, Math.min(n - last, c - lastCpu));
+        last = n;
+        lastCpu = c;
+      }, 1);
+      const items = Array.from({ length: 500 }, (_, i) => ({ trace: makeTrace(i) as never, kind: 'test', runId: 'run-b' }));
+      const t0 = performance.now();
+      await store.saveTraces(items);
+      const total = performance.now() - t0;
+      clearInterval(timer);
+      console.log(`500 traces: ${total.toFixed(0)} ms in all, longest event-loop block ${worst.toFixed(0)} ms, widest transaction ${widest} rows`);
+      expect(store.meta.listTraces({ limit: 1 }).total).toBe(500);
+      expect(existsSync(join(dir, 'ws-batch', 'traces', '2026-10-22', 'batch-499.json'))).toBe(true);
+      expect(widest).toBeLessThanOrEqual(50);
+      expect(worst, `longest block ${worst.toFixed(0)} ms`).toBeLessThan(50 * Number(process.env.TESTPION_PERF_SLACK ?? 1));
+    } finally {
+      store.close();
+    }
+  });
+});

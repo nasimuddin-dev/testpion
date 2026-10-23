@@ -94,47 +94,67 @@ subscribe('net.client.socket', (m) => {
 });
 
 interface Waiter {
-  origin: string;
-  path: string;
-  method: string;
+  key: string;
   sent?: SentOver;
 }
-const waiters = new Set<Waiter>(); // bounded: 200
+/**
+ * Requests waiting to be seen on a socket, by origin + method + path (first come first served per key): the sendHeaders event looks its
+ * request up in a map (it scanned a set of waiters, capped at 200 - so above 200 concurrent requests the connection data was lost).
+ */
+const waiters = new Map<string, Set<Waiter>>(); // bounded: MAX_WAITING; (only those not seen yet: a Set keeps arrival order, and taking one or removing one is O(1))
+let waiting = 0;
+const MAX_WAITING = 100_000; // a leak guard: a waiter is removed by stop(), which every request calls
+const keyOf = (origin: string, method: string, path: string) => `${method} ${origin}${path}`;
 subscribe('undici:client:sendHeaders', (m) => {
-  if (!waiters.size) return;
+  if (!waiting) return;
   const { request, socket } = m as { request?: { origin?: unknown; path?: string; method?: string }; socket?: Sock };
   if (!request || !socket) return;
-  const origin = String(request.origin);
-  for (const w of waiters) {
-    if (w.sent || w.origin !== origin || w.path !== request.path || w.method !== request.method) continue;
-    let tlsProtocol: string | undefined;
-    let cipher: string | undefined;
-    try {
-      tlsProtocol = socket.getProtocol?.() ?? undefined;
-      cipher = socket.getCipher?.()?.name;
-    } catch {
-      /* a plain socket, or already closed */
-    }
-    const cert = tlsProtocol ? peerCertificate(socket) : undefined;
-    w.sent = {
-      sentAt: performance.now(),
-      times: times.get(socket),
-      remoteAddress: socket.remoteAddress,
-      remotePort: socket.remotePort,
-      tlsProtocol,
-      cipher,
-      certificate: cert && { ...cert, daysLeft: certificateDaysLeft(cert) },
-    };
-    waiters.delete(w);
-    return;
+  const key = keyOf(String(request.origin), String(request.method ?? '').toUpperCase(), request.path ?? '');
+  const queue = waiters.get(key);
+  const w = queue?.values().next().value;
+  if (!w || !queue) return;
+  queue.delete(w);
+  waiting--;
+  if (!queue.size) waiters.delete(key);
+  let tlsProtocol: string | undefined;
+  let cipher: string | undefined;
+  try {
+    tlsProtocol = socket.getProtocol?.() ?? undefined;
+    cipher = socket.getCipher?.()?.name;
+  } catch {
+    /* a plain socket, or already closed */
   }
+  const cert = tlsProtocol ? peerCertificate(socket) : undefined;
+  w.sent = {
+    sentAt: performance.now(),
+    times: times.get(socket),
+    remoteAddress: socket.remoteAddress,
+    remotePort: socket.remotePort,
+    tlsProtocol,
+    cipher,
+    certificate: cert && { ...cert, daysLeft: certificateDaysLeft(cert) },
+  };
 });
 
 /** Watch for the first time a request for this URL is written; read the result once the response has started. */
 export function watchSend(url: URL, method: string): { result(): SentOver | undefined; stop(): void } {
-  const w: Waiter = { origin: url.origin, path: url.pathname + url.search, method: method.toUpperCase() };
-  // a request that failed before stop() leaves its waiter: drop the oldest ones past a bound
-  if (waiters.size >= 200) waiters.delete(waiters.values().next().value!);
-  waiters.add(w);
-  return { result: () => w.sent, stop: () => waiters.delete(w) };
+  const w: Waiter = { key: keyOf(url.origin, method.toUpperCase(), url.pathname + url.search) };
+  if (waiting >= MAX_WAITING) {
+    waiters.clear();
+    waiting = 0;
+  }
+  (waiters.get(w.key) ?? waiters.set(w.key, new Set()).get(w.key)!).add(w);
+  waiting++;
+  let stopped = false;
+  return {
+    result: () => w.sent,
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      const queue = waiters.get(w.key);
+      if (!queue || !queue.delete(w)) return;
+      waiting--;
+      if (!queue.size) waiters.delete(w.key);
+    },
+  };
 }

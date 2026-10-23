@@ -32,11 +32,12 @@ export function ocFilesToBundle(files: Array<{ path: string; text: string }>, na
   if (name && !root.info?.name) root.info = { ...(root.info ?? {}), name };
   const dotenv = norm.find((f) => f.path === '.env');
   if (dotenv) root.extensions = { ...(root.extensions ?? {}), dotenv: dotenv.text };
+  const byPath = new Map(norm.map((f) => [f.path, f] as const)); // (each folder looked through every file for its settings)
   const folders = new Map<string, Any>([['', root]]);
   const folderOf = (dir: string): Any => {
     if (folders.has(dir)) return folders.get(dir)!;
     const parent = folderOf(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '');
-    const settings = norm.find((f) => f.path === `${dir}/folder.yml` || f.path === `${dir}/folder.yaml`);
+    const settings = byPath.get(`${dir}/folder.yml`) ?? byPath.get(`${dir}/folder.yaml`);
     const parsed = settings ? (parseYaml(settings.text) as Any) ?? {} : {};
     const folder: Any = { ...parsed, info: { name: dir.split('/').pop(), ...(parsed.info ?? {}), type: 'folder' }, items: [] };
     parent.items.push(folder);

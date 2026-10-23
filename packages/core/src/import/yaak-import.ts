@@ -112,9 +112,17 @@ export function parseYaak(text: string): ImportDocument {
   };
 
   const sortOf = (x: Any) => Number(x.sortPriority ?? 0);
+  // grouped by parent folder once (each folder used to filter every folder and request)
+  const groupByFolder = (list: Any[]) => {
+    const m = new Map<string | null, Any[]>();
+    for (const x of list) (m.get(x.folderId ?? null) ?? m.set(x.folderId ?? null, []).get(x.folderId ?? null)!).push(x);
+    return m;
+  };
+  const foldersIn = groupByFolder(folders);
+  const requestsIn = groupByFolder(requests);
   const build = (workspace: string | undefined, parent: string | null): CollectionNode[] => {
-    const here = (x: Any) => (workspace === undefined || wsId(x) === workspace) && (x.folderId ?? null) === parent;
-    const items = [...folders.filter(here).map((x) => ({ x, folder: true })), ...requests.filter(here).map((x) => ({ x, folder: false }))].sort((a, b) => sortOf(a.x) - sortOf(b.x));
+    const here = (x: Any) => workspace === undefined || wsId(x) === workspace;
+    const items = [...(foldersIn.get(parent) ?? []).filter(here).map((x) => ({ x, folder: true })), ...(requestsIn.get(parent) ?? []).filter(here).map((x) => ({ x, folder: false }))].sort((a, b) => sortOf(a.x) - sortOf(b.x));
     return items.map(({ x, folder }): CollectionNode => {
       if (!folder) return request(x);
       const name = String(x.name ?? 'Folder');

@@ -664,6 +664,7 @@ export function debuggerHandlers(be: Backend): Handlers {
       offset?: number;
     } = {}) => {
       const needle = text?.toLowerCase();
+      const needleRe = needle ? new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : undefined;
       const out = shown().exchanges.filter((e) => {
         if (host && !e.host.toLowerCase().includes(host.toLowerCase())) return false;
         if (method && e.method !== method.toUpperCase()) return false;
@@ -680,8 +681,9 @@ export function debuggerHandlers(be: Backend): Handlers {
           const line = `${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''} ${e.status ?? ''}`.toLowerCase();
           if (line.includes(needle)) return true;
           if (!deep) return false;
-          const h = (x?: Record<string, string>) => Object.entries(x ?? {}).some(([k, v]) => k.toLowerCase().includes(needle) || v.toLowerCase().includes(needle));
-          return h(e.requestHeaders) || h(e.responseHeaders) || !!e.requestBody?.toLowerCase().includes(needle) || !!e.responseBody?.toLowerCase().includes(needle);
+          // (a case-insensitive pattern: the bodies - up to 200 MB in all - are not lowercased into copies for every search)
+          const h = (x?: Record<string, string>) => Object.entries(x ?? {}).some(([k, v]) => needleRe!.test(k) || needleRe!.test(v));
+          return h(e.requestHeaders) || h(e.responseHeaders) || (!!e.requestBody && needleRe!.test(e.requestBody)) || (!!e.responseBody && needleRe!.test(e.responseBody));
         }
         return true;
       });

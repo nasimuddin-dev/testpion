@@ -14,7 +14,8 @@ export interface SseEvent {
 }
 
 export class SseParser {
-  private buffer = '';
+  /** The text since the last line break, in pieces (joined only when a line break arrives: a long line in many chunks is not copied again for each). */
+  private partial: string[] = [];
   private data: string[] = [];
   private event = '';
   private id?: string;
@@ -30,24 +31,37 @@ export class SseParser {
     }
     // a \r ends a line straight away; a \n right after it (a \r\n split across chunks) is skipped
     if (this.afterCR && text.startsWith('\n')) text = text.slice(1);
-    this.buffer += text;
+    if (!text) return [];
+    if (!/[\r\n]/.test(text)) {
+      this.partial.push(text);
+      this.afterCR = false;
+      return [];
+    }
+    const buffer = this.partial.length ? this.partial.join('') + text : text;
+    this.partial = [];
     const out: SseEvent[] = [];
+    const lineBreak = /\r\n|\n|\r/g;
+    let from = 0;
     for (;;) {
-      const m = /\r\n|\n|\r/.exec(this.buffer);
+      lineBreak.lastIndex = from;
+      const m = lineBreak.exec(buffer);
       if (!m) break;
-      const line = this.buffer.slice(0, m.index);
-      this.buffer = this.buffer.slice(m.index + m[0].length);
-      this.afterCR = m[0] === '\r' && this.buffer === '';
+      const line = buffer.slice(from, m.index);
+      from = m.index + m[0].length;
+      this.afterCR = m[0] === '\r' && from === buffer.length;
       const ev = this.line(line, atMs);
       if (ev) out.push(ev);
     }
-    if (this.buffer) this.afterCR = false;
+    if (from < buffer.length) {
+      this.partial.push(buffer.slice(from));
+      this.afterCR = false;
+    }
     return out;
   }
 
   /** End of stream: an event without its final blank line is dropped, as browsers do. */
   flush(): SseEvent[] {
-    this.buffer = '';
+    this.partial = [];
     this.data = [];
     this.event = '';
     return [];

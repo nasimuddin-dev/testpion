@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 /**
@@ -73,5 +73,78 @@ describe.skipIf(!built)('the root --version and --help from the build index', ()
     const r = run(['--version', '--json'], false);
     expect(r.status).toBe(0);
     expect(r.out.trim()).toMatch(/\d+\.\d+\.\d+/);
+  });
+});
+
+/*
+ * C-1: every real command paid about 220 ms over bare Node before it started, most of it for node:http (30 ms: its module
+ * graph pulls in Node's own undici) and node:dns (20-70 ms), imported by a dozen engine files for servers and proxies that a
+ * listing never uses. In the bundle they now load at first use. The census is exact (what Node loaded), the timing is a
+ * generous bound on a shared box: measured 160 ms best of three (bare node: 46 ms, before: 281-365 ms).
+ */
+describe.skipIf(!built || !existsSync(resolve('packages/cli/dist/bundle.js')))('a real command from the bundle', () => {
+  const census = resolve(process.env.TEMP ?? process.env.TMPDIR ?? '.', `tp-census-${process.pid}.js`);
+  const examples = resolve('examples/public-workspace');
+  const runCensus = () => {
+    const out = census.replace(/\.js$/, '.json');
+    writeFileSync(census, `process.on('exit', () => require('node:fs').writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.moduleLoadList)));`);
+    const r = spawnSync(process.execPath, ['--require', census, bin, 'collections', '--json', '-w', examples], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+    const loaded = JSON.parse(readFileSync(out, 'utf8')) as string[];
+    rmSync(out, { force: true });
+    return { r, loaded };
+  };
+
+  it('does not load the network stack to list collections', () => {
+    try {
+      const { r, loaded } = runCensus();
+      expect(r.status).toBe(0);
+      expect(JSON.parse(r.stdout).data.length).toBeGreaterThan(0);
+      for (const m of ['NativeModule http', 'NativeModule dns', 'NativeModule https', 'NativeModule http2']) expect(loaded, m).not.toContain(m);
+    } finally {
+      rmSync(census, { force: true });
+    }
+  });
+
+  const best = (args: string[], full: boolean, runs = 3) => Math.min(...Array.from({ length: runs }, () => { const t0 = performance.now(); run(args, full); return performance.now() - t0; }));
+
+  it('starts fast: collections --json within 6x of bare node (best of three each; 160 ms against 46 ms measured on an idle box, 281-365 ms before)', () => {
+    const ms = best(['collections', '--json', '-w', examples], false, 3);
+    console.log(`testpion collections --json: ${ms.toFixed(0)} ms`);
+    const bare = Math.min(...Array.from({ length: 3 }, () => { const t0 = performance.now(); spawnSync(process.execPath, ['-e', '0']); return performance.now() - t0; }));
+    expect(ms, `bare node ${bare.toFixed(0)} ms`).toBeLessThan(Math.max(6 * bare, 150));
+  });
+});
+
+/*
+ * The network policy guards `dns.lookup` by replacing it on the module object (so a name that answers differently the second time, DNS
+ * rebinding, cannot reach a private address). In the bundle `node:dns` is a forwarder that loads the real module at first use: a write
+ * through it must reach the real module, or the guard is silently off.
+ */
+describe('the lazy node:dns forwarder keeps the DNS guard', () => {
+  it('a policy that blocks private networks refuses localhost through the bundled forwarder', async () => {
+    const { build } = await import('esbuild');
+    const { lazyBuiltins } = (await import(pathToFileURL(resolve('scripts/cli-bundle.mjs')).href)) as { lazyBuiltins: unknown };
+    const dir = mkdtempSync(join(tmpdir(), 'tp-lazydns-'));
+    try {
+      const entry = join(dir, 'entry.ts');
+      const policy = resolve('packages/core/src/net/policy.ts').split(sep).join('/');
+      writeFileSync(
+        entry,
+        `import dnsModule from 'node:dns';\nimport { setNetworkPolicy } from ${JSON.stringify(policy)};\n` +
+          `const real = process.getBuiltinModule('node:dns');\nconst before = real.lookup;\n` +
+          `setNetworkPolicy({ blockPrivateNetworks: true });\n` +
+          `const swapped = real.lookup !== before;\n` +
+          `dnsModule.lookup('localhost', {}, (err) => { console.log(JSON.stringify({ swapped, code: err && err.code })); setNetworkPolicy({ blockPrivateNetworks: false }); });\n`,
+      );
+      const out = join(dir, 'out.mjs');
+      await build({ entryPoints: [entry], outfile: out, bundle: true, platform: 'node', format: 'esm', logLevel: 'silent', plugins: [lazyBuiltins as never], external: ['esbuild'] });
+      const r = spawnSync(process.execPath, [out], { encoding: 'utf8' });
+      expect(r.stderr).toBe('');
+      const got = JSON.parse(r.stdout.trim().split('\n').pop()!) as { swapped: boolean; code?: string };
+      expect(got.swapped).toBe(true);
+      expect(got.code).toBe('EACCES');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -9,6 +9,7 @@ import { errorEnvelope } from '../errors-envelope.js';
 import { Redactor } from '../util/redact.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
+import { compactTool } from './compact.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
 import { ConfirmCodes, contractCallResult, elicitationConfirmer, isContractResult, withToolContract, type Confirmer } from './tool-contract.js';
@@ -43,10 +44,13 @@ interface TestPionMcpOptions {
   /** Only the browsing tools (no requests are sent). */
   readOnly?: boolean;
   /**
-   * Which tools are listed: `full` (every tool; the default) or `minimal` (the tools of the common jobs, for hosts
-   * that load every listed tool into the context; search_tools finds the rest, and any tool can be called).
+   * What `tools/list` holds (any tool can be called whatever the profile; env TESTPION_MCP_PROFILE sets it when this is not given):
+   * `full` (the default): every tool, compact (what it does, one line of when, short parameter descriptions: about 200 KB);
+   * `minimal`: the tools of the common jobs, compact, for hosts that load every listed tool into the context (search_tools finds the rest);
+   * `verbose`: every tool with its complete text (when not to use it, an example call, every parameter's full description: about 314 KB).
+   * `search_tools` with a `name` returns that tool's complete entry in any profile.
    */
-  profile?: 'minimal' | 'full';
+  profile?: McpProfile;
   /** Allow sending to environments marked as production (off by default). */
   allowProduction?: boolean;
   version?: string;
@@ -60,8 +64,18 @@ interface TestPionMcpOptions {
   sendBudget?: number;
 }
 
+export type McpProfile = 'full' | 'minimal' | 'verbose';
+
+/** The profile asked for: the option, else TESTPION_MCP_PROFILE, else `full`. */
+export function resolveMcpProfile(profile?: string): McpProfile {
+  const p = profile ?? process.env.TESTPION_MCP_PROFILE ?? 'full';
+  if (p !== 'full' && p !== 'minimal' && p !== 'verbose') throw new ApsError('ConfigurationError', `The MCP profile is full, minimal or verbose, not "${p}"`);
+  return p;
+}
+
 export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   const { store, secrets, settings } = opts;
+  const profile = resolveMcpProfile(opts.profile);
   const redactor = new Redactor(settings.redactFields);
   const collections = () => store.listCollections().filter((c) => !c.problem);
   const findCollection = (ref: unknown): Collection => requireCollection(store, String(ref ?? ''), { loadable: true });
@@ -94,39 +108,51 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     // the tools of every module (tools/index.ts): a new tool goes there, never here
     ...moduleTools(deps),
   ];
-  // list_flows and one tool per flow with an expose: block (flow-tools.ts); a flow never shadows a built-in tool
-  all.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !all.some((x) => x.name === t.name)));
-  const base = withEnvironmentSecrets(store, withProductionConsent(all.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
-  base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title));
-  // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
   let confirmer: Confirmer | undefined;
-  const envBudget = Number(process.env.TESTPION_MCP_SEND_BUDGET);
-  const tools = withToolContract(base, {
-    docs: TOOL_DOCS,
-    confirmer: () => confirmer,
-    confirmCodes: opts.confirmCodes ? new ConfirmCodes(opts.confirmCodes.announce) : undefined,
-    sendBudget: opts.sendBudget ?? (Number.isFinite(envBudget) && envBudget > 0 ? envBudget : undefined),
-  });
-  const listed = opts.profile === 'minimal' ? tools.filter((t) => MINIMAL_TOOLS.has(t.name)) : tools;
+  /*
+   * The tool set is put together at the first request, not when the server is made: it holds list_flows and one tool per flow with an
+   * expose: block (flow-tools.ts), which reads every test file under tests/ (a stat each, and the file when it changed) - time
+   * `initialize` should not wait for, growing with the number of test files. A flow never shadows a built-in tool.
+   */
+  let registry: { all: Tool[]; tools: Tool[]; listed: Tool[] } | undefined;
+  const tools = () => (registry ??= buildRegistry()).tools;
+  function buildRegistry() {
+    const every = [...all];
+    every.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !every.some((x) => x.name === t.name)));
+    const base = withEnvironmentSecrets(store, withProductionConsent(every.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
+    base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title, (name) => registry?.tools.find((t) => t.name === name)));
+    // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
+    const envBudget = Number(process.env.TESTPION_MCP_SEND_BUDGET);
+    const withContract = withToolContract(base, {
+      docs: TOOL_DOCS,
+      confirmer: () => confirmer,
+      confirmCodes: opts.confirmCodes ? new ConfirmCodes(opts.confirmCodes.announce) : undefined,
+      sendBudget: opts.sendBudget ?? (Number.isFinite(envBudget) && envBudget > 0 ? envBudget : undefined),
+    });
+    const chosen = profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name)) : withContract;
+    return { all: every, tools: withContract, listed: profile === 'verbose' ? chosen : chosen.map(compactTool) };
+  }
+  const listedTools = () => (registry ??= buildRegistry()).listed;
 
   const server = new (mcpServer().Server)(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
       capabilities: { tools: {}, resources: {}, prompts: {} },
-      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${opts.profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
+      instructions: `TestPion workspace "${store.workspace.name}". what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}`,
     },
   );
   server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
-    tools: listed.map(({ name, description, inputSchema, outputSchema, write }) => {
-      const annotations = toolAnnotations(name, !!write);
-      return { name, title: annotations.title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations };
+    tools: listedTools().map(({ name, description, inputSchema, outputSchema, write }) => {
+      // the title is the tool's own field; repeating it inside the annotations was 6 KB of a full list
+      const { title, ...annotations } = toolAnnotations(name, !!write);
+      return { name, title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations };
     }),
   }));
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
   const json = (uri: string, data: unknown) => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] });
   // a resource read goes through the same contract as a tool call (size caps and named cuts), never to the raw tool
   const runTool = async (name: string, args: Record<string, unknown> = {}) => {
-    const r = await tools.find((t) => t.name === name)!.run(args);
+    const r = await tools().find((t) => t.name === name)!.run(args);
     return isContractResult(r) ? r.value : r;
   };
   server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({
@@ -169,7 +195,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     return { description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(args) } }] };
   });
   server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
-    const tool = tools.find((t) => t.name === req.params.name);
+    const tool = tools().find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }], structuredContent: { error: errorEnvelope(new ApsError('ValidationError', `Unknown tool ${req.params.name}`, { suggestions: ['List the tools and use one of their names.'] })) } };
     try {
       const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
@@ -185,7 +211,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       // the text for every client, and { error: { code, message, hint, retryable } } (the CLI envelope's mapping) for the ones that read structured content.
       // A tool that declares an outputSchema cannot carry it there (clients validate structuredContent against the schema): it goes in _meta.error.
       const envelope = errorEnvelope(err);
-      const declared = !!listed.find((t) => t.name === req.params.name)?.outputSchema;
+      const declared = !!listedTools().find((t) => t.name === req.params.name)?.outputSchema;
       return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }], ...(declared ? {} : { structuredContent: { error: envelope } }), _meta: { error: envelope } };
     }
   });

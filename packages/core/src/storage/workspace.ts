@@ -5,7 +5,7 @@ import type { Collection, Environment, Library, McpServerConfig, ProviderConfig,
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { onOwnWrite, writeJsonAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeJson, removeOwned } from './fsutil.js';
+import { onOwnWrite, writeJsonAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeDerivedAsync, writeJson, removeOwned } from './fsutil.js';
 import { assertNotNewerOnDisk, looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -334,16 +334,20 @@ export class WorkspaceStore {
     );
   }
 
-  /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
-  environmentView(idOrName: string): Environment | undefined {
-    if (typeof idOrName !== 'string') return undefined;
+  /** Every environment as listEnvironments answers it, shared and frozen: the files are read again only when one of them changed. */
+  environmentList(): readonly Environment[] {
     const dir = this.path('environments');
     // the files' names, sizes and times: a list of environments read again only when one of them changed
     const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
     const sig = files.map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false }))).join('|');
     const hit = this.views.get('environments');
-    const list = hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, sig: '', value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
-    return list.find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
+    return hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, sig: '', value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
+  }
+
+  /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
+  environmentView(idOrName: string): Environment | undefined {
+    if (typeof idOrName !== 'string') return undefined;
+    return this.environmentList().find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
   }
 
   /*
@@ -385,10 +389,18 @@ export class WorkspaceStore {
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
+  private packageText = new Map<string, { mtimeMs: number; size: number; text: string }>();
   readScriptPackage(name: string): string | undefined {
     if (!SCRIPT_PACKAGE_NAME.test(name)) return undefined;
     const p = this.packagePath(name);
-    return existsSync(p) ? readFileSync(p, 'utf8') : undefined;
+    // by size and time: tp.require reads the package on every script run
+    const st = statSync(p, { throwIfNoEntry: false });
+    if (!st?.isFile()) return undefined;
+    const hit = this.packageText.get(p);
+    if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.text;
+    const text = readFileSync(p, 'utf8');
+    this.packageText.set(p, { mtimeMs: st.mtimeMs, size: st.size, text });
+    return text;
   }
   saveScriptPackage(name: string, code: string): void {
     const p = this.packagePath(name);
@@ -726,6 +738,29 @@ export class WorkspaceStore {
       path: rel,
     });
     return rel;
+  }
+
+  /**
+   * Persist many traces without holding the process: the files are written through the thread pool (32 at a time),
+   * then the rows go into the database in transactions of 50 with the event loop free in between. A 500-trace batch
+   * used to be 500 synchronous writes inside one transaction (about 750 ms in one block).
+   */
+  async saveTraces(items: ReadonlyArray<{ trace: Trace; kind: string; runId?: string }>): Promise<void> {
+    const rows = items.map(({ trace, kind, runId }) => {
+      const day = new Date(trace.startTime).toISOString().slice(0, 10);
+      const rel = join('traces', day, `${trace.traceId}.json`);
+      return { trace, rel, meta: { id: trace.traceId, name: trace.name, kind, status: trace.status, startTime: trace.startTime, durationMs: (trace.endTime ?? trace.startTime) - trace.startTime, spanCount: trace.spans.length, runId, path: rel } };
+    });
+    const FILES_AT_ONCE = 32;
+    const ROWS_PER_TRANSACTION = 50;
+    for (let i = 0; i < rows.length; i += FILES_AT_ONCE) {
+      const chunk = rows.slice(i, i + FILES_AT_ONCE);
+      await Promise.all(chunk.map((r) => writeDerivedAsync(this.path(r.rel), JSON.stringify(r.trace))));
+      this.meta.batch(() => {
+        for (const r of chunk) this.meta.addTrace(r.meta);
+      });
+      if ((i + FILES_AT_ONCE) % ROWS_PER_TRANSACTION === 0) await new Promise<void>((r) => setImmediate(r));
+    }
   }
 
   loadTrace(id: string): Trace | undefined {

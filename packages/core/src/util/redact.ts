@@ -272,3 +272,14 @@ export function findLiteralSecrets(data: unknown, redactor: Redactor, path = '')
   walk(data, path, 0);
   return out;
 }
+
+/**
+ * The first `max` characters of a long text, redacted, without redacting (or copying) the rest: the text is cut a little past
+ * `max` (a secret that starts before the cut ends inside the margin, so it is still recognised whole), redacted, then cut to `max`.
+ * `rest` is how many characters of the original are not in `head`.
+ */
+export function redactedHead(redactor: { redactString(s: string): string }, text: string, max: number, margin = 4096): { head: string; rest: number } {
+  if (text.length <= max) return { head: redactor.redactString(text), rest: 0 };
+  const head = redactor.redactString(text.slice(0, max + margin)).slice(0, max);
+  return { head, rest: text.length - max };
+}

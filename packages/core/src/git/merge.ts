@@ -164,16 +164,22 @@ function mergeItems(base: Node[] = [], ours: Node[] = [], theirs: Node[] = [], p
   const t = new Map(theirs.map((n) => [n.id, n]));
   // order: ours, with what only theirs added placed after its predecessor in theirs
   const order = ours.map((n) => n.id);
-  theirs.forEach((n, i) => {
-    if (o.has(n.id) || b.has(n.id)) return;
-    const prev = theirs
-      .slice(0, i)
-      .reverse()
-      .find((p) => order.includes(p.id));
-    order.splice(prev ? order.indexOf(prev.id) + 1 : 0, 0, n.id);
+  const inOrder = new Set(order);
+  // the nearest earlier item of theirs that is already in the order, kept as the loop goes (it was a scan of everything before, per added item)
+  let prev: string | undefined;
+  theirs.forEach((n) => {
+    if (!o.has(n.id) && !b.has(n.id)) {
+      order.splice(prev === undefined ? 0 : order.indexOf(prev) + 1, 0, n.id);
+      inOrder.add(n.id);
+    }
+    if (inOrder.has(n.id)) prev = n.id;
   });
   // what ours deleted but theirs changed comes back (nothing is lost): at its place in theirs
-  for (const n of theirs) if (!order.includes(n.id) && b.has(n.id) && !o.has(n.id) && !same(b.get(n.id), n)) order.push(n.id);
+  for (const n of theirs)
+    if (!inOrder.has(n.id) && b.has(n.id) && !o.has(n.id) && !same(b.get(n.id), n)) {
+      order.push(n.id);
+      inOrder.add(n.id);
+    }
   const out: Node[] = [];
   for (const id of order) {
     const bn = b.get(id);

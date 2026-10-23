@@ -339,6 +339,24 @@ export function stepLine(text: string, name: string): number | undefined {
   return i >= 0 ? i + 1 : undefined;
 }
 
+/**
+ * `stepLine` for many steps at once: the file is split and scanned once, every `name:` line noted, then each name is a map read
+ * (stepLine split the file and compiled one or two regular expressions per step: 500 steps x every line of the file).
+ */
+export function stepLines(text: string): (name: string) => number | undefined {
+  const block = new Map<string, number>();
+  const inline = new Map<string, number>();
+  const blockRe = /^\s*-?\s*name:\s*(["']?)(.+?)\1\s*(#.*)?$/;
+  const inlineRe = /[{,]\s*name:\s*(["']?)(.+?)\1\s*[,}]/g;
+  text.split(/\r?\n/).forEach((l, i) => {
+    const b = blockRe.exec(l);
+    if (b && !block.has(b[2]!)) block.set(b[2]!, i + 1);
+    if (l.includes('name:'))
+      for (const m of l.matchAll(inlineRe)) if (!inline.has(m[2]!)) inline.set(m[2]!, i + 1);
+  });
+  return (name) => block.get(name) ?? inline.get(name);
+}
+
 /* ------------------------------------------------------------------ notes and frames (the canvas only) */
 
 /** The colours a sticky note or a frame can have (names, so the file reads well and the theme picks the shade). */

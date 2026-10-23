@@ -30,7 +30,7 @@ import {
   buildGraphQLOperation,
   schemaFromSdl,
   workspaceStorageAsync,
-  deleteRunsBefore,
+  deleteRunsBeforeAsync,
   listCertificates,
   checkCertificate,
   recordCertificate,
@@ -113,10 +113,10 @@ export function requestsHandlers(be: Backend): Handlers {
     'history.clear': () => be.ws.meta.clearHistory(),
     /** What the workspace keeps on disk (runs, traces, response bodies, history) — Settings ▸ Storage. */
     'storage.usage': () => workspaceStorageAsync(be.ws),
-    'storage.deleteRunsBefore': ({ days }: { days: number }) => {
+    'storage.deleteRunsBefore': async ({ days }: { days: number }) => {
       const n = Math.max(1, Math.floor(Number(days) || 0));
       if (!n) throw new ApsError('ValidationError', 'Give a number of days');
-      const r = deleteRunsBefore(be.ws, new Date(Date.now() - n * 86_400_000).toISOString());
+      const r = await deleteRunsBeforeAsync(be.ws, new Date(Date.now() - n * 86_400_000).toISOString());
       be.host.emit('data.changed', { kind: 'runs' });
       return r;
     },

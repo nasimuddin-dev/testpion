@@ -2,7 +2,7 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, isIP, type Socket } from 'node:net';
 import { lookup as dnsLookupAll } from 'node:dns/promises';
-import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
+import { guardedLookup, upstreamAgents } from './upstream-guard.js';
 import { isLocalOnlyAddress } from '../net/policy.js';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
@@ -18,7 +18,7 @@ import { duplexPair } from 'node:stream';
 import { applicationOfPort, ownerOfProcess, type ProgramInfo } from './programs.js';
 import { DebuggerSession } from './session.js';
 export { applicationOfPort, ownerOfProcess, type ProgramInfo };
-import type { Duplex } from 'node:stream';
+import { PassThrough, type Duplex, type Readable } from 'node:stream';
 import { ApsError } from '../errors.js';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { sleep } from '../util/concurrency.js';
@@ -141,6 +141,8 @@ interface DebuggerProxyOptions {
   /** The pairing secret of a LAN proxy (default: a new random one, `DebuggerProxy.pairingSecret`). */
   lanSecret?: string;
   maxBodyBytes?: number;
+  /** The most a body is held in memory so that rules and breakpoints can change it (default 64 MB); a bigger one is sent on as it arrives, unchanged. */
+  holdLimitBytes?: number;
   /** `update`: something learned later changed a listed exchange (its program, found after the response). */
   onExchange?(e: DebuggerExchange, phase: 'request' | 'response' | 'update'): void;
   /** Which program owns a client port (see applicationOfPort); replaceable in tests. */
@@ -160,19 +162,6 @@ interface DebuggerProxyOptions {
 }
 
 /** A tunnel whose requests are read: where they go, who sent them, how many came, its connection id. */
-/**
- * A `lookup` for the connections made on behalf of a device on the network: the name is resolved once, by the connection
- * itself, and refused when it points at this computer (loopback, link-local). Checking first and connecting after would
- * resolve twice, and a name that answers differently the second time (DNS rebinding) would get through.
- */
-function guardedLookup(hostname: string, options: object, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void): void {
-  dnsLookup(hostname, options as never, ((err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => {
-    if (err) return callback(err, address, family);
-    const list = Array.isArray(address) ? address : [{ address, family: family ?? 4 }];
-    if (list.some((a) => isLocalOnlyAddress(a.address))) return callback(Object.assign(new Error(`${hostname} points at this computer`), { code: 'EACCES' }) as NodeJS.ErrnoException, address, family);
-    callback(null, address, family);
-  }) as never);
-}
 /** Exchanges of devices on the network: their connections use guardedLookup. */
 const remoteExchanges = new WeakSet<object>();
 
@@ -233,13 +222,41 @@ function collect(stream: NodeJS.ReadableStream, max: number, keep: boolean): Pro
   });
 }
 
-/** A request body whole (it is forwarded after the rules, which may change it). */
-const collectWhole = (stream: NodeJS.ReadableStream) =>
-  new Promise<Buffer>((resolve) => {
+/**
+ * The most a request or response body is held in memory so that rules and breakpoints can change it. A body over it is not held:
+ * what has arrived is sent on and the rest follows as it comes (rules that change the body, and body breakpoints, do not apply to it).
+ */
+const HOLD_LIMIT = 64 * 1024 * 1024;
+
+/**
+ * A body whole (it is forwarded after the rules, which may change it), as the bytes it has: no text conversion. Over `limit` the
+ * stream is paused with what has arrived so far, for the caller to send on (`over`).
+ */
+const holdBody = (stream: NodeJS.ReadableStream, limit = HOLD_LIMIT) =>
+  new Promise<{ body: Buffer; over?: false } | { chunks: Buffer[]; bytes: number; over: true }>((resolve) => {
     const chunks: Buffer[] = [];
-    stream.on('data', (c: Buffer) => chunks.push(c));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', () => resolve(Buffer.concat(chunks)));
+    let bytes = 0;
+    const settle = () => {
+      stream.off('data', onData);
+      stream.off('end', onEnd);
+      stream.off('error', onEnd);
+    };
+    const onData = (c: Buffer) => {
+      chunks.push(c);
+      bytes += c.length;
+      if (bytes > limit) {
+        settle();
+        stream.pause();
+        resolve({ chunks, bytes, over: true });
+      }
+    };
+    const onEnd = () => {
+      settle();
+      resolve({ body: Buffer.concat(chunks, bytes) });
+    };
+    stream.on('data', onData);
+    stream.on('end', onEnd);
+    stream.on('error', onEnd);
   });
 
 /** The program that owns a local TCP port, best effort, per platform; undefined when unknown. */
@@ -346,12 +363,27 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (t) return;
       t = setTimeout(() => {
         t = undefined;
+        session.account(e); // what the stream holds so far counts against the session's budget
         opts.onExchange?.(e, 'response');
       }, 250);
     };
   };
   const rulesNow = () => opts.rules?.() ?? [];
   const upstreamTls = () => ({ ca: trustedCa(), rejectUnauthorized: !opts.decrypt?.insecureUpstream });
+  /*
+   * One https.Agent for the upstream requests of a trust configuration: with the CA list in every request's options (hundreds of
+   * certificates) each request hashed it to find its agent. A new one is made only when the trusted CAs change.
+   */
+  const upstreamHttps = upstreamAgents(trustedCa, () => !!opts.decrypt?.insecureUpstream);
+  /** TLS contexts of the leaf certificates handed to clients, by certificate (parsing the PEM for every tunnel was repeated work). */
+  const contexts = new BoundedMap<string, ReturnType<typeof createSecureContext>>(500);
+  const contextFor = (leaf: { cert: string; key: string }) => {
+    const hit = contexts.get(leaf.cert);
+    if (hit) return hit;
+    const made = createSecureContext({ cert: leaf.cert, key: leaf.key });
+    contexts.set(leaf.cert, made);
+    return made;
+  };
   /** Where a request on this socket goes: the absolute URL of a proxy request, or the decrypted tunnel's origin plus the path. */
   const targetOf = (req: IncomingMessage | Http2ServerRequest, origin?: TunnelOrigin): URL => {
     if (origin) return new URL(req.url ?? '/', `${origin.scheme}://${origin.host}:${origin.port}`);
@@ -456,11 +488,28 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       setApp(e, a);
     });
     // the request body whole, before the rules: a breakpoint or a modify rule may change it
-    const reqBody = await collectWhole(req as NodeJS.ReadableStream);
-    e.requestBodyBytes = reqBody.length;
-    e.requestBodyTruncated = reqBody.length > maxBody;
-    if (reqBody.length && textLike(req.headers['content-type'])) e.requestBody = reqBody.subarray(0, maxBody).toString('utf8');
-    let bodyToSend: Buffer | undefined = reqBody.length ? reqBody : undefined;
+    const held = await holdBody(req as NodeJS.ReadableStream, opts.holdLimitBytes);
+    let bodyToSend: Buffer | Readable | undefined;
+    let streamed = false;
+    if (held.over) {
+      // too big to hold: sent on as it arrives (counted, the first part kept for the list), rules do not change this body
+      streamed = true;
+      const head = Buffer.concat(held.chunks, Math.min(held.bytes, maxBody)).subarray(0, maxBody);
+      e.requestBodyBytes = held.bytes;
+      e.requestBodyTruncated = true;
+      if (textLike(req.headers['content-type'])) e.requestBody = head.toString('utf8');
+      const pass = new PassThrough();
+      for (const c of held.chunks) pass.write(c);
+      (req as NodeJS.ReadableStream).on('data', (c: Buffer) => (e.requestBodyBytes += c.length));
+      (req as NodeJS.ReadableStream).pipe(pass);
+      bodyToSend = pass;
+    } else {
+      const reqBody = held.body;
+      e.requestBodyBytes = reqBody.length;
+      e.requestBodyTruncated = reqBody.length > maxBody;
+      if (reqBody.length && textLike(req.headers['content-type'])) e.requestBody = reqBody.subarray(0, maxBody).toString('utf8');
+      bodyToSend = reqBody.length ? reqBody : undefined;
+    }
 
     const rules = rulesNow();
     await programFirst(appPromise, rules);
@@ -474,7 +523,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (decision.highlight) e.highlight = decision.highlight;
       if (decision.applied.length) e.rules = decision.applied;
       if (decision.requestHeaders) e.requestHeaders = applyHeaderEdits(e.requestHeaders, decision.requestHeaders);
-      if (decision.requestBody !== undefined) {
+      if (decision.requestBody !== undefined && !streamed) {
         e.requestBody = decision.requestBody;
         bodyToSend = Buffer.from(decision.requestBody, 'utf8');
         e.requestBodyBytes = bodyToSend.length;
@@ -511,7 +560,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           }
         }
         if (edits.headers) e.requestHeaders = edits.headers;
-        if (edits.body !== undefined) {
+        if (edits.body !== undefined && !streamed) {
           e.requestBody = edits.body;
           bodyToSend = Buffer.from(edits.body, 'utf8');
           e.requestBodyBytes = bodyToSend.length;
@@ -669,7 +718,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     target: URL,
     method: string,
     headers: Record<string, string | string[] | undefined>,
-    body: Buffer | undefined,
+    body: Buffer | Readable | undefined,
     res: ServerResponse,
     e: DebuggerExchange,
     decision: ReturnType<typeof decideRequest> | undefined,
@@ -683,7 +732,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     if (e.redirectedTo) h.host = target.host;
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamTls() : {}) }, async (ures) => {
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : {}) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -735,9 +784,31 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
         return;
       }
       // held: the whole body, then the rules' edits, then the breakpoint, then the client
-      const whole = await collect(ures, Number.MAX_SAFE_INTEGER, true);
-      e.responseBodyBytes = whole.bytes;
-      let outBody: Buffer = Buffer.from(whole.text ?? '', 'utf8');
+      const heldResponse = await holdBody(ures, opts.holdLimitBytes);
+      if (heldResponse.over) {
+        // too big to hold for edits: what has arrived goes on, then the rest as it comes (headers and body rules do not change it)
+        res.writeHead(e.status ?? 502, isH2(res) ? forH2(ures.headers) : ures.headers);
+        e.responseBodyBytes = heldResponse.bytes;
+        e.responseBodyTruncated = true;
+        for (const c of heldResponse.chunks) res.write(c);
+        ures.on('data', (c: Buffer) => {
+          e.responseBodyBytes += c.length;
+          res.write(c);
+        });
+        ures.on('end', () => {
+          res.end();
+          done();
+        });
+        ures.on('error', (err) => {
+          e.error = err.message;
+          res.end();
+          done();
+        });
+        ures.resume();
+        return;
+      }
+      e.responseBodyBytes = heldResponse.body.length;
+      let outBody: Buffer = heldResponse.body;
       let outHeaders = applyHeaderEdits(e.responseHeaders, decision?.responseHeaders);
       if (decision?.responseBody !== undefined) outBody = Buffer.from(decision.responseBody, 'utf8');
       if (keep) e.responseBody = outBody.subarray(0, maxBody).toString('utf8');
@@ -775,6 +846,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
     };
+    // the request's 60 s timeout only emitted an event nobody listened to: a stalled upstream never ended the exchange
+    up.on('timeout', () => up.destroy(Object.assign(new Error('The server did not answer within 60 s'), { code: 'ETIMEDOUT' })));
     up.on('error', (err: NodeJS.ErrnoException) => {
       e.error = err.code === 'ENOTFOUND' ? `Unknown host ${target.hostname}` : err.message;
       e.durationMs = Date.now() - t0;
@@ -790,7 +863,8 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     });
     // the request is sent whole when the last byte has gone out
     up.once('finish', () => (e.sendMs = Date.now() - t0));
-    up.end(body);
+    if (body && !Buffer.isBuffer(body)) body.pipe(up);
+    else up.end(body);
   }
 
   // WebSocket: the upgrade goes to the server; both directions are read frame by frame on the way
@@ -846,7 +920,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     delete h['proxy-connection'];
     if (e.redirectedTo) h.host = target.host;
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamTls() : {}) });
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : {}) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -1017,11 +1091,11 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
         tlsSocket = new TLSSocket(inner, {
           isServer: true,
           ALPNProtocols: ['h2', 'http/1.1'],
-          secureContext: createSecureContext({ cert: leaf.cert, key: leaf.key }),
+          secureContext: contextFor(leaf),
           SNICallback: (name, cb) => {
             try {
               const l = opts.decrypt!.leafFor(name);
-              cb(null, createSecureContext({ cert: l.cert, key: l.key }));
+              cb(null, contextFor(l));
             } catch (err) {
               cb(err as Error);
             }
@@ -1111,6 +1185,10 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
       new Promise<void>((resolve) => {
         for (const s of sockets) s.destroy();
         sockets.clear();
+        // upstream HTTP/2 sessions and the upstream agent's idle connections outlived the proxy
+        for (const sess of h2Sessions.values()) sess.destroy();
+        h2Sessions.clear();
+        upstreamHttps.destroy();
         server.closeAllConnections?.();
         server.close(() => resolve());
       }),

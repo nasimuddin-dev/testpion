@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { extname } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
-import { flowChecks, flowGraph, layoutExtras, namesSetByScripts, stepLine, templatedText, templateVariables, toDot, type FlowCheck, type FlowFrameDef, type FlowGraph, type FlowNote, type FlowStep } from '@testpion/shared';
+import { flowChecks, flowGraph, layoutExtras, namesSetByScripts, stepLines, templatedText, templateVariables, toDot, type FlowCheck, type FlowFrameDef, type FlowGraph, type FlowNote, type FlowStep } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import type { TestCase } from '../model/types.js';
@@ -183,10 +183,11 @@ export async function flowOfFile(store: WorkspaceStore, file: string, opts: { ru
   const text = opts.text ?? readFileSync(abs, 'utf8');
   const steps: FlowStep[] = [];
   const tests: TestCase[] = [];
+  const lineOf = stepLines(text);
   // the file's own steps (a dataset: test stays one step, not one per row): the designer edits what is written
   for await (const t of loadTestsFromFile(abs, opts.text, { templates: true })) {
     const s = flowStepOf(t);
-    s.line = stepLine(text, t.name);
+    s.line = lineOf(t.name);
     steps.push(s);
     tests.push(t);
     if (steps.length >= 500) break;

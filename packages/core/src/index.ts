@@ -363,3 +363,4 @@ export { docsOf, listOf } from './eval/rag/lists.js';
 export * from './eval/rag/metric-compare.js';
 export * from './eval/rag/metric-docs.js';
 export * from './eval/rag/dataset-columns.js';
+export { useMcpSdkBundle } from './mcp-server/sdk.js';

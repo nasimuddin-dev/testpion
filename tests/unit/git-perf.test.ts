@@ -14,8 +14,10 @@ import { expectWithin } from '../perf-budget';
  * view and `git status --by-item` show) must take under one second, and making the change marks from them under 100 ms. The
  * budget is the owner's; the median of three runs is held to it so one slow moment does not fail a build.
  */
-const BUDGET_STATUS_MS = 700;
-const BUDGET_MARKS_MS = 100;
+// TESTPION_PERF_SLACK widens both budgets on a box that is loaded or slow (a CI runner, other perf files running alongside); the default holds the owner's numbers
+const SLACK = Number(process.env.TESTPION_PERF_SLACK ?? 1) || 1;
+const BUDGET_STATUS_MS = 700 * SLACK;
+const BUDGET_MARKS_MS = 100 * SLACK;
 
 const t = tempDir('tp-git-perf-');
 const ws = t.dir;

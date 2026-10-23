@@ -1,4 +1,4 @@
-import { shortId, type ItemRef, type Redactor, type TestResult } from '@testpion/core';
+import { redactedHead, shortId, type ItemRef, type Redactor, type TestResult } from '@testpion/core';
 
 /**
  * The Postman-style console (the window's bottom panel): what was sent, newest last, with the scripts' output. Every
@@ -42,6 +42,26 @@ interface ConsoleHost {
 
 /** A body for the console: kept up to 16,000 characters. */
 export const clipConsole = (t: string | undefined) => (t && t.length > CONSOLE_BODY_CHARS ? `${t.slice(0, CONSOLE_BODY_CHARS)}… [${t.length - CONSOLE_BODY_CHARS} more characters]` : t);
+
+/** A body longer than this is cut before anything is parsed or copied: the console keeps 16,000 characters of it anyway. */
+const BIG_BODY_CHARS = 64 * 1024;
+
+/**
+ * A request or response body for the console: redacted, pretty-printed when it is JSON, clipped to 16,000 characters. A big body is
+ * cut first and redacted as text (it was parsed, deep-copied and pretty-printed whole, to keep a fraction of it).
+ */
+export function consoleBody(redactor: Redactor, t: string | undefined): string | undefined {
+  if (!t) return t;
+  if (t.length > BIG_BODY_CHARS) {
+    const { head, rest } = redactedHead(redactor, t, CONSOLE_BODY_CHARS);
+    return `${head}… [${rest} more characters]`;
+  }
+  try {
+    return clipConsole(JSON.stringify(redactor.redact(JSON.parse(t)), null, 2));
+  } catch {
+    return clipConsole(redactor.redactString(t));
+  }
+}
 
 /** The refs of an entry, without the empty ones. */
 export function consoleRefs(o: { collectionId?: string; requestId?: string; historyId?: string; traceId?: string; runId?: string; resultId?: string }): ItemRef[] | undefined {

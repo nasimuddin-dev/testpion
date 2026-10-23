@@ -261,34 +261,87 @@ export const SQLITE_GUARDS = {
   watchMs: 50,
 } as const;
 
-/** The worker's program: opens the file read-only, runs one prepared statement, answers up to maxRows + 1 rows. */
+/**
+ * The worker's program: answers one query per message - opens the file read-only, runs one prepared statement (up to maxRows + 1 rows),
+ * closes the file. A worker is kept for a few seconds between queries (see the pool below): starting one costs tens of ms, and a RAG
+ * run asks hundreds of queries. The database itself is opened for each query and closed after it, so an idle worker holds no file
+ * (the file can be replaced or deleted, which a held handle would refuse on Windows) and always reads the file as it is now.
+ */
 const SQLITE_WORKER = `
 const { parentPort, workerData } = require('node:worker_threads');
 process.emitWarning = () => {};
-try {
-  const { DatabaseSync } = require('node:sqlite');
-  const db = new DatabaseSync(workerData.path, { readOnly: true, limits: workerData.limits });
-  db.exec('PRAGMA query_only = ON');
-  try { db.exec('PRAGMA hard_heap_limit = ' + workerData.hardHeapBytes); } catch {}
-  const stmt = db.prepare(workerData.sql);
-  const rows = [];
-  let columns = [];
-  for (const r of stmt.iterate()) {
-    if (!columns.length) columns = Object.keys(r);
-    rows.push(columns.map((c) => { const v = r[c]; return typeof v === 'bigint' ? (v <= 9007199254740991n && v >= -9007199254740991n ? Number(v) : v.toString()) : v instanceof Uint8Array ? Buffer.from(v).toString('base64') : v; }));
-    if (rows.length > workerData.maxRows) break;
+const { DatabaseSync } = require('node:sqlite');
+parentPort.on('message', (m) => {
+  let db;
+  try {
+    db = new DatabaseSync(workerData.path, { readOnly: true, limits: workerData.limits });
+    db.exec('PRAGMA query_only = ON');
+    try { db.exec('PRAGMA hard_heap_limit = ' + workerData.hardHeapBytes); } catch {}
+    const stmt = db.prepare(m.sql);
+    const rows = [];
+    let columns = [];
+    for (const r of stmt.iterate()) {
+      if (!columns.length) columns = Object.keys(r);
+      rows.push(columns.map((c) => { const v = r[c]; return typeof v === 'bigint' ? (v <= 9007199254740991n && v >= -9007199254740991n ? Number(v) : v.toString()) : v instanceof Uint8Array ? Buffer.from(v).toString('base64') : v; }));
+      if (rows.length > m.maxRows) break;
+    }
+    if (!columns.length && typeof stmt.columns === 'function') columns = stmt.columns().map((c) => c.name);
+    db.close();
+    parentPort.postMessage({ ok: true, columns, rows });
+  } catch (e) {
+    try { if (db) db.close(); } catch {}
+    parentPort.postMessage({ ok: false, error: String(e && e.message || e) });
   }
-  if (!columns.length && typeof stmt.columns === 'function') columns = stmt.columns().map((c) => c.name);
-  db.close();
-  parentPort.postMessage({ ok: true, columns, rows });
-} catch (e) {
-  parentPort.postMessage({ ok: false, error: String(e && e.message || e) });
-}
+});
 `;
+
+/** Idle workers by database file (a worker is told its file when it starts). */
+interface PooledWorker {
+  w: Worker;
+  path: string;
+  uses: number;
+  timer?: ReturnType<typeof setTimeout>;
+}
+const IDLE_MS = 10_000;
+const MAX_IDLE_PER_FILE = 2;
+const MAX_USES = 200;
+const idleWorkers = new Map<string, PooledWorker[]>(); // bounded: MAX_IDLE_PER_FILE per file, each idle IDLE_MS
+
+function takeWorker(path: string): PooledWorker {
+  const list = idleWorkers.get(path) ?? [];
+  while (list.length) {
+    const p = list.pop()!;
+    clearTimeout(p.timer);
+    if (p.uses < MAX_USES) return p;
+    void p.w.terminate();
+  }
+  sqlWorkerStats.started++;
+  const w = new Worker(SQLITE_WORKER, { eval: true, workerData: { path, limits: SQLITE_GUARDS.limits, hardHeapBytes: SQLITE_GUARDS.hardHeapBytes }, resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32 } });
+  w.unref(); // an idle worker never keeps the process alive
+  return { w, path, uses: 0 };
+}
+
+function giveBack(p: PooledWorker): void {
+  const list = idleWorkers.get(p.path) ?? [];
+  if (list.length >= MAX_IDLE_PER_FILE) return void p.w.terminate();
+  p.timer = setTimeout(() => {
+    const at = list.indexOf(p);
+    if (at >= 0) list.splice(at, 1);
+    void p.w.terminate();
+  }, IDLE_MS);
+  p.timer.unref();
+  list.push(p);
+  idleWorkers.set(p.path, list);
+}
+
+/** Workers started for SQL queries so far (a test counts them: a hundred queries on one file start a few, not a hundred). */
+export const sqlWorkerStats = { started: 0 };
 
 function runSqlite(path: string, sql: string, maxRows: number, timeoutMs: number, signal?: AbortSignal, memoryMb: number = SQLITE_GUARDS.memoryGrowthMb): Promise<SqlResult> {
   return new Promise((resolveP, reject) => {
-    const w = new Worker(SQLITE_WORKER, { eval: true, workerData: { path, sql, maxRows, limits: SQLITE_GUARDS.limits, hardHeapBytes: SQLITE_GUARDS.hardHeapBytes }, resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 32 } });
+    const pooled = takeWorker(path);
+    pooled.uses++;
+    const w = pooled.w;
     let done = false;
     const rss0 = process.memoryUsage.rss();
     // native memory is not covered by resourceLimits: a query that makes the process grow this much is stopped
@@ -297,21 +350,31 @@ function runSqlite(path: string, sql: string, maxRows: number, timeoutMs: number
       if (grown > memoryMb) finish(() => reject(new ApsError('ValidationError', `The SQL query used more than ${memoryMb} MB of memory and was stopped`, { suggestions: ['Ask for a query that builds smaller values.'] })));
     }, SQLITE_GUARDS.watchMs);
     watch.unref();
-    const finish = (f: () => void) => {
+    /** A worker that answered goes back to the pool; one that was stopped (timeout, memory, cancel) or failed is ended. */
+    const finish = (f: () => void, reuse = false) => {
       if (done) return;
       done = true;
       clearInterval(watch);
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
-      void w.terminate();
+      w.off('message', onMessage);
+      w.off('error', onError);
+      w.off('exit', onExit);
+      if (reuse) giveBack(pooled);
+      else void w.terminate();
       f();
     };
     const timer = setTimeout(() => finish(() => reject(new ApsError('TimeoutError', `The SQL query ran for more than ${timeoutMs} ms and was stopped`, { suggestions: ['Compare the results as CSV, or ask the system for a query that finishes sooner.'] }))), timeoutMs);
     const onAbort = () => finish(() => reject(new ApsError('CancelledError', 'The SQL query was cancelled')));
+    const onMessage = (m: { ok: boolean; error?: string; columns?: string[]; rows?: unknown[][] }) =>
+      finish(() => (m.ok ? resolveP({ columns: m.columns ?? [], rows: m.rows ?? [] }) : reject(new ApsError('ValidationError', `The SQL query failed: ${m.error}`))), true);
+    const onError = (e: Error) => finish(() => reject(new ApsError('ValidationError', `The SQL query failed: ${e.message}`)));
+    const onExit = (code: number) => finish(() => reject(new ApsError('ValidationError', `The SQL query stopped (worker exit ${code})`)));
     signal?.addEventListener('abort', onAbort, { once: true });
-    w.once('message', (m: { ok: boolean; error?: string; columns?: string[]; rows?: unknown[][] }) => finish(() => (m.ok ? resolveP({ columns: m.columns ?? [], rows: m.rows ?? [] }) : reject(new ApsError('ValidationError', `The SQL query failed: ${m.error}`)))));
-    w.once('error', (e) => finish(() => reject(new ApsError('ValidationError', `The SQL query failed: ${e.message}`))));
-    w.once('exit', (code) => finish(() => reject(new ApsError('ValidationError', `The SQL query stopped (worker exit ${code})`))));
+    w.on('message', onMessage);
+    w.on('error', onError);
+    w.on('exit', onExit);
+    w.postMessage({ sql, maxRows });
   });
 }
 

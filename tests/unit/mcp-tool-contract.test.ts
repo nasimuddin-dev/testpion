@@ -27,7 +27,8 @@ beforeAll(async () => {
   const mgr = new WorkspaceManager(join(dir, 'home'));
   store = mgr.open(ws);
   const connect = async (c: Client) => {
-    const server = createTestPionMcpServer({ store, secrets: new EnvSecretStore(), settings: mgr.loadSettings() });
+    // the complete entries: this file checks the shape of every description, which the default (compact) list shortens
+    const server = createTestPionMcpServer({ store, secrets: new EnvSecretStore(), settings: mgr.loadSettings(), profile: 'verbose' });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), c.connect(b)]);
   };

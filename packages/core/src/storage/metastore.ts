@@ -1,4 +1,5 @@
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import type { HistoryEntry, RunSummary } from '../model/types.js';
@@ -347,6 +348,13 @@ function removeFiles(root: string, paths: Array<string | null | undefined>): voi
   }
 }
 
+/** `removeFiles` without holding the caller: a prune drops about 200 files at once, inside the send that triggered it. */
+function removeFilesLater(root: string, paths: Array<string | null | undefined>): void {
+  const allowed = [resolve(root, 'payloads') + sep, resolve(root, 'traces') + sep];
+  const files = paths.filter((p): p is string => !!p).map((p) => resolve(root, p)).filter((file) => allowed.some((a) => file.startsWith(a)));
+  void Promise.all(files.map((file) => rm(file, { force: true }).catch(() => undefined)));
+}
+
 class SqliteMetaStore implements MetaStore {
   readonly backend = 'sqlite' as const;
   private db: SqliteDb;
@@ -355,6 +363,11 @@ class SqliteMetaStore implements MetaStore {
   /** Prepared once: inserts happen for every request sent and every trace of a run. */
   private statements = new Map<string, ReturnType<SqliteDb['prepare']>>();
   private inserts = { history: 0, traces: 0, ai: 0, judge: 0 };
+  /** Every PRUNE_EVERY inserts - but not at the first of a process (every CLI command), which would count the table for nothing. */
+  private pruneDue(k: keyof SqliteMetaStore['inserts']): boolean {
+    const n = this.inserts[k]++;
+    return n > 0 && n % PRUNE_EVERY === 0;
+  }
   private batchDepth = 0;
 
   private stmt(sql: string) {
@@ -468,7 +481,7 @@ class SqliteMetaStore implements MetaStore {
   /** Bound a table to `max` rows: counted first (the common case is "nothing to do"), then the oldest by `order` go, by rowid, with their files. */
   addAiCall(c: AiCallRecord): void {
     this.stmt('INSERT OR REPLACE INTO ai_calls (id, at, doc) VALUES (?,?,?)').run(c.id, c.at, JSON.stringify(c));
-    if (this.inserts.ai++ % PRUNE_EVERY === 0) this.prune('ai_calls', 'at', 'NULL', MAX_AI_CALLS);
+    if (this.pruneDue('ai')) this.prune('ai_calls', 'at', 'NULL', MAX_AI_CALLS);
   }
 
   listAiCalls(q: { since?: string; limit?: number } = {}): AiCallRecord[] {
@@ -491,7 +504,7 @@ class SqliteMetaStore implements MetaStore {
 
   putJudgeCache(key: string, doc: string): void {
     this.stmt('INSERT OR REPLACE INTO judge_cache (key, at, doc) VALUES (?,?,?)').run(key, new Date().toISOString(), doc);
-    if (this.inserts.judge++ % PRUNE_EVERY === 0) this.prune('judge_cache', 'at', 'NULL', MAX_JUDGE_CACHE);
+    if (this.pruneDue('judge')) this.prune('judge_cache', 'at', 'NULL', MAX_JUDGE_CACHE);
   }
 
   clearJudgeCache(): number {
@@ -503,12 +516,12 @@ class SqliteMetaStore implements MetaStore {
   private prune(table: 'history' | 'traces' | 'ai_calls' | 'judge_cache', order: string, fileCol: string, max: number): void {
     const n = (this.stmt(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
     if (n <= max) return;
-    const old = this.db.prepare(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
+    const old = this.stmt(`SELECT rowid AS id, ${fileCol} AS file FROM ${table} ORDER BY ${order} ASC LIMIT ?`).all(n - max) as Array<{ id: number; file: string | null }>;
     this.batch(() => {
       const del = this.stmt(`DELETE FROM ${table} WHERE rowid = ?`);
       for (const r of old) del.run(r.id);
     });
-    removeFiles(this.root, old.map((r) => r.file));
+    removeFilesLater(this.root, old.map((r) => r.file));
   }
 
   /** `total` of a page: free when the page is not full, else counted (indexed filters are cheap; a text query scans). */
@@ -540,7 +553,7 @@ class SqliteMetaStore implements MetaStore {
       historyOk(e.status) ? 1 : 0,
     );
     // bound history size (and delete the saved response bodies of what goes)
-    if (this.inserts.history++ % PRUNE_EVERY === 0) this.prune('history', 'ts', 'payload', MAX_HISTORY);
+    if (this.pruneDue('history')) this.prune('history', 'ts', 'payload', MAX_HISTORY);
   }
 
   private where(q: ListQuery, cols: string[]): { sql: string; args: unknown[] } {
@@ -682,7 +695,7 @@ class SqliteMetaStore implements MetaStore {
 
   addTrace(t: TraceMeta): void {
     this.stmt('INSERT OR REPLACE INTO traces (id, name, kind, status, start, duration, spans, run_id, path) VALUES (?,?,?,?,?,?,?,?,?)').run(t.id, t.name, t.kind, t.status, t.startTime, t.durationMs, t.spanCount, t.runId ?? null, t.path);
-    if (this.inserts.traces++ % PRUNE_EVERY === 0) this.prune('traces', 'start', 'path', MAX_TRACES);
+    if (this.pruneDue('traces')) this.prune('traces', 'start', 'path', MAX_TRACES);
   }
 
   listTraces(q: ListQuery = {}): Page<TraceMeta> {
@@ -880,21 +893,25 @@ class JsonlMetaStore implements MetaStore {
       opts,
     );
   }
-  requestStats(collectionId: string) {
+  private statsOf(entries: HistoryEntry[]) {
     return summarizeRequestStats(
-      this.data.history
-        .filter((h) => h.collectionId === collectionId && isRequestEntry(h))
-        .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))
+      entries
+        .sort((x, y) => (x.timestamp < y.timestamp ? 1 : -1))
         .slice(0, 5000)
         .map((h) => ({ ...h, checksOk: (h.responseMeta as { checksOk?: boolean } | undefined)?.checksOk })),
     );
   }
+  requestStats(collectionId: string) {
+    return this.statsOf(this.data.history.filter((h) => h.collectionId === collectionId && isRequestEntry(h)));
+  }
   historyByCollection() {
-    const ids = new Set(this.data.history.filter(isRequestEntry).map((h) => h.collectionId).filter((c): c is string => !!c));
+    // grouped in one pass (it was a filter and a sort of the whole history for every collection)
+    const groups = new Map<string, HistoryEntry[]>();
+    for (const h of this.data.history) if (h.collectionId && isRequestEntry(h)) (groups.get(h.collectionId) ?? groups.set(h.collectionId, []).get(h.collectionId)!).push(h);
     return Object.fromEntries(
-      [...ids].map((c) => {
-        const stats = this.requestStats(c);
-        return [c, { sent: stats.length, failing: stats.filter((s) => !s.lastOk).length }];
+      [...groups].map(([c, entries]) => {
+        const stats = this.statsOf(entries);
+        return [c, { sent: stats.length, failing: stats.filter((x) => !x.lastOk).length }];
       }),
     );
   }

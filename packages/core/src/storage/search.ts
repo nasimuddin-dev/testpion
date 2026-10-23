@@ -45,7 +45,9 @@ function datasetNames(root: string, dir = '', depth = 0, out: string[] = []): st
 
 interface IndexedDoc {
   hit: Omit<SearchHit, 'score'>;
+  /** What is searched; lowercased once, the first time a query reaches the doc (it was lowercased again for every doc on every query). */
   text: string;
+  lowered?: { title: string };
 }
 
 /**
@@ -194,8 +196,12 @@ export class WorkspaceSearch {
     const terms = q.split(/\s+/);
     const hits: SearchHit[] = [];
     for (const d of this.definitionDocs()) {
-      const title = d.hit.title.toLowerCase();
-      const text = d.text.toLowerCase();
+      if (!d.lowered) {
+        d.text = d.text.toLowerCase();
+        d.lowered = { title: d.hit.title.toLowerCase() };
+      }
+      const title = d.lowered.title;
+      const text = d.text;
       if (!terms.every((t) => text.includes(t) || title.includes(t))) continue;
       const score = (title === q ? 100 : 0) + (title.startsWith(q) ? 50 : 0) + terms.filter((t) => title.includes(t)).length * 10 + 1;
       hits.push({ ...d.hit, score });

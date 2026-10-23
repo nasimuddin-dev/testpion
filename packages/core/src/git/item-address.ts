@@ -187,7 +187,7 @@ export function addNestedItem(a: ItemAddress, base: string | undefined, source: 
   if (!sdoc || !chain) return undefined;
   const start = base === undefined ? { ...sdoc, items: [] } : parseJson(base);
   if (!start) return undefined;
-  const original = JSON.parse(JSON.stringify(start)) as Rec;
+  const original = start; // (never changed: only the copy below is, so it needs no copy of its own)
   const doc = JSON.parse(JSON.stringify(start)) as Rec;
   const shells = new Set<string>();
   let list = (Array.isArray(doc.items) ? doc.items : (doc.items = [])) as unknown[];

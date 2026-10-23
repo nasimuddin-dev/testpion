@@ -74,6 +74,17 @@ export class VariableTracker {
 
   /** The values as they are (for a seed kept in memory); undefined when there are none. */
   raw(): Record<string, unknown> | undefined {
+    // nothing changed since the last call (most steps of a run change nothing): the scopes are not walked again
+    if (this.last && this.last.version === this.vars.version) return this.last.out && { ...this.last.out };
+    const version = this.vars.version;
+    const out = this.compute();
+    this.last = { version, out };
+    return out && { ...out };
+  }
+
+  private last?: { version: number; out: Record<string, unknown> | undefined };
+
+  private compute(): Record<string, unknown> | undefined {
     const runtime = this.vars.scopeValues('runtime');
     const all = this.vars.toObject();
     let out: Record<string, unknown> | undefined;

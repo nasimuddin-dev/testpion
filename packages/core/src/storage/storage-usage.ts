@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkspaceStore } from './workspace.js';
 
@@ -133,6 +133,33 @@ export function deleteRunsBefore(store: Pick<WorkspaceStore, 'meta' | 'runDir'>,
     rmSync(dir, { recursive: true, force: true });
     store.meta.deleteRun(r.id);
     deleted++;
+  }
+  return { deleted, bytes };
+}
+
+/**
+ * `deleteRunsBefore` for the app's backend: the folders are measured and removed through the thread pool, and the index rows go
+ * in one transaction per 50 runs, so the window is never held up (2,000 old runs were seconds of frozen UI).
+ */
+export async function deleteRunsBeforeAsync(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, before: string): Promise<{ deleted: number; bytes: number }> {
+  let deleted = 0;
+  let bytes = 0;
+  const all = store.meta.listRuns({ limit: 100_000 }).items.filter((r) => r.startedAt < before);
+  for (let i = 0; i < all.length; i += 50) {
+    const chunk = all.slice(i, i + 50);
+    const sizes = await Promise.all(
+      chunk.map(async (r) => {
+        const dir = store.runDir(r.id);
+        const size = await sizeOfAsync(dir);
+        await rm(dir, { recursive: true, force: true });
+        return size.bytes;
+      }),
+    );
+    bytes += sizes.reduce((a, b) => a + b, 0);
+    store.meta.batch(() => {
+      for (const r of chunk) store.meta.deleteRun(r.id);
+    });
+    deleted += chunk.length;
   }
   return { deleted, bytes };
 }

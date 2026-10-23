@@ -53,6 +53,8 @@ export interface RunOptions {
   onTrace?: (trace: Trace, result: TestResult) => void | Promise<void>;
   /** Wraps each batch of `onTrace` calls, e.g. `(fn) => store.meta.batch(fn)` for one database transaction per batch. */
   traceBatch?: (fn: () => void) => void;
+  /** Persist a whole batch without blocking: replaces `onTrace` + `traceBatch` (files written off the main thread, rows in small transactions). */
+  onTraceBatch?: (batch: Array<{ trace: Trace; result: TestResult }>) => Promise<void>;
   onEvent?: (e: RunEvent) => void;
   environment?: string;
   bail?: boolean;
@@ -280,6 +282,11 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   const deferreds = new Map<string, Deferred>();
   const seen = new Set<string>();
   const dep = (id: string) => deferreds.get(id) ?? deferreds.set(id, deferred()).get(id)!;
+  // a result settles only what something is waiting for: a Deferred (a promise) for every result of a 100,000-iteration run was never used
+  const settle = (id: string, status: TestStatus) => {
+    if (!statusById.has(id)) statusById.set(id, status); // (a step that asks later finds it here)
+    deferreds.get(id)?.resolve(status);
+  };
 
   // traces are derived data: queued and written in batches so a test never waits for a file write
   const traceQueue: Array<[Trace, TestResult]> = [];
@@ -289,9 +296,18 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     if (traceTimer) clearTimeout(traceTimer);
     traceTimer = undefined;
     const batch = traceQueue.splice(0);
-    if (!batch.length || !opts.onTrace) return traceWrites;
+    if (!batch.length || !(opts.onTrace || opts.onTraceBatch)) return traceWrites;
     const onTrace = opts.onTrace;
+    const onTraceBatch = opts.onTraceBatch;
     traceWrites = traceWrites.then(async () => {
+      if (onTraceBatch) {
+        try {
+          await onTraceBatch(batch.map(([trace, result]) => ({ trace, result })));
+        } catch {
+          /* a failed batch loses its traces, not the run */
+        }
+      }
+      if (!onTrace) return; // (with a batch writer, `onTrace` is only for side effects such as exporting)
       const pending: Array<Promise<void>> = [];
       const all = () => {
         for (const [t, r] of batch) {
@@ -328,9 +344,9 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     const redacted = opts.services.redactor.redact(r);
     if (redacted.metadata?.setup !== true) agg.add(redacted);
     statusById.set(r.id, r.status);
-    dep(r.id).resolve(r.status);
+    settle(r.id, r.status);
     await write(redacted);
-    if (trace && opts.onTrace && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) queueTrace(trace, redacted);
+    if (trace && (opts.onTrace || opts.onTraceBatch) && (opts.traceMode === 'all' || (opts.traceMode !== 'none' && r.status !== 'passed'))) queueTrace(trace, redacted);
     emit({ type: 'test-end', runId, result: redacted });
     progress();
     if (opts.bail && (r.status === 'failed' || r.status === 'error')) ctrl.abort();
@@ -354,13 +370,23 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   let lastResponse: StepResponse | undefined;
   const conditionById = new Map<string, boolean>();
   const branchSkipped = new Set<string>();
+  const responseChars = new Map<string, number>();
+  let responseCharsTotal = 0;
+  const forgetResponse = (id: string) => {
+    responseCharsTotal -= responseChars.get(id) ?? 0;
+    responseChars.delete(id);
+    responses.delete(id);
+  };
   const remember = (id: string, full: StepResponse) => {
     // a big body is not kept (an if: then sees its status and headers): a long run holds at most 100 small responses
     const r = (full.text?.length ?? 0) > 262_144 ? { status: full.status, headers: full.headers } : full;
-    responses.delete(id);
+    // (and at most 4 million characters of body in all - each also held parsed, 3-10 times the text - the oldest go first)
+    forgetResponse(id);
     responses.set(id, r);
+    responseChars.set(id, r.text?.length ?? 0);
+    responseCharsTotal += r.text?.length ?? 0;
     lastResponse = r;
-    if (responses.size > 100) responses.delete(responses.keys().next().value!);
+    while (responses.size > 100 || (responseCharsTotal > 4_000_000 && responses.size > 1)) forgetResponse(responses.keys().next().value!);
   };
   for (const [id, r] of Object.entries(opts.seed?.responses ?? {})) remember(id, r);
   for (const [id, c] of Object.entries(opts.seed?.conditions ?? {})) conditionById.set(id, c);
@@ -584,7 +610,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       if (!isAbortError(e)) {
         const err = normalizeError(e);
         await record({ ...skippedResult(t, 'internal error'), status: 'error', error: err });
-      } else dep(id).resolve('skipped');
+      } else settle(id, 'skipped');
     } finally {
       running--;
       release();
@@ -625,14 +651,14 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       const id = t.id ?? t.name;
       seen.add(id);
       if (done.has(id)) {
-        dep(id).resolve(statusById.get(id)!);
+        settle(id, statusById.get(id)!);
         continue;
       }
       if (only && !only.has(id)) {
         // not run: done in the run it was seeded from (the steps after it go on as if it had just run)
         const s: TestStatus = branchSkipped.has(id) ? 'skipped' : 'passed';
         statusById.set(id, s);
-        dep(id).resolve(s);
+        settle(id, s);
         continue;
       }
       if (setupFailed) {
@@ -642,7 +668,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       if (t.finally) {
         // a step that waits for it is told so (finally steps run last), never left waiting
         finallyIds.add(id);
-        dep(id).resolve('skipped');
+        settle(id, 'skipped');
         holdFinally(fileKey, t);
         continue;
       }

@@ -197,6 +197,9 @@ export async function prepareLoadTest(cfg: LoadTestConfig, deps: Pick<LoadTestDe
   return { url, grpcCaller, flow, llm };
 }
 
+/** Live load-test recorders stay exact for 20,000 samples, then become histograms (a 30-minute run never sorts millions of samples per tick). */
+const LIVE_RECORDER = { exactUpTo: 20_000 };
+
 /** Run a load test. The target must already have variables resolved. */
 export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Promise<LoadSnapshot> {
   const { grpcCaller, flow, llm } = deps.prepared ?? (await prepareLoadTest(cfg, deps));
@@ -206,9 +209,9 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
   deps.signal?.addEventListener('abort', onAbort, { once: true });
   const signal = ctrl.signal;
 
-  const latency = new LatencyRecorder();
-  const ttft = new LatencyRecorder();
-  const gen = new LatencyRecorder();
+  const latency = new LatencyRecorder(LIVE_RECORDER);
+  const ttft = new LatencyRecorder(LIVE_RECORDER);
+  const gen = new LatencyRecorder(LIVE_RECORDER);
   const status: Record<string, number> = {};
   const errKinds: Record<string, number> = {};
   const series: LoadSnapshot['series'] = [];
@@ -216,7 +219,7 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
   let errors = 0;
   let connFail = 0;
   // HTTP: server time and connection reuse
-  const ttfbRec = new LatencyRecorder();
+  const ttfbRec = new LatencyRecorder(LIVE_RECORDER);
   let newConns = 0;
   let reusedConns = 0;
   let setupSum = 0;
@@ -238,7 +241,7 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
   let interN = 0;
   let secReq = 0;
   let secErr = 0;
-  let secLat = new LatencyRecorder();
+  let secLat = new LatencyRecorder(LIVE_RECORDER);
 
   const start = performance.now();
   const endAt = start + cfg.durationSec * 1000;
@@ -255,18 +258,18 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
   let active = 0;
   const bucket = cfg.requestsPerSecond ? new TokenBucket(cfg.requestsPerSecond) : undefined;
 
-  const per = cfg.target.kind === 'sequence' ? cfg.target.requests.map((r) => ({ name: r.name, requests: 0, errors: 0, latency: new LatencyRecorder() })) : (flow?.steps ?? []).map((name) => ({ name, requests: 0, errors: 0, latency: new LatencyRecorder() }));
+  const per = cfg.target.kind === 'sequence' ? cfg.target.requests.map((r) => ({ name: r.name, requests: 0, errors: 0, latency: new LatencyRecorder(LIVE_RECORDER) })) : (flow?.steps ?? []).map((name) => ({ name, requests: 0, errors: 0, latency: new LatencyRecorder(LIVE_RECORDER) }));
   const stepRow = new Map<string, number>();
   per.forEach((p, i) => !stepRow.has(p.name) && stepRow.set(p.name, i));
   let iterations = 0;
   let iterFailed = 0;
-  const iterLatency = new LatencyRecorder();
+  const iterLatency = new LatencyRecorder(LIVE_RECORDER);
   /** One request of a sequence: counted like a single-request test, and in its own row. */
   const step = async (i: number, request: HttpRequestSpec, cookieJar?: CookieJar) => {
     const t0 = performance.now();
     const row = per[i]!;
     try {
-      const { response } = await executeHttp(request, { signal, discardBody: true, redactor: deps.redactor, cookieJar });
+      const { response } = await executeHttp(request, { signal, discardBody: true, redactor: deps.redactor, cookieJar, poolConnections: cfg.virtualUsers });
       const ms = performance.now() - t0;
       recordHttp(response);
       bytes += response.size;
@@ -359,7 +362,7 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
           if (r.codeName === 'UNAVAILABLE' || r.codeName === 'DEADLINE_EXCEEDED') connFail++;
         }
       } else if (cfg.target.kind === 'http') {
-        const { response } = await executeHttp(cfg.target.request, { signal, discardBody: true, redactor: deps.redactor });
+        const { response } = await executeHttp(cfg.target.request, { signal, discardBody: true, redactor: deps.redactor, poolConnections: cfg.virtualUsers });
         const ms = performance.now() - t0;
         recordHttp(response);
         bytes += response.size;
@@ -463,7 +466,7 @@ export async function runLoadTest(cfg: LoadTestConfig, deps: LoadTestDeps): Prom
     series.push({ t: round((performance.now() - start) / 1000, 0), rps: secReq, p95, errors: secErr, vus: targetVUs(performance.now()) });
     secReq = 0;
     secErr = 0;
-    secLat = new LatencyRecorder();
+    secLat = new LatencyRecorder(LIVE_RECORDER);
     deps.onSnapshot?.(snapshot(false));
   }, 1000);
 

@@ -42,7 +42,7 @@ beforeAll(async () => {
   r.write('mcp-servers.json', servers([{ ...weather, name: 'Weather live' }, search('https://s.example.com/v3')]));
   const mgr = new WorkspaceManager(home.dir);
   const store = mgr.open(r.ws);
-  const server = createTestPionMcpServer({ store, secrets: new EnvSecretStore(), settings: mgr.loadSettings() });
+  const server = createTestPionMcpServer({ store, secrets: new EnvSecretStore(), settings: mgr.loadSettings(), profile: 'verbose' }); // (the complete entries: the compact list leaves out when-not and the example)
   client = new Client({ name: 'test', version: '1' });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);

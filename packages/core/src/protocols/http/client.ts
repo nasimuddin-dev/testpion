@@ -2,6 +2,7 @@ import { assertHostPath, assertUrlAllowed, getNetworkPolicy } from '../../net/po
 import { ENGINE_VERSION } from '../../version.js';
 import { baseDispatcher, ensureProxyApplied, makeDispatcher, proxyGeneration } from '../../net/proxy.js';
 import { createWriteStream, openAsBlob, readFileSync, mkdirSync, type WriteStream } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { subscribe } from 'node:diagnostics_channel';
 import { STATUS_CODES } from 'node:http';
@@ -19,6 +20,8 @@ import { watchSend } from './socket-timing.js';
 
 /** Events kept per SSE response (the stream itself can be endless). */
 const MAX_SSE_EVENTS = 10_000;
+/** ...and at most this many characters of event data kept (10,000 events of 1 MB each were 10 GB); the rest are counted, not kept. */
+const MAX_SSE_EVENT_CHARS = 32 * 1024 * 1024;
 import type { Redactor } from '../../util/redact.js';
 import { shortId } from '../../util/ids.js';
 import { levenshtein } from '../../util/text-distance.js';
@@ -30,6 +33,8 @@ export interface HttpExecOptions extends AuthContext {
   signal?: AbortSignal;
   /** When set, the full response body is streamed to a file in this directory. */
   payloadDir?: string;
+  /** A pool of at least this many connections per origin (a load test with more virtual users than the shared pool's 256 would queue the rest inside undici, counted as server time). */
+  poolConnections?: number;
   maxPreviewBytes?: number;
   /** Receives decoded chunks while the body streams (SSE, chunked responses). */
   onChunk?: (chunk: string) => void;
@@ -65,6 +70,14 @@ export interface PreparedRequest {
 let undiciMod: Promise<typeof import('undici')> | undefined;
 const undici = () => (undiciMod ??= import('undici'));
 
+/** The shared pool's connections per origin (net/proxy.ts). */
+const BASE_POOL_CONNECTIONS = 256;
+
+/** The pool a run with this many concurrent requests needs when the shared one is too small: a multiple of 256, or undefined when the shared pool does. */
+export function widePoolSize(connections: number | undefined): number | undefined {
+  return connections && connections > BASE_POOL_CONNECTIONS ? Math.ceil(connections / BASE_POOL_CONNECTIONS) * BASE_POOL_CONNECTIONS : undefined;
+}
+
 /** Connection pools by TLS / proxy settings: at most this many are kept, the least recently used is closed (a host that serves many users with different client certificates must not collect pools without end). */
 const DISPATCHERS_MAX = 32;
 const dispatchers = new Map<string, Dispatcher>(); // bounded: DISPATCHERS_MAX, least recently used
@@ -82,12 +95,14 @@ subscribe('undici:client:connected', (message) => {
 });
 
 /** Reuse connection pools per TLS / proxy / HTTP version configuration (the app-wide proxy settings apply; see net/proxy.ts). */
-function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): Dispatcher | undefined {
+function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>, connections?: number): Dispatcher | undefined {
   const s = spec.settings ?? {};
+  const wide = widePoolSize(connections);
+  if (wide && !pool) pool = { connections: wide, pipelining: 1, keepAliveTimeout: 10_000, shared: wide };
   // (a pool of its own, e.g. one connection for NTLM, is never shared: see executeHttpAttempt)
-  if (!pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
-  const key = JSON.stringify([proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
-  let d = pool ? undefined : dispatchers.get(key);
+  if (!wide && !pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
+  const key = JSON.stringify([wide, proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
+  let d = pool && !wide ? undefined : dispatchers.get(key);
   if (d) {
     // most recently used last
     dispatchers.delete(key);
@@ -105,8 +120,9 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>): D
       if (s.clientCert.caPath) connect.ca = readFileSync(assertHostPath(s.clientCert.caPath, 'Client certificate CA'));
       if (s.clientCert.passphrase) connect.passphrase = s.clientCert.passphrase;
     }
-    d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...pool });
-    if (!pool) {
+    const { shared: _shared, ...poolOptions } = (pool ?? {}) as Record<string, unknown>;
+    d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...poolOptions });
+    if (!pool || wide) {
       dispatchers.set(key, d);
       while (dispatchers.size > DISPATCHERS_MAX) {
         const oldest = dispatchers.keys().next().value!;
@@ -413,6 +429,17 @@ async function executeHttpAttempt(spec: HttpRequestSpec, opts: HttpExecOptions =
   }
 }
 
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE', 'TRACE']);
+/** undici reports a connection closed under a request as UND_ERR_SOCKET ("other side closed"); a reset or broken pipe is the same event. */
+function isStaleConnectionError(e: unknown): boolean {
+  const code = (e as { cause?: { code?: string }; code?: string } | undefined)?.cause?.code ?? (e as { code?: string } | undefined)?.code;
+  return code === 'UND_ERR_SOCKET' || code === 'ECONNRESET' || code === 'EPIPE';
+}
+/** A body that can be written again: not a stream. */
+function isReplayableBody(body: unknown): boolean {
+  return body === undefined || body === null || typeof body === 'string' || body instanceof Uint8Array || body instanceof ArrayBuffer || (typeof Blob !== 'undefined' && body instanceof Blob) || body instanceof URLSearchParams || (typeof FormData !== 'undefined' && body instanceof FormData);
+}
+
 async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions, pool?: Dispatcher): Promise<{ response: HttpResponseData; prepared: PreparedRequest }> {
   const t0 = performance.now();
   const timeline: TimelinePhase[] = [];
@@ -432,7 +459,7 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   const s = spec.settings ?? {};
   const jar = opts.cookieJar;
   const follow = s.followRedirects !== false;
-  const tSend = performance.now();
+  let tSend = performance.now();
   // With a cookie jar, redirects are followed here so cookies set by each hop (login flows) are kept.
   let current = url;
   let curMethod = method;
@@ -449,22 +476,39 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   // Postman's redirect options are applied hop by hop, so redirects are followed here when one is set
   const custom = !!(s.followOriginalMethod || s.followAuthorizationHeader || s.removeRefererOnRedirect);
   // the connection the (first) request goes over: DNS, TCP and TLS phases when it is a new one
-  const watch = watchSend(url, method);
+  let watch = watchSend(url, method);
+  let staleRetried = false;
   // undici loads with the first request, with the app's proxy and certificate settings applied
   await ensureProxyApplied();
   const { fetch: undiciFetch } = await undici();
   for (;;) {
     await assertUrlAllowed(current);
-    res = await undiciFetch(current, {
-      method: curMethod,
-      headers: headers as unknown as Record<string, string>,
-      body: (ntlmStage === 1 ? undefined : curBody) as never,
-      redirect: follow && !jar && !guarded && !custom ? 'follow' : 'manual',
-      signal: opts.signal,
-      dispatcher: pool ?? dispatcherFor(spec),
-      // duplex is required by undici for streamed (Blob/FormData) bodies
-      ...({ duplex: 'half' } as object),
-    });
+    try {
+      res = await undiciFetch(current, {
+        method: curMethod,
+        headers: headers as unknown as Record<string, string>,
+        body: (ntlmStage === 1 ? undefined : curBody) as never,
+        redirect: follow && !jar && !guarded && !custom ? 'follow' : 'manual',
+        signal: opts.signal,
+        dispatcher: pool ?? dispatcherFor(spec, undefined, opts.poolConnections),
+        // duplex is required by undici for streamed (Blob/FormData) bodies
+        ...({ duplex: 'half' } as object),
+      });
+    } catch (e) {
+      // A pooled connection the server had already closed (its keep-alive timer ran out, a load balancer recycled it): the
+      // request never reached the server, so a request that can be sent again goes once more over a new connection, as a
+      // browser does. (A busy machine lost one request of thousands this way.)
+      const sentOver = watch.result();
+      if (!staleRetried && !opts.signal?.aborted && sentOver?.times && sentOver.times.created < tSend - 1 && isStaleConnectionError(e) && IDEMPOTENT_METHODS.has(curMethod) && isReplayableBody(curBody)) {
+        staleRetried = true;
+        watch.stop();
+        watch = watchSend(current, curMethod);
+        tSend = performance.now();
+        continue;
+      }
+      watch.stop();
+      throw e;
+    }
     // NTLM: the server's challenge (message 2) is answered on the same connection; a server that does not challenge
     // (it needs no auth) keeps this response
     if (ntlm && ntlmStage === 1) {
@@ -517,12 +561,12 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   if (sent) {
     const t = sent.times;
     // a socket opened after the request started is this request's own new connection
-    const fresh = !!t && t.created >= tSend - 1;
+    const fresh = staleRetried || (!!t && t.created >= tSend - 1);
     if (fresh) {
       const phase = (name: string, from: number, to?: number) => to !== undefined && timeline.push({ name, startMs: round(from - t0), durationMs: round(to - from) });
-      phase('DNS lookup', t.created, t.lookup);
-      phase('TCP connect', t.lookup ?? t.created, t.connect);
-      if (t.connect !== undefined) phase('TLS handshake', t.connect, t.secure);
+      if (t) phase('DNS lookup', t.created, t.lookup);
+      if (t) phase('TCP connect', t.lookup ?? t.created, t.connect);
+      if (t?.connect !== undefined) phase('TLS handshake', t.connect, t.secure);
     }
     connection = { reused: !fresh, remoteAddress: sent.remoteAddress, remotePort: sent.remotePort, tlsProtocol: sent.tlsProtocol, cipher: sent.cipher, certificate: sent.certificate };
     timeline.push({ name: 'waiting (TTFB)', startMs: round(sent.sentAt - t0), durationMs: round(performance.now() - sent.sentAt) });
@@ -538,7 +582,7 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
   let payloadPath: string | undefined;
   const decoder = opts.onChunk ? new TextDecoder() : undefined;
   // Server-Sent Events: parsed as they arrive; stopping the request keeps the events received so far
-  const sse = !opts.discardBody && isEventStream(res.headers.get('content-type')) ? { parser: new SseParser(), decoder: new TextDecoder(), events: [] as SseEvent[], total: 0 } : undefined;
+  const sse = !opts.discardBody && isEventStream(res.headers.get('content-type')) ? { parser: new SseParser(), decoder: new TextDecoder(), events: [] as SseEvent[], total: 0, chars: 0 } : undefined;
   let streamStopped = false;
 
   if (res.body && method !== 'HEAD') {
@@ -583,22 +627,29 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
           const atMs = round(performance.now() - t0);
           for (const ev of sse.parser.push(sse.decoder.decode(value, { stream: true }), atMs)) {
             sse.total++;
-            if (sse.events.length < MAX_SSE_EVENTS) sse.events.push(ev);
+            if (sse.events.length < MAX_SSE_EVENTS && sse.chars < MAX_SSE_EVENT_CHARS) {
+              sse.events.push(ev);
+              sse.chars += ev.data.length;
+            }
             opts.onSseEvent?.(ev);
           }
         }
         size += value.byteLength;
         if (opts.discardBody) continue;
+        const before = chunks.length;
         if (kept < maxPreview) {
           const take = Math.min(value.byteLength, maxPreview - kept);
           chunks.push(Buffer.from(value.buffer, value.byteOffset, take));
           kept += take;
         }
-        if (opts.payloadDir) {
+        // The full body goes to a file only when it does not fit the preview (a body that fits is the preview: no folder, no file, no
+        // handle per response; a small binary one is written after the loop, because its preview is not its bytes).
+        if (opts.payloadDir && size > maxPreview) {
           if (!file) {
             mkdirSync(opts.payloadDir, { recursive: true });
             payloadPath = join(opts.payloadDir, `${shortId('resp-')}.bin`);
             file = createWriteStream(payloadPath);
+            for (const c of chunks.slice(0, before)) file.write(c);
           }
           if (!file.write(value)) await new Promise<void>((r) => file!.once('drain', () => r()));
         }
@@ -615,7 +666,14 @@ async function executeHttpAttemptOn(spec: HttpRequestSpec, opts: HttpExecOptions
 
   const truncated = size > kept;
   const bodyBuf = Buffer.concat(chunks);
+  chunks.length = 0; // (the pieces and the joined body were both held until the response was built)
   const contentType = res.headers.get('content-type') ?? '';
+  if (opts.payloadDir && !file && !opts.discardBody && !truncated && bodyBuf.length && isBinaryBody(bodyBuf, contentType)) {
+    // "Save response" needs the bytes of a small binary body too (its preview is a placeholder)
+    mkdirSync(opts.payloadDir, { recursive: true });
+    payloadPath = join(opts.payloadDir, `${shortId('resp-')}.bin`);
+    await writeFile(payloadPath, bodyBuf);
+  }
   let bodyPreviewText = opts.discardBody ? '' : decodeBody(bodyBuf, contentType);
   if (truncated) bodyPreviewText = trimToCharBoundary(bodyPreviewText);
   let json: unknown;
@@ -674,9 +732,13 @@ function bodyDecodeError(e: unknown, encoding: string | null): ApsError | undefi
   });
 }
 
+function isBinaryBody(buf: Buffer, contentType: string): boolean {
+  return /image\/|audio\/|video\/|octet-stream|application\/(zip|pdf|gzip)/i.test(contentType) || looksBinary(buf);
+}
+
 function decodeBody(buf: Buffer, contentType: string): string {
   if (!buf.length) return '';
-  if (/image\/|audio\/|video\/|octet-stream|application\/(zip|pdf|gzip)/i.test(contentType) || looksBinary(buf))
+  if (isBinaryBody(buf, contentType))
     return `<binary data ${buf.length} bytes — use "Save response" to download>`;
   const charset = /charset=([^;]+)/i.exec(contentType)?.[1]?.trim().toLowerCase();
   try {

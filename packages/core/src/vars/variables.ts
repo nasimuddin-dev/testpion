@@ -52,6 +52,9 @@ export class VariableScope {
   }
 
   /** Create a child that shares nothing but a copy of current values (runtime writes stay local). */
+  /** Counts every change to a value (a set, an unset, a replaced scope): a reader that kept the last answer knows when it is stale. */
+  version = 0;
+
   clone(): VariableScope {
     const c = new VariableScope(this.secrets, this.redactor, this.opts);
     for (const [name, m] of this.scopes) c.scopes.set(name, new Map(m));
@@ -71,6 +74,7 @@ export class VariableScope {
       for (const [k, v] of Object.entries(values)) m.set(k, v);
     }
     this.scopes.set(scope, m);
+    this.version++;
   }
 
   /** Every variable name defined in any scope (for "did you mean" when a reference has no value). */
@@ -91,10 +95,12 @@ export class VariableScope {
 
   set(key: string, value: unknown, scope: ScopeName = 'runtime'): void {
     this.scopes.get(scope)!.set(key, value);
+    this.version++;
   }
 
   unset(key: string, scope: ScopeName = 'runtime'): void {
     this.scopes.get(scope)!.delete(key);
+    this.version++;
   }
 
   has(key: string): boolean {

@@ -1,5 +1,18 @@
 import type { DebuggerExchange } from './proxy.js';
 
+/** A message of a gRPC call is an object already decoded: counted at a flat estimate rather than stringified again. */
+const GRPC_MESSAGE_ESTIMATE = 512;
+const STREAM_ITEM_OVERHEAD = 64;
+
+/** What an exchange keeps in memory that the budget counts, in characters: its bodies, its WebSocket frames, SSE events and gRPC messages. */
+function sizeOf(e: DebuggerExchange): number {
+  let n = (e.requestBody?.length ?? 0) + (e.responseBody?.length ?? 0);
+  if (e.frames) for (const f of e.frames) n += (f.text?.length ?? 0) + STREAM_ITEM_OVERHEAD;
+  if (e.events) for (const ev of e.events) n += ev.data.length + STREAM_ITEM_OVERHEAD;
+  if (e.grpc) n += (e.grpc.requests.length + e.grpc.responses.length) * GRPC_MESSAGE_ESTIMATE;
+  return n;
+}
+
 /**
  * The exchanges a Debugger session holds, with its two limits in one place: at most `maxExchanges` (the oldest go
  * first, dropped in blocks so a full session does not pay a memmove per request) and at most `maxBodyBytes` of bodies
@@ -43,7 +56,7 @@ export class DebuggerSession {
 
   /** Call after a body was attached (or replaced): charges it to the budget and lets the oldest bodies go if needed. */
   account(e: DebuggerExchange): void {
-    const n = (e.requestBody?.length ?? 0) + (e.responseBody?.length ?? 0);
+    const n = sizeOf(e);
     this.keptBytes += n - (this.kept.get(e) ?? 0);
     this.kept.set(e, n);
     while (this.keptBytes > this.maxBodyBytes && this.evictAt < this.items.length) {
@@ -51,6 +64,10 @@ export class DebuggerSession {
       if (old === e || !this.kept.get(old)) continue;
       delete old.requestBody;
       delete old.responseBody;
+      // streams count too: 500 frames or events of 64 KB each per direction were outside the budget (about 32 MB per streaming exchange)
+      delete old.frames;
+      delete old.events;
+      if (old.grpc) old.grpc = { ...old.grpc, requests: [], responses: [] };
       old.bodiesDropped = true;
       this.keptBytes -= this.kept.get(old)!;
       this.kept.set(old, 0);

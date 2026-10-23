@@ -16,6 +16,19 @@ type ServerStdio = typeof import('@modelcontextprotocol/sdk/server/stdio.js');
 type ServerHttp = typeof import('@modelcontextprotocol/sdk/server/streamableHttp.js');
 
 const has = typeof require === 'function';
+
+/**
+ * The server side of the SDK (types, the server, stdio) as one file, when the build made one (packages/cli/dist/mcp-sdk.cjs): loading it
+ * takes about 55 ms where its 500 module files take 210 ms with a warm compile cache. Set once at start; the client modules and
+ * everything else still load as files.
+ */
+let sdkBundle: { types: Types; server: ServerIndex; stdio: ServerStdio } | undefined;
+let sdkBundlePath: string | undefined;
+export function useMcpSdkBundle(path: string | undefined): void {
+  sdkBundlePath = path;
+  sdkBundle = undefined;
+}
+const bundled = () => (sdkBundlePath ? (sdkBundle ??= nodeRequire(sdkBundlePath) as NonNullable<typeof sdkBundle>) : undefined);
 let types: Types | undefined;
 let clientIndex: ClientIndex | undefined;
 let clientStdio: ClientStdio | undefined;
@@ -26,12 +39,12 @@ let serverIndex: ServerIndex | undefined;
 let serverStdio: ServerStdio | undefined;
 let serverHttp: ServerHttp | undefined;
 
-export const mcpTypes = (): Types => (types ??= has ? require('@modelcontextprotocol/sdk/types.js') : nodeRequire('@modelcontextprotocol/sdk/types.js'));
+export const mcpTypes = (): Types => (types ??= bundled()?.types ?? (has ? require('@modelcontextprotocol/sdk/types.js') : nodeRequire('@modelcontextprotocol/sdk/types.js')));
 export const mcpClient = (): ClientIndex => (clientIndex ??= has ? require('@modelcontextprotocol/sdk/client/index.js') : nodeRequire('@modelcontextprotocol/sdk/client/index.js'));
 export const mcpClientStdio = (): ClientStdio => (clientStdio ??= has ? require('@modelcontextprotocol/sdk/client/stdio.js') : nodeRequire('@modelcontextprotocol/sdk/client/stdio.js'));
 export const mcpClientHttp = (): ClientHttp => (clientHttp ??= has ? require('@modelcontextprotocol/sdk/client/streamableHttp.js') : nodeRequire('@modelcontextprotocol/sdk/client/streamableHttp.js'));
 export const mcpClientSse = (): ClientSse => (clientSse ??= has ? require('@modelcontextprotocol/sdk/client/sse.js') : nodeRequire('@modelcontextprotocol/sdk/client/sse.js'));
 export const mcpInMemory = (): InMemory => (inMemory ??= has ? require('@modelcontextprotocol/sdk/inMemory.js') : nodeRequire('@modelcontextprotocol/sdk/inMemory.js'));
-export const mcpServer = (): ServerIndex => (serverIndex ??= has ? require('@modelcontextprotocol/sdk/server/index.js') : nodeRequire('@modelcontextprotocol/sdk/server/index.js'));
-export const mcpServerStdio = (): ServerStdio => (serverStdio ??= has ? require('@modelcontextprotocol/sdk/server/stdio.js') : nodeRequire('@modelcontextprotocol/sdk/server/stdio.js'));
+export const mcpServer = (): ServerIndex => (serverIndex ??= bundled()?.server ?? (has ? require('@modelcontextprotocol/sdk/server/index.js') : nodeRequire('@modelcontextprotocol/sdk/server/index.js')));
+export const mcpServerStdio = (): ServerStdio => (serverStdio ??= bundled()?.stdio ?? (has ? require('@modelcontextprotocol/sdk/server/stdio.js') : nodeRequire('@modelcontextprotocol/sdk/server/stdio.js')));
 export const mcpServerHttp = (): ServerHttp => (serverHttp ??= has ? require('@modelcontextprotocol/sdk/server/streamableHttp.js') : nodeRequire('@modelcontextprotocol/sdk/server/streamableHttp.js'));

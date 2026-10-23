@@ -104,3 +104,16 @@ describe('stepLine', () => {
     expect(stepLine(text, 'Echo whoever')).toBe(4);
   });
 });
+
+// A-4: stepLine split the file and compiled regular expressions for every step of the file
+import { stepLine as stepLineOne, stepLines as stepLinesMany } from '@testpion/shared';
+describe('stepLines', () => {
+  it('answers like stepLine for block and inline steps, for 500 steps in a few milliseconds', () => {
+    const text = ['name: Flow', 'tests:', ...Array.from({ length: 500 }, (_, i) => `  - name: "Step ${i}" # note\n    type: log`), '  - { id: x, name: Inline one, type: log }', '  - name: Dup', '  - name: Dup'].join('\n');
+    const lineOf = stepLinesMany(text);
+    for (const n of ['Step 0', 'Step 250', 'Step 499', 'Inline one', 'Dup', 'Missing']) expect(lineOf(n), n).toBe(stepLineOne(text, n));
+    const t0 = performance.now();
+    for (let i = 0; i < 500; i++) lineOf(`Step ${i}`);
+    expect(performance.now() - t0).toBeLessThan(10);
+  });
+});

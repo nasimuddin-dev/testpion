@@ -39,10 +39,24 @@ export const MAX_SESSIONS = 8;
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
+let sweepTimer: ReturnType<typeof setTimeout> | undefined;
+/** Expired previews go on a timer too, not only when the next one arrives (up to 200 MB of text each stayed until then). */
+function scheduleSweep(): void {
+  if (sweepTimer || !SESSIONS.size) return;
+  sweepTimer = setTimeout(() => {
+    sweepTimer = undefined;
+    const now = Date.now();
+    for (const [k, v] of SESSIONS) if (now - v.at > TTL_MS) SESSIONS.delete(k);
+    scheduleSweep();
+  }, TTL_MS / 3);
+  sweepTimer.unref?.();
+}
+
 /** Keep a preview for the import that follows; expired ones are dropped first, then the oldest while there are too many. */
 export function rememberSession(id: string, s: Session, now = Date.now()): void {
   for (const [k, v] of SESSIONS) if (now - v.at > TTL_MS) SESSIONS.delete(k);
   SESSIONS.set(id, s);
+  scheduleSweep();
   // a Map keeps insertion order: the first key is the oldest
   while (SESSIONS.size > MAX_SESSIONS) SESSIONS.delete(SESSIONS.keys().next().value as string);
 }

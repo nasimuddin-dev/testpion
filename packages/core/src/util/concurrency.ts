@@ -2,7 +2,8 @@ import { ApsError } from '../errors.js';
 
 /** Counting semaphore used to bound concurrency. */
 export class Semaphore {
-  private queue: Array<() => void> = [];
+  /** Waiters in arrival order (a Set keeps it): taking the first and cancelling one are O(1), where shift() and indexOf+splice were O(n). */
+  private queue = new Set<() => void>();
   private active = 0;
 
   constructor(private limit: number) {
@@ -14,7 +15,7 @@ export class Semaphore {
   }
 
   get waiting(): number {
-    return this.queue.length;
+    return this.queue.size;
   }
 
   setLimit(n: number): void {
@@ -34,13 +35,12 @@ export class Semaphore {
         resolve(this.releaser());
       };
       const onAbort = () => {
-        const i = this.queue.indexOf(grant);
-        if (i >= 0) this.queue.splice(i, 1);
+        this.queue.delete(grant);
         reject(new ApsError('CancelledError', 'Cancelled while waiting for a worker'));
       };
       if (signal?.aborted) return onAbort();
       signal?.addEventListener('abort', onAbort, { once: true });
-      this.queue.push(grant);
+      this.queue.add(grant);
     });
   }
 
@@ -55,7 +55,11 @@ export class Semaphore {
   }
 
   private drain(): void {
-    while (this.active < this.limit && this.queue.length) this.queue.shift()!();
+    while (this.active < this.limit && this.queue.size) {
+      const next = this.queue.values().next().value!;
+      this.queue.delete(next);
+      next();
+    }
   }
 
   async run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
@@ -88,8 +92,12 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * `acquire()` waits until a request may start; `consumeTokens()` records token usage after the fact.
  */
 export class RateLimiter {
+  /** Start times of the requests of the last minute, oldest first; `reqHead` is the first one still inside the minute (the old ones are cut off in blocks). */
   private reqTimes: number[] = [];
+  private reqHead = 0;
   private tokenEvents: Array<{ t: number; n: number }> = [];
+  private tokenHead = 0;
+  private tokenSum = 0;
 
   constructor(private opts: { requestsPerSecond?: number; requestsPerMinute?: number; tokensPerMinute?: number } = {}) {}
 
@@ -101,19 +109,26 @@ export class RateLimiter {
     if (!this.enabled) return;
     for (;;) {
       const now = Date.now();
-      this.reqTimes = this.reqTimes.filter((t) => now - t < 60_000);
-      this.tokenEvents = this.tokenEvents.filter((e) => now - e.t < 60_000);
+      while (this.reqHead < this.reqTimes.length && now - this.reqTimes[this.reqHead]! >= 60_000) this.reqHead++;
+      if (this.reqHead > 1024) {
+        this.reqTimes = this.reqTimes.slice(this.reqHead);
+        this.reqHead = 0;
+      }
+      while (this.tokenHead < this.tokenEvents.length && now - this.tokenEvents[this.tokenHead]!.t >= 60_000) this.tokenSum -= this.tokenEvents[this.tokenHead++]!.n;
+      if (this.tokenHead > 1024) {
+        this.tokenEvents = this.tokenEvents.slice(this.tokenHead);
+        this.tokenHead = 0;
+      }
       let wait = 0;
       const { requestsPerSecond: rps, requestsPerMinute: rpm, tokensPerMinute: tpm } = this.opts;
-      if (rps) {
-        const lastSecond = this.reqTimes.filter((t) => now - t < 1000);
-        if (lastSecond.length >= rps) wait = Math.max(wait, 1000 - (now - lastSecond[lastSecond.length - rps]!));
+      const inMinute = this.reqTimes.length - this.reqHead;
+      if (rps && inMinute >= rps) {
+        // the request `rps` places back, when it is within the last second: the new one waits until that second is over
+        const nth = this.reqTimes[this.reqTimes.length - rps]!;
+        if (now - nth < 1000) wait = Math.max(wait, 1000 - (now - nth));
       }
-      if (rpm && this.reqTimes.length >= rpm) wait = Math.max(wait, 60_000 - (now - this.reqTimes[this.reqTimes.length - rpm]!));
-      if (tpm) {
-        const used = this.tokenEvents.reduce((s, e) => s + e.n, 0);
-        if (used >= tpm && this.tokenEvents.length) wait = Math.max(wait, 60_000 - (now - this.tokenEvents[0]!.t));
-      }
+      if (rpm && inMinute >= rpm) wait = Math.max(wait, 60_000 - (now - this.reqTimes[this.reqTimes.length - rpm]!));
+      if (tpm && this.tokenSum >= tpm && this.tokenEvents.length > this.tokenHead) wait = Math.max(wait, 60_000 - (now - this.tokenEvents[this.tokenHead]!.t));
       if (wait <= 0) {
         this.reqTimes.push(now);
         return;
@@ -123,7 +138,10 @@ export class RateLimiter {
   }
 
   consumeTokens(n: number): void {
-    if (this.opts.tokensPerMinute && n > 0) this.tokenEvents.push({ t: Date.now(), n });
+    if (this.opts.tokensPerMinute && n > 0) {
+      this.tokenEvents.push({ t: Date.now(), n });
+      this.tokenSum += n;
+    }
   }
 }
 

@@ -139,16 +139,30 @@ function nodeKeys(doc: ImportDocument, c: Collection): Map<string, { key: string
 
 const collectionKey = (doc: ImportDocument, c: Collection) => doc.sourceKey ?? `name:${c.name}`;
 
-function locate(nodes: CollectionNode[], id: string): { node: CollectionNode; list: CollectionNode[]; index: number } | undefined {
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i]!;
-    if (n.id === id) return { node: n, list: nodes, index: i };
-    if (n.kind === 'folder') {
-      const r = locate(n.items, id);
-      if (r) return r;
-    }
-  }
-  return undefined;
+interface Located {
+  node: CollectionNode;
+  list: CollectionNode[];
+  index: number;
+  /** The names from the top of the collection to the node (its own last). */
+  names: string[];
+}
+
+/**
+ * Where every node of a tree is, found by id: one walk, then each lookup is a map read. (`locate` walked the tree for every node
+ * it was asked about, from six places: a 10,000-node re-import was tens of millions of node visits.) A node replaced in place keeps
+ * its place, and nodes added at the end of a folder are not looked up by id, so one locator serves a whole apply.
+ */
+function locator(nodes: CollectionNode[]): (id: string) => Located | undefined {
+  const at = new Map<string, Located>();
+  const walk = (list: CollectionNode[], names: string[]) => {
+    list.forEach((node, index) => {
+      const mine = [...names, node.name];
+      if (!at.has(node.id)) at.set(node.id, { node, list, index, names: mine });
+      if (node.kind === 'folder') walk(node.items, mine);
+    });
+  };
+  walk(nodes, []);
+  return (id) => at.get(id);
 }
 
 /** The workspace collection an import of `doc`'s collection `c` would update, with its record, or undefined. */
@@ -169,11 +183,12 @@ export function planReimport(store: WorkspaceStore, doc: ImportDocument, c: Coll
   const keys = nodeKeys(doc, c);
   const seen = new Set<string>();
   const idBySrc = new Map(Object.entries(record.nodes).map(([nodeId, r]) => [r.src, nodeId]));
+  const locate = locator(ex.items);
   for (const { key, path, node } of keys.values()) {
     seen.add(key);
     const srcHash = hashOf(node);
     const existingId = idBySrc.get(key);
-    const found = existingId ? locate(ex.items, existingId) : undefined;
+    const found = existingId ? locate(existingId) : undefined;
     const rec = existingId ? record.nodes[existingId] : undefined;
     let action: ReimportAction;
     let reason: string;
@@ -197,19 +212,8 @@ export function planReimport(store: WorkspaceStore, doc: ImportDocument, c: Coll
     items.push({ key, path, kind: node.kind, action, reason, ...(conflict ? { conflict } : {}), ...(scripts ? { scripts } : {}) });
   }
   const gone = Object.entries(record.nodes)
-    .filter(([id, r]) => !seen.has(r.src) && locate(ex.items, id))
-    .map(([id]) => {
-      const names: string[] = [];
-      const walk = (nodes: CollectionNode[], path: string[]): boolean => {
-        for (const n of nodes) {
-          if (n.id === id) return names.push(...path, n.name) > 0;
-          if (n.kind === 'folder' && walk(n.items, [...path, n.name])) return true;
-        }
-        return false;
-      };
-      walk(ex.items, []);
-      return names;
-    });
+    .filter(([id, r]) => !seen.has(r.src) && locate(id))
+    .map(([id]) => locate(id)!.names);
   const rootHash = hashOf(rootOf(c));
   const rootAction: ReimportItem = (() => {
     if (record.root.srcHash === rootHash) return { key: 'collection', path: [], kind: 'folder' as const, action: 'skip' as const, reason: 'unchanged in the source' };
@@ -266,13 +270,14 @@ export function applyReimport(store: WorkspaceStore, doc: ImportDocument, c: Col
   let skipped = 0;
   /** Imported node id → the id it has in the collection now (for the records). */
   const placed = new Map<string, string>();
+  const locateNext = locator(next.items);
 
   const merge = (imported: CollectionNode[], into: CollectionNode[]) => {
     for (const n of imported) {
       const k = keys.get(n.id)!;
       const action = act(k.key);
       const existingId = idBySrc.get(k.key);
-      const found = existingId ? locate(next.items, existingId) : undefined;
+      const found = existingId ? locateNext(existingId) : undefined;
       if (found) {
         if (action === 'replace') {
           found.list[found.index] = replaceNode(found.node, n);
@@ -307,11 +312,12 @@ export function applyReimport(store: WorkspaceStore, doc: ImportDocument, c: Col
   const nodes: Record<string, NodeRecord> = {};
   const savedKeys = nodeKeys({ ...doc, sourceIds: undefined }, saved);
   void savedKeys;
+  const locateSaved = locator(saved.items);
   const hashAt = (id: string) => {
-    const f = locate(saved.items, id);
+    const f = locateSaved(id);
     return f ? hashOf(f.node) : '';
   };
-  for (const [nodeId, r] of Object.entries(record.nodes)) if (locate(saved.items, nodeId)) nodes[nodeId] = r;
+  for (const [nodeId, r] of Object.entries(record.nodes)) if (locateSaved(nodeId)) nodes[nodeId] = r;
   for (const k of keys.values()) {
     const id = placed.get(k.node.id);
     if (!id) continue;
