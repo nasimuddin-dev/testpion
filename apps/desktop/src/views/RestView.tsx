@@ -48,6 +48,7 @@ import { ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
 import { Button, cx, Empty, IconButton, Menu } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
+import { rehydrateResponse, pushLiveEvents, type LiveEvents } from '../lib/send-result';
 import { METHODS, RestTab, SendResult, blankRequest, savedSnapshot } from './rest/types';
 import { runRestTabCommand, saveRestTabAsTest, tabFromSaved, useRestTabs } from './rest/tabs-store';
 import { RequestEditor } from './rest/RequestEditor';
@@ -81,6 +82,7 @@ export function RestView() {
   const streams = useRef<Record<string, string>>({});
   /** Server-Sent Events arriving for requests still being sent, by send id (shown live). */
   const [liveEvents, setLiveEvents] = useState<Record<string, SseEvent[]>>({});
+  const sseLive = useRef<Record<string, LiveEvents>>({});
 
   // the shared list (lib/collections-store): fetched once for the sidebar, this view and the breadcrumbs (useCollections)
   const loadCollections = refreshCollections;
@@ -93,13 +95,19 @@ export function RestView() {
   );
   useEffect(
     () =>
-      on<Array<{ id: string; event: SseEvent }>>('http.sse', (items) =>
+      on<Array<{ id: string; event: SseEvent }>>('http.sse', (items) => {
+        // kept to the engine's limits, and handed to the finished result (the final answer does not carry the events again)
+        const touched = new Set<string>();
+        for (const it of items) {
+          sseLive.current[it.id] = pushLiveEvents(sseLive.current[it.id], [it.event]);
+          touched.add(it.id);
+        }
         setLiveEvents((cur) => {
           const next = { ...cur };
-          for (const it of items) next[it.id] = [...(next[it.id] ?? []), it.event];
+          for (const id of touched) next[id] = [...(sseLive.current[id]?.events ?? [])] as SseEvent[];
           return next;
-        }),
-      ),
+        });
+      }),
     [],
   );
 
@@ -222,7 +230,7 @@ export function RestView() {
     streams.current[id] = '';
     useApp.getState().setActivity(id, `Sending ${tab.request.method} ${tab.name}`);
     try {
-      const r = await call<SendResult & { id: string }>('http.send', {
+      const sent = await call<SendResult & { id: string }>('http.send', {
         id,
         name: tab.name,
         request: toEngineRequest(tab.request),
@@ -234,6 +242,7 @@ export function RestView() {
         assertions: tab.assertions,
         stream: tab.request.headers?.some((h) => /accept/i.test(h.key) && /event-stream/.test(h.value)),
       });
+      const r = rehydrateResponse(sent, sseLive.current[id]);
       const curl = await call<string>('http.code', { request: toEngineRequest(tab.request), environment: env, collectionId: tab.collectionId, requestId: tab.requestId, language: 'curl' }).catch(() => undefined);
       setResults((rs) => ({ ...rs, [tabId]: { ...r, curl, stream: streams.current[id] || undefined } }));
       if (r.blockedEnv?.length)
@@ -248,6 +257,7 @@ export function RestView() {
       setResults((rs) => ({ ...rs, [tabId]: { error: asError(e) } }));
     } finally {
       delete streams.current[id];
+      delete sseLive.current[id];
       setLiveEvents((cur) => {
         const next = { ...cur };
         delete next[id];

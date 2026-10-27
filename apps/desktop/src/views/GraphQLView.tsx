@@ -1,4 +1,5 @@
 import { BookOpen, ChevronLeft, Code2, FlaskConical, Network, Play, Radio, RefreshCw, Save, Square, Wand2, FileCheck2 } from 'lucide-react';
+import { rehydrateResponse } from '../lib/send-result';
 import { AiAction } from '../components/ai/AiAction';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAssistantContext } from '../lib/assistant-context';
@@ -323,7 +324,7 @@ export function GraphQLView() {
         preRequestScript: d.preRequestScript,
         testScript: d.testScript,
       });
-      setResult(r);
+      setResult(rehydrateResponse(r));
       if (r.checks?.some((c: CheckResult) => !c.passed)) setResTab('tests');
     } catch (e) {
       setResult({ error: asError(e) });

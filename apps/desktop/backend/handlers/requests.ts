@@ -1,4 +1,5 @@
 /** RPC handlers: Sending requests: HTTP (with response history), GraphQL and WebSocket. */
+import { slimSendResult } from '../send-result.js';
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { cachedAttention, collectionsHealth } from '../stats-cache.js';
 import {
@@ -40,7 +41,7 @@ import type { Backend, Handlers, HttpSendParams, GqlSendParams } from '../backen
 
 export function requestsHandlers(be: Backend): Handlers {
   return {
-    'http.send': (p: HttpSendParams) => be.httpSend(p),
+    'http.send': async (p: HttpSendParams) => slimSendResult(await be.httpSend(p)),
     /**
      * Send the same request with two environments (one after the other, scripts included) and diff the
      * responses: status, time, headers and a field-by-field body diff.
@@ -143,7 +144,7 @@ export function requestsHandlers(be: Backend): Handlers {
       const { sdl, schema } = await introspect(ctx.vars.resolveDeep(request), { redactor: ctx.redactor });
       return { sdl, summary: summarizeSchema(schema) };
     },
-    'gql.send': (p: GqlSendParams) => be.gqlSend(p),
+    'gql.send': async (p: GqlSendParams) => slimSendResult(await be.gqlSend(p), { events: false }),
     /** A ready-to-run operation for a root field of the introspected schema (SDL from gql.introspect). */
     'gql.buildOperation': ({ sdl, field, depth, requiredArgsOnly }: { sdl: string; field: string; depth?: number; requiredArgsOnly?: boolean }) =>
       buildGraphQLOperation(schemaFromSdl(sdl), field, { depth, includeOptionalArgs: !requiredArgsOnly }),
