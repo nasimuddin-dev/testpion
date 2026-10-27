@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync, watch } from 'node:fs';
 import { join, sep } from 'node:path';
 import { watchKindOfPath, type WatchKind } from '@testpion/shared';
-import { forgetOwnWrite, ownWrite } from './fsutil.js';
+import { forgetOwnWrite, ownWrite, ownWriteStat } from './fsutil.js';
 import { sha1Hex } from '../util/hash.js';
 
 /**
@@ -221,6 +221,12 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     if (own === undefined) return false;
     // the app's own change when the file is exactly what it made it (or gone, when it removed it): that is the known
     // state now. Anything else is someone else's change after it (an editor, git), reported like any outside change.
+    // the size and time the file had right after the app wrote it: still those, and nothing needs reading or hashing
+    const ownStat = own === 'gone' ? undefined : ownWriteStat(full);
+    if (ownStat && fingerprint(path, 'stat') === ownStat) {
+      seen.set(path, ownStat);
+      return true;
+    }
     const f = fingerprint(path, own.startsWith('stat:') ? 'stat' : 'hash');
     if (f === own) {
       if (f === 'gone') seen.delete(path);

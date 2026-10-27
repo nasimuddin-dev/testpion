@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { atomicWrite } from '../storage/fsutil.js';
+import { appendBoundedLine } from '../util/jsonl-append.js';
 import { dirname, join } from 'node:path';
 import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
@@ -338,12 +339,8 @@ export function lastMonitorResult(store: WorkspaceStore, id: string): MonitorRes
 }
 
 function recordResult(store: WorkspaceStore, r: MonitorResult): void {
-  const f = resultsFile(store, r.monitorId);
-  mkdirSync(dirname(f), { recursive: true });
-  appendFileSync(f, JSON.stringify(r) + '\n');
-  // keep the file bounded: rewrite the newest results when it grows past twice the limit
-  const lines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim());
-  if (lines.length > KEEP_RESULTS * 2) atomicWrite(f, lines.slice(-KEEP_RESULTS).join('\n') + '\n'); // atomic: a crash while compacting keeps the old file
+  // bounded: compacted to the newest results when the file grows past twice the limit (atomically: a crash while compacting keeps the old file)
+  appendBoundedLine(resultsFile(store, r.monitorId), JSON.stringify(r), KEEP_RESULTS, (f, text) => atomicWrite(f, text));
 }
 
 /** When a monitor should run next: `everyMinutes` after its last run, or now if it never ran. */

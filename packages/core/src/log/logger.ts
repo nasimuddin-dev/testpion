@@ -96,18 +96,33 @@ export class Logger {
   }
 }
 
-/** JSON-lines file sink with simple size-based rotation. */
+/**
+ * JSON-lines file sink with simple size-based rotation. The sink counts the bytes it wrote, so a record is one append (it was a
+ * stat and an append: at TRACE level a record is written per RPC); the size is read again every 200 records, since another process
+ * (a CLI run) may append to the same file. No handle is kept open (Windows cannot rename or remove a file that is).
+ */
 export function fileSink(path: string, maxBytes = 10 * 1024 * 1024): LogSink {
   // the log can hold what an error message carried: readable by this account only (POSIX; Windows keeps the profile's permissions)
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   let restricted = false;
+  let bytes = -1; // unknown: read at the first record
+  let sinceStat = 0;
   return (rec) => {
+    const line = JSON.stringify(rec) + '\n';
     try {
-      if ((statSync(path, { throwIfNoEntry: false })?.size ?? 0) > maxBytes) renameSync(path, `${path}.1`);
+      if (bytes < 0 || ++sinceStat >= 200) {
+        bytes = statSync(path, { throwIfNoEntry: false })?.size ?? 0;
+        sinceStat = 0;
+      }
+      if (bytes > maxBytes) {
+        renameSync(path, `${path}.1`);
+        bytes = 0;
+      }
     } catch {
       /* ignore */
     }
-    appendFileSync(path, JSON.stringify(rec) + '\n', { mode: 0o600 });
+    appendFileSync(path, line, { mode: 0o600 });
+    bytes += Buffer.byteLength(line);
     if (!restricted) {
       restricted = true;
       restrictToOwner(dirname(path), 'dir'); // Windows: this user only (best effort, once)

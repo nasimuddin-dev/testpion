@@ -154,10 +154,13 @@ export async function latestResults(
   const wanted = new Set(names);
   const out: Record<string, { status: string; runId: string; startedAt: string; latencyMs?: number }> = {};
   if (!wanted.size) return out;
+  // one name: lines without it are not parsed; the file is left as soon as every name has its result
+  const needle = wanted.size === 1 ? jsonNeedle([...wanted][0]!) : undefined;
   for (const run of store.meta.listRuns({ limit: Math.min(Math.max(opts.runs ?? 30, 1), 300) }).items) {
-    for await (const r of await readResultsFile(join(store.runDir(run.id), 'results.jsonl'))) {
+    for await (const r of await readResultsFile(join(store.runDir(run.id), 'results.jsonl'), needle === undefined ? {} : { contains: needle })) {
       if (!wanted.has(r.name) || out[r.name]) continue;
       out[r.name] = { status: r.status, runId: run.id, startedAt: run.startedAt, latencyMs: r.latencyMs ?? r.durationMs };
+      if (Object.keys(out).length === wanted.size) break;
     }
     if (Object.keys(out).length === wanted.size) break;
   }

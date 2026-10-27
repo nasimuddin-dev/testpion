@@ -107,13 +107,19 @@ interface IndexRow {
 interface ResultsIndex {
   mtimeMs: number;
   size: number;
+  /** Offset after the last line that ended in a newline: the next pass over a file that grew starts here. */
+  consumed: number;
+  /** The lines that ended in a newline. */
   rows: IndexRow[];
+  /** What the lines are for a reader: `rows`, plus a last line without a newline when it is whole (a finished file may end that way). */
+  view: IndexRow[];
 }
 
 /**
  * The index of a results file (its lines' byte positions, ids, names and statuses), built by one pass over the file and
  * kept while the file is unchanged: a page, a filter keystroke or a count then reads only the lines it shows, not the
- * whole file again. A few files are kept (the runs open on screen); a run still writing is indexed again as it grows.
+ * whole file again. A few files are kept (the runs open on screen); a run still writing is indexed from where the last pass
+ * ended, not again from the start (every page or filter call during a 50,000-result run read and parsed the whole file).
  */
 const indexes = new Map<string, ResultsIndex>(); // bounded: INDEXED_FILES
 const INDEXED_FILES = 4;
@@ -122,28 +128,35 @@ async function resultsIndex(file: string): Promise<ResultsIndex> {
   const st = statSync(file);
   const hit = indexes.get(file);
   if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit;
-  const rows: IndexRow[] = [];
-  const add = (line: Buffer, offset: number) => {
+  // a file that only grew continues from the end of its last whole line, when that line is still what was indexed
+  const grew = hit && st.size >= hit.size && sameTail(file, hit);
+  const rows: IndexRow[] = grew ? hit!.rows.slice() : [];
+  const from = grew ? hit!.consumed : 0;
+  let tail: IndexRow | undefined;
+  const parse = (line: Buffer, offset: number): IndexRow | undefined => {
     const text = line.toString('utf8');
-    if (!text.trim()) return;
+    if (!text.trim()) return undefined;
     try {
       const r = JSON.parse(text) as Partial<TestResult>;
-      rows.push({ offset, length: line.length, id: String(r.id ?? ''), name: String(r.name ?? ''), status: String(r.status ?? '') });
+      return { offset, length: line.length, id: String(r.id ?? ''), name: String(r.name ?? ''), status: String(r.status ?? '') };
     } catch {
-      /* a torn line (the run was interrupted while writing) */
+      return undefined; // a torn line (the run was interrupted while writing)
     }
   };
-  let base = 0;
+  let base = from;
+  let consumed = from;
   let carry: Buffer[] = [];
   let carried = 0;
-  for await (const chunk of createReadStream(file) as AsyncIterable<Buffer>) {
+  for await (const chunk of createReadStream(file, { start: from }) as AsyncIterable<Buffer>) {
     let start = 0;
     for (let nl = chunk.indexOf(10, start); nl !== -1; nl = chunk.indexOf(10, start)) {
       const piece = chunk.subarray(start, nl);
-      add(carry.length ? Buffer.concat([...carry, piece]) : piece, base + start - carried);
+      const row = parse(carry.length ? Buffer.concat([...carry, piece]) : piece, base + start - carried);
+      if (row) rows.push(row);
       carry = [];
       carried = 0;
       start = nl + 1;
+      consumed = base + start;
     }
     if (start < chunk.length) {
       const rest = chunk.subarray(start);
@@ -152,8 +165,8 @@ async function resultsIndex(file: string): Promise<ResultsIndex> {
     }
     base += chunk.length;
   }
-  if (carry.length) add(Buffer.concat(carry), base - carried);
-  const index = { mtimeMs: st.mtimeMs, size: st.size, rows };
+  if (carry.length) tail = parse(Buffer.concat(carry), base - carried);
+  const index: ResultsIndex = { mtimeMs: st.mtimeMs, size: st.size, consumed, rows, view: tail ? [...rows, tail] : rows };
   indexes.delete(file);
   indexes.set(file, index);
   for (const k of indexes.keys()) {
@@ -161,6 +174,24 @@ async function resultsIndex(file: string): Promise<ResultsIndex> {
     indexes.delete(k);
   }
   return index;
+}
+
+/** The last indexed line is still the same bytes at the same place (the file was appended to, not rewritten). */
+function sameTail(file: string, hit: ResultsIndex): boolean {
+  const last = hit.rows[hit.rows.length - 1];
+  if (!last) return hit.consumed === 0;
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, 'r');
+    const buf = Buffer.alloc(last.length);
+    if (readSync(fd, buf, 0, last.length, last.offset) !== last.length) return false;
+    const r = JSON.parse(buf.toString('utf8')) as Partial<TestResult>;
+    return String(r.id ?? '') === last.id && String(r.name ?? '') === last.name && String(r.status ?? '') === last.status;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
 }
 
 /** Forget the indexes (tests). */
@@ -183,7 +214,7 @@ export async function pageRunResults(store: Pick<WorkspaceStore, 'runDir'>, q: {
   const needle = q.query?.toLowerCase();
   const index = await resultsIndex(file);
   const page: IndexRow[] = [];
-  for (const row of index.rows) {
+  for (const row of index.view) {
     const review = reviews[row.id];
     if (q.status === 'reviewed' ? !review?.rating : q.status === 'unreviewed' ? !!review?.rating : q.status && q.status !== 'all' && (q.status === 'failed' ? row.status !== 'failed' && row.status !== 'error' : row.status !== q.status)) continue;
     // by name (a part of it), or by the test's id exactly (a link to one result)

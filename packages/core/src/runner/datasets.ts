@@ -8,6 +8,7 @@ import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
 import { dbKindOf, dbRecords } from './db-datasets.js';
 import { noteOwnChange } from '../storage/fsutil.js';
+import { BoundedMap } from '../util/collections.js';
 import { cursorOf, offsetOfCursor } from '../util/page.js';
 
 export type DatasetRecord = Record<string, unknown>;
@@ -311,9 +312,16 @@ export async function appendDatasetRow(
     }
   }
   appendFileSync(file, (needsNewline ? '\n' : '') + JSON.stringify(row) + '\n');
-  noteOwnChange(file); // the app's own change: the views hear of it, the watcher does not report it
-  return { path: relative(store.root, file).split(sep).join('/'), rows: await countLines(file) };
+  noteOwnChange(file, { stat: true }); // the app's own change: the views hear of it, the watcher does not report it (by size and time: the file is not read and hashed for every record)
+  // the rows are counted once per file; an append that found the file as counted adds one (a loop of appends was a pass over the whole file each)
+  const cached = appendedRows.get(file);
+  const rows = cached && cached.size === size ? cached.rows + 1 : await countLines(file);
+  appendedRows.set(file, { size: statSync(file).size, rows });
+  return { path: relative(store.root, file).split(sep).join('/'), rows };
 }
+
+/** Size and non-blank line count of a dataset after its last append (so the next append need not count the file again). */
+const appendedRows = new BoundedMap<string, { size: number; rows: number }>(64);
 
 /** Non-blank lines of a file, streamed. */
 async function countLines(file: string): Promise<number> {
