@@ -22,7 +22,8 @@ const steps = [
      if (!ok) return 'NO EDITOR';
      return 'squiggles: ' + markers() + ' | missing: ' + JSON.stringify(missing()) + ' | defined: ' + JSON.stringify(defined());`,
   ),
-  // tp is the API's name: "tp." offers the tp.test snippet, and "pm." (Postman habits) offers the same tp.* snippets, never pm.*
+  // tp is the API's name: "tp." offers the tp.test snippet and never pm.*; "pm." (Postman habits) offers the same tp.* snippets plus the pm.* names
+  // listed as "Postman name" entries that insert the tp.* name (pm.test becomes tp.test)
   step(
     'tp-completions',
     `const ed = (window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.offsetParent); if (!ed) return 'NO EDITOR';
@@ -35,8 +36,14 @@ const steps = [
      };
      const tp = await offered('tp.te');
      const pm = await offered('pm.te');
+     // accept the pm.test entry: the editor ends up with tp.test
+     ed.setValue('pm.te'); ed.setPosition(ed.getModel().getPositionAt(5)); ed.focus();
+     ed.trigger('e2e', 'editor.action.triggerSuggest', {}); await __t.sleep(1200);
+     for (let i = 0; i < 40; i++) { if (document.querySelector('.suggest-widget .monaco-list-row.focused .label-name')?.textContent.trim() === 'pm.test') break; ed.trigger('e2e', 'selectNextSuggestion', {}); await __t.sleep(80); }
+     ed.trigger('e2e', 'acceptSelectedSuggestion', {}); await __t.sleep(400);
+     const inserted = ed.getValue();
      ed.setValue(''); await __t.sleep(300);
-     return 'tp. offers tp.test: ' + tp.includes('tp.test') + ' | pm. offers tp.test: ' + pm.includes('tp.test') + ' | pm.* offered: ' + [...tp, ...pm].some((l) => l.startsWith('pm.'));`,
+     return 'tp. offers tp.test: ' + tp.includes('tp.test') + ' | tp. offers pm.*: ' + tp.some((l) => l.startsWith('pm.')) + ' | pm. offers tp.test: ' + pm.includes('tp.test') + ' | pm. offers pm.test: ' + pm.includes('pm.test') + ' | pm.test inserts: ' + inserted;`,
   ),
   // the Script packages dialog tells you how to load a package, with tp
   step(
@@ -59,7 +66,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'console-and-template-in-a-script': /^squiggles: 0 \| missing: \[\] \| defined: \["\{\{httpbin\}\}"\]$/,
-  'tp-completions': /^tp\. offers tp\.test: true \| pm\. offers tp\.test: true \| pm\.\* offered: false$/,
+  'tp-completions': /^tp\. offers tp\.test: true \| tp\. offers pm\.\*: false \| pm\. offers tp\.test: true \| pm\. offers pm\.test: true \| pm\.test inserts: tp\.test$/,
   'packages-footer-says-tp': /^footer: In a script: const auth = tp\.require\('name'\);/,
   'missing-variable-in-a-body-still-shows': /^missing: \["\{\{nobodyDefinedThis\}\}"\] \| defined: \["\{\{httpbin\}\}"\]$/,
 });

@@ -254,7 +254,7 @@ module.exports = withExpect(
     ),
     'tests-empty-area': /^New HTTP test \| .*New suite \| Import… ‖ Expand all \| Collapse all ‖ Export… ‖ Run in CI…$/,
     'history-row': /^Open( \| Open request)? \| Open trace ‖ Copy link ‖ Save as test… ‖ Delete…$/,
-    environment: X('Open ‖ Make active ‖ Copy link | Export… ‖ Rename | Duplicate ‖ Delete…'),
+    environment: X('Open ‖ Make active ‖ Copy link | Export… ‖ Rename | Duplicate | Move up | Move down ‖ Delete…'),
     'look-comfortable-dark': /^density (comfortable|undefined) theme dark$/,
     'look-compact-dark': /^density compact \| fits true$/,
     'look-compact-light': /^theme light \| items \d+$/,

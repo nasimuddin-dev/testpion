@@ -20,7 +20,7 @@ const steps = [
      const chaining = [...document.querySelectorAll('main [aria-label="Collections"] button')].find((b) => b.textContent.includes('JSONPlaceholder'));
      chaining.click(); await __t.sleep(600);
      const keys = [...document.querySelectorAll('main input')].filter((i) => i.offsetParent).map((i) => i.value).filter((v) => v === 'userId');
-     return 'collections with counts: ' + list.filter((t) => /\\d$/.test(t)).length + ' | heading: ' + document.querySelector('main h2')?.textContent.trim() + ' | userId row: ' + (keys.length === 1);`,
+     return 'collections with counts: ' + list.filter((t) => /\\d$/.test(t)).length + ' | heading: ' + [...document.querySelectorAll('main h2')].find((h) => h.offsetParent)?.textContent.trim() + ' | userId row: ' + (keys.length === 1);`,
   ),
   step(
     'edit-and-save',

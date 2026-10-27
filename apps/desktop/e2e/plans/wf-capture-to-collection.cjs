@@ -69,7 +69,7 @@ const steps = [
      const b = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((x) => x.offsetParent && x.textContent.trim() === 'Capture'), 5000);
      if (!b) return 'NO CAPTURE BUTTON';
      await __t.real.click(b); await __t.sleep(300);
-     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Reverse proxy for one API/.test(m.textContent)), 3000);
+     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Capture traffic for one API/.test(m.textContent)), 3000);
      await __t.esc();
      return 'reverse proxy: ' + !!item;`,
   ),

@@ -33,6 +33,7 @@ const H = `
       await __t.real.click(item);
     } else {
       const b = await __t.waitFor(() => (dl(id) && !dl(id).disabled ? dl(id) : null), 15000); if (!b) return 'NO DOWNLOAD ' + id;
+      b.scrollIntoView({ block: 'center' }); await __t.sleep(300); // Home's Activity card is below the first screen: a real click needs it on screen
       await __t.real.click(b);
     }
     const t = await newSaved(seen, 20000);

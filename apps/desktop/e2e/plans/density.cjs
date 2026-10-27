@@ -12,7 +12,8 @@ const H = `
     return e.clientHeight > 0 && e.scrollHeight > e.clientHeight + 1 && !/auto|scroll/.test(cs.overflowY);
   }).map((e) => (e.getAttribute('aria-label') || e.textContent || e.tagName).trim().slice(0, 30));
   const tour = async () => { const out = []; for (const v of VIEWS) { await __t.view(v); await __t.sleep(300); const c = clipped(); out.push(v + ':' + c.length + (c.length ? '(' + c.slice(0, 3).join('/') + ')' : '')); } return out.join(' '); };
-  const fieldH = () => Math.round(vis('.field')[0]?.getBoundingClientRect().height ?? 0);
+  // a standard form field (the toolbar and search fields are small by design: field-sm, h-7)
+  const fieldH = () => Math.round(vis('.field').find((e) => !/field-sm|(^|\\s)h-\\d/.test(e.className))?.getBoundingClientRect().height ?? 0);
   const pickSettings = async (labelText) => {
     await __t.view('Settings'); await __t.tab('Appearance');
     vis('main button').find((b) => b.textContent.trim() === labelText)?.click(); await __t.sleep(200);

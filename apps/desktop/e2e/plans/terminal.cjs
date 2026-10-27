@@ -161,7 +161,7 @@ const steps = [
     `const before = tabs().length;
      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })); await __t.sleep(500);
      const input = document.querySelector('[role=dialog] input'); if (!input) return 'NO INPUT';
-     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Terminal: New'); input.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(400);
+     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'New terminal'); input.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(400);
      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await __t.sleep(300);
      await __t.waitFor(() => tabs().length === before + 1, 15000);
      return 'terminals: ' + before + ' → ' + tabs().length;`,
@@ -275,7 +275,7 @@ const prepare = (ws) => {
 module.exports = withExpect(
   steps,
   {
-    'open-terminal-tab': /capabilities \{"shell":true\} \| xterm: true \| tabs: 1 \| shell: \w+ \| cwd is the workspace: true \| focused: true/,
+    'open-terminal-tab': /capabilities \{"shell":true,"localFiles":true\} \| xterm: true \| tabs: 1 \| shell: \w+ \| cwd is the workspace: true \| focused: true/,
     'testpion-version': /^printed \d+\.\d+\.\d+/,
     'echo-hello': /^echoed hello-from-tp$/,
     'find-file-link': /^link at \{"x":\d+,"y":\d+\}$/,

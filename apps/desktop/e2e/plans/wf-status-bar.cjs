@@ -56,8 +56,8 @@ const steps = [
   step(
     'tools-reverse-proxy',
     `${H}
-     const r = await tool('Reverse proxy'); if (r !== 'ok') return r;
-     const shown = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].some((d) => /reverse proxy for one API/.test(d.textContent)), 3000);
+     const r = await tool('Capture traffic for one API'); if (r !== 'ok') return r;
+     const shown = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].some((d) => /Capture traffic for one API/.test(d.textContent)), 3000);
      const view = localStorage.getItem('aps.view');
      await __t.esc();
      return 'reverse proxy: ' + !!shown + ' | in: ' + view;`,

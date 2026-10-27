@@ -88,7 +88,7 @@ const steps = [
      const panel = await __t.waitFor(() => document.querySelector('aside[aria-label="AI assistant"]'), 5000); if (!panel) return 'NO ASSISTANT';
      await __t.sleep(1500);
      const text = panel.innerText.replace(/\\s+/g, ' ');
-     return 'title: ' + /Design a toolset/.test(text) + ' | ai-generated notice: ' + /AI-generated/.test(text) + ' | asked about: ' + /support agent/.test(text) + ' | not saved yet: ' + vis('[data-toolset-save]')[0]?.disabled;`,
+     return 'title: ' + /Design a toolset/.test(text) + ' | ai-generated notice: ' + /AI-generated/.test(text) + ' | asked about: ' + [...panel.querySelectorAll('textarea, input')].some((i) => /support agent/.test(i.value)) + ' | nothing sent yet: ' + /Nothing has been sent/.test(text) + ' | not saved yet: ' + vis('[data-toolset-save]')[0]?.disabled;`,
   ),
 ];
 
@@ -102,7 +102,7 @@ module.exports = withExpect(
     'serve-box-has-the-commands':
       /^stdio: testpion mock-mcp mocks\/weather\.mcp-mock\.yaml \| http: testpion mock-mcp mocks\/weather\.mcp-mock\.yaml --http -p 3333 \| config: true \| copy buttons: 3$/,
     'yaml-view-edits-the-raw-file': /^language: yaml \| has ping: true \| raw edit saved: Answers pong \(edited raw\)\. \| back to form: get_forecast, get_alerts, ping$/,
-    'generate-with-ai-asks-then-opens-the-assistant': /^title: true \| ai-generated notice: true \| asked about: true \| not saved yet: true$/,
+    'generate-with-ai-asks-then-opens-the-assistant': /^title: true \| ai-generated notice: true \| asked about: true \| nothing sent yet: true \| not saved yet: true$/,
   },
   { settings: { assistantProvider: 'demo', assistantModel: 'demo' } },
 );
