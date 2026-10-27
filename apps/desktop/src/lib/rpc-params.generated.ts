@@ -169,6 +169,7 @@ export interface RpcParamTypes {
   'http.parseCurl': RpcCommonParams & { text: string };
   'http.parseSnippet': RpcCommonParams & { text: string };
   'http.send': RpcCommonParams & { request: Record<string, unknown>; id?: string; name?: string; preRequestScript?: string; testScript?: string; assertions?: unknown[] };
+  'http.unresolved': RpcCommonParams & { request: Record<string, unknown>; preRequestScript?: string };
   'import.apply': RpcCommonParams & { sessionId: string; keepPm?: boolean; replaceSpec?: boolean };
   'import.cancel': RpcCommonParams & { sessionId: string };
   'import.preview': RpcCommonParams & { files?: unknown[]; text?: string; url?: string; folderName?: string; keepPm?: boolean };
@@ -281,6 +282,9 @@ export interface RpcParamTypes {
   'secrets.allow': RpcCommonParams & { environment: string; refs?: string[] };
   'secrets.refs': RpcCommonParams & { environment: string };
   'settings.describeCertificates': RpcCommonParams & { pem: string };
+  'settings.export': RpcCommonParams;
+  'settings.import': RpcCommonParams & { doc: Record<string, unknown> };
+  'settings.reset': RpcCommonParams & { keys?: string[] };
   'sio.connect': RpcCommonParams & { url: string; path?: string; headers?: unknown[]; auth?: string };
   'stats.requests': RpcCommonParams & { collectionId: string };
   'terminal.ack': RpcCommonParams & { id: string; parsed: number; epoch?: number };
@@ -340,9 +344,10 @@ export interface RpcParamTypes {
   'ws.open': RpcCommonParams & { ref?: string };
   'ws.openProblem': RpcCommonParams;
   'ws.rename': RpcCommonParams & { ref: string; name: string };
+  'ws.revealFile': RpcCommonParams & { path: string };
   'ws.search': RpcCommonParams & { query: string };
   'ws.update': RpcCommonParams & { name?: string; description?: string; variables?: unknown[] };
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 328;
+export const RPC_METHOD_COUNT = 333;

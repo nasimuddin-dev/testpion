@@ -8,7 +8,7 @@ import { BoundedMap } from '../util/collections.js';
 const handedOff = new BoundedMap<string, unknown>(3);
 /** An object nobody took (a format check of a file that was never imported) is let go after this long. */
 const KEEP_MS = 20_000;
-let expiry: ReturnType<typeof setTimeout> | undefined;
+let expiry: ReturnType<typeof setTimeout> | undefined; // bounded: one timer that empties the 3-entry map
 
 /** `text` is `JSON.stringify(value)`: the next reader of exactly that text gets the object. */
 export function handOff(text: string, value: unknown): string {
