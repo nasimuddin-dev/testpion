@@ -6,6 +6,7 @@ import { finishDocument } from './pipeline.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
 import { parseYaml } from '../util/lazy-yaml.js';
+import { takeParsed } from './parsed.js';
 
 /** A Postman v2.0 / v2.1 collection, and its environment and globals files, as import documents. */
 
@@ -75,10 +76,14 @@ function pmSettings(b: Any | undefined, where: string, findings: Findings): Http
 
 /** Postman v2.1 / v2.0 → document. `{{vault:x}}` references and mock-server URLs are reported. */
 export function parsePostman(text: string): ImportDocument {
-  const d = JSON.parse(text);
+  return parsePostmanValue(takeParsed(text), text);
+}
+
+/** `parsePostman` of a collection that is already an object (a converted v1 or v3 file: no text written and read again). `text` is the file it came from (its size, the Vault and mock-server references in it). */
+export function parsePostmanValue(d: any, text: string): ImportDocument {
   const findings = new Findings();
   const version = /\/v?(\d+\.\d+(?:\.\d+)?)\//.exec(String(d.info?.schema ?? ''))?.[1];
-  const doc = newDocument('postman', text, { tool: 'Postman', ...(version ? { version } : {}), scriptTool: 'postman' });
+  const doc = { ...newDocument('postman', '', { tool: 'Postman', ...(version ? { version } : {}), scriptTool: 'postman' }), bytes: Buffer.byteLength(text) };
 
   /** The item's auth (undefined: inherits); an unsupported scheme adds a note and, for a request, a disabled placeholder header. */
   const authOf = (raw: unknown, where: string, headers?: KeyValue[]): AuthConfig | undefined => {

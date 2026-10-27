@@ -1,6 +1,7 @@
 import { parseYaml } from '../util/lazy-yaml.js';
 import { Findings, type ImportDocument } from './model.js';
-import { parsePostman } from './postman-import.js';
+import { parsePostmanValue } from './postman-import.js';
+import { takeParsed } from './parsed.js';
 import type { Any } from './import-helpers.js';
 
 /**
@@ -85,7 +86,7 @@ export function postmanV1ToV21(d: Any): Any {
 }
 
 export function parsePostmanV1(text: string): ImportDocument {
-  const doc = parsePostman(JSON.stringify(postmanV1ToV21(JSON.parse(text))));
+  const doc = parsePostmanValue(postmanV1ToV21(JSON.parse(text)), text);
   doc.version = '1';
   doc.findings.unshift({ code: 'NOTE', severity: 'info', where: [], message: 'A Postman collection v1 file (the first export format): it was converted to the current structure. Re-export it from Postman as v2.1 if you still have the app', reportOnly: true });
   return doc;
@@ -342,10 +343,10 @@ function postmanV3ToV21(files: V3File[], name: string, findings: Findings): Any 
 }
 
 export function parsePostmanV3(text: string): ImportDocument {
-  const d = JSON.parse(text) as { postmanV3: 1; name?: string; key?: string; files: V3File[] };
+  const d = takeParsed<{ postmanV3: 1; name?: string; key?: string; files: V3File[] }>(text);
   const findings = new Findings();
   const v21 = postmanV3ToV21(d.files, d.name ?? 'Postman collection', findings);
-  const doc = parsePostman(JSON.stringify(v21));
+  const doc = parsePostmanValue(v21, text);
   doc.version = '3';
   if (d.key) doc.sourceKey = d.key;
   doc.fileCount = d.files.length;

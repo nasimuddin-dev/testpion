@@ -9,6 +9,7 @@ import { Findings, newDocument, type ImportDocument } from './model.js';
 import { collectionOf, kv, type Any } from './import-helpers.js';
 import { finishDocument } from './pipeline.js';
 import type { ImportScriptsMode, ImportScriptsSummary } from './import-scripts.js';
+import { takeParsed } from './parsed.js';
 
 /**
  * Bruno (collection export JSON, a single .bru request, a collection folder read by bru.ts) as an import document.
@@ -151,7 +152,7 @@ export function processEnvNames(text: string): Set<string> {
 /** Bruno JSON export / .bru file → document. */
 export function parseBruno(text: string): ImportDocument {
   // a single .bru request file, or a Bruno JSON export
-  const d: Any = looksLikeBru(text) ? bruFilesToBrunoExport([{ path: 'request.bru', text }], 'Bruno import') : JSON.parse(text);
+  const d: Any = looksLikeBru(text) ? bruFilesToBrunoExport([{ path: 'request.bru', text }], 'Bruno import') : takeParsed(text);
   const findings = new Findings();
   const doc = newDocument('bruno', text, { tool: 'Bruno', scriptTool: 'bruno' });
   const saved: { grpc: LibraryItem[]; websocket: LibraryItem[] } = { grpc: [], websocket: [] };

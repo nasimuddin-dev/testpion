@@ -1,4 +1,5 @@
 import { bruFilesToBrunoExport } from './bru.js';
+import { handOff } from './parsed.js';
 import { detectFormat } from './detect.js';
 import { ocFilesToBundle } from './opencollection-import.js';
 import { looksLikePostmanV3 } from './postman-versions.js';
@@ -21,6 +22,9 @@ export interface RawImportFile {
   path: string;
   data: Buffer | string;
 }
+
+/** An assembled folder as the text the importers read; the object itself is handed to the importer, which would parse the text again (parsed.ts). */
+const handOffJson = (value: unknown): string => handOff(JSON.stringify(value), value);
 
 export interface ImportInput {
   /** A name for the input (the file or folder name). */
@@ -142,16 +146,16 @@ export function expandImportFiles(files: RawImportFile[], opts: { folderName?: s
     const name = (root ? base(root) : opts.folderName) ?? (inputs.length ? `Collection ${inputs.length + 1}` : 'Collection');
     const kind = roots.get(root)!;
     let text: string;
-    if (kind === 'bruno') text = JSON.stringify(bruFilesToBrunoExport(list, list.some((x) => x.path === 'bruno.json') ? undefined : name));
-    else if (kind === 'yaak') text = JSON.stringify(yaakFilesToExport(list));
+    if (kind === 'bruno') text = handOffJson(bruFilesToBrunoExport(list, list.some((x) => x.path === 'bruno.json') ? undefined : name));
+    else if (kind === 'yaak') text = handOffJson(yaakFilesToExport(list));
     else if (kind === 'postman-v3') {
       if (!looksLikePostmanV3(list)) {
         skipped.push({ path: root || name, why: 'not a Postman collection folder' });
         continue;
       }
       const key = v3.get(root) || cloudIds.get(root) || undefined;
-      text = JSON.stringify({ postmanV3: 1, name, ...(key ? { key } : {}), files: list });
-    } else text = JSON.stringify(ocFilesToBundle(list, name));
+      text = handOffJson({ postmanV3: 1, name, ...(key ? { key } : {}), files: list });
+    } else text = handOffJson(ocFilesToBundle(list, name));
     inputs.push({ name, text, source: root || opts.folderName || name, fileCount: list.length });
   }
 
