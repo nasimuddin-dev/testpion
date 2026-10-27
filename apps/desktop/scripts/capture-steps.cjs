@@ -320,6 +320,8 @@ module.exports = async function run(win) {
     const root = (await invoke('ws.current')).path;
     const abs = join(root, 'tests', ...path.split('/'));
     mkdirSync(dirname(abs), { recursive: true });
+    // the list is the sidebar's Tests tab (the view may have been left on its Runs tab)
+    await js(`__cap.all('main [role=tab]').find((t) => __cap.text(t) === 'Tests')?.click(); true`);
     for (let i = 0; ; i++) {
       writeFileSync(abs, text);
       try {
@@ -389,6 +391,18 @@ module.exports = async function run(win) {
     await js(`__cap.input(__cap.one(${J(FILTER)}), ''); true`);
     await until(`!__cap.one(${J(FILTER)}).value`, 'the filter to clear');
   };
+  /**
+   * The blank tabs (a fresh profile starts with one; the guided tour's step opens another before the page loads again):
+   * closed one by one, each ✕ is shown only while the tab is hovered but a click works whenever it is in the page.
+   */
+  const closeBlankTabs = async () => {
+    const blank = `__cap.all('[role=tablist][aria-label="Open requests"] [aria-label="Close New HTTP request"]', document)`;
+    for (let i = 0; i < 8 && (await js(`(${blank}).length > 0`)); i++) {
+      await js(`(${blank})[0].click(); true`);
+      await sleep(150);
+    }
+    await until(`!(${blank}).length`, 'the blank tabs to close');
+  };
   const sendAndWait = async () => {
     await click('Send', 'main button');
     await until(`/\\b200 OK\\b/.test(__cap.screen()) && /Time \\d+ ms/.test(__cap.screen())`, 'the response');
@@ -399,8 +413,7 @@ module.exports = async function run(win) {
   // a token first (the collection's requests use it): its access token (a JWT) decoded in the JWT tab
   await openRequest('Get access token');
   // the blank tab a fresh profile starts with
-  await js(`__cap.one('[aria-label="Close New HTTP request"]')?.click(); true`);
-  await until(`!__cap.one('[aria-label="Close New HTTP request"]')`, 'the blank tab to close');
+  await closeBlankTabs();
   await sendAndWait();
   await responseTab('JWT');
   await until(`__cap.screen().includes('Decoded locally')`, 'the decoded token');
@@ -1294,8 +1307,7 @@ tests:
   await nav('Collections');
   await showExplorer();
   // the blank tab a new workspace starts with
-  await js(`__cap.one('[aria-label="Close New HTTP request"]')?.click(); true`);
-  await until(`!__cap.one('[aria-label="Close New HTTP request"]')`, 'the blank tab to close');
+  await closeBlankTabs();
   await clickSel(`${EXPLORER} button[aria-label="Collapse all"]`, 'Collapse all');
   const streams = `__cap.all('${EXPLORER} [data-tree-row]').find((b) => __cap.text(b).startsWith('Live streams (SSE)'))`;
   await until(streams, 'the Live streams (SSE) collection');
