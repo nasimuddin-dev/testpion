@@ -10,7 +10,10 @@ import { createElement, lazy, memo, Suspense, useEffect, useMemo, useRef, useSta
 import { lazyMemoView, type LazyView } from './lib/memo-view';
 import { call, modKey, on } from './api';
 import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
-import { useApp, type ViewId } from './store';
+import { openRef } from './lib/open-ref';
+import { LABEL } from './lib/vocabulary';
+import { POSTMAN_WORDS } from '@testpion/shared';
+import { toastError, useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
 import { focusedScriptEditor } from './lib/script-editor';
@@ -260,13 +263,13 @@ export default function App() {
         // certificates that expire within 7 days: a reminder once a day
         setTimeout(remindExpiringCertificates, 4000);
       } catch (error) {
-        useApp.getState().toast(`Could not finish starting TestPion: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        toastError(error, 'Could not finish starting TestPion');
       } finally {
         // The shell remains usable if a workspace service is temporarily down.
         setReady(true);
       }
     })();
-    const off = on('run.error', (p: { error: { message: string } }) => useApp.getState().toast(`Run failed: ${p.error.message}`, 'error'));
+    const off = on('run.error', (p: { error: { message: string } }) => toastError(p.error, 'Run failed'));
     const offMonitors = watchMonitorAlerts();
     const offRuns = watchRunNotifications();
     const offSecrets = watchSecretRefs();
@@ -404,7 +407,8 @@ export default function App() {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
       { id: 'new-graphql', label: 'New GraphQL request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
-      { id: 'new-ai', label: 'New AI test', hint: 'AI Lab', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'new-ai', label: LABEL.newAiPrompt, hint: 'AI Lab: prompts and model comparison', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'new-ai-test', label: 'New AI test file', hint: 'Tests: an AI test that passes or fails, for CI', run: () => s.openIntent('tests', { newFile: 'llm' }) },
       { id: 'run-test', label: 'Run test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
       { id: 'run-suite', label: 'Run suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
       { id: 'rerun-last', label: 'Rerun last run', hint: keyLabel('rerun-last', bindings), run: () => void runAgain('last') },
@@ -425,8 +429,8 @@ export default function App() {
       { id: 'toggle-logs', label: 'Show application logs', run: () => s.set({ logsOpen: true, bottomTab: 'logs' }) },
       ...(shellCapable
         ? [
-            { id: 'terminal-new', label: 'Terminal: New', hint: keyLabel('new-terminal', bindings), run: newTerminal },
-            { id: 'terminal-focus', label: 'Terminal: Focus', hint: keyLabel('terminal', bindings), run: focusTerminal },
+            { id: 'terminal-new', label: 'New terminal', hint: keyLabel('new-terminal', bindings), run: newTerminal },
+            { id: 'terminal-focus', label: 'Focus the terminal', hint: keyLabel('terminal', bindings), run: focusTerminal },
           ]
         : []),
       ...(aiOn ? [{ id: 'assistant', label: 'Ask AI assistant', hint: keyLabel('assistant', bindings), run: () => askAssistant() }] : []),
@@ -457,7 +461,7 @@ export default function App() {
       { id: 'm-new-env', label: 'New environment', hint: 'File', run: () => void runMenuCommand('new-environment') },
       { id: 'm-open-examples', label: 'Open examples workspace', hint: 'Help', run: () => void runMenuCommand('open-examples') },
       { id: 'm-ci', label: 'Run in CI (GitHub Actions, GitLab, Azure, Jenkins)…', hint: 'Tests', run: () => useApp.getState().set({ ci: {} }) },
-      { id: 'm-record', label: 'Capture: Reverse proxy for one API…', hint: 'Debugger', run: () => openReverseProxyCapture() },
+      { id: 'm-record', label: LABEL.captureReverseProxy, hint: 'Debugger: a reverse proxy in front of one API', run: () => openReverseProxyCapture() },
       { id: 'm-var-usages', label: 'Find variable usages / rename a variable everywhere…', hint: 'Environments', run: () => useApp.getState().set({ variableUsages: true }) },
       { id: 'm-openapi-diff', label: 'Compare OpenAPI versions (breaking changes)…', hint: 'Tests', run: () => useApp.getState().set({ openapiDiff: true }) },
       { id: 'm-api-coverage', label: 'API coverage (OpenAPI operations tested)…', hint: 'Tests', run: () => useApp.getState().set({ apiCoverage: {} }) },
@@ -470,6 +474,9 @@ export default function App() {
       { id: 'm-exp-ws', label: 'Export workspace (older format)', hint: 'File', run: () => void runMenuCommand('export-workspace') },
       { id: 'm-exp-bundle', label: 'Export a TestPion bundle…', hint: 'File', run: () => void runMenuCommand('export-bundle') },
       { id: 'm-import-bundle', label: 'Import a TestPion bundle…', hint: 'File', run: () => void runMenuCommand('import-bundle') },
+      { id: 'run-collection', label: 'Run a collection…', hint: 'Collections', run: () => s.openIntent('collections', { run: true }) },
+      { id: 'mock-server', label: 'Start a mock server for a collection…', hint: 'Collections', run: () => s.openIntent('collections', { mock: true }) },
+      { id: 'open-globals', label: 'Open globals', hint: 'Environments', run: () => void openRef({ kind: 'environment', scope: 'globals' } as never) },
       { id: 'm-migrate', label: 'Migrate from another tool (Postman, Insomnia, Bruno …)…', hint: 'File', run: () => openImport({ migrate: true }) },
     ];
     // every command has an icon: its own, or a generic one for a command added without
@@ -481,6 +488,11 @@ export default function App() {
     cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the default views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
       cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
+    // Postman's words find the row they map to (shared/postman-words.ts)
+    for (const c of cmds) {
+      const aliases = POSTMAN_WORDS.filter((w) => w.paletteId === c.id).flatMap((w) => [w.theirs.toLowerCase(), ...w.aliases]);
+      if (aliases.length) c.aliases = aliases;
+    }
     return cmds;
   }, [workspace, shellCapable, rail, bindings, aiOn]);
   // what is on screen offers its own commands (Quick Open's @, and first among the > commands): a request's script

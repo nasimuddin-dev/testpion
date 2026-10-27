@@ -67,7 +67,7 @@ describe('CLI: import preview', () => {
     const one = cli('import-report', out.receipts[0], '-w', ws, '--markdown');
     expect(one.out).toContain('# Import report');
     // and undone, one after the other
-    const u = cli('import-undo', ...out.receipts, '-w', ws);
+    const u = cli('import-undo', ...out.receipts, '-w', ws, '--yes');
     expect(u.status, u.err).toBe(0);
     expect(names()).toEqual([]);
   });
@@ -82,7 +82,7 @@ describe('CLI: import preview', () => {
     expect(out.report.summary.items).toBe(2);
     expect(out.notes).toBeUndefined();
     expect(readFileSync(reportFile, 'utf8')).toContain('# Import report: Postman');
-    const u = cli('import-undo', out.importId, '-w', ws, '--json');
+    const u = cli('import-undo', out.importId, '-w', ws, '--yes', '--json');
     expect(data(u.out)[0].trashed[0]).toMatchObject({ kind: 'collection', name: 'Beta' });
   });
 

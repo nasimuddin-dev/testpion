@@ -137,6 +137,7 @@ const steps = [
      await __t.view('Home'); await __t.sleep(800);
      const card = document.querySelector('section[aria-label="Needs attention"]'); if (!card) return 'NO CARD';
      const row = await __t.waitFor(() => card.querySelector('[data-problem="run"]'), 6000); if (!row) return 'NO RUN PROBLEM';
+     row.scrollIntoView({ block: 'center' }); await __t.sleep(300);
      await __t.real.rightClick(row);
      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Explain and fix failures with AI…'), 3000); if (!item) return 'NO MENU ITEM';
      await __t.real.click(item);

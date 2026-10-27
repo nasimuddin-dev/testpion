@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Command } from 'commander';
 import { buildProgram } from '../../packages/cli/src/index.js';
+import { LEGACY } from '../../packages/cli/src/groups.js';
 
 const ROOTS = ['packages/core/src', 'packages/cli/src', 'packages/shared/src', 'apps/desktop/src', 'apps/desktop/backend', 'apps/desktop/electron', 'docs'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'public', '.vitepress']);
@@ -30,7 +31,9 @@ const PROSE = new Set(['command', 'commands', 'command-line', 'markers', 'block'
 const child = (c: Command, name: string) => c.commands.find((x) => x.name() === name || x.aliases().includes(name));
 
 /** `testpion a b c` → the problem with it, or undefined when the command exists. */
-function problem(program: Command, words: string[]): string | undefined {
+function problem(program: Command, spoken: string[]): string | undefined {
+  // the old spelling (`openapi-lint`) is the command it became (`lint openapi`): groups.ts keeps it working
+  const words = LEGACY[spoken[0]!] ? [...LEGACY[spoken[0]!]!.split(' '), ...spoken.slice(1)] : spoken;
   let cmd = program;
   for (const [i, w] of words.entries()) {
     const next = child(cmd, w);

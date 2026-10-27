@@ -69,6 +69,12 @@ const SEEN = 'tour.firstLoop';
 
 /** The tour was shown in this workspace (finished, skipped or closed): it does not open by itself again. */
 export function tourSeen(): boolean {
+  // screenshot and e2e runs start in the Examples workspace: the tour stays shut unless a plan asks (localStorage aps.capture.tour = 1)
+  try {
+    if (window.aps?.capture && localStorage.getItem('aps.capture.tour') !== '1') return true;
+  } catch {
+    /* storage unavailable */
+  }
   const k = scopedKey(SEEN);
   if (!k) return true; // no workspace yet: never auto-open
   try {
@@ -110,6 +116,7 @@ export const useTour = create<TourState>((set) => ({
 }));
 
 /** Whether Home should open the tour by itself: a workspace whose first loop is not done, the tour never shown here. */
-export function shouldAutoStart(progress: OnboardingStep[], opts: { examples: boolean }): boolean {
-  return !opts.examples && progress.length > 0 && progress.some((s) => !s.done) && !tourSeen();
+export function shouldAutoStart(progress: OnboardingStep[], _opts: { examples?: boolean } = {}): boolean {
+  // (the Examples workspace is where a new window starts: the tour is offered there once, like anywhere)
+  return progress.length > 0 && progress.some((s) => !s.done) && !tourSeen();
 }

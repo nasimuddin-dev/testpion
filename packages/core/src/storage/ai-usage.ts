@@ -166,7 +166,7 @@ export function checkAiCaps(store: WorkspaceStore | undefined, s: AiSettings | u
       details: { aiLimit: limit, setup: { assistant: true } },
       suggestions: [
         'Send less: a folder instead of a collection, or the Metadata only privacy level.',
-        `Raise or remove the cap in Settings ▸ AI assistant ▸ Limits (CLI and CI: "ai": { "${String(limit.cap)}": … } in the app's settings.json, 0 or absent for no cap).`,
+        `Raise or remove the cap in Settings ▸ AI assistant ▸ Limits (CLI and CI: testpion settings set ai.${String(limit.cap)}=<number>; 0 means no cap).`,
       ],
     });
   if (s.maxTokensPerCall && est.tokens > s.maxTokensPerCall)

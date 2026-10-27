@@ -23,7 +23,7 @@ import {
   type MonitorResult,
   type WorkspaceStore,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { resolveSelection } from '../run.js';
 import { parseGates } from '@testpion/core';
@@ -136,7 +136,7 @@ export function registerMonitorCommands(program: Command): void {
       withWorkspace(o.workspace, (store) => {
         const m = findMonitor(store, ref);
         deleteMonitor(store, m.id);
-        console.log(green(`Removed monitor "${m.name}"`));
+        respond({ removed: m.name, id: m.id }, () => console.log(green(`Removed monitor "${m.name}"`)));
       }),
     );
 

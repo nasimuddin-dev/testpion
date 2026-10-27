@@ -132,11 +132,42 @@ Every command that takes `--json` prints **one envelope** on stdout, whatever ha
 
 **`--non-interactive`** (the default with `CI` or `TESTPION_NON_INTERACTIVE=1`): a command never waits for input; where it would (a token read from the terminal by `jwt -`) it fails at once with a hint. When a command fails and stdout is not a terminal, stderr suggests the `--json` form.
 
-`testpion agent-info` prints its JSON as before (it has no `--json`).
+**`--json` is on every command**, so an agent never has to know which ones take it (on a command that already printed JSON it only wraps it in the envelope; on the plumbing git calls, `merge-driver` and `git textconv`, and on `mcp-server`, whose stdout is not ours, it is accepted and ignored). `testpion agent-info` prints plain JSON as before, and `--json` puts the same object in the envelope's `data`. `mock` and `mock-graphql` with `--json` print one line when they listen: `{ type: "listening", data: { url } }`.
+
+**`--yes`** on every command that deletes or overwrites, the CLI twin of `confirm: true` on the MCP tools that confirm (`item delete`, `import-undo`, `import --undo`, `git resolve`, `git sync`, `git restore`, `git discard-item`, `git stash push / apply / pop / drop`, `git undo`, `git unshare-session`, `git fix`, `git large --track`, `git codeowners --write`, `tidy`, `vars rename`, `vars move`, `replace --apply`, `flow edit --remove`, `ai apply`, `ai undo`, `integration-suite / tests-from-spec / generate-data / rag capture --overwrite`, `agents init --force`, `settings set / reset`, `workspace delete`, `trash empty`). On a terminal the command asks "Continue?"; when it cannot ask (`--non-interactive`, CI, a pipe) it refuses before anything changed, exit code 2, and answers what the MCP tool answers: `data: { confirmationRequired: true, wouldDo, hint }`. Show the person `wouldDo`, then repeat the command with `--yes`; `--dry-run` shows what it would change. The commands whose whole purpose is to send or spend what you named (`run`, `rag run`, `security run`, `ai attempt-fix` …) ask nothing.
+
+**`--max-cost <usd>`** on the commands that call the AI model (`ai run`, `ai triage`, `ai script`, `generate tests`, `tidy --ai`, `flow generate`, `security generate`, `openapi-drift --ai`, `search --ask`, `rag generate-dataset / draft-references / author`): the command refuses before anything is sent when one call could cost more (the context plus the most the answer may use, at the price in Settings ▸ Model pricing; a model on this computer is free). The MCP tools take `max_cost_usd` the same way, and every AI result carries `usage` and `costUsd`.
+
+**One structure.** Related commands live under one word, and `testpion --help` lists them in groups: `lint` (`lint <collection>`, `lint tests`, `lint openapi`), `mock` (`mock <collection>`, `mock mcp`, `mock graphql`) and `openapi` (`diff`, `ops`, `drift`, `coverage`, `fuzz`). The old spellings `lint-tests`, `openapi-lint`, `mock-mcp`, `mock-graphql`, `openapi-diff`, `openapi-ops`, `openapi-drift`, `coverage` and `fuzz` keep working, and so does `openapi lint`. A collection called `tests`, `openapi`, `mcp` or `graphql` is reached with `lint collection tests` / `mock collection mcp`. `node packages/cli/dist/index.js` works like `bin/testpion.js`.
+
+**A wrong command** answers with a hint: a misspelt command says `Did you mean testpion agent-info?` (and in the `--json` envelope, `errors[].hint`).
+
+## `settings`
+
+The app's settings (the ones in Settings in the window, per computer) for scripts and agents: `testpion settings get [key] [--describe] --json` shows them with the defaults filled in (never a secret, never the lists the app keeps for itself), `testpion settings set defaultTimeoutMs=60000 ai.dailyBudgetUsd=2 theme=dark` changes them (lists are comma separated; `--dry-run` shows the change), `testpion settings reset <keys…> | --all` puts them back. MCP: `get_settings`, `set_settings` (asks for `confirm: true`).
+
+## `auth token`
+
+`testpion auth token <collection> [request] [-e environment] [--cached] --json` runs the OAuth 2.0 grant of a collection, or of a request (its own auth, else its folder's or the collection's) now, as **Get token** does in the Authorization tab: whether the token call works, when the token ends, its scope, and the token masked. MCP: `auth_token`.
+
+## Environment variables {#environment-variables}
+
+| Variable | What it does |
+|---|---|
+| `TESTPION_HOME` | The app's data folder (settings, workspaces, secrets) instead of the default one |
+| `TESTPION_NON_INTERACTIVE=1` | Never wait for input (also set by `CI`) |
+| `TESTPION_SECRET_<NAME>` | The value of a secret variable (the CLI has no OS keychain) |
+| `TESTPION_AI_PROVIDER`, `TESTPION_AI_MODEL` (`_SMALL`, `_LARGE`), `TESTPION_AI_LOCAL_ONLY` | The AI model the CLI and CI use |
+| `TESTPION_NO_PROXY`, `TESTPION_USE_SYSTEM_CA`, `TESTPION_CA_FILE` | Outbound proxy off, the OS certificate store, extra CA certificates |
+| `TESTPION_BLOCK_PRIVATE_NETWORKS`, `TESTPION_ALLOW_HOSTS`, `TESTPION_ALLOW_PROCESSES` | The network policy for shared use ([privacy](/security/privacy)) |
+| `TESTPION_REGISTER_LINKS` | Register the `testpion://` links with the operating system when the desktop app starts |
+| `TESTPION_DEBUGGER_CERTS` | Where the HTTP Debugger keeps its root certificate |
+| `TESTPION_EXAMPLES` | The examples workspace the web host serves |
+| `TESTPION_WORKSPACE` | The workspace the Terminal panel starts in |
 
 ## Paging {#paging}
 
-A command that lists something that can grow long comes a page at a time, the same way everywhere (and like the MCP tools): `-n/--limit` (how many; 200 unless the command says otherwise, at most 1,000), and `--cursor <c>` (the `nextCursor` of the page before) or `--offset <n>` (the same as a number). A list that was cut says so: in text mode a last line `200 of 2500 requests shown; more: --cursor o5k`, and with `--json` the envelope has `page` (`{ total, limit, truncated, nextCursor }`) and a warning with the same line, while `data` stays the plain list, so a script that reads `.data` is unchanged. A list that fits has no `page`. To read all of it, repeat the command with `nextCursor` until `page` is gone.
+A command that lists something that can grow long comes a page at a time, the same way everywhere (and like the MCP tools): `-n/--limit` (how many; 100 unless the command says otherwise, at most 500: the same numbers as the MCP tools), and `--cursor <c>` (the `nextCursor` of the page before) or `--offset <n>` (the same as a number). A list that was cut says so: in text mode a last line `100 of 2500 requests shown; more: --cursor o5k`, and with `--json` the envelope has `page` (`{ total, limit, truncated, nextCursor }`) and a warning with the same line, while `data` stays the plain list, so a script that reads `.data` is unchanged. A list that fits has no `page`. To read all of it, repeat the command with `nextCursor` until `page` is gone.
 
 ```bash
 testpion history flaky -w my-workspace --json -l 500                       # page.nextCursor says where the next page starts
@@ -572,7 +603,7 @@ Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is T
 | `--dry-run` | report what would be written, write nothing |
 | `--json` | `{ workspace, root, dryRun, files: [{ target, path, status, reason? }] }`; status is `created`, `updated`, `unchanged` or `skipped` |
 
-Exit code `2` when a file was skipped (broken markers, a folder where the file should be) or a target is unknown. `testpion agents-md` (0.45) is the same as `agents init`; `agents-md --stdout` prints the AGENTS.md part. The app does the same in **Settings ▸ AI agents ▸ Write AGENTS.md** and agents with the `agents_init` MCP tool. See [Use TestPion from AI agents](/ai-testing/mcp-server#agents-md).
+Exit code `2` when a file was skipped (broken markers, a folder where the file should be) or a target is unknown. `testpion agents-md` (0.45) is the same as `agents init`; `agents-md --stdout` prints the AGENTS.md part. The app does the same in **Settings ▸ AI agents (MCP) ▸ Write AGENTS.md** and agents with the `agents_init` MCP tool. See [Use TestPion from AI agents](/ai-testing/mcp-server#agents-md).
 
 ```bash
 testpion agents init -w my-workspace --targets agents,claude,cursor --json

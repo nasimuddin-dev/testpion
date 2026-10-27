@@ -8,7 +8,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
-import { EXIT, CliError, bold, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
+import { EXIT, CliError, bold, dim, green, printJson, respond, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
@@ -97,7 +97,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
       withWorkspace(o.workspace, (store, ephemeral) => {
         needWorkspace(ephemeral);
         const ok = wrap(() => unlabel(store, { labels: name, record: o.result, metric: o.metric }));
-        console.log(ok ? `${green('Removed')} the label` : dim('There was no such label.'));
+        respond({ removed: !!ok }, () => console.log(ok ? `${green('Removed')} the label` : dim('There was no such label.')));
       }),
     );
 

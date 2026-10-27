@@ -46,11 +46,11 @@ A command that prints a lot (`cat` of a 50 MB log, `yes`) never freezes the wind
 
 ## Run in terminal
 
-Where the app shows a command line (Settings ▸ **AI agents** for Claude Code, an MCP toolset's **Serve** box), the terminal icon next to **Copy** puts the command into the terminal. It is typed, not run: read it, then press <kbd>Enter</kbd>.
+Where the app shows a command line (Settings ▸ **AI agents (MCP)** for Claude Code, an MCP toolset's **Serve** box), the terminal icon next to **Copy** puts the command into the terminal. It is typed, not run: read it, then press <kbd>Enter</kbd>.
 
 ## Coding agents in the terminal
 
-Claude Code, Codex or Gemini CLI started in the Terminal work in the workspace folder and can run `testpion` commands (`testpion agent-info` tells them what they need). To give them TestPion's MCP tools, use the command of Settings ▸ **AI agents** (**Run in terminal** there types `claude mcp add testpion -- …` for you). TestPion has no MCP tool for the terminal: an agent already has a shell of its own.
+Claude Code, Codex or Gemini CLI started in the Terminal work in the workspace folder and can run `testpion` commands (`testpion agent-info` tells them what they need). To give them TestPion's MCP tools, use the command of Settings ▸ **AI agents (MCP)** (**Run in terminal** there types `claude mcp add testpion -- …` for you). TestPion has no MCP tool for the terminal: an agent already has a shell of its own.
 
 ## Desktop app only
 
@@ -58,5 +58,5 @@ The terminal runs programs on your computer, so only the desktop app offers it. 
 
 ## Limits
 
-- `testpion` in the terminal can't read from standard input on Windows (a limitation of running the app in command-line mode). For `testpion mcp-server`, which talks over standard input, agents start `TestPion --mcp-server` as Settings ▸ AI agents shows.
+- `testpion` in the terminal can't read from standard input on Windows (a limitation of running the app in command-line mode). For `testpion mcp-server`, which talks over standard input, agents start `TestPion --mcp-server` as Settings ▸ AI agents (MCP) shows.
 - Windows 10 1809 or later (ConPTY).

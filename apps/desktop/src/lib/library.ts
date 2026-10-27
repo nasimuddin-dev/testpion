@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { asError, call, on } from '../api';
-import { useApp } from '../store';
+import { call, on } from '../api';
+import { useApp, toastError } from '../store';
 import type { Library, LibraryItem } from '../types';
 import { libraryOps, type FolderListOps } from '../components/FolderList';
 import { uid } from './format';
@@ -29,7 +29,7 @@ export function useLibrary<T>(kind: string) {
         if (saved.warnings?.length)
           useApp.getState().toast(`Saved, but ${saved.warnings.slice(0, 3).join(', ')}${saved.warnings.length > 3 ? ' …' : ''} holds a secret typed in: it is now in a workspace file. Use a secret {{variable}} instead.`, 'error');
       } catch (e) {
-        useApp.getState().toast(`Could not save: ${asError(e).message}`, 'error');
+        toastError(e, 'Could not save');
         void reload();
       }
     },

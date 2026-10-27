@@ -15,7 +15,7 @@ const H = `
 const fresh = [
   'fresh-workspace',
   `main:const { BrowserWindow } = require('electron'); const w = BrowserWindow.getAllWindows()[0];
-   await w.webContents.executeJavaScript("window.aps.invoke('ws.create', { name: 'E2E tour' })");
+   await w.webContents.executeJavaScript("localStorage.setItem('aps.capture.tour', '1'); window.aps.invoke('ws.create', { name: 'E2E tour' })");
    w.webContents.reload(); await new Promise((r) => setTimeout(r, 6000)); await w.webContents.executeJavaScript(require('node:fs').readFileSync(require.resolve('./helpers.js'), 'utf8')); await w.webContents.executeJavaScript(require('./real-input.cjs').PAGE); return 'reloaded';`,
   false,
 ];

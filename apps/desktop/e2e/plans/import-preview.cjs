@@ -39,7 +39,7 @@ const steps = [
      document.querySelector('[aria-label^="Import (OpenAPI"]').click();
      const choose = await __t.waitFor(() => btn(/^Choose files/), 3000); if (!choose) return 'NO DIALOG';
      const cancel = btn(/^Cancel$/);
-     const primary = choose.className.includes('brand-gradient') && !btn(/^Preview pasted/)?.className.includes('brand-gradient');
+     const primary = choose.className.includes('primary-gradient') && !btn(/^Preview pasted/)?.className.includes('primary-gradient');
      const migrate = !!dlg().querySelector('[data-import-migrate]');
      if (!cancel) return 'NO BUTTON Cancel';
      await __t.real.click(cancel);

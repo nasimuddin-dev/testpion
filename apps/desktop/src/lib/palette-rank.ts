@@ -10,6 +10,8 @@ export interface RankedRow {
   hint?: string;
   detail?: string;
   group?: string;
+  /** Other words that find the row ("runner" for Run collection). */
+  aliases?: string[];
 }
 
 /** How well a row matches the typed words (0 best), or undefined when it does not match. */
@@ -18,7 +20,7 @@ export function paletteScore(row: RankedRow, text: string): number | undefined {
   if (!q) return 0;
   const words = q.split(' ');
   const label = row.label.toLowerCase();
-  const other = [row.hint, row.detail, row.group].filter(Boolean).join('\n').toLowerCase();
+  const other = [row.hint, row.detail, row.group, ...(row.aliases ?? [])].filter(Boolean).join('\n').toLowerCase();
   if (!words.every((w) => label.includes(w) || other.includes(w))) return undefined;
   if (label.trim() === q) return 0;
   if (label.startsWith(q)) return 1;

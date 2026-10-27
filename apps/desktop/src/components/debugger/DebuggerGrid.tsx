@@ -207,7 +207,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         return (
           <span className="truncate">
             {e.source === 'reverse' && (
-              <span className="mr-1" data-source="reverse" title="Captured by the reverse proxy (Capture ▸ Reverse proxy for one API)">
+              <span className="mr-1" data-source="reverse" title="Captured by the reverse proxy (Capture traffic for one API)">
                 <Badge>reverse</Badge>
               </span>
             )}

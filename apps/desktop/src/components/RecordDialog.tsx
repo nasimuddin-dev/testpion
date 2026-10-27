@@ -63,7 +63,7 @@ export function RecordDialog({ onClose }: { onClose(): void }) {
     });
   };
   return (
-    <Modal title="Capture: reverse proxy for one API" onClose={onClose} width={760}>
+    <Modal title="Capture traffic for one API" onClose={onClose} width={760}>
       <div className="flex flex-col gap-3">
         <p className="text-sm text-muted">
           TestPion listens on this computer and forwards every request to the API. Point your app or any client at the local address instead of the API, use it as usual, and the requests and responses appear here

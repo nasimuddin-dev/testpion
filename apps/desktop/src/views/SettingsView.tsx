@@ -11,6 +11,7 @@ import { toastError, useApp } from '../store';
 import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
+import { NETWORK_DISCLOSURES } from '../lib/network-disclosures';
 import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
 import { OutputActions } from '../components/output/OutputFrame';
 import { diagnosticsOutputSpec } from '../components/output/diagnostics-specs';
@@ -148,7 +149,7 @@ export function SettingsView() {
               <Field label="Default timeout (ms)" hint="How long a request or a test may take before it is stopped, in milliseconds, unless the request or test sets its own. 30000 (30 seconds) unless changed; 0 waits forever.">
                 <Input type="number" min={0} step={1000} placeholder="30000" value={s.defaultTimeoutMs} onChange={(e) => set({ defaultTimeoutMs: Math.max(0, Math.round(Number(e.target.value) || 0)) })} />
               </Field>
-              <Field label="Maximum response preview (MB)" hint="Larger bodies are streamed to disk and truncated in the viewer; use the download arrow on the response bar for the full payload.">
+              <Field label="Maximum response preview (MB)" hint="Larger bodies are streamed to disk and truncated in the viewer; use the download arrow on the response bar for the full body.">
                 <Input type="number" step="0.5" value={s.maxPreviewBytes / 1024 / 1024} onChange={(e) => set({ maxPreviewBytes: Math.max(0.1, Number(e.target.value)) * 1024 * 1024 })} />
               </Field>
               <Field label="Log level" hint="Secrets are redacted at every level, so DEBUG/TRACE are safe to enable.">
@@ -178,12 +179,18 @@ export function SettingsView() {
               >
                 <Textarea className="field mono min-h-20" placeholder={'e.g.\nAPI_BASE_URL\nSTAGING_TOKEN'} value={(s.envVariables ?? []).join('\n')} onChange={(e) => set({ envVariables: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })} />
               </Field>
-              <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
-                <div className="font-medium">Telemetry</div>
-                <p className="text-muted">
-                  Telemetry is <b>disabled</b> and not implemented in this build. TestPion never transmits request bodies, prompts, responses or credentials anywhere except to the endpoints and providers you
-                  explicitly call.
-                </p>
+              <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-2" data-network-disclosures>
+                <div className="font-medium">What leaves this computer</div>
+                <p className="text-muted">There is no telemetry and no account. Besides the requests you send, TestPion makes only these calls:</p>
+                {NETWORK_DISCLOSURES.map((d) => (
+                  <div key={d.id} className="flex flex-col gap-0.5" data-disclosure={d.id}>
+                    <div className="font-medium">{d.title}</div>
+                    <p className="text-muted">
+                      To {d.to}. Carries: {d.carries} {d.when} Off: {d.off}.
+                    </p>
+                    {d.id === 'updates' && <Toggle checked={s.checkForUpdates !== false} onChange={(checkForUpdates) => set({ checkForUpdates })} label="Check for updates when the app starts" />}
+                  </div>
+                ))}
               </div>
               <ScriptTrustPanel />
               <div className="rounded-md border border-line p-3 text-sm flex flex-col gap-1">
@@ -210,13 +217,13 @@ export function SettingsView() {
               <p className="text-sm text-muted">
                 Estimated cost = input tokens × input price + output tokens × output price. Prices change — enter the current prices from your provider and bump the version when they change. Reports record which price
                 version was used. No prices are built in. A price for a model (<span className="mono">gpt-4o-mini</span>) also applies to its dated versions (
-                <span className="mono">gpt-4o-mini-2024-07-18</span>); then press <b>Save</b>.
+                <span className="mono">gpt-4o-mini-2024-07-18</span>); then press <b>Save settings</b>.
               </p>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted">
-                    <th className="py-1">Provider (kind/id or *)</th>
-                    <th>Model (glob)</th>
+                    <th className="py-1">Provider (name, or * for any)</th>
+                    <th>Model (name; * matches a family)</th>
                     <th>Input $/1M</th>
                     <th>Output $/1M</th>
                     <th>Version</th>

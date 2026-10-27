@@ -32,6 +32,10 @@
   --brand-from: #2f7bff;
   --brand-to: #8b5cff;
   --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+  /* the primary button: white text on it is at least 4.5:1 in both themes (tests/unit/ui-friendliness.test.ts checks it) */
+  --primary-from: #2563eb;
+  --primary-to: #6d3df0;
+  --primary-gradient: linear-gradient(135deg, var(--primary-from), var(--primary-to));
   /* the logo's highlight colours */
   --brand-cyan: #1ff0ff;
   --brand-magenta: #f04fe0;
@@ -96,7 +100,7 @@
   --accent: oklch(0.68 0.18 257);
   --accent-hover: oklch(0.74 0.16 257);
   --accent-soft: oklch(0.3 0.085 262);
-  --accent-fg: oklch(1 0 0);
+  --accent-fg: oklch(0.16 0.04 270);
   --ok: oklch(0.78 0.15 160);
   --bad: oklch(0.7 0.18 22);
   --warn: oklch(0.83 0.15 80);

@@ -206,7 +206,7 @@ export function WebSocketView() {
       const line: WsMessage = { id: `err-${Date.now()}`, time: Date.now(), direction: 'system', data: text, size: text.length };
       setMessages((m) => [...m, line]);
       setSelected(line);
-      useApp.getState().toast(`Could not connect: ${err.message || 'the connection failed'}`, 'error');
+      toastError(e, 'Could not connect');
     }
   };
   // saved messages: pick one into the editor, save the current one under a name, delete one
@@ -619,7 +619,7 @@ export function WebSocketView() {
               </div>
             ) : tab === 'auth' ? (
               <div className="h-full flex flex-col">
-                <p className="px-2 py-1.5 text-xs text-muted border-b border-line">The handshake's auth payload (JSON), e.g. {'{ "token": "{{accessToken}}" }'}. Values may use {'{{variables}}'}.</p>
+                <p className="px-2 py-1.5 text-xs text-muted border-b border-line">The handshake's auth data (JSON), e.g. {'{ "token": "{{accessToken}}" }'}. Values may use {'{{variables}}'}.</p>
                 <div className="flex-1 min-h-0">
                   <CodeEditor language="json" value={d.auth ?? ''} onChange={(auth) => setD({ ...d, auth })} placeholder='{ "token": "{{accessToken}}" }' />
                 </div>

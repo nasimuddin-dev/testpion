@@ -69,7 +69,7 @@ const DESTRUCTIVE = new Set([
 ]);
 
 /** Write tools that give the same result when called again with the same arguments. */
-const IDEMPOTENT = new Set(['set_environment_variable', 'reorder_environments', 'write_test_file', 'set_request_checks']);
+const IDEMPOTENT = new Set(['set_environment_variable', 'reorder_environments', 'write_test_file', 'set_request_checks', 'create_folder', 'save_monitor']);
 
 const WORDS: Record<string, string> = { jwt: 'JWT', openapi: 'OpenAPI', ci: 'CI', mcp: 'MCP', llm: 'LLM', grpc: 'gRPC', graphql: 'GraphQL', api: 'API', testpion: 'TestPion' };
 
@@ -101,7 +101,14 @@ export function toolAnnotations(name: string, write: boolean): ToolAnnotations {
 }
 
 /** The guide for agents: how the workspace is laid out, which tools to use for what, and the test file format. */
-export function agentGuide(o: { workspace: string; checkTypes: string[]; readOnly?: boolean }): string {
+export function agentGuide(o: { workspace: string; checkTypes: string[]; readOnly?: boolean; toolDetails?: ReadonlyMap<string, string> }): string {
+  // what the tool descriptions left out to stay short (tool-contract.ts), by tool
+  const details = o.toolDetails?.size
+    ? `\n## Tool details\n\nWhat the tool descriptions leave out to stay short, by tool.\n\n${[...o.toolDetails]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, text]) => `### \`${name}\`\n\n${text}`)
+        .join('\n\n')}\n`
+    : '';
   return `# TestPion for AI agents
 
 Workspace: **${o.workspace}**. TestPion is an API client and test runner (REST, GraphQL, gRPC, WebSocket / Socket.IO / MQTT / Kafka, MCP, LLMs). Secret values never leave the machine: tools return variable *names*, and saved requests keep secrets as \`{{variables}}\`.${o.readOnly ? '\n\nThis server is **read-only**: tools that send requests or change files are not available.' : ''}
@@ -176,7 +183,7 @@ tests:
 Other types: \`graphql\` (\`endpoint\`, \`query\`, \`variables\`), \`grpc\` (\`target\`, \`method\`, \`message\`), \`websocket\` / \`socketio\` / \`mqtt\`, \`mcp\` (\`server\`, \`tool\`, \`arguments\`), \`llm\` (\`provider\`, \`model\`, \`prompt\`). Suites are \`*.suite.yaml\` (\`tests: [rest, graphql]\`, \`setup\`, \`teardown\`, \`concurrency\`, \`retries\`, \`environment\`).
 
 \`write_test_file\` checks a file (it must parse and use known check types) before saving it, and \`run_tests\` with \`paths\` runs it.
-`;
+${details}`;
 }
 
 interface PromptDef {

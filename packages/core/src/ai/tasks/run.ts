@@ -8,6 +8,7 @@
  * (never applied here) → record the call in the usage ledger.
  */
 import { extractCodeBlock, type ItemRef } from '@testpion/shared';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ApsError, normalizeError } from '../../errors.js';
 import type { Collection, PriceEntry, TokenUsage } from '../../model/types.js';
 import type { ExecServices } from '../../runner/execute.js';
@@ -113,6 +114,8 @@ export interface AiTaskRequest {
    */
   images?: ChatImage[];
   allowImages?: boolean;
+  /** Refuse before sending when this call could cost more than this many US dollars (the price table; a local model is free). */
+  maxCostUsd?: number;
 }
 
 /** An image of a preview: what it is, not the bytes (a small one carries a data URI to show a thumbnail). */
@@ -165,6 +168,8 @@ export interface AiTaskResult {
   calls: number;
   usage: TokenUsage;
   costUsd?: number;
+  /** The price table has this model: `costUsd` is a real figure (without it a cost of 0 means unknown). */
+  priceKnown: boolean;
   ms: number;
   proposal?: Proposal;
   /** The preview without the messages (`dryRun` has them). */
@@ -291,6 +296,38 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
 
 let counter = 0;
 
+const costCap = new AsyncLocalStorage<number>();
+let processCostCap: number | undefined;
+
+/** The cap of a whole process (the CLI's `--max-cost`: one command per process); `undefined` removes it. */
+export function setAiCostCap(maxCostUsd: number | undefined): void {
+  processCostCap = typeof maxCostUsd === 'number' && Number.isFinite(maxCostUsd) && maxCostUsd >= 0 ? maxCostUsd : undefined;
+}
+
+/** Run `fn` with a per-call cost cap (USD) on every AI call inside it: the MCP tools' `max_cost_usd`, the CLI's `--max-cost`. */
+export function withAiCostCap<T>(maxCostUsd: number | undefined, fn: () => T): T {
+  return typeof maxCostUsd === 'number' && Number.isFinite(maxCostUsd) && maxCostUsd >= 0 ? costCap.run(maxCostUsd, fn) : fn();
+}
+
+/** Refuse a call that could cost more than the caller allowed, before anything is sent. */
+function checkCallCost(preview: AiPreview, cap: number | undefined): void {
+  if (cap === undefined || preview.local) return;
+  const most = preview.estimate.maxCostUsd;
+  const usd = (n: number) => `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
+  if (most === undefined)
+    throw new ApsError('ConfigurationError', `This model has no price, so the cost cap of ${usd(cap)} cannot be kept`, {
+      why: 'The cost of a call comes from the price table (Settings ▸ Model pricing). Nothing was sent.',
+      suggestions: ['Add a price for this model in Settings ▸ Model pricing, or run without a cap.'],
+      details: { aiLimit: { cap: 'maxCostUsd', limit: cap }, setup: { assistant: true } },
+    });
+  if (most > cap)
+    throw new ApsError('ValidationError', `This call could cost up to ${usd(most)}, over the cap of ${usd(cap)}`, {
+      why: 'The estimate is the context, plus the most the answer may use, at the price of the model. Nothing was sent.',
+      suggestions: ['Send less: a folder instead of a collection, or the Metadata only privacy level.', 'Or raise the cap, or pick a cheaper model.'],
+      details: { aiLimit: { cap: 'maxCostUsd', limit: cap, estimate: most } },
+    });
+}
+
 /**
  * Run an AI task (see the module comment). `prepared` is the call already built by `prepareAiTask(deps, req)` for this very
  * request (the RAG judge builds it first to read the cache): it is used as it is, not built again.
@@ -331,8 +368,9 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
   const { messages, ...summary } = preview;
   const base = { task: def.id, taskVersion: def.version, title: def.title, provider: provider.config.name, model, aiGenerated: true as const };
   // a dry run's messages go to the window: the pictures are in `preview.images` (thumbnails), not twice in the messages
-  if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, ms: 0, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, dryRun: true };
+  if (req.dryRun) return { ...base, text: '', truncated: false, problems: [], repairs: 0, calls: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, priceKnown: false, ms: 0, preview: { ...preview, messages: preview.messages.map(({ images: _i, ...m }) => m) }, dryRun: true };
   checkAiCaps(deps.store, aiSettingsForSurface(deps.settings.ai, deps.surface), { tokens: preview.estimate.inputTokens + maxOutputTokens, costUsd: preview.estimate.maxCostUsd });
+  checkCallCost(preview, req.maxCostUsd ?? costCap.getStore() ?? processCostCap);
 
   const started = Date.now();
   const at = new Date().toISOString();
@@ -503,7 +541,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
       });
       if (deps.store && !req.noProposal) saveProposal(deps.store, proposal);
     }
-    return { ...base, model: modelUsed, text, code, value, truncated, finishReason, problems, repairs, calls, usage, costUsd: cost, ms: Date.now() - started, proposal, preview: summary };
+    return { ...base, model: modelUsed, text, code, value, truncated, finishReason, problems, repairs, calls, usage, costUsd: cost, ms: Date.now() - started, proposal, preview: summary, priceKnown: cost !== undefined };
   } catch (e) {
     const n = normalizeError(e);
     outcome = n.kind === 'CancelledError' || deps.signal?.aborted ? 'cancelled' : 'error';

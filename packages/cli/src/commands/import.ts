@@ -125,7 +125,7 @@ export function registerImportCommands(program: Command): void {
     .option('--folder <path>', 'for a request: folder path inside the collection, e.g. "Auth / Tokens"')
     .option('--name <name>', 'for a request: its name (default: method and path)')
     .option('--no-contract-checks', 'for an OpenAPI document: do not add openapi contract checks to the requests')
-    .option('--replace-spec', 'for an OpenAPI / AsyncAPI document: replace a different document of the same name in specs/ (it goes to the trash; default: keep both, the new one as name-2)')
+    .option('--replace-spec', 'for an OpenAPI / AsyncAPI document: replace a different document of the same name in specs/ (it goes to Recently deleted; default: keep both, the new one as name-2)')
     .option('--keep-pm', "for Postman / Insomnia: keep pm.* in scripts (default: they are converted to TestPion's tp.*; pm.* runs either way)")
     .option('--lift-tests', 'turn simple tests (a status, a response time, a header, a JSON field) of the scripts into assertions')
     .option('--new-copy', 'when the source was imported before, add another collection instead of updating the one it made')

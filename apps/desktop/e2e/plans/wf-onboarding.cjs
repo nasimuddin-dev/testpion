@@ -23,7 +23,7 @@ const steps = [
      const until = async (fn, ms) => { for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 200))) { const v = fn(); if (v) return v; } };
      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', ctrlKey: true, altKey: true, bubbles: true }));
      const c = await until(() => card()?.querySelectorAll('[data-get-started] li').length === 5 && card(), 15000); if (!c) return 'NO CARD';
-     const walk = [...c.querySelectorAll('[data-walkthroughs] button')].map((b) => b.textContent.trim()).filter((t) => t !== '(guide)');
+     const walk = [...document.querySelectorAll('[data-walkthroughs] button')].map((b) => b.textContent.trim()).filter((t) => t !== '(guide)' && t !== 'Hide');
      return c.querySelectorAll('[aria-label="done"]').length + ' done | walk-throughs: ' + walk.join(', ');`,
   ),
   step(

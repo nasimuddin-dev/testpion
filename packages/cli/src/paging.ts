@@ -1,6 +1,6 @@
 /**
- * One way every list command of the CLI pages (the same contract as the MCP tools): `--limit` (how many; 200 unless the
- * command says otherwise, at most 1,000), `--cursor` (the `nextCursor` of the page before) or `--offset` (the same as a
+ * One way every list command of the CLI pages (the same contract as the MCP tools): `--limit` (how many; 100 unless the
+ * command says otherwise, at most 500), `--cursor` (the `nextCursor` of the page before) or `--offset` (the same as a
  * number). A list that is cut says so: a `more: --cursor X` line in text mode, and with `--json` the envelope's `page`
  * ({ total, limit, truncated, nextCursor }) and a warning; `data` stays the plain list.
  */

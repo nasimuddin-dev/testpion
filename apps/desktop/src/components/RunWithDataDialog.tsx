@@ -1,7 +1,7 @@
 import { plural } from '../lib/format';
 import { FileSpreadsheet, Layers, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
+import { call } from '../api';
 import { selectEnvironments, toastError, useApp } from '../store';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
 import { Button, Field, Input, Modal, Segmented, Select, Toggle, cx } from './ui';
@@ -58,7 +58,7 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
         if (d.query) setQuery(d.query);
       }
     } catch (e) {
-      useApp.getState().toast(`Could not read the data file: ${asError(e).message}`, 'error');
+      toastError(e, 'Could not read the data file');
     }
   };
   const start = async () => {

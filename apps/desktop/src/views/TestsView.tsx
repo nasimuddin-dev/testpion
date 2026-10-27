@@ -468,6 +468,8 @@ export function TestsView() {
   };
 
   useIntent('tests', async (p) => {
+    // the palette's "New AI Test File" (and any other "new file of this kind")
+    if (typeof p?.newFile === 'string') return void newFile(p.newFile);
     // a test named only by its id (a flaky test, an attention item, a test-case link): its file and step first
     let path: string | undefined = p?.path;
     let step: string | undefined = p?.step;
@@ -771,8 +773,8 @@ export function TestsView() {
                       <span className="text-muted">Retries</span>
                       <Input type="number" min={0} value={opts.retries} onChange={(e) => setOpts({ ...opts, retries: Math.max(0, Number(e.target.value)) })} />
                     </label>
-                    <Input className="text-xs" placeholder="grep name" value={opts.grep} onChange={(e) => setOpts({ ...opts, grep: e.target.value })} />
-                    <Input className="text-xs" placeholder="tags" value={opts.tags} onChange={(e) => setOpts({ ...opts, tags: e.target.value })} />
+                    <Input className="text-xs" aria-label="Only tests whose name contains" placeholder="grep name" value={opts.grep} onChange={(e) => setOpts({ ...opts, grep: e.target.value })} />
+                    <Input className="text-xs" aria-label="Only tests with these tags" placeholder="tags" value={opts.tags} onChange={(e) => setOpts({ ...opts, tags: e.target.value })} />
                   </div>
                   <Button variant="primary" icon={<Play size={13} />} onClick={() => run([], 'All tests')} data-tour="run-all">
                     Run all tests

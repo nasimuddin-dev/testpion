@@ -23,7 +23,7 @@ import {
   type LoadTarget,
 } from '@testpion/core';
 import { hasTemplate } from '@testpion/shared';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad, openWorkspace, WORKSPACE_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad, openWorkspace, WORKSPACE_OPTION } from '../shared.js';
 import { addOutputOptions } from '../output-save.js';
 import { runWatching, watchTargets } from '../watch.js';
 import { executeScaleRun, isScaleRun, type ScaleCliOptions } from './flow-scale.js';
@@ -326,7 +326,9 @@ export function registerRunCommands(program: Command): void {
       if (!existsSync(summaryPath)) throw new CliError(`summary.json not found next to ${file}`, EXIT.CONFIG_ERROR);
       const summary = JSON.parse(readFileSync(summaryPath, 'utf8'));
       const out = await writeReports(o.out ?? dirname(file), summary, () => readResults(file), o.format);
-      for (const [f, p] of Object.entries(out)) console.log(`${f}: ${p}`);
+      respond(out, () => {
+        for (const [f, p] of Object.entries(out)) console.log(`${f}: ${p}`);
+      });
     });
 }
 

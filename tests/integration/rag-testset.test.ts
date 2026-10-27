@@ -75,7 +75,7 @@ describe('testpion rag generate-dataset', () => {
     // running it again adds nothing twice (the same questions are duplicates of what the file holds)
     const again = cliData<{ proposal: { items: Array<{ selected: boolean }> } }>((await cli(['rag', 'generate-dataset', 'docs', '--count', '2', '--types', 'single-hop,unanswerable', '--name', 'clinic', '--json', '-w', ws])).out);
     expect(again.proposal.items.every((i) => !i.selected)).toBe(true);
-    const undo = await cli(['ai', 'undo', out.proposal.id, '-w', ws]);
+    const undo = await cli(['ai', 'undo', out.proposal.id, '-w', ws, '--yes']);
     expect(undo.status, undo.err).toBe(0);
     expect(existsSync(join(ws, 'datasets', 'clinic.jsonl'))).toBe(false);
   });

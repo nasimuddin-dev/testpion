@@ -68,18 +68,20 @@ On your desktop TestPion can call anything, including `localhost` and your priva
 
 Turn it on with environment variables (`TESTPION_BLOCK_PRIVATE_NETWORKS=1`, `TESTPION_ALLOW_HOSTS=api.internal,10.0.0.5`, `TESTPION_ALLOW_PROCESSES=0`) or with `testpion mcp-server --block-private-networks [--allow-host api.internal]`.
 
-## What leaves your computer without you asking {#without-asking}
+## What leaves your computer {#without-asking}
 
-- **The update check**, 5 seconds after start (turn it off in Settings ▸ About ▸ *Check for updates when the app starts*). Two endpoints, both GitHub, both sending only a `TestPion/<version>` user agent:
-  - where the app can update itself (the Windows installer, the Linux AppImage), `github.com/nasimuddin-dev/testpion/releases` serves `latest.yml` and, if you accept, the installer, whose SHA-512 is checked against `latest.yml`;
-  - everywhere else, `api.github.com/repos/nasimuddin-dev/testpion/releases/latest` returns the newest release number and notes, which the app compares with its own.
-- **The background git fetch** of the open workspace, every few minutes, to its own remote, only for workspaces you have pushed or synced from on this computer (never a repository you only cloned).
-- **Monitors** on the schedule you set, and their webhooks.
+There is no telemetry and no account. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call. Besides your requests, TestPion makes these calls (Settings ▸ Privacy & security lists them):
+
+| What | Where to | What it carries | When | How to turn it off |
+|---|---|---|---|---|
+| Check for updates | `api.github.com` and `github.com` (the TestPion releases) | The question "what is the newest release?" and the TestPion version in the user agent; no workspace data | A few seconds after the app starts and every 6 hours while it runs; on by default | Settings ▸ About ▸ Check for updates when the app starts |
+| AI actions | The AI provider you set up, or a model on this computer | The context of the action you started, secrets and personal data masked (see "What will be sent") | Only when you use an AI action | Settings ▸ AI assistant ▸ Hide all AI actions, or Local only |
+| Send feedback | Nowhere by itself: it builds a report and a link to a pre-filled GitHub issue that you open | What you typed and the diagnostics you ticked | Only when you open the link | Do not use it |
+| Background git fetch | The open workspace's own git remote | What a fetch carries; nothing from the workspace | Every few minutes, only for workspaces you have pushed or synced from on this computer (never a repository you only cloned) | Settings ▸ Git ▸ Fetch in the background |
+| Monitors | The URLs and webhooks you set | The requests of the monitor and its webhook message | On the schedule you set | Pause or delete the monitor |
+
+The update check has two endpoints, both GitHub, sending only a `TestPion/<version>` user agent: where the app can update itself (the Windows installer, the Linux AppImage) `github.com/nasimuddin-dev/testpion/releases` serves `latest.yml` and, if you accept, the installer, whose SHA-512 is checked against `latest.yml`; everywhere else `api.github.com/repos/nasimuddin-dev/testpion/releases/latest` returns the newest release number and notes, which the app compares with its own.
 
 Nothing else is sent unasked. Crash and error details stay in the local log.
-
-## Telemetry
-
-Telemetry is not implemented. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call.
 
 :::

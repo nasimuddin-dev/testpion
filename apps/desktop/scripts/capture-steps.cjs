@@ -343,6 +343,11 @@ module.exports = async function run(win) {
   park();
   // a fresh profile opens on Home
   await until(`document.querySelector('nav [aria-label="Home"][aria-current="page"]') && __cap.one('section[aria-label=Activity]')`, 'Home');
+  // capture mode keeps the tour shut (it would cover every step): this one asks for it, and the page loads again
+  await js(`localStorage.setItem('aps.capture.tour', '1'); location.reload()`);
+  await new Promise((r) => setTimeout(r, 6000));
+  await js(HELPERS);
+  await until(`document.querySelector('nav [aria-label="Home"][aria-current="page"]') && __cap.one('section[aria-label=Activity]')`, 'Home again');
   // the guided tour opens by itself the first time Home shows Get started (a fresh profile: now); Next goes to the
   // Send button of a new request
   await until(`__cap.one('section[aria-label="Get started"]') && __cap.one('[role=dialog][data-coachmark]')`, 'the guided tour to open on Home');
@@ -885,6 +890,11 @@ module.exports = async function run(win) {
     await clickOn(`(() => { const m = __cap.one('main button[aria-label="Response actions"]'); m?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); return m; })()`, 'the response actions');
     await click(label, '[role=menuitem]');
   };
+  /** An AI action opens on "Ready to send" (the estimate first): Send goes on. */
+  const sendAi = async () => {
+    await until(`__cap.one('[data-ai-preflight] [data-ai-send]')`, 'the Ready to send card');
+    await clickOn(`__cap.one('[data-ai-preflight] [data-ai-send]')`, 'Send');
+  };
   // a fresh token (the earlier one may have expired while the shots above were taken)
   await openRequest('Get access token');
   await sendAndWait();
@@ -917,7 +927,8 @@ module.exports = async function run(win) {
   // Suggest assertions on a patient: the review opens by itself, a pinned id and owner flagged with safer forms
   await openRequest('Get patient');
   await sendAndWait();
-  await responseAction('Suggest assertions');
+  await responseAction('Suggest checks');
+  await sendAi();
   await until(`__cap.one('[data-proposal] [data-proposal-safer]') && __cap.all('[data-proposal] [data-proposal-item]').length >= 6`, 'the review of the suggested checks', 30000);
   await shot('ai-suggest-assertions');
   await clickOn(`__cap.all('[role=dialog] button').find((b) => __cap.text(b) === 'Close')`, 'Close');

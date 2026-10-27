@@ -1,5 +1,6 @@
 import { toast as sonner } from 'sonner';
 import { aiSetupActionFor } from './lib/ai-setup';
+import { errorNextStep } from './lib/error-text';
 import type { ReactNode } from 'react';
 import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
@@ -252,7 +253,7 @@ interface AppState {
    * A message at the bottom right. `opts.undo`: the message is about something reversible (a delete): it gets Undo for
    * 8 s, also Ctrl/Cmd+Z (lib/undo.ts); the undo's failure is shown as an error.
    */
-  toast(text: string, kind?: Toast['kind'], action?: ToastAction | ToastAction[], opts?: { undo?: () => unknown; restored?: string }): void;
+  toast(text: string, kind?: Toast['kind'], action?: ToastAction | ToastAction[], opts?: { undo?: () => unknown; restored?: string; description?: string }): void;
   setActivity(key: string, label?: string): void;
   openIntent(view: ViewId, payload: any): void;
   /** Back / forward through the places visited (views and the items opened in them), like a browser. */
@@ -441,10 +442,10 @@ export const useApp = create<AppState>((set, get) => ({
     };
     const [main, second] = [...(undoButton ? [undoButton] : []), ...[actions ?? []].flat().map(toastButton)];
     // a toast with an action (Undo, Open run) stays longer, so there is time to use it
-    const duration = main ? 8000 : kind === 'error' || kind === 'warning' ? 7000 : 3500;
+    const duration = main ? 8000 : opts?.description ? 9000 : kind === 'error' || kind === 'warning' ? 7000 : 3500;
     set({ toasts: [...get().toasts, { id, kind, text }] });
     setTimeout(() => set({ toasts: get().toasts.filter((t) => t.id !== id) }), duration);
-    (kind === 'error' ? sonner.error : kind === 'success' ? sonner.success : kind === 'warning' ? sonner.warning : sonner)(text, { id: sonnerId, duration, ...(main ? { action: main } : {}), ...(second ? { cancel: second } : {}) });
+    (kind === 'error' ? sonner.error : kind === 'success' ? sonner.success : kind === 'warning' ? sonner.warning : sonner)(text, { id: sonnerId, duration, ...(opts?.description ? { description: opts.description } : {}), ...(main ? { action: main } : {}), ...(second ? { cancel: second } : {}) });
   },
   setActivity: (key, label) => {
     const a = { ...get().activity };
@@ -510,12 +511,15 @@ export function notifySystem(title: string, body: string, opts: { ref?: ItemRef;
  * Show an error (anything thrown) as an error toast; a missing AI key offers "Add the key" (AI Lab ▸ Providers, its key
  * field), and a push the remote refused (someone pushed first) offers "Pull & push" (the Git view syncs).
  */
-export function toastError(e: unknown): void {
-  const err = asError(e);
+export function toastError(e: unknown, what?: string): void {
+  const raw = asError(e);
+  // `what` says what was being done ("Could not read the data file"); the engine's message says why
+  const err = what ? { ...raw, message: `${what}: ${raw.message}` } : raw;
   // an AI setup problem (a key, no model, Local only) offers its fix (lib/ai-errors.ts, the one place that decides)
   const setup = aiSetupActionFor(err, () => useApp.getState());
   const behind = isPushRejected(err);
-  useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined));
+  // the message, then why and what to try first (the engine's `why` / `suggestions`: lib/error-text.ts)
+  useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined), { description: errorNextStep(err) });
 }
 
 /** Run an action; a failure is shown as the one error toast (`toastError`). Resolves true when it ran to the end. */

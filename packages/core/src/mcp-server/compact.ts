@@ -8,7 +8,7 @@ import type { Tool } from './tool.js';
  * What stays: the name, the first sentences (what it does), one line of when to use it, any warning line (a delete asks for
  * `confirm`), and the whole input schema except that parameter descriptions are cut to their first sentence.
  */
-const SHORT_PARAMETER = 48;
+const SHORT_PARAMETER = 40;
 const SHORT_WHAT = 200;
 const SHORT_WHEN = 120;
 

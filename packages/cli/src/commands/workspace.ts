@@ -18,13 +18,14 @@ import {
   exportWholeWorkspace,
   workspaceExportFileName,
 } from '@testpion/core';
-import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, withWorkspace, JSON_OPTION } from '../shared.js';
+import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, respond, withWorkspace, JSON_OPTION } from '../shared.js';
 import { registerGitCommands } from './git.js';
 import { checkStaged } from './git-items.js';
 
 export function registerWorkspaceCommands(program: Command): void {
   const ws = program.command('workspace').description('manage workspaces');
   ws.command('list')
+    .description('the workspaces on this computer: name, folder and whether it is the one the app opens')
     .option(...JSON_OPTION)
     .action((o) => {
       const list = new WorkspaceManager().list();
@@ -59,11 +60,12 @@ export function registerWorkspaceCommands(program: Command): void {
       else console.log(green(r.deletedFiles ? `Deleted "${d.name}"` : `Removed "${d.name}" from the list (folder kept: ${d.path})`));
     });
   ws.command('create')
+    .description('make a new, empty workspace (a folder with workspace.json); --path puts it in a folder of your choice, e.g. inside a git repository')
     .argument('<name>')
     .option('--path <dir>', 'create in this directory (e.g. inside a git repo)')
     .action((name: string, o) => {
       const s = new WorkspaceManager().create(name, o.path ? resolve(o.path) : undefined);
-      console.log(green(`Created workspace "${name}" at ${s.root}`));
+      respond({ name, path: s.root }, () => console.log(green(`Created workspace "${name}" at ${s.root}`)));
       s.close();
     });
   ws.command('export')
@@ -148,7 +150,7 @@ export function registerWorkspaceCommands(program: Command): void {
       return withWorkspace(o.workspace, (store) => {
         // the hook can call this very CLI when `testpion` is not on the PATH (e.g. run from a checkout)
         const r = installPreCommitHook(store.root, cliSelf());
-        console.log(r.installed ? `${green('installed')} ${r.path}` : r.message);
+        respond({ installed: r.installed, path: r.path, message: r.message }, () => console.log(r.installed ? `${green('installed')} ${r.path}` : r.message));
         if (!r.installed) process.exitCode = EXIT.TEST_FAILURE;
       });
     });
@@ -158,6 +160,7 @@ export function registerWorkspaceCommands(program: Command): void {
   const trash = program.command('trash').description(`recently deleted ${trashKindsText()} (kept ${TRASH_DAYS} days): list, restore, empty`);
   trash
     .command('list')
+    .description('list what was deleted in the last 30 days (Recently deleted): id, kind, name, when; restore one with `trash restore <id>`')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option(...JSON_OPTION)
     .action((o) => {
@@ -183,14 +186,15 @@ export function registerWorkspaceCommands(program: Command): void {
     });
   trash
     .command('empty')
-    .description('delete everything in the trash for good (or one item with --id)')
+    .description('delete everything in Recently deleted for good (or one item with --id)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--id <id>', 'only this item')
     .option('--yes', 'confirm; required, because this cannot be undone')
     .action((o) => {
       if (!o.yes) throw new CliError('Refusing to delete for good without --yes', EXIT.CONFIG_ERROR);
       return withWorkspace(o.workspace, (store) => {
-        console.log(green(`Deleted ${purgeTrash(store, o.id)} item(s) for good`));
+        const n = purgeTrash(store, o.id);
+        respond({ deleted: n }, () => console.log(green(`Deleted ${n} item(s) for good`)));
       });
     });
 }

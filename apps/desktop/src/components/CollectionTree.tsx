@@ -3,7 +3,7 @@ import { startFlowGenerate, startTidyImport } from './ai/flow-generate';
 import { Download, FilePlus2, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
-import { asError, call, on } from '../api';
+import { call, on } from '../api';
 import { sharedCall } from '../lib/shared-call';
 import { VirtualList } from './ui';
 import { focusRow } from './TreeParts';
@@ -341,7 +341,7 @@ export const CollectionTree = memo(function CollectionTree({
       onChange(r.collection);
       useApp.getState().toast(`Converted ${plural(r.changed, 'script')} to ${to}.*`, 'success');
     } catch (e) {
-      useApp.getState().toast(`Couldn't convert the scripts: ${asError(e).message}`, 'error');
+      toastError(e, "Couldn't convert the scripts");
     }
   };
   // which collections, categories and folders are open: the workspace's tree state (lib/tree-state)

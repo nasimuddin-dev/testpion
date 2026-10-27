@@ -141,7 +141,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
                 value={tab}
                 onChange={setTab}
                 tabs={[
-                  { id: 'payload', label: 'Payload' },
+                  { id: 'payload', label: 'Body' },
                   { id: 'attributes', label: 'Attributes' },
                   { id: 'input', label: 'Input' },
                   { id: 'output', label: 'Output' },

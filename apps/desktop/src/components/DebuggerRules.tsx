@@ -334,7 +334,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
           <Field label="Host" hint="Glob: api.test, *.example.com; empty: any">
             <Input className="mono" value={r.match?.host ?? ''} onChange={(e) => match({ host: e.target.value || undefined })} placeholder="*.example.com" />
           </Field>
-          <Field label="URL" hint="Glob or /regex/">
+          <Field label="URL" hint="A pattern with *, or /a regular expression/">
             <Input className="mono" value={r.match?.url ?? ''} onChange={(e) => match({ url: e.target.value || undefined })} placeholder="*/orders/*" />
           </Field>
           <Field label="Methods" hint="GET, POST …; empty: any">

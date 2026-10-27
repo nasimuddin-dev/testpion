@@ -14,6 +14,7 @@ import { CodeModal } from '../components/CodeModal';
 import { formatMs, uid } from '../lib/format';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { AuthEditor } from '../components/AuthEditor';
+import { useInheritedAuth } from '../lib/inherited-auth';
 import { CodeEditor } from '../components/CodeEditor';
 import { addToFolder, findNode, mapNodes } from '../components/CollectionTree';
 import { SaveModal } from './rest/dialogs';
@@ -141,7 +142,7 @@ export function GraphQLView() {
       const copied = await copyQuietly(r.url);
       useApp.getState().toast(`GraphQL mock running at ${r.url}${copied ? ' (copied)' : ''}. Every valid query gets fake, correctly typed data.`, 'success');
     } catch (e) {
-      useApp.getState().toast(`Couldn't start the mock: ${asError(e).message}`, 'error');
+      toastError(e, "Couldn't start the mock");
     }
   };
   const [running, setRunning] = useState<string>();
@@ -410,7 +411,7 @@ export function GraphQLView() {
     try {
       set({ query: print(parse(d.query)) });
     } catch (e) {
-      useApp.getState().toast(`Cannot format: ${(e as Error).message}`, 'error');
+      toastError(e, 'Cannot format');
     }
   };
 
@@ -536,10 +537,10 @@ export function GraphQLView() {
                           <KeyValueEditor rows={d.headers} onChange={(headers) => set({ headers })} keyPlaceholder="Header" />
                         </div>
                       )}
-                      {sub === 'auth' && <AuthEditor auth={d.auth} onChange={(auth) => set({ auth })} />}
+                      {sub === 'auth' && <GraphQLAuth collectionId={d.collectionId} requestId={d.requestId} auth={d.auth} onChange={(auth) => set({ auth })} />}
                       {sub === 'connection' && (
                         <div className="h-full flex flex-col">
-                          <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Payload of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
+                          <p className="px-2 py-1.5 text-xs text-muted border-b border-line">Data of <span className="mono">connection_init</span> (JSON), for servers that read auth there, e.g. {'{ "authorization": "Bearer {{token}}" }'}. The Auth tab is also sent as a handshake header.</p>
                           <div className="flex-1 min-h-0">
                             <CodeEditor language="json" value={d.connectionParams ?? ''} onChange={(connectionParams) => set({ connectionParams })} minimal />
                           </div>
@@ -763,4 +764,10 @@ function SchemaExplorer({ schema, error, sdl, onInsert, onBuild, onIntrospect, l
       </div>
     </div>
   );
+}
+
+/** The Authorization tab of a GraphQL request: what "Inherit" gets from its folders and collection is shown. */
+function GraphQLAuth({ collectionId, requestId, auth, onChange }: { collectionId?: string; requestId?: string; auth?: import('../types').AuthConfig; onChange(a: import('../types').AuthConfig): void }) {
+  const inherited = useInheritedAuth(collectionId, requestId, auth?.type === 'inherit');
+  return <AuthEditor auth={auth} onChange={onChange} inherited={inherited} />;
 }

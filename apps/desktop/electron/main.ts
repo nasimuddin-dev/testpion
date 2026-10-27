@@ -240,7 +240,7 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       // the preload reads whether the app draws the title bar from here (no synchronous call to a busy main process)
-      additionalArguments: [`--tp-titlebar=${overlayTitleBar ? 1 : 0}`],
+      additionalArguments: [`--tp-titlebar=${overlayTitleBar ? 1 : 0}`, ...(capture ? ['--tp-capture=1'] : [])],
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,

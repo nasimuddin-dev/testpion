@@ -7,7 +7,7 @@ import { aiHidden } from '../lib/ai-visible';
 import { startTidyImport } from './ai/flow-generate';
 import { toastSpecKeptBoth } from '../lib/spec-import';
 import { toastImportNotes, toastUnchangedScripts } from '../lib/import-scripts';
-import { IMPORT_FILE_ACCEPT, MIGRATE_TOOLS, type MigrateTool } from '@testpion/shared';
+import { IMPORT_FILE_ACCEPT, MIGRATE_TOOLS, POSTMAN_WORDS, type MigrateTool } from '@testpion/shared';
 import type { ImportManyPlan, ImportPlan, ImportReport, ImportSource, ReimportAction } from '../types';
 import { pickImportFiles, pickImportFolder } from '../lib/import-files';
 import { bundleRequestOf, openImportBundle } from '../lib/transfer';
@@ -223,7 +223,28 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
               ))}
             </div>
           )}
-          {guide ? <p className="text-sm text-muted">{guide.how}</p> : <p className="text-sm text-muted">Drop files, a folder or a link anywhere on the window, or choose them below. Postman (v1, v2, Git folders), Insomnia, Bruno (folders and OpenCollection YAML), Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog, OpenAPI / Swagger, AsyncAPI, HAR, WSDL, GraphQL schemas, .env, .http, cURL, TestPion files and TestPion bundles (a bundle opens its own preview). A ZIP (a Postman data export, a zipped collection) is opened. You see what will be created, and what will not come over, before anything is written.</p>}
+          {guide ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted">{guide.how}</p>
+              {tool === 'postman' && (
+                <details className="text-xs" data-postman-words>
+                  <summary className="cursor-pointer text-accent">Postman's words in TestPion</summary>
+                  <table className="mt-1 w-full">
+                    <tbody>
+                      {POSTMAN_WORDS.map((w) => (
+                        <tr key={w.theirs} className="align-top">
+                          <td className="pr-3 py-0.5 text-muted whitespace-nowrap">{w.theirs}</td>
+                          <td className="py-0.5">
+                            <b>{w.ours}</b>: {w.where}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              )}
+            </div>
+          ) : <p className="text-sm text-muted">Drop files, a folder or a link anywhere on the window, or choose them below. Postman (v1, v2, Git folders), Insomnia, Bruno (folders and OpenCollection YAML), Hoppscotch, Thunder Client, Yaak, HTTPie, Apidog, OpenAPI / Swagger, AsyncAPI, HAR, WSDL, GraphQL schemas, .env, .http, cURL, TestPion files and TestPion bundles (a bundle opens its own preview). A ZIP (a Postman data export, a zipped collection) is opened. You see what will be created, and what will not come over, before anything is written.</p>}
           {!choosing && (
             <p className="text-xs">
               <LinkButton icon={null} onClick={() => setChoosing(true)} data-import-migrate>

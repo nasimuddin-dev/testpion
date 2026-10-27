@@ -24,7 +24,7 @@ export async function allowSecretRefs(environment: string, refs: Blocked[]): Pro
   if (!ok) return false;
   await attempt(async () => {
     const r = await call<PrefetchResult>('secrets.allow', { environment, refs: refs.map((x) => x.ref) });
-    if (r.failed.length) useApp.getState().toast(`${r.failed[0]!.error}${r.failed.length > 1 ? ` (+${r.failed.length - 1} more)` : ''}`, 'error');
+    if (r.failed.length) useApp.getState().toast(`Could not read the secret from ${tools}: ${r.failed[0]!.error}${r.failed.length > 1 ? ` (+${r.failed.length - 1} more)` : ''}`, 'error', undefined, { description: 'Check that you are signed in to it in a terminal, and that the reference in the variable is right.' });
     else useApp.getState().toast(`Read ${r.fetched.length === 1 ? 'the secret' : `${r.fetched.length} secrets`} from ${tools}: send again to use ${r.fetched.length === 1 ? 'it' : 'them'}`, 'success');
   });
   return true;

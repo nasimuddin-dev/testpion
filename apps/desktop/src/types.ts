@@ -36,6 +36,8 @@ export interface WorkspaceCurrent {
   path: string;
   environments: Environment[];
   migrations: string[];
+  /** The examples workspace that ships with the app. */
+  examples?: boolean;
 }
 
 

@@ -1,7 +1,7 @@
 import { Database, FileSpreadsheet, History, ListChecks, Play, Wand2, X } from 'lucide-react';
 import { LABEL } from '../lib/vocabulary';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { asError, call, on } from '../api';
+import { call, on } from '../api';
 import { promptText, toastError, useApp, attempt } from '../store';
 import type { Collection, CollectionNode, Library } from '../types';
 import { timeAgo, plural } from '../lib/format';
@@ -135,6 +135,10 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
   }, [collection.id, loadRuns]);
   // a run that finishes joins the list (with its totals and environment) however long it took
   useEffect(() => on('run.finished', () => void loadRuns()), [loadRuns]);
+  // the run started here and not finished yet: a second Run would start a parallel one the first pane never shows
+  const [running, setRunning] = useState<string>();
+  useEffect(() => on<{ runId: string }>('run.finished', (p) => setRunning((r) => (r === p.runId ? undefined : r))), []);
+  useEffect(() => on<{ runId: string }>('run.error', (p) => setRunning((r) => (!p.runId || r === p.runId ? undefined : r))), []);
   useEffect(() => setUnchecked(new Set()), [folderId]);
   // a dataset picked in the sidebar or its tab: previewed and set as the run's data, whichever collection is chosen
   useEffect(() => {
@@ -146,7 +150,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
         setData(d);
         setIterations('');
       },
-      (e) => live && useApp.getState().toast(`Could not read the data file: ${asError(e).message}`, 'error'),
+      (e) => live && toastError(e, 'Could not read the data file'),
     );
     return () => {
       live = false;
@@ -177,6 +181,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
       });
       setStartedIn((m) => ({ ...m, [r.runId]: environment || undefined }));
       setRunId(r.runId);
+      setRunning(r.runId);
       setTimeout(() => void loadRuns(), 500);
     } catch (e) {
       toastError(e);
@@ -217,7 +222,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
         setIterations('');
       }
     } catch (e) {
-      useApp.getState().toast(`Could not read the data file: ${asError(e).message}`, 'error');
+      toastError(e, 'Could not read the data file');
     }
   };
 
@@ -313,7 +318,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                           setData(await call<DataFile>('col.previewDataFile', { path: ds.path }));
                           setIterations('');
                         } catch (err) {
-                          useApp.getState().toast(`Could not read the data file: ${asError(err).message}`, 'error');
+                          toastError(err, 'Could not read the data file');
                         }
                       }}
                     >
@@ -434,12 +439,17 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
             </div>
           </div>
           <div className="border-t border-line p-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <Button variant="primary" className="min-w-0 max-w-full" icon={<Play size={13} />} loading={starting} disabled={!selected.length} reason="Tick at least one request to run" onClick={start}>
+            <Button variant="primary" className="min-w-0 max-w-full" icon={<Play size={13} />} loading={starting} disabled={!selected.length || !!running} reason={running ? 'A run is in progress: stop it first (Stop, in the run on the right)' : 'Tick at least one request to run'} onClick={start}>
               <span className="truncate">Run {folderId ? findName(collection.items, folderId) : collection.name}</span>
             </Button>
             <span className="text-xs text-muted whitespace-nowrap">
               {plural(selected.length, 'request')} × {plural(iterCount, 'iteration')}
             </span>
+            {running && (
+              <span className="text-xs text-muted" role="status" data-run-in-progress>
+                A run is in progress: stop it first.
+              </span>
+            )}
           </div>
         </div>
 

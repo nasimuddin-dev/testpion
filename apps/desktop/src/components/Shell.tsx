@@ -396,6 +396,8 @@ export interface PaletteCommand {
   detail?: string;
   /** A heading the command is listed under (Requests, Logic …); commands of a group come together. */
   group?: string;
+  /** Other words that find it (Postman's names: "runner", "newman", "interceptor" …). */
+  aliases?: string[];
   run(): void;
 }
 

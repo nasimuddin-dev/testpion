@@ -496,7 +496,7 @@ In CI: `testpion eval compare <run> --baseline <run>` exits 1 on regressions bey
 
 ## AGENTS.md from the live workspace
 
-1. **Settings ▸ AI agents ▸ Write AGENTS.md** (tick **Also CLAUDE.md** and **Also a Cursor rule** for those agents), or `testpion agents init --targets agents,claude,cursor`.
+1. **Settings ▸ AI agents (MCP) ▸ Write AGENTS.md** (tick **Also CLAUDE.md** and **Also a Cursor rule** for those agents), or `testpion agents init --targets agents,claude,cursor`.
 2. AGENTS.md describes this workspace for coding agents: its collections, environments (names only), tests and flows, the commands with their exit codes, the MCP server, how to add a request, test or flow, and the secrets and production rules.
 3. Write it again after the workspace changes: only the part between the `testpion` markers is replaced, your own text stays; the result says which files were created, updated, unchanged or skipped.
 
@@ -507,7 +507,7 @@ Agents: `agents_init`. [AGENTS.md](/ai-testing/mcp-server#agents-md)
 1. Press <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> (or the **Terminal** tab next to Console and Logs): Windows PowerShell opens in the workspace folder (macOS and Linux: your login shell). The drop-down next to **+** offers PowerShell 7, Command Prompt and Git Bash when they are installed.
 2. Type `testpion --version`: the app's own command line is on the `PATH`, nothing to install, and `TESTPION_WORKSPACE` names the workspace.
 3. Selecting copies, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> or right-click pastes, links open; up to 8 terminals, each kept with its output while the panel shows something else.
-4. **Run in terminal** (the terminal icon next to **Copy** in Settings ▸ AI agents and an MCP toolset's Serve box) types a command there for you to check and run. Command palette: **Terminal: New**, **Terminal: Focus**.
+4. **Run in terminal** (the terminal icon next to **Copy** in Settings ▸ AI agents (MCP) and an MCP toolset's Serve box) types a command there for you to check and run. Command palette: **Terminal: New**, **Terminal: Focus**.
 
 [Terminal](/getting-started/terminal)
 

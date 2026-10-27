@@ -2,6 +2,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ApsError } from '../../errors.js';
+import { TOOL_DETAILS } from '../tool-contract.js';
 import { checkTypes } from '../../eval/checks.js';
 import type { CheckConfig, CollectionNode } from '../../model/types.js';
 import { isSuiteFile, loadSuite, loadTestsFromFile } from '../../runner/loader.js';
@@ -39,7 +40,7 @@ export function testFileTools(d: ModuleToolDeps): Tool[] {
       description:
         'How to use this TestPion workspace: which tool to use for what, how variables resolve, every check type this engine knows (with examples) and the YAML test file format. Read it before writing checks or test files.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-      run: () => agentGuide({ workspace: store.workspace.name, checkTypes: checkTypes(), readOnly: readOnly }),
+      run: () => agentGuide({ workspace: store.workspace.name, checkTypes: checkTypes(), readOnly: readOnly, toolDetails: TOOL_DETAILS }),
     },
     {
       name: 'set_request_checks',

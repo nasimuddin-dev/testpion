@@ -13,6 +13,8 @@
  * - **Output schemas** for the run, send and check tools, so clients can read their results as data.
  */
 import { randomBytes } from 'node:crypto';
+import { SURFACE_PAGE } from '../util/page.js';
+import { withAiCostCap } from '../ai/tasks/run.js';
 import { ApsError } from '../errors.js';
 import type { Tool, ToolDoc } from './tool.js';
 
@@ -98,6 +100,23 @@ export const BIG_TOOLS = new Set([
 ]);
 
 type Args = Record<string, unknown>;
+
+/** The tools that call the user's AI model: each takes `max_cost_usd`, a cap on what one call may cost (refused before anything is sent). */
+export const AI_COST_TOOLS = new Set([
+  'ai_run_task',
+  'flow_generate',
+  'ai_triage_run',
+  'ai_analyze_flaky',
+  'spec_tests_generate',
+  'tidy_import',
+  'security_tests_generate',
+  'contract_drift',
+  'write_script',
+  'search_ask',
+  'rag_generate_testset',
+  'rag_draft_references',
+  'rag_author_evaluation',
+]);
 const q = (v: unknown) => JSON.stringify(String(v ?? ''));
 
 /**
@@ -135,6 +154,7 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   delete_request: { describe: (a) => `delete the request ${q(a.request)} of the collection ${q(a.collection)} (it goes to no trash: git or a backup brings it back)` },
   import_bundle_apply: { describe: (a) => `import the previewed bundle ${q(a.plan_id)} into the workspace (${a.on_conflict === 'replace' ? 'items that are already here are replaced' : a.on_conflict === 'skip' ? 'items that are already here are kept' : 'items that are already here are kept and the incoming ones renamed'}; undo_import takes it back)` },
   undo_import: { when: (a) => typeof a.import_id === 'string' && !!a.import_id, describe: (a) => `undo the import ${q(a.import_id)}: items it made are removed, items it replaced come back` },
+  set_settings: { describe: (a) => `change the app settings of this computer${a.reset ? ` (reset ${JSON.stringify(a.reset)})` : ''}${a.settings && typeof a.settings === 'object' ? `: ${Object.keys(a.settings as object).join(', ')}` : ''}; it applies to every workspace` },
   delete_item: { describe: (a) => `delete ${typeof a.ref === 'string' ? q(a.ref) : JSON.stringify(a.ref ?? '')} to Recently deleted (restore_item puts it back for 30 days)` },
   flow_remove_step: { describe: (a) => `remove the step ${q(a.id)} from tests/${String(a.file ?? '')} (steps that wait for it lose that dependency)` },
   git_resolve: { describe: (a) => `overwrite the conflicted file ${q(a.path)} with ${a.side ? `"${String(a.side)}"` : 'the chosen sides'} (the other side's changes in it are dropped)` },
@@ -326,8 +346,8 @@ export function fitResult(value: unknown, format: ResponseFormat): { value: unkn
 
 /* ------------------------------------------------------------------ cursors */
 
-const DEFAULT_PAGE = 100;
-const MAX_PAGE = 500;
+const DEFAULT_PAGE = SURFACE_PAGE.limit;
+const MAX_PAGE = SURFACE_PAGE.max;
 
 export function encodeCursor(tool: string, offset: number): string {
   return Buffer.from(JSON.stringify({ t: tool, o: offset })).toString('base64url');
@@ -426,9 +446,27 @@ const stable = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof
 
 const prop = (description: string, type = 'string', extra: Record<string, unknown> = {}) => ({ type, description, ...extra });
 
+/** The longest first paragraph of a tool's description: hosts cut long ones, and the "When to use" that follows must survive. */
+const SHORT_DESCRIPTION = 600;
+
+/** What the descriptions left out to stay short, by tool: testpion_guide lists it under "Tool details". */
+export const TOOL_DETAILS = new Map<string, string>();
+
+/** The first sentences of `text` that fit, and the rest (undefined when all of it fits). */
+function shorten(text: string): { head: string; rest?: string } {
+  if (text.length <= SHORT_DESCRIPTION) return { head: text };
+  const cut = text.slice(0, SHORT_DESCRIPTION);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('.\n'));
+  const at = end > SHORT_DESCRIPTION / 3 ? end + 1 : cut.lastIndexOf(' ');
+  return { head: text.slice(0, at).trim(), rest: text.slice(at).trim() };
+}
+
 /** The description as the agent reads it: what, when, when not, an example, then what the contract adds. */
 function composeDescription(t: Tool, doc: ToolDoc | undefined): string {
-  const parts = [t.description.trim()];
+  // a description that carries its own When to use / Example (a tool without a ToolDoc) is kept as written
+  const { head, rest } = t.description.includes('\nWhen to use:') ? { head: t.description.trim(), rest: undefined } : shorten(t.description.trim());
+  if (rest) TOOL_DETAILS.set(t.name, rest);
+  const parts = [rest ? `${head} (More: testpion_guide, Tool details.)` : head];
   if (doc) parts.push(`\nWhen to use: ${doc.when}\nWhen not: ${doc.whenNot}\nExample: ${JSON.stringify(doc.example)}`);
   const notes: string[] = [];
   // (the pages, `response_format` and `confirm` parameters describe themselves in the input schema: saying it twice was 30 KB of tools/list)
@@ -464,6 +502,8 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
       properties.limit = prop(`Page size (default ${DEFAULT_PAGE}, max ${MAX_PAGE})`, 'number');
     }
     if (big) properties.response_format = prop('concise (default: long values cut, each cut named) or detailed', 'string', { enum: ['concise', 'detailed'] });
+    if (AI_COST_TOOLS.has(t.name) && !Object.hasOwn(properties, 'max_cost_usd'))
+      properties.max_cost_usd = prop('Refuse before anything is sent when this call could cost more than this many US dollars (the context plus the most the answer may use, at the price of the model). Leave out for no per-call cap; the daily caps always apply', 'number');
     const budget = SEND_TOOLS.includes(t.name) ? budgets.send : AI_SPEND_TOOLS.includes(t.name) ? budgets.ai : undefined;
     if (confirm || budget)
       properties.confirm = o.confirmCodes
@@ -546,7 +586,9 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
           } else if (ownLimit) args.limit = offset + pageSize + 1;
           else delete args.limit;
         }
-        const out = await t.run(args);
+        const costCap = AI_COST_TOOLS.has(t.name) && typeof args.max_cost_usd === 'number' ? args.max_cost_usd : undefined;
+        if (AI_COST_TOOLS.has(t.name) && !t.inputSchema.properties.max_cost_usd) delete args.max_cost_usd;
+        const out = await withAiCostCap(costCap, () => t.run(args));
         const notes: string[] = [];
         let value: unknown = out;
         let structured: Record<string, unknown> | undefined;

@@ -20,6 +20,17 @@ export const LOOP_STEPS: Record<OnboardingStep['id'], { label: string; text: str
   ci: { label: 'Run them in CI', text: 'GitHub Actions, GitLab, Azure or Jenkins: one file.' },
 };
 
+/** The same steps in the Examples workspace, where there is something to send and run at once. */
+const LOOP_STEPS_EXAMPLES: Partial<Record<OnboardingStep['id'], { label: string; text: string }>> = {
+  send: { label: 'Send one of these', text: 'Open a collection, pick a request, press Send.' },
+  save: { label: 'Save a copy of your own', text: 'Edit a request and press Ctrl+S: it is yours.' },
+  test: { label: 'Save it as a test', text: 'Save as test… in its ⋯: checks you can run again.' },
+  run: { label: 'Run the offline suite', text: 'In Tests: it needs no internet.' },
+};
+
+/** A step's words, for the Examples workspace or any other. */
+export const loopStep = (id: OnboardingStep['id'], examples: boolean): { label: string; text: string } => ({ ...LOOP_STEPS[id], ...(examples ? LOOP_STEPS_EXAMPLES[id] : {}) });
+
 /** What a step's button does: open what it builds on (through openRef), or where to start. */
 export function runStep(s: OnboardingStep): void {
   const app = useApp.getState();
@@ -30,7 +41,8 @@ export function runStep(s: OnboardingStep): void {
       // the request sent last, in its editor: Ctrl+S saves it
       return s.ref ? void openRef(s.ref, s.ref.kind === 'history' ? { edit: true } : {}) : app.openIntent('rest', { newTab: true });
     case 'test':
-      if (s.ref?.kind === 'request') app.toast('Use Save as test… in the ⋯ at the end of the request’s breadcrumb', 'info');
+      // the request opens with the Save as test dialog on it
+      if (s.ref?.kind === 'request') return app.openIntent('rest', { collectionId: s.ref.collectionId, requestId: s.ref.requestId, saveAsTest: true });
       return s.ref ? void openRef(s.ref) : app.setView('tests');
     case 'run':
       return s.ref ? void openRef(s.ref) : app.setView('tests');
@@ -44,7 +56,7 @@ export const WALKTHROUGHS: Array<{ id: string; title: string; text: string; star
   {
     id: 'debug',
     title: 'Debug a failing test',
-    text: 'Run the Offline suite, open a failure, fix it, run it again (F8 steps through problems).',
+    text: 'Run the offline suite, open a failure, fix it, run it again (F8 steps through problems).',
     docs: 'getting-started/finding-your-way#problems',
     start: async () => {
       await runMenuCommand('open-examples');

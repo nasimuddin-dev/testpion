@@ -231,6 +231,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'http.code': { request: 'o', language: 's' },
   'http.compareEnvironments': { request: 'o', left: 's', right: 's' },
   'http.copyCode': { request: 'o', language: 's' },
+  'auth.fetchToken': { auth: 'o' },
   'http.curl': { request: 'o' },
   'http.parseCurl': { text: 's' },
   'http.parseSnippet': { text: 's' },

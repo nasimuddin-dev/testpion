@@ -2,6 +2,7 @@ import { aiRunDeps, aiUsageSummary, applyProposal, draftFlowProposal, flowSource
 import { normalizeError } from '../../errors.js';
 import { createEngineContext } from '../../engine.js';
 import { withEngine } from './server-kit.js';
+import { spent } from './ai-propose.js';
 import { ApsError } from '../../errors.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
@@ -96,6 +97,7 @@ export function aiTools({
           const { preview, proposal, ...rest } = r;
           return {
             ...rest,
+            ...spent(r),
             ...(r.dryRun ? { preview } : { sent: { privacy: preview.privacy, contextTokens: preview.context.tokens, masked: preview.redactionCount, local: preview.local } }),
             ...(proposal ? { proposal: forAgent(proposal), next: `Show the user the items and their verification; apply with ai_apply_proposal { id: "${proposal.id}" } after they agree.` } : {}),
           };
@@ -144,6 +146,7 @@ export function aiTools({
             const { preview, proposal, ...rest } = r;
             return {
               ...rest,
+              ...spent(r),
               sent: { privacy: preview.privacy, contextTokens: preview.context.tokens, masked: preview.redactionCount, local: preview.local },
               ...(proposal ? { proposal: forAgent(proposal), next: next(proposal) } : {}),
             };

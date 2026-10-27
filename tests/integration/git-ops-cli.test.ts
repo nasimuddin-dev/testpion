@@ -100,7 +100,7 @@ describe('restore, discard and undo', () => {
 
   it('restore writes just that item back and gives an undo id; undo puts the file back exactly', () => {
     const before = r.read('mcp-servers.json');
-    const run = cli('git', 'restore', 'mcp-server:search', '--rev', c1, '--json');
+    const run = cli('git', 'restore', 'mcp-server:search', '--rev', c1, '--yes', '--json');
     expect(run.status, run.err).toBe(0);
     const res = cliData<{ applied: boolean; undoId: string }>(run.out);
     expect(res.applied).toBe(true);
@@ -112,23 +112,23 @@ describe('restore, discard and undo', () => {
     const list = cliData<Array<{ id: string }>>(cli('git', 'undo', '--list', '--json').out);
     expect(list[0]!.id).toBe(res.undoId);
     expect(cli('git', 'undo', '--list').out).toMatch(/Restore/);
-    const undo = cli('git', 'undo', '--json');
+    const undo = cli('git', 'undo', '--yes', '--json');
     expect(undo.status, undo.err).toBe(0);
     expect(r.read('mcp-servers.json')).toBe(before);
-    expect(cli('git', 'undo').err).toMatch(/Nothing to undo/);
+    expect(cli('git', 'undo', '--yes').err).toMatch(/Nothing to undo/);
   });
 
   it('discard-item throws away one item\'s change and keeps the other\'s', () => {
     const dry = cli('git', 'discard-item', 'mcp-server:search', '--dry-run', '--json');
     expect(cliData<{ applied: boolean; changed: boolean }>(dry.out)).toMatchObject({ applied: false, changed: true });
     expect(json('mcp-servers.json').servers[1].url).toBe('https://s.example.com/v3');
-    const run = cli('git', 'discard-item', 'mcp-server:search', '--json');
+    const run = cli('git', 'discard-item', 'mcp-server:search', '--yes', '--json');
     expect(run.status, run.err).toBe(0);
     expect(cliData<{ applied: boolean; undoId: string }>(run.out).applied).toBe(true);
     const now = json('mcp-servers.json').servers;
     expect(now.find((s: { id: string }) => s.id === 'search').url).toBe('https://s.example.com/v2');
     expect(now.find((s: { id: string }) => s.id === 'weather').name).toBe('Weather live');
-    expect(cli('git', 'discard-item', 'mcp-server:search').out).toMatch(/nothing to change/i);
+    expect(cli('git', 'discard-item', 'mcp-server:search', '--yes').out).toMatch(/nothing to change/i);
   });
 });
 
@@ -139,7 +139,7 @@ describe('stash', () => {
     expect(cliData<{ applied: boolean; changes: unknown[] }>(dry.out)).toMatchObject({ applied: false });
     expect(json('mcp-servers.json').servers[0].name).toBe('Weather live');
 
-    const push = cli('git', 'stash', 'push', '-m', 'Before the rewrite', '--json');
+    const push = cli('git', 'stash', 'push', '-m', 'Before the rewrite', '--yes', '--json');
     expect(push.status, push.err).toBe(0);
     expect(cliData<{ applied: boolean; stash: { name: string } }>(push.out)).toMatchObject({ applied: true, stash: { name: 'Before the rewrite' } });
     expect(json('mcp-servers.json').servers[0].name).toBe('Weather mock');
@@ -153,7 +153,7 @@ describe('stash', () => {
     expect(show.stash.name).toBe('Before the rewrite');
     expect(show.changes.map((c) => c.title).join(' ')).toMatch(/Weather/);
 
-    const pop = cli('git', 'stash', 'pop', '--json');
+    const pop = cli('git', 'stash', 'pop', '--yes', '--json');
     expect(pop.status, pop.err).toBe(0);
     expect(cliData<{ dropped: boolean; conflicted: boolean }>(pop.out)).toMatchObject({ dropped: true, conflicted: false });
     expect(json('mcp-servers.json').servers[0].name).toBe('Weather live');
@@ -161,10 +161,10 @@ describe('stash', () => {
   });
 
   it('drop removes a stash for good; a missing one says what exists', () => {
-    expect(cli('git', 'stash', 'push', '-m', 'second').status).toBe(0);
-    const drop = cli('git', 'stash', 'drop', '0', '--json');
+    expect(cli('git', 'stash', 'push', '-m', 'second', '--yes').status).toBe(0);
+    const drop = cli('git', 'stash', 'drop', '0', '--yes', '--json');
     expect(cliData<{ dropped: { name: string } }>(drop.out).dropped.name).toBe('second');
-    const none = cli('git', 'stash', 'apply');
+    const none = cli('git', 'stash', 'apply', '--yes');
     expect(none.status).toBe(2);
     expect(none.err).toMatch(/No such stash/);
   });
@@ -246,12 +246,12 @@ describe('conflicts of an MCP server and of a text file', () => {
     expect(text.out).toMatch(/merged by meaning/);
 
     // an unknown key names the valid ones; a bad JSON edit is refused; nothing is written
-    const bad = cli('git', 'resolve', 'mcp-servers.json', '--pick', 'item:nope=ours');
+    const bad = cli('git', 'resolve', 'mcp-servers.json', '--pick', 'item:nope=ours', '--yes');
     expect(bad.status).toBe(2);
     expect(bad.err).toMatch(/item:search#url/);
-    expect(cli('git', 'resolve', 'mcp-servers.json', '--edit', 'item:search#url=not json').status).toBe(2);
+    expect(cli('git', 'resolve', 'mcp-servers.json', '--edit', 'item:search#url=not json', '--yes').status).toBe(2);
 
-    const done = cli('git', 'resolve', 'mcp-servers.json', '--edit', 'item:search#url="https://edited.example.com"', '--json');
+    const done = cli('git', 'resolve', 'mcp-servers.json', '--edit', 'item:search#url="https://edited.example.com"', '--yes', '--json');
     expect(done.status, done.err).toBe(0);
     expect(json('mcp-servers.json').servers.find((s: { id: string }) => s.id === 'search').url).toBe('https://edited.example.com');
     expect(cli('git', 'conflicts').out).toMatch(/No conflicts/);
@@ -271,7 +271,7 @@ describe('conflicts of an MCP server and of a text file', () => {
     expect(list[0]!.hunks[0]!.where).toMatch(/near item Pay/);
     expect(cli('git', 'conflicts', 'tests/flows/checkout.yaml').out).toMatch(/hunk:0/);
 
-    const edit = cli('git', 'resolve', 'tests/flows/checkout.yaml', '--edit', 'hunk:0=      url: "{{baseUrl}}/pay-edited"');
+    const edit = cli('git', 'resolve', 'tests/flows/checkout.yaml', '--edit', 'hunk:0=      url: "{{baseUrl}}/pay-edited"', '--yes');
     expect(edit.status, edit.err).toBe(0);
     expect(r.read('tests/flows/checkout.yaml')).toContain('/pay-edited"');
     expect(r.read('tests/flows/checkout.yaml')).not.toContain('<<<<<<<');
@@ -300,7 +300,7 @@ describe('not a repository', () => {
       const store = WorkspaceStore.create(join(plain.dir, 'ws'), 'Plain');
       const ws = store.root;
       store.close();
-      for (const args of [['history', 'mcp-server:weather'], ['blame', 'mcp-server:weather'], ['stash', 'list'], ['stash', 'push', '-m', 'x'], ['stage-item', 'mcp-server:weather'], ['commit', '-m', 'x']]) {
+      for (const args of [['history', 'mcp-server:weather'], ['blame', 'mcp-server:weather'], ['stash', 'list'], ['stash', 'push', '-m', 'x', '--yes'], ['stage-item', 'mcp-server:weather'], ['commit', '-m', 'x']]) {
         const run = runCliSync(['git', ...args, '-w', ws], { home: home.dir });
         expect(run.status, args.join(' ')).toBe(2);
         expect(run.err, args.join(' ')).toMatch(/not in a git repository/);

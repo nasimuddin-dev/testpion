@@ -21,7 +21,7 @@ import {
   gitRenameBranch,
   type MergeResolutions,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, withWorkspace, JSON_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { commitScanned, registerGitItemCommands, splitKeyValue } from './git-items.js';
 import { registerGitSetupCommands } from './git-setup.js';
@@ -87,7 +87,8 @@ export function registerGitCommands(git: Command, program: Command): void {
         const saved = await saveSurface({ store: s, surface: 'git.diff', format: o.format, out: o.out, params: { path: file, staged: !!o.staged } });
         return console.log(savedLine(saved));
       }
-      process.stdout.write(await gitDiff(s.root, file, !!o.staged));
+      const diff = await gitDiff(s.root, file, !!o.staged);
+      respond({ path: file, staged: !!o.staged, diff }, () => process.stdout.write(diff));
     }),
   );
 
@@ -147,7 +148,7 @@ export function registerGitCommands(git: Command, program: Command): void {
     .action((branch: string, o) =>
       withWorkspace(o.workspace, async (s) => {
         await gitSwitch(s.root, branch, { create: !!o.create });
-        console.log(green(`On ${branch}`));
+        respond({ branch, created: !!o.create }, () => console.log(green(`On ${branch}`)));
       }),
     );
 

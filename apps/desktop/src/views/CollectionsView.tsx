@@ -31,7 +31,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
-import { useIntent } from '../hooks';
+import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
@@ -45,7 +45,7 @@ import { CollectionDocs } from '../components/CollectionDocs';
 import { addToFolder, CollectionTree } from '../components/CollectionTree';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from '../components/TrashDialog';
 import { KeyValueEditor } from '../components/KeyValueEditor';
-import { Badge, Bar, Button, cx, Empty, IconButton, Menu, type MenuItem, MoreMenu, SectionTitle, Split, Tabs } from '../components/ui';
+import { Badge, Bar, Button, cx, Empty, IconButton, Menu, type MenuItem, MoreMenu, SectionTitle, Split, StatusDot, Tabs } from '../components/ui';
 import { InlineRename, treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { openItemMenu, type OpenItemCtx } from '../lib/item-menu';
@@ -54,6 +54,7 @@ import { subtreeIds } from '../components/MoveDialog';
 import { ImportModal } from './rest/dialogs';
 import { SecurityReviewDialog } from '../components/SecurityReviewDialog';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
+import { adoptSaved, changedFields, discardDraft, editDraft, markSaved, resolveConflict, useCollectionDrafts } from '../lib/collection-draft';
 
 export function CollectionsView() {
   const [trashOpen, setTrashOpen] = useState(false);
@@ -77,7 +78,13 @@ export function CollectionsView() {
     );
     return () => void (live = false);
   }, [selOutline]);
-  const [draft, setDraft] = useState<Collection>();
+  // the edits of the collection's own settings live in lib/collection-draft: a refresh of the outline (a save in a
+  // request tab, the file watcher, a pull, an AI apply) merges into them and never wipes what is being typed
+  const entries = useCollectionDrafts((s) => s.entries);
+  const entry = sel ? entries[sel] : undefined;
+  const draft = entry?.draft;
+  const setDraft = editDraft;
+  const dirty = !!entry && changedFields(entry.base, entry.draft).length > 0;
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'headers' | 'auth' | 'scripts' | 'settings' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
   // a dataset chosen before the collection (the sidebar's "Run a collection with it"): the runner starts with it
@@ -98,7 +105,9 @@ export function CollectionsView() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => setDraft(stored && stored.id === sel ? stored : undefined), [sel, stored]);
+  useEffect(() => {
+    if (stored && stored.id === sel) adoptSaved(stored);
+  }, [sel, stored]);
   useIntent('collections', (p) => {
     if (p?.collectionId) setSel(p.collectionId);
     // the New collection button of an empty state elsewhere (Home, the variables pane): lib/empty-actions.ts
@@ -147,6 +156,17 @@ export function CollectionsView() {
     await load();
     useApp.getState().toast('Collection saved', 'success');
   };
+  /** Save the settings being edited (the draft). Resolves false when it could not be saved. */
+  const saveDraft = async (): Promise<boolean> => {
+    if (!draft || !dirty) return true;
+    const ok = await attempt(() => save(draft));
+    if (ok) markSaved(draft);
+    return ok;
+  };
+  /** Save a change to the requests (the tree): the settings being edited stay unsaved and are merged back after. */
+  const saveItems = (c: Collection) => save(c.id === entry?.base.id ? { ...entry.base, items: c.items } : c);
+  useSaveShortcut('collections', () => void saveDraft());
+  useLeaveGuard('collections', dirty, draft ? `The settings of "${draft.name}"` : 'The collection settings', saveDraft);
   const exportAs = async (id: string, format: 'testpion' | 'postman' | 'openapi' | 'bruno' | 'http' | 'asyncapi') => {
     try {
       const r = await call<SaveResult & { name: string; notes: string[] }>('col.export', { id, format });
@@ -271,7 +291,7 @@ export function CollectionsView() {
                 <Button size="sm" variant="ghost" icon={<FolderPlus size={12} />} onClick={() => void newCollection()}>
                   New
                 </Button>
-                <IconButton label="Capture traffic into a collection (the Debugger's reverse proxy for one API)" onClick={() => openReverseProxyCapture()}>
+                <IconButton label="Capture traffic for one API into a collection" onClick={() => openReverseProxyCapture()}>
                   <Radio />
                 </IconButton>
                 <IconButton label="Recently deleted" onClick={() => setTrashOpen(true)}>
@@ -300,7 +320,10 @@ export function CollectionsView() {
                 className="mx-0 rounded-none pl-3 border-b border-line/60"
               >
                 <span className="flex-1 min-w-0">
-                  <span className={cx('block text-sm font-medium truncate', c.problem && 'text-bad')}>{c.name}</span>
+                  <span className={cx('block text-sm font-medium truncate', c.problem && 'text-bad')}>
+                    {c.name}
+                    {entries[c.id] && changedFields(entries[c.id].base, entries[c.id].draft).length > 0 && <StatusDot tone="accent" label="Unsaved changes" className="ml-1.5 align-middle" />}
+                  </span>
                   <span className="block text-xs text-muted truncate">{c.problem ? c.problem : `${plural(count(c.items), 'request')} · v${c.version} · ${c.updatedAt ? timeAgo(c.updatedAt) : ''}`}</span>
                 </span>
               </TreeRowShell>
@@ -340,6 +363,12 @@ export function CollectionsView() {
                   </span>
                 )}
                 <Badge>v{draft.version}</Badge>
+                {dirty && (
+                  <span className="flex items-center gap-1 text-xs text-muted" data-collection-dirty>
+                    <StatusDot tone="accent" />
+                    Unsaved changes
+                  </span>
+                )}
                 <div className="ml-auto flex gap-2">
                   <Button size="sm" icon={<FilePlus2 size={12} />} onClick={() => useApp.getState().openIntent('rest', { newTab: true })}>
                     New HTTP request
@@ -368,13 +397,29 @@ export function CollectionsView() {
                       { label: 'Security review…', icon: <ShieldCheck size={14} />, separator: true, onSelect: () => setSecurityOpen(true) },
                     ]}
                   />
-                  <Button size="sm" variant="primary" onClick={() => save(draft)}>
+                  <Button size="sm" variant="primary" disabled={!dirty} reason="Nothing changed yet" title="Save the settings (Ctrl+S)" onClick={() => void saveDraft()}>
                     Save
                   </Button>
+                  {dirty && (
+                    <Button size="sm" variant="ghost" title="Throw away the changes that are not saved" onClick={() => discardDraft(draft.id)}>
+                      Discard
+                    </Button>
+                  )}
                   {/* the collection's own menu (lib/node-menu.ts), the same as its row's: Export ▸ is there (one export menu, H2); Delete… goes to Recently deleted, with Undo */}
                   <MoreMenu label="More collection actions" items={openItemMenu('collection', collectionMenu(draft))} />
                 </div>
               </Bar>
+              {entry && entry.conflict.length > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b border-line bg-warn/10 text-xs" role="status" data-collection-conflict>
+                  <span>Changed outside this editor while you were editing: {entry.conflict.join(', ')}. Your edits are kept until you choose.</span>
+                  <Button size="sm" className="ml-auto" onClick={() => resolveConflict(draft.id, 'mine')}>
+                    Keep mine
+                  </Button>
+                  <Button size="sm" onClick={() => resolveConflict(draft.id, 'theirs')}>
+                    Take the saved version
+                  </Button>
+                </div>
+              )}
               <Tabs label="Collection"
                 value={tab}
                 onChange={setTab}
@@ -409,14 +454,14 @@ export function CollectionsView() {
                     <CollectionTree
                       collections={[draft]}
                       onOpen={open}
-                      onChange={save}
+                      onChange={saveItems}
                       onRun={(_, folderId) => {
                         setRunFolder(folderId);
                         setTab('run');
                       }}
                       onNewRequest={async (c, folderId) => {
                         const node = { kind: 'http' as const, id: uid('req-'), name: 'New request', request: { method: 'GET', url: '{{baseUrl}}/' }, assertions: [{ type: 'status', expected: 200 }] };
-                        await save({ ...c, items: addToFolder(c.items, folderId, node) });
+                        await saveItems({ ...c, items: addToFolder(c.items, folderId, node) });
                         open(c, node);
                       }}
                     />
@@ -426,7 +471,7 @@ export function CollectionsView() {
                   <div className="p-2">
                     <div className="flex items-center gap-2 px-1 pb-2">
                       <p className="text-xs text-muted">
-                        Collection variables override environment variables (so they are the same in every environment) and are overridden by request and runtime variables.
+                        Collection variables override environment variables (so they are the same in every environment) and are overridden by request variables and by variables a script sets while a run is going.
                       </p>
                       {draft.variables.length > 0 && (
                         <Button size="sm" className="ml-auto shrink-0" icon={<ArrowRightLeft size={12} />} title="So each environment can set its own value" onClick={() => setMoveVarsOpen(true)}>

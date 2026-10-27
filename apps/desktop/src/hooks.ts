@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { confirmAction, useApp, type ViewId } from './store';
+import { ask, confirmAction, useApp, type ViewId } from './store';
 import { useDoc } from './lib/docs';
 import { setLeaveGuard } from './lib/leave-guard';
 
@@ -71,18 +71,42 @@ export function useSaveShortcut(view: ViewId, fn: () => void): void {
  * While `dirty`, leaving this view (another view, an intent, back / forward) asks first, with the dialog the request
  * tabs show on close: `what` names the edits ("The settings"). Save with Ctrl+S is the way to keep them.
  */
-export function useLeaveGuard(view: ViewId, dirty: boolean, what: string): void {
+export function useLeaveGuard(view: ViewId, dirty: boolean, what: string, save?: () => Promise<unknown>): void {
+  const saver = useRef(save);
+  saver.current = save;
   useEffect(() => {
     if (!dirty) return;
-    setLeaveGuard(view, () =>
-      confirmAction({
+    setLeaveGuard(view, async () => {
+      // with a way to save (collection settings): Save / Don't save / Cancel, like closing a request tab
+      if (saver.current) {
+        const id = await ask({
+          title: 'Unsaved changes',
+          message: `${what} have unsaved changes.`,
+          detail: 'Save them before you leave, or leave without saving and they are lost.',
+          tone: 'question',
+          buttons: [
+            { id: 'cancel', label: 'Cancel' },
+            { id: 'discard', label: "Don't save" },
+            { id: 'save', label: 'Save', variant: 'primary' },
+          ],
+          cancelId: 'cancel',
+        });
+        if (id === 'discard') return true;
+        if (id !== 'save') return false;
+        try {
+          return (await saver.current()) !== false;
+        } catch {
+          return false;
+        }
+      }
+      return confirmAction({
         title: 'Unsaved changes',
         message: `${what} have unsaved changes.`,
         detail: 'Leave anyway and discard them? Save with Ctrl+S to keep them.',
         confirmLabel: 'Discard changes',
         danger: true,
-      }),
-    );
+      });
+    });
     return () => setLeaveGuard(view, undefined);
   }, [view, dirty, what]);
 }

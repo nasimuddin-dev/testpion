@@ -11,7 +11,7 @@ import { parseYaml } from '../util/lazy-yaml.js';
 
 type Any = Record<string, any>;
 
-type PmEvent = { listen: string; script?: { exec?: string[] | string } };
+type PmEvent = { listen: string; disabled?: boolean; script?: { exec?: string[] | string } };
 /** Script of a Postman `event` list (`prerequest` or `test`). */
 function pmScript(events: PmEvent[] | undefined, listen: string): string | undefined {
   const e = (events ?? []).find((x) => x.listen === listen)?.script?.exec;
@@ -87,6 +87,15 @@ export function parsePostman(text: string): ImportDocument {
     headers?.push(...a.headers);
     return a.auth;
   };
+  /** The script of an event list; one that is switched off in Postman (`disabled: true`) is not imported (it was not running there), and the report says so. */
+  const script = (events: PmEvent[] | undefined, listen: 'prerequest' | 'test', where: string): string | undefined => {
+    const ev = (events ?? []).find((x) => x.listen === listen);
+    if (ev?.disabled === true && pmScript(events, listen)) {
+      findings.add({ code: 'SCRIPT_DISABLED', severity: 'not-imported', where: [where], field: listen === 'test' ? 'testScript' : 'preRequestScript', message: `"${where}": the ${listen === 'test' ? 'post-response (test)' : 'pre-request'} script is switched off in Postman (disabled) and was not imported` });
+      return undefined;
+    }
+    return pmScript(events, listen);
+  };
   const convert = (items: any[]): CollectionNode[] =>
     (items ?? []).map((it: any): CollectionNode => {
       if (Array.isArray(it.item)) {
@@ -94,6 +103,8 @@ export function parsePostman(text: string): ImportDocument {
         const settings = pmSettings(it.protocolProfileBehavior, it.name ?? 'Folder', findings);
         const description = pmDescription(it.description);
         const fid = shortId('fld-');
+        const pre = script(it.event, 'prerequest', it.name ?? 'Folder');
+        const post = script(it.event, 'test', it.name ?? 'Folder');
         if (it.id) (doc.sourceIds ??= {})[fid] = String(it.id);
         return {
           kind: 'folder',
@@ -104,8 +115,8 @@ export function parsePostman(text: string): ImportDocument {
           ...(description ? { description } : {}),
           ...(settings ? { settings } : {}),
           ...(variables.length ? { variables } : {}),
-          ...(pmScript(it.event, 'prerequest') ? { preRequestScript: pmScript(it.event, 'prerequest') } : {}),
-          ...(pmScript(it.event, 'test') ? { testScript: pmScript(it.event, 'test') } : {}),
+          ...(pre ? { preRequestScript: pre } : {}),
+          ...(post ? { testScript: post } : {}),
         };
       }
       const r = typeof it.request === 'string' ? { url: it.request } : it.request ?? {};
@@ -120,14 +131,16 @@ export function parsePostman(text: string): ImportDocument {
       if (r.body?.mode === 'graphql') {
         const g = r.body.graphql ?? {};
         const gid = shortId('gql-');
+        const gpre = script(it.event, 'prerequest', it.name ?? url);
+        const gpost = script(it.event, 'test', it.name ?? url);
         if (it.id) (doc.sourceIds ??= {})[gid] = String(it.id);
         return {
           kind: 'graphql',
           id: gid,
           name: it.name ?? url,
           request: { endpoint: url, query: g.query ?? '', variables: typeof g.variables === 'string' && g.variables.trim() ? g.variables : undefined, headers, auth },
-          ...(pmScript(it.event, 'prerequest') ? { preRequestScript: pmScript(it.event, 'prerequest') } : {}),
-          ...(pmScript(it.event, 'test') ? { testScript: pmScript(it.event, 'test') } : {}),
+          ...(gpre ? { preRequestScript: gpre } : {}),
+          ...(gpost ? { testScript: gpost } : {}),
         };
       }
       let body: BodyConfig | undefined;
@@ -165,8 +178,8 @@ export function parsePostman(text: string): ImportDocument {
           ...(settings ? { settings } : {}),
         },
         description: pmDescription(r.description ?? it.description),
-        preRequestScript: pmScript(it.event, 'prerequest'),
-        testScript: pmScript(it.event, 'test'),
+        preRequestScript: script(it.event, 'prerequest', it.name ?? url),
+        testScript: script(it.event, 'test', it.name ?? url),
         examples: pmExamples(it.response, { method: r.method, url }),
       };
     });
@@ -183,8 +196,8 @@ export function parsePostman(text: string): ImportDocument {
     variables: (d.variable ?? []).map((v: any) => ({ key: v.key, value: String(v.value ?? ''), enabled: !v.disabled })),
     auth: authOf(d.auth, d.info?.name ?? 'Postman import'),
     ...(collectionSettings ? { settings: collectionSettings } : {}),
-    preRequestScript: pmScript(d.event, 'prerequest'),
-    testScript: pmScript(d.event, 'test'),
+    preRequestScript: script(d.event, 'prerequest', d.info?.name ?? 'Postman import'),
+    testScript: script(d.event, 'test', d.info?.name ?? 'Postman import'),
   };
   doc.collections.push(collection);
   if (d.info?._postman_id) doc.sourceKey = String(d.info._postman_id);

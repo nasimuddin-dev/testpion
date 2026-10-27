@@ -1,5 +1,5 @@
 import { asError, bridge, call, on } from './api';
-import { ask, useApp } from './store';
+import { ask, useApp, toastError } from './store';
 import { summariseNotes } from './lib/release-notes';
 
 const SKIP_KEY = 'aps.update.skip';
@@ -117,7 +117,7 @@ export async function checkForUpdates({ manual }: { manual: boolean }): Promise<
   if (choice === 'skip') store(SKIP_KEY, found.version);
   if (choice === 'install') {
     if (found.installable) await install(found.version, found.url);
-    else await call('app.openExternal', { url: found.url }).catch((e: Error) => toast(`Couldn't open the download page: ${e.message}`, 'error'));
+    else await call('app.openExternal', { url: found.url }).catch((e: Error) => toastError(e, "Couldn't open the download page"));
   }
   return 'available';
 }

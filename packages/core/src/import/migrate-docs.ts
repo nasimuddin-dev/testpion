@@ -1,6 +1,7 @@
 import { BRU_TO_TP, INSOMNIA_MISSING, POSTMAN_LEGACY_CALLS, POSTMAN_MISSING, POSTMAN_MISSING_HINT } from '../scripts/convert/coverage.js';
 import { BRU_CALLS, BRU_REQ_RES, HOPPSCOTCH_RULES, MATCHERS, THUNDER_RULES } from '../scripts/convert/rules.js';
 import { IMPORTER_SUPPORT, MATRIX_FEATURES, type ImporterSupport } from './support.js';
+import { POSTMAN_WORDS } from '@testpion/shared';
 
 /**
  * The migration guides, generated: one page per source tool (docs/migrate/<id>.md) and an overview with the capability
@@ -121,6 +122,8 @@ function page(s: ImporterSupport): string {
     '',
     bullets(s.notMapped),
   ];
+  if (s.id === 'postman')
+    lines.push('', "## Postman's words in TestPion", '', "Where to find what you know. In the command palette (Ctrl+K), typing the Postman word finds the row.", '', table(POSTMAN_WORDS.map((w): [string, string] => [w.theirs, `**${w.ours}**: ${w.where}`]), ['In Postman', 'In TestPion']));
   if (s.scripts) lines.push('', `## Scripts (${s.scripts.api})`, '', 'Scripts become TestPion\'s `tp.*`; anything the table does not list is left as written and still runs where the sandbox can run it.', '', scriptTable(s.scripts.table));
   if (s.templates) lines.push('', '## Variables and templates', '', s.templates);
   lines.push('', '## Importing again and going back', '', `Import the same source again and TestPion **updates** the collection it made instead of adding a copy, matching on ${s.updateKey}: the preview shows *replace*, *new* or *skip* for each item (an item you edited here is skipped unless you choose *replace*), and the update is one undo step.`);

@@ -43,6 +43,7 @@ const TITLES: Record<string, string> = {
   SCRIPT_API: 'Script APIs without an equivalent',
   SCRIPT_BASE_ENVIRONMENT: 'Base environment in scripts',
   SCRIPT_PARSE_ERROR: 'Scripts that do not parse',
+  SCRIPT_DISABLED: 'Scripts switched off in the source',
   SCRIPT_LIFT: 'Script settings moved to the request',
   TESTS_LIFTED: 'Tests lifted into assertions',
   TESTS_LIFTABLE: 'Tests that can become assertions',

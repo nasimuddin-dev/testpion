@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { AGENT_ENVIRONMENT, agentCommands, agentMcp, ENGINE_VERSION, EXIT_CODES } from '@testpion/core';
-import { withWorkspace, WORKSPACE_OPTION } from '../shared.js';
+import { respond, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 /**
  * `testpion agent-info`: what an AI agent needs to drive TestPion from this machine, as one JSON object — the version,
@@ -26,9 +26,7 @@ export function registerAgentInfoCommand(program: Command): void {
         workspace = null;
       }
       const w = workspace ? ` -w "${String(workspace.root)}"` : '';
-      console.log(
-        JSON.stringify(
-          {
+      const info = {
             schemaVersion: 1,
             testpion: ENGINE_VERSION,
             workspace,
@@ -40,10 +38,8 @@ export function registerAgentInfoCommand(program: Command): void {
             mcp: agentMcp(`testpion mcp-server${w}`),
             docs: { agents: 'https://testpion.dev/ai-testing/mcp-server', llms: 'https://testpion.dev/llms.txt', agentsMd: `testpion agents init${w} [--targets agents,claude,cursor] writes AGENTS.md (and CLAUDE.md, a Cursor rule) into the workspace` },
             secrets: 'Secret values never appear in tool results, exports or generated files: they are {{variables}}; set them in the environment or the app.',
-          },
-          null,
-          2,
-        ),
-      );
+      };
+      // plain JSON as it always was; with --json the same object is the envelope's data
+      respond(info, () => console.log(JSON.stringify(info, null, 2)));
     });
 }

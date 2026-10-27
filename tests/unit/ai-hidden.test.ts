@@ -248,7 +248,7 @@ describe('every entry point of the window honours Hide all AI actions', () => {
   it('the shared button is not rendered while AI is hidden, and the opening functions go through the store', () => {
     const action = text.get('components/ai/AiAction.tsx')!;
     expect(action).toMatch(/if \(!enabled\) return null;/);
-    expect(action).toContain("useApp.getState().set({ assistant: req })");
+    expect(action).toContain('useApp.getState().set({ assistant: { ...req, preflight:');
     expect(text.get('components/ai/flow-generate.ts')).toContain('set({ flowGenerate: req })');
     expect(text.get('components/ai/ai-analysis.ts')).toContain('set({ aiAnalysis: req })');
     // the palette and the rail do not offer the assistant while hidden

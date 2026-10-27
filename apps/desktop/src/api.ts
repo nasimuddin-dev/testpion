@@ -18,6 +18,8 @@ interface Bridge {
   on(channel: string, cb: (payload: any) => void): () => void;
   /** Electron on Windows / Linux: the app draws the title bar (window buttons over the top bar's right end). */
   titleBar?: boolean;
+  /** Screenshot and e2e runs (electron/main.ts capture mode). */
+  capture?: boolean;
   titleBarColors?(color: string, symbolColor: string, height?: number): void;
   /** Open the application menu (File, Edit, View …) at a point of the window. */
   appMenu?(x: number, y: number): void;

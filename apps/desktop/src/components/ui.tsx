@@ -40,7 +40,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
         size === 'sm' && 'h-7 px-2.5 text-xs',
         size === 'md' && 'h-8 px-3 text-sm',
         size === 'lg' && 'h-9 px-4 text-sm',
-        variant === 'primary' && 'bg-[image:var(--brand-gradient)] border-transparent text-white shadow-[var(--glow)] hover:brightness-110 hover:shadow-[var(--glow),var(--elev-md)]',
+        variant === 'primary' && 'bg-[image:var(--primary-gradient)] border-transparent text-white shadow-[var(--glow)] hover:brightness-110 hover:shadow-[var(--glow),var(--elev-md)]',
         variant === 'default' && 'bg-bg border-line-strong shadow-sm hover:bg-hover hover:border-line-strong',
         variant === 'soft' && 'bg-accent-soft border-transparent text-accent hover:bg-accent/20',
         variant === 'ghost' && 'border-transparent text-muted hover:text-fg hover:bg-hover',

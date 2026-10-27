@@ -75,7 +75,7 @@ function OtlpDialog({ ids, selected, onClose }: { ids: string[]; selected?: stri
     >
       <p className="text-sm text-muted mb-3">Sends traces as OTLP/HTTP JSON to a collector (Jaeger, Grafana Tempo, Honeycomb, an OpenTelemetry Collector …), redacted. The CLI does this during runs with <span className="mono">--otlp</span> or the standard <span className="mono">OTEL_EXPORTER_OTLP_ENDPOINT</span>.</p>
       <label className="block text-xs text-muted mb-1">Collector URL (…/v1/traces is added)</label>
-      <Input className="w-full mono mb-3" value={cfg.endpoint} onChange={(e) => setCfg({ ...cfg, endpoint: e.target.value })} placeholder="http://localhost:4318" />
+      <Input className="w-full mono mb-3" aria-label="OTLP endpoint" value={cfg.endpoint} onChange={(e) => setCfg({ ...cfg, endpoint: e.target.value })} placeholder="http://localhost:4318" />
       <label className="block text-xs text-muted mb-1">Headers, e.g. an API key as a secret variable: x-honeycomb-team = {'{{honeycombKey}}'}</label>
       <KeyValueEditor rows={cfg.headers} onChange={(headers) => setCfg({ ...cfg, headers })} keyPlaceholder="Header" />
     </Modal>

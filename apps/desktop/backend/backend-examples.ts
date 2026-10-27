@@ -38,3 +38,17 @@ export function updateExamples(be: Backend): void {
     be.logger.warn(`Could not add the new examples: ${(e as Error).message}`);
   }
 }
+
+const examplesIds = new WeakMap<Backend, string>();
+/** Whether the open workspace is the examples workspace that ships with the app (its id is the shipped template's). */
+export function isExamplesWorkspace(be: Backend): boolean {
+  const dir = be.host.examplesDir;
+  if (!dir || !be.store) return false;
+  try {
+    let id = examplesIds.get(be);
+    if (!id) examplesIds.set(be, (id = readJson<{ id: string }>(join(dir, 'workspace.json')).id));
+    return id === be.store.workspace.id;
+  } catch {
+    return false;
+  }
+}

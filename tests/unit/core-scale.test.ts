@@ -198,10 +198,10 @@ describe('a run of thousands of results', () => {
     expect(seen).toEqual(Array.from({ length: PER }, (_, i) => `test-${i}`));
     expectWithin(performance.now() - t0, 10_000, 'paging 4 pages of results');
   });
-  it('caps a page at 1,000 and filters before it pages', async () => {
+  it('caps a page at 500 and filters before it pages', async () => {
     const store = storeOf();
     const all = await pageRunResults(store, { runId: 'run-0', limit: 100_000 });
-    expect(all.items).toHaveLength(1000);
+    expect(all.items).toHaveLength(500);
     expect(all.truncated).toBe(true);
     const failed = await pageRunResults(store, { runId: 'run-0', status: 'failed', limit: 10 });
     expect(failed.total).toBe(Array.from({ length: PER }, (_, i) => i).filter((i) => (i < 1200 && i % 3 === 0) || i === 7).length);
@@ -235,8 +235,8 @@ describe('a run of thousands of results', () => {
       cursor = page.nextCursor;
     }
     expect(seen).toEqual(all.map((t) => t.id));
-    expect((await flakyTestsPage(store, { runs: 30 })).items).toHaveLength(200);
-    expect((await flakyTestsPage(store, { runs: 30, limit: 99_999 })).items).toHaveLength(1000);
+    expect((await flakyTestsPage(store, { runs: 30 })).items).toHaveLength(100);
+    expect((await flakyTestsPage(store, { runs: 30, limit: 99_999 })).items).toHaveLength(500);
   });
 });
 

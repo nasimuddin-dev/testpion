@@ -5,7 +5,7 @@
  * tools.
  */
 import type { Command } from 'commander';
-import { compareEvalRuns, evalMatrixPage, type EvalCompareItem, type EvalMatrixQuery } from '@testpion/core';
+import { compareEvalRuns, evalMatrixPage, SURFACE_PAGE, type EvalCompareItem, type EvalMatrixQuery } from '@testpion/core';
 import { EXIT, bold, CliError, dim, green, printJson, red, withWorkspace, yellow, WORKSPACE_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 
@@ -40,7 +40,7 @@ export function registerEvalCompareCommands(ev: Command): void {
     .option('-t, --threshold <score>', 'a score change counts beyond this, 0 to 1 (a drop of exactly the threshold is not a regression)', '0.05')
     .option('--max-regressions <n>', 'regressions allowed before the exit code is 1', '0')
     .option('--fail-on-missing', 'exit 1 too when a baseline case is missing from the run')
-    .option('--limit <n>', 'at most this many cases per list (default 200)')
+    .option('--limit <n>', 'at most this many cases per list (default 200, at most 500)')
     .option('--json', 'print the report as JSON: counts, per-variant pass rate and score delta, regressions, improvements, missing, added, passed')
     .action((run: string, o: { baseline: string; workspace?: string; threshold?: string; maxRegressions?: string; failOnMissing?: boolean; limit?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
@@ -122,7 +122,7 @@ export function registerEvalCompareCommands(ev: Command): void {
           tag: o.tag,
           sort: o.sort as EvalMatrixQuery['sort'],
           offset: number(o.offset, '--offset', { int: true, min: 0 }),
-          limit: number(o.limit, '--limit', { int: true, min: 1, max: 1000 }),
+          limit: number(o.limit, '--limit', { int: true, min: 1, max: SURFACE_PAGE.max }),
         });
         if (o.json) return printJson(page);
         console.log(

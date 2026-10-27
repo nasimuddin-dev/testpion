@@ -1,8 +1,8 @@
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../../lib/sticky';
-import { asError, call, type NormalizedError } from '../../api';
-import { persisted, useApp } from '../../store';
+import { call, type NormalizedError } from '../../api';
+import { persisted, useApp, toastError } from '../../store';
 import type { CheckConfig, CheckResult, ProviderConfig } from '../../types';
 import { templateVars } from '../../lib/format';
 import { loadDraft } from '../../lib/draft-store';
@@ -96,7 +96,7 @@ export function ModelPicker({ providers, provider, model, onChange }: { provider
     p &&
     call<string[]>('ai.models', { providerId: p.id, environment: env })
       .then(setModels)
-      .catch((e) => useApp.getState().toast(`Could not list models: ${asError(e).message}`, 'error'));
+      .catch((e) => toastError(e, 'Could not list models'));
   return (
     <div className="flex items-center gap-1">
       <Select aria-label="Provider" value={p?.id ?? ''} onChange={(e) => onChange(e.target.value, providers.find((x) => x.id === e.target.value)?.defaultModel ?? '')}>

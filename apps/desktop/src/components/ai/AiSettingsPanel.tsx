@@ -51,7 +51,7 @@ export function AiSettingsPanel({ s, set, providers }: { s: AppSettings; set(p: 
       <div className="font-medium">Models per task</div>
       <div className="grid grid-cols-2 gap-3">
         {tier('small', 'Small tasks', 'Explanations, triage, commit messages: a cheaper or local model is enough.')}
-        {tier('large', 'Large tasks', 'Tests, flows, assertions, toolsets: the most capable model.')}
+        {tier('large', 'Large tasks', 'Tests, flows, checks, toolsets: the most capable model.')}
       </div>
       <Toggle checked={!!ai.localOnly} onChange={(v) => put({ localOnly: v })} label="Local only: AI never leaves this computer" />
       <p className="text-xs text-muted -mt-2 pl-1">

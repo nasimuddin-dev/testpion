@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePublishRequest } from '../lib/request-variables';
 import { useAssistantContext } from '../lib/assistant-context';
 import { asError, call, on } from '../api';
-import { promptText, useApp, attempt } from '../store';
+import { promptText, useApp, attempt, toastError } from '../store';
 import { useIntent, useSendShortcut, useSaveShortcut } from '../hooks';
 import { openRef, reportIfGone } from '../lib/open-ref';
 import type { CheckConfig, Collection, CollectionNode, HttpRequestSpec, KeyValue, SavedExample, SavedHttpRequest, SseEvent } from '../types';
@@ -133,7 +133,7 @@ export function RestView() {
       }
       useApp.getState().toast(`Imported ${SNIPPET_LABEL[format ?? 'curl'] ?? 'request'}`, 'success');
     } catch (e) {
-      useApp.getState().toast(`Couldn't import the pasted request: ${asError(e).message}`, 'error');
+      toastError(e, "Couldn't import the pasted request");
     }
   };
   const importSnippetRef = useRef(importSnippet);
@@ -170,12 +170,29 @@ export function RestView() {
     setActive(t.id);
   };
 
+  // a tab opened to type into (New request, Ctrl+T, Home's card, the tour): the cursor is in its URL field, as in Postman
+  const focusUrlOf = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!focusUrlOf.current || focusUrlOf.current !== active) return;
+    focusUrlOf.current = undefined;
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('input[aria-label="Request URL"], [aria-label="Request URL"] input')?.focus());
+  }, [active, tabs]);
+  // Get started ▸ "Save it as a test" ▸ Show me: the request opens and the Save as test dialog with it
+  const saveAsTestOf = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const t = tabs.find((x) => x.id === active);
+    if (!saveAsTestOf.current || !t || t.requestId !== saveAsTestOf.current) return;
+    saveAsTestOf.current = undefined;
+    saveRestTabAsTest(t);
+  });
   useIntent('rest', async (p) => {
+    if (p?.saveAsTest && p.requestId) saveAsTestOf.current = String(p.requestId);
     if (p?.tabCommand) return runRestTabCommand(p.tabCommand);
     // "Describe with AI" from an empty GraphQL, gRPC, WebSocket or MCP view
     if (p?.describe) return aiOn ? void describeRequest() : undefined;
     if (p?.newTab) {
       const t = blankRequest();
+      focusUrlOf.current = t.id;
       setTabs((ts) => [...ts, t]);
       setActive(t.id);
     } else if (p?.collectionId) {

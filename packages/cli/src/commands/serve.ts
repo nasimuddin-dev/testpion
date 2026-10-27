@@ -278,6 +278,7 @@ ${cyan(r.url)}`);
       const overrides = o.overrides ? (JSON.parse(readFileSync(o.overrides, 'utf8')) as Record<string, Record<string, unknown>>) : undefined;
       const server = await startGraphQLMockServer(schema, { port: o.port ? Number(o.port) : 0, overrides, listLength: Number(o.listLength) || 2, delayMs: o.delay ? Number(o.delay) : undefined });
       console.log(bold(`GraphQL mock: ${server.url}`));
+      emitEvent('listening', { url: server.url });
       console.log(dim(`Queries: ${Object.keys(schema.getQueryType()?.getFields() ?? {}).join(', ') || 'none'}. Press Ctrl+C to stop.`));
       await new Promise<void>((done) => {
         const stop = () => {

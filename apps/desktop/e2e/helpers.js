@@ -92,7 +92,10 @@ window.__t = (() => {
         b = await waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === label), 1500);
         if (!b) return false;
       }
-      b.click(); await sleep(1200); return true;
+      b.click(); await sleep(1200);
+      // an AI action opens on "Ready to send" (the estimate first): Send goes on
+      const go = document.querySelector('[data-ai-preflight] [data-ai-send]'); if (go) { go.click(); await sleep(300); }
+      return true;
     },
     // click Send and wait until the request is over (the Cancel button is Send again, "Sending request…" is gone): a public
     // server may take seconds under load, so no fixed sleep decides whether the response is in

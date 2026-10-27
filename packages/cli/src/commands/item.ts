@@ -24,7 +24,7 @@ export function registerItemCommand(program: Command): void {
     );
   item
     .command('restore')
-    .description('put back a deleted item by its trash id (from `item delete` or `trash list`); a name that is taken again gets "(restored)"')
+    .description('put back a deleted item by its id in Recently deleted (from `item delete` or `trash list`); a name that is taken again gets "(restored)"')
     .argument('<id>')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option('--json', 'print { kind, id, name, ref } as JSON')

@@ -1,7 +1,7 @@
 import { Copy, Play, Radio, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, on } from '../api';
-import { toastError, useApp } from '../store';
+import { attempt, toastError, useApp } from '../store';
 import { Badge, Button, cx, Empty, Field, Input, statusTone } from './ui';
 import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
@@ -58,9 +58,26 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
       setBusy(false);
     }
   };
+  /** "Use as {{baseUrl}}": a "Mock" environment (made when missing) gets baseUrl = the mock's address, and becomes the active one. */
+  const useAsBaseUrl = async () => {
+    if (!info.url) return;
+    const app = useApp.getState();
+    try {
+      const mock = app.workspace?.environments.find((e) => e.name === 'Mock');
+      if (mock) await call('vars.setInEnvironment', { environment: mock.id, name: 'baseUrl', value: info.url });
+      else await call('env.save', { env: { id: `env-mock-${Date.now().toString(36)}`, name: 'Mock', variables: [{ key: 'baseUrl', value: info.url, enabled: true }] } });
+      await app.refreshWorkspace();
+      app.setEnvironment('Mock');
+      app.toast(`{{baseUrl}} is ${info.url} in the Mock environment, now active`, 'success');
+    } catch (e) {
+      toastError(e);
+    }
+  };
   const stop = async () => {
-    await call('mock.stop', { collectionId });
-    setInfo(await call<MockInfo>('mock.status', { collectionId }));
+    await attempt(async () => {
+      await call('mock.stop', { collectionId });
+      setInfo(await call<MockInfo>('mock.status', { collectionId }));
+    });
   };
   const routes = info.routes;
   // hits per route (by method and example served), and how requests were answered
@@ -108,6 +125,9 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
               onClick={() => void copyText(info.url!, 'the mock server URL')}
             >
               Copy URL
+            </Button>
+            <Button size="sm" onClick={() => void useAsBaseUrl()} title="Make a Mock environment whose {{baseUrl}} is this address, and switch to it" data-mock-use-base-url>
+              Use as {'{{baseUrl}}'}
             </Button>
           </div>
         )}
