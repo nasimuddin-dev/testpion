@@ -120,6 +120,8 @@ export const LABEL = {
   openTrace: 'Open trace',
   openRun: 'Open run',
   makeActive: 'Make active',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
   recentlyDeleted: 'Recently deleted…',
   /** Deleting puts the item in Recently deleted (or asks first where nothing can bring it back). */
   delete: 'Delete…',

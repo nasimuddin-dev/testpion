@@ -152,7 +152,7 @@ export function pathMatcher(target: string): (p: string | undefined) => boolean 
  * in it. Entries are kept for a minute (the watcher's events arrive within that); `OUTSIDE` marks a path whose last
  * change was someone else's, so an own entry of a folder above it no longer speaks for it.
  */
-const recentWrites = new Map<string, { at: number; fingerprint: string; dir?: boolean }>(); // bounded: 1000 entries, 60 s
+const recentWrites = new Map<string, { at: number; fingerprint: string; dir?: boolean; stat?: string }>(); // bounded: 1000 entries, 60 s
 const OWN_WRITE_TTL_MS = 60_000;
 /** At most this many own writes are remembered (~200 B each): a write the watcher has not seen yet is only forgotten beyond it. */
 const MAX_OWN_WRITES = 100_000;
@@ -179,11 +179,24 @@ function contentFingerprint(bytes: Buffer): string {
   return `hash:${bytes.length}:${sha1Hex(bytes)}`;
 }
 
-function recordOwn(path: string, fingerprint: string, dir?: boolean): void {
+/** `stat:<size>:<mtime ms>` of a file as it is now (what the watcher's cheap check compares), or undefined. */
+function statSigOf(path: string): string | undefined {
+  try {
+    const st = statSync(path);
+    return st.isFile() ? `stat:${st.size}:${Math.round(st.mtimeMs)}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Files at least this big also get their size:mtime remembered after an own write, so the watcher's event for it is answered by a stat, not a read and a hash. */
+const OWN_STAT_MIN_BYTES = 4096;
+
+function recordOwn(path: string, fingerprint: string, dir?: boolean, stat?: string): void {
   const abs = resolve(path);
   const key = ownKey(abs);
   recentWrites.delete(key); // newest last: pruning goes oldest first
-  recentWrites.set(key, { at: Date.now(), fingerprint, ...(dir ? { dir } : {}) });
+  recentWrites.set(key, { at: Date.now(), fingerprint, ...(dir ? { dir } : {}), ...(stat ? { stat } : {}) });
   // only what has expired goes (oldest first, stopping at the first one still fresh: O(1) a write): a write the
   // watcher has not seen yet is never forgotten — an import of thousands of files would otherwise come back as
   // "changed outside TestPion". MAX_OWN_WRITES bounds the memory of a flood that never pauses.
@@ -230,6 +243,12 @@ export function ownWrite(path: string, withinMs = OWN_WRITE_TTL_MS): string | un
   return undefined;
 }
 
+/** The size:mtime (`stat:…`) the file had right after this process last wrote it (within `withinMs`), when it was kept: the watcher answers its event from a stat when the file still has it. */
+export function ownWriteStat(path: string, withinMs = OWN_WRITE_TTL_MS): string | undefined {
+  const w = recentWrites.get(ownKey(path));
+  return w && w.fingerprint !== OUTSIDE && w.stat && Date.now() - w.at < withinMs ? w.stat : undefined;
+}
+
 /** The file at `path` was last changed by someone else (the watcher saw other bytes than this process wrote). */
 export function forgetOwnWrite(path: string): void {
   const abs = ownKey(path);
@@ -241,7 +260,7 @@ export function forgetOwnWrite(path: string): void {
  * Record a change this process made without the helpers below (another library wrote the file, an async write and
  * rename): `path` as it is on disk now — a file's content, a folder's files (each), or gone.
  */
-export function noteOwnChange(path: string): void {
+export function noteOwnChange(path: string, opts: { stat?: boolean } = {}): void {
   let st: import('node:fs').Stats | undefined;
   try {
     st = statSync(path);
@@ -267,7 +286,8 @@ export function noteOwnChange(path: string): void {
     return walk(path, 0);
   }
   try {
-    recordOwn(path, st.size > 8 * 1024 * 1024 ? `stat:${st.size}:${Math.round(st.mtimeMs)}` : contentFingerprint(readFileSync(path)));
+    // `stat`: an append to a big file is noted by its size and time (the whole file is not read and hashed for every record)
+    recordOwn(path, opts.stat || st.size > 8 * 1024 * 1024 ? `stat:${st.size}:${Math.round(st.mtimeMs)}` : contentFingerprint(readFileSync(path)));
   } catch {
     recordOwn(path, 'gone', true);
   }
@@ -307,7 +327,7 @@ export function writeOwned(path: string, data: string | Buffer, opts: { mode?: n
     restrictToOwner(dirname(path), 'dir');
     restrictToOwner(path, 'file');
   }
-  recordOwn(path, contentFingerprint(bytes));
+  recordOwn(path, contentFingerprint(bytes), undefined, bytes.length >= OWN_STAT_MIN_BYTES ? statSigOf(path) : undefined);
   forgetText(path);
 }
 
@@ -356,7 +376,7 @@ export function stageAtomicWrite(path: string, data: string | Buffer, opts: { mo
       } finally {
         forgetText(path);
       }
-      recordOwn(path, contentFingerprint(bytes));
+      recordOwn(path, contentFingerprint(bytes), undefined, bytes.length >= OWN_STAT_MIN_BYTES ? statSigOf(path) : undefined);
       if (priv) restrictToOwner(path, 'file');
     },
     discard() {
@@ -467,7 +487,7 @@ export async function atomicWriteAsync(path: string, data: string | Buffer): Pro
   } finally {
     forgetText(path);
   }
-  recordOwn(path, contentFingerprint(bytes));
+  recordOwn(path, contentFingerprint(bytes), undefined, bytes.length >= OWN_STAT_MIN_BYTES ? statSigOf(path) : undefined);
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

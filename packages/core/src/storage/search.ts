@@ -206,11 +206,11 @@ export class WorkspaceSearch {
       const score = (title === q ? 100 : 0) + (title.startsWith(q) ? 50 : 0) + terms.filter((t) => title.includes(t)).length * 10 + 1;
       hits.push({ ...d.hit, score });
     }
-    for (const h of this.store.meta.listHistory({ query, limit: 20 }).items)
+    for (const h of this.store.meta.listHistory({ query, limit: 20, countTotal: false }).items)
       hits.push({ kind: 'history', id: h.id, title: h.name, subtitle: `History · ${h.method ?? h.kind} ${h.url ?? ''} · ${h.status ?? ''}`, ref: { kind: 'history', historyId: h.id }, score: 0.5 });
-    for (const t of this.store.meta.listTraces({ query, limit: 10 }).items)
+    for (const t of this.store.meta.listTraces({ query, limit: 10, countTotal: false }).items)
       hits.push({ kind: 'trace', id: t.id, title: t.name, subtitle: `Trace · ${t.kind} · ${t.status}`, ref: { kind: 'trace', traceId: t.id }, score: 0.4 });
-    for (const r of this.store.meta.listRuns({ query, limit: 10 }).items)
+    for (const r of this.store.meta.listRuns({ query, limit: 10, countTotal: false }).items)
       hits.push({ kind: 'run', id: r.id, title: r.name, subtitle: `Run · ${r.passed}/${r.total} passed`, ref: { kind: 'run', runId: r.id }, score: 0.3 });
     return hits.sort((a, b) => b.score - a.score);
   }

@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import type { Collection, CollectionNode } from '../../types';
 import { uid } from '../../lib/format';
+import { defaultSaveCollection, rememberSaveCollection } from '../../lib/last-save-target';
 import { Button, Field, Input, Modal, Select, NamedOptions } from '../../components/ui';
 
 /**
@@ -31,7 +32,7 @@ export function SaveModal({
   onCreate(c: Collection): Promise<void>;
 }) {
   const [name, setName] = useState(defaultName);
-  const [cid, setCid] = useState((defaultCollectionId && collections.some((x) => x.id === defaultCollectionId) ? defaultCollectionId : collections[0]?.id) ?? '');
+  const [cid, setCid] = useState(() => defaultSaveCollection(collections, defaultCollectionId));
   const [folder, setFolder] = useState(defaultFolder ?? '');
   // a name here means "create this collection and save into it" (the default when there are none yet)
   const [newCollection, setNewCollection] = useState<string | null>(collections.length ? null : 'My collection');
@@ -40,11 +41,12 @@ export function SaveModal({
   const canSave = !!name.trim() && (creating ? !!newCollection.trim() : !!cid);
   const submit = async () => {
     if (!canSave || busy) return;
-    if (!creating) return onSave(cid, name.trim(), folder || undefined);
+    if (!creating) return (rememberSaveCollection(cid), onSave(cid, name.trim(), folder || undefined));
     setBusy(true);
     try {
       const id = uid('col-');
       await onCreate({ schemaVersion: '1.0', id, name: newCollection.trim(), version: 0, variables: [], items: [], updatedAt: '' });
+      rememberSaveCollection(id);
       onSave(id, name.trim());
     } finally {
       setBusy(false);

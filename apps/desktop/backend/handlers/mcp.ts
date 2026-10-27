@@ -18,7 +18,7 @@ import {
   type CheckConfig,
   type McpServerConfig,
   mcpToolUsage,
-  atomicWrite,
+  atomicWriteAsync,
   saveTest,
   removeItem,
 } from '@testpion/core';
@@ -70,8 +70,8 @@ export function mcpHandlers(be: Backend): Handlers {
     // calls, failures and times per tool of a server, from the history
     'mcp.toolUsage': ({ serverId }: { serverId?: string }) => mcpToolUsage(be.ws, { serverId }),
     'mcp.servers': () => be.ws.getMcpServers().map((s) => ({ ...s, connected: !!be.mcpSessions.get(s.id)?.connected })),
-    'mcp.saveServers': ({ servers }: { servers: McpServerConfig[] }) => {
-      be.ws.saveMcpServers(servers);
+    'mcp.saveServers': async ({ servers }: { servers: McpServerConfig[] }) => {
+      await be.ws.saveMcpServersAsync(servers);
       return servers;
     },
     /** Programs this workspace may start on this computer (stdio MCP servers the user allowed). */
@@ -161,10 +161,10 @@ export function mcpHandlers(be: Backend): Handlers {
       const def = mockFromDiscovery(name, discovery, calls, texts);
       const rel = `mocks/${s.config.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.mcp-mock.yaml`;
       mkdirSync(be.ws.path('mocks'), { recursive: true });
-      atomicWrite(be.ws.path(rel), dumpMcpMock(def));
+      await atomicWriteAsync(be.ws.path(rel), dumpMcpMock(def));
       if (addServer) {
         const servers = be.ws.getMcpServers().filter((x) => !(x.transport === 'mock' && x.mockFile === rel));
-        be.ws.saveMcpServers([...servers, { id: shortId('mcp-'), name: `${s.config.name} (mock)`, transport: 'mock', mockFile: rel }]);
+        await be.ws.saveMcpServersAsync([...servers, { id: shortId('mcp-'), name: `${s.config.name} (mock)`, transport: 'mock', mockFile: rel }]);
       }
       return { path: rel, tools: def.tools?.length ?? 0, calls: calls.length, resources: Object.keys(texts).length };
     },
@@ -184,10 +184,10 @@ export function mcpHandlers(be: Backend): Handlers {
     /** Parse a definition typed or generated as YAML (the YAML editor, Generate with AI) without saving it. */
     'mcp.mock.parse': ({ text }: { text: string }) => loadMcpMock(text),
     /** Save a toolset: the definition (from the form) or the raw text (from the YAML editor, checked first). */
-    'mcp.mock.write': ({ file, definition, text }: { file: string; definition?: McpMockDefinition; text?: string }) => {
+    'mcp.mock.write': async ({ file, definition, text }: { file: string; definition?: McpMockDefinition; text?: string }) => {
       const abs = be.ws.safePath(file);
       const out = text !== undefined ? (loadMcpMock(text), text) : dumpMcpMock(loadMcpMock(dumpMcpMock(definition!)));
-      atomicWrite(abs, out);
+      await atomicWriteAsync(abs, out);
       return { text: out, definition: loadMcpMock(out) };
     },
     /** Try a tool of a toolset as edited (unsaved): the mock's answer in-process, shaped like mcp.call's result. */

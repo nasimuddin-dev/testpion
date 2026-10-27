@@ -208,7 +208,8 @@ export function MonitorsView() {
     setBusy((b) => [...b, m.id]);
     try {
       const r = await call<MonitorResult>('monitor.run', { id: m.id });
-      toast(`${m.name}: ${statusLabel(r).toLowerCase()} (${r.passed}/${r.total})`, r.status === 'passed' ? 'success' : 'error');
+      // a result that is not a plain pass says why in the same message ("attention: the certificate ends in 9 days")
+      toast(`${m.name}: ${statusLabel(r).toLowerCase()} (${r.passed}/${r.total})${r.status !== 'passed' && (r.error || r.reason) ? `: ${r.error ?? r.reason}` : ''}`, r.status === 'passed' ? 'success' : 'error');
     } catch (e) {
       toastError(e);
     } finally {
@@ -555,7 +556,9 @@ function MonitorDetail(p: {
                     {timeAgo(r.startedAt)}
                   </td>
                   <td>
-                    <Badge tone={tone(r.status)}>{statusLabel(r)}</Badge>
+                    <Badge tone={tone(r.status)} title={r.error ?? r.reason}>
+                      {statusLabel(r)}
+                    </Badge>
                     {(r.error || r.reason) && <span className="text-xs text-bad ml-2">{r.error ?? r.reason}</span>}
                   </td>
                   <td className="text-right tabular-nums">{r.total ? `${r.passed}/${r.total}` : '—'}</td>

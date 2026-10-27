@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { dirname } from 'node:path';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { LoadSnapshot } from './load.js';
+import { appendBoundedLine } from '../util/jsonl-append.js';
 
 /** One finished load test, as kept in the workspace (runs/load/history.jsonl, the newest 500). */
 export interface LoadRunRecord {
@@ -52,12 +53,8 @@ export function loadRunRecord(snap: LoadSnapshot, info: Omit<LoadRunRecord, 'req
 }
 
 export function recordLoadRun(store: Pick<WorkspaceStore, 'path'>, r: LoadRunRecord): void {
-  const f = file(store);
-  mkdirSync(dirname(f), { recursive: true });
-  appendFileSync(f, JSON.stringify(r) + '\n');
-  // bounded: rewrite the newest records when the file grows past twice the limit
-  const lines = readFileSync(f, 'utf8').split('\n').filter((l) => l.trim());
-  if (lines.length > KEEP * 2) writeFileSync(f, lines.slice(-KEEP).join('\n') + '\n');
+  // bounded: the newest records are rewritten when the file grows past twice the limit
+  appendBoundedLine(file(store), JSON.stringify(r), KEEP, (f, text) => writeFileSync(f, text));
 }
 
 /** Finished load tests, newest first; only one saved load test's with `savedId`, or with a matching name / target with `query`. */

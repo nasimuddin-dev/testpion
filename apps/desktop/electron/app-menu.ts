@@ -46,7 +46,7 @@ function build(a: AppMenuActions): Menu {
     {
       label: 'File',
       submenu: [
-        item({ label: 'New Request Tab', i: 'newTab', accelerator: 'CmdOrCtrl+T', click: () => a.tabs('new') }),
+        item({ label: 'New Request Tab', i: 'newTab', accelerator: 'CmdOrCtrl+T', registerAccelerator: false, click: () => a.tabs('new') }),
         item({
           label: 'New',
           i: 'new',

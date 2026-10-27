@@ -77,7 +77,7 @@ export function testingHandlers(be: Backend): Handlers {
   return {
     'tests.tree': () => be.ws.testTree(),
     'tests.read': ({ path }: { path: string }) => be.ws.readTestFile(path),
-    'tests.write': ({ path, content }: { path: string; content: string }) => be.ws.writeTestFile(path, content),
+    'tests.write': ({ path, content }: { path: string; content: string }) => be.ws.writeTestFileAsync(path, content),
     /** What is wrong in a test file being edited (unknown keys, types, checks …), with positions, for the editor's markers. */
     'tests.lint': ({ content, path }: { content: string; path?: string }) =>
       lintTestFile(content, { file: path, suite: !!path && isSuiteFile(path), ...(path && /^\s*"?webhook"?\s*:/m.test(content) ? { webhooks: webhookFlows(be.ws.path('tests')) } : {}) }),
@@ -107,9 +107,9 @@ export function testingHandlers(be: Backend): Handlers {
       return { expose: readExposure(text, path), suggested: suggested || 'flow' };
     },
     /** Write (or, with expose: null, remove) the expose: block of a test file or suite; the rest of the file stays as it is. */
-    'tests.expose': ({ path, expose }: { path: string; expose: FlowExposure | null }) => {
+    'tests.expose': async ({ path, expose }: { path: string; expose: FlowExposure | null }) => {
       const next = setExposure(be.ws.readTestFile(path), expose ?? undefined);
-      be.ws.writeTestFile(path, next);
+      await be.ws.writeTestFileAsync(path, next);
       return { path, expose: readExposure(next, path) };
     },
     /** The first 500 tests of a test file inside tests/ (or its suite), read so that no file blocks the main process. */
@@ -238,7 +238,7 @@ export function testingHandlers(be: Backend): Handlers {
       if (!summary) throw new ApsError('ValidationError', `No run ${runId}`);
       if (!name?.trim()) throw new ApsError('ValidationError', 'baselines.save: missing name');
       const b = await createBaseline(name, summary as never, be.results(runId));
-      be.ws.saveBaseline(b);
+      await be.ws.saveBaselineAsync(b);
       return { name, tests: Object.keys(b.tests).length };
     },
     /** Compare a run with a saved baseline (`name`) or with an earlier run (`withRun`, used as the baseline). */

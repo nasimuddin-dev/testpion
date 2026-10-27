@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { call } from '../../api';
 import { confirmAction, toastError } from '../../store';
 import type { Collection, SavedHttpRequest } from '../../types';
-import { findNode, mapNodes } from '../../lib/collection-nodes';
+import { findNode, folderIdsTo, mapNodes } from '../../lib/collection-nodes';
 import { refreshCollection } from '../../lib/collections-store';
 import { noteClosedTabs } from '../../lib/closed-tabs';
 import { useExternalChange } from '../../lib/external-change';
@@ -109,6 +109,13 @@ function duplicateTab(t: RestTab): void {
     return [...ts.slice(0, i + 1), copy, ...ts.slice(i + 1)];
   });
   s.setActive(copy.id);
+  // saved beside the original: its collection and its folder are what the Save dialog starts on
+  const { collectionId, requestId } = t;
+  if (collectionId && requestId)
+    void call<Collection>('col.get', { id: collectionId }).then(
+      (c) => patchTab(copy.id, { saveNear: { collectionId, folderId: folderIdsTo(c.items, requestId)?.at(-1) } }),
+      () => patchTab(copy.id, { saveNear: { collectionId } }),
+    );
 }
 
 /** Rename a tab (edited in place in the tab strip); a saved request is renamed in its collection too. */

@@ -367,6 +367,7 @@ function AppLogs() {
       <Bar className="text-xs overflow-clip whitespace-nowrap">
         <OutputBarStart>
           <span className="text-muted truncate min-w-0">Application logs · secrets are always redacted</span>
+          <HelpLink page="getting-started/logs" what="Logs" />
         </OutputBarStart>
         <OutputActions spec={spec}>
           <Select className="field-sm text-xs w-auto" value={level} onChange={(e) => setLevel(e.target.value)} aria-label="Log level">

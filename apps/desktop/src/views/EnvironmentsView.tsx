@@ -208,8 +208,15 @@ export function EnvironmentsView() {
       rename: () => setRenamingEnv(e.id),
       duplicate: () => void duplicateEnv(e),
       delete: () => void deleteEnv(e),
+      // the order every environment picker uses: the menu does what dragging a row does
+      moveUp: () => void move(e.id, envs.findIndex((x) => x.id === e.id) - 1),
+      moveDown: () => void move(e.id, envs.findIndex((x) => x.id === e.id) + 1),
     },
-    disabled: activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
+    disabled: {
+      ...(activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {}),
+      ...(envs[0]?.id === e.id ? { moveUp: 'It is first already' } : {}),
+      ...(envs[envs.length - 1]?.id === e.id ? { moveDown: 'It is last already' } : {}),
+    },
   });
   // new variables of a saved environment, offered to the others (AlsoAddDialog)
   const [alsoFor, setAlsoFor] = useState<{ from: string; keys: string[] }>();

@@ -1,4 +1,5 @@
 import { parseYamlShared } from '../util/lazy-yaml.js';
+import { handOff, peekParsed } from './parsed.js';
 import { WORKSPACE_FORMATS } from '../storage/workspace.js';
 import type { ImportFormat } from '@testpion/shared';
 import { looksLikeBru } from './bru.js';
@@ -28,7 +29,7 @@ export function detectFormat(text: string): ImportFormat | 'unknown' {
   if (!t.startsWith('{') && !t.startsWith('[') && isDotenv(t)) return 'dotenv';
   let d: Record<string, any>;
   try {
-    d = t.startsWith('{') || t.startsWith('[') ? JSON.parse(t) : (parseYamlShared(t) as Record<string, any>);
+    d = t.startsWith('{') || t.startsWith('[') ? ((peekParsed(t) as Record<string, any> | undefined) ?? JSON.parse(t)) : (parseYamlShared(t) as Record<string, any>);
   } catch {
     return 'unknown';
   }
@@ -51,7 +52,11 @@ export function detectFormat(text: string): ImportFormat | 'unknown' {
   if (isAsyncApi(d)) return 'asyncapi';
   if (d.openapi) return 'openapi';
   if (d.swagger) return 'swagger';
-  if (d.info?._postman_id || String(d.info?.schema ?? '').includes('postman')) return 'postman';
+  if (d.info?._postman_id || String(d.info?.schema ?? '').includes('postman')) {
+    // the importer reads the same document next: it takes this parse instead of making its own (not for a huge file, which would be held for nothing if it is never imported)
+    if (t.length < 24 * 1024 * 1024) handOff(t, d);
+    return 'postman';
+  }
   if (d._postman_variable_scope === 'environment' || d._postman_variable_scope === 'globals' || (Array.isArray(d.values) && d.name)) return 'postman-env';
   if (d.log?.entries) return 'har';
   if (WORKSPACE_FORMATS.has(d.format)) return 'aps-workspace';

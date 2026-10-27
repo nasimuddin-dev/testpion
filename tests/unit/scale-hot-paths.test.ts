@@ -38,7 +38,7 @@ beforeAll(() => {
   meta = openMetaStore(join(t.dir, '.meta-scale'));
   meta.batch(() => {
     for (let i = 0; i < 100_000; i++)
-      meta.addHistory({ id: `h${i}`, timestamp: new Date(1.7e12 + i * 1000).toISOString(), kind: 'http', name: `GET /r${i % 500}`, status: i % 17 === 0 ? 500 : 200, durationMs: 5 + (i % 90), requestId: `c${i % 50}-r${i % 200}`, request: { method: 'GET', url: `http://x/r${i}` } } as never);
+      meta.addHistory({ id: `h${i}`, timestamp: new Date(1.7e12 + i * 1000).toISOString(), kind: 'http', name: `GET /r${i % 500}`, status: i % 17 === 0 ? 500 : 200, durationMs: 5 + (i % 90), requestId: `c${i % 50}-r${i % 200}`, collectionId: `c${i % 50}`, responseMeta: { timing: { ttfbMs: 5 + (i % 7), reusedConnection: true } }, request: { method: 'GET', url: `http://x/r${i}` } } as never);
   });
 }, 120_000);
 afterAll(() => {
@@ -78,5 +78,16 @@ describe('100,000 History rows', () => {
     expect(await best('historyByCollection', () => meta.historyByCollection())).toBeLessThan(500);
     expect(await best('activity(30 days)', () => meta.activity({ days: 30 }))).toBeLessThan(500);
     expect(meta.listHistory({ limit: 200, brief: true }).items).toHaveLength(200);
+  });
+
+  it('a collection timing reads its own rows from the index (D-4)', async () => {
+    // before: the latest 2,000 rows of every collection read whole, then filtered by collection in JS
+    const old = await best('collectionTiming, before (whole rows, filtered in JS)', () => meta.listHistory({ limit: 2000, requests: true }).items.filter((h) => h.collectionId === 'c7'));
+    const now = await best('collectionTimings (indexed column, timing only)', () => meta.collectionTimings('c7', 2000));
+    expect(now).toBeLessThan(20 * (process.env.TESTPION_PERF_SLACK ? Number(process.env.TESTPION_PERF_SLACK) : 3));
+    expect(now).toBeLessThan(old);
+    expect(meta.collectionTimings('c7', 2000).length).toBeGreaterThan(100);
+    // a search box does not count the table behind its 20 hits
+    expect(await best('listHistory query, no total', () => meta.listHistory({ query: 'r12', limit: 20, countTotal: false }))).toBeLessThan(500);
   });
 });

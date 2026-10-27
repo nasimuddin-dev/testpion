@@ -1,6 +1,7 @@
 import { toast as sonner } from 'sonner';
 import { aiSetupActionFor } from './lib/ai-setup';
 import { errorNextStep } from './lib/error-text';
+import { fileInError } from './lib/error-file';
 import type { ReactNode } from 'react';
 import { docKey, isDocView, routeDoc, useDocs } from './lib/docs';
 import { create } from 'zustand';
@@ -519,7 +520,10 @@ export function toastError(e: unknown, what?: string): void {
   const setup = aiSetupActionFor(err, () => useApp.getState());
   const behind = isPushRejected(err);
   // the message, then why and what to try first (the engine's `why` / `suggestions`: lib/error-text.ts)
-  useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : undefined), { description: errorNextStep(err) });
+  // an error about a file of the workspace offers to show it in the file manager (the backend checks it is there)
+  const file = setup || behind ? undefined : fileInError(err, useApp.getState().workspace?.path);
+  const reveal = file ? { label: 'Reveal file', onClick: () => void call('ws.revealFile', { path: file }).catch((e2) => useApp.getState().toast(asError(e2).message, 'error')) } : undefined;
+  useApp.getState().toast(err.message, 'error', setup ?? (behind ? { label: 'Pull & push', onClick: () => useApp.getState().openIntent('git', { sync: true }) } : reveal), { description: errorNextStep(err) });
 }
 
 /** Run an action; a failure is shown as the one error toast (`toastError`). Resolves true when it ran to the end. */

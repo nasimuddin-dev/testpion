@@ -1,6 +1,8 @@
 import { createElement, type ReactNode } from 'react';
 import {
   AlarmClock,
+  ArrowDown,
+  ArrowUp,
   ArchiveRestore,
   Bot,
   Braces,
@@ -74,6 +76,8 @@ export interface NodeMenuCtx extends Omit<NodeMenuContext, 'on' | 'disabled'> {
 /** The lucide component of each icon name the action tables use (a name without one shows no icon; the unit test lists them). */
 export const ACTION_ICONS: Readonly<Record<string, LucideIcon>> = {
   'alarm-clock': AlarmClock,
+  'arrow-down': ArrowDown,
+  'arrow-up': ArrowUp,
   'archive-restore': ArchiveRestore,
   bot: Bot,
   braces: Braces,

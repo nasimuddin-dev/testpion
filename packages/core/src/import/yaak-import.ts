@@ -5,6 +5,7 @@ import { mapMoreAuth } from './foreign-auth-more.js';
 import { normalizeYaak, distinct, splitYaakUnknown } from './templates-more.js';
 import { Findings, newDocument, type ImportDocument } from './model.js';
 import { collectionOf, type Any } from './import-helpers.js';
+import { takeParsed } from './parsed.js';
 
 /**
  * Yaak as an import document: the workspace export (`yaakSchema`, `resources: { workspaces, environments, folders,
@@ -38,7 +39,7 @@ export function yaakFilesToExport(files: Array<{ path: string; text: string }>):
 
 export function parseYaak(text: string): ImportDocument {
   const t = text.trim();
-  const d: Any = t.startsWith('{') ? JSON.parse(t) : (parseYaml(t) as Any);
+  const d: Any = t.startsWith('{') ? takeParsed(t) : (parseYaml(t) as Any);
   const r: Any = d.resources ?? {};
   const findings = new Findings();
   const doc = newDocument('yaak', text, { tool: 'Yaak', ...(d.yaakVersion ? { version: String(d.yaakVersion) } : {}), scriptTool: undefined });

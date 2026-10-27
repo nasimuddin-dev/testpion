@@ -14,12 +14,12 @@ interface PhaseTotals {
 
 /** Totals over the latest `limit` HTTP and GraphQL responses of the collection that have timing; undefined when there are none. */
 export function collectionTiming(store: WorkspaceStore, collectionId: string, opts: { limit?: number } = {}): PhaseTotals | undefined {
-  const rows = store.meta.listHistory({ limit: Math.min(Math.max(opts.limit ?? 2000, 1), 20_000), requests: true }).items;
+  // the collection's own rows from the indexed column, only the timing of each (it used to read the latest 2,000 of every collection whole)
+  const rows = store.meta.collectionTimings(collectionId, Math.min(Math.max(opts.limit ?? 2000, 1), 20_000));
   const t: PhaseTotals = { requests: 0, newConnections: 0, reused: 0, dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, downloadMs: 0 };
-  for (const h of rows) {
-    if (h.collectionId !== collectionId) continue;
-    const m = (h.responseMeta as { timing?: { dnsMs?: number; tcpMs?: number; tlsMs?: number; ttfbMs?: number; downloadMs?: number; reusedConnection?: boolean } } | undefined)?.timing;
-    if (!m || m.ttfbMs === undefined) continue;
+  for (const row of rows) {
+    const m = row as { dnsMs?: number; tcpMs?: number; tlsMs?: number; ttfbMs?: number; downloadMs?: number; reusedConnection?: boolean };
+    if (m.ttfbMs === undefined) continue;
     t.requests++;
     if (m.reusedConnection === true) t.reused++;
     else if (m.reusedConnection === false) t.newConnections++;

@@ -183,7 +183,7 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | Run |  | Open <kbd>Enter</kbd> |  | Rerun failed | Copy link, Copy CLI command, Copy run id, Export report… | Run in CI…, Explain and fix failures with AI… |  |  | Delete… <kbd>Del</kbd> |
 | History entry |  | Open <kbd>Enter</kbd>, Open request, Open trace |  |  | Copy link | Save as test… |  |  | Delete… <kbd>Del</kbd> |
 | Trace |  | Open <kbd>Enter</kbd>, Open run |  |  | Copy link |  |  |  |  |
-| Environment |  | Open <kbd>Enter</kbd> |  | Make active | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
+| Environment |  | Open <kbd>Enter</kbd> |  | Make active | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move up <kbd>Alt+↑</kbd>, Move down <kbd>Alt+↓</kbd> | Delete… <kbd>Del</kbd> |
 | AI provider |  | Open <kbd>Enter</kbd> |  |  | Copy link, Export… | Settings… | Git | Duplicate | Delete… <kbd>Del</kbd> |
 
 <!-- node-menus:end -->
@@ -222,6 +222,8 @@ The rail, the density and your [keys](/getting-started/keyboard-shortcuts#change
 ## Settings {#settings}
 
 **Settings** (<kbd>Ctrl</kbd>+<kbd>,</kbd>, the gear in the top bar) has a tab per subject: Appearance, Keyboard, Requests, Git, Proxy, Certificates, Privacy & security, Model pricing, Load testing, Storage, AI assistant, AI agents (MCP) and About. **Save settings** (<kbd>Ctrl</kbd>+<kbd>S</kbd>) writes what you changed on any tab and is enabled only once something changed; leaving the view with unsaved changes asks first, like closing an edited request tab. Keyboard, Storage and AI agents save on their own. Every number field says its default and what it does: the default timeout (30000 ms unless changed; 0 waits forever) and the maximum virtual users of a load test (200 unless changed; a guard against a typo overloading this computer or the API).
+
+Under each tab's name one line says what it applies to (**all workspaces on this computer**, or this workspace). The **Search settings** box at the top finds a setting by its name or a word people use for it (*timeout*, *dark*, *corporate*, *key*): a click goes to its tab. **About** has **Export settings** (a JSON file of the settings of your choice, the same one `testpion settings get --json` prints, with no secret, no variables and no price table), **Import settings…** (every value is checked as `testpion settings set` checks it, and a setting this version does not know is skipped and named) and **Reset settings…** (every setting back to its default; workspaces and secrets are not touched). A request that changes data (POST, PUT, PATCH, DELETE) and still has a variable with no value (a name in double braces) asks once before it is sent, with the names; **Settings ▸ Requests** turns that question off.
 
 ## Choose what the rail shows {#choose-what-the-rail-shows}
 

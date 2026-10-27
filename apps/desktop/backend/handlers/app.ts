@@ -13,6 +13,9 @@ import {
   type AuthConfig,
   FEEDBACK_EMAIL,
   samePath,
+  exportSettings,
+  importSettings,
+  settingsDefaults,
 } from '@testpion/core';
 import { RPC_VERSION } from '@testpion/shared';
 import { existsSync, statSync } from 'node:fs';
@@ -40,6 +43,20 @@ export function appHandlers(be: Backend): Handlers {
     /** Stop a call in flight by the id the caller gave it (internal: the window and the bridge cancel their own calls). */
     'rpc.cancel': ({ id }: { id: string }) => be.calls.cancel(id),
     'settings.get': () => be.settings,
+    /** Settings ▸ About ▸ Export: the settings of the person's choice (the file `testpion settings get --json` prints), never a secret. */
+    'settings.export': () => exportSettings(be.settings),
+    /** Settings ▸ About ▸ Import: an exported file, every value checked as `testpion settings set` checks it; says what changed and what this version does not know. */
+    'settings.import': async ({ doc }: { doc: unknown }) => {
+      const r = importSettings(be.settings, doc);
+      if (r.changed.length) await be.handlers['settings.save']!(r.next);
+      return { changed: r.changed, skipped: r.skipped };
+    },
+    /** Settings ▸ About ▸ Reset: the named settings (all, when none are named) back to their defaults. */
+    'settings.reset': async ({ keys }: { keys?: string[] } = {}) => {
+      const r = settingsDefaults(be.settings, keys?.length ? keys : 'all');
+      if (r.reset.length) await be.handlers['settings.save']!(r.next);
+      return { reset: r.reset };
+    },
     /** Forget cached OAuth 2.0 tokens (Auth tab ▸ Forget tokens); returns how many there were. */
     'auth.clearTokens': () => clearTokenCache(),
     /** Auth tab ▸ Get token: run the OAuth 2.0 grant now and say whether it works, when the token ends and its scope (the token masked). */

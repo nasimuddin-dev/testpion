@@ -806,6 +806,8 @@ export interface AppSettings {
   globalVariables: KeyValue[];
   /** Check GitHub for a newer version when the desktop app starts. */
   checkForUpdates: boolean;
+  /** Ask before a POST / PUT / PATCH / DELETE is sent with a {{variable}} that has no value. Default on. */
+  confirmUnresolvedSend?: boolean;
   /** Show a desktop notification when a run (tests, collection, evaluation) finishes while the app isn't in front. Default on. */
   notifyRunFinished?: boolean;
   /** Outbound proxy: environment variables (default), a custom proxy, or none. The password is in the secret store. */
@@ -860,6 +862,7 @@ export function defaultSettings(): AppSettings {
     globalVariables: [],
     settingsRevision: 2,
     checkForUpdates: true,
+    confirmUnresolvedSend: true,
   };
 }
 
