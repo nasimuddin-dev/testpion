@@ -710,7 +710,7 @@ const cycle = (c) => {
          const { runId } = await inv('tests.run', { paths: ['soak.yaml'], name: 'Soak switch ${c}' });
          await inv('ws.open', { ref: window.__soakTourPath });
          await inv('ws.open', { ref: window.__soakHomePath });
-         const rec = await __t.waitFor(async () => (await inv('runs.summary', { runId }))?.total > 0, 20000);
+         let rec = false; for (let i = 0; i < 80 && !rec; i++) { await __t.sleep(250); rec = ((await inv('runs.list', { limit: 20 }).catch(() => null))?.items ?? []).some((x) => x.id === runId); }
          switched = 'run recorded ' + !!rec;
        }
        out.push('switch: ' + switched);

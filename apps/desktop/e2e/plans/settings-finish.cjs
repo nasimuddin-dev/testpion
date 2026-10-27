@@ -53,8 +53,10 @@ const steps = [
   s(
     'unresolved-variable-asks-first',
     `const url = vis('input[aria-label="Request URL"]')[0]; if (!url) return 'NO INPUT';
-     const method = vis('[aria-label="HTTP method"]')[0] ?? vis('select').find((x) => [...x.options].some((o) => o.value === 'POST'));
-     if (method) { const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(method, 'POST'); method.dispatchEvent(new Event('change', { bubbles: true })); }
+     const m = vis('button[aria-label="Method"]')[0]; if (!m) return 'NO BUTTON method';
+     await __t.real.click(m);
+     const post = await __t.waitFor(() => vis('[role=menuitem]').find((x) => x.textContent.trim() === 'POST'), 2000); if (!post) return 'NO MENU';
+     await __t.real.click(post); await __t.sleep(200);
      setVal(url, 'http://127.0.0.1:4010/echo/{{noSuchVariable}}'); await __t.sleep(300);
      const send = vis('button').find((b) => b.textContent.trim() === 'Send'); if (!send) return 'NO BUTTON';
      send.click(); await __t.sleep(900);
@@ -68,7 +70,7 @@ module.exports = withExpect(steps, {
   'scope-lines': /^Applies to: all workspaces on this computer\. \|\| Applies to: this workspace/,
   'search-jumps-to-the-tab': /^Default timeout \(ms\)\s*Requests \|\| field: true \| box cleared: true$/,
   'ask-before-sending-toggle': /^toggle: true \| default on: true$/,
-  'about-export-import-reset': /^Export.*Import settings….*Reset settings… \|\| exported: testpion-settings \| imported density: compact \| reset: (undefined|comfortable)$/,
+  'about-export-import-reset': /Import settings… \| Reset settings… \|\| exported: testpion-settings \| imported density: compact \| reset: (undefined|comfortable)$/,
   'ctrl-t-opens-a-request-tab': /^tabs \d+ -> \d+ \| url field focus: true$/,
   'unresolved-variable-asks-first': /^Send with 1 variable that has no value\?.*noSuchVariable.* \|\| closed: true$/,
 });

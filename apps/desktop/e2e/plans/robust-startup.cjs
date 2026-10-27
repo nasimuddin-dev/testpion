@@ -33,6 +33,8 @@ const steps = [
     `main:
       const { readFileSync, writeFileSync } = require('node:fs');
       const { join } = require('node:path');
+      const { BrowserWindow } = require('electron');
+      const win = BrowserWindow.getAllWindows()[0];
       const problem = await win.webContents.executeJavaScript("window.aps.invoke('ws.openProblem')");
       writeFileSync(join(problem.path, 'workspace.json'), readFileSync(join(problem.path, '.good-workspace.json'), 'utf8'));
       return 'fixed ' + problem.path;`,
