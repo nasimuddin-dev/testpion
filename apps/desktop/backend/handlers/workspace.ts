@@ -1,7 +1,7 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
 import { describeVariables } from '../var-descriptions.js';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname } from 'node:path';
 import {
   ApsError,
   listTrash,
@@ -82,6 +82,15 @@ export function workspaceHandlers(be: Backend): Handlers {
     'ws.list': () => be.manager.list(),
     /** Why no workspace is open after the start, if the last one could not be opened. */
     'ws.openProblem': () => (be.store ? null : (be.startupProblem ?? null)),
+    /** Show a file of the open workspace in the file manager (an error toast names it: "Reveal file"). Only inside the workspace. */
+    'ws.revealFile': async ({ path }: { path: string }) => {
+      const file = be.ws.safePath(path);
+      if (!existsSync(file)) throw new ApsError('ValidationError', `${path} is not there (any more)`);
+      if (be.host.showItemInFolder) be.host.showItemInFolder(file);
+      else if (be.host.openPath) await be.host.openPath(dirname(file));
+      else throw new ApsError('ConfigurationError', 'Files can only be shown from the desktop app');
+      return { ok: true };
+    },
     'ws.current': () =>
       be.store && {
         ...be.store.workspace,

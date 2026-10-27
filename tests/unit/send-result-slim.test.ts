@@ -69,7 +69,9 @@ describe('S-7 the send result carries the body once', () => {
 
   it('server-sent events are streamed once; the finished result carries their number and the window hands back what it kept', async () => {
     const streamed: unknown[] = [];
-    const slim = (await be.invoke('http.send', { request: { method: 'GET', url: `${base}/sse`, headers: [{ key: 'Accept', value: 'text/event-stream', enabled: true }] }, stream: true })) as { response: { events?: unknown[]; eventsStreamed?: number } };
+    const slim = (await be.invoke('http.send', { request: { method: 'GET', url: `${base}/sse`, headers: [{ key: 'Accept', value: 'text/event-stream', enabled: true }] }, stream: true })) as {
+      response: { events?: unknown[]; eventsStreamed?: number };
+    };
     expect(slim.response.events).toBeUndefined();
     expect(slim.response.eventsStreamed).toBe(3);
     let live = pushLiveEvents(undefined, [{ data: 'one' }, { data: 'two' }]);
@@ -82,7 +84,11 @@ describe('S-7 the send result carries the body once', () => {
 
   it('the live list keeps to the engine limits (it was unbounded)', () => {
     let live = pushLiveEvents(undefined, []);
-    for (let i = 0; i < 12; i++) live = pushLiveEvents(live, Array.from({ length: 1000 }, () => ({ data: 'x' })));
+    for (let i = 0; i < 12; i++)
+      live = pushLiveEvents(
+        live,
+        Array.from({ length: 1000 }, () => ({ data: 'x' })),
+      );
     expect(live.events.length).toBe(10_000);
   });
 });

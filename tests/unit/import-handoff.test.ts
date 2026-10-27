@@ -58,7 +58,10 @@ describe('the hand-off of a parsed document', () => {
   });
 
   it('a picked Postman v3 folder is not written out as one text and parsed again', () => {
-    const files = Array.from({ length: 400 }, (_, i) => ({ path: `Big/Folder/request-${i}.request.yaml`, data: `$kind: http-request\nname: Request ${i}\nmethod: GET\nurl: '{{baseUrl}}/r${i}'\n${'# padding\n'.repeat(40)}` }));
+    const files = Array.from({ length: 400 }, (_, i) => ({
+      path: `Big/Folder/request-${i}.request.yaml`,
+      data: `$kind: http-request\nname: Request ${i}\nmethod: GET\nurl: '{{baseUrl}}/r${i}'\n${'# padding\n'.repeat(40)}`,
+    }));
     files.push({ path: 'Big/.resources/definition.yaml', data: '$kind: collection\nname: Big\n' });
     const { inputs } = expandImportFiles(files as never, { folderName: 'Big' });
     expect(inputs.length).toBe(1);

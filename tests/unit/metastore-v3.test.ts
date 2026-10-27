@@ -50,7 +50,21 @@ function v2Database(dir: string) {
     [entry('c', 1), { checksOk: false }],
     [entry('d', 0, { requestId: 'r-d' }), undefined],
   ];
-  for (const [e, meta] of rows) ins.run(e.id, e.timestamp, e.kind, e.name, e.method, e.url, String(e.status), e.durationMs, JSON.stringify({ responseMeta: meta, collectionId: e.collectionId, requestId: e.requestId }), e.collectionId, e.requestId, e.status === 200 ? 1 : 0);
+  for (const [e, meta] of rows)
+    ins.run(
+      e.id,
+      e.timestamp,
+      e.kind,
+      e.name,
+      e.method,
+      e.url,
+      String(e.status),
+      e.durationMs,
+      JSON.stringify({ responseMeta: meta, collectionId: e.collectionId, requestId: e.requestId }),
+      e.collectionId,
+      e.requestId,
+      e.status === 200 ? 1 : 0,
+    );
   db.close();
 }
 
@@ -95,7 +109,13 @@ describe('SQLite metadata store, schema 3', () => {
     meta.close();
     // the plan uses an index of history (the collection's, not a scan of the table)
     const db = new DatabaseSync(join(dir, 'database.sqlite'));
-    const plan = (db.prepare("EXPLAIN QUERY PLAN SELECT json_extract(doc, '$.responseMeta.timing') FROM history WHERE collection_id = ? AND kind IN ('http') ORDER BY ts DESC LIMIT 5").all('c1') as Array<{ detail: string }>).map((r) => r.detail).join(' ');
+    const plan = (
+      db.prepare("EXPLAIN QUERY PLAN SELECT json_extract(doc, '$.responseMeta.timing') FROM history WHERE collection_id = ? AND kind IN ('http') ORDER BY ts DESC LIMIT 5").all('c1') as Array<{
+        detail: string;
+      }>
+    )
+      .map((r) => r.detail)
+      .join(' ');
     expect(plan).toMatch(/USING INDEX history_(collection_ts|coll_req_ts)|USING COVERING INDEX/);
     expect(plan).not.toMatch(/SCAN history(?! USING)/);
     db.close();
@@ -117,7 +137,11 @@ describe('SQLite metadata store, schema 3', () => {
     const dir = tempDir();
     const meta = openMetaStore(dir);
     for (let i = 0; i < 300; i++) meta.addHistory(entry(`h${i}`, 300 - i));
-    for (let i = 0; i < 10; i++) meta.addRun({ runId: `run${i}`, name: 'n', startedAt: new Date(Date.now() - i * 1000).toISOString(), durationMs: 1, total: 1, passed: 1, failed: 0, skipped: 0, errors: 0 } as never, `runs/run${i}`);
+    for (let i = 0; i < 10; i++)
+      meta.addRun(
+        { runId: `run${i}`, name: 'n', startedAt: new Date(Date.now() - i * 1000).toISOString(), durationMs: 1, total: 1, passed: 1, failed: 0, skipped: 0, errors: 0 } as never,
+        `runs/run${i}`,
+      );
     meta.deleteRuns(['run1', 'run2', 'run3']);
     expect(meta.listRuns().items.map((r) => r.id)).not.toContain('run2');
     expect(meta.listRuns().total).toBe(7);

@@ -48,7 +48,9 @@ describe('the asynchronous twins write the same files', () => {
     await ws.saveScriptPackageAsync('util', 'module.exports = 1');
     expect(ws.readScriptPackage('util')).toContain('module.exports');
     // no temp file is left behind
-    const leftovers = readdirSync(dir, { recursive: true }).map(String).filter((f) => f.includes('.tmp-'));
+    const leftovers = readdirSync(dir, { recursive: true })
+      .map(String)
+      .filter((f) => f.includes('.tmp-'));
     expect(leftovers).toEqual([]);
     ws.close();
   });

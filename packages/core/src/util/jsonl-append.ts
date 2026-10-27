@@ -15,10 +15,14 @@ export function appendBoundedLine(file: string, line: string, keep: number, rewr
   appendFileSync(file, line + '\n');
   let n = known.get(file);
   if (n === undefined) {
-    n = readFileSync(file, 'utf8').split('\n').filter((l) => l.trim()).length;
+    n = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim()).length;
   } else n++;
   if (n > keep * 2) {
-    const lines = readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
+    const lines = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim());
     if (lines.length > keep * 2) {
       rewrite(file, lines.slice(-keep).join('\n') + '\n');
       n = keep;

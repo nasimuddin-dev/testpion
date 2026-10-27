@@ -102,6 +102,8 @@ export type MenuLabelKey =
   | 'openTrace'
   | 'openRun'
   | 'makeActive'
+  | 'moveUp'
+  | 'moveDown'
   | 'recentlyDeleted';
 
 /**
@@ -370,6 +372,9 @@ const LIST_ACTIONS = [
   { id: 'openTrace', group: 'open', label: 'openTrace', icon: 'file-text', kinds: ['history'] },
   { id: 'openRun', group: 'open', label: 'openRun', icon: 'external-link', kinds: ['trace'] },
   { id: 'makeActive', group: 'run', label: 'makeActive', icon: 'check-circle-2', kinds: ['environment'] },
+  // the order of the environments is changed by dragging a row, or by these (and Alt+↑ / Alt+↓ on a focused row)
+  { id: 'moveUp', group: 'edit', label: 'moveUp', icon: 'arrow-up', kinds: ['environment'], shortcut: 'Alt+↑' },
+  { id: 'moveDown', group: 'edit', label: 'moveDown', icon: 'arrow-down', kinds: ['environment'], shortcut: 'Alt+↓' },
   { id: 'recentlyDeleted', group: 'open', label: 'recentlyDeleted', icon: 'archive-restore', kinds: ['section:environment', 'section:collection'] },
 ] as const satisfies readonly ActionDef[];
 

@@ -1,3 +1,4 @@
+import { PM_ALIASES } from './lib/pm-aliases';
 import type * as Monaco from 'monaco-editor';
 import { call } from './api';
 import { isTemplateBlock } from '@testpion/shared';
@@ -435,10 +436,23 @@ export function installEditorIntel(monaco: typeof Monaco): void {
       const word = model.getWordUntilPosition(position);
       const startColumn = expr ? position.column - expr[1]!.length : word.startColumn;
       const range = new monaco.Range(position.lineNumber, startColumn, position.lineNumber, position.column);
+      // Postman habits: the pm.* names are listed (only once pm was typed), each labelled as a Postman name and inserting the tp.* one
+      const aliases = expr?.[1]?.startsWith('pm')
+        ? PM_ALIASES.map((a) => ({
+            label: { label: a.pm, description: 'Postman name' },
+            kind: monaco.languages.CompletionItemKind.Function,
+            detail: `Postman compatibility: inserts ${a.tp}`,
+            documentation: { value: `\`${a.pm}\` still runs, but TestPion's own name is \`${a.tp}\`; this inserts that.` },
+            insertText: a.tp,
+            filterText: a.pm,
+            sortText: `~~${a.pm}`,
+            range,
+          }))
+        : [];
       return {
         // tp.* is the app's name for the API. Someone typing pm. (Postman habits) is offered the same tp.* snippets:
         // they match what was typed and replace it with tp.*, so pm never ends up in inserted code.
-        suggestions: SNIPPETS.map((s) => ({
+        suggestions: [...aliases, ...SNIPPETS.map((s) => ({
           label: s.label,
           kind: monaco.languages.CompletionItemKind.Snippet,
           detail: s.detail,
@@ -448,7 +462,7 @@ export function installEditorIntel(monaco: typeof Monaco): void {
           filterText: expr?.[1]?.startsWith('pm') ? s.label.replace(/^tp\./, 'pm.') : s.label,
           sortText: `~${s.label}`,
           range,
-        })),
+        }))],
       };
     },
   });

@@ -48,6 +48,7 @@ import { ErrorPanel } from '../components/Results';
 import { VarInput } from '../components/VarInput';
 import { Button, cx, Empty, IconButton, Menu } from '../components/ui';
 import { ResponseSplit } from '../components/ResponseSplit';
+import { confirmUnresolvedSend } from '../lib/confirm-unresolved';
 import { rehydrateResponse, pushLiveEvents, type LiveEvents } from '../lib/send-result';
 import { METHODS, RestTab, SendResult, blankRequest, savedSnapshot } from './rest/types';
 import { runRestTabCommand, saveRestTabAsTest, tabFromSaved, useRestTabs } from './rest/tabs-store';
@@ -222,8 +223,10 @@ export function RestView() {
   });
 
   const send = async () => {
-    const id = uid('send-');
     const tabId = tab.id;
+    // a request that changes data, with a {{variable}} that has no value: ask once before it goes out
+    if (!(await confirmUnresolvedSend(tabId, { request: toEngineRequest(tab.request), environment: env, collectionId: tab.collectionId, requestId: tab.requestId, preRequestScript: tab.preRequestScript }))) return undefined;
+    const id = uid('send-');
     // a request that was sent has a response to come back to: its tab stays (a preview tab is replaced by the next click)
     if (tab.preview) setTabs((ts) => ts.map((x) => (x.id === tabId ? { ...x, preview: false } : x)));
     setSending((s) => ({ ...s, [tabId]: id }));
@@ -301,7 +304,7 @@ export function RestView() {
     // the snapshot of the request as the file holds it (the writer normalises), so a later disk change is compared fairly
     const stored = await call<Collection>('col.get', { id: collectionId }).then((c) => findNode(c.items, node.id), () => undefined);
     const base = savedSnapshot(stored?.kind === 'http' ? stored : node);
-    setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, name, collectionId, requestId: node.id, dirty: false, base } : t)));
+    setTabs((ts) => ts.map((t) => (t.id === tab.id ? { ...t, name, collectionId, requestId: node.id, dirty: false, base, saveNear: undefined } : t)));
     useApp.getState().toast('Saved', 'success');
   };
 
@@ -544,7 +547,7 @@ export function RestView() {
       </>
       )}
     </div>
-      {saving && <SaveModal collections={collections} defaultName={tab.name} onClose={() => setSaving(false)} onSave={(cid, name, folder) => (setSaving(false), void saveTab(cid, name, folder))} onCreate={saveCollection} />}
+      {saving && <SaveModal collections={collections} defaultName={tab.name} defaultCollectionId={tab.saveNear?.collectionId} defaultFolder={tab.saveNear?.folderId} onClose={() => setSaving(false)} onSave={(cid, name, folder) => (setSaving(false), void saveTab(cid, name, folder))} onCreate={saveCollection} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={loadCollections} />}
       {showCookies && <CookiesModal initialDomain={hostOf(tab.request.url) || undefined} onClose={() => setShowCookies(false)} />}
       {comparingEnvs && <EnvCompareDialog tab={tab} onClose={() => setComparingEnvs(false)} />}

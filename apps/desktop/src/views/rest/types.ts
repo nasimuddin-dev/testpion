@@ -34,6 +34,8 @@ export interface RestTab {
   base?: string;
   /** Pinned tabs stay first and are not closed by "close others / all". */
   pinned?: boolean;
+  /** A copy of a saved request (Duplicate tab): saving it asks with the original's collection and folder already chosen, so it lands beside it. Gone once saved. */
+  saveNear?: { collectionId: string; folderId?: string };
   /** A preview tab (WF-19): a single click in the explorer opened it; the next one replaces it until it is kept or edited. */
   preview?: boolean;
 }

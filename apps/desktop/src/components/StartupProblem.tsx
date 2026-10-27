@@ -14,7 +14,11 @@ export function StartupProblem() {
   const [retrying, setRetrying] = useState(false);
   useEffect(() => {
     let alive = true;
-    const read = () => void call<{ path?: string; message: string } | null>('ws.openProblem').then((p) => alive && setProblem(p), () => undefined);
+    const read = () =>
+      void call<{ path?: string; message: string } | null>('ws.openProblem').then(
+        (p) => alive && setProblem(p),
+        () => undefined,
+      );
     read();
     const off = on('workspace.problem', read);
     return () => {

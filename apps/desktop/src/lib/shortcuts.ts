@@ -29,6 +29,7 @@ export const COMMANDS: readonly ShortcutCommand[] = [
   { id: 'switch-environment', label: 'Switch environment', combo: 'Mod+Shift+E' },
   { id: 'search', label: 'Search the workspace', combo: 'Mod+Shift+F' },
   { id: 'rerun-last', label: 'Run the last run again', combo: 'Mod+Shift+R' },
+  { id: 'new-request-tab', label: 'New request tab', combo: 'Mod+T' },
   { id: 'reopen-tab', label: 'Reopen the closed tab', combo: 'Mod+Shift+T' },
   { id: 'download-output', label: 'Download the focused output', combo: 'Mod+Shift+S' },
   { id: 'back', label: 'Back', combo: 'Alt+←' },
@@ -92,7 +93,7 @@ function rows(views: string[]): Array<{ title: string; rows: Row[] }> {
       rows: [
         { fixed: ['Mod+Enter'], text: 'Send the request (also runs AI prompts and gRPC calls)' },
         { fixed: ['Mod+S'], text: 'Save (a request, a test file, the settings …)' },
-        { fixed: ['Mod+T'], text: 'New request tab' },
+        { ids: ['new-request-tab'], text: 'New request tab' },
         { fixed: ['Mod+W'], text: 'Close the tab' },
         { fixed: ['Mod+Shift+W'], text: 'Close all tabs' },
         { fixed: ['Mod+O'], text: 'Import (Postman, Insomnia, Bruno, OpenAPI, cURL …)' },

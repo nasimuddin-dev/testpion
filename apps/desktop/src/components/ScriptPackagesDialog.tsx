@@ -70,6 +70,7 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
   return (
     <Modal
       title="Script packages"
+      help="test-runner/script-packages"
       onClose={onClose}
       onSubmit={() => void save()}
       width={1000}

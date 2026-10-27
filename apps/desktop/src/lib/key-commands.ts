@@ -20,6 +20,8 @@ const RUN: Record<string, () => void | false> = {
   search: () => useApp.getState().set({ searchOpen: true, paletteOpen: false }),
   // WF-08: the latest run, as it ran
   'rerun-last': () => void runAgain('last'),
+  // a new request tab: the window's own command (the web version has no menu), shown in the menu without registering its key
+  'new-request-tab': () => useApp.getState().openIntent('rest', { newTab: true }),
   // WF-10: whichever strip it was in
   'reopen-tab': () => void reopenClosedTab(),
   // the down arrow of the output nearest to the focus (a response, a run, the console)

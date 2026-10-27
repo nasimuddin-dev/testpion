@@ -1,5 +1,6 @@
 /** RPC handlers: Sending requests: HTTP (with response history), GraphQL and WebSocket. */
 import { slimSendResult } from '../send-result.js';
+import { unresolvedVariables } from '../send-check.js';
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { cachedAttention, collectionsHealth } from '../stats-cache.js';
 import {
@@ -41,6 +42,8 @@ import type { Backend, Handlers, HttpSendParams, GqlSendParams } from '../backen
 
 export function requestsHandlers(be: Backend): Handlers {
   return {
+    /** The {{variables}} of a request that have no value (the window asks before a data-changing request is sent with one). */
+    'http.unresolved': (p: Parameters<typeof unresolvedVariables>[1]) => unresolvedVariables(be, p),
     'http.send': async (p: HttpSendParams) => slimSendResult(await be.httpSend(p)),
     /**
      * Send the same request with two environments (one after the other, scripts included) and diff the

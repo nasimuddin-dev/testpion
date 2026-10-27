@@ -19,7 +19,14 @@ const addRuns = (store: WorkspaceStore, count: number, daysAgo = (i: number) => 
     mkdirSync(store.runDir(id), { recursive: true });
   }
 };
-const baseline = (runId: string, name = `base ${runId}`) => ({ schemaVersion: '1.0' as const, name, createdAt: new Date().toISOString(), runId, summary: {} as never, tests: { t: { status: 'passed' as const } } });
+const baseline = (runId: string, name = `base ${runId}`) => ({
+  schemaVersion: '1.0' as const,
+  name,
+  createdAt: new Date().toISOString(),
+  runId,
+  summary: {} as never,
+  tests: { t: { status: 'passed' as const } },
+});
 
 describe('retention never prunes a run a baseline points at', () => {
   it('by count and by age, in the sweep, and in "delete runs before"', async () => {
@@ -38,7 +45,12 @@ describe('retention never prunes a run a baseline points at', () => {
     expect(store.meta.listRuns({ limit: 100 }).items.map((r) => r.id)).toEqual(expect.arrayContaining(['run-011', 'run-009', 'run-000']));
     const before = new Date().toISOString();
     expect(deleteRunsBefore(store, before).deleted).toBe(1); // run-000 only
-    expect(store.meta.listRuns({ limit: 100 }).items.map((r) => r.id).sort()).toEqual(['run-009', 'run-011']);
+    expect(
+      store.meta
+        .listRuns({ limit: 100 })
+        .items.map((r) => r.id)
+        .sort(),
+    ).toEqual(['run-009', 'run-011']);
     expect((await deleteRunsBeforeAsync(store, before)).deleted).toBe(0);
     store.close();
   });

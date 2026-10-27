@@ -6,6 +6,7 @@ import { InheritedHeaders } from './InheritedHeaders';
 import { ScriptsPanel } from './ScriptsPanel';
 import { RequestSettings } from './RequestSettings';
 import { Button, Field, Modal, Tabs, Textarea } from './ui';
+import { confirmAction } from '../store';
 
 /**
  * Folder settings: scripts that run around every request inside, folder variables, headers, the auth the
@@ -14,6 +15,12 @@ import { Button, Field, Modal, Tabs, Textarea } from './ui';
 export function FolderEditorBody({ folder, onSave, onClose }: { folder: CollectionFolder; onSave(f: CollectionFolder): void; onClose(): void }) {
   const [draft, setDraft] = useState<CollectionFolder>(folder);
   const [tab, setTab] = useState<'scripts' | 'variables' | 'headers' | 'auth' | 'settings' | 'docs'>('scripts');
+  // Esc, the ✕, a click outside and Cancel keep what was typed unless the person says to drop it
+  const dirty = JSON.stringify(draft) !== JSON.stringify(folder);
+  const close = async () => {
+    if (dirty && !(await confirmAction({ title: 'Unsaved changes', message: `The settings of the folder "${folder.name}" have unsaved changes.`, detail: 'Close anyway and discard them? Save keeps them.', confirmLabel: 'Discard changes', danger: true }))) return;
+    onClose();
+  };
   const save = () => {
     onSave({
       ...draft,
@@ -29,12 +36,12 @@ export function FolderEditorBody({ folder, onSave, onClose }: { folder: Collecti
   return (
     <Modal
       title={`Folder: ${folder.name}`}
-      onClose={onClose}
+      onClose={() => void close()}
       onSubmit={save}
       width={880}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={() => void close()}>
             Cancel
           </Button>
           <Button variant="primary" onClick={save}>

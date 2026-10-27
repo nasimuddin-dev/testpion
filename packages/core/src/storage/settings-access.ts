@@ -47,6 +47,7 @@ export const SETTING_SPECS: Record<string, Spec> = {
   'ai.preferStable': { kind: 'boolean', doc: 'Suggested checks avoid values that change (ids, times, tokens).' },
   assistantProvider: { kind: 'text', doc: 'The provider of the AI assistant.' },
   assistantModel: { kind: 'text', doc: 'The model of the AI assistant.' },
+  confirmUnresolvedSend: { kind: 'boolean', doc: 'Ask before a request that changes data (POST, PUT, PATCH, DELETE) is sent with a {{variable}} that has no value.' },
 };
 
 /** Settings that are not the person's choice, or could hold a secret: never listed or set here. */
@@ -99,9 +100,8 @@ export function parseSettingValue(key: string, text: string): unknown {
   return text;
 }
 
-/** Change settings (`key=value` pairs, already parsed): returns the new settings and what changed (key, before, after). */
-export function changeSettings(mgr: WorkspaceManager, changes: Record<string, unknown>, o: { dryRun?: boolean } = {}): { changed: Array<{ key: string; before: unknown; after: unknown }>; settings: Record<string, unknown> } {
-  const current = mgr.loadSettings();
+/** `current` with `changes` applied (keys checked as `settings set` checks them); nothing is saved. Also what changed (key, before, after). */
+export function applySettings(current: AppSettings, changes: Record<string, unknown>): { next: AppSettings; changed: Array<{ key: string; before: unknown; after: unknown }> } {
   const next = structuredClone(current) as unknown as Record<string, unknown>;
   const changed: Array<{ key: string; before: unknown; after: unknown }> = [];
   for (const [key, value] of Object.entries(changes)) {
@@ -109,14 +109,19 @@ export function changeSettings(mgr: WorkspaceManager, changes: Record<string, un
     changed.push({ key, before: read(current, key) ?? null, after: value });
     write(next, key, value);
   }
-  const saved = o.dryRun ? (next as unknown as AppSettings) : mgr.saveSettings(next as unknown as AppSettings);
+  return { next: next as unknown as AppSettings, changed };
+}
+
+/** Change settings (`key=value` pairs, already parsed): returns the new settings and what changed (key, before, after). */
+export function changeSettings(mgr: WorkspaceManager, changes: Record<string, unknown>, o: { dryRun?: boolean } = {}): { changed: Array<{ key: string; before: unknown; after: unknown }>; settings: Record<string, unknown> } {
+  const { next, changed } = applySettings(mgr.loadSettings(), changes);
+  const saved = o.dryRun ? next : mgr.saveSettings(next);
   return { changed, settings: describeSettings(saved) };
 }
 
-/** Put settings back to their defaults (all of them, or the keys named). */
-export function resetSettings(mgr: WorkspaceManager, keys: string[] | 'all', o: { dryRun?: boolean } = {}) {
+/** `current` with the settings named (or all of them) back at their defaults; nothing is saved. Also which ones changed. */
+export function settingsDefaults(current: AppSettings, keys: string[] | 'all'): { next: AppSettings; reset: string[] } {
   const list = keys === 'all' ? Object.keys(SETTING_SPECS) : keys;
-  const current = mgr.loadSettings();
   const defaults = defaultSettings();
   const changes: Record<string, unknown> = {};
   for (const k of list) {
@@ -126,6 +131,50 @@ export function resetSettings(mgr: WorkspaceManager, keys: string[] | 'all', o: 
   }
   const next = structuredClone(current) as unknown as Record<string, unknown>;
   for (const [k, v] of Object.entries(changes)) write(next, k, v);
-  const saved = o.dryRun || !Object.keys(changes).length ? (next as unknown as AppSettings) : mgr.saveSettings(next as unknown as AppSettings);
-  return { reset: Object.keys(changes), settings: describeSettings(saved) };
+  return { next: next as unknown as AppSettings, reset: Object.keys(changes) };
+}
+
+/** Put settings back to their defaults (all of them, or the keys named). */
+export function resetSettings(mgr: WorkspaceManager, keys: string[] | 'all', o: { dryRun?: boolean } = {}) {
+  const { next, reset } = settingsDefaults(mgr.loadSettings(), keys);
+  const saved = o.dryRun || !reset.length ? next : mgr.saveSettings(next);
+  return { reset, settings: describeSettings(saved) };
+}
+
+/** The file Settings ▸ About exports and `testpion settings get --json` prints: the settings of the person's choice, with a format name. */
+export interface SettingsExport {
+  format: 'testpion-settings';
+  version: 1;
+  settings: Record<string, unknown>;
+}
+
+export function exportSettings(settings: AppSettings): SettingsExport {
+  const all = describeSettings(settings);
+  return { format: 'testpion-settings', version: 1, settings: Object.fromEntries(Object.entries(all).filter(([k]) => SETTING_SPECS[k])) };
+}
+
+/**
+ * Settings from an exported file, each checked as `settings set` checks it (a wrong value names its setting and changes nothing).
+ * Keys this version does not know are skipped and named; nothing is saved here.
+ */
+export function importSettings(current: AppSettings, doc: unknown): { next: AppSettings; changed: Array<{ key: string; before: unknown; after: unknown }>; skipped: string[] } {
+  const body = doc && typeof doc === 'object' ? (doc as { format?: unknown; settings?: unknown }) : {};
+  if (body.format !== 'testpion-settings' || !body.settings || typeof body.settings !== 'object')
+    throw bad('That is not a TestPion settings file', ['Export the settings from Settings ▸ About (or run testpion settings get --json) and import that file.']);
+  const changes: Record<string, unknown> = {};
+  const skipped: string[] = [];
+  for (const [key, value] of Object.entries(body.settings as Record<string, unknown>)) {
+    if (!SETTING_SPECS[key]) {
+      skipped.push(key);
+      continue;
+    }
+    // null is "not set" (the file lists every setting): that is the default again
+    if (value === null) {
+      changes[key] = read(defaultSettings(), key);
+      continue;
+    }
+    changes[key] = parseSettingValue(key, Array.isArray(value) ? value.join('\n') : String(value ?? ''));
+  }
+  const { next, changed } = applySettings(current, changes);
+  return { next, changed: changed.filter((c) => JSON.stringify(c.before ?? null) !== JSON.stringify(c.after ?? null)), skipped };
 }

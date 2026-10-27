@@ -12,11 +12,14 @@ import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
 import { NETWORK_DISCLOSURES } from '../lib/network-disclosures';
-import { Badge, Button, Field, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
+import { Badge, Button, Field, HelpLink, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
 import { OutputActions } from '../components/output/OutputFrame';
+import { SettingsSearch } from '../components/SettingsSearch';
+import { SettingsTransfer } from '../components/SettingsTransfer';
+import { SETTINGS_SCOPE, SETTINGS_TABS, type SettingsTabId } from '../lib/settings-index';
 import { diagnosticsOutputSpec } from '../components/output/diagnostics-specs';
 
-type Tab = 'appearance' | 'keyboard' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
+type Tab = SettingsTabId;
 
 export function SettingsView() {
   const settings = useApp((s) => s.settings);
@@ -78,21 +81,7 @@ export function SettingsView() {
       <Tabs label="Settings"
         value={tab}
         onChange={setTab}
-        tabs={[
-          { id: 'appearance', label: 'Appearance' },
-          { id: 'keyboard', label: 'Keyboard' },
-          { id: 'requests', label: 'Requests' },
-          { id: 'git', label: 'Git' },
-          { id: 'proxy', label: 'Proxy' },
-          { id: 'certificates', label: 'Certificates' },
-          { id: 'privacy', label: 'Privacy & security' },
-          { id: 'pricing', label: 'Model pricing' },
-          { id: 'load', label: 'Load testing' },
-          { id: 'storage', label: 'Storage' },
-          { id: 'assistant', label: 'AI assistant' },
-          { id: 'agents', label: 'AI agents (MCP)' },
-          { id: 'about', label: 'About' },
-        ]}
+        tabs={SETTINGS_TABS.map((t) => ({ ...t }))}
         right={
           tab !== 'storage' && tab !== 'agents' && tab !== 'keyboard' && (
             <Button size="sm" variant="primary" icon={<Save size={12} />} onClick={() => void save()} disabled={!changed} reason="Nothing changed yet" title="Save settings (Ctrl+S)">
@@ -103,6 +92,10 @@ export function SettingsView() {
       />
       <div className="flex-1 overflow-auto p-5">
         <div className="max-w-3xl flex flex-col gap-4">
+          <SettingsSearch onGo={setTab} />
+          <p className="text-xs text-muted -mt-2" data-settings-scope="">
+            {SETTINGS_SCOPE[tab]}
+          </p>
           {tab === 'appearance' && (
             <>
               <Field label="Theme">
@@ -152,6 +145,7 @@ export function SettingsView() {
               <Field label="Maximum response preview (MB)" hint="Larger bodies are streamed to disk and truncated in the viewer; use the download arrow on the response bar for the full body.">
                 <Input type="number" step="0.5" value={s.maxPreviewBytes / 1024 / 1024} onChange={(e) => set({ maxPreviewBytes: Math.max(0.1, Number(e.target.value)) * 1024 * 1024 })} />
               </Field>
+              <Toggle checked={s.confirmUnresolvedSend !== false} onChange={(confirmUnresolvedSend) => set({ confirmUnresolvedSend })} label="Ask before sending a request that changes data with a variable that has no value" />
               <Field label="Log level" hint="Secrets are redacted at every level, so DEBUG/TRACE are safe to enable.">
                 <Select value={s.logLevel} onChange={(e) => set({ logLevel: e.target.value as AppSettings['logLevel'] })}>
                   {['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].map((l) => (
@@ -214,6 +208,7 @@ export function SettingsView() {
           )}
           {tab === 'pricing' && (
             <>
+              <HelpLink page="ai-testing/model-pricing" what="Model pricing" className="self-start" />
               <p className="text-sm text-muted">
                 Estimated cost = input tokens × input price + output tokens × output price. Prices change — enter the current prices from your provider and bump the version when they change. Reports record which price
                 version was used. No prices are built in. A price for a model (<span className="mono">gpt-4o-mini</span>) also applies to its dated versions (
@@ -312,6 +307,7 @@ export function SettingsView() {
               <div>Secret storage: {info?.secretBackend}</div>
               {!!ws?.migrations.length && <div>Migrations applied on open: {ws.migrations.join(', ')}</div>}
               <div className="text-muted">Available check types: {info?.checkTypes.join(', ')}</div>
+              <SettingsTransfer unsaved={changed > 0} />
               <div>
                 <span className="inline-flex align-middle" data-output="settings.diagnostics" title="For a bug report: versions and storage backends as text or JSON, or the full bundle as a ZIP (settings without secrets, the last 500 log records, workspace size, slowest calls). Home folders and tokens are masked.">
                   <OutputActions spec={diagnosticsSpec} />

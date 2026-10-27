@@ -374,7 +374,8 @@ describe('docs say what the app says (P1)', () => {
   });
 
   it('the Settings tab names in the docs list are the tabs of SettingsView', () => {
-    const view = readFileSync(join(SRC, 'views/SettingsView.tsx'), 'utf8');
+    // (the tab list lives in lib/settings-index.ts: the view, the search and the scope lines read it)
+    const view = readFileSync(join(SRC, 'views/SettingsView.tsx'), 'utf8') + readFileSync(join(SRC, 'lib/settings-index.ts'), 'utf8');
     for (const t of TABS) expect(view, t).toContain(`label: '${t}'`);
   });
 });

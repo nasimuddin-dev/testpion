@@ -143,6 +143,9 @@ Key facts for agents, by topic:
 - [Save and export results](https://nasimuddin-dev.github.io/testpion/getting-started/save-and-export-results): the down arrow, formats, secret masking, what the CLI writes
 - [Keep your workspace in git](https://nasimuddin-dev.github.io/testpion/getting-started/git): Fix git setup, history / restore / discard / stage per item, conflicts, the staged secret scan, big files, shared sessions, CODEOWNERS; `testpion git …`
 - [Terminal](https://nasimuddin-dev.github.io/testpion/getting-started/terminal): the app's terminal tab with `testpion` on the PATH
+- [Logs](https://nasimuddin-dev.github.io/testpion/getting-started/logs): the bottom panel's application log, levels, saving it, where the file is
+- [Script packages](https://nasimuddin-dev.github.io/testpion/test-runner/script-packages): shared modules for scripts, loaded with `tp.require`
+- [Model pricing](https://nasimuddin-dev.github.io/testpion/ai-testing/model-pricing): the prices behind AI cost estimates and how a price matches a model
 - [Keyboard shortcuts](https://nasimuddin-dev.github.io/testpion/getting-started/keyboard-shortcuts): every shortcut on one page
 - [Your first AI test](https://nasimuddin-dev.github.io/testpion/getting-started/first-ai-test): test an LLM prompt with evaluators
 

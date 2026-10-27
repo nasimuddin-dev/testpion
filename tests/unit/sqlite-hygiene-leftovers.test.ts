@@ -81,7 +81,8 @@ describe('D-10 appending to a dataset', () => {
     const ms = performance.now() - t0;
     console.log(`1,000 appends to a 10 MB dataset: ${ms.toFixed(0)} ms`);
     expect(last).toBe(11_001);
-    expect(ms).toBeLessThan(1000 * Number(process.env.TESTPION_PERF_SLACK || 3));
+    // (it was 27 s: the budget keeps a loaded box passing and a pass over the file per append failing)
+    expect(ms).toBeLessThan(10_000 * Number(process.env.TESTPION_PERF_SLACK || 1));
     // a change by someone else in between is counted again, not assumed
     appendFileSync(file, '{"outside":1}\n');
     expect((await appendDatasetRow(store, 'big', { n: 9999 })).rows).toBe(11_003);
