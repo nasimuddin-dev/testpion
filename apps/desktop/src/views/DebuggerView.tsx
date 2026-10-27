@@ -499,7 +499,7 @@ export function DebuggerView() {
               {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
             </span>
           ) : (
-            'Watch one program: a browser or a terminal opened through the proxy; or everything on this computer. Nothing is captured until you choose.'
+            'Capture all traffic to see every program on this computer that follows the system proxy, or watch one program: a browser or a terminal opened through the proxy.'
           )
         }
         actions={
@@ -509,9 +509,21 @@ export function DebuggerView() {
                 Stop
               </Button>
             ) : (
-              <Button variant="primary" icon={<Play size={13} />} onClick={() => void start()} title="Start the proxy; point a program at it yourself, or choose what to capture from the menu">
+              <Button icon={<Play size={13} />} onClick={() => void start()} title="Start the proxy; point a program at it yourself, or choose what to capture from the menu">
                 Start capturing
               </Button>
+            )}
+            {!status?.systemProxy && (
+              <span data-capture-all>
+                <Button
+                  variant={status?.running ? 'default' : 'primary'}
+                  icon={<Globe size={13} />}
+                  onClick={() => void startThen(() => systemProxy(true))}
+                  title="Start the proxy and point this computer's proxy setting at it: browsers and programs that follow the Windows, macOS or Linux proxy setting show up here. Stopping puts the setting back."
+                >
+                  Capture all traffic
+                </Button>
+              </span>
             )}
             {recording ? (
               <>

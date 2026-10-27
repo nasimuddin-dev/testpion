@@ -230,8 +230,18 @@ async function readSystemProxy(): Promise<SystemProxySnapshot> {
   };
 }
 
+/** The stand-in for the system proxy while TESTPION_FAKE_SYSTEM_PROXY is set; '' = none. Tests read it with `fakeSystemProxyValue`. */
+let fakeSystemProxy = ''; // bounded: one string
+export const fakeSystemProxyValue = () => fakeSystemProxy;
+
 /** Point the system proxy at ours (every program that honours it sends through TestPion); returns what to restore. */
 export async function setSystemProxy(proxyUrl: string): Promise<SystemProxySnapshot> {
+  // tests: TESTPION_FAKE_SYSTEM_PROXY keeps the "system proxy" in memory so no run touches the real setting
+  if (process.env.TESTPION_FAKE_SYSTEM_PROXY) {
+    const before = fakeSystemProxy;
+    fakeSystemProxy = proxyUrl;
+    return { platform: 'fake', fake: before } as unknown as SystemProxySnapshot;
+  }
   const before = await readSystemProxy();
   const { host, port, hostPort: hp } = hostPort(proxyUrl);
   try {
@@ -262,6 +272,10 @@ export async function setSystemProxy(proxyUrl: string): Promise<SystemProxySnaps
 
 /** Put the system proxy back as it was. */
 export async function restoreSystemProxy(s: SystemProxySnapshot): Promise<void> {
+  if ((s.platform as string) === 'fake') {
+    fakeSystemProxy = (s as unknown as { fake: string }).fake;
+    return;
+  }
   if (s.platform === 'win32' && s.win) {
     await ps(
       `Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyEnable -Value ${s.win.enable ? 1 : 0} -Type DWord; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyServer -Value '${s.win.server.replace(/'/g, "''")}' -Type String; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyOverride -Value '${s.win.override.replace(/'/g, "''")}' -Type String`,
