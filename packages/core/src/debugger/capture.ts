@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFileChecked, spawnChecked } from '../net/process.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +13,7 @@ import { ApsError } from '../errors.js';
 
 const run = (cmd: string, args: string[], timeout = 8000) =>
   new Promise<string>((resolve, reject) => {
-    execFile(cmd, args, { timeout, windowsHide: true, maxBuffer: 1024 * 1024 }, (err, out, errOut) => (err ? reject(new Error(String(errOut || err.message).trim())) : resolve(String(out))));
+    execFileChecked(`program ${cmd}`, cmd, args, { timeout, windowsHide: true, maxBuffer: 1024 * 1024 }, (err, out, errOut) => (err ? reject(new Error(String(errOut || err.message).trim())) : resolve(String(out))));
   });
 
 const hostPort = (proxyUrl: string) => {
@@ -108,7 +108,7 @@ export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, st
       suggestions: ['Start your browser by hand with --proxy-server=' + proxyUrl + ' (Chromium browsers) or set the proxy in its settings.'],
     });
   if (b.systemProxy) {
-    const child = spawn('open', ['-a', b.path, startUrl], { detached: true, stdio: 'ignore' });
+    const child = spawnChecked('browser launch', 'open', ['-a', b.path, startUrl], { detached: true, stdio: 'ignore' });
     child.on('error', () => undefined);
     child.unref();
     return { browser: b.label, profileDir: '', systemProxy: true };
@@ -136,7 +136,7 @@ export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, st
   } else {
     args = [`--proxy-server=${proxyUrl}`, '--proxy-bypass-list=<-loopback>', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check', startUrl];
   }
-  const child = spawn(b.path, args, { detached: true, stdio: 'ignore', windowsHide: false });
+  const child = spawnChecked('browser launch', b.path, args, { detached: true, stdio: 'ignore', windowsHide: false });
   child.on('error', () => undefined);
   child.unref();
   return { browser: b.label, profileDir };
@@ -148,7 +148,7 @@ export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, st
 export function openTerminalWithProxy(proxyUrl: string): { terminal: string } {
   const env = { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, http_proxy: proxyUrl, https_proxy: proxyUrl, NO_PROXY: '', no_proxy: '' };
   const detach = (cmd: string, args: string[], label: string) => {
-    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', env, windowsHide: false });
+    const child = spawnChecked('terminal launch', cmd, args, { detached: true, stdio: 'ignore', env, windowsHide: false });
     child.on('error', () => undefined);
     child.unref();
     return { terminal: label };

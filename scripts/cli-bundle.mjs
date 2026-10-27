@@ -65,7 +65,7 @@ export function bundleCli({ root, outfile }) {
     logLevel: 'warning',
     metafile: true,
     plugins: [lazyBuiltins],
-    alias: { '@testpion/core': join(root, 'packages/core/src/index.ts'), '@testpion/shared': join(root, 'packages/shared/src/index.ts') },
+    alias: { '@testpion/core/desktop': join(root, 'packages/core/src/desktop.ts'), '@testpion/core': join(root, 'packages/core/src/index.ts'), '@testpion/shared': join(root, 'packages/shared/src/index.ts') },
     external: Object.keys(ranges).flatMap((n) => [n, `${n}/*`]),
     // CommonJS dependencies that call require() need it in an ES module bundle
     banner: { js: "import { createRequire as __tpCreateRequire } from 'node:module'; const require = __tpCreateRequire(import.meta.url);" },

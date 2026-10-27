@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { exchangesFromHar, exchangesToHar, proxyShellLines, Redactor, type DebuggerExchange } from '@testpion/core';
+import { exchangesFromHar, exchangesToHar, Redactor, type DebuggerExchange } from '@testpion/core';
+import { proxyShellLines } from '@testpion/core/desktop';
 
 // DBG-2: a session is a HAR file (every HTTP tool opens it) with TestPion's extras; it comes back whole, redacted.
 const exchange = (over: Partial<DebuggerExchange> = {}): DebuggerExchange => ({

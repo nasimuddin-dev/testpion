@@ -1,6 +1,6 @@
 import { nodeRequire } from '../util/lazy-require.js';
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFileChecked } from '../net/process.js';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -148,7 +148,7 @@ export function leafSigner(root: RootCertificate): (host: string) => LeafCertifi
 
 const run = (cmd: string, args: string[]) =>
   new Promise<string>((resolve, reject) => {
-    execFile(cmd, args, { timeout: 20_000, windowsHide: true }, (err, out, errOut) => (err ? reject(new Error(String(errOut || out || err.message).trim())) : resolve(String(out))));
+    execFileChecked(`certificate tool ${cmd}`, cmd, args, { timeout: 20_000, windowsHide: true }, (err, out, errOut) => (err ? reject(new Error(String(errOut || out || err.message).trim())) : resolve(String(out))));
   });
 
 /** How to trust the root here, for the UI when the one-click install is not possible. */

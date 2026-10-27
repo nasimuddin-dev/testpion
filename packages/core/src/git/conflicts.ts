@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSyncChecked } from '../net/process.js';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -93,7 +93,7 @@ function mergeSegments(base: string, ours: string, theirs: string): Segment[] {
     writeFileSync(b!, base);
     writeFileSync(o!, ours);
     writeFileSync(t!, theirs);
-    const r = spawnSync('git', ['merge-file', '-p', '--diff3', '-L', 'ours', '-L', 'base', '-L', 'theirs', o!, b!, t!], { encoding: 'utf8', windowsHide: true, maxBuffer: 256 * 1024 * 1024 });
+    const r = spawnSyncChecked('git', 'git', ['merge-file', '-p', '--diff3', '-L', 'ours', '-L', 'base', '-L', 'theirs', o!, b!, t!], { encoding: 'utf8', windowsHide: true, maxBuffer: 256 * 1024 * 1024 });
     if (r.error) throw new ApsError('ConfigurationError', (r.error as NodeJS.ErrnoException).code === 'ENOENT' ? 'Git is not installed' : r.error.message);
     if (r.status === null || r.status < 0 || r.status > 127) throw new ApsError('ConfigurationError', `git merge-file failed: ${(r.stderr ?? '').trim()}`);
     const lines = (r.stdout ?? '').split(/(?<=\n)/);

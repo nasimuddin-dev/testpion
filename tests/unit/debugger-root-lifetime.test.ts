@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import forge from 'node-forge';
-import { ROOT_DAYS, ensureRootCertificate, regenerateRootCertificate, rootStanding } from '../../packages/core/src/index.js';
+import { ROOT_DAYS, ensureRootCertificate, regenerateRootCertificate, rootStanding } from '../../packages/core/src/desktop.js';
 
 const dirs: string[] = [];
 const dir = () => {

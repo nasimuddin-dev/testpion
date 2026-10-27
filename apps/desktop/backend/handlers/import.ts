@@ -24,44 +24,25 @@ import {
   type SkippedFile,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { ImportPreviews, type PreviewSession } from '../import-previews.js';
 
-/** What a preview read, kept for the import that follows (the window never sends the files twice). */
-export interface Session {
-  inputs: ImportInput[];
-  skipped: SkippedFile[];
-  at: number;
-}
-const SESSIONS = new Map<string, Session>();
-const TTL_MS = 30 * 60_000;
-/** Previews kept at once (each holds what was read, up to 200 MB of text): the oldest goes when a new one needs the room. */
-export const MAX_SESSIONS = 8;
-/** The most one picked or dropped file may be, and all files of one preview together, checked on the base64 text before it is decoded. */
+/** What a preview read, kept for the import that follows (import-previews.ts: per session, bounded in count, age and bytes). */
+export type Session = PreviewSession;
+export { MAX_PREVIEWS as MAX_SESSIONS } from '../import-previews.js';
+/** The most one picked or dropped file may be, checked on the base64 text before it is decoded. */
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
-const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
-let sweepTimer: ReturnType<typeof setTimeout> | undefined;
-/** Expired previews go on a timer too, not only when the next one arrives (up to 200 MB of text each stayed until then). */
-function scheduleSweep(): void {
-  if (sweepTimer || !SESSIONS.size) return;
-  sweepTimer = setTimeout(() => {
-    sweepTimer = undefined;
-    const now = Date.now();
-    for (const [k, v] of SESSIONS) if (now - v.at > TTL_MS) SESSIONS.delete(k);
-    scheduleSweep();
-  }, TTL_MS / 3);
-  sweepTimer.unref?.();
+const previewsBySession = new WeakMap<Backend, ImportPreviews>();
+/** This session's previews. */
+export function previewsOf(be: Backend): ImportPreviews {
+  return previewsBySession.get(be) ?? previewsBySession.set(be, new ImportPreviews(be.host.importBytes)).get(be)!;
 }
-
-/** Keep a preview for the import that follows; expired ones are dropped first, then the oldest while there are too many. */
-export function rememberSession(id: string, s: Session, now = Date.now()): void {
-  for (const [k, v] of SESSIONS) if (now - v.at > TTL_MS) SESSIONS.delete(k);
-  SESSIONS.set(id, s);
-  scheduleSweep();
-  // a Map keeps insertion order: the first key is the oldest
-  while (SESSIONS.size > MAX_SESSIONS) SESSIONS.delete(SESSIONS.keys().next().value as string);
+/** Keep a preview for the import that follows (tests; the handler uses the same store). */
+export function rememberSession(be: Backend, id: string, s: Session, now = Date.now()): void {
+  previewsOf(be).remember(id, s, now);
 }
-/** For tests: how many previews are kept. */
-export const sessionCount = (): number => SESSIONS.size;
+/** For tests: how many previews this session keeps. */
+export const sessionCount = (be: Backend): number => previewsOf(be).size;
 
 const KEY = 'postman.apiKey';
 
@@ -102,10 +83,7 @@ function sinks(be: Backend): ImportSinks {
 }
 
 export function importHandlers(be: Backend): Handlers {
-  const sweep = () => {
-    const now = Date.now();
-    for (const [id, s] of SESSIONS) if (now - s.at > TTL_MS) SESSIONS.delete(id);
-  };
+  const sweep = () => previewsOf(be).sweep();
   return {
     /**
      * Read what the user gave (files, a dropped folder, a ZIP, pasted text, a link, a Postman id) and say what importing
@@ -118,8 +96,9 @@ export function importHandlers(be: Backend): Handlers {
       if (p.files?.length) {
         // sizes are checked on the base64 text, before any of it is decoded
         const asked = p.files.reduce((n, f) => n + Math.floor(((f.base64?.length ?? 0) * 3) / 4), 0);
-        if (asked > MAX_UPLOAD_BYTES) throw new ApsError('ValidationError', `Those files are larger than ${MAX_UPLOAD_BYTES / 1048576} MB together`, { suggestions: [] });
-        const raw: RawImportFile[] = p.files.map((f) => ({ path: f.path, data: f.base64 !== undefined ? decodeBase64(f.base64, MAX_FILE_BYTES, f.path) : (f.text ?? '') }));
+        const maxUpload = previewsOf(be).maxBytes;
+        if (asked > maxUpload) throw new ApsError('ValidationError', `Those files are larger than ${Math.round(maxUpload / 1048576)} MB together`, { suggestions: [] });
+        const raw: RawImportFile[] = p.files.map((f) => ({ path: f.path, data: f.base64 !== undefined ? decodeBase64(f.base64, Math.min(MAX_FILE_BYTES, maxUpload), f.path) : (f.text ?? '') }));
         const r = expandImportFiles(raw, { folderName: p.folderName });
         inputs.push(...r.inputs);
         skipped.push(...r.skipped);
@@ -142,16 +121,16 @@ export function importHandlers(be: Backend): Handlers {
       }
       if (!inputs.length) throw new ApsError('ValidationError', skipped.length ? `Nothing to import: ${skipped.slice(0, 3).map((s) => `${s.path} (${s.why})`).join(', ')}` : 'Choose a file or folder, paste a document, or give a link', { suggestions: [] });
       const sessionId = shortId('imps-');
-      rememberSession(sessionId, { inputs, skipped, at: Date.now() });
+      previewsOf(be).remember(sessionId, { inputs, skipped, at: Date.now() });
       // a copied request (cURL, fetch …) is saved by import.apply into the "Imported" collection: there is no tree to preview
       const snippets = inputs.filter((i) => isRequestSnippet(i.text)).length;
       return { sessionId, snippets, ...planInputs(be.ws, inputs.filter((i) => !isRequestSnippet(i.text)), skipped, { scripts: p.keepPm ? 'keep' : 'tp', liftTests: p.liftTests }) };
     },
     /** Import what a preview read. Several inputs: one that fails does not stop the others. Returns the ids `import.undo` takes. */
     'import.apply': ({ sessionId, keepPm, replaceSpec, liftTests, newCopy, decisions }: { sessionId: string; keepPm?: boolean; replaceSpec?: boolean; liftTests?: boolean; newCopy?: boolean; decisions?: Record<string, ReimportAction> }) => {
-      const s = SESSIONS.get(sessionId);
+      const s = previewsOf(be).get(sessionId);
       if (!s) throw new ApsError('ValidationError', 'That preview has expired: choose the files again', { suggestions: [] });
-      SESSIONS.delete(sessionId);
+      previewsOf(be).delete(sessionId);
       const snippetInputs = s.inputs.filter((i) => isRequestSnippet(i.text));
       const snippets = snippetInputs.map((i) => be.handlers['col.import']!({ text: i.text, fileName: i.name }) as { request?: string; collection?: string });
       const rest = s.inputs.filter((i) => !isRequestSnippet(i.text));
@@ -173,7 +152,7 @@ export function importHandlers(be: Backend): Handlers {
       if (imported.some((x) => x.result?.globals)) be.host.emit('data.changed', { kind: 'globals' });
       return { imported, receipts, snippets, skipped: s.skipped };
     },
-    'import.cancel': ({ sessionId }: { sessionId: string }) => ({ ok: SESSIONS.delete(sessionId) }),
+    'import.cancel': ({ sessionId }: { sessionId: string }) => ({ ok: previewsOf(be).delete(sessionId) }),
     /** Take back imports (the receipts `import.apply` returned): to Recently deleted, so it can be restored. */
     'import.undo': ({ receipts, force }: { receipts: string[]; force?: boolean }) => {
       const r = undoMany(be.ws, receipts, { force, sinks: sinks(be) });

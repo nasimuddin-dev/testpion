@@ -4,6 +4,17 @@
 
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
+### Cloud foundation, stage 1
+
+Nothing changes for the desktop app; the engine is now safe to host for several people in one process (planning/cloud-stage-1.md).
+
+- **A context for every call**: who calls, what they may do, a cancel signal, a request id and an optional deadline travel with each RPC call. The window (or a bridge) cancels a call by its id (`rpc.cancel`), the dev bridge cancels the calls of a connection that closed, and sends, runs, load tests, AI, gRPC, saves and fuzz runs stop with it.
+- **Two people, one process**: the proxy, extra certificates and connection pools, the import previews, the fuzz run and the "already told" lists belong to the session, not the process (`planning/cloud-globals.md` lists what is left and why it is safe; a test fails when new process-wide state has no row).
+- **Scripts can run off the main thread**: a pool of worker threads runs the same sandbox (`TESTPION_SCRIPT_WORKERS=1`); eight CPU-heavy scripts take 0.9 s instead of 2.3 s, a hung one is ended, and trust gates, secrets and limits work as before.
+- **`TESTPION_ALLOW_PROCESSES=0` now stops every program the engine starts** (git, secret-manager commands, browsers), not only MCP servers; one place starts them (a test fails on any other).
+- **Browser launchers, the root-certificate installer and the system proxy** moved to `@testpion/core/desktop`, out of the engine's main entry.
+- **The dev bridge honours backpressure** (a client that does not read is trimmed, then disconnected) and the window checks the version of the interface when it connects; the parameter types of every RPC method are generated from the backend's tables.
+
 ### Faster engine
 
 Measured on the owner's (busy) Windows box; before to after.

@@ -4,7 +4,13 @@ import { Command, Option } from 'commander';
 import {
   collectionFromExchanges,
   type CaptureGrouping,
-  debuggerCertDir, ensureRootCertificate, exchangesToHar, grpcDecoder, grpcMethodIndex, leafSigner, startDebuggerProxy, workspaceProtoRoots, type DebuggerRule, type DebuggerRulesFile,
+  exchangesToHar,
+  grpcDecoder,
+  grpcMethodIndex,
+  startDebuggerProxy,
+  workspaceProtoRoots,
+  type DebuggerRule,
+  type DebuggerRulesFile,
   McpSession,
   recordingToCollection,
   startRecorder,
@@ -34,6 +40,7 @@ import {
   type FeedbackKind,
   startFlowWebhookServer,
 } from '@testpion/core';
+import { debuggerCertDir, ensureRootCertificate, leafSigner } from '@testpion/core/desktop';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, withWorkspace, cliSecrets, cliContext, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { emitEvent, machine } from '../output.js';
 import { executeMock } from '../run.js';

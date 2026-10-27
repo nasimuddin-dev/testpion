@@ -8,7 +8,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { ensureRootCertificate, exchangesFromSaz, leafSigner, parseRawHttp, sseParser, startDebuggerProxy, webSocketFrameParser, writeZip, type DebuggerProxy } from '@testpion/core';
+import { exchangesFromSaz, parseRawHttp, sseParser, startDebuggerProxy, webSocketFrameParser, writeZip, type DebuggerProxy } from '@testpion/core';
+import { ensureRootCertificate, leafSigner } from '@testpion/core/desktop';
 
 // DBG-4: HTTPS decrypted with the root certificate, WebSocket frames and SSE events read on the way, Fiddler SAZ files opened.
 

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFileChecked } from '../net/process.js';
 
 /** A program found behind a client port. */
 export interface ProgramInfo {
@@ -134,5 +134,5 @@ export function ownerOfProcess(pid: number): Promise<string | undefined> {
 
 /** A command's stdout, or '' when it fails (a lookup that cannot be made answers "unknown"). */
 function spawnText(file: string, args: string[], timeout = SPAWN.timeout): Promise<string> {
-  return new Promise((resolve) => execFile(file, args, { ...SPAWN, timeout, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' }, (err, out) => resolve(err ? '' : String(out))));
+  return new Promise((resolve) => execFileChecked(`program ${file}`, file, args, { ...SPAWN, timeout, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' }, (err, out) => resolve(err ? '' : String(out))));
 }

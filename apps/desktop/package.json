@@ -17,7 +17,8 @@
     "icons": "electron scripts/make-icons.cjs",
     "screenshots": "node scripts/build-main.mjs && vite build && node scripts/capture.cjs",
     "menu-icons": "electron scripts/make-menu-icons.cjs",
-    "e2e": "node e2e/run-e2e.mjs"
+    "e2e": "node e2e/run-e2e.mjs",
+    "rpc-types": "node scripts/rpc-types.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",

@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSyncChecked } from '../net/process.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { collectionFileContent } from '../storage/workspace.js';
 import { debuggerRulesFileValue, workspaceFileValue, environmentFileValue, libraryFileValue, mcpServersFileValue, providersFileValue, sameValue, stableText } from '../storage/stable-files.js';
@@ -376,7 +376,7 @@ export function runMergeDriver(baseFile: string, oursFile: string, theirsFile: s
 
 /** git merge-file: the usual line merge with conflict markers. */
 function lineMerge(base: string, ours: string, theirs: string): number {
-  const r = spawnSync('git', ['merge-file', ours, base, theirs], { windowsHide: true });
+  const r = spawnSyncChecked('git', 'git', ['merge-file', ours, base, theirs], { windowsHide: true });
   return r.status === 0 ? 0 : 1;
 }
 

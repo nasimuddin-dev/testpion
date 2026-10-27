@@ -1,5 +1,6 @@
 /** The Debugger's state in the backend (handlers/debugger.ts uses it; debugger-rules.ts and debugger-reverse.ts read it). */
-import { DebuggerSession, type DebuggerExchange, type DebuggerProxy, type DebuggerRulesFile, type LeafCertificate, type RootCertificate, type SystemProxySnapshot } from '@testpion/core';
+import { DebuggerSession, type DebuggerExchange, type DebuggerProxy, type DebuggerRulesFile } from '@testpion/core';
+import { type LeafCertificate, type RootCertificate, type SystemProxySnapshot } from '@testpion/core/desktop';
 import type { PendingBreakpoint } from './debugger-rules.js';
 
 /** A request one of the workspace's mock servers received. */

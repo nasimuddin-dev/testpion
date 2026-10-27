@@ -9,7 +9,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import { decodeProtobufRaw, ensureRootCertificate, grpcDecoder, grpcMethodIndex, leafSigner, parseProtos, startDebuggerProxy, type DebuggerProxy } from '@testpion/core';
+import { decodeProtobufRaw, grpcDecoder, grpcMethodIndex, parseProtos, startDebuggerProxy, type DebuggerProxy } from '@testpion/core';
+import { ensureRootCertificate, leafSigner } from '@testpion/core/desktop';
 
 // DBG-5: HTTP/2 inside a decrypted tunnel, gRPC over h2c through a CONNECT (decoded with the .proto), plain HTTP/1
 // inside a CONNECT, the page the proxy serves to a phone, protobuf without a schema.

@@ -58,6 +58,14 @@ describe('two sessions in one process', () => {
     expect((await b.invoke('settings.get', {})) as { defaultTimeoutMs: number }).toMatchObject({ defaultTimeoutMs: b.settings.defaultTimeoutMs });
   });
 
+  it('network configuration: a proxy and a CA saved in one session are not the other one (NetConfig)', async () => {
+    await a.invoke('settings.save', { ...a.settings, proxy: { mode: 'custom', url: 'http://127.0.0.1:9' } });
+    expect(a.net.settings).toMatchObject({ mode: 'custom', url: 'http://127.0.0.1:9' });
+    expect(b.net.settings.mode).not.toBe('custom');
+    expect(a.net.id).not.toBe(b.net.id);
+    await a.invoke('settings.save', { ...a.settings, proxy: { mode: 'env' } });
+  });
+
   it('secrets: a secret of one user is not readable by the other', async () => {
     await a.secrets.set('two.sessions', 'only-a');
     expect(a.secrets.get('two.sessions')).toBe('only-a');

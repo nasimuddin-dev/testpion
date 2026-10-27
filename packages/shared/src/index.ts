@@ -32,3 +32,4 @@ export * from './postman-words.js';
 export * from './output/index.js';
 export * from './rag-presets.js';
 export * from './rag-metrics.js';
+export * from './rpc.js';

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFileChecked } from '../net/process.js';
 import { ApsError } from '../errors.js';
 import type { Environment } from '../model/types.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
@@ -95,7 +95,7 @@ const defaultRunner: SecretRunner = (command, args, timeoutMs) =>
     // az and gcloud are .cmd scripts on Windows, which only a shell starts: their arguments were checked to be plain
     const shell = process.platform === 'win32' && SHELL_TOOLS.has(command);
     if (shell && !args.every((a) => PLAIN.test(a) || /^-[\w-]+(=[\w.@:/+-]+)?$/.test(a))) return reject(new ApsError('ValidationError', 'A secret reference has characters a shell would read'));
-    execFile(command, args, { timeout: timeoutMs, windowsHide: true, shell, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+    execFileChecked(`secret manager ${command}`, command, args, { timeout: timeoutMs, windowsHide: true, shell, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
       if (!err) return resolve(String(stdout));
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT')

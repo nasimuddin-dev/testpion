@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSyncChecked } from '../net/process.js';
 
 /**
  * The Windows counterpart of mode 0600 / 0700. A file written "private" (secrets.json, current values, the log, saved Debugger
@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 export type AclRunner = (file: string, args: string[]) => void;
 
 const defaultRunner: AclRunner = (file, args) => {
-  execFileSync(file, args, { stdio: 'ignore', timeout: 5000, windowsHide: true });
+  execFileSyncChecked('file permissions (icacls)', file, args, { stdio: 'ignore', timeout: 5000, windowsHide: true });
 };
 
 let runner: AclRunner = defaultRunner;

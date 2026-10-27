@@ -3,6 +3,9 @@ import { isIP } from 'node:net';
 import { isAbsolute, resolve } from 'node:path';
 import { ApsError } from '../errors.js';
 import { relativeInside } from '../storage/fsutil.js';
+import { setProcessesAllowed } from './process-policy.js';
+
+export { assertProcessesAllowed } from './process-policy.js';
 
 /**
  * Network policy for outbound connections (requests, tp.sendRequest, GraphQL, WebSocket, MCP over
@@ -70,6 +73,7 @@ export function looksLikeHostPath(text: string): boolean {
 
 export function setNetworkPolicy(p: Partial<NetworkPolicy>): NetworkPolicy {
   current = { ...current, ...p };
+  if (p.allowProcesses !== undefined) setProcessesAllowed(current.allowProcesses);
   syncDnsGuard();
   return current;
 }
@@ -273,11 +277,6 @@ export function policyLookup(hostname: string, options: object, callback: (err: 
     if (bad) return callback(Object.assign(blockedError(hostname, bad.address), { code: 'EACCES' }) as unknown as NodeJS.ErrnoException, address, family);
     callback(null, address, family);
   }) as never);
-}
-
-/** Refuse to start local processes when the policy forbids it (MCP stdio servers on a shared server). */
-export function assertProcessesAllowed(what: string): void {
-  if (!current.allowProcesses) throw new ApsError('ConfigurationError', `Blocked by the network policy: starting local programs (${what}) is disabled on this server`, { suggestions: ['Use an MCP server over Streamable HTTP or SSE instead of stdio.'] });
 }
 
 // a policy set by the environment (TESTPION_BLOCK_PRIVATE_NETWORKS) guards name lookups from the start

@@ -2,6 +2,9 @@
  * Renderer ↔ backend bridge. In Electron this is the preload IPC bridge; in browser development
  * mode it is an HTTP/SSE bridge proxied by Vite. The UI never executes network calls itself.
  */
+import { RPC_VERSION } from '@testpion/shared';
+import type { RpcParamsOf, RpcResults, TypedRpcMethod } from './lib/rpc-methods';
+
 export interface NormalizedError {
   kind: string;
   message: string;
@@ -52,7 +55,7 @@ function webBridge(): Bridge {
     kind: 'web',
     platform: navigator.platform.toLowerCase().includes('mac') ? 'darwin' : navigator.platform.toLowerCase().includes('win') ? 'win32' : 'linux',
     async invoke(method, params, meta) {
-      const res = await fetch(`/__aps/rpc?token=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params, requestId: meta?.requestId }) });
+      const res = await fetch(`/__aps/rpc?token=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params, requestId: meta?.requestId, rpcVersion: RPC_VERSION }) });
       const r = await res.json();
       if (!r.ok) throw Object.assign(new Error(r.error?.message ?? 'Error'), r.error);
       return r.data;
@@ -111,9 +114,14 @@ export function setConflictHandler(fn: ConflictHandler | undefined): void {
   conflictHandler = fn;
 }
 
-export async function call<T = any>(method: string, params?: unknown, opts?: CallOptions): Promise<T> {
+export function call<M extends TypedRpcMethod>(method: M, params?: RpcParamsOf<M>, opts?: CallOptions): Promise<RpcResults[M]>;
+export function call<T = any>(method: string, params?: unknown, opts?: CallOptions): Promise<T>;
+export async function call(method: string, params?: unknown, opts?: CallOptions): Promise<any> {
+  type T = any;
   try {
-    return await bridge.invoke(method, params, opts);
+    const r = await bridge.invoke(method, params, opts);
+    if (method === 'app.info') checkRpcVersion(r?.rpcVersion);
+    return r;
   } catch (e) {
     if ((e as { kind?: string })?.kind === 'ConflictError' && conflictHandler) {
       const answer = await conflictHandler({ method, params, error: asError(e) });
@@ -129,6 +137,20 @@ export async function call<T = any>(method: string, params?: unknown, opts?: Cal
 /** Stop a call that was made with `{ requestId }` (its work stops where it checks its signal; the call answers CancelledError). */
 export function cancelCall(requestId: string): Promise<boolean> {
   return call<boolean>('rpc.cancel', { id: requestId });
+}
+
+/**
+ * The window and the engine must speak the same RPC contract (RPC_VERSION): a hosted engine may be newer or older than the page that
+ * is open. An engine that does not say (it predates the field) is accepted; a different version is refused with what to do.
+ */
+export function checkRpcVersion(engine: unknown): void {
+  if (engine === undefined || engine === RPC_VERSION) return;
+  throw Object.assign(new Error(`This window speaks version ${RPC_VERSION} of the TestPion interface and the engine speaks ${String(engine)}.`), {
+    kind: 'ConfigurationError',
+    what: 'The window and the engine do not match',
+    why: 'They were built from different versions.',
+    suggestions: ['Reload the page (or restart the app) so both load the same version.'],
+  });
 }
 
 export function on<T = any>(channel: string, cb: (payload: T) => void): () => void {

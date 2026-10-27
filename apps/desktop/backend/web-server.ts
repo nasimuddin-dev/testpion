@@ -9,13 +9,15 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ApsError, isLoopbackHostHeader, normalizeError } from '@testpion/core';
 import { Backend } from './backend.js';
+import { RPC_VERSION } from '@testpion/shared';
+import { SseHub } from './sse-hub.js';
 
 /** Largest RPC request accepted (imports and uploaded files travel as JSON). */
 const MAX_BODY = 64 * 1024 * 1024;
 
 const port = Number(process.env.TESTPION_BRIDGE_PORT ?? 5174);
 const token = process.env.TESTPION_BRIDGE_TOKEN ?? randomBytes(16).toString('hex');
-const clients = new Set<ServerResponse>();
+const hub = new SseHub(); // events to the connected pages, with the socket backpressure honoured (sse-hub.ts)
 const tokenBytes = Buffer.from(token);
 const validToken = (t: unknown) => typeof t === 'string' && t.length === token.length && timingSafeEqual(Buffer.from(t), tokenBytes);
 const reply = (res: ServerResponse, status: number, body: unknown) => {
@@ -25,9 +27,9 @@ const reply = (res: ServerResponse, status: number, body: unknown) => {
 
 const backend = new Backend({
   appDir: process.env.TESTPION_HOME || process.env.FLUXPION_HOME || join(homedir(), '.testpion-dev'),
+  importBytes: MAX_BODY, // what the bridge accepts in one request is also what a preview may hold
   emit: (channel, payload) => {
-    const data = `data: ${JSON.stringify({ channel, payload })}\n\n`;
-    for (const c of clients) c.write(data);
+    hub.broadcast(channel, payload);
   },
   openExternal: (url) => console.log(`[bridge] open ${url}`),
   examplesDir: process.env.TESTPION_EXAMPLES ?? join(process.cwd(), 'examples', 'public-workspace'),
@@ -51,8 +53,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (url.pathname === '/events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(': connected\n\n');
-    clients.add(res);
-    req.on('close', () => clients.delete(res));
+    const off = hub.add(res);
+    req.on('close', off);
     return;
   }
   if (url.pathname === '/rpc' && req.method === 'POST') {
@@ -64,13 +66,15 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       if (size > MAX_BODY) return reply(res, 413, { ok: false, error: normalizeError(new ApsError('ValidationError', `Request is larger than ${MAX_BODY / 1024 / 1024} MB`)) });
       chunks.push(c);
     }
-    let call: { method?: unknown; params?: unknown; requestId?: unknown };
+    let call: { method?: unknown; params?: unknown; requestId?: unknown; rpcVersion?: unknown };
     try {
       call = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {
       return reply(res, 400, { ok: false, error: normalizeError(new ApsError('ValidationError', 'The request body is not valid JSON')) });
     }
     if (typeof call?.method !== 'string') return reply(res, 400, { ok: false, error: normalizeError(new ApsError('ValidationError', 'Missing "method"')) });
+    // a page built for another version of the interface gets told so, not a method that behaves differently
+    if (call.rpcVersion !== undefined && call.rpcVersion !== RPC_VERSION) return reply(res, 426, { ok: false, error: normalizeError(new ApsError('ConfigurationError', `This page speaks version ${String(call.rpcVersion)} of the TestPion interface and the engine speaks ${RPC_VERSION}`, { suggestions: ['Reload the page.'] })) });
     // a connection that closes before the answer cancels the call (a closed tab stops the work it started)
     const gone = new AbortController();
     res.on('close', () => !res.writableFinished && gone.abort());

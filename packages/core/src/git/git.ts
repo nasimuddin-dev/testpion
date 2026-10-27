@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFileChecked } from '../net/process.js';
 import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
@@ -77,7 +77,7 @@ export function runGitBytes(cwd: string, args: string[], opts: { input?: string;
  */
 function cleanAfterTimeout(cwd: string, pid: number | undefined, timeoutMs: number): void {
   try {
-    if (process.platform === 'win32' && pid) execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => undefined);
+    if (process.platform === 'win32' && pid) execFileChecked('git', 'taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => undefined);
     const lock = join(cwd, '.git', 'index.lock');
     const st = statSync(lock, { throwIfNoEntry: false });
     if (st && Date.now() - st.mtimeMs > timeoutMs) rmSync(lock, { force: true });
@@ -92,7 +92,8 @@ function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts:
   // a remote added, changed or removed (by the app or by anything that goes through here): the remembered URL is stale
   if (args[0] === 'remote') remotes.clear();
   return new Promise<Out>((done, fail) => {
-    const child = execFile(
+    const child = execFileChecked(
+      'git',
       'git',
       args,
       // GIT_OPTIONAL_LOCKS=0: a read (status, diff …) never takes the index lock to refresh the index's stat cache. The app reads
