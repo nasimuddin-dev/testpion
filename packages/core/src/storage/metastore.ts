@@ -203,6 +203,10 @@ interface ListQuery {
   brief?: boolean;
   /** History only: requests sent only (isRequestEntry), not capture sessions. */
   requests?: boolean;
+  /** History only: entries of this collection (an indexed column). */
+  collectionId?: string;
+  /** A list that does not show a total (a search box, a menu) skips the second scan that counts a full page: `total` is then a lower bound. */
+  countTotal?: false;
   limit?: number;
   offset?: number;
 }
@@ -240,6 +244,10 @@ export interface MetaStore {
   getTrace(id: string): TraceMeta | undefined;
   /** Workspace activity per day (requests, failures, runs) for charts. */
   activity(opts?: { days?: number; tzOffsetMin?: number }): Activity;
+  /** The timing of the latest `limit` requests of a collection that have one (from the indexed collection column, not a scan of the whole history). */
+  collectionTimings(collectionId: string, limit?: number): Array<Record<string, unknown>>;
+  /** Delete several runs in one transaction. */
+  deleteRuns(ids: string[]): void;
   /** Per saved request of a collection: responses, failures, latest status, median time. */
   requestStats(collectionId: string): RequestStat[];
   /** Per collection: how many of its saved requests were sent, and how many of those failed the last time. */
@@ -319,8 +327,8 @@ function loadSqlite() {
   return sqliteModule;
 }
 
-/** v2: history has collection_id, request_id and status_ok columns (indexed) instead of reading them out of `doc`. */
-const SQLITE_SCHEMA_VERSION = 2;
+/** v3: history.checks_ok (the response's own check verdict) and the composite (collection, request, time) index. v2: history has collection_id, request_id and status_ok columns (indexed) instead of reading them out of `doc`. */
+const SQLITE_SCHEMA_VERSION = 3;
 
 /** History entries and traces kept; older ones are pruned, with their files. */
 const MAX_HISTORY = 20_000;
@@ -387,8 +395,11 @@ class SqliteMetaStore implements MetaStore {
     // at once — a failed open fell back to metadata.jsonl, and the runs recorded there were missing from the history
     this.db.exec('PRAGMA busy_timeout=10000;');
     try {
-      this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16000;');
+      // WAL checkpoints: automatic every 1,000 pages, and the file is cut back to 32 MB after a checkpoint (a burst of traces must not leave a huge -wal behind)
+      this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA cache_size=-16000; PRAGMA wal_autocheckpoint=1000; PRAGMA journal_size_limit=33554432; PRAGMA analysis_limit=1000;');
       this.migrate();
+      // let the planner refresh its statistics where they are stale (cheap when nothing changed)
+      this.optimize();
     } catch (e) {
       // an open handle would keep the file locked (Windows cannot move it aside)
       try {
@@ -441,8 +452,32 @@ class SqliteMetaStore implements MetaStore {
           CREATE INDEX IF NOT EXISTS history_collection_ts ON history(collection_id, ts DESC);
           CREATE INDEX IF NOT EXISTS history_request_ts ON history(request_id, ts DESC);
         `);
+        this.db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', '2')").run();
+      });
+    }
+    if (v < 3) {
+      // checks_ok: the stats read it from a column instead of parsing every row's doc; a composite index for "newest row of each saved request"
+      this.batch(() => {
+        const cols = new Set((this.db.prepare('PRAGMA table_info(history)').all() as Array<{ name: string }>).map((c) => c.name));
+        if (!cols.has('checks_ok')) this.db.exec('ALTER TABLE history ADD COLUMN checks_ok INTEGER');
+        this.db.exec("UPDATE history SET checks_ok = json_extract(doc, '$.responseMeta.checksOk') WHERE json_valid(doc) AND json_type(doc, '$.responseMeta.checksOk') IN ('true', 'false')");
+        this.db.exec('CREATE INDEX IF NOT EXISTS history_coll_req_ts ON history(collection_id, request_id, ts DESC)');
         this.db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)").run(String(SQLITE_SCHEMA_VERSION));
       });
+      try {
+        this.db.exec('ANALYZE');
+      } catch {
+        /* statistics are an optimisation */
+      }
+    }
+  }
+
+  /** `PRAGMA optimize`: statistics for the tables the queries ran on, only when they went stale. Best-effort. */
+  private optimize(): void {
+    try {
+      this.db.exec('PRAGMA optimize;');
+    } catch {
+      /* busy or read-only: the next open tries again */
     }
   }
 
@@ -508,9 +543,7 @@ class SqliteMetaStore implements MetaStore {
   }
 
   clearJudgeCache(): number {
-    const n = (this.stmt('SELECT COUNT(*) AS n FROM judge_cache').get() as { n: number }).n;
-    this.db.exec('DELETE FROM judge_cache');
-    return n;
+    return Number((this.stmt('DELETE FROM judge_cache').run() as { changes?: number | bigint }).changes ?? 0);
   }
 
   private prune(table: 'history' | 'traces' | 'ai_calls' | 'judge_cache', order: string, fileCol: string, max: number): void {
@@ -522,20 +555,27 @@ class SqliteMetaStore implements MetaStore {
       for (const r of old) del.run(r.id);
     });
     removeFilesLater(this.root, old.map((r) => r.file));
+    // a prune is the one place a lot of pages change at once: fold the WAL back in without waiting for anyone
+    try {
+      this.db.exec('PRAGMA wal_checkpoint(PASSIVE);');
+    } catch {
+      /* busy: the automatic checkpoint gets it */
+    }
   }
 
   /** `total` of a page: free when the page is not full, else counted (indexed filters are cheap; a text query scans). */
   private total(from: string, w: { sql: string; args: unknown[] }, q: ListQuery, got: number): number {
     const limit = q.limit ?? 100;
     if (got < limit && (got > 0 || !q.offset)) return (q.offset ?? 0) + got;
-    return (this.db.prepare(`SELECT COUNT(*) AS n FROM ${from} ${w.sql}`).get(...w.args) as { n: number }).n;
+    if (q.countTotal === false) return (q.offset ?? 0) + got;
+    return (this.stmt(`SELECT COUNT(*) AS n FROM ${from} ${w.sql}`).get(...w.args) as { n: number }).n;
   }
 
   addHistory(e: HistoryEntry): void {
     // long bodies are cut: the entry is then a preview of what was sent
     const req = capHistoryRequest(e.request);
     const doc = { request: req.value, responseMeta: e.responseMeta, collectionId: e.collectionId, requestId: e.requestId, ...(req.cut || e.requestPreview ? { requestPreview: true } : {}), ...(e.capture ? { capture: e.capture } : {}) };
-    this.stmt('INSERT OR REPLACE INTO history (id, ts, kind, name, method, url, status, duration, size, trace_id, payload, doc, collection_id, request_id, status_ok) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+    this.stmt('INSERT OR REPLACE INTO history (id, ts, kind, name, method, url, status, duration, size, trace_id, payload, doc, collection_id, request_id, status_ok, checks_ok) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
       e.id,
       e.timestamp,
       e.kind,
@@ -551,6 +591,7 @@ class SqliteMetaStore implements MetaStore {
       e.collectionId ?? null,
       e.requestId ?? null,
       historyOk(e.status) ? 1 : 0,
+      typeof (e.responseMeta as { checksOk?: unknown } | undefined)?.checksOk === 'boolean' ? ((e.responseMeta as { checksOk: boolean }).checksOk ? 1 : 0) : null,
     );
     // bound history size (and delete the saved response bodies of what goes)
     if (this.pruneDue('history')) this.prune('history', 'ts', 'payload', MAX_HISTORY);
@@ -577,16 +618,20 @@ class SqliteMetaStore implements MetaStore {
       w.args.push(q.requestId);
     }
     // status_ok is historyOk(status), set on insert
+    if (q.collectionId) {
+      w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + 'collection_id = ?';
+      w.args.push(q.collectionId);
+    }
     if (q.failed) w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + 'status_ok = 0';
     if (q.requests) w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + REQUEST_KIND_SQL;
     // a brief list leaves the request out; a capture session's doc is small and says what it became (its row opens that)
     const cols = q.brief ? "id, ts, kind, name, method, url, status, duration, size, trace_id, payload, collection_id, request_id, CASE WHEN kind = 'capture' THEN doc END AS doc" : '*';
-    const rows = this.db.prepare(`SELECT ${cols} FROM history ${w.sql} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
+    const rows = this.stmt(`SELECT ${cols} FROM history ${w.sql} ORDER BY ts DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
     return { total: this.total('history', w, q, rows.length), items: rows.map(historyRow) };
   }
 
   getHistory(id: string): HistoryEntry | undefined {
-    const r = this.db.prepare('SELECT * FROM history WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const r = this.stmt('SELECT * FROM history WHERE id = ?').get(id) as Record<string, unknown> | undefined;
     return r ? historyRow(r) : undefined;
   }
 
@@ -597,13 +642,13 @@ class SqliteMetaStore implements MetaStore {
       this.db.exec('CREATE INDEX IF NOT EXISTS history_trace ON history(trace_id)');
       this.traceIndexed = true;
     }
-    const r = this.db.prepare('SELECT * FROM history WHERE trace_id = ? LIMIT 1').get(traceId) as Record<string, unknown> | undefined;
+    const r = this.stmt('SELECT * FROM history WHERE trace_id = ? LIMIT 1').get(traceId) as Record<string, unknown> | undefined;
     return r ? historyRow(r) : undefined;
   }
 
   deleteHistory(id: string): void {
-    const row = this.db.prepare('SELECT payload FROM history WHERE id = ?').get(id) as { payload: string | null } | undefined;
-    this.db.prepare('DELETE FROM history WHERE id = ?').run(id);
+    const row = this.stmt('SELECT payload FROM history WHERE id = ?').get(id) as { payload: string | null } | undefined;
+    this.stmt('DELETE FROM history WHERE id = ?').run(id);
     removeFiles(this.root, [row?.payload]);
   }
 
@@ -621,15 +666,13 @@ class SqliteMetaStore implements MetaStore {
   }
 
   addRun(s: RunSummary, dir: string): void {
-    this.db
-      .prepare('INSERT OR REPLACE INTO runs (id, name, started, duration, total, passed, failed, skipped, errors, environment, dir) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
-      .run(s.runId, s.name, s.startedAt, s.durationMs, s.total, s.passed, s.failed, s.skipped, s.errors, s.environment ?? null, dir);
+    this.stmt('INSERT OR REPLACE INTO runs (id, name, started, duration, total, passed, failed, skipped, errors, environment, dir) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(s.runId, s.name, s.startedAt, s.durationMs, s.total, s.passed, s.failed, s.skipped, s.errors, s.environment ?? null, dir);
   }
 
   listRuns(q: ListQuery = {}): Page<RunMeta> {
     const w = this.where({ query: q.query }, ['name']);
     // two runs started in the same millisecond: the one recorded later first (rowid), never an arbitrary order
-    const rows = this.db.prepare(`SELECT * FROM runs ${w.sql} ORDER BY started DESC, rowid DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
+    const rows = this.stmt(`SELECT * FROM runs ${w.sql} ORDER BY started DESC, rowid DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
     return {
       total: this.total('runs', w, q, rows.length),
       items: rows.map((r) => ({
@@ -649,12 +692,18 @@ class SqliteMetaStore implements MetaStore {
   }
 
   deleteRun(id: string): void {
-    this.db.prepare('DELETE FROM runs WHERE id = ?').run(id);
+    this.stmt('DELETE FROM runs WHERE id = ?').run(id);
+  }
+
+  deleteRuns(ids: string[]): void {
+    this.batch(() => {
+      for (const id of ids) this.deleteRun(id);
+    });
   }
 
   activity(opts: { days?: number; tzOffsetMin?: number } = {}): Activity {
     const since = activitySince(opts.days);
-    const runs = (this.db.prepare('SELECT started, total, passed, failed, errors FROM runs WHERE started >= ?').all(since) as Array<Record<string, number | string>>).map((r) => ({
+    const runs = (this.stmt('SELECT started, total, passed, failed, errors FROM runs WHERE started >= ?').all(since) as Array<Record<string, number | string>>).map((r) => ({
       startedAt: r.started as string,
       total: Number(r.total),
       passed: Number(r.passed),
@@ -667,7 +716,7 @@ class SqliteMetaStore implements MetaStore {
   }
 
   requestStats(collectionId: string): RequestStat[] {
-    const rows = this.stmt(`SELECT ts, status, duration, request_id AS rid, json_extract(doc, '$.responseMeta.checksOk') AS cok FROM history WHERE collection_id = ? AND ${REQUEST_KIND_SQL} ORDER BY ts DESC LIMIT 5000`).all(
+    const rows = this.stmt(`SELECT ts, status, duration, request_id AS rid, checks_ok AS cok FROM history WHERE collection_id = ? AND ${REQUEST_KIND_SQL} ORDER BY ts DESC LIMIT 5000`).all(
       collectionId,
     ) as Array<Record<string, unknown>>;
     return summarizeRequestStats(
@@ -685,7 +734,7 @@ class SqliteMetaStore implements MetaStore {
     // the newest row of each saved request (one index probe each), then per collection; a response is fine when
     // its own checks passed, else by its status (as summarizeRequestStats decides)
     const rows = this.stmt(
-      `SELECT k.cid, COUNT(*) AS sent, SUM(CASE WHEN COALESCE(json_extract(h.doc, '$.responseMeta.checksOk'), h.status_ok) THEN 0 ELSE 1 END) AS failing
+      `SELECT k.cid, COUNT(*) AS sent, SUM(CASE WHEN COALESCE(h.checks_ok, h.status_ok) THEN 0 ELSE 1 END) AS failing
        FROM (SELECT DISTINCT collection_id AS cid, request_id AS rid FROM history WHERE collection_id IS NOT NULL AND request_id IS NOT NULL AND ${REQUEST_KIND_SQL}) k
        JOIN history h ON h.rowid = (SELECT rowid FROM history WHERE request_id = k.rid AND collection_id = k.cid AND ${REQUEST_KIND_SQL} ORDER BY ts DESC LIMIT 1)
        GROUP BY k.cid`,
@@ -704,16 +753,38 @@ class SqliteMetaStore implements MetaStore {
     if (q.failed) {
       w.sql = (w.sql ? w.sql + ' AND ' : 'WHERE ') + "status <> 'ok'";
     }
-    const rows = this.db.prepare(`SELECT * FROM traces ${w.sql} ORDER BY start DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
+    const rows = this.stmt(`SELECT * FROM traces ${w.sql} ORDER BY start DESC LIMIT ? OFFSET ?`).all(...w.args, q.limit ?? 100, q.offset ?? 0) as Array<Record<string, unknown>>;
     return { total: this.total('traces', w, q, rows.length), items: rows.map(traceRow) };
   }
 
   getTrace(id: string): TraceMeta | undefined {
-    const r = this.db.prepare('SELECT * FROM traces WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+    const r = this.stmt('SELECT * FROM traces WHERE id = ?').get(id) as Record<string, unknown> | undefined;
     return r ? traceRow(r) : undefined;
   }
 
+  collectionTimings(collectionId: string, limit = 2000): Array<Record<string, unknown>> {
+    const rows = this.stmt(`SELECT json_extract(doc, '$.responseMeta.timing') AS t FROM history WHERE collection_id = ? AND ${REQUEST_KIND_SQL} AND json_extract(doc, '$.responseMeta.timing.ttfbMs') IS NOT NULL ORDER BY ts DESC LIMIT ?`).all(collectionId, limit) as Array<{ t: string | null }>;
+    const out: Array<Record<string, unknown>> = [];
+    for (const r of rows) {
+      try {
+        if (r.t) out.push(JSON.parse(r.t) as Record<string, unknown>);
+      } catch {
+        /* a broken row is skipped */
+      }
+    }
+    return out;
+  }
+
   close(): void {
+    this.statements.clear();
+    // leave the file tidy: statistics, then the WAL folded back in (never waiting long for another process that is reading)
+    try {
+      this.db.exec('PRAGMA busy_timeout=250;');
+      this.optimize();
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    } catch {
+      /* another process holds it: its own close does this */
+    }
     this.db.close();
   }
 }
@@ -851,7 +922,8 @@ class JsonlMetaStore implements MetaStore {
   }
   listHistory(q: ListQuery = {}) {
     const all = q.requests ? this.data.history.filter(isRequestEntry) : this.data.history;
-    const base = q.requestId ? all.filter((h) => h.requestId === q.requestId) : all;
+    const byCollection = q.collectionId ? all.filter((h) => h.collectionId === q.collectionId) : all;
+    const base = q.requestId ? byCollection.filter((h) => h.requestId === q.requestId) : byCollection;
     return this.page(q.failed ? base.filter((h) => !historyOk(h.status)) : base, q, (h, s) => `${h.name} ${h.url} ${h.method} ${h.status}`.toLowerCase().includes(s));
   }
   getHistory(id: string) {
@@ -917,6 +989,18 @@ class JsonlMetaStore implements MetaStore {
   }
   batch<T>(fn: () => T): T {
     return fn();
+  }
+  deleteRuns(ids: string[]) {
+    for (const id of ids) this.deleteRun(id);
+  }
+  collectionTimings(collectionId: string, limit = 2000) {
+    const out: Array<Record<string, unknown>> = [];
+    for (let i = this.data.history.length - 1; i >= 0 && out.length < limit; i--) {
+      const h = this.data.history[i]!;
+      const t = (h.responseMeta as { timing?: Record<string, unknown> } | undefined)?.timing;
+      if (h.collectionId === collectionId && isRequestEntry(h) && t && t.ttfbMs !== undefined) out.push(t);
+    }
+    return out;
   }
   addTrace(t: TraceMeta) {
     insertByKey(this.data.traces, t, traceKey);

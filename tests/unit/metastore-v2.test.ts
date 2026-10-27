@@ -84,7 +84,7 @@ describe('SQLite metadata store, schema 2', () => {
     const schema = db.prepare("SELECT value FROM meta WHERE key = 'schema'").all();
     const indexes = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'history'").all() as Array<{ name: string }>).map((r) => r.name);
     db.close();
-    expect(schema).toEqual([{ value: '2' }]);
+    expect(schema).toEqual([{ value: '3' }]);
     expect(rows).toEqual([
       { id: 'a1', collection_id: 'c1', request_id: 'r1', status_ok: 0 },
       { id: 'a2', collection_id: 'c1', request_id: 'r1', status_ok: 1 },

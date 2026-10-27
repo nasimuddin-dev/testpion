@@ -117,8 +117,8 @@ export function pruneRuns(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, plan: 
     bytes += sizeOf(dir).bytes;
     if (o.dryRun) continue;
     rmSync(dir, { recursive: true, force: true });
-    store.meta.deleteRun(r.id);
   }
+  if (!o.dryRun) store.meta.deleteRuns(doomed.map((r) => r.id));
   return { deleted: doomed.length, bytes, ids: doomed.map((r) => r.id) };
 }
 
@@ -156,9 +156,7 @@ export async function deleteRunsBeforeAsync(store: Pick<WorkspaceStore, 'meta' |
       }),
     );
     bytes += sizes.reduce((a, b) => a + b, 0);
-    store.meta.batch(() => {
-      for (const r of chunk) store.meta.deleteRun(r.id);
-    });
+    store.meta.deleteRuns(chunk.map((r) => r.id));
     deleted += chunk.length;
   }
   return { deleted, bytes };
