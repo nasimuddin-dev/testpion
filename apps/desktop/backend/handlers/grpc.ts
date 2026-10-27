@@ -1,6 +1,7 @@
 /** RPC handlers: gRPC calls described by .proto files (sent as text, so they work the same in a hosted version). */
 import { describeRoot, executeGrpc, grpcRoot, parseGrpcTarget, reflectServer, shortId, type GrpcRequestSpec, type GrpcTlsOptions, type ProtoFile } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { linkedController } from '../request-context.js';
 
 export interface GrpcSendParams extends GrpcRequestSpec {
   /** Call id, for grpc.cancel. */
@@ -34,7 +35,7 @@ export function grpcHandlers(be: Backend): Handlers {
     /** Call a method; streamed responses also arrive live on `grpc.messages`. Cancel with grpc.cancel. */
     'grpc.send': async (p: GrpcSendParams) => {
       const id = p.id ?? shortId('grpc-');
-      const ctrl = new AbortController();
+      const ctrl = linkedController();
       be.controllers.set(id, ctrl);
       const ctx = be.context({ environment: p.environment });
       const live = be.batched<unknown>('grpc.messages', 100);

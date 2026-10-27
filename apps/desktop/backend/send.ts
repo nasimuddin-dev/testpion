@@ -3,6 +3,7 @@ import { ApsError, hostOfUrl, Tracer, executeHttp, executeGraphQL, inheritedAuth
 import { clipConsole, consoleBody, consoleRefs } from './console-log.js';
 import type { GqlSendParams, HttpSendParams } from './params.js';
 import type { Backend } from './backend.js';
+import { linkedController } from './request-context.js';
 
 type Ctx = ReturnType<Backend['context']>;
 type ScriptView = Pick<Parameters<typeof runScript>[1], 'request'> & Partial<Pick<Parameters<typeof runScript>[1], 'response' | 'cookies'>>;
@@ -43,7 +44,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
     } catch (e) {
       return { id, error: normalizeError(e), scriptLogs: [], unresolved: [], cycles: [], blockedEnv: [] };
     }
-  const ctrl = new AbortController();
+  const ctrl = linkedController();
   be.controllers.set(id, ctrl);
   const ctx = be.context({ environment: p.environment, collectionId: p.collectionId });
   const tracer = new Tracer(p.name ?? `${p.request.method} ${p.request.url}`, ctx.redactor);
@@ -274,7 +275,7 @@ export async function codeSnippet(be: Backend, p: { request: HttpRequestSpec; en
 
 export async function gqlSend(be: Backend, p: GqlSendParams) {
   const id = p.id ?? shortId('gql-');
-  const ctrl = new AbortController();
+  const ctrl = linkedController();
   be.controllers.set(id, ctrl);
   const ctx = be.context({ environment: p.environment, collectionId: p.collectionId });
   const tracer = new Tracer(p.operationName ?? 'GraphQL', ctx.redactor);

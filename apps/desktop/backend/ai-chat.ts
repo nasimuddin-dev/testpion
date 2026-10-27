@@ -2,10 +2,11 @@
 import { Tracer, estimateCost, runChecks, shortId, tryParseJson, validateSchema, renderPrompt } from '@testpion/core';
 import type { AiChatParams } from './params.js';
 import type { Backend } from './backend.js';
+import { linkedController } from './request-context.js';
 
 export async function aiChat(be: Backend, p: AiChatParams) {
   const id = p.requestId ?? shortId('ai-');
-  const ctrl = new AbortController();
+  const ctrl = linkedController();
   be.controllers.set(id, ctrl);
   const ctx = be.context({ environment: p.environment });
   const tracer = new Tracer(`AI ${p.model}`, ctx.redactor);

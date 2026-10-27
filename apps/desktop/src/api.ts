@@ -11,10 +11,15 @@ export interface NormalizedError {
   details?: Record<string, unknown>;
 }
 
+/** What a call can say about itself: an id of its own, to cancel it with `cancelCall` (the backend's `rpc.cancel`). */
+export interface CallOptions {
+  requestId?: string;
+}
+
 interface Bridge {
   kind: 'electron' | 'web';
   platform: string;
-  invoke(method: string, params?: unknown): Promise<any>;
+  invoke(method: string, params?: unknown, meta?: CallOptions): Promise<any>;
   on(channel: string, cb: (payload: any) => void): () => void;
   /** Electron on Windows / Linux: the app draws the title bar (window buttons over the top bar's right end). */
   titleBar?: boolean;
@@ -46,8 +51,8 @@ function webBridge(): Bridge {
   return {
     kind: 'web',
     platform: navigator.platform.toLowerCase().includes('mac') ? 'darwin' : navigator.platform.toLowerCase().includes('win') ? 'win32' : 'linux',
-    async invoke(method, params) {
-      const res = await fetch(`/__aps/rpc?token=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params }) });
+    async invoke(method, params, meta) {
+      const res = await fetch(`/__aps/rpc?token=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params, requestId: meta?.requestId }) });
       const r = await res.json();
       if (!r.ok) throw Object.assign(new Error(r.error?.message ?? 'Error'), r.error);
       return r.data;
@@ -61,12 +66,12 @@ function webBridge(): Bridge {
   };
 }
 
-const electronBridge = (aps: Bridge & { rpc?(method: string, params?: unknown): Promise<{ ok: boolean; data?: unknown; error?: NormalizedError }> }): Bridge =>
+const electronBridge = (aps: Bridge & { rpc?(method: string, params?: unknown, meta?: CallOptions): Promise<{ ok: boolean; data?: unknown; error?: NormalizedError }> }): Bridge =>
   aps.rpc
     ? {
         ...aps,
-        async invoke(method, params) {
-          const r = await aps.rpc!(method, params);
+        async invoke(method, params, meta) {
+          const r = await aps.rpc!(method, params, meta);
           // thrown here, on the page's side of the context bridge, the error keeps its kind, suggestions and details
           if (!r.ok) throw Object.assign(new Error(r.error?.message ?? 'Error'), r.error);
           return r.data;
@@ -106,9 +111,9 @@ export function setConflictHandler(fn: ConflictHandler | undefined): void {
   conflictHandler = fn;
 }
 
-export async function call<T = any>(method: string, params?: unknown): Promise<T> {
+export async function call<T = any>(method: string, params?: unknown, opts?: CallOptions): Promise<T> {
   try {
-    return await bridge.invoke(method, params);
+    return await bridge.invoke(method, params, opts);
   } catch (e) {
     if ((e as { kind?: string })?.kind === 'ConflictError' && conflictHandler) {
       const answer = await conflictHandler({ method, params, error: asError(e) });
@@ -119,6 +124,11 @@ export async function call<T = any>(method: string, params?: unknown): Promise<T
     if (again === undefined) throw e;
     return bridge.invoke(method, again);
   }
+}
+
+/** Stop a call that was made with `{ requestId }` (its work stops where it checks its signal; the call answers CancelledError). */
+export function cancelCall(requestId: string): Promise<boolean> {
+  return call<boolean>('rpc.cancel', { id: requestId });
 }
 
 export function on<T = any>(channel: string, cb: (payload: T) => void): () => void {

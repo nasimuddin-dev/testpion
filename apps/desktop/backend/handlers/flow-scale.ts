@@ -31,6 +31,7 @@ import {
 } from '@testpion/core';
 import { existsSync, writeFileSync } from 'node:fs';
 import type { Backend, Handlers } from '../backend.js';
+import { linkedController } from '../request-context.js';
 
 interface Job {
   id: string;
@@ -117,7 +118,7 @@ export function flowScaleHandlers(be: Backend): Handlers {
           kind: 'data',
           file: rel,
           store,
-          ctrl: new AbortController(),
+          ctrl: linkedController(),
           startedAt: new Date().toISOString(),
           writer: new ScaleRowsWriter(store, id),
           progress: { done: 0, passed: 0, failed: 0, cancelled: 0, skipped: 0 },
@@ -168,7 +169,7 @@ export function flowScaleHandlers(be: Backend): Handlers {
         kind: 'matrix',
         file: rel,
         store,
-        ctrl: new AbortController(),
+        ctrl: linkedController(),
         startedAt: new Date().toISOString(),
         progress: { done: 0, passed: 0, failed: 0, cancelled: 0, skipped: 0, total: envs.length },
         environments: envs,

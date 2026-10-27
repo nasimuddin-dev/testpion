@@ -64,15 +64,19 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       if (size > MAX_BODY) return reply(res, 413, { ok: false, error: normalizeError(new ApsError('ValidationError', `Request is larger than ${MAX_BODY / 1024 / 1024} MB`)) });
       chunks.push(c);
     }
-    let call: { method?: unknown; params?: unknown };
+    let call: { method?: unknown; params?: unknown; requestId?: unknown };
     try {
       call = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     } catch {
       return reply(res, 400, { ok: false, error: normalizeError(new ApsError('ValidationError', 'The request body is not valid JSON')) });
     }
     if (typeof call?.method !== 'string') return reply(res, 400, { ok: false, error: normalizeError(new ApsError('ValidationError', 'Missing "method"')) });
+    // a connection that closes before the answer cancels the call (a closed tab stops the work it started)
+    const gone = new AbortController();
+    res.on('close', () => !res.writableFinished && gone.abort());
     try {
-      reply(res, 200, { ok: true, data: (await backend.invoke(call.method, call.params)) ?? null });
+      const requestId = typeof call.requestId === 'string' ? call.requestId : undefined;
+      reply(res, 200, { ok: true, data: (await backend.invoke(call.method, call.params, { requestId, signal: gone.signal })) ?? null });
     } catch (e) {
       // errors are plain objects (kind, message, suggestions …) the UI and AI agents can read
       reply(res, 200, { ok: false, error: normalizeError(e) });

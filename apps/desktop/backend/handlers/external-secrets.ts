@@ -7,8 +7,9 @@
 import { ApsError, areSecretReadsTrusted, forgetHost, forgetSecretReads, trustSummary, forgetTrustedCommands, trustHost, trustSecretReads, trustedHosts, environmentSecretRefs, externalSecrets, isCommandTrusted, prefetchEnvironmentSecrets, secretRefCommand, commandLine, trustCommand } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
-/** References already reported as not allowed in this session (one message each, not one per request). */
-const told = new Set<string>();
+/** References already reported as not allowed in each session (one message each, not one per request; the next user is told too). */
+const toldBySession = new WeakMap<Backend, Set<string>>();
+const toldOf = (be: Backend) => toldBySession.get(be) ?? toldBySession.set(be, new Set()).get(be)!;
 
 /** Before an RPC call with an environment: read its trusted references; say once which ones wait to be allowed. */
 export async function prefetchSecretsFor(be: Backend, params: unknown): Promise<void> {
@@ -21,6 +22,7 @@ export async function prefetchSecretsFor(be: Backend, params: unknown): Promise<
     return;
   }
   const r = await prefetchEnvironmentSecrets(store, env);
+  const told = toldOf(be);
   const fresh = r.blocked.filter((b) => !told.has(b.ref));
   for (const b of fresh) told.add(b.ref);
   if (fresh.length) be.host.emit('secrets.blocked', { environment: env, refs: fresh });
@@ -59,7 +61,7 @@ export function externalSecretsHandlers(be: Backend): Handlers {
         if (refs && !refs.includes(ref)) continue;
         const c = secretRefCommand(ref);
         trustCommand(be.ws, c.command, c.args);
-        told.delete(ref);
+        toldOf(be).delete(ref);
       }
       return prefetchEnvironmentSecrets(be.ws, environment);
     },

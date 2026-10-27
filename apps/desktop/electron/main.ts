@@ -343,12 +343,12 @@ function start(): void {
   // deny every web permission the app does not use (camera, microphone, location …), whatever page asks (electron/permissions.ts)
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => callback(permissionAllowed(permission, details.requestingUrl, process.env.VITE_DEV_SERVER_URL)));
   session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permissionAllowed(permission, origin, process.env.VITE_DEV_SERVER_URL));
-  ipcMain.handle('aps:rpc', async (e, method: string, params: unknown) => {
+  ipcMain.handle('aps:rpc', async (e, method: string, params: unknown, meta?: { requestId?: unknown }) => {
     // only the app's own page (the window's top frame) may call the backend, never an embedded frame
     if (!win || e.sender !== win.webContents || e.senderFrame !== win.webContents.mainFrame) return { ok: false, error: normalizeError(new Error('Not allowed')) };
     try {
       const be = await backendReady;
-      return { ok: true, data: await be.invoke(method, params) };
+      return { ok: true, data: await be.invoke(method, params, { requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined }) };
     } catch (err) {
       // a plain object keeps kind and suggestions (IPC would reduce an Error to its message)
       return { ok: false, error: normalizeError(err) };

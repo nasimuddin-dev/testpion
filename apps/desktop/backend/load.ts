@@ -1,10 +1,11 @@
 /** Starting a load test (startLoad): resolves the target, checks the safeguards and runs it in the background. The Backend method is a one-line delegate. */
 import { ApsError, reflectServer, parseGrpcTarget, normalizeError, runLoadTest, buildUrl, evaluateThresholds, recordLoadRun, loadRunRecord, type LoadRunRecord, collectionLoadTarget, shortId, type LoadTestConfig } from '@testpion/core';
 import type { Backend } from './backend.js';
+import { linkedController } from './request-context.js';
 
 export async function startLoad(be: Backend, p: { config: LoadTestConfig; environment?: string; collection?: { collectionId: string; selection?: string[]; warmUp?: boolean }; name?: string; savedId?: string; thresholds?: string[] }) {
   const id = shortId('load-');
-  const ctrl = new AbortController();
+  const ctrl = linkedController();
   be.controllers.set(id, ctrl);
   const ctx = be.context({ environment: p.environment, collectionId: p.collection?.collectionId });
   // a collection: its requests in order (after an optional warm-up run with scripts), variables resolved once

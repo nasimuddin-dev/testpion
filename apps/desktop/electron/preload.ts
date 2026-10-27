@@ -15,14 +15,14 @@ ipcRenderer.on('aps:event', (_e, channel: string, payload: unknown) => {
 contextBridge.exposeInMainWorld('aps', {
   kind: 'electron',
   platform: process.platform,
-  invoke: async (method: string, params?: unknown) => {
-    const r = await ipcRenderer.invoke('aps:rpc', method, params);
+  invoke: async (method: string, params?: unknown, meta?: { requestId?: string }) => {
+    const r = await ipcRenderer.invoke('aps:rpc', method, params, meta);
     if (!r.ok) throw Object.assign(new Error(r.error?.message ?? 'Error'), r.error);
     return r.data;
   },
   // the envelope itself: an error thrown across the context bridge keeps only its message, so the page throws
   // (with the kind, suggestions and details) on its side
-  rpc: (method: string, params?: unknown) => ipcRenderer.invoke('aps:rpc', method, params),
+  rpc: (method: string, params?: unknown, meta?: { requestId?: string }) => ipcRenderer.invoke('aps:rpc', method, params, meta),
   on: (channel: string, cb: Listener) => {
     const set = listeners.get(channel) ?? listeners.set(channel, new Set()).get(channel)!;
     set.add(cb);

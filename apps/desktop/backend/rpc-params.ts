@@ -62,6 +62,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'search.query': { query: 'o', scope: 'sa?' },
   'search.fields': {},
   'assistant.ask': { task: 's', question: 's?', context: 'x?', history: 'a?' },
+  'rpc.cancel': { id: 's' },
   'app.openExternal': { url: 's' },
   'asyncapi.outline': { path: 'wp?', text: 's?' },
   'bundle.export': { selection: 'a?', section: 's?', folder: 'o?', all: 'b?', uses: 'b?', datasets: 's?', providers: 'b?', format: 's?', title: 's?', dryRun: 'b?', workspaceVariables: 'b?', exclude: 'sa?' },

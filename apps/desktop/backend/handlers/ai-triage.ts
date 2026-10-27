@@ -5,6 +5,7 @@
  */
 import { analyzeFlaky, attemptFix, shortId, triageRun, type ItemRef } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { linkedController } from '../request-context.js';
 
 export function aiTriageHandlers(be: Backend): Handlers {
   return {
@@ -17,7 +18,7 @@ export function aiTriageHandlers(be: Backend): Handlers {
     /** Attempt to fix: apply the chosen items of a flaky analysis and run the test `times` times (production asks like any run); `ai.cancel` stops it. */
     'ai.attemptFix': async (p: { id: string; items?: string[]; times?: number; requestId?: string }) => {
       const key = p.requestId ?? shortId('af-');
-      const ctrl = new AbortController();
+      const ctrl = linkedController();
       be.controllers.set(key, ctrl);
       try {
         return await attemptFix({

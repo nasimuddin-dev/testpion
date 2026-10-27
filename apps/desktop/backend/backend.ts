@@ -39,8 +39,6 @@ import {
   type GraphQLSubscription,
   CurrentValues,
   CookieJarStore,
-  collectMockRoutes,
-  type MockRoute,
   type MockServer,
   runTests,
   runCollection,
@@ -138,11 +136,14 @@ import { aiChat as aiChatImpl } from './ai-chat.js';
 import { startLoad as startLoadImpl } from './load.js';
 import { hasTemplate } from '@testpion/shared';
 import { findNodeName, readRunData } from './run-data.js';
+import { mockInfo as mockInfoImpl, refreshMock as refreshMockImpl } from './mock-state.js';
+import { appServices, type AppServices } from './app-services.js';
+import { Calls, linkedController, raceAbort, type CallMeta, type RequestContext } from './request-context.js';
 
 /** How long after start the monitor scheduler and the background git fetch begin (the window's first paint comes first). */
 const SCHEDULERS_DELAY_MS = 3000;
 /** What the window reads at start-up: nothing of it goes over the network, so it never waits for the HTTP stack to load. */
-const LOCAL_READS = /^(app\.info|settings\.get|ws\.(current|list|examplesAdded)|col\.(list|tree|get)|env\.list|lib\.get|mcp\.servers|openapi\.specs|datasets\.list|stats\.\w+|debug\.status|git\.(status|changes|log)|monitor\.list|history\.list|runs\.list|traces\.list|terminal\.\w+)$/;
+const LOCAL_READS = /^(app\.info|settings\.get|ws\.(current|list|examplesAdded)|col\.(list|tree|get)|env\.list|lib\.get|mcp\.servers|openapi\.specs|datasets\.list|stats\.\w+|debug\.status|git\.(status|changes|log)|monitor\.list|history\.list|runs\.list|traces\.list|terminal\.\w+|rpc\.cancel)$/;
 /** RPC methods that change what the workspace lists (collections, saved items, environments, monitors, MCP servers). */
 const DATA_CHANGING = /^(col\.(save|delete|import\w*|move\w*|duplicate\w*)|lib\.save|env\.(save|delete|reorder|import\w*)|vars\.setInEnvironment|monitor\.(save|delete)|mcp\.(saveServers|connect|disconnect)|trash\.restore|debug\.saveToCollection|ws\.(open|import\w*|openExamples))$/;
 
@@ -172,6 +173,8 @@ export interface BackendHost {
   serverMode?: boolean;
   /** Server mode: the folder of the signed-in user, the only place files can be read or written (default: the data folder). */
   userRoot?: string;
+  /** The process-wide services this session shares with the others of its host (default: the process's own, app-services.ts). */
+  app?: AppServices;
 }
 
 export type Handler = (params: any) => Promise<unknown> | unknown;
@@ -218,6 +221,8 @@ export class Backend {
   mcpRedactors = new Map<string, Redactor>();
   wsConsole = new Map<string, { url: string; redactor: Redactor; counts: { sent: number; received: number; opened: number } }>();
   controllers = new Map<string, AbortController>();
+  /** The calls in flight, by id (`rpc.cancel`): request-context.ts. */
+  readonly calls = new Calls();
   /** What this start added to the user's examples workspace (shown once by the UI, see ws.examplesAdded). */
   examplesAdded: string[] = [];
   runs = new Map<string, RunState>();
@@ -260,6 +265,7 @@ export class Backend {
         emit(channel, payload);
       },
     });
+    (host.app ?? appServices()).register(this);
     this.manager = new WorkspaceManager(host.appDir);
     if (host.serverMode) setNetworkPolicy({ allowLocalFiles: false, localFileRoots: [host.userRoot ?? host.appDir] });
     this.settings = this.manager.loadSettings();
@@ -455,29 +461,12 @@ export class Backend {
     return this.cookieStore.jar;
   }
 
-  /** A running mock server follows its collection: new or edited examples are served straight away. */
   refreshMock(collectionId: string): void {
-    const m = this.mocks.get(collectionId);
-    if (!m) return;
-    try {
-      m.update(this.ws.getCollection(collectionId));
-    } catch {
-      /* collection deleted: keep the last routes until the server is stopped */
-    }
+    refreshMockImpl(this, collectionId);
   }
 
-  /** Status of a collection's mock server; when stopped, the routes it would serve. */
   mockInfo(collectionId: string) {
-    const m = this.mocks.get(collectionId);
-    const view = (routes: MockRoute[]) => routes.map((r) => ({ method: r.method, path: r.path, status: r.example.status, example: r.example.name, request: r.requestName, requestId: r.requestId }));
-    if (m) return { running: true, url: m.url, port: m.port, routes: view(m.routes) };
-    let routes: MockRoute[] = [];
-    try {
-      routes = collectMockRoutes(this.ws.getCollection(collectionId));
-    } catch {
-      /* unknown collection */
-    }
-    return { running: false, routes: view(routes) };
+    return mockInfoImpl(this, collectionId);
   }
 
   /** Console entry for an MCP or WebSocket action (console-log.ts). */
@@ -556,7 +545,12 @@ export class Backend {
     return this.store;
   }
 
-  async invoke(method: string, params: unknown): Promise<unknown> {
+  /** One RPC call; `meta` is what the host knows of it (its request id for `rpc.cancel`, the signed-in user, a signal, a deadline). */
+  invoke(method: string, params: unknown, meta?: CallMeta): Promise<unknown> {
+    return this.calls.run(method, meta, (ctx) => this.invokeIn(ctx, method, params));
+  }
+
+  private async invokeIn(ctx: RequestContext, method: string, params: unknown): Promise<unknown> {
     // own methods only: "constructor", "toString" … are not RPC methods
     const h = typeof method === 'string' && Object.hasOwn(this.handlers, method) ? this.handlers[method] : undefined;
     if (!h) throw new ApsError('ConfigurationError', `Unknown backend method ${String(method).slice(0, 80)}`);
@@ -577,9 +571,13 @@ export class Backend {
       // the proxy settings apply from the first method that may go over the network (start-up's reads don't wait)
       if (!LOCAL_READS.test(method)) await ensureProxyApplied();
       const checked = params;
-      const r = await this.ownWrites.run(
-        () => guardProduction(this, method, checked, async () => h(checked ?? {})), // WF-06: production needs consent
-        (b) => (written = b),
+      if (ctx.signal.aborted) throw new ApsError('CancelledError', 'The call was cancelled');
+      const r = await raceAbort(
+        ctx.signal,
+        this.ownWrites.run(
+          () => guardProduction(this, method, checked, async () => h(checked ?? {})), // WF-06: production needs consent
+          (b) => (written = b),
+        ),
       );
       const ms = Math.round(performance.now() - t0);
       this.logger.trace(`rpc ${method}`, { ms });
@@ -749,7 +747,7 @@ export class Backend {
       throw new ApsError('ConfigurationError', 'No Claude API key is saved', { details: { setup: { assistant: true } }, suggestions: ['Open Settings ▸ AI assistant and save your Anthropic API key.'] });
     const ctx = this.context({ environment: p.environment });
     const id = p.requestId ?? shortId('as-');
-    const ctrl = new AbortController();
+    const ctrl = linkedController();
     this.controllers.set(id, ctrl);
     const deltas = this.batched<unknown>('assistant.deltas', 40);
     try {
@@ -784,7 +782,7 @@ export class Backend {
     exec: (o: RunOptions) => Promise<RunSummary> = runTests,
   ) {
     const runId = shortId('run-');
-    const ctrl = new AbortController();
+    const ctrl = linkedController();
     let finish!: () => void;
     const finished = new Promise<void>((res) => (finish = res));
     const store = this.ws;
@@ -923,6 +921,8 @@ export class Backend {
     this.gitAutoFetch.stop();
     const cookies = this.cookieStore?.flush().catch(() => undefined); // started now, awaited with the rest
     await settleWithin([this.debugger?.release?.()], 2000); // saves a Debugger session with unsaved exchanges
+    this.calls.cancelAll();
+    (this.host.app ?? appServices()).release(this);
     for (const c of this.controllers.values()) c.abort();
     for (const r of this.runs.values()) r.ctrl.abort();
     await settleWithin(

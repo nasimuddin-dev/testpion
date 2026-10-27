@@ -38,6 +38,7 @@ import {
 } from '@testpion/core';
 import { COPY_LIMIT, LAUNCHER_EXTENSIONS, fileExtension, sanitizeFileName, type OutputFormatId, type OutputSource } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
+import { linkedController } from '../request-context.js';
 import { scaleRowsPage } from './flow-scale.js';
 
 export { partPathFor };
@@ -163,7 +164,7 @@ export function outputHandlers(be: Backend): Handlers {
       const jobId = p.jobId && /^[\w-]{1,64}$/.test(p.jobId) ? p.jobId : `out-${Date.now().toString(36)}-${++seq}`;
       // one save per job: a second one with the same id would take over the first one's Cancel and progress
       if (jobs.has(jobId)) throw new ApsError('ValidationError', `output.save: job ${jobId} is already running`);
-      const ctrl = new AbortController();
+      const ctrl = linkedController();
       jobs.set(jobId, ctrl);
       try {
         const { built, redacting, notice } = await prepare(be, p, ctrl.signal);
@@ -239,7 +240,7 @@ export function outputHandlers(be: Backend): Handlers {
     'output.copy': async (p: SaveParams) => {
       const { fmt } = checkOutput(p);
       if (!fmt.text) throw new ApsError('ValidationError', `${fmt.label} is not text: download it instead`);
-      const ctrl = new AbortController();
+      const ctrl = linkedController();
       const { built } = await prepare(be, p, ctrl.signal);
       let text = '';
       for await (const c of built.chunks) {

@@ -34,6 +34,8 @@ export function appHandlers(be: Backend): Handlers {
       /** What this host can do beyond the shared RPCs: `shell` (real shells in the Terminal panel) only in the desktop app. */
       capabilities: { shell: be.terminals.available, localFiles: !be.host.serverMode },
     }),
+    /** Stop a call in flight by the id the caller gave it (internal: the window and the bridge cancel their own calls). */
+    'rpc.cancel': ({ id }: { id: string }) => be.calls.cancel(id),
     'settings.get': () => be.settings,
     /** Forget cached OAuth 2.0 tokens (Auth tab ▸ Forget tokens); returns how many there were. */
     'auth.clearTokens': () => clearTokenCache(),
