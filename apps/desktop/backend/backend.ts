@@ -68,9 +68,11 @@ import {
   listMonitors,
   lastMonitorResult,
   type WorkspaceInfo,
-  setProxySettings,
+  NetConfig,
+  setDefaultNet,
+  withScriptRunner,
+  type ScriptRunner,
   ensureProxyApplied,
-  setTlsTrust,
   APP_CLAUDE_ID,
   runAiTask,
   aiRunDeps,
@@ -136,8 +138,9 @@ import { aiChat as aiChatImpl } from './ai-chat.js';
 import { startLoad as startLoadImpl } from './load.js';
 import { hasTemplate } from '@testpion/shared';
 import { findNodeName, readRunData } from './run-data.js';
+import { applyNetSettings } from './net-apply.js';
 import { mockInfo as mockInfoImpl, refreshMock as refreshMockImpl } from './mock-state.js';
-import { appServices, type AppServices } from './app-services.js';
+import { appServices, scriptWorkersWanted, type AppServices } from './app-services.js';
 import { Calls, linkedController, raceAbort, type CallMeta, type RequestContext } from './request-context.js';
 
 /** How long after start the monitor scheduler and the background git fetch begin (the window's first paint comes first). */
@@ -173,6 +176,10 @@ export interface BackendHost {
   serverMode?: boolean;
   /** Server mode: the folder of the signed-in user, the only place files can be read or written (default: the data folder). */
   userRoot?: string;
+  /** Run the scripts of this session in a pool of worker threads (a number: its size) instead of the main thread; TESTPION_SCRIPT_WORKERS overrides. */
+  scriptWorkers?: boolean | number;
+  /** The most text the import previews of this session hold, and the most one upload may be (default 512 MB; a shared server sets less). */
+  importBytes?: number;
   /** The process-wide services this session shares with the others of its host (default: the process's own, app-services.ts). */
   app?: AppServices;
 }
@@ -223,6 +230,10 @@ export class Backend {
   controllers = new Map<string, AbortController>();
   /** The calls in flight, by id (`rpc.cancel`): request-context.ts. */
   readonly calls = new Calls();
+  /** This session's proxy, trusted certificates and connection pools (core net/proxy.ts); the desktop app's one session is also the process default. */
+  readonly net = new NetConfig();
+  /** Where this session's scripts run: a worker pool shared by the process, or undefined for the main thread (core scripts/script-runner.ts). */
+  scripts: ScriptRunner | undefined;
   /** What this start added to the user's examples workspace (shown once by the UI, see ws.examplesAdded). */
   examplesAdded: string[] = [];
   runs = new Map<string, RunState>();
@@ -266,6 +277,7 @@ export class Backend {
       },
     });
     (host.app ?? appServices()).register(this);
+    this.scripts = (host.app ?? appServices()).scriptRunner(scriptWorkersWanted(host.scriptWorkers));
     this.manager = new WorkspaceManager(host.appDir);
     if (host.serverMode) setNetworkPolicy({ allowLocalFiles: false, localFileRoots: [host.userRoot ?? host.appDir] });
     this.settings = this.manager.loadSettings();
@@ -284,6 +296,7 @@ export class Backend {
     });
     this.terminals = createTerminals(this);
     this.handlers = this.buildHandlers();
+    if (!host.serverMode) setDefaultNet(this.net); // one person's computer: global fetch and timers follow this session
     this.applyProxy();
     if (this.manager.settingsProblem) this.logger.warn(`Settings were reset to defaults: ${this.manager.settingsProblem}`);
     this.bootstrapWorkspace();
@@ -291,7 +304,7 @@ export class Backend {
       // read on every tick, so a workspace switch or an edited monitor applies right away
       list: () => (this.store ? listMonitors(this.store).filter((m) => !this.runningMonitors.has(m.id)) : []),
       last: (id) => lastMonitorResult(this.ws, id),
-      run: (m) => runMonitorNow(this, m, 'schedule'),
+      run: (m) => this.net.run(() => withScriptRunner(this.scripts, () => runMonitorNow(this, m, 'schedule'))),
       onResult: (monitor, result, previous) => this.host.emit('monitor.result', { monitor, result, previous }),
       resolve: (m, text) => {
         const ctx = this.context({ environment: m.environment });
@@ -315,21 +328,7 @@ export class Backend {
 
   /** Apply the proxy and certificate settings (the proxy password comes from the secret store and is redacted from logs). */
   applyProxy(): void {
-    const p = this.settings.proxy ?? { mode: 'env' as const };
-    const password = p.mode === 'custom' && p.username ? this.secrets.get('proxy.password') : undefined;
-    if (password) this.logger.redactor.addSecret(password);
-    try {
-      setProxySettings({ ...p, password });
-    } catch (e) {
-      this.logger.warn(`Proxy settings ignored: ${(e as Error).message}`);
-      setProxySettings({ mode: 'env' });
-    }
-    try {
-      setTlsTrust(this.settings.tls ?? {});
-    } catch (e) {
-      this.logger.warn(`Certificate settings ignored: ${(e as Error).message}`);
-      setTlsTrust({});
-    }
+    applyNetSettings(this);
   }
 
   /** Copy the bundled examples workspace into the data folder (once); undefined when this host has none. */
@@ -547,7 +546,7 @@ export class Backend {
 
   /** One RPC call; `meta` is what the host knows of it (its request id for `rpc.cancel`, the signed-in user, a signal, a deadline). */
   invoke(method: string, params: unknown, meta?: CallMeta): Promise<unknown> {
-    return this.calls.run(method, meta, (ctx) => this.invokeIn(ctx, method, params));
+    return this.net.run(() => withScriptRunner(this.scripts, () => this.calls.run(method, meta, (ctx) => this.invokeIn(ctx, method, params))));
   }
 
   private async invokeIn(ctx: RequestContext, method: string, params: unknown): Promise<unknown> {
@@ -625,6 +624,8 @@ export class Backend {
       cookieJar: this.cookieStore?.jar,
       allowProduction: opts.allowProduction,
       aiSurface: 'app',
+      net: this.net,
+      scriptRunner: this.scripts,
       scriptTrust: scriptTrustFor(this.ws, { onBlocked: (b) => this.scriptBlocked(b) }),
     });
     // Postman-style current values: set by scripts, kept on this machine, override stored values
@@ -941,6 +942,7 @@ export class Backend {
     await settleWithin([cookies], CAP);
     this.currentValues?.flush();
     this.ownWrites.dispose();
+    this.net.dispose();
     this.store?.close();
   }
 }

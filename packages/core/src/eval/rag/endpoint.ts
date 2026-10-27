@@ -13,6 +13,7 @@ import { assertUrlAllowed } from '../../net/policy.js';
 import { queryAll } from '../../util/jsonpath.js';
 import { shortId } from '../../util/ids.js';
 import type { RagJudgeHost } from './judge.js';
+import { netFetch } from '../../net/proxy.js';
 
 /** The text as it may leave this computer: secrets and (unless switched off) personal data masked. */
 export function outbound(host: RagJudgeHost, s: string): string {
@@ -71,7 +72,7 @@ export async function classify(host: RagJudgeHost, c: ClassifierConfig, premise:
   await assertUrlAllowed(c.url);
   const t0 = Date.now();
   try {
-    const res = await fetch(c.url, {
+    const res = await netFetch(c.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(c.headers ?? {}) },
       body: JSON.stringify({ [c.premiseField ?? 'premise']: outbound(host, premise), [c.hypothesisField ?? 'hypothesis']: outbound(host, hypothesis) }),

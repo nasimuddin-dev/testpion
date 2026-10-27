@@ -2,6 +2,7 @@ import { assertUrlAllowed } from '../net/policy.js';
 import { ApsError, errorKindForStatus } from '../errors.js';
 import { maskSensitiveText, type Redactor } from '../util/redact.js';
 import type { ToolCall } from './types.js';
+import { netFetch } from '../net/proxy.js';
 
 /**
  * How long an AI provider may take. `requestMs`: from sending the request to the answer (for a call that is not streamed: the whole answer;
@@ -61,7 +62,7 @@ export async function doFetch(
   else opts.signal?.addEventListener('abort', onCancel, { once: true });
   const timer = limit > 0 ? setTimeout(() => ctl.abort(new ApsError('TimeoutError', `${opts.provider} did not answer within ${Math.round(limit / 1000)} s`, { suggestions: ['Check that the provider is reachable (a local model must be running).', 'Raise the limit in Settings ▸ AI (request timeout).'] })), limit) : undefined;
   try {
-    res = await fetch(url, {
+    res = await netFetch(url, {
       method: opts.method ?? 'POST',
       headers: { 'content-type': 'application/json', ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),

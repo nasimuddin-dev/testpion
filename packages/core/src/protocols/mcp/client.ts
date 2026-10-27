@@ -13,6 +13,7 @@ import type { McpServerConfig } from '../../model/types.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
 import { shortId } from '../../util/ids.js';
+import { netFetch } from '../../net/proxy.js';
 
 /** One protocol-level event in an MCP session (spec §12.4). */
 export interface McpTraceEvent {
@@ -259,7 +260,7 @@ export class McpSession {
           const cookie = jar.headerFor(target);
           if (cookie) headers.set('cookie', cookie);
         }
-        const res = await fetch(target, { ...init, headers, redirect: 'manual' });
+        const res = await netFetch(target, { ...init, headers, redirect: 'manual' });
         const setCookies = res.headers.getSetCookie?.() ?? [];
         if (jar && setCookies.length) jar.storeFromResponse(target, setCookies);
         const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;

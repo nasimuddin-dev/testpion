@@ -9,6 +9,7 @@ import { queryAll } from '../util/jsonpath.js';
 import { dbKindOf, dbRecords } from './db-datasets.js';
 import { noteOwnChange } from '../storage/fsutil.js';
 import { cursorOf, offsetOfCursor } from '../util/page.js';
+import { netFetch } from '../net/proxy.js';
 
 export type DatasetRecord = Record<string, unknown>;
 
@@ -80,7 +81,7 @@ async function* rawRecords(src: DatasetSource): AsyncGenerator<DatasetRecord> {
   const fmt = formatOf(src);
   if (src.url) {
     await assertUrlAllowed(src.url);
-    const res = await fetch(src.url);
+    const res = await netFetch(src.url);
     if (!res.ok) throw new ApsError('NetworkError', `Dataset URL returned HTTP ${res.status}`);
     const text = await res.text();
     yield* parseText(text, fmt, src.recordsPath);

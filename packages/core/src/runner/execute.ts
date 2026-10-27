@@ -58,6 +58,8 @@ import { runAssert, runSet } from './flow-control.js';
 import type { PinnedResponse } from './debug-hooks.js';
 import { assertProductionStep, isDataChangingMethod, isGraphQLMutation, isGrpcReadMethod, type ProductionGate } from '../net/production-guard.js';
 import { sha256Hex } from '../util/hash.js';
+import { withNet, type NetConfig } from '../net/proxy.js';
+import { withScriptRunner, type ScriptRunner } from '../scripts/script-runner.js';
 
 export interface ExecServices {
   /** Source of a workspace script package (tp.require), when there is one. */
@@ -98,6 +100,10 @@ export interface ExecServices {
   pinned?: (testId: string) => PinnedResponse | undefined;
   /** What the workspace's scripts may do: hosts for `tp.sendRequest`, reading secrets (scripts/script-trust.ts). Unset: unrestricted. */
   scriptTrust?: ScriptTrust;
+  /** The session's network configuration (proxy, trusted certificates, connection pools): every step runs with it. Unset: the call's, else the process default. */
+  net?: NetConfig;
+  /** Where this session's scripts run (a worker pool on a server). Unset: the call's, else the process's, else the engine in this thread (scripts/script-runner.ts). */
+  scriptRunner?: ScriptRunner;
   /** A production environment's gate: data-changing steps run only with consent (net/production-guard.ts). */
   production?: ProductionGate;
   /** The judge of the judged RAG metrics (eval/rag/judge.ts): the AI settings, the cache and the budget of this run. */
@@ -169,7 +175,11 @@ export function productionStep(test: TestCase, scope: VariableScope): { action: 
 }
 
 /** Execute one test case: scripts → protocol call → checks → extraction. Never throws (except cancellation). */
-export async function executeTest(testIn: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; parentSpan?: SpanHandle; prev?: StepResponse }): Promise<ExecutionOutcome> {
+export function executeTest(testIn: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; parentSpan?: SpanHandle; prev?: StepResponse }): Promise<ExecutionOutcome> {
+  return withNet(svc.net, () => withScriptRunner(svc.scriptRunner, () => executeTestIn(testIn, svc, opts)));
+}
+
+async function executeTestIn(testIn: TestCase, svc: ExecServices, opts: { tracer: Tracer; signal?: AbortSignal; parentSpan?: SpanHandle; prev?: StepResponse }): Promise<ExecutionOutcome> {
   let test = testIn;
   const scope = svc.vars.clone();
   if (test.variables) scope.setScope('request', test.variables);

@@ -21,6 +21,8 @@ import { prepareAiTask, runAiTask } from './ai/tasks/run.js';
 import type { AiSurface } from './storage/ai-usage.js';
 import { scriptTrustFor, TRUST_SCRIPTS_ENV, type ScriptTrust } from './scripts/script-trust.js';
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
+import type { NetConfig } from './net/proxy.js';
+import type { ScriptRunner } from './scripts/script-runner.js';
 
 export interface ContextOptions {
   store: WorkspaceStore;
@@ -59,6 +61,10 @@ export interface ContextOptions {
   aiEnv?: Record<string, string | undefined>;
   /** What the workspace's scripts may do (hosts, secrets). Unset: the workspace's trust list on this computer (scripts/script-trust.ts). */
   scriptTrust?: ScriptTrust;
+  /** The session's network configuration (proxy, trusted certificates): the steps and sends of this context use it. */
+  net?: NetConfig;
+  /** Where the scripts of this context run (scripts/script-runner.ts). */
+  scriptRunner?: ScriptRunner;
 }
 
 export interface EngineContext {
@@ -161,6 +167,8 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     readFile: (path: string) => readFileSync(store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
     workspaceRoot: opts.fileRoot ?? store.root,
     scriptPackage: (name: string) => store.readScriptPackage(name),
+    net: opts.net,
+    scriptRunner: opts.scriptRunner,
     scriptTrust:
       opts.scriptTrust ??
       scriptTrustFor(store, {

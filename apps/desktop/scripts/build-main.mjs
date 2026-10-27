@@ -15,6 +15,8 @@ await build({ ...mainOptions, entryPoints: [join(root, 'electron/main.ts')], out
 copyFileSync(join(root, 'electron/boot.cjs'), join(out, 'boot.cjs'));
 // `TestPion --cli …` (the `testpion` command of the Terminal panel): the CLI, loaded only in that mode
 await build({ ...mainOptions, entryPoints: [join(root, '../../packages/cli/src/index.ts')], outfile: join(out, 'cli.cjs') });
+// the script engine in a worker thread (TESTPION_SCRIPT_WORKERS=1; core scripts/script-runner-workers.ts finds it next to main.cjs)
+await build({ ...mainOptions, entryPoints: [join(root, '../../packages/core/src/scripts/script-worker.ts')], outfile: join(out, 'script-worker.cjs') });
 await build({ ...preloadBundleOptions, entryPoints: [join(root, 'electron/preload.ts')], outfile: join(out, 'preload.cjs') });
 await build({ ...mainOptions, entryPoints: [join(root, 'backend/web-server.ts')], outfile: join(out, 'web-server.cjs') });
 // drivers loaded on first use (see LAZY_MODULES): beside the bundles, in dist-electron/lazy

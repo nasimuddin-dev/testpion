@@ -1,6 +1,6 @@
 import { assertHostPath, assertUrlAllowed, getNetworkPolicy } from '../../net/policy.js';
 import { ENGINE_VERSION } from '../../version.js';
-import { baseDispatcher, ensureProxyApplied, makeDispatcher, proxyGeneration } from '../../net/proxy.js';
+import { currentNet, ensureProxyApplied } from '../../net/proxy.js';
 import { createWriteStream, openAsBlob, readFileSync, mkdirSync, type WriteStream } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -100,8 +100,9 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>, co
   const wide = widePoolSize(connections);
   if (wide && !pool) pool = { connections: wide, pipelining: 1, keepAliveTimeout: 10_000, shared: wide };
   // (a pool of its own, e.g. one connection for NTLM, is never shared: see executeHttpAttempt)
-  if (!wide && !pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return baseDispatcher();
-  const key = JSON.stringify([wide, proxyGeneration(), s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
+  const net = currentNet(); // this call's session: its proxy, its trusted certificates, its pools
+  if (!wide && !pool && !s.insecure && !s.proxy && !s.clientCert && !s.http1Only && !s.tlsMinVersion && !s.tlsMaxVersion && !s.ciphers?.trim()) return net.baseDispatcher();
+  const key = JSON.stringify([net.id, wide, net.generation, s.insecure, s.proxy, s.clientCert, !!s.http1Only, s.tlsMinVersion, s.tlsMaxVersion, s.ciphers?.trim()]);
   let d = pool && !wide ? undefined : dispatchers.get(key);
   if (d) {
     // most recently used last
@@ -121,7 +122,7 @@ function dispatcherFor(spec: HttpRequestSpec, pool?: Record<string, unknown>, co
       if (s.clientCert.passphrase) connect.passphrase = s.clientCert.passphrase;
     }
     const { shared: _shared, ...poolOptions } = (pool ?? {}) as Record<string, unknown>;
-    d = makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...poolOptions });
+    d = net.makeDispatcher(connect, s.proxy, { ...(s.http1Only ? { allowH2: false } : {}), ...poolOptions });
     if (!pool || wide) {
       dispatchers.set(key, d);
       while (dispatchers.size > DISPATCHERS_MAX) {

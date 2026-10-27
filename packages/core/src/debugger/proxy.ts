@@ -24,7 +24,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { sleep } from '../util/concurrency.js';
 import { flattenHeaders } from '../util/headers.js';
 import { BoundedMap } from '../util/collections.js';
-import { trustedCa } from '../net/proxy.js';
+import { currentNet } from '../net/proxy.js';
 import { applyHeaderEdits, decideRequest, highlightRuleForResponse, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
 import type { LeafCertificate } from './certificate.js';
@@ -369,6 +369,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     };
   };
   const rulesNow = () => opts.rules?.() ?? [];
+  const net = currentNet(); // the session that started the proxy: its certificates apply to its connections
+  const trustedCa = () => net.trustedCa();
   const upstreamTls = () => ({ ca: trustedCa(), rejectUnauthorized: !opts.decrypt?.insecureUpstream });
   /*
    * One https.Agent for the upstream requests of a trust configuration: with the CA list in every request's options (hundreds of

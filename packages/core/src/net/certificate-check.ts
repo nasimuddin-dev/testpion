@@ -4,7 +4,7 @@
  */
 import { connect, type PeerCertificate as TlsPeerCertificate } from 'node:tls';
 import { assertUrlAllowed } from './policy.js';
-import { trustedCa } from './proxy.js';
+import { currentNet } from './proxy.js';
 
 interface CertificateCheck {
   host: string;
@@ -32,7 +32,7 @@ export async function checkCertificate(target: string, opts: { timeoutMs?: numbe
   const port = Number(url.port) || 443;
   const started = performance.now();
   return new Promise((resolve, reject) => {
-    const socket = connect({ host, port, servername: /^[\d.:]+$/.test(host) ? undefined : host, ca: trustedCa(), rejectUnauthorized: false, ALPNProtocols: ['h2', 'http/1.1'] });
+    const socket = connect({ host, port, servername: /^[\d.:]+$/.test(host) ? undefined : host, ca: currentNet().trustedCa(), rejectUnauthorized: false, ALPNProtocols: ['h2', 'http/1.1'] });
     const timer = setTimeout(() => {
       socket.destroy();
       reject(new Error(`No TLS handshake with ${host}:${port} within ${opts.timeoutMs ?? 10_000} ms`));

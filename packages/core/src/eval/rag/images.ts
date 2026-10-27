@@ -11,6 +11,7 @@ import type { RetrievedDoc } from '../../model/types.js';
 import type { ChatImage } from '../../ai/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import { prepareImage, type PreparedImage } from '../../util/image-info.js';
+import { netFetch } from '../../net/proxy.js';
 
 export const IMAGE_LIMITS = { perImageBytes: 5 * 1024 * 1024, perSample: 16, perSampleBytes: 20 * 1024 * 1024 } as const;
 
@@ -39,7 +40,7 @@ export function defaultImageSource(workspaceRoot?: string): ImageSource {
   return {
     async fetchUrl(url, maxBytes) {
       await assertUrlAllowed(url);
-      const res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) });
+      const res = await netFetch(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const len = Number(res.headers.get('content-length'));
       if (Number.isFinite(len) && len > maxBytes) throw new Error(`${Math.round(len / 1024 / 102.4) / 10} MB is over the ${maxBytes / 1024 / 1024} MB limit`);

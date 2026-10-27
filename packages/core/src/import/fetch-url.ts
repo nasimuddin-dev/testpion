@@ -1,6 +1,7 @@
 import { bundleWsdl, isWsdl } from './wsdl.js';
 import { assertUrlAllowed, isPlainHttpAllowed } from '../net/policy.js';
 import { ApsError } from '../errors.js';
+import { netFetch } from '../net/proxy.js';
 
 /** Largest document fetched for an import. */
 export const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
@@ -44,7 +45,7 @@ export async function fetchImportText(link: string, opts: { signal?: AbortSignal
     if (u.protocol === 'http:' && !isPlainHttpAllowed(u)) throw new ApsError('ConfigurationError', `Blocked by the network policy: ${u.hostname} is not allowed over plain http`, { suggestions: ['Use an https:// link.'] });
     await assertUrlAllowed(u);
     try {
-      res = await fetch(url, {
+      res = await netFetch(url, {
         headers: { accept: 'application/json, application/yaml, text/yaml, text/plain;q=0.9, */*;q=0.5' },
         signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
         redirect: 'manual',

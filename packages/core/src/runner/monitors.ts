@@ -17,6 +17,7 @@ import { isSuiteFile, loadSuite, loadTestsFromFile, streamTests } from './loader
 import { findSavedEvaluation } from './saved-evaluations.js';
 import { runMonitorEvaluation, type MonitorRagInfo } from './monitor-rag.js';
 import { resolveMetric } from '../eval/rag/metric-registry.js';
+import { netFetch } from '../net/proxy.js';
 
 /**
  * Monitors: a collection (or some of its folders / requests) run on a schedule, like Postman monitors.
@@ -105,7 +106,7 @@ export async function notifyMonitorWebhook(url: string, monitor: Pick<Monitor, '
   try {
     if (!/^https?:\/\//i.test(url)) throw new Error('the webhook must be an http(s) URL');
     await assertUrlAllowed(url); // a server must not let a webhook reach its internal network (169.254.169.254 …)
-    const res = await fetch(url, {
+    const res = await netFetch(url, {
       method: 'POST',
       redirect: 'error', // a redirect would leave the address that was checked
       headers: { 'content-type': 'application/json' },

@@ -8,6 +8,8 @@ import { HANDLEBARS_SOURCE } from './handlebars.generated.js';
 import { MOMENT_SOURCE } from './moment.js';
 import { BRUNO_SOURCE, USES_BRUNO } from './bruno.js';
 import { queryHtml } from './html.js';
+import { currentScriptRunner } from './script-runner.js';
+import { ApsError } from '../errors.js';
 
 const USES_MOMENT = /\bmoment\b/;
 const USES_LODASH = /(^|[^\w$.])_\s*[.(]|require\s*\(\s*['"]lodash['"]/;
@@ -90,6 +92,8 @@ export interface ScriptOptions {
   memoryMb?: number;
   /** Enables `tp.sendRequest`. Without it, calls are reported as unavailable. */
   sendRequest?: ScriptRequestSender;
+  /** Stops the script (a worker is ended; in this thread it is checked between passes). */
+  signal?: AbortSignal;
   /** Most `tp.sendRequest` calls per script run (default 20). */
   maxRequests?: number;
   /** Source of a workspace script package, for `tp.require(name)`. */
@@ -322,7 +326,8 @@ const HASHES = new Set(['md5', 'sha1', 'sha256', 'sha512']);
  * hasn't answered, they are sent and the script runs again from the start with the responses, so
  * callbacks run synchronously with real data. Only the last pass's results are kept.
  */
-export async function runScript(code: string, input: ScriptInput, opts: ScriptOptions = {}): Promise<ScriptOutput> {
+export async function runScriptInThread(code: string, input: ScriptInput, opts: ScriptOptions = {}): Promise<ScriptOutput> {
+  if (opts.signal?.aborted) throw new ApsError('CancelledError', 'The script was cancelled');
   const max = opts.maxRequests ?? 20;
   const sent: NonNullable<ScriptInput['sent']> = [];
   const log: NonNullable<ScriptOutput['sentRequests']> = [];
@@ -490,7 +495,7 @@ export interface ExpressionInput {
  * a few milliseconds of CPU and a small heap. `$` and `body` are the response body, `status`, `headers`, `text` and
  * `vars` the rest. Answers the value, or the error (a syntax error, a timeout).
  */
-export async function evaluateExpression(expr: string, input: ExpressionInput, opts: { timeoutMs?: number; memoryMb?: number } = {}): Promise<{ value?: unknown; error?: string }> {
+export async function evaluateExpressionInThread(expr: string, input: ExpressionInput, opts: { timeoutMs?: number; memoryMb?: number } = {}): Promise<{ value?: unknown; error?: string }> {
   if (!expr?.trim()) return { error: 'The expression is empty' };
   const mod = await getModule();
   const rt = getRuntime(mod);
@@ -543,7 +548,7 @@ ${expr}
  * scripts/make-handlebars.cjs); the template and data go in as text/JSON, the page comes out as a string. A second of CPU,
  * 64 MB of heap, and the template, data and page sizes are capped. Answers the page, or the error.
  */
-export async function renderTemplate(template: string, data: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxTemplateBytes?: number; maxDataBytes?: number; maxOutputBytes?: number } = {}): Promise<{ html?: string; error?: string }> {
+export async function renderTemplateInThread(template: string, data: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxTemplateBytes?: number; maxDataBytes?: number; maxOutputBytes?: number } = {}): Promise<{ html?: string; error?: string }> {
   const maxTemplate = opts.maxTemplateBytes ?? 256 * 1024;
   const maxData = opts.maxDataBytes ?? 8 * 1024 * 1024;
   const maxOut = opts.maxOutputBytes ?? 8 * 1024 * 1024;
@@ -613,7 +618,7 @@ JSON.stringify({ html: String(__html).slice(0, ${maxOut + 1}) });`;
  * 64 KB of result by default. `tp.log(...)` keeps a few lines. Answers the value it returned, or the error (a syntax error,
  * a thrown error, a timeout, memory, a result that is too large).
  */
-export async function runMetricScript(code: string, sample: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxOutputBytes?: number; options?: unknown } = {}): Promise<{ value?: unknown; error?: string; logs: string[] }> {
+export async function runMetricScriptInThread(code: string, sample: unknown, opts: { timeoutMs?: number; memoryMb?: number; maxOutputBytes?: number; options?: unknown } = {}): Promise<{ value?: unknown; error?: string; logs: string[] }> {
   if (!code?.trim()) return { error: 'The script is empty', logs: [] };
   const mod = await getModule();
   const rt = getRuntime(mod);
@@ -661,4 +666,25 @@ JSON.stringify({ v: __r === undefined ? null : __r, logs: __logs });`;
       runtime = undefined;
     }
   }
+}
+
+/*
+ * The entry points the engine calls. Each goes to the runner of the call (a worker pool on a server) and, without one, runs the
+ * engine in this thread (script-runner.ts).
+ */
+export function runScript(code: string, input: ScriptInput, opts: ScriptOptions = {}): Promise<ScriptOutput> {
+  const r = currentScriptRunner();
+  return r ? r.runScript(code, input, opts) : runScriptInThread(code, input, opts);
+}
+export function evaluateExpression(expr: string, input: ExpressionInput, opts: { timeoutMs?: number; memoryMb?: number } = {}): Promise<{ value?: unknown; error?: string }> {
+  const r = currentScriptRunner();
+  return r ? r.evaluateExpression(expr, input, opts) : evaluateExpressionInThread(expr, input, opts);
+}
+export function renderTemplate(template: string, data: unknown, opts: Parameters<typeof renderTemplateInThread>[2] = {}): Promise<{ html?: string; error?: string }> {
+  const r = currentScriptRunner();
+  return r ? r.renderTemplate(template, data, opts) : renderTemplateInThread(template, data, opts);
+}
+export function runMetricScript(code: string, sample: unknown, opts: Parameters<typeof runMetricScriptInThread>[2] = {}): Promise<{ value?: unknown; error?: string; logs: string[] }> {
+  const r = currentScriptRunner();
+  return r ? r.runMetricScript(code, sample, opts) : runMetricScriptInThread(code, sample, opts);
 }
