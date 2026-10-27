@@ -75,7 +75,7 @@ export function debuggerFlowHandlers(be: Backend): Handlers {
      * A flow file from exchanges: their steps, the links found (a value from one response used by a later request),
      * the variables (origins, secrets to set) and what was left out. `dryRun` previews; otherwise it is written.
      */
-    'debug.createFlow': (p: CreateFlowParams = {}) => {
+    'debug.createFlow': async (p: CreateFlowParams = {}) => {
       const exchanges = exchangesOf(p);
       const name = p.name?.trim() || `Recorded ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
       const r: FlowFromExchangesResult = flowFromExchanges(exchanges, {
@@ -89,7 +89,7 @@ export function debuggerFlowHandlers(be: Backend): Handlers {
       const where = freePath(name, p.overwrite);
       const out = { file: `tests/${where.file}`, path: where.file, exists: where.exists, ...r, dropped: r.dropped.map((d) => ({ ...d, url: be.logger.redactor.redactUrl(d.url) })) };
       if (p.dryRun) return { ...out, written: false };
-      be.ws.writeTestFile(where.file, r.text);
+      await be.ws.writeTestFileAsync(where.file, r.text);
       be.logger.info(`Recorded flow tests/${where.file}: ${r.steps.length} steps from ${exchanges.length} exchanges`);
       // History: this capture session and the flow it became (opens the flow)
       const entry = recordCaptureSession(be.ws, exchanges, { result: 'flow', ref: { kind: 'flow', path: where.file }, target: `tests/${where.file}`, items: r.steps.length }, be.logger.redactor);
@@ -100,7 +100,7 @@ export function debuggerFlowHandlers(be: Backend): Handlers {
      * recorded flow), in a new collection or added to one (in a folder `name`), a folder per host or path. Secrets
      * become variables that are listed, never saved.
      */
-    'debug.saveToCollection': (p: { ids?: string[]; since?: string; collectionId?: string; name?: string; group?: CaptureGrouping; environment?: string; keepNoise?: boolean } = {}) => {
+    'debug.saveToCollection': async (p: { ids?: string[]; since?: string; collectionId?: string; name?: string; group?: CaptureGrouping; environment?: string; keepNoise?: boolean } = {}) => {
       const exchanges = exchangesOf(p);
       const r = collectionFromExchanges(exchanges, {
         collection: p.collectionId ? be.ws.getCollection(p.collectionId) : undefined,
@@ -110,7 +110,7 @@ export function debuggerFlowHandlers(be: Backend): Handlers {
         redactor: be.logger.redactor,
         keepNoise: p.keepNoise,
       });
-      const saved = be.ws.saveCollection(r.collection);
+      const saved = await be.ws.saveCollectionAsync(r.collection);
       be.refreshMock(saved.id);
       be.logger.info(`Saved ${r.requests.length} captured requests to collection "${saved.name}"`);
       // History: this capture session and the collection it went to (opens the collection)

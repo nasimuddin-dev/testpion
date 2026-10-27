@@ -47,7 +47,7 @@ export function aiHandlers(be: Backend): Handlers {
       providers = providers.filter((p) => !(p as { builtIn?: boolean }).builtIn);
       for (const [id, key] of Object.entries(keys ?? {})) if (key) await be.secrets.set(secretKeys.provider(id), key);
       const clean = providers.map((p) => ({ ...p, apiKey: p.apiKey && /\{\{/.test(p.apiKey) ? p.apiKey : keys?.[p.id] || be.secrets.get(secretKeys.provider(p.id)) ? `{{$secret.${secretKeys.provider(p.id)}}}` : undefined }));
-      be.ws.saveProviders(clean);
+      await be.ws.saveProvidersAsync(clean);
       return clean;
     },
     // prompts run in the AI Lab: tokens, cost and time per model, from the history

@@ -5,7 +5,7 @@ import type { Collection, Environment, Library, McpServerConfig, ProviderConfig,
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
-import { onOwnWrite, writeJsonAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeDerivedAsync, writeJson, removeOwned } from './fsutil.js';
+import { onOwnWrite, writeJsonAsync, atomicWriteAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeDerivedAsync, writeJson, removeOwned } from './fsutil.js';
 import { assertNotNewerOnDisk, looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
@@ -407,6 +407,10 @@ export class WorkspaceStore {
     mkdirSync(dirname(p), { recursive: true });
     atomicWrite(p, code);
   }
+  /** `saveScriptPackage` for the app: a busy file is waited for with timers, not by pausing the thread. */
+  async saveScriptPackageAsync(name: string, code: string): Promise<void> {
+    await atomicWriteAsync(this.packagePath(name), code);
+  }
   deleteScriptPackage(name: string): void {
     removeOwned(this.packagePath(name));
   }
@@ -586,14 +590,23 @@ export class WorkspaceStore {
     return readJson<{ providers: ProviderConfig[] }>(this.path('providers.json'), { providers: [] }).providers;
   }
 
+  /** `saveProviders` for the app (see saveCollectionAsync). */
+  async saveProvidersAsync(providers: ProviderConfig[]): Promise<void> {
+    await writeJsonAsync(this.path('providers.json'), this.providersValue(providers));
+  }
+
   saveProviders(providers: ProviderConfig[]): void {
+    writeJson(this.path('providers.json'), this.providersValue(providers));
+  }
+
+  private providersValue(providers: ProviderConfig[]) {
     for (const p of providers)
       if (p.apiKey && !/\{\{.+\}\}/.test(p.apiKey))
         throw new ApsError('ValidationError', `Provider "${p.name}" has a literal API key; store it as a secret instead`, {
           suggestions: ['Use {{$secret.provider.<id>.apiKey}} or {{$env.NAME}}.'],
         });
     assertNotNewerOnDisk(this.path('providers.json'), 'providers.json');
-    writeJson(this.path('providers.json'), providersFileValue({ schemaVersion: SCHEMA_VERSION, providers }));
+    return providersFileValue({ schemaVersion: SCHEMA_VERSION, providers });
   }
 
   getMcpServers(): McpServerConfig[] {
@@ -615,6 +628,11 @@ export class WorkspaceStore {
   saveMcpServers(servers: McpServerConfig[]): void {
     assertNotNewerOnDisk(this.path('mcp-servers.json'), 'mcp-servers.json');
     writeJson(this.path('mcp-servers.json'), mcpServersFileValue({ schemaVersion: SCHEMA_VERSION, servers }));
+  }
+
+  async saveMcpServersAsync(servers: McpServerConfig[]): Promise<void> {
+    assertNotNewerOnDisk(this.path('mcp-servers.json'), 'mcp-servers.json');
+    await writeJsonAsync(this.path('mcp-servers.json'), mcpServersFileValue({ schemaVersion: SCHEMA_VERSION, servers }));
   }
 
   /* saved items with folders (WebSocket connections, AI prompts, MCP server folders …), one file per kind */
@@ -682,6 +700,10 @@ export class WorkspaceStore {
 
   writeTestFile(rel: string, content: string): void {
     atomicWrite(this.safePath(rel, this.path('tests')), /\.ya?ml$/i.test(rel) ? normalizeText(content) : content);
+  }
+
+  async writeTestFileAsync(rel: string, content: string): Promise<void> {
+    await atomicWriteAsync(this.safePath(rel, this.path('tests')), /\.ya?ml$/i.test(rel) ? normalizeText(content) : content);
   }
 
   deleteTestFile(rel: string): void {
@@ -799,6 +821,10 @@ export class WorkspaceStore {
     writeJson(this.path('baselines', `${slugify(b.name)}.json`), b);
   }
 
+  async saveBaselineAsync(b: Baseline): Promise<void> {
+    await writeJsonAsync(this.path('baselines', `${slugify(b.name)}.json`), b);
+  }
+
   /** Ids of the tests that failed or errored in a run ("last": the newest run), for re-running them. */
   failedTestIds(runId: string): { runId: string; ids: string[] } {
     const id = runId === 'last' ? this.meta.listRuns({ limit: 1 }).items[0]?.id : runId;
@@ -807,7 +833,8 @@ export class WorkspaceStore {
     if (!existsSync(file)) throw new ApsError('ValidationError', `No results for run ${id}`);
     const ids = new Set<string>();
     for (const line of readFileSync(file, 'utf8').split('\n')) {
-      if (!line.trim()) continue;
+      // only a line that says failed or error is parsed (most of a big run's lines are passes)
+      if (!line.includes('"status":"failed"') && !line.includes('"status":"error"')) continue;
       try {
         const r = JSON.parse(line) as { id?: string; status?: string };
         // collection runs number results per iteration: request@2 (and request@2#3 when it ran again)

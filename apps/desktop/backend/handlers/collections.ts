@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWrite, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
+import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -102,11 +102,11 @@ export function collectionsHandlers(be: Backend): Handlers {
       return removeItem(be.ws, { kind: 'collection', collectionId: id });
     },
     /** Save a response as an example of a saved request (sensitive headers and values are masked). */
-    'col.addExample': (p: { collectionId: string; requestId: string; name: string; environment?: string; response: Parameters<typeof exampleFromResponse>[0]; request?: SavedExample['request'] }) => {
+    'col.addExample': async (p: { collectionId: string; requestId: string; name: string; environment?: string; response: Parameters<typeof exampleFromResponse>[0]; request?: SavedExample['request'] }) => {
       const ctx = be.context({ environment: p.environment, collectionId: p.collectionId });
       const example = exampleFromResponse(p.response, { name: p.name, redactor: ctx.redactor, request: p.request });
       const c = withRequestExamples(be.ws.getCollection(p.collectionId), p.requestId, (list) => [...list, example]);
-      be.ws.saveCollection(c);
+      await be.ws.saveCollectionAsync(c);
       be.refreshMock(p.collectionId);
       return example;
     },
@@ -131,34 +131,34 @@ export function collectionsHandlers(be: Backend): Handlers {
       }
     },
     /** Replace a saved request's examples (rename, edit, delete). */
-    'col.setExamples': (p: { collectionId: string; requestId: string; examples: SavedExample[] }) => {
-      be.ws.saveCollection(withRequestExamples(be.ws.getCollection(p.collectionId), p.requestId, () => p.examples));
+    'col.setExamples': async (p: { collectionId: string; requestId: string; examples: SavedExample[] }) => {
+      await be.ws.saveCollectionAsync(withRequestExamples(be.ws.getCollection(p.collectionId), p.requestId, () => p.examples));
       be.refreshMock(p.collectionId);
       return p.examples;
     },
     /** What piles up in a collection: duplicate requests, typed-in hosts, empty folders, unused variables. */
     'col.tidy': ({ collectionId }: { collectionId: string }) => tidyCollection(be.ws.getCollection(collectionId)),
     /** Remove duplicate copies, empty folders and / or unused variables. */
-    'col.tidyApply': (p: { collectionId: string; removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; useCollectionAuth?: boolean }) => {
+    'col.tidyApply': async (p: { collectionId: string; removeDuplicates?: boolean; removeEmptyFolders?: boolean; removeUnusedVariables?: boolean; useCollectionAuth?: boolean }) => {
       const r = applyTidy(be.ws.getCollection(p.collectionId), p);
-      if (r.removed) be.ws.saveCollection(r.collection);
+      if (r.removed) await be.ws.saveCollectionAsync(r.collection);
       return { removed: r.removed };
     },
     /** Move collection variables into environments (each can then set its own value); `dryRun` only says what would happen. */
     'vars.moveToEnvironments': (p: { collectionId: string; keys?: string[]; environments: string[]; dryRun?: boolean }) => moveCollectionVariablesToEnvironments(be.ws, { ...p, secrets: be.secrets }),
     /** Find and replace across a collection's requests: the changes (preview), or saved with `apply`. */
-    'col.replace': (p: { collectionId: string; find: string; replace: string; regex?: boolean; caseSensitive?: boolean; fields?: ReplaceField[]; folderId?: string; apply?: boolean }) => {
+    'col.replace': async (p: { collectionId: string; find: string; replace: string; regex?: boolean; caseSensitive?: boolean; fields?: ReplaceField[]; folderId?: string; apply?: boolean }) => {
       const c = be.ws.getCollection(p.collectionId);
       const r = replaceInCollection(c, p);
-      if (p.apply && r.matches.length) be.ws.saveCollection(r.collection);
+      if (p.apply && r.matches.length) await be.ws.saveCollectionAsync(r.collection);
       const red = (v: string) => be.logger.redactor.redactString(v);
       return { count: r.matches.length, applied: !!p.apply && r.matches.length > 0, matches: r.matches.slice(0, 500).map((m) => ({ ...m, before: red(m.before).slice(0, 400), after: red(m.after).slice(0, 400) })) };
     },
     /** Rewrite a collection's scripts between tp.* and pm.*; `dryRun` only counts. */
-    'col.convertScripts': ({ collectionId, to, dryRun }: { collectionId: string; to: 'tp' | 'pm'; dryRun?: boolean }) => {
+    'col.convertScripts': async ({ collectionId, to, dryRun }: { collectionId: string; to: 'tp' | 'pm'; dryRun?: boolean }) => {
       const c = be.ws.getCollection(collectionId);
       const r = convertCollectionScripts(c, to === 'tp' ? 'pm' : 'tp', to);
-      if (!dryRun && r.changed) be.ws.saveCollection(r.collection);
+      if (!dryRun && r.changed) await be.ws.saveCollectionAsync(r.collection);
       return { changed: r.changed, replacements: r.replacements, skipped: r.skipped, collection: dryRun ? r.collection : undefined };
     },
     /** Import a file's text. Postman / Insomnia scripts become `tp.*` unless `keepPm` (the result's `scripts` says how many, and which were left). */
@@ -217,9 +217,9 @@ export function collectionsHandlers(be: Backend): Handlers {
       return { path, text: readFileSync(be.ws.safePath(path), 'utf8') };
     },
     /** Save an OpenAPI document edited in its tab (only files in specs/). */
-    'openapi.spec.save': ({ path, text }: { path: string; text: string }) => {
+    'openapi.spec.save': async ({ path, text }: { path: string; text: string }) => {
       if (!SPEC_PATH.test(path)) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path}`);
-      atomicWrite(be.ws.safePath(path), text);
+      await atomicWriteAsync(be.ws.safePath(path), text);
       return { path };
     },
     /** An OpenAPI document as a reader sees it: operations by tag, parameters, bodies, responses, a request per operation. */
@@ -295,11 +295,11 @@ export function collectionsHandlers(be: Backend): Handlers {
     /** The first rows of a dataset with its columns (and their kinds of value) and its record count (the tab's preview). */
     'datasets.preview': ({ name, limit, query }: { name: string; limit?: number; query?: string }) => readWorkspaceDataset(be.ws, name, { limit: limit ?? 200, query }),
     /** Save a dataset's text (the tab's editor). */
-    'datasets.write': ({ name, text }: { name: string; text: string }) => {
+    'datasets.write': async ({ name, text }: { name: string; text: string }) => {
       const file = datasetFile(name);
       if (!datasetFormatOfName(file)) throw new ApsError('ValidationError', 'Only CSV, JSON, JSONL and Markdown datasets are edited as text');
       if (text.length > 50 * 1024 * 1024) throw new ApsError('ValidationError', 'The dataset is larger than 50 MB');
-      atomicWrite(file, text);
+      await atomicWriteAsync(file, text);
       be.host.emit('data.changed', { kind: 'datasets' });
       return { name: datasetName(file), path: file };
     },

@@ -63,7 +63,7 @@ export function debuggerReverseHandlers(be: Backend): Handlers {
     },
     'record.status': () => (be.recorder ? { url: be.recorder.url, target: be.recorder.target, exchanges: captured().length } : null),
     /** Save this recording as a collection (secrets become {{variables}}; responses become examples); History keeps the capture session. */
-    'record.save': ({ name }: { name: string }) => {
+    'record.save': async ({ name }: { name: string }) => {
       const rec = recordings.get(be);
       const exchanges = captured();
       if (!rec || !exchanges.length) throw new ApsError('ValidationError', 'Nothing recorded yet');
@@ -71,7 +71,7 @@ export function debuggerReverseHandlers(be: Backend): Handlers {
         exchanges.map((e) => recordedFromDebuggerExchange(e, rec.target)),
         { name: name.trim() || 'Recorded', target: rec.target, redactor: be.logger.redactor },
       );
-      const saved = be.ws.saveCollection(r.collection);
+      const saved = await be.ws.saveCollectionAsync(r.collection);
       const entry = recordCaptureSession(be.ws, exchanges, { result: 'collection', ref: { kind: 'collection', collectionId: saved.id }, target: saved.name, items: r.requests }, be.logger.redactor);
       return { collectionId: saved.id, name: saved.name, requests: r.requests, placeholders: r.placeholders.map((p) => p.variable), historyId: entry.id };
     },

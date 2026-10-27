@@ -281,7 +281,7 @@ export function workspaceHandlers(be: Backend): Handlers {
     /* Script packages (tp.require): packages/<name>.js in the workspace */
     'packages.list': () => be.ws.listScriptPackages(),
     'packages.get': ({ name }: { name: string }) => be.ws.readScriptPackage(name) ?? null,
-    'packages.save': ({ name, code }: { name: string; code: string }) => be.ws.saveScriptPackage(name, code),
+    'packages.save': ({ name, code }: { name: string; code: string }) => be.ws.saveScriptPackageAsync(name, code),
     'packages.delete': ({ name }: { name: string }) => be.ws.deleteScriptPackage(name),
     'lib.get': ({ kind }: { kind: string }) => be.ws.getLibrary(kind, { etag: true }),
     'lib.save': async ({ kind, library }: { kind: string; library: { folders: string[]; items: Array<{ id: string; name: string; folder?: string; collectionId?: string; data: unknown }> } }) => {
