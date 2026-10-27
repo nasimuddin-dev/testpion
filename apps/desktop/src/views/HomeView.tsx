@@ -18,6 +18,7 @@ import { CheckCircle2, Circle } from 'lucide-react';
 import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
+import { StartupProblem } from '../components/StartupProblem';
 import { RecentRuns } from '../components/charts';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { useRecentItems } from '../lib/recent-items';
@@ -369,6 +370,7 @@ export function HomeView() {
           )}
         </div>
 
+        <StartupProblem />
         {showGetStarted && (
           <GetStarted
             onHide={() => {

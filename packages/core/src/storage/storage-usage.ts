@@ -97,6 +97,20 @@ export interface RetentionPlan {
   keepDays: number;
 }
 
+/** What names a run that must outlive the retention: a saved baseline points at the run it was made from. */
+export interface BaselineSource {
+  listBaselines?(): Array<{ runId: string }>;
+}
+
+/** The runs a baseline points at: never pruned, however old or far down the list (the baseline's comparison and its report link to them). */
+export function baselineRunIds(store: BaselineSource): Set<string> {
+  try {
+    return new Set((store.listBaselines?.() ?? []).map((b) => b.runId).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
 export const retentionOf = (r?: { keepRuns?: number; keepDays?: number }): RetentionPlan => ({
   keepRuns: r?.keepRuns !== undefined && r.keepRuns >= 0 ? Math.floor(r.keepRuns) : DEFAULT_RETENTION.keepRuns,
   keepDays: r?.keepDays !== undefined && r.keepDays >= 0 ? Math.floor(r.keepDays) : DEFAULT_RETENTION.keepDays,
@@ -106,8 +120,8 @@ export const retentionOf = (r?: { keepRuns?: number; keepDays?: number }): Reten
  * Deletes the runs beyond the retention: older than `keepDays` days, or not among the newest `keepRuns` (0 = no limit on that one). A run in
  * `keep` (in progress, or named as a baseline) stays. With `dryRun` nothing is deleted and the answer says what would be.
  */
-export function pruneRuns(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, plan: RetentionPlan, o: { now?: number; keep?: Iterable<string>; dryRun?: boolean } = {}): { deleted: number; bytes: number; ids: string[] } {
-  const keep = new Set(o.keep ?? []);
+export function pruneRuns(store: Pick<WorkspaceStore, 'meta' | 'runDir'> & BaselineSource, plan: RetentionPlan, o: { now?: number; keep?: Iterable<string>; dryRun?: boolean } = {}): { deleted: number; bytes: number; ids: string[] } {
+  const keep = new Set([...(o.keep ?? []), ...baselineRunIds(store)]);
   const cutoff = plan.keepDays > 0 ? new Date((o.now ?? Date.now()) - plan.keepDays * 86_400_000).toISOString() : undefined;
   const all = store.meta.listRuns({ limit: 100_000 }).items; // newest first
   const doomed = all.filter((r, i) => !keep.has(r.id) && ((plan.keepRuns > 0 && i >= plan.keepRuns) || (cutoff !== undefined && r.startedAt < cutoff)));
@@ -123,10 +137,11 @@ export function pruneRuns(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, plan: 
 }
 
 /** Delete the runs (results, reports, index rows) that started before `before` (ISO time). Baselines are kept. */
-export function deleteRunsBefore(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, before: string): { deleted: number; bytes: number } {
+export function deleteRunsBefore(store: Pick<WorkspaceStore, 'meta' | 'runDir'> & BaselineSource, before: string): { deleted: number; bytes: number } {
   let deleted = 0;
   let bytes = 0;
-  const all = store.meta.listRuns({ limit: 100_000 }).items.filter((r) => r.startedAt < before);
+  const pinned = baselineRunIds(store);
+  const all = store.meta.listRuns({ limit: 100_000 }).items.filter((r) => r.startedAt < before && !pinned.has(r.id));
   for (const r of all) {
     const dir = store.runDir(r.id);
     bytes += sizeOf(dir).bytes;
@@ -141,10 +156,11 @@ export function deleteRunsBefore(store: Pick<WorkspaceStore, 'meta' | 'runDir'>,
  * `deleteRunsBefore` for the app's backend: the folders are measured and removed through the thread pool, and the index rows go
  * in one transaction per 50 runs, so the window is never held up (2,000 old runs were seconds of frozen UI).
  */
-export async function deleteRunsBeforeAsync(store: Pick<WorkspaceStore, 'meta' | 'runDir'>, before: string): Promise<{ deleted: number; bytes: number }> {
+export async function deleteRunsBeforeAsync(store: Pick<WorkspaceStore, 'meta' | 'runDir'> & BaselineSource, before: string): Promise<{ deleted: number; bytes: number }> {
   let deleted = 0;
   let bytes = 0;
-  const all = store.meta.listRuns({ limit: 100_000 }).items.filter((r) => r.startedAt < before);
+  const pinned = baselineRunIds(store);
+  const all = store.meta.listRuns({ limit: 100_000 }).items.filter((r) => r.startedAt < before && !pinned.has(r.id));
   for (let i = 0; i < all.length; i += 50) {
     const chunk = all.slice(i, i + 50);
     const sizes = await Promise.all(

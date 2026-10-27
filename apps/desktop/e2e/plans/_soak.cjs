@@ -208,8 +208,10 @@ const setup = [
     'soak-tour-workspace',
     `const here = await window.aps.invoke('ws.current');
      await window.aps.invoke('ws.create', { name: 'Soak tour' });
+     window.__soakTourPath = (await window.aps.invoke('ws.current')).path;
      await window.aps.invoke('ws.open', { ref: here.path });
      window.__soakHome = here.name;
+     window.__soakHomePath = here.path;
      return 'workspaces: ' + (await window.aps.invoke('ws.list')).map((w) => w.name).join(', ') + ' | back in: ' + (await window.aps.invoke('ws.current')).name;`,
   ),
 ];
@@ -689,6 +691,37 @@ const cycle = (c) => {
        if (ex) { await __t.real.click(ex); const d = await __t.waitFor(() => document.querySelector('[role=dialog]'), 3000); await __t.esc(); await __t.waitFor(() => !document.querySelector('[role=dialog]'), 3000); out.push('export dialog ' + !!d + ' closed ' + !document.querySelector('[role=dialog]')); }
        return out.join(' | ') + ' | ms ' + ms(t0);`,
     ),
+    // R-7: saves, a workspace switch while a run is going, and imports repeated; each cycle leaves nothing behind (the memory bound is the last step)
+    r(
+      `${p}-robust`,
+      `const t0 = performance.now(); const out = [];
+       const inv = (m, a) => window.aps.invoke(m, a);
+       // saves: a collection and test files rewritten, as a person saving over and over
+       let saves = 0;
+       for (let i = 0; i < 12; i++) {
+         await inv('col.save', { schemaVersion: '1.0', id: 'soak-scratch', name: 'Soak scratch ' + i, version: 0, variables: [], items: [{ kind: 'http', id: 'sr', name: 'sr ' + i, request: { method: 'GET', url: '${DEMO}/health?s=' + i, headers: [] } }], updatedAt: '' }).then(() => saves++, () => {});
+         await inv('tests.write', { path: 'soak-scratch.yaml', content: 'tests:\\n  - id: s' + i + '\\n    name: scratch ' + i + '\\n    url: "${DEMO}/health"\\n    assertions:\\n      - { type: status, expected: 200 }\\n' }).then(() => saves++, () => {});
+       }
+       await inv('col.delete', { id: 'soak-scratch' }).catch(() => {});
+       out.push('saves ' + saves);
+       // the workspace is switched while a run is going: the run ends in this workspace's history, it does not vanish or end in an error
+       let switched = 'NO TOUR';
+       if (window.__soakTourPath) {
+         const { runId } = await inv('tests.run', { paths: ['soak.yaml'], name: 'Soak switch ${c}' });
+         await inv('ws.open', { ref: window.__soakTourPath });
+         await inv('ws.open', { ref: window.__soakHomePath });
+         const rec = await __t.waitFor(async () => (await inv('runs.summary', { runId }))?.total > 0, 20000);
+         switched = 'run recorded ' + !!rec;
+       }
+       out.push('switch: ' + switched);
+       // imports repeated: a Postman collection of 60 requests, three times under three names, then removed
+       const doc = (n) => JSON.stringify({ info: { name: 'Soak import ' + n, _postman_id: 'soak-imp-' + n, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: Array.from({ length: 60 }, (_, i) => ({ name: 'R' + i, request: { method: 'GET', url: '${DEMO}/health?i=' + i } })) });
+       let imported = 0;
+       for (let n = 0; n < 3; n++) await inv('col.import', { text: doc(n), fileName: 'soak-import-' + n + '.json' }).then(() => imported++, () => {});
+       for (const col of await inv('col.list')) if (/^Soak import/.test(col.name)) await inv('col.delete', { id: col.id }).catch(() => {});
+       out.push('imports ' + imported + ' left ' + (await inv('col.list')).filter((col) => /^Soak import/.test(col.name)).length);
+       return out.join(' | ') + ' | ms ' + ms(t0);`,
+    ),
     // the probe: the same three timed actions every cycle
     r(
       `${p}-probe`,
@@ -759,8 +792,29 @@ function SNAPSHOT(c) {
     return 'snapshots: ' + file + ' (' + Math.round(fs.statSync(file).size / 1048576) + ' MB), ' + mainFile + ' (' + Math.round(fs.statSync(mainFile).size / 1048576) + ' MB)';`;
 }
 
+/**
+ * The bound: from the third cycle (everything warmed up) to the last, the main process and the page may not have grown by more than
+ * SOAK_MAX_GROWTH_MB (default 60) of used heap, nor the listeners, handles or DOM nodes by more than a few percent. A leak that the
+ * saves, switches and imports above would make shows here as a number; the series itself is in metrics.jsonl.
+ */
+const BOUND = `
+  const fs = require('fs'), path = require('path');
+  const rows = fs.readFileSync(path.join(${OUT}, 'metrics.jsonl'), 'utf8').split('\\n').filter(Boolean).map((l) => JSON.parse(l));
+  if (rows.length < 4) return 'bound: only ' + rows.length + ' cycles measured (needs 4)';
+  const a = rows[2], b = rows[rows.length - 1];
+  const limit = (Number(process.env.SOAK_MAX_GROWTH_MB) || 60) * 1048576;
+  const grow = { main: b.main.heapUsed - a.main.heapUsed, page: b.renderer.jsHeapUsed - a.renderer.jsHeapUsed, handles: b.main.handles - a.main.handles, listeners: b.renderer.cdp.JSEventListeners - a.renderer.cdp.JSEventListeners, nodes: b.renderer.cdp.Nodes - a.renderer.cdp.Nodes };
+  const bad = [];
+  if (grow.main > limit) bad.push('main heap +' + (grow.main / 1048576).toFixed(1) + ' MB');
+  if (grow.page > limit) bad.push('page heap +' + (grow.page / 1048576).toFixed(1) + ' MB');
+  if (grow.handles > 20) bad.push('handles +' + grow.handles);
+  if (grow.listeners > Math.max(200, 0.1 * a.renderer.cdp.JSEventListeners)) bad.push('listeners +' + grow.listeners);
+  if (grow.nodes > Math.max(2000, 0.1 * a.renderer.cdp.Nodes)) bad.push('nodes +' + grow.nodes);
+  return (bad.length ? 'ERR bound exceeded: ' + bad.join(', ') : 'bound ok') + ' | cycles ' + (rows.length) + ' | main ' + (grow.main / 1048576).toFixed(1) + ' MB | page ' + (grow.page / 1048576).toFixed(1) + ' MB | handles ' + grow.handles + ' | listeners ' + grow.listeners + ' | nodes ' + grow.nodes;`;
+
 const steps = [...setup];
 for (let c = 1; c <= CYCLES; c++) steps.push(...cycle(c));
+steps.push(['soak-bound', `main: ${BOUND}`, false]);
 // the AI surfaces use the examples' offline demo model (no network, no key)
 steps.settings = { assistantProvider: 'demo', assistantModel: 'demo' };
 // the down arrow's saves go to this file (the Save-as dialog is stubbed)

@@ -81,7 +81,7 @@ export function workspaceHandlers(be: Backend): Handlers {
   return {
     'ws.list': () => be.manager.list(),
     /** Why no workspace is open after the start, if the last one could not be opened. */
-    'ws.openProblem': () => be.startupProblem ?? null,
+    'ws.openProblem': () => (be.store ? null : (be.startupProblem ?? null)),
     'ws.current': () =>
       be.store && {
         ...be.store.workspace,

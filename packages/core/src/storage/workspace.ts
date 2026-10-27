@@ -5,6 +5,7 @@ import type { Collection, Environment, Library, McpServerConfig, ProviderConfig,
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { shortId, slugify } from '../util/ids.js';
+import { sha1Hex } from '../util/hash.js';
 import { onOwnWrite, writeJsonAsync, atomicWriteAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeDerivedAsync, writeJson, removeOwned } from './fsutil.js';
 import { assertNotNewerOnDisk, looksLikeWorkspace, normalizeCollection, normalizeEnvironment, scanString } from './normalize.js';
 
@@ -79,7 +80,9 @@ export class WorkspaceStore {
   private static stamp(file: string): string | undefined {
     try {
       const st = statSync(file);
-      return `${st.size}:${Math.round(st.mtimeMs)}`;
+      // size and time; a file under 64 KB also by its content: two same-size writes within one clock tick have the same size and time
+      const base = `${st.size}:${Math.round(st.mtimeMs)}`;
+      return st.size > 0 && st.size < 64 * 1024 ? `${base}:${sha1Hex(readFileSync(file)).slice(0, 12)}` : base;
     } catch {
       return undefined;
     }
