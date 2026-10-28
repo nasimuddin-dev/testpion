@@ -65,11 +65,11 @@ const nodeWatch: WatchSource = (root, listener, onError) => {
 const RETRY_WATCH_MS = [1000, 5000, 30_000];
 
 /**
- * Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. `onProblem` hears why the watch could not start or
+ * Start watching; `onChange` gets each batch once things are quiet for `debounceMs`. `onSettled` says when the open walk, an `adopt()` walk or a reported batch has finished (tests wait on it instead of a delay). `onProblem` hears why the watch could not start or
  * stopped (once per failure; the code, e.g. ENOSPC when the inotify limit is reached), and the watch is started again after 1, 5 and then
  * every 30 seconds: outside changes are not silently missed.
  */
-export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; maxWaitMs?: number; watch?: WatchSource; onProblem?: (message: string, code?: string) => void } = {}): WorkspaceWatch {
+export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange[]) => void, opts: { debounceMs?: number; maxWaitMs?: number; watch?: WatchSource; onProblem?: (message: string, code?: string) => void; onSettled?: (what: 'open' | 'adopt' | 'flush') => void } = {}): WorkspaceWatch {
   const pending = new Map<string, WorkspaceChange>();
   const debounce = opts.debounceMs ?? 400;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -191,7 +191,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
       done,
     );
   };
-  snapshotSliced();
+  snapshotSliced(() => opts.onSettled?.('open'));
   /**
    * The system could not say which files changed: its buffer of events overflowed (a checkout or a merge while the app's
    * thread was busy writes thousands of entries in .git), and the one event left names no file. Every file is looked at
@@ -262,6 +262,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
         if (at < entries.length) return void later(slice);
         flushing = false;
         if (batch.length) onChange(batch);
+        opts.onSettled?.('flush');
         if ((pending.size || rescanAll) && !stopped) arm();
       };
       slice();
@@ -375,7 +376,11 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     adopting = true;
     adoptedAt = Date.now();
     const mine = walk + 1;
-    snapshotSliced(() => void (walk === mine && (adopting = false)));
+    snapshotSliced(() => {
+      if (walk !== mine) return;
+      adopting = false;
+      opts.onSettled?.('adopt');
+    });
   };
   return Object.assign(stop, { adopt });
 }

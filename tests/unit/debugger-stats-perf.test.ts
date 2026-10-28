@@ -124,6 +124,20 @@ describe('deep search', () => {
     await be.invoke('debug.openSession', { text: har(1500, 20_000) });
     const exchanges = (be as any).debugger.exchanges as any[];
     expect(exchanges.length).toBe(1500);
+    // how late a 5 ms timer is on this machine right now, with nothing running (a loaded box starves the probe itself)
+    const gaps = async (ms: number) => {
+      const out: number[] = [];
+      let at = performance.now();
+      const t = setInterval(() => {
+        const now = performance.now();
+        out.push(now - at);
+        at = now;
+      }, 5);
+      await new Promise((r) => setTimeout(r, ms));
+      clearInterval(t);
+      return out;
+    };
+    const idle = Math.max(...(await gaps(300)).slice(1));
     const turns: number[] = [];
     let last = performance.now();
     const probe = setInterval(() => {
@@ -144,7 +158,9 @@ describe('deep search', () => {
     const second = performance.now() - t1;
     console.log(`the same search again: ${second.toFixed(1)} ms`);
     expectWithin(second, 15, 'the same deep search again');
-    expect(longest).toBeLessThan(first > 100 ? first / 2 : 100);
+    // the scan gives the loop a turn every few ms: what the loop was held beyond the machine's own idle lateness stays within a slice
+    expect(turns.length, 'the loop ran during the scan').toBeGreaterThan(1);
+    expectWithin(Math.max(0, longest - idle), 16, 'longest block of a deep search beyond the idle timer lateness');
     // a change to one exchange: it is read again, the answer follows
     await be.invoke('debug.bookmark', { id: exchanges[3].id, on: true });
     expect(await be.invoke('debug.exchanges', { text: 'zebra-crossing', deep: true, idsOnly: true })).toEqual(ids);
