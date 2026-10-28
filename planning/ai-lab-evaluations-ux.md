@@ -403,3 +403,13 @@ User study (cheap, optional): five developers who have not used the app, task J1
 3. Default spend cap for a real provider: $1.00 per run, ask over $0.50, or no default?
 4. Is a small local usage counter for the "started from a template" metric acceptable (no network, opt-in), or should the metric come from the e2e harness only?
 5. Agent evaluations: persist as the existing `type: agent` test file (assumed), or as an evaluation item in `library/evaluations.json` like the others?
+
+## Decisions on the open questions (2026-10-28, chosen by the owner's request "pick which one is best")
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| 1 | One rail item or two | **One "AI quality" item** (AU-21), with the old view ids kept as aliases for one release. | Today the person has to know which of two places does their job; one entry with task cards removes that choice. |
+| 2 | No real model connected | **Use the offline demo model automatically, with a visible "Offline demo" label on every result and a one-click "Connect a real model"**. | The first result must appear in ≤ 3 clicks with no key; the label keeps it honest that the answers are not from a real model. |
+| 3 | Default spend cap | **$1.00 per run as a hard stop for real providers; ask first when the estimate is over $0.50**; both editable under Options; none for the offline demo. | Protects a first run from a surprise bill and still lets a normal evaluation run unprompted. |
+| 4 | "Started from a template" metric | **From the e2e harness only; no counter in the product.** | The privacy table promises nothing leaves the machine; a metric is not worth a new data question. |
+| 5 | Where agent evaluations live | **The existing `type: agent` test file** (git-tracked, already run by the CLI and CI). | One format for the UI, the CLI and CI; no second place to keep in sync. |
