@@ -2,8 +2,8 @@ import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '.
 import { exchangesFromHar, exchangesToHar } from '../../debugger/har.js';
 import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
 import { shortId } from '../../util/ids.js';
-import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrusted, rootStanding, trustInstructions } from '../../debugger/certificate.js';
-import { restoreSystemProxy, setSystemProxy, type SystemProxySnapshot } from '../../debugger/capture.js';
+import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrust, rootStanding, trustInstructions } from '../../debugger/certificate.js';
+import { disengageSystemProxy, engageSystemProxy, type SystemProxySnapshot } from '../../debugger/system-proxy.js';
 import { adviceFor, cookiesOf, hostMatches, paramsOf } from '@testpion/shared';
 import { exchangesFromSaz } from '../../debugger/saz.js';
 import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../../debugger/grpc.js';
@@ -28,7 +28,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
   const restoreSystem = async () => {
     const was = systemProxy;
     systemProxy = undefined;
-    if (was) await restoreSystemProxy(was);
+    if (was) await disengageSystemProxy(debuggerCertDir(), was);
   };
   let guarded = false;
   const session: DebuggerExchange[] = d.session ?? [];
@@ -119,7 +119,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
             },
           });
           if (a.system_proxy === true) {
-            systemProxy = await setSystemProxy(proxy.url);
+            systemProxy = await engageSystemProxy(debuggerCertDir(), proxy.url);
             if (!guarded) {
               guarded = true;
               // the OS setting must not outlive this process: put it back when the server is told to end
@@ -159,9 +159,9 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           await removeRootCertificate(root);
           note = 'Removed from the trust store';
         }
-        const trusted = await rootCertificateTrusted(root);
-        // trusted undefined: this computer cannot tell (Linux): the steps are for the person
-        return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known: trusted !== undefined, note, ...(trusted === true ? {} : { instructions: trustInstructions(root.path) }) };
+        const { trusted, known } = await rootCertificateTrust(root);
+        // known false: this computer cannot tell (Linux, or the check failed): the steps are for the person
+        return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known, note, ...(trusted === true ? {} : { instructions: trustInstructions(root.path) }) };
       },
     },
     {

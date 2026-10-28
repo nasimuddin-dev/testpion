@@ -46,10 +46,10 @@ import {
   installRootCertificate,
   leafSigner,
   removeRootCertificate,
-  restoreSystemProxy,
-  rootCertificateTrusted,
+  disengageSystemProxy,
+  engageSystemProxy,
+  rootCertificateTrust,
   rootStanding,
-  setSystemProxy,
   trustInstructions,
   type SystemProxySnapshot,
 } from '@testpion/core/desktop';
@@ -468,7 +468,7 @@ ${cyan(r.url)}`);
       // the OS proxy setting is restored on Ctrl+C (and when the setting cannot be changed, nothing is left running)
       let snapshot: SystemProxySnapshot | undefined;
       try {
-        if (o.systemProxy) snapshot = await setSystemProxy(proxy.url);
+        if (o.systemProxy) snapshot = await engageSystemProxy(debuggerCertDir(), proxy.url);
       } catch (e) {
         await proxy.close();
         throw new CliError(`Could not set the system proxy: ${(e as Error).message}`, EXIT.EXECUTION_ERROR);
@@ -480,7 +480,7 @@ ${cyan(r.url)}`);
         process.once('SIGINT', () => resolve());
         process.once('SIGTERM', () => resolve());
       });
-      if (snapshot) await restoreSystemProxy(snapshot);
+      if (snapshot) await disengageSystemProxy(debuggerCertDir(), snapshot);
       if (o.out) {
         const entries = proxy.exchanges.filter((e) => e.kind === 'http');
         writeFileSync(o.out, JSON.stringify(exchangesToHar(entries, redactor, ENGINE_VERSION), null, 2));
@@ -524,9 +524,9 @@ ${cyan(r.url)}`);
         await removeRootCertificate(root);
         note = 'Removed from the trust store';
       }
-      const trusted = await rootCertificateTrusted(root);
-      // trusted undefined: this computer cannot tell (Linux): the steps are for the person
-      const out = { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known: trusted !== undefined, platform: process.platform, ...(note ? { note } : {}), ...(trusted === true ? {} : { instructions: trustInstructions(root.path) }) };
+      const { trusted, known } = await rootCertificateTrust(root);
+      // known false: this computer cannot tell (Linux, or the check failed): the steps are for the person
+      const out = { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known, platform: process.platform, ...(note ? { note } : {}), ...(trusted === true ? {} : { instructions: trustInstructions(root.path) }) };
       if (o.json) return printJson(out);
       console.log(`${trusted === true ? green('trusted') : trusted === false ? red('not trusted') : yellow('trust unknown')}  ${root.path}\n${dim(`fingerprint ${root.fingerprint}`)}`);
       if (note) console.log(note);
