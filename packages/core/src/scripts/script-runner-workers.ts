@@ -59,7 +59,9 @@ const HEADER = 32; // the require bridge's control words (script-worker.ts)
 export function findScriptWorkerFile(explicit?: string): string | undefined {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [explicit, process.env.TESTPION_SCRIPT_WORKER_FILE, join(here, 'script-worker.js'), join(here, 'script-worker.cjs'), join(here, '..', 'script-worker.cjs'), join(here, '..', '..', 'dist', 'scripts', 'script-worker.js')];
-  return candidates.find((f): f is string => !!f && existsSync(f));
+  // a packaged app keeps its files in app.asar; a worker thread cannot be started from inside the archive, the build unpacks it beside it
+  const unpacked = (f: string) => f.replace(/([\/])app\.asar([\/])/, '$1app.asar.unpacked$2');
+  return candidates.flatMap((f) => (f ? [unpacked(f), f] : [])).find((f) => existsSync(f));
 }
 
 export class WorkerScriptRunner implements ScriptRunner {

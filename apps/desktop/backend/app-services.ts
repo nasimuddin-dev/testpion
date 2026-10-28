@@ -7,6 +7,7 @@
  */
 import { WorkerScriptRunner, type ScriptRunner } from '@testpion/core';
 import type { Backend } from './backend.js';
+import { GuardedScriptRunner } from './guarded-script-runner.js';
 
 /** Script workers: TESTPION_SCRIPT_WORKERS=1 (or a pool size), =0 for none; otherwise what the host asks for (BackendHost.scriptWorkers). */
 export function scriptWorkersWanted(hostChoice: boolean | number | undefined, env: NodeJS.ProcessEnv = process.env): number {
@@ -20,7 +21,8 @@ export class AppServices {
   readonly sessions = new Set<Backend>();
   readonly startedAt = Date.now();
 
-  private pool?: WorkerScriptRunner;
+  private pool?: GuardedScriptRunner;
+  private workers?: WorkerScriptRunner;
   /** Why the worker pool could not start (the sessions then run scripts in their own thread); undefined when it did or was not asked for. */
   scriptWorkersProblem?: string;
 
@@ -29,7 +31,9 @@ export class AppServices {
     if (want <= 0) return undefined;
     if (!this.pool && !this.scriptWorkersProblem)
       try {
-        this.pool = new WorkerScriptRunner(want > 1 ? { size: want } : {});
+        // the desktop app asks for the pool by default: an idle worker is kept 10 minutes, and a pool that cannot do a round trip at start falls back to this thread
+        this.workers = new WorkerScriptRunner({ idleMs: 600_000, ...(want > 1 ? { size: want } : {}) });
+        this.pool = new GuardedScriptRunner(this.workers, (why) => (this.scriptWorkersProblem = why));
       } catch (e) {
         this.scriptWorkersProblem = (e as Error).message;
       }
@@ -39,6 +43,7 @@ export class AppServices {
   async dispose(): Promise<void> {
     await this.pool?.dispose();
     this.pool = undefined;
+    this.workers = undefined;
   }
 
   register(s: Backend): void {

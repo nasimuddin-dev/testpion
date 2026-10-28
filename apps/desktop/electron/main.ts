@@ -418,6 +418,8 @@ function startBackend(): void {
     // on Linux without a keyring Electron's "encrypted" store has a public key: refused unless the person opts in (storage/secrets.ts)
     cipher: safeStorageCipher(safeStorage as unknown as SafeStorageLike),
     emit,
+    // scripts run in a pool of worker threads, so a slow script never freezes the window (TESTPION_SCRIPT_WORKERS=0 turns it off)
+    scriptWorkers: 1,
     // bundled with the installer (electron-builder extraResources); the repo's copy when running from source
     examplesDir: app.isPackaged ? join(process.resourcesPath, 'examples', 'public-workspace') : join(__dirname, '..', '..', '..', 'examples', 'public-workspace'),
     openExternal: (url) => shell.openExternal(url),
