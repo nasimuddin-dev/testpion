@@ -196,6 +196,8 @@ export interface SystemProxySnapshot {
   gnome?: { mode: string; httpHost: string; httpPort: string; httpsHost: string; httpsPort: string };
 }
 
+/** `<-loopback>`: localhost and 127.0.0.1 go through the proxy too (the default `<local>` skips them, so a local site would not show). */
+export const WIN_PROXY_OVERRIDE = '<-loopback>';
 const WIN_KEY = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
 const ps = (script: string) => run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
 
@@ -247,7 +249,7 @@ export async function setSystemProxy(proxyUrl: string): Promise<SystemProxySnaps
   try {
     if (process.platform === 'win32') {
       await ps(
-        `Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyEnable -Value 1 -Type DWord; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyServer -Value '${hp}' -Type String; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyOverride -Value '<local>' -Type String`,
+        `Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyEnable -Value 1 -Type DWord; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyServer -Value '${hp}' -Type String; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyOverride -Value '${WIN_PROXY_OVERRIDE}' -Type String`,
       );
       await refreshWinInet();
     } else if (process.platform === 'darwin') {

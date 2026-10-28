@@ -58,7 +58,7 @@ The **Capture** menu does the pointing for you:
 - **A terminal: commands run in it (only those)**: a new terminal window whose shell has `HTTP_PROXY` and `HTTPS_PROXY` set; anything you run in it is captured.
 - **A phone or another computer…**: see [below](#a-phone-or-another-computer).
 - **Reverse proxy for one API…**: for a client that can't use a proxy; see [Reverse proxy for one API](#reverse-proxy-for-one-api).
-- **Everything on this computer (the system proxy, restored on stop)**: every program that honours the operating system's proxy sends through (Windows: Internet Settings; macOS: `networksetup`; GNOME: `gsettings`). It is put back as it was when you choose **Stop capturing everything (restore the system proxy)**, when you stop capturing and when TestPion quits.
+- **Everything on this computer (the system proxy, restored on stop)**: every program that honours the operating system's proxy sends through (Windows: Internet Settings; macOS: `networksetup`; GNOME: `gsettings`). On Windows it also sends `localhost` and `127.0.0.1` through the proxy (the setting `<-loopback>`), so a site you run locally shows up; Windows normally skips them. On macOS and Linux, browsers skip localhost by default: open the site as `http://localhost.:4373/` (with a dot after `localhost`) or use **Capture traffic for one API…**. It is put back as it was when you choose **Stop capturing everything (restore the system proxy)**, when you stop capturing and when TestPion quits.
 - **Copy the lines for bash / zsh, PowerShell, cmd, curl or Chrome / Edge**: the lines for a shell that is already open.
 
 Plain HTTP is captured whole. HTTPS shows as a **tunnel** by host, with bytes in and out, until you decrypt it.
