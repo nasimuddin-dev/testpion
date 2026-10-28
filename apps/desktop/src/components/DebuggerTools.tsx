@@ -483,7 +483,7 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
       {!info ? (
         <Busy>Looking for this computer's addresses…</Busy>
       ) : !info.running ? (
-        <p className="text-sm">Start capturing first.</p>
+        <p className="text-sm">Start the proxy first: Capture all traffic, or a way from the Capture menu.</p>
       ) : !info.lan ? (
         <div className="grid gap-3 text-sm">
           <p>
@@ -521,7 +521,7 @@ export function LanDialog({ onClose, onRestartOnLan }: { onClose(): void; onRest
               {info.pairingSecret}
             </span>
           </p>
-          {!info.decrypt && <p className="text-xs text-muted">HTTPS shows as tunnels by host. Turn on HTTPS ▸ Decrypt HTTPS to read it; the page then offers the root certificate.</p>}
+          {!info.decrypt && <p className="text-xs text-muted">HTTPS shows as tunnels by host. Turn on HTTPS ▸ See inside HTTPS… to read it; the page then offers the root certificate.</p>}
         </div>
       )}
     </Modal>

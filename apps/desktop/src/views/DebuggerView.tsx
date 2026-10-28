@@ -31,6 +31,11 @@ import { Database, Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { persisted, promptText, toastError, useApp, attempt, confirmAction } from '../store';
+import { createCaptureFlow } from '../components/debugger/capture-flow';
+import { sessionActions, ActionButton } from '../components/debugger/session-actions';
+import { applyPreset, chipAria, chipText, chipTitle, presetOf } from '../components/debugger/quick-filter';
+import { isMenuKey, openRowMenu } from '../components/debugger/row-menu-key';
+import { certificateError } from '../components/debugger/ExchangeExtras';
 import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
 import { Badge, Button, cx, Empty, FilterInput, Menu, type MenuItem, PageHeader, SectionTitle, Select, Split, Tabs } from '../components/ui';
 import { formatBytes, formatMs, outputFileName } from '@testpion/shared';
@@ -324,38 +329,14 @@ export function DebuggerView() {
       void load();
     });
   };
-  // see inside HTTPS: the TestPion certificate must be trusted here (asked once, Windows confirms), then decryption goes on
-  const readHttps = async () => {
-    try {
-      const info = await call<{ trusted?: boolean }>('debug.certificate');
-      if (info.trusted !== true) {
-        const ok = await confirmAction({
-          title: 'See inside HTTPS?',
-          message: 'To show the requests inside HTTPS (your API calls), TestPion’s certificate has to be trusted on this computer.',
-          detail: 'Your operating system asks you to confirm. Without it, HTTPS shows only as tunnels, by host. Close and reopen your browser afterwards.',
-          confirmLabel: 'Install and decrypt',
-          cancelLabel: 'Only tunnels',
-        });
-        if (!ok) return;
-        await call('debug.certificate', { action: 'install' });
-        toast('Certificate installed: close and reopen your browser so it trusts it');
-      }
-      setStatus(await call<Status>('debug.decrypt', { on: true }));
-    } catch (err) {
-      toastError(err);
-    }
-  };
-  const captureAll = () =>
-    startThen(async () => {
-      await systemProxy(true);
-      await readHttps();
-    });
-  const systemProxy = async (onOff: boolean) => {
-    await attempt(async () => {
-      setStatus(await call<Status>('debug.systemProxy', { on: onOff }));
-      toast(onOff ? 'System proxy set: programs that honour it send through TestPion' : 'System proxy restored');
-    });
-  };
+  // Capture all traffic and See inside HTTPS: one flow (capture-flow.ts); `readHttps` is the only way decryption goes on
+  const flow = useMemo(
+    () => createCaptureFlow<Status>({ call, confirm: confirmAction, toast, fail: toastError, setStatus, platform: capture?.platform }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [capture?.platform],
+  );
+  const { systemProxy, readHttps } = flow;
+  const captureAll = () => startThen(async () => void (await flow.captureAll()));
 
   // keyboard: ↑ ↓ select, Enter opens, Delete removes, Ctrl+F finds, Ctrl+E clears
   const onKey = (ev: React.KeyboardEvent) => {
@@ -366,6 +347,8 @@ export function DebuggerView() {
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'f') return (ev.preventDefault(), filterBox.current?.focus());
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') return (ev.preventDefault(), void clear());
     if (!rows.length || (ev.target as HTMLElement).tagName === 'INPUT') return;
+    // Shift+F10 / the Menu key: the selected row's menu, as a right-click opens it
+    if (isMenuKey(ev) && selected) return void (openRowMenu(ev.currentTarget as HTMLElement, selected) && ev.preventDefault());
     // in the order the grid shows (it may be sorted by another column)
     const shown = order.current.length === rows.length ? order.current : rows;
     const i = shown.findIndex((r) => r.id === selected);
@@ -423,13 +406,13 @@ export function DebuggerView() {
     onOpen: openInTab,
     onResend: (e) => void resend(e),
     onKeepEncrypted: (e) => void keepEncrypted(e),
+    onReadHttps: () => void readHttps(),
     onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
     onCompare: setCompareA,
     onDelete: (ids) => void remove(ids),
     onCreateFlow: createFlowFrom,
     onSaveToCollection: saveToCollection,
     onCreateDataset: createDataset,
-    onClear: () => void clear(),
     onQuickRule: quickRule,
     onNewRule: setRuleDraft,
     onConnections: () => setTab('connections'),
@@ -464,8 +447,8 @@ export function DebuggerView() {
     },
   });
 
-  // What to capture: one program (a browser or a terminal opened through the proxy), or everything on this computer
-  // (the system proxy, an explicit choice, restored on stop). Each starts the proxy when it is not running yet.
+  // The narrower ways to capture: one program (a browser or a terminal opened through the proxy), a phone, one API. Everything
+  // on this computer is the primary button. Each starts the proxy when it is not running yet.
   const captureItems: MenuItem[] = [
     ...(capture?.browsers ?? []).map<MenuItem>((b) =>
       b.systemProxy
@@ -494,9 +477,7 @@ export function DebuggerView() {
     { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => void startThen(() => setDialog('lan')) },
     // WF-12: a client that can't use a proxy points at a local address that forwards to the API (no certificate needed)
     { label: LABEL.captureReverseProxy, icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
-    status?.systemProxy
-      ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
-      : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void captureAll() },
+    ...(status?.systemProxy ? [{ label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }] : []),
     ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => void copyText(s.lines, `the lines for ${s.shell}`)) })),
     { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, reason: 'Stop the proxy first', onSelect: () => void changePort() },
   ];
@@ -512,8 +493,15 @@ export function DebuggerView() {
     ],
     empty: rows.length ? undefined : 'No exchanges captured',
   };
+  // Save session and Clear the session: one definition each, rendered by the strip, the Session menu and nowhere else
+  const acts = sessionActions({ canSave: rows.length > 0, canClear: !!status?.exchanges, save: () => void saveSession(), clear: () => void clear() });
+  const transferItems: MenuItem[] = [
+    { label: 'Import a HAR file…', icon: <Upload size={14} />, onSelect: () => void importHar() },
+    { label: 'Import a Fiddler session (.saz)…', icon: <Upload size={14} />, onSelect: () => void importSaz() },
+    { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, reason: 'Nothing captured yet', onSelect: () => void saveOutput(outputSpec, defaultFormat(outputSpec)) },
+  ];
   const sessionItems: MenuItem[] = [
-    { label: 'Save session…', icon: <Save size={14} />, disabled: !rows.length, reason: 'Nothing captured yet', onSelect: () => void saveSession() },
+    acts.save,
     ...sessions.map<MenuItem>((s) => ({
       label: `Open ${s.name}${s.autosave ? ' (AutoSave)' : ''} · ${new Date(s.savedAt).toLocaleString()}`,
       icon: <FolderOpen size={14} />,
@@ -523,10 +511,8 @@ export function DebuggerView() {
     ...sessions
       .filter((x) => !x.autosave)
       .map<MenuItem>((s) => ({ label: `Share ${s.name} with the team…`, icon: <Users size={14} />, title: 'Put a masked copy of this session in debugger/shared/, which git tracks', onSelect: () => void shareDebuggerSession(s.name) })),
-    { label: 'Import a HAR file…', icon: <Upload size={14} />, onSelect: () => void importHar() },
-    { label: 'Import a Fiddler session (.saz)…', icon: <Upload size={14} />, onSelect: () => void importSaz() },
-    { label: 'Export as HAR…', icon: <Download size={14} />, disabled: !rows.length, reason: 'Nothing captured yet', onSelect: () => void saveOutput(outputSpec, defaultFormat(outputSpec)) },
-    { label: 'Clear the session', icon: <Trash2 size={14} />, danger: true, disabled: !status?.exchanges, reason: 'Nothing captured yet', shortcut: 'Ctrl+E', onSelect: () => void clear() },
+    ...transferItems,
+    acts.clear,
   ];
 
   return (
@@ -550,25 +536,40 @@ export function DebuggerView() {
         }
         actions={
           <>
-            {status?.running ? (
+            {status?.running && (
               <Button icon={<Square size={13} />} onClick={() => void stop()}>
                 Stop
               </Button>
-            ) : (
-              <Button icon={<Play size={13} />} onClick={() => void start()} title="Start the proxy; point a program at it yourself, or choose what to capture from the menu">
-                Start capturing
-              </Button>
             )}
             {!status?.systemProxy && (
-              <span data-capture-all>
+              <span data-capture-all className="inline-flex">
                 <Button
                   variant={status?.running ? 'default' : 'primary'}
+                  className={status?.running ? undefined : 'rounded-r-none'}
                   icon={<Globe size={13} />}
                   onClick={() => void captureAll()}
                   title="Start the proxy and point this computer's proxy setting at it: browsers and programs that follow the Windows, macOS or Linux proxy setting show up here. Stopping puts the setting back."
                 >
                   Capture all traffic
                 </Button>
+                {!status?.running && (
+                  <Menu
+                    width={300}
+                    items={[
+                      {
+                        label: 'Only a program I point at the proxy',
+                        icon: <Play size={14} />,
+                        title: 'Start the proxy alone: point a program at it yourself (HTTP_PROXY, --proxy-server). Nothing else on this computer is touched.',
+                        onSelect: () => void start(),
+                      },
+                    ]}
+                    trigger={
+                      <Button variant="primary" className="rounded-l-none -ml-px px-1.5 border-l border-white/30" aria-label="Other ways to start" title="Other ways to start">
+                        <ChevronDown size={13} />
+                      </Button>
+                    }
+                  />
+                )}
               </span>
             )}
             {recording ? (
@@ -603,7 +604,7 @@ export function DebuggerView() {
               items={captureItems}
               onOpenChange={(o) => o && void loadCapture()}
               trigger={
-                <Button icon={<Globe size={13} />} title="What to capture: a browser or a terminal (only that program), or everything on this computer">
+                <Button icon={<Globe size={13} />} title="What to capture: a browser, a terminal, a phone or one API (only that program)">
                   Capture <ChevronDown size={12} />
                 </Button>
               }
@@ -612,13 +613,14 @@ export function DebuggerView() {
               width={330}
               items={[
                 {
-                  label: status?.decrypt ? 'Stop decrypting HTTPS' : 'Decrypt HTTPS',
+                  label: status?.decrypt ? 'Stop decrypting HTTPS' : 'See inside HTTPS…',
                   icon: status?.decrypt ? <LockOpen size={14} /> : <Lock size={14} />,
+                  title: status?.decrypt ? undefined : 'Turn on HTTPS decryption: TestPion asks once to trust its certificate',
+                  // turning it on is the one flow with the question about the certificate; turning it off is a plain switch
                   onSelect: () =>
-                    void call<Status>('debug.decrypt', { on: !status?.decrypt }).then(
-                      (st) => (setStatus(st), toast(st.decrypt ? 'HTTPS is decrypted for programs that trust the TestPion root' : 'HTTPS is a tunnel again')),
-                      toastError,
-                    ),
+                    status?.decrypt
+                      ? void call<Status>('debug.decrypt', { on: false }).then((st) => (setStatus(st), toast('HTTPS is a tunnel again')), toastError)
+                      : void readHttps(),
                 },
                 { label: 'Root certificate…', icon: <Lock size={14} />, onSelect: () => setDialog('certificate') },
                 {
@@ -693,7 +695,7 @@ export function DebuggerView() {
         ]}
       />
       {tab === 'stats' ? (
-        <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} running={!!status?.running} onStart={() => void start()} onRecord={() => void startRecording()} />
+        <StatsPanel stats={stats} onPick={(id) => (setTab('traffic'), setSelected(id))} running={!!status?.running} onStart={() => void captureAll()} onRecord={() => void startRecording()} />
       ) : tab === 'connections' ? (
         <ConnectionsView rows={rows} onPick={(id) => (setTab('traffic'), setSelected(id))} />
       ) : tab === 'rules' ? (
@@ -704,7 +706,7 @@ export function DebuggerView() {
             active={dock}
             onPanel={(p) => (dock === p && dockShown ? openDock(undefined) : openDock(p))}
             onSubmit={() => (sel ? openInTab(sel) : useApp.getState().openIntent('rest', {}))}
-            exportItems={sessionItems}
+            exportItems={transferItems}
           />
           <div className="flex-1 min-w-0">
             {/* the dock is a pinnable panel: pinned beside the grid, or a tab on the right edge that slides it over */}
@@ -714,14 +716,10 @@ export function DebuggerView() {
                   <div className="flex items-center gap-2 px-3 py-1 border-b border-line text-xs bg-accent-soft" data-https-banner>
                     <Lock size={12} className="text-accent" />
                     <span>
-                      <b>HTTPS shows as tunnels</b> — decrypt it to see the requests inside (the program must trust the TestPion root certificate).
+                      <b>HTTPS shows as tunnels</b> — see inside it to read the requests (TestPion asks once to trust its certificate).
                     </span>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() => void call<Status>('debug.decrypt', { on: true }).then((st) => (setStatus(st), toast('HTTPS is decrypted for programs that trust the TestPion root')), toastError)}
-                    >
-                      Decrypt HTTPS
+                    <Button size="sm" variant="primary" onClick={() => void readHttps()}>
+                      See inside HTTPS…
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setDialog('certificate')}>
                       Install certificate…
@@ -817,27 +815,28 @@ export function DebuggerView() {
                     <button
                       key={q.id}
                       type="button"
-                      className="flex items-center gap-1 h-6 px-2 rounded-full bg-accent-soft text-accent text-xs whitespace-nowrap hover:bg-hover"
-                      title="Showing the rows this rule keeps; click to show them all again (the rule stays in Rules)"
+                      className="flex items-center gap-1 h-6 px-2 rounded-full bg-chip text-chip-fg text-xs whitespace-nowrap hover:bg-hover hover:text-fg"
+                      title={chipTitle(q)}
+                      aria-label={chipAria(q)}
                       data-quick-filter
                       onClick={() => setFilter((f) => ({ ...f, quick: f.quick.filter((x) => x.id !== q.id) }))}
                     >
-                      {q.label.replace(/^(Capture only|Filter out) /, '')} <X size={11} />
+                      {chipText(q)} <X size={11} aria-hidden />
                     </button>
                   ))}
                   <Menu
                     width={260}
                     items={[
-                      ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({ label: p.name, onSelect: () => setFilter({ ...filter, ...(p.filter as Partial<typeof filter>) }) })),
+                      ...(rules?.filterPresets ?? []).map<MenuItem>((p) => ({ label: p.name, onSelect: () => setFilter((f) => applyPreset(f, p.filter)) })),
                       {
                         label: 'Save this filter…',
                         icon: <Save size={14} />,
                         onSelect: async () => {
                           const name = await promptText('Save filter preset', {
-                            message: 'The current filter (text, host, method, status, bookmarked) under a name, for this workspace.',
+                            message: 'The current filter (text, host, method, status, bookmarked) under a name, for this workspace. The Capture only and Filter out chips are not saved: the rules are.',
                             placeholder: 'Name',
                           });
-                          if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), toastError);
+                          if (name) void call<RulesState['filterPresets']>('debug.saveFilterPreset', { name, filter: presetOf(filter) }).then((fp) => setRules((r) => r && { ...r, filterPresets: fp }), toastError);
                         },
                       },
                       // at once, with Undo in the message (the preset is saved again as it was)
@@ -865,18 +864,14 @@ export function DebuggerView() {
                       </Button>
                     }
                   />
-                  <span className="ml-auto flex items-center gap-1.5">
-                    {filtersOn && (
-                      <Button size="sm" variant="ghost" icon={<X size={13} />} title="Show every exchange again: clear the text, the dropdowns, the checkboxes and the chips" data-clear-filters onClick={() => setFilter(noFilter)}>
-                        Clear filters
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" icon={<Save size={13} />} disabled={!rows.length} title={rows.length ? 'Save the session to open it later' : 'Nothing captured yet'} onClick={() => void saveSession()}>
-                      Save session
+                  {filtersOn && (
+                    <Button size="sm" variant="ghost" icon={<X size={13} />} title="Show every exchange again: clear the text, the dropdowns, the checkboxes and the chips" data-clear-filters onClick={() => setFilter(noFilter)}>
+                      Clear filters
                     </Button>
-                    <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} disabled={!status?.exchanges} title={status?.exchanges ? 'Forget every captured exchange (Ctrl+E)' : 'Nothing captured yet'} onClick={() => void clear()}>
-                      Clear
-                    </Button>
+                  )}
+                  <span className="ml-auto flex items-center gap-1.5 pl-2 border-l border-line" data-session-actions>
+                    <ActionButton item={acts.save} label="Save session" />
+                    <ActionButton item={acts.clear} label="Clear" />
                   </span>
                   <OutputActions spec={outputSpec}>
                     <button
@@ -900,20 +895,25 @@ export function DebuggerView() {
                           {plural(status.exchanges, 'exchange')} captured, hidden by the filters above.
                         </Empty>
                       ) : !rows.length ? (
-                        <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
+                        <Empty
+                          icon={<Bug size={26} />}
+                          title={status?.running ? 'Waiting for traffic' : 'Not capturing'}
+                          actions={[
+                            ...(status?.systemProxy ? [] : [{ label: LABEL.captureAll, icon: <Globe size={14} />, onClick: () => void captureAll() }]),
+                            { label: 'More ways to capture', icon: <Globe size={14} />, items: captureItems, primary: !!status?.systemProxy },
+                            { label: 'Record a flow…', icon: <Circle size={14} />, onClick: () => void startRecording(), primary: false },
+                          ]}
+                        >
                           {status?.running ? (
                             <>
-                              <b>Capture</b> opens a browser or a terminal through the proxy; or point a program at{' '}
+                              Open a browser or a terminal through the proxy, or point a program at{' '}
                               <button type="button" className="mono text-fg underline decoration-dotted" title="Copy the proxy address" onClick={() => void copyText(status.url ?? '', 'the proxy address')}>
                                 {status.url}
                               </button>{' '}
                               yourself (<span className="mono">HTTP_PROXY</span>, <span className="mono">--proxy-server</span>). Requests appear here as they happen.
                             </>
                           ) : (
-                            <>
-                              <b>Capture</b> chooses what to watch: a browser or a terminal opened through the proxy (only that program is captured), or everything on this computer. Other programs are not affected.
-                              <b> Start capturing</b> alone starts the proxy for a program you point at it yourself; the Session menu opens a saved capture.
-                            </>
+                            <>Watch every program on this computer that follows the system proxy, or just one: a browser or a terminal opened through the proxy. The Session menu opens a saved capture.</>
                           )}
                         </Empty>
                       ) : (
@@ -924,6 +924,7 @@ export function DebuggerView() {
                           onOrder={onOrder}
                           onSelect={gridSelect.onSelect}
                           actions={gridActions}
+                          decrypt={!!status?.decrypt}
                         />
                       )}
                       <TrafficSide side={side} onSide={setSide} incoming={incoming.list.length} />
@@ -948,6 +949,7 @@ export function DebuggerView() {
                           e={sel}
                           onOpen={paneActions.onOpen}
                           onResend={paneActions.onResend}
+                          onKeepEncrypted={status?.decrypt || certificateError(sel) ? paneActions.onKeepEncrypted : undefined}
                           onAsk={aiOn ? paneActions.onAsk : undefined}
                           onBookmark={paneActions.onBookmark}
                           onDelete={paneActions.onDelete}
@@ -1024,7 +1026,7 @@ function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Sta
         <Empty
           icon={<Bug size={26} />}
           title="Nothing captured yet"
-          actions={[...(running ? [] : [{ label: 'Start the proxy', onClick: onStart }]), { label: 'Record a flow…', onClick: onRecord, primary: running }]}
+          actions={[...(running ? [] : [{ label: LABEL.captureAll, onClick: onStart }]), { label: 'Record a flow…', onClick: onRecord, primary: running }]}
         >
           {running ? 'The proxy is on: send some traffic through it' : 'Send some traffic through the proxy'}; the session's numbers appear here.
         </Empty>

@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { formatBytes } from '@testpion/shared';
 import { Empty } from '../ui';
 import type { Exchange } from './model';
 
@@ -94,40 +93,15 @@ export function CookiesView({ e, side }: { e: Exchange; side: 'request' | 'respo
   return <Table name={`cookies-${side}`} head={['Cookie', side === 'request' ? 'Value' : 'Value and attributes']} rows={rows} />;
 }
 
-/** Every property of the exchange in one place: the quick answer to "what was this call". */
-export function OverviewView({ e }: { e: Exchange }) {
-  const ms = (v?: number) => (v === undefined ? undefined : `${v} ms`);
-  const rows: Array<[string, ReactNode | undefined]> = [
-    ['URL', e.url],
-    ['Method', e.method],
-    ['Status', e.status ? `${e.status} ${e.statusText ?? ''}`.trim() : e.error ? 'No response' : 'Waiting'],
-    ['Protocol', e.kind === 'tunnel' ? 'HTTPS tunnel (CONNECT)' : e.kind === 'websocket' ? 'WebSocket' : e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1'],
-    ['Encrypted (TLS)', e.tls ? 'yes, decrypted by TestPion' : e.kind === 'tunnel' ? 'yes, not decrypted' : undefined],
-    ['Program', e.application ? `${e.application}${e.pid ? ` (process ${e.pid})` : ''}` : e.clientPort ? `unknown (local port ${e.clientPort})` : undefined],
-    ['Account', e.user],
-    ['Server address', e.serverAddress],
-    ['Content type', e.contentType],
-    ['Request size', formatBytes(e.requestBodyBytes)],
-    ['Response size', formatBytes(e.responseBodyBytes)],
-    ['Sending', ms(e.sendMs)],
-    ['Waiting for the server', ms(e.waitMs)],
-    ['Total time', ms(e.durationMs)],
-    ['Started', e.startedAt ? new Date(e.startedAt).toLocaleString() : undefined],
-    ['Rules that acted', e.rules?.length ? e.rules.join(', ') : undefined],
-    ['Redirected to', e.redirectedTo],
-    ['Answered by a rule', e.repliedByRule ? 'yes' : undefined],
-    ['Edited at a breakpoint', e.edited ? 'yes' : undefined],
-    ['Error', e.error],
-  ];
-  return <Table name="overview" head={['Property', 'Value']} rows={rows.filter((r): r is [string, ReactNode] => r[1] !== undefined && r[1] !== '')} />;
-}
+/** The program refused TestPion's certificate (it does not trust the root, or pins its own). */
+export const certificateError = (e: Pick<Exchange, 'error'>) => /certificate/i.test(e.error ?? '');
 
 /** What the usual error messages mean and what to do about them. */
 export function adviceFor(e: Exchange): string[] {
   const m = `${e.error ?? ''}`.toLowerCase();
-  if (/did not trust the testpion root certificate|certificate/.test(m) && /trust|certificate/.test(m))
+  if (certificateError(e))
     return [
-      'The program refused the certificate TestPion presents for HTTPS. Install the TestPion root certificate (HTTPS ▸ Root certificate…) and restart the program.',
+      'The program refused the certificate TestPion presents for HTTPS. Click HTTPS ▸ See inside HTTPS… (TestPion asks once to trust its certificate) and restart the program.',
       'Some programs ignore the system certificate store or pin their own certificate (OneDrive, banking, many apps): keep that host encrypted (right-click the row ▸ Keep this host encrypted).',
     ];
   if (/econnrefused|refused/.test(m)) return ['Nothing is listening at that address and port. Check the server is running and the port is right.', 'A firewall or a rule that redirects this host can also refuse it.'];
@@ -136,7 +110,7 @@ export function adviceFor(e: Exchange): string[] {
   if (/econnreset|socket hang up|closed/.test(m)) return ['The connection was closed before the answer arrived. The server may have crashed, or a proxy or firewall cut it.'];
   if (e.status && e.status >= 500) return ['The server failed. Look at the response body for its message, and at the server log.'];
   if (e.status === 401 || e.status === 403) return ['The server refused the credentials. See the Auth tab: is the token there, not expired, for the right audience or scope?'];
-  if (e.status === 404) return ['The path was not found. Compare the URL (Params and Overview tabs) with what the API expects.'];
+  if (e.status === 404) return ['The path was not found. Compare the URL (Params and Summary tabs) with what the API expects.'];
   if (e.status && e.status >= 400) return ['The server rejected the request. Its response body usually says why (Content tab); then check the request headers and the body.'];
   return [];
 }

@@ -121,7 +121,7 @@ function PropertyTable({ groups }: { groups: Array<{ title: string; rows: Array<
   return (
     <table className="w-full text-xs border-collapse">
       <tbody>
-        {groups.map((g) => {
+        {groups.filter((g) => g.rows.some(([, v]) => v !== undefined && v !== null && v !== '')).map((g) => {
           const open = !closed.includes(g.title);
           return (
             <Fragment key={g.title}>
@@ -213,6 +213,16 @@ export function SummaryPanel({ e }: { e?: Exchange }) {
               ['Receiving', formatMs(p.receiving)],
               ['Total', formatMs(e.durationMs)],
               ['Speed (KB/s)', speedOf(e)],
+            ],
+          },
+          {
+            title: 'Rules and errors',
+            rows: [
+              ['Rules that acted', e.rules?.length ? e.rules.join(', ') : undefined],
+              ['Redirected to', e.redirectedTo],
+              ['Answered by a rule', e.repliedByRule ? 'yes' : undefined],
+              ['Edited at a breakpoint', e.edited ? 'yes' : undefined],
+              ['Error', e.error],
             ],
           },
         ]}
