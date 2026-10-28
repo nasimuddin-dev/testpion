@@ -80,17 +80,22 @@ export interface RpcParamTypes {
   'datasets.read': RpcCommonParams & { path: string };
   'datasets.saveCsv': RpcCommonParams & { name: string; text: string };
   'datasets.write': RpcCommonParams & { name: string; text: string };
+  'debug.certificate': RpcCommonParams & { action?: string };
   'debug.createFlow': RpcCommonParams & { ids?: string[]; since?: string; name?: string; drop?: string[]; keepNoise?: boolean; noiseHosts?: string[]; dryRun?: boolean; overwrite?: boolean };
   'debug.decrypt': RpcCommonParams & { on?: boolean; noDecrypt?: string[] };
   'debug.delete': RpcCommonParams & { ids: string[] };
   'debug.deleteSession': RpcCommonParams & { name: string };
   'debug.exchanges': RpcCommonParams & { host?: string; method?: string; text?: string; kind?: string; application?: string; type?: string; limit?: number; offset?: number };
-  'debug.openSession': RpcCommonParams & { name?: string; path?: string; text?: string; base64?: string };
+  'debug.openBrowser': RpcCommonParams & { browser?: string; url?: string };
+  'debug.openSession': RpcCommonParams & { name?: string; path?: string; text?: string; base64?: string; append?: boolean };
   'debug.profile': RpcCommonParams & { action: string; name: string; from?: string };
   'debug.record': RpcCommonParams & { on?: boolean };
   'debug.saveFilterPreset': RpcCommonParams & { name: string; filter: Record<string, unknown> };
   'debug.saveRule': RpcCommonParams & { rule: Record<string, unknown> };
   'debug.saveToCollection': RpcCommonParams & { ids?: string[]; since?: string; name?: string; group?: string; keepNoise?: boolean };
+  'debug.selfTest': RpcCommonParams & { url: string; method?: string; headers?: Record<string, unknown>; body?: string };
+  'debug.start': RpcCommonParams & { port?: number; lan?: boolean };
+  'debug.systemProxy': RpcCommonParams & { on: boolean };
   'debug.view': RpcCommonParams & { session?: string };
   'diagnostics.bundle': RpcCommonParams;
   'diagnostics.get': RpcCommonParams;
@@ -350,4 +355,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 333;
+export const RPC_METHOD_COUNT = 338;

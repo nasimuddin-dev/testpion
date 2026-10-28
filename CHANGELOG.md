@@ -4,6 +4,16 @@
 
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
+### Machine safety
+
+- **The system proxy no longer outlives TestPion**: the old setting is written to a private file before it is changed and deleted after it is put back; the next start restores it when a crash or kill left it pointing at TestPion; our own address is never taken for "the old setting"; quitting restores it first, with a limit of its own; a part-way change on macOS or GNOME is undone; the system follows when the proxy moves to another port.
+- **The root certificate**: installing adds the new root first and then removes older ones of the same name by their hash; "trusted" reads the hash lines of `certutil` / `security` and is true, false or not known (a failing tool is no longer "no"; the answer is kept for 30 s).
+- **Saving a session never blocks the app**: Stop, Save, AutoSave and quitting write the HAR a few exchanges at a time to a temporary file and rename it; quitting waits for a write in flight.
+- **The AutoSave is private**: it is in the app's data folder instead of the workspace, and tokens in it are masked by their shape. An AutoSave an earlier version left in the workspace moves there.
+- **The proxy**: no `Proxy-Authorization` on WebSocket upgrades; the proxy's own page escapes the Host and sends a CSP; devices on the network do not share upstream HTTP/1.1 or HTTP/2 connections with this computer's own programs.
+- **Capture calls**: a browser start page must be http or https (not a `--switch`); `debug.openSession` has a size limit; parameters of the capture calls are checked; the capture terminal also trusts the root certificate (`NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`) when HTTPS is decrypted.
+- **Programs that outlive a timeout**: a secret-manager command or an `npx`-started MCP server that is stopped takes its children with it (`taskkill /T` on Windows).
+
 ### Cloud foundation, stage 1
 
 Nothing changes for the desktop app; the engine is now safe to host for several people in one process (planning/cloud-stage-1.md).

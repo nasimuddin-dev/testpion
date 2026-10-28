@@ -922,7 +922,7 @@ export class Backend {
     this.monitorScheduler.stop();
     this.gitAutoFetch.stop();
     const cookies = this.cookieStore?.flush().catch(() => undefined); // started now, awaited with the rest
-    await settleWithin([this.debugger?.release?.()], 2000); // saves a Debugger session with unsaved exchanges
+    await settleWithin([this.debugger?.release?.()], 6000); // saves a Debugger session with unsaved exchanges
     this.calls.cancelAll();
     (this.host.app ?? appServices()).release(this);
     for (const c of this.controllers.values()) c.abort();

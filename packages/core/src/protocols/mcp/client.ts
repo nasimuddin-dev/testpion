@@ -2,6 +2,7 @@ import { ENGINE_VERSION } from '../../version.js';
 import { readFileSync } from 'node:fs';
 import { createMcpMockServer, loadMcpMock } from '../../mcp-server/mcp-mock.js';
 import { assertProcessesAllowed, assertUrlAllowed } from '../../net/policy.js';
+import { killProcessTree } from '../../net/process.js';
 import { ensureProxyApplied } from '../../net/proxy.js';
 import type { CookieJar } from '../../cookies/cookie-jar.js';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -38,7 +39,7 @@ type McpEventListener = (e: McpTraceEvent) => void;
  * Transport decorator that observes every JSON-RPC message without changing behaviour.
  * Keeps transport handling isolated from the MCP domain model.
  */
-class TracingTransport implements Transport {
+export class TracingTransport implements Transport {
   private pending = new Map<string | number, { method: string; t: number; params: unknown }>();
   onclose?: () => void;
   onerror?: (error: Error) => void;
@@ -76,8 +77,32 @@ class TracingTransport implements Transport {
     await this.inner.send(message, options);
   }
 
+  /** The process id of a stdio server (undefined for the other transports, or before it started). */
+  get pid(): number | undefined {
+    return (this.inner as { pid?: number | null }).pid ?? undefined;
+  }
+
+  /**
+   * Close the server. A stdio server is asked to leave by closing its input; when it has not left after 1.5 s (before the SDK ends the
+   * program alone at 2 s) the program and everything it started is ended: `npx` leaves a node process behind it per connection otherwise.
+   */
   async close(): Promise<void> {
-    await this.inner.close();
+    const pid = this.pid;
+    let closed = false;
+    const timer = pid ? setTimeout(() => !closed && killProcessTree(pid), 1500) : undefined;
+    timer?.unref();
+    try {
+      await this.inner.close();
+    } finally {
+      closed = true;
+      clearTimeout(timer);
+    }
+  }
+
+  /** Stop at once, the whole tree (a server that never answered the handshake). */
+  async abandon(): Promise<void> {
+    killProcessTree(this.pid);
+    await this.inner.close().catch(() => undefined);
   }
 
   setProtocolVersion(v: string): void {
@@ -324,6 +349,7 @@ export class McpSession {
       await this.client.connect(this.transport, { timeout: timeoutMs });
     } catch (e) {
       this.emit({ id: shortId(), timestamp: Date.now(), direction: 'local', method: 'connection/failed', kind: 'error', error: (e as Error).message });
+      await this.transport.abandon(); // the server that did not answer must not keep running
       throw new ApsError('ProtocolError', `Could not connect to MCP server "${this.config.name}": ${(e as Error).message}`, {
         why:
           this.config.transport === 'stdio'

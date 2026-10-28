@@ -1,4 +1,4 @@
-import { execFileChecked } from '../net/process.js';
+import { execFileChecked, killProcessTree } from '../net/process.js';
 import { ApsError } from '../errors.js';
 import type { Environment } from '../model/types.js';
 import { commandLine, isCommandTrusted } from '../storage/trust.js';
@@ -95,7 +95,13 @@ const defaultRunner: SecretRunner = (command, args, timeoutMs) =>
     // az and gcloud are .cmd scripts on Windows, which only a shell starts: their arguments were checked to be plain
     const shell = process.platform === 'win32' && SHELL_TOOLS.has(command);
     if (shell && !args.every((a) => PLAIN.test(a) || /^-[\w-]+(=[\w.@:/+-]+)?$/.test(a))) return reject(new ApsError('ValidationError', 'A secret reference has characters a shell would read'));
-    execFileChecked(`secret manager ${command}`, command, args, { timeout: timeoutMs, windowsHide: true, shell, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+    // the timeout is ours, not execFile's: with a shell (`az.cmd`) execFile ends the shell and leaves the tool it started running, so the
+    // whole tree is ended while the shell is still there to walk
+    let timedOut = false;
+    const timeoutError = () => new ApsError('ConfigurationError', `${command} did not answer within ${Math.round(timeoutMs / 1000)} s and was stopped`, { suggestions: [`Check that you are signed in (${command}) and the network is reachable.`] });
+    const child = execFileChecked(`secret manager ${command}`, command, args, { windowsHide: true, shell, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      clearTimeout(timer);
+      if (timedOut) return reject(timeoutError());
       if (!err) return resolve(String(stdout));
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT')
@@ -113,6 +119,12 @@ const defaultRunner: SecretRunner = (command, args, timeoutMs) =>
         ),
       );
     });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killProcessTree(child.pid);
+      child.kill();
+      setTimeout(() => reject(timeoutError()), 2000).unref(); // the callback normally follows the kill at once
+    }, timeoutMs);
   });
 let runner: SecretRunner = defaultRunner;
 

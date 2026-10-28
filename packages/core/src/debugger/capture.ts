@@ -1,4 +1,4 @@
-import { execFileChecked, spawnChecked } from '../net/process.js';
+import { spawnChecked } from '../net/process.js';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,14 +7,9 @@ import { ApsError } from '../errors.js';
 /**
  * Capture helpers of the HTTP Debugger (planning/http-debugger.md, DBG-2): the ways a program ends up sending through
  * the proxy without the user editing settings by hand: a browser started with the proxy and a throw-away profile, a
- * terminal with HTTP_PROXY set, the lines to paste in an existing shell, and the system proxy switched to ours and back.
+ * terminal with HTTP_PROXY set and the lines to paste in an existing shell (the system proxy is in system-proxy.ts).
  * Everything here is best effort per platform; a failure is an ApsError with what to do by hand.
  */
-
-const run = (cmd: string, args: string[], timeout = 8000) =>
-  new Promise<string>((resolve, reject) => {
-    execFileChecked(`program ${cmd}`, cmd, args, { timeout, windowsHide: true, maxBuffer: 1024 * 1024 }, (err, out, errOut) => (err ? reject(new Error(String(errOut || err.message).trim())) : resolve(String(out))));
-  });
 
 const hostPort = (proxyUrl: string) => {
   const u = new URL(proxyUrl);
@@ -23,13 +18,43 @@ const hostPort = (proxyUrl: string) => {
 
 /* ------------------------------------------------------------------ shell lines */
 
-/** The lines that make a shell send through the proxy; one set per shell, for copying. */
-export function proxyShellLines(proxyUrl: string): Array<{ shell: string; lines: string }> {
+/** The variables programs read to trust one more root certificate (the Debugger's, when it decrypts HTTPS). */
+export const CA_VARIABLES = ['NODE_EXTRA_CA_CERTS', 'REQUESTS_CA_BUNDLE', 'SSL_CERT_FILE', 'CURL_CA_BUNDLE'] as const;
+
+const sh = (v: string) => `'${v.split("'").join("'\\''")}'`;
+/** Text inside an AppleScript string literal. */
+const asScript = (v: string) => v.split('\\').join('\\\\').split('"').join('\\"');
+const psq = (v: string) => `'${v.replace(/'/g, "''")}'`;
+
+/** The environment of a shell that sends through the proxy, and trusts the root certificate at `caPath` when given. */
+export function proxyEnvironment(proxyUrl: string, caPath?: string): Record<string, string> {
+  return {
+    HTTP_PROXY: proxyUrl,
+    HTTPS_PROXY: proxyUrl,
+    http_proxy: proxyUrl,
+    https_proxy: proxyUrl,
+    NO_PROXY: '',
+    no_proxy: '',
+    ...(caPath ? Object.fromEntries(CA_VARIABLES.map((k) => [k, caPath])) : {}),
+  };
+}
+
+/**
+ * The lines that make a shell send through the proxy; one set per shell, for copying. With `caPath` (HTTPS is decrypted)
+ * they also point the usual CA variables at the root certificate, and curl gets `--cacert`.
+ */
+export function proxyShellLines(proxyUrl: string, caPath?: string): Array<{ shell: string; lines: string }> {
   return [
-    { shell: 'bash / zsh', lines: `export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl} NO_PROXY=` },
-    { shell: 'PowerShell', lines: `$env:HTTP_PROXY = '${proxyUrl}'; $env:HTTPS_PROXY = '${proxyUrl}'; $env:NO_PROXY = ''` },
-    { shell: 'cmd', lines: `set HTTP_PROXY=${proxyUrl} && set HTTPS_PROXY=${proxyUrl} && set NO_PROXY=` },
-    { shell: 'curl', lines: `curl -x ${proxyUrl} https://example.com/` },
+    { shell: 'bash / zsh', lines: `export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl} NO_PROXY=${caPath ? ` ${CA_VARIABLES.map((k) => `${k}=${sh(caPath)}`).join(' ')}` : ''}` },
+    {
+      shell: 'PowerShell',
+      lines: `$env:HTTP_PROXY = '${proxyUrl}'; $env:HTTPS_PROXY = '${proxyUrl}'; $env:NO_PROXY = ''${caPath ? `; ${CA_VARIABLES.map((k) => `$env:${k} = ${psq(caPath)}`).join('; ')}` : ''}`,
+    },
+    {
+      shell: 'cmd',
+      lines: `set HTTP_PROXY=${proxyUrl} && set HTTPS_PROXY=${proxyUrl} && set NO_PROXY=${caPath ? ` && ${CA_VARIABLES.map((k) => `set "${k}=${caPath}"`).join(' && ')}` : ''}`,
+    },
+    { shell: 'curl', lines: `curl -x ${proxyUrl}${caPath ? ` --cacert ${sh(caPath)}` : ''} https://example.com/` },
     { shell: 'Chrome / Edge', lines: `--proxy-server=${proxyUrl}` },
   ];
 }
@@ -48,6 +73,22 @@ interface InstalledBrowser {
   label: string;
   path: string;
   systemProxy?: boolean;
+}
+
+/**
+ * The page a browser opens with: http or https only. A value that starts with `-` would be read by the browser as one of
+ * its own switches (--gpu-launcher=…, --renderer-cmd-prefix=…), a file: or javascript: address opens something that is not capture.
+ */
+export function checkStartUrl(url: string): string {
+  const u = String(url ?? '').trim();
+  let ok = false;
+  try {
+    ok = !u.startsWith('-') && /^https?:$/.test(new URL(u).protocol);
+  } catch {
+    /* not an address */
+  }
+  if (!ok) throw new ApsError('ValidationError', 'The start page must be an http:// or https:// address', { suggestions: ['For example https://example.com/'] });
+  return u;
 }
 
 /** The browsers installed on this computer that can be opened through the proxy, best effort. */
@@ -101,6 +142,7 @@ export function installedBrowsers(): InstalledBrowser[] {
  * (the caller sets it first; `systemProxy` in the answer says so).
  */
 export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, startUrl = 'http://neverssl.com/'): { browser: string; profileDir: string; systemProxy?: boolean } {
+  startUrl = checkStartUrl(startUrl);
   const all = installedBrowsers();
   const b = browser ? all.find((x) => x.name === browser) : all[0];
   if (!b)
@@ -144,9 +186,10 @@ export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, st
 
 /* ------------------------------------------------------------------ a terminal with the proxy */
 
-/** Open a terminal window whose shell sends through the proxy (HTTP_PROXY / HTTPS_PROXY set). */
-export function openTerminalWithProxy(proxyUrl: string): { terminal: string } {
-  const env = { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, http_proxy: proxyUrl, https_proxy: proxyUrl, NO_PROXY: '', no_proxy: '' };
+/** Open a terminal window whose shell sends through the proxy (HTTP_PROXY / HTTPS_PROXY set); with `caPath` it also trusts the root certificate there (NODE_EXTRA_CA_CERTS, REQUESTS_CA_BUNDLE, SSL_CERT_FILE, CURL_CA_BUNDLE). */
+export function openTerminalWithProxy(proxyUrl: string, caPath?: string): { terminal: string } {
+  const env = { ...process.env, ...proxyEnvironment(proxyUrl, caPath) };
+  const exportCa = caPath ? ` ${CA_VARIABLES.map((k) => `${k}=${sh(caPath)}`).join(' ')}` : '';
   const detach = (cmd: string, args: string[], label: string) => {
     const child = spawnChecked('terminal launch', cmd, args, { detached: true, stdio: 'ignore', env, windowsHide: false });
     child.on('error', () => undefined);
@@ -164,10 +207,10 @@ export function openTerminalWithProxy(proxyUrl: string): { terminal: string } {
     return detach('cmd.exe', ['/c', 'start', 'TestPion HTTP Debugger', 'cmd.exe', '/k', banner], 'Command Prompt');
   }
   if (process.platform === 'darwin') {
-    const script = `tell application "Terminal" to do script "export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl} NO_PROXY=; echo 'TestPion HTTP Debugger: this shell sends through ${proxyUrl}'"`;
+    const script = `tell application "Terminal" to do script "export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl} NO_PROXY=${asScript(exportCa)}; echo 'TestPion HTTP Debugger: this shell sends through ${proxyUrl}'"`;
     return detach('osascript', ['-e', script, '-e', 'tell application "Terminal" to activate'], 'Terminal');
   }
-  const bash = `export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl} NO_PROXY=; echo 'TestPion HTTP Debugger: this shell sends through ${proxyUrl}'; exec ${process.env.SHELL || 'bash'}`;
+  const bash = `export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl} NO_PROXY=${exportCa}; echo 'TestPion HTTP Debugger: this shell sends through ${proxyUrl}'; exec ${process.env.SHELL || 'bash'}`;
   for (const [cmd, args] of [
     ['x-terminal-emulator', ['-e', 'bash', '-c', bash]],
     ['gnome-terminal', ['--', 'bash', '-c', bash]],
@@ -180,136 +223,6 @@ export function openTerminalWithProxy(proxyUrl: string): { terminal: string } {
       /* the next one */
     }
   }
-  throw new ApsError('ConfigurationError', 'No terminal emulator found', { suggestions: [`In a shell: export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl}`] });
+  throw new ApsError('ConfigurationError', 'No terminal emulator found', { suggestions: [`In a shell: export HTTP_PROXY=${proxyUrl} HTTPS_PROXY=${proxyUrl}${exportCa}`] });
 }
 
-/* ------------------------------------------------------------------ the system proxy */
-
-/** What the system proxy was before TestPion changed it, so it can be put back exactly. */
-export interface SystemProxySnapshot {
-  platform: NodeJS.Platform;
-  /** Windows: the Internet Settings values. */
-  win?: { enable: number; server: string; override: string };
-  /** macOS: per network service, the web and secure web proxy lines of networksetup. */
-  mac?: Array<{ service: string; web: string; secure: string }>;
-  /** GNOME: the mode and the manual hosts. */
-  gnome?: { mode: string; httpHost: string; httpPort: string; httpsHost: string; httpsPort: string };
-}
-
-/** `<-loopback>`: localhost and 127.0.0.1 go through the proxy too (the default `<local>` skips them, so a local site would not show). */
-export const WIN_PROXY_OVERRIDE = '<-loopback>';
-const WIN_KEY = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
-const ps = (script: string) => run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
-
-async function readSystemProxy(): Promise<SystemProxySnapshot> {
-  if (process.platform === 'win32') {
-    const out = await ps(
-      `$p = Get-ItemProperty -Path '${WIN_KEY}'; @{ enable = [int]$p.ProxyEnable; server = [string]$p.ProxyServer; override = [string]$p.ProxyOverride } | ConvertTo-Json -Compress`,
-    );
-    const v = JSON.parse(out) as { enable: number; server: string; override: string };
-    return { platform: 'win32', win: { enable: v.enable ?? 0, server: v.server ?? '', override: v.override ?? '' } };
-  }
-  if (process.platform === 'darwin') {
-    const services = (await run('networksetup', ['-listallnetworkservices']))
-      .split('\n')
-      .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith('*') && !/An asterisk/.test(s));
-    const mac: NonNullable<SystemProxySnapshot['mac']> = [];
-    for (const service of services)
-      mac.push({ service, web: await run('networksetup', ['-getwebproxy', service]).catch(() => ''), secure: await run('networksetup', ['-getsecurewebproxy', service]).catch(() => '') });
-    return { platform: 'darwin', mac };
-  }
-  const g = async (k: string) => (await run('gsettings', ['get', k.includes('.') ? k.split(' ')[0]! : 'org.gnome.system.proxy', k.split(' ')[1] ?? k]).catch(() => '')).trim().replace(/^'|'$/g, '');
-  return {
-    platform: process.platform,
-    gnome: {
-      mode: await g('org.gnome.system.proxy mode'),
-      httpHost: await g('org.gnome.system.proxy.http host'),
-      httpPort: await g('org.gnome.system.proxy.http port'),
-      httpsHost: await g('org.gnome.system.proxy.https host'),
-      httpsPort: await g('org.gnome.system.proxy.https port'),
-    },
-  };
-}
-
-/** The stand-in for the system proxy while TESTPION_FAKE_SYSTEM_PROXY is set; '' = none. Tests read it with `fakeSystemProxyValue`. */
-let fakeSystemProxy = ''; // bounded: one string
-export const fakeSystemProxyValue = () => fakeSystemProxy;
-
-/** Point the system proxy at ours (every program that honours it sends through TestPion); returns what to restore. */
-export async function setSystemProxy(proxyUrl: string): Promise<SystemProxySnapshot> {
-  // tests: TESTPION_FAKE_SYSTEM_PROXY keeps the "system proxy" in memory so no run touches the real setting
-  if (process.env.TESTPION_FAKE_SYSTEM_PROXY) {
-    const before = fakeSystemProxy;
-    fakeSystemProxy = proxyUrl;
-    return { platform: 'fake', fake: before } as unknown as SystemProxySnapshot;
-  }
-  const before = await readSystemProxy();
-  const { host, port, hostPort: hp } = hostPort(proxyUrl);
-  try {
-    if (process.platform === 'win32') {
-      await ps(
-        `Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyEnable -Value 1 -Type DWord; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyServer -Value '${hp}' -Type String; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyOverride -Value '${WIN_PROXY_OVERRIDE}' -Type String`,
-      );
-      await refreshWinInet();
-    } else if (process.platform === 'darwin') {
-      for (const s of before.mac ?? []) {
-        await run('networksetup', ['-setwebproxy', s.service, host, String(port)]);
-        await run('networksetup', ['-setsecurewebproxy', s.service, host, String(port)]);
-      }
-    } else {
-      await run('gsettings', ['set', 'org.gnome.system.proxy.http', 'host', host]);
-      await run('gsettings', ['set', 'org.gnome.system.proxy.http', 'port', String(port)]);
-      await run('gsettings', ['set', 'org.gnome.system.proxy.https', 'host', host]);
-      await run('gsettings', ['set', 'org.gnome.system.proxy.https', 'port', String(port)]);
-      await run('gsettings', ['set', 'org.gnome.system.proxy', 'mode', "'manual'"]);
-    }
-  } catch (e) {
-    throw new ApsError('ConfigurationError', `Could not set the system proxy: ${(e as Error).message}`, {
-      suggestions: ['Set it by hand in the OS network settings: HTTP and HTTPS proxy ' + hp + '.', 'Or start a browser or a terminal from here instead; they need no system change.'],
-    });
-  }
-  return before;
-}
-
-/** Put the system proxy back as it was. */
-export async function restoreSystemProxy(s: SystemProxySnapshot): Promise<void> {
-  if ((s.platform as string) === 'fake') {
-    fakeSystemProxy = (s as unknown as { fake: string }).fake;
-    return;
-  }
-  if (s.platform === 'win32' && s.win) {
-    await ps(
-      `Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyEnable -Value ${s.win.enable ? 1 : 0} -Type DWord; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyServer -Value '${s.win.server.replace(/'/g, "''")}' -Type String; Set-ItemProperty -Path '${WIN_KEY}' -Name ProxyOverride -Value '${s.win.override.replace(/'/g, "''")}' -Type String`,
-    );
-    await refreshWinInet();
-  } else if (s.platform === 'darwin' && s.mac) {
-    for (const m of s.mac) {
-      const parse = (text: string) => {
-        const on = /Enabled:\s*Yes/i.test(text);
-        const host = /Server:\s*(\S*)/.exec(text)?.[1] ?? '';
-        const port = /Port:\s*(\d+)/.exec(text)?.[1] ?? '0';
-        return { on, host, port };
-      };
-      const w = parse(m.web);
-      const sec = parse(m.secure);
-      if (w.on && w.host) await run('networksetup', ['-setwebproxy', m.service, w.host, w.port]);
-      else await run('networksetup', ['-setwebproxystate', m.service, 'off']);
-      if (sec.on && sec.host) await run('networksetup', ['-setsecurewebproxy', m.service, sec.host, sec.port]);
-      else await run('networksetup', ['-setsecurewebproxystate', m.service, 'off']);
-    }
-  } else if (s.gnome) {
-    await run('gsettings', ['set', 'org.gnome.system.proxy.http', 'host', s.gnome.httpHost]);
-    await run('gsettings', ['set', 'org.gnome.system.proxy.http', 'port', s.gnome.httpPort || '0']);
-    await run('gsettings', ['set', 'org.gnome.system.proxy.https', 'host', s.gnome.httpsHost]);
-    await run('gsettings', ['set', 'org.gnome.system.proxy.https', 'port', s.gnome.httpsPort || '0']);
-    await run('gsettings', ['set', 'org.gnome.system.proxy', 'mode', `'${s.gnome.mode || 'none'}'`]);
-  }
-}
-
-/** Tell WinINET the settings changed (browsers and .NET read the registry again). */
-async function refreshWinInet(): Promise<void> {
-  await ps(
-    `$sig = '[DllImport("wininet.dll", SetLastError = true)] public static extern bool InternetSetOption(IntPtr h, int opt, IntPtr buf, int len);'; $w = Add-Type -MemberDefinition $sig -Name WinInet -Namespace TestPion -PassThru; [void]$w::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0); [void]$w::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0)`,
-  ).catch(() => undefined);
-}
