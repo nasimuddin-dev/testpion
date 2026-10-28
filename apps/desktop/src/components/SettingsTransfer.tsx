@@ -34,7 +34,20 @@ export function SettingsTransfer({ unsaved }: { unsaved: boolean }) {
       } catch {
         return useApp.getState().toast(`${file.name} is not a settings file (it is not JSON)`, 'error');
       }
-      const r = await call<{ changed: unknown[]; skipped: string[] }>('settings.import', { doc });
+      // security settings (proxy, TLS, environment variables, redaction) are shown old -> new and confirmed before anything is applied
+      const check = await call<{ security: Array<{ key: string; before: string; after: string }> }>('settings.import', { doc, dryRun: true });
+      if (
+        check.security.length &&
+        !(await confirmAction({
+          title: 'Import security settings?',
+          message: 'This file changes settings that decide where requests and their secrets go, or what is hidden. Old value, then the new one:',
+          detail: check.security.map((c) => `${c.key}: ${c.before} → ${c.after}`).join('\n'),
+          confirmLabel: 'Import',
+          danger: true,
+        }))
+      )
+        return;
+      const r = await call<{ changed: unknown[]; skipped: string[] }>('settings.import', { doc, confirmSecurity: true });
       await refresh();
       useApp
         .getState()

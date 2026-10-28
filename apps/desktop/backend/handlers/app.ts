@@ -15,6 +15,8 @@ import {
   samePath,
   exportSettings,
   importSettings,
+  securityChangesOf,
+  describeSecurityChanges,
   settingsDefaults,
 } from '@testpion/core';
 import { RPC_VERSION } from '@testpion/shared';
@@ -45,11 +47,22 @@ export function appHandlers(be: Backend): Handlers {
     'settings.get': () => be.settings,
     /** Settings ▸ About ▸ Export: the settings of the person's choice (the file `testpion settings get --json` prints), never a secret. */
     'settings.export': () => exportSettings(be.settings),
-    /** Settings ▸ About ▸ Import: an exported file, every value checked as `testpion settings set` checks it; says what changed and what this version does not know. */
-    'settings.import': async ({ doc }: { doc: unknown }) => {
+    /**
+     * Settings ▸ About ▸ Import: an exported file, every value checked as `testpion settings set` checks it; says what changed and what this
+     * version does not know. SECURITY settings it changes (proxy, TLS, `{{$env}}` access, redaction …) come back as `security` (old → new,
+     * masked); they are applied only with `confirmSecurity: true`, which the window sends after showing them. `dryRun` changes nothing.
+     */
+    'settings.import': async ({ doc, dryRun, confirmSecurity }: { doc: unknown; dryRun?: boolean; confirmSecurity?: boolean }) => {
       const r = importSettings(be.settings, doc);
+      const security = securityChangesOf(r.changed);
+      if (dryRun) return { changed: r.changed, skipped: r.skipped, security, applied: false };
+      if (security.length && confirmSecurity !== true)
+        throw new ApsError('ValidationError', `This file changes security settings (${describeSecurityChanges(security)}). Nothing was imported: confirm them first.`, {
+          suggestions: ['Check the proxy, TLS, environment-variable and redaction values, then import again and confirm.'],
+          details: { security },
+        });
       if (r.changed.length) await be.handlers['settings.save']!(r.next);
-      return { changed: r.changed, skipped: r.skipped };
+      return { changed: r.changed, skipped: r.skipped, security, applied: true };
     },
     /** Settings ▸ About ▸ Reset: the named settings (all, when none are named) back to their defaults. */
     'settings.reset': async ({ keys }: { keys?: string[] } = {}) => {
