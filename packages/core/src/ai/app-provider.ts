@@ -1,5 +1,6 @@
 import type { ProviderConfig } from '../model/types.js';
 import { ApsError } from '../errors.js';
+import { netFetch } from '../net/proxy.js';
 
 /**
  * The app's own Claude provider: the user's Anthropic API key, saved once in Settings ▸ AI assistant and
@@ -36,7 +37,7 @@ export async function checkAnthropicKey(key: string, opts: { signal?: AbortSigna
   if (!k) throw new ApsError('ValidationError', 'Paste an Anthropic API key', { suggestions: [] });
   let res: Response;
   try {
-    res = await fetch(`${(opts.baseUrl ?? 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/models?limit=1`, {
+    res = await netFetch(`${(opts.baseUrl ?? 'https://api.anthropic.com').replace(/\/+$/, '')}/v1/models?limit=1`, {
       headers: { 'x-api-key': k, 'anthropic-version': '2023-06-01' },
       signal: opts.signal ? AbortSignal.any([opts.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
     });

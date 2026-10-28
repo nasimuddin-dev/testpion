@@ -1,6 +1,7 @@
 import { ApsError } from '../errors.js';
 import { assertUrlAllowed } from '../net/policy.js';
 import type { ImportInput } from './inputs.js';
+import { netFetch } from '../net/proxy.js';
 
 /**
  * Pulling collections and environments from Postman by link or id with the user's own Postman API key
@@ -53,7 +54,7 @@ export async function fetchPostmanInputs(ref: PostmanRef, apiKey: string | undef
       suggestions: ['Create one in Postman: Settings ▸ Account settings ▸ API keys, then give it to the Import dialog, `--postman-api-key` or POSTMAN_API_KEY. A collection shared as a file imports without one.'],
     });
   const key = apiKey.trim();
-  const f: Fetch = opts.fetchImpl ?? ((url, init) => fetch(url, { ...init, redirect: 'error' }) as never);
+  const f: Fetch = opts.fetchImpl ?? ((url, init) => netFetch(url, { ...init, redirect: 'error' }) as never);
   const get = async (path: string): Promise<Record<string, any>> => {
     const url = `${POSTMAN_API}${path}`;
     await assertUrlAllowed(url);

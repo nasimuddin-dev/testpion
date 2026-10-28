@@ -5,6 +5,7 @@ import type { AuthConfig } from '../../model/types.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
 import { BoundedMap } from '../../util/collections.js';
+import { netFetch } from '../../net/proxy.js';
 
 export interface AuthContext {
   redactor?: Redactor;
@@ -210,7 +211,7 @@ async function requestToken(auth: Extract<AuthConfig, { type: 'oauth2' }>, form:
     form.set('client_id', auth.clientId);
     if (auth.clientSecret) form.set('client_secret', auth.clientSecret);
   }
-  const f = ctx.fetchImpl ?? fetch;
+  const f = ctx.fetchImpl ?? netFetch;
   const res = await f(auth.tokenUrl, {
     method: 'POST',
     headers,

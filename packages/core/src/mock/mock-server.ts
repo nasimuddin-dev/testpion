@@ -5,6 +5,7 @@ import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { flattenHeaders } from '../util/headers.js';
 import { isLoopbackHostHeader } from '../net/local-guard.js';
+import { netFetch } from '../net/proxy.js';
 
 /** One example the mock server can answer with. */
 export interface MockRoute {
@@ -176,7 +177,7 @@ async function forward(base: string, req: IncomingMessage, body: string | undefi
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) if (v !== undefined && !FORWARD_SKIP.test(k)) for (const x of Array.isArray(v) ? v : [v]) headers.append(k, x);
   const method = (req.method ?? 'GET').toUpperCase();
-  const upstream = await fetch(base.replace(/\/+$/, '') + (req.url ?? '/'), { method, headers, body: method === 'GET' || method === 'HEAD' || !body ? undefined : body, redirect: 'manual' });
+  const upstream = await netFetch(base.replace(/\/+$/, '') + (req.url ?? '/'), { method, headers, body: method === 'GET' || method === 'HEAD' || !body ? undefined : body, redirect: 'manual' });
   const buf = Buffer.from(await upstream.arrayBuffer());
   const out: Record<string, string> = { ...cors, 'x-mock-forwarded': 'true', 'content-length': String(buf.length) };
   upstream.headers.forEach((v, k) => {
