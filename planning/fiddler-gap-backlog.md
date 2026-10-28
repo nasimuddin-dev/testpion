@@ -299,3 +299,14 @@ Not claimed: "free" (Classic is free), "open source" (unchecked), "faster" (no b
 4. Which comes first for your users: corporate gateway and client certificates (FG-9) or the AI traffic inspector (FG-18)?
 5. Should throttling (FG-1) be a global "Network speed" switch only, or also a per-rule setting (more power, more UI)?
 6. May rules and sessions travel in a Fiddler-compatible format (SAZ export, FARX import, FG-22) even though FARX is not publicly specified and needs reverse engineering from sample files?
+
+## Decisions on the open questions (2026-10-28, chosen by the owner's request "pick which one is best for the app")
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| 1 | Per-process capture for programs that ignore the system proxy | **Launcher first (FG-14, S)**: start the program with the right proxy switches and CA variables, and turn off HTTP/3 for browsers (Q5). Per-process capture (L) only if users ask after that. | Most "missing" traffic is a program started without the proxy or a browser using QUIC; the launcher fixes both for a day of work and needs no driver or admin rights. |
+| 2 | Share a session | **Local first**: a masked bundle file plus git (FG-24). A hosted link is a cloud-version feature. | Matches "cloud integration last"; the masked bundle already exists; nothing to host or secure yet. |
+| 3 | JS scripting API for rules | **Declarative rules are the ceiling for 0.55–0.59**; add JS rule scripts (FG-21) at 0.60 on the existing QuickJS sandbox with the script-trust gate and a small `tp.*` rule API. | Keeps the Debugger simple and safe now, and avoids a second scripting model: the sandbox, trust and worker pool already exist. |
+| 4 | Gateway/client certificates vs AI traffic inspector | **Gateway, custom CA and client certificates first (FG-9)**, pulled into 0.56; the AI traffic inspector (FG-18) follows in 0.60. | A user behind a corporate proxy or mutual TLS cannot capture at all without FG-9: it blocks adoption. FG-18 is a differentiator that builds on a working capture. |
+| 5 | Throttling | **One global "Network speed" switch with presets** (modem, 3G, slow 4G, custom) first (FG-1); a per-rule bandwidth cap later as one more rule kind (rules already carry `delayMs`). | The global switch covers the common case with one control; the per-rule form reuses the rules panel and needs no new UI pattern. |
+| 6 | Fiddler-compatible formats | **Yes**: SAZ export (a documented zip format, we already import it); FARX import as best-effort, read-only, labelled "partial import" with a list of what was skipped; no FARX export. | Moving a Fiddler user's data in is the adoption path; promising a round trip for an unpublished format would be a false claim. |
