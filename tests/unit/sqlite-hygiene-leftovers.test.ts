@@ -58,6 +58,7 @@ describe('D-8 the log file sink', () => {
     const log = join(dir, 'app.log');
     const sink = fileSink(log, 2000);
     for (let i = 0; i < 100; i++) sink({ time: 'now', level: 'INFO', scope: 'x', message: `record ${i} ${'.'.repeat(40)}` } as never);
+    sink.flush?.();
     expect(existsSync(`${log}.1`)).toBe(true);
     expect(readFileSync(log, 'utf8').length).toBeLessThan(2400);
     expect(lines(log).every((l) => JSON.parse(l).scope === 'x')).toBe(true);

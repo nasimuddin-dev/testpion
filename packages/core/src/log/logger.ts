@@ -1,4 +1,5 @@
 import { appendFileSync, mkdirSync, statSync, renameSync } from 'node:fs';
+import { appendFile as appendFileP } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { Redactor } from '../util/redact.js';
 import { restrictToOwner } from '../storage/private-acl.js';
@@ -14,7 +15,8 @@ export interface LogRecord {
   data?: unknown;
 }
 
-export type LogSink = (rec: LogRecord) => void;
+/** A sink; one that buffers has `flush()` (writes what it holds now). */
+export type LogSink = ((rec: LogRecord) => void) & { flush?: () => void };
 
 /**
  * Structured logger. Every record passes through the redactor before reaching any sink,
@@ -96,21 +98,42 @@ export class Logger {
   }
 }
 
+/** Sinks that may hold lines not yet written, flushed when the process exits (the newest 64: a session's sink leaves with its Backend). */
+const liveSinks = new Set<() => void>(); // bounded: trimmed to 64 below
+let exitHooked = false; // bounded: a flag
+const PENDING_CAP = 2 * 1024 * 1024;
+
 /**
- * JSON-lines file sink with simple size-based rotation. The sink counts the bytes it wrote, so a record is one append (it was a
- * stat and an append: at TRACE level a record is written per RPC); the size is read again every 200 records, since another process
- * (a CLI run) may append to the same file. No handle is kept open (Windows cannot rename or remove a file that is).
+ * JSON-lines file sink with simple size-based rotation. INFO and below are batched: a record is a string in memory, and the batch
+ * is appended with one asynchronous write a few milliseconds later (at TRACE level a record is written per RPC; a synchronous
+ * append per record stalled the thread on a slow disk). WARN and ERROR go out at once and synchronously, after whatever is pending,
+ * so a crash right after them still finds them; the process exit writes what is left. The buffer is bounded (2 MB: the oldest
+ * lines are dropped, and the file says how many). `flush()` writes everything now (tests, shutdown).
+ * The sink counts the bytes it wrote and reads the size again every 200 writes, since another process (a CLI run) may append to
+ * the same file. No handle is kept open (Windows cannot rename or remove a file that is).
  */
 export function fileSink(path: string, maxBytes = 10 * 1024 * 1024): LogSink {
   // the log can hold what an error message carried: readable by this account only (POSIX; Windows keeps the profile's permissions)
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   let restricted = false;
-  let bytes = -1; // unknown: read at the first record
+  let bytes = statSync(path, { throwIfNoEntry: false })?.size ?? 0; // re-read every 200 writes
   let sinceStat = 0;
-  return (rec) => {
-    const line = JSON.stringify(rec) + '\n';
+  let pending: string[] = [];
+  let pendingBytes = 0;
+  let dropped = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  /** The text to write now, with the rotation decided first. */
+  const take = (): string => {
+    clearTimeout(timer);
+    timer = undefined;
+    const note = dropped ? JSON.stringify({ time: new Date().toISOString(), level: 'WARN', scope: 'log', message: `${dropped} log lines were dropped (the writer fell behind)` }) + '\n' : '';
+    const text = note + pending.join('');
+    pending = [];
+    pendingBytes = 0;
+    dropped = 0;
+    if (!text) return '';
     try {
-      if (bytes < 0 || ++sinceStat >= 200) {
+      if (++sinceStat >= 200) {
         bytes = statSync(path, { throwIfNoEntry: false })?.size ?? 0;
         sinceStat = 0;
       }
@@ -121,14 +144,55 @@ export function fileSink(path: string, maxBytes = 10 * 1024 * 1024): LogSink {
     } catch {
       /* ignore */
     }
-    appendFileSync(path, line, { mode: 0o600 });
-    bytes += Buffer.byteLength(line);
-    if (!restricted) {
-      restricted = true;
-      restrictToOwner(dirname(path), 'dir'); // Windows: this user only (best effort, once)
-      restrictToOwner(path, 'file');
-    }
+    bytes += Buffer.byteLength(text);
+    return text;
   };
+  const restrict = () => {
+    if (restricted) return;
+    restricted = true;
+    restrictToOwner(dirname(path), 'dir'); // Windows: this user only (best effort, once)
+    restrictToOwner(path, 'file');
+  };
+  const flush = (): void => {
+    const text = take();
+    if (!text) return;
+    appendFileSync(path, text, { mode: 0o600 });
+    restrict();
+  };
+  const sink: LogSink = (rec) => {
+    const line = JSON.stringify(rec) + '\n';
+    pending.push(line);
+    pendingBytes += line.length;
+    if (bytes + pendingBytes > maxBytes) return flush(); // this write rotates the file: not as part of a big batch
+    if (rec.level === 'ERROR' || rec.level === 'WARN') return flush();
+    if (pendingBytes > PENDING_CAP) {
+      const cut = pending.length >> 1;
+      dropped += cut;
+      pendingBytes -= pending.splice(0, cut).reduce((n, l) => n + l.length, 0);
+    }
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      const text = take();
+      if (text) appendFileP(path, text, { mode: 0o600 }).then(restrict, () => undefined);
+    }, 20);
+    timer.unref();
+  };
+  sink.flush = flush;
+  liveSinks.add(flush);
+  if (liveSinks.size > 64) liveSinks.delete(liveSinks.values().next().value!);
+  if (!exitHooked) {
+    exitHooked = true;
+    process.on('exit', () => {
+      for (const f of liveSinks) {
+        try {
+          f();
+        } catch {
+          /* the process is ending */
+        }
+      }
+    });
+  }
+  return sink;
 }
 
 export function consoleSink(minLevel: LogLevel = 'TRACE'): LogSink {
