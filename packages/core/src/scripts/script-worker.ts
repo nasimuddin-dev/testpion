@@ -20,8 +20,8 @@ const ctl = new Int32Array(shared, 0, 8);
 const HEADER = 32;
 const replies = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>(); // bounded: the sends of the one job in flight
 let reqSeq = 0;
-let pkgSeq = 0;
-let requireWaitMs = 10_000;
+let pkgSeq = 0; // bounded: a counter, one per worker thread
+let requireWaitMs = 10_000; // bounded: a number, set by each job of this worker thread
 
 function sendRequest(jobId: number, request: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
