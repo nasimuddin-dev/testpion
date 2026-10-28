@@ -23,6 +23,12 @@ files:
   - "!dist-electron/web-server.cjs"
   - package.json
 asar: true
+# worker_threads load the script worker (packages/core/src/scripts/script-worker.ts) by a real file path, and the worker requires the lazy
+# bundles next to it: both must be files on disk, not entries of app.asar (the pool is on by default; security review 2026-10-27).
+# (Unpacked files are outside the asar integrity check; both are built from this repository by scripts/build-main.mjs.)
+asarUnpack:
+  - dist-electron/script-worker.cjs
+  - dist-electron/lazy/**
 # The examples workspace (public APIs, every protocol): copied into the user's data folder and opened on first launch.
 extraResources:
   # the window icon (Linux and macOS windows; Windows also takes it from the .exe)
