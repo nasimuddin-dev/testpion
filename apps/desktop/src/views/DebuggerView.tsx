@@ -840,6 +840,11 @@ export function DebuggerView() {
                     }
                   />
                   <span className="ml-auto flex items-center gap-1.5">
+                    {filtersOn && (
+                      <Button size="sm" variant="ghost" icon={<X size={13} />} title="Show every exchange again: clear the text, the dropdowns, the checkboxes and the chips" data-clear-filters onClick={() => setFilter(noFilter)}>
+                        Clear filters
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" icon={<Save size={13} />} disabled={!rows.length} title={rows.length ? 'Save the session to open it later' : 'Nothing captured yet'} onClick={() => void saveSession()}>
                       Save session
                     </Button>

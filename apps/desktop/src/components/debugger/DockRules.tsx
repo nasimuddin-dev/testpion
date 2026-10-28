@@ -61,6 +61,27 @@ export function RuleList({
   const rules = (state?.rules ?? []).filter((r) => kinds.includes(r.kind) && (!f || r.name.toLowerCase().includes(f) || (r.summary ?? '').toLowerCase().includes(f)));
   const hits = state?.hits ?? {};
   const act = (p: Promise<RulesState>) => void p.then(onChange, toastError);
+  // every rule of this panel at once, with one Undo that puts them back where they were
+  const clearAll = () => {
+    const all = state?.rules ?? [];
+    const mine = all.map((r, at) => ({ r, at })).filter((x) => kinds.includes(x.r.kind));
+    void deleteWithUndo({
+      what: `all ${mine.length} rules of this list`,
+      run: async () => {
+        let s: RulesState | undefined;
+        for (const { r } of mine) s = await call<RulesState>('debug.deleteRule', { id: r.id });
+        if (s) onChange(s);
+      },
+      undo: async () => {
+        let s: RulesState | undefined;
+        for (const { r, at } of mine) {
+          const saved = await call<RulesState & { rule?: Rule }>('debug.saveRule', { rule: r });
+          s = await call<RulesState>('debug.moveRule', { id: saved.rule?.id ?? r.id, to: at });
+        }
+        if (s) onChange(s);
+      },
+    });
+  };
   const addButton = (
     <Button size="sm" icon={<Plus size={12} />} onClick={add.onClick} title={add.label}>
       Add
@@ -76,6 +97,9 @@ export function RuleList({
         <FilterInput className="flex-1" placeholder="Filter rules" label="Filter rules" value={find} onChange={setFind} />
         <IconButton size="md" label="Reset hits: count the hits from zero" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>
           <RotateCcw />
+        </IconButton>
+        <IconButton size="md" label="Remove every rule of this list (Undo brings them back)" disabled={!rules.length || !!f} data-clear-rules onClick={clearAll}>
+          <Trash2 />
         </IconButton>
         {add.items ? <Menu width={220} items={add.items} trigger={addButton} /> : addButton}
       </div>
