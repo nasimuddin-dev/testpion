@@ -62,6 +62,37 @@ describe('SSE hub with backpressure', () => {
     fast.close();
   });
 
+  it('the queue of a client that never reads is bounded by characters too: 2,000 events of 1 MB hold at most the byte cap', async () => {
+    const cap = 8 * 1024 * 1024;
+    const hub = new SseHub(1000, cap);
+    const port = await bridge(hub);
+    const slow = client(port, false);
+    await sleep(150);
+    const mb = 'z'.repeat(1024 * 1024);
+    let most = 0;
+    for (let i = 0; i < 2000; i++) {
+      hub.broadcast('run.events', { seq: i, pad: mb });
+      most = Math.max(most, hub.queuedBytes);
+    }
+    // the count cap alone (1,000 events) would have held about 1 GB; the byte cap holds a few events
+    expect(most).toBeLessThanOrEqual(cap + 2 * 1024 * 1024);
+    expect(hub.dropped).toBeGreaterThan(1500);
+    expect(hub.size).toBe(1); // the events could be lost: the client stays
+    slow.close();
+  }, 30_000);
+
+  it('events that must be kept past the byte cap disconnect the client; the queue is let go', async () => {
+    const hub = new SseHub(1000, 4 * 1024 * 1024);
+    const port = await bridge(hub);
+    const slow = client(port, false);
+    await sleep(150);
+    const mb = 'k'.repeat(1024 * 1024);
+    for (let i = 0; i < 200 && hub.size; i++) hub.broadcast('data.changed', { seq: i, pad: mb });
+    expect(hub.disconnected).toBe(1);
+    expect(hub.queuedBytes).toBe(0);
+    slow.close();
+  }, 30_000);
+
   it('a client that falls behind on events that must not be lost is disconnected', async () => {
     const hub = new SseHub(50);
     const port = await bridge(hub);
@@ -76,7 +107,7 @@ describe('SSE hub with backpressure', () => {
   });
 
   it('the queue empties on drain when the client starts reading again', async () => {
-    const hub = new SseHub(5000);
+    const hub = new SseHub(5000, 64 * 1024 * 1024);
     const port = await bridge(hub);
     let bytes = 0;
     let resume!: () => void;
