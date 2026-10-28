@@ -3,6 +3,8 @@ import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { Command, Option } from 'commander';
 import { createInterface } from 'node:readline';
 import {
+  describeNetworkSpeed,
+  parseNetworkSpeed,
   collectionFromExchanges,
   type CaptureGrouping,
   exchangesToHar,
@@ -410,6 +412,10 @@ ${cyan(r.url)}`);
     .option('--rules <file.json>', "rules to apply (the app's debugger/rules.json: ignore, highlight, modify, reply, redirect); the file is re-read when it changes")
     .option('--decrypt', 'decrypt HTTPS with the TestPion root certificate (~/.testpion/debugger; the program must trust it)')
     .option('--system-proxy', "point this computer's proxy setting at the capture, so every program that follows it is captured; Ctrl+C puts it back")
+    .option('--throttle <speed>', 'Network speed (FG-1): pace every forwarded request and response: modem, edge, slow-3g, 3g, slow-4g, or custom with --down-kbps / --up-kbps / --latency-ms')
+    .option('--down-kbps <n>', 'with --throttle custom: download kilobits per second')
+    .option('--up-kbps <n>', 'with --throttle custom: upload kilobits per second (default: as --down-kbps)')
+    .option('--latency-ms <n>', 'with --throttle custom: milliseconds added to every request')
     .option('--paused', 'start with listing paused: the proxy forwards, nothing is printed or saved; type resume (then Enter) to list, pause to stop listing again')
     .option('--dry-run', 'change nothing: print what it would do')
     .option('-w, --workspace <nameOrPath>', "decode gRPC messages with the .proto files of this workspace's gRPC calls (default: the nearest workspace.json, if any)")
@@ -417,7 +423,7 @@ ${cyan(r.url)}`);
     .option('--save-collection [name]', 'when stopped, save the exchanges as requests in a new collection of the workspace (secrets become variables, never saved)')
     .option('--to <collection>', 'with --save-collection: add them to this collection instead (in a folder [name] when given)')
     .addOption(new Option('--group <how>', 'with --save-collection: a folder per host, per first path segment, or none').choices(['host', 'path', 'none']).default('host'))
-    .action(async (o: { port: string; lan?: boolean; paused?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; to?: string; group: CaptureGrouping }) => {
+    .action(async (o: { port: string; lan?: boolean; paused?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; throttle?: string; downKbps?: string; upKbps?: string; latencyMs?: string; to?: string; group: CaptureGrouping }) => {
       if (o.dryRun) {
         const wouldDo = [`start the proxy on port ${Number(o.port) || 8899}${o.lan ? ' on every interface' : ''}`, ...(o.decrypt ? ['decrypt HTTPS with the TestPion root certificate'] : []), ...(o.systemProxy ? ['point this computer’s proxy setting at it (Ctrl+C puts it back)'] : []), ...(o.out ? [`save the session as HAR to ${o.out} when stopped`] : [])];
         if (machine()) emitEvent('dry-run', { wouldDo });
@@ -446,11 +452,19 @@ ${cyan(r.url)}`);
       const leaf = root ? leafSigner(root) : undefined;
       // gRPC: decoded with the workspace's protos when there is a workspace, else field by field
       let protoRoots: ReturnType<typeof workspaceProtoRoots> = [];
+      let workspaceRoot: string | undefined;
       try {
-        protoRoots = await withWorkspace(o.workspace, (store) => workspaceProtoRoots(store));
+        await withWorkspace(o.workspace, (store) => ((protoRoots = workspaceProtoRoots(store)), (workspaceRoot = store.root)));
       } catch {
-        /* no workspace here: field by field */
+        /* no workspace here: field by field, and map-local rules have no folder to read */
       }
+      let speed: ReturnType<typeof parseNetworkSpeed>;
+      try {
+        speed = o.throttle ? parseNetworkSpeed({ preset: o.throttle, downKbps: o.downKbps ? Number(o.downKbps) : undefined, upKbps: o.upKbps ? Number(o.upKbps) : undefined, latencyMs: o.latencyMs ? Number(o.latencyMs) : undefined }) : undefined;
+      } catch (e) {
+        throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+      }
+      if (speed) console.error(dim(`Network speed: ${describeNetworkSpeed(speed)}`));
       // listing can be paused while the proxy goes on forwarding (FG-13): `pause` and `resume` on the terminal's input
       let paused = !!o.paused;
       const proxy = await startDebuggerProxy({
@@ -460,6 +474,8 @@ ${cyan(r.url)}`);
         port: Number(o.port) || undefined,
         lan: !!o.lan,
         rules,
+        speed: () => speed,
+        workspaceRoot: () => workspaceRoot,
         ...(leaf ? { decrypt: { leafFor: leaf, enabled: () => true } } : {}),
         onExchange: (e, phase) => {
           if (phase !== 'response') return;

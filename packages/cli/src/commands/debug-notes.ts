@@ -3,15 +3,19 @@
  *   debugger breakpoints <mode>   the one managed "Auto breakpoint" rule of a rules file (FG-5)
  *   debugger annotate <har> <ref> a note and a colour mark on one entry of a HAR file (FG-11)
  *   debugger presets              the ready-made rules (Disable caching, User agent, Hide…), listed or added to a rules file (FG-15)
+ *   debugger remap                host remapping rules (FG-4): add api.test=localhost:3000, list, remove, import the OS hosts file
+ *   debugger rule                 any rule as JSON (map local, rewrite, faults, WebSocket frames: FG-6, FG-7, FG-26), listed, added or removed
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import {
   AUTO_BREAKPOINT_LABEL,
   annotateHarEntry,
   autoBreakpointMode,
+  checkRuleShape,
   defaultRules,
   describeRule,
+  parseHostsFile,
   parseAutoBreakpointMode,
   rulePresets,
   shortId,
@@ -136,5 +140,97 @@ export function registerDebugNotesCommands(program: Command): void {
       if (!o.dryRun) write([...active, rule]);
       if (o.json) return printJson({ file, added: { ...rule, summary: describeRule(rule) }, changed: !o.dryRun });
       console.log(`${green(o.dryRun ? 'Would add' : 'Added')} ${rule.name} to ${file}`);
+    });
+
+  program
+    .command('debug-remap')
+    .description('host remapping (FG-4): reach a host at another host, IP or port. `debug remap api.test=localhost:3000 --keep-host` adds a rule to a rules file; --list shows the remaps, --remove <host> deletes one, --import-hosts adds the OS hosts file as rules that are switched off')
+    .argument('[mapping]', 'host=target, e.g. api.test=localhost:3000 or shop.test=10.0.0.5')
+    .option('--keep-host', 'keep the original Host header and TLS name (as a hosts-file entry would)')
+    .addOption(new Option('--scheme <scheme>', 'the protocol used to reach the target').choices(['auto', 'http', 'https']).default('auto'))
+    .option('--list', 'list the remap rules of the file')
+    .option('--remove <host>', 'remove the remap rules for this host')
+    .option('--import-hosts [file]', 'add the entries of the OS hosts file (or the file given) as remap rules, switched off')
+    .option('--rules <file.json>', "the rules file (default: the workspace's debugger/rules.json)")
+    .option('--dry-run', 'change nothing: say what would be written')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
+    .action(async (mapping: string | undefined, o: RulesOpts & { keepHost?: boolean; scheme: 'auto' | 'http' | 'https'; list?: boolean; remove?: string; importHosts?: string | boolean }) => {
+      const file = await rulesPath(o);
+      const { active, write } = readRules(file);
+      const remaps = (rules: DebuggerRule[]) => rules.filter((r) => r.kind === 'remap').map((r) => ({ id: r.id, host: r.match.host, to: r.remap?.to, scheme: r.remap?.scheme ?? 'auto', keepHost: !!r.remap?.preserveHost, enabled: r.enabled }));
+      let next = active;
+      const added: DebuggerRule[] = [];
+      if (mapping) {
+        const i = mapping.indexOf('=');
+        if (i < 1 || i === mapping.length - 1) throw new CliError('Give the mapping as host=target, e.g. api.test=localhost:3000', EXIT.CONFIG_ERROR);
+        const rule: DebuggerRule = { id: shortId('rule-'), name: `Remap ${mapping.slice(0, i)}`, enabled: true, kind: 'remap', match: { host: mapping.slice(0, i) }, remap: { to: mapping.slice(i + 1), scheme: o.scheme, ...(o.keepHost ? { preserveHost: true } : {}) } };
+        const bad = checkRuleShape(rule);
+        if (bad) throw new CliError(bad, EXIT.CONFIG_ERROR);
+        added.push(rule);
+      }
+      if (o.importHosts !== undefined && o.importHosts !== false) {
+        const hostsFile = typeof o.importHosts === 'string' ? o.importHosts : process.platform === 'win32' ? `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\drivers\\etc\\hosts` : '/etc/hosts';
+        if (!existsSync(hostsFile)) throw new CliError(`No hosts file at ${hostsFile}`, EXIT.CONFIG_ERROR);
+        for (const h of parseHostsFile(readFileSync(hostsFile, 'utf8'))) {
+          if ([...active, ...added].some((r) => r.kind === 'remap' && r.match.host === h.host)) continue;
+          added.push({ id: shortId('rule-'), name: `Hosts file: ${h.host}`, enabled: false, kind: 'remap', match: { host: h.host }, remap: { to: h.address, preserveHost: true } });
+        }
+      }
+      let removed = 0;
+      if (o.remove) {
+        next = active.filter((r) => !(r.kind === 'remap' && r.match.host === o.remove));
+        removed = active.length - next.length;
+        if (!removed) throw new CliError(`No remap rule for ${o.remove}`, EXIT.CONFIG_ERROR);
+      }
+      const changed = (added.length > 0 || removed > 0) && !o.dryRun;
+      if (changed) write([...next, ...added]);
+      const out = { file, remaps: remaps([...next, ...added]), added: added.length, removed, changed, ...(o.dryRun ? { dryRun: true } : {}) };
+      if (o.json) return printJson(out);
+      if (added.length || removed) console.log(`${green(o.dryRun ? 'Would change' : 'Changed')} ${file}: ${added.length} added, ${removed} removed`);
+      for (const r of out.remaps) console.log(`${r.enabled ? ' ' : dim('-')} ${String(r.host).padEnd(28)} -> ${r.to}${r.scheme !== 'auto' ? ` (${r.scheme})` : ''}${r.keepHost ? dim(' keeps the Host header') : ''}`);
+    });
+
+  program
+    .command('debug-rule')
+    .description('any Debugger rule as JSON, so a script or an agent can do what the rule editor does: map local (reply.file / reply.folder), redirect with a path rewrite, modify with requestReplace / responseReplace / setStatus, fault (drop, timeout, truncate, error), frame (WebSocket), remap. `--add \'{"kind":"fault",...}\'` (or @file.json) appends it, --list shows the rules, --remove <id> deletes one')
+    .option('--add <json>', 'a rule object, or @path to a JSON file with one')
+    .option('--list', 'list the rules of the file, with what each does')
+    .option('--remove <id>', 'remove a rule by id')
+    .option('--rules <file.json>', "the rules file (default: the workspace's debugger/rules.json)")
+    .option('--dry-run', 'change nothing: say what would be written')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
+    .action(async (o: RulesOpts & { add?: string; list?: boolean; remove?: string }) => {
+      const file = await rulesPath(o);
+      const { active, write } = readRules(file);
+      let next = active;
+      let added: DebuggerRule | undefined;
+      if (o.add) {
+        let raw: Partial<DebuggerRule>;
+        try {
+          raw = JSON.parse(o.add.startsWith('@') ? readFileSync(o.add.slice(1), 'utf8') : o.add) as Partial<DebuggerRule>;
+        } catch (e) {
+          throw new CliError(`--add is not valid JSON: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+        }
+        const kinds = ['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame'];
+        if (!raw || typeof raw !== 'object' || !kinds.includes(String(raw.kind))) throw new CliError(`A rule has a kind: ${kinds.join(', ')}`, EXIT.CONFIG_ERROR);
+        const rule: DebuggerRule = { ...(raw as DebuggerRule), id: shortId('rule-'), enabled: raw.enabled !== false, match: raw.match ?? {}, name: raw.name ?? '' };
+        rule.name = rule.name || describeRule(rule);
+        const bad = checkRuleShape(rule);
+        if (bad) throw new CliError(bad, EXIT.CONFIG_ERROR);
+        added = rule;
+      }
+      if (o.remove) {
+        next = active.filter((r) => r.id !== o.remove);
+        if (next.length === active.length) throw new CliError(`No rule ${o.remove}`, EXIT.CONFIG_ERROR);
+      }
+      const changed = (!!added || next !== active) && !o.dryRun;
+      if (changed) write(added ? [...next, added] : next);
+      const rules = (added ? [...next, added] : next).map((r) => ({ id: r.id, name: r.name, kind: r.kind, enabled: r.enabled, summary: describeRule(r) }));
+      const out = { file, ...(added ? { added: { ...added, summary: describeRule(added) } } : {}), rules, changed, ...(o.dryRun ? { dryRun: true } : {}) };
+      if (o.json) return printJson(out);
+      if (added) console.log(`${green(o.dryRun ? 'Would add' : 'Added')} ${added.name} to ${file}`);
+      if (o.list || (!added && !o.remove)) for (const r of rules) console.log(`${r.enabled ? ' ' : dim('-')} ${r.id.padEnd(22)} ${r.kind.padEnd(10)} ${r.summary}`);
     });
 }

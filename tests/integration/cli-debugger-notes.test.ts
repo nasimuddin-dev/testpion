@@ -87,3 +87,46 @@ describe('debugger capture --paused', () => {
     expect(r.status, r.err).toBe(0);
   });
 });
+
+describe('debugger remap and rule (FG-4, FG-6, FG-7, FG-26)', () => {
+  it('adds, lists and removes host remaps, and imports a hosts file switched off', () => {
+    const file = join(tmp.dir, 'remap.json');
+    writeFileSync(file, '[]');
+    const added = run(['debugger', 'remap', 'api.test=localhost:3000', '--keep-host', '--rules', file, '--json']);
+    expect(added.status, added.err).toBe(0);
+    expect(json(added).remaps).toEqual([expect.objectContaining({ host: 'api.test', to: 'localhost:3000', keepHost: true, enabled: true })]);
+    expect(JSON.parse(readFileSync(file, 'utf8'))[0]).toMatchObject({ kind: 'remap', match: { host: 'api.test' }, remap: { to: 'localhost:3000', preserveHost: true } });
+    const hosts = join(tmp.dir, 'hosts');
+    writeFileSync(hosts, '# test\n127.0.0.1 localhost\n10.1.1.1 shop.test api.test\n');
+    const imported = run(['debugger', 'remap', '--import-hosts', hosts, '--rules', file, '--json']);
+    expect(imported.status, imported.err).toBe(0);
+    expect(json(imported).added).toBe(1); // api.test is already remapped
+    expect(JSON.parse(readFileSync(file, 'utf8'))[1]).toMatchObject({ enabled: false, match: { host: 'shop.test' } });
+    expect(run(['debugger', 'remap', 'bad', '--rules', file, '--json']).status).toBe(2);
+    expect(json(run(['debugger', 'remap', '--remove', 'api.test', '--rules', file, '--json'])).removed).toBe(1);
+    expect(run(['debugger', 'remap', '--remove', 'nope.test', '--rules', file, '--json']).status).toBe(2);
+    const dry = run(['debugger', 'remap', 'x.test=y.test', '--dry-run', '--rules', file, '--json']);
+    expect(json(dry)).toMatchObject({ changed: false, dryRun: true });
+  });
+
+  it('adds a rule of any kind from JSON and refuses one that cannot work', () => {
+    const file = join(tmp.dir, 'rule.json');
+    writeFileSync(file, '[]');
+    const fault = run(['debugger', 'rule', '--add', '{"kind":"fault","match":{"host":"api.test"},"fault":{"action":"error","status":503,"percent":20}}', '--rules', file, '--json']);
+    expect(fault.status, fault.err).toBe(0);
+    expect(json(fault).added.summary).toBe('For api.test: answer 503 in 20% of requests');
+    const local = run(['debugger', 'rule', '--add', '{"kind":"reply","match":{"url":"*/users"},"reply":{"status":200,"file":"mocks/users.json"}}', '--rules', file, '--json']);
+    expect(local.status, local.err).toBe(0);
+    expect(run(['debugger', 'rule', '--add', '{"kind":"reply","match":{},"reply":{"status":200,"file":"../secret"}}', '--rules', file, '--json']).status).toBe(2);
+    expect(run(['debugger', 'rule', '--add', '{"kind":"fault","match":{},"fault":{"action":"explode"}}', '--rules', file, '--json']).status).toBe(2);
+    expect(run(['debugger', 'rule', '--add', '{"kind":"frame","match":{},"frame":{"action":"replace","find":"(a+)+b","regex":true,"replace":"x"}}', '--rules', file, '--json']).status).toBe(2);
+    const rules = json(run(['debugger', 'rule', '--list', '--rules', file, '--json'])).rules as Array<{ id: string; kind: string }>;
+    expect(rules.map((r) => r.kind)).toEqual(['fault', 'reply']);
+    expect(run(['debugger', 'rule', '--remove', rules[0]!.id, '--rules', file, '--json']).status).toBe(0);
+    expect((JSON.parse(readFileSync(file, 'utf8')) as unknown[]).length).toBe(1);
+  });
+
+  it('capture knows --throttle', () => {
+    expect(run(['debugger', 'capture', '--throttle', '3g', '--dry-run', '--json']).status).toBe(0);
+  });
+});

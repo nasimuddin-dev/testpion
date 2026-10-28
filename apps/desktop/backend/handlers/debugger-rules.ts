@@ -23,9 +23,12 @@ import {
   atomicWriteAsync,
   debuggerRulesFileValue,
   stableText,
+  checkRuleShape,
+  parseHostsFile,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { existsSync, readFileSync } from 'node:fs';
+import { debuggerSpeedHandlers } from './debugger-speed.js';
 import { newDebuggerState, type DebuggerState } from './debugger-state.js';
 
 export interface PendingBreakpoint {
@@ -96,15 +99,16 @@ export function holdBreakpoint(be: Backend, state: DebuggerState, e: DebuggerExc
   });
 }
 
-const validKinds = new Set(['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint']);
+const validKinds = new Set(['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame']);
 
 /** A rule as sent by the window or an agent, checked. */
 function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
   if (!r || typeof r !== 'object') throw new ApsError('ValidationError', 'A rule is an object');
   if (!validKinds.has(String(r.kind)))
-    throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore (filter out), only (capture only), highlight, modify, reply, redirect, breakpoint.'] });
+    throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore (filter out), only (capture only), highlight, modify, reply, redirect, breakpoint, remap, fault, frame.'] });
   const name = String(r.name ?? '').trim() || describeRule({ ...(r as DebuggerRule), name: '' });
-  if (r.kind === 'redirect' && !r.redirect?.host?.trim()) throw new ApsError('ValidationError', 'A redirect rule needs a host (host:port)');
+  const problem = checkRuleShape(r as DebuggerRule);
+  if (problem) throw new ApsError('ValidationError', problem);
   const where = r.match?.where;
   if (where) {
     if ((r.kind === 'only' || r.kind === 'ignore') && ['ip', 'status', 'type', 'duration', 'size'].includes(where.column))
@@ -136,6 +140,12 @@ function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
     ...(r.reply ? { reply: r.reply } : {}),
     ...(r.redirect ? { redirect: r.redirect } : {}),
     ...(r.breakpoint ? { breakpoint: r.breakpoint } : {}),
+    ...(r.requestReplace?.length ? { requestReplace: r.requestReplace } : {}),
+    ...(r.responseReplace?.length ? { responseReplace: r.responseReplace } : {}),
+    ...(r.setStatus ? { setStatus: Number(r.setStatus) } : {}),
+    ...(r.remap ? { remap: r.remap } : {}),
+    ...(r.fault ? { fault: r.fault } : {}),
+    ...(r.frame ? { frame: r.frame } : {}),
   };
 }
 
@@ -159,12 +169,29 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
     };
   };
   return {
+    ...debuggerSpeedHandlers(be, state),
     'debug.rules': () => list(),
     'debug.resetRuleHits': () => {
       state.proxy?.resetRuleHits();
       return list();
     },
     'debug.rulePresets': ({ host }: { host?: string } = {}) => rulePresets(host).map((p) => ({ id: p.id, label: p.label, summary: describeRule({ ...p.rule, id: p.id }) })),
+    /** Host remapping (FG-4): the OS hosts file's entries as remap rules, switched off (the person turns on the ones wanted). */
+    'debug.importHosts': async ({ path }: { path?: string } = {}) => {
+      const hostsPath = path ?? (process.platform === 'win32' ? `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\drivers\\etc\\hosts` : '/etc/hosts');
+      if (!existsSync(hostsPath)) throw new ApsError('ValidationError', `No hosts file at ${hostsPath}`);
+      const f = file();
+      const rules = (f.profiles[f.active] ??= []);
+      const added: DebuggerRule[] = [];
+      for (const h of parseHostsFile(readFileSync(hostsPath, 'utf8'))) {
+        if (rules.some((r) => r.kind === 'remap' && r.match.host === h.host)) continue;
+        const rule = cleanRule({ name: `Hosts file: ${h.host}`, enabled: false, kind: 'remap', match: { host: h.host }, remap: { to: h.address, preserveHost: true } });
+        rules.push(rule);
+        added.push(rule);
+      }
+      if (added.length) await save(be, state);
+      return { ...list(), imported: added.length, file: hostsPath };
+    },
     /** Add a preset (filled in for a host when given), or save a rule (new or changed). */
     'debug.addPreset': async ({ preset, host }: { preset: string; host?: string }) => {
       const p = rulePresets(host).find((x) => x.id === preset);
@@ -261,9 +288,12 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
         ignore: d.ignore,
         highlight: d.highlight,
         reply: d.reply?.status,
-        redirect: d.redirect?.host,
+        redirect: d.redirect?.host ?? (d.redirect?.rewrite ? 'the same host, another path' : undefined),
         breakpoint: d.breakpoint,
         delayMs: d.delayMs,
+        fault: d.fault?.action,
+        setStatus: d.setStatus,
+        frames: d.frames?.length,
         requestHeaders: d.requestHeaders,
         responseHeaders: d.responseHeaders,
       };

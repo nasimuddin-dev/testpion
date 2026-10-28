@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { debuggerTools } from '../../packages/core/src/mcp-server/tools/debugger-tools';
+import { Redactor } from '../../packages/core/src/util/redact';
 import { WebSocketServer } from 'ws';
 import {
   Pacer,
@@ -443,5 +445,27 @@ describe('WebSocket frame rules (FG-26)', () => {
       await talk(['never arrives'], 300);
       expect(fromClient).toEqual([]);
     });
+  });
+});
+
+describe('debugger_rules for agents', () => {
+  const run = async (t: ReturnType<typeof debuggerTools>, name: string, args: Record<string, unknown>) => {
+    const r = await t.find((x) => x.name === name)!.run(args as never);
+    return r as Record<string, any>;
+  };
+  it('takes the new rule kinds, refuses the ones that cannot work, and sets the network speed', async () => {
+    const t = debuggerTools({ redactor: new Redactor(), session: [] });
+    const remap = await run(t, 'debugger_rules', { action: 'add', rule: { kind: 'remap', match: { host: 'api.test' }, remap: { to: 'localhost:3000', preserveHost: true } } });
+    expect(remap.added.summary).toBe('Reach api.test at localhost:3000, keeping the Host header');
+    await run(t, 'debugger_rules', { action: 'add', rule: { kind: 'fault', match: {}, fault: { action: 'drop' } } });
+    await run(t, 'debugger_rules', { action: 'add', rule: { kind: 'frame', match: {}, frame: { action: 'drop', direction: 'received' } } });
+    await expect(run(t, 'debugger_rules', { action: 'add', rule: { kind: 'fault', match: {}, fault: { action: 'truncate' } } })).rejects.toThrow(/bytes to keep/);
+    await expect(run(t, 'debugger_rules', { action: 'add', rule: { kind: 'reply', match: {}, reply: { status: 200, file: '../x' } } })).rejects.toThrow(/inside the workspace/);
+    expect((await run(t, 'debugger_rules', { action: 'list' })).rules).toHaveLength(3);
+    expect((await run(t, 'debugger_rules', { action: 'speed' })).speed).toBeNull();
+    expect((await run(t, 'debugger_rules', { action: 'speed', speed: '3g' })).speed).toMatchObject({ preset: '3g' });
+    expect((await run(t, 'debugger_rules', { action: 'speed', speed: 'custom', down_kbps: 256, latency_ms: 50 })).label).toBe('Custom: 256 down / 256 up kbit/s, 50 ms');
+    await expect(run(t, 'debugger_rules', { action: 'speed', speed: 'dialup' })).rejects.toThrow(/No network speed/);
+    expect((await run(t, 'debugger_rules', { action: 'speed', speed: 'off' })).speed).toBeNull();
   });
 });

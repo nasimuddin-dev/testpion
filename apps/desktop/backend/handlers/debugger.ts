@@ -264,7 +264,8 @@ export function debuggerHandlers(be: Backend): Handlers {
     viewing,
     lan: !!state.lan,
     // rules that change what programs send or get (not ignore / highlight): the status bar shows them wherever you are
-    changingRules: state.proxy ? activeRules(be, state).filter((r) => r.enabled && (r.kind === 'modify' || r.kind === 'reply' || r.kind === 'redirect' || r.kind === 'breakpoint')).length : 0,
+    changingRules: state.proxy ? activeRules(be, state).filter((r) => r.enabled && ['modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame'].includes(r.kind)).length : 0,
+    speed: state.speed ?? null,
     running: !!state.proxy,
     paused: !!state.paused,
     url: state.proxy?.url,
@@ -514,6 +515,8 @@ export function debuggerHandlers(be: Backend): Handlers {
         grpcDecode: protos.decode,
         rootCertificatePem: () => (state.decrypt ? certificateOf(be, state).certPem : undefined),
         rules: () => activeRules(be, state),
+        speed: () => state.speed,
+        workspaceRoot: () => be.ws.root,
         listing: () => !state.paused,
         onBreakpoint: (e, phase) => holdBreakpoint(be, state, e, phase),
         decrypt: {
