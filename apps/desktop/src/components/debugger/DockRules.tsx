@@ -98,7 +98,7 @@ export function RuleList({
         <IconButton size="md" label="Reset hits: count the hits from zero" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>
           <RotateCcw />
         </IconButton>
-        <IconButton size="md" label="Remove every rule of this list (Undo brings them back)" disabled={!rules.length || !!f} data-clear-rules onClick={clearAll}>
+        <IconButton size="md" label="Remove every rule of this list (Undo brings them back)" disabled={!rules.length || !!f} reason={!rules.length ? 'No rules to remove' : 'Clear the search box first'} data-clear-rules onClick={clearAll}>
           <Trash2 />
         </IconButton>
         {add.items ? <Menu width={220} items={add.items} trigger={addButton} /> : addButton}
