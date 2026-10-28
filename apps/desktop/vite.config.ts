@@ -22,7 +22,8 @@ export default defineConfig({
   server: {
     // browser development mode: the backend bridge is proxied so there is no CORS surface
     proxy: {
-      '/__aps': { target: 'http://127.0.0.1:5174', changeOrigin: true, rewrite: (p) => p.replace(/^\/__aps/, '') },
+      // the bridge token (TESTPION_BRIDGE_TOKEN, set by scripts/dev.mjs) is added here as a header: never in the page, never in a URL
+      '/__aps': { target: 'http://127.0.0.1:5174', changeOrigin: true, rewrite: (p) => p.replace(/^\/__aps/, ''), headers: { 'x-aps-token': process.env.TESTPION_BRIDGE_TOKEN ?? '' } },
     },
   },
   build: {

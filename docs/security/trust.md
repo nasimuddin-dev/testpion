@@ -38,7 +38,7 @@ The command line and CI have no one to ask: pass `--trust-scripts` to `testpion 
 
 ## Local servers
 
-The recorder, the mock server, flow webhooks and the development bridge answer only to a `Host` of `localhost`, `127.0.0.1` or `::1` (a web page that points its own name at your computer is refused), the recorder gives CORS and credentials only to pages from this computer or origins you list, and never combines credentials with `*`.
+The recorder, the mock server, flow webhooks and the development bridge answer only to a `Host` of `localhost`, `127.0.0.1` or `::1` (a web page that points its own name at your computer is refused); the development bridge also wants its per-process token in an `x-aps-token` header (the dev server adds it) and refuses a token in a URL, where history, logs and `Referer` would keep it, the recorder gives CORS and credentials only to pages from this computer or origins you list, and never combines credentials with `*`.
 
 ## Files on this computer
 
