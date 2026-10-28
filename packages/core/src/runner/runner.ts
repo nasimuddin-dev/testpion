@@ -2,6 +2,7 @@ import { ENGINE_VERSION } from '../version.js';
 import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname } from 'node:path';
 import { startRunMarker } from '../storage/run-marker.js';
+import { endWithNewline } from '../util/jsonl-append.js';
 import { fileLines } from '../util/file-lines.js';
 import type { RunSummary, TestCase, TestResult, TestStatus, Trace } from '../model/types.js';
 import { ApsError, isAbortError, normalizeError } from '../errors.js';
@@ -258,6 +259,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   if (opts.resultsFile) {
     mkdirSync(dirname(opts.resultsFile), { recursive: true });
     endMarker = startRunMarker(dirname(opts.resultsFile)); // another process's housekeeping leaves a run in progress alone
+    if (opts.resume) endWithNewline(opts.resultsFile); // a torn last line must not swallow the first new result
     out = createWriteStream(opts.resultsFile, { flags: opts.resume ? 'a' : 'w' });
     out.on('error', (e) => {
       outError ??= e;
