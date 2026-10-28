@@ -28,13 +28,24 @@ class TopK<T> {
 
 /** When each exchange started, parsed once (an ISO date costs about a microsecond to parse: 5 ms for a session of 5,000, on every sync). */
 const started = new WeakMap<DebuggerExchange, number>();
-function startMs(e: DebuggerExchange): number {
+export function startMs(e: DebuggerExchange): number {
   let t = started.get(e);
   if (t === undefined) started.set(e, (t = Date.parse(e.startedAt)));
   return t;
 }
 
 const tallies = <K extends string>(m: Map<K, Tally>) => [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.bytes - a.bytes).slice(0, 20);
+
+/** The lean row of each exchange, kept with what it was built from; built again when the exchange changed, moved or the masking changed. */
+const leanRows = new WeakMap<DebuggerExchange, { rev: number; seq: number | undefined; firstAt: number | undefined; gen: number; dropped: boolean; row: unknown }>();
+export function cachedLeanRow<R>(e: DebuggerExchange, key: { rev: number; seq: number | undefined; firstAt: number | undefined; gen: number }, build: () => R): R {
+  const dropped = !!e.bodiesDropped;
+  const c = leanRows.get(e);
+  if (c && c.rev === key.rev && c.seq === key.seq && c.firstAt === key.firstAt && c.gen === key.gen && c.dropped === dropped) return c.row as R;
+  const row = build();
+  leanRows.set(e, { ...key, dropped, row });
+  return row;
+}
 
 /** Statistics of a session: by host, content type and program, the largest and the slowest, the timeline and the status mix; one pass over the exchanges. */
 export function sessionStats(exchanges: DebuggerExchange[], redactUrl: (url: string) => string) {
@@ -147,7 +158,7 @@ export class DeepSearchCache {
 }
 
 /** Run `step` over `items`, giving the event loop a turn whenever `sliceMs` have passed (a search over the bodies of a long session). */
-export async function inSlices<T>(items: T[], step: (x: T) => void, sliceMs = 12): Promise<void> {
+export async function inSlices<T>(items: T[], step: (x: T) => void, sliceMs = 8): Promise<void> {
   let t0 = performance.now();
   for (const x of items) {
     step(x);

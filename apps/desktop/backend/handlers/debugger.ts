@@ -41,7 +41,7 @@ import {
 } from '@testpion/core/desktop';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
-import { cachedSessionStats, DeepSearchCache, inSlices } from './debugger-stats.js';
+import { cachedLeanRow, cachedSessionStats, DeepSearchCache, inSlices, startMs } from './debugger-stats.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
 
 export { newDebuggerState, type DebuggerState, type IncomingRequest };
@@ -82,11 +82,19 @@ function replaced(state: DebuggerState): void {
   for (const e of state.exchanges) changed(state, e);
 }
 
+/** Rows of a changes answer built in one go; a longer list is built in slices. */
+const LEAN_AT_ONCE = 300;
+
 /**
  * A row of the grid: what the columns, filters and panels need, not the contents. Headers become their sizes;
  * bodies, frames, events and gRPC messages come with the one exchange (debug.exchange).
  */
 function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
+  const l = listOf(state);
+  // built once per revision (a reset of thousands of rows reads them from here)
+  return cachedLeanRow(e, { rev: l.revs.get(e) ?? 0, seq: l.seqs.get(e), firstAt: l.firstAt, gen: be.logger.redactor.generation }, () => buildLeanRow(be, state, e));
+}
+function buildLeanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
   const { requestBody: _rb, responseBody: _sb, frames, events, grpc, requestHeaders, responseHeaders, trailers: _t, ...rest } = e;
   const l = listOf(state);
   const size = (h?: Record<string, string>) => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
@@ -95,7 +103,7 @@ function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
     url: be.logger.redactor.redactUrl(e.url),
     requestHeaders: {},
     seq: l.seqs.get(e),
-    offsetSec: l.firstAt !== undefined ? (Date.parse(e.startedAt) - l.firstAt) / 1000 : 0,
+    offsetSec: l.firstAt !== undefined ? (startMs(e) - l.firstAt) / 1000 : 0,
     requestHeaderBytes: size(requestHeaders),
     responseHeaderBytes: responseHeaders ? size(responseHeaders) : undefined,
     requestContentType: requestHeaders['content-type'],
@@ -711,10 +719,17 @@ export function debuggerHandlers(be: Backend): Handlers {
      * (reset) when the list was replaced since `epoch`; `firstSeq` drops the rows the session no longer keeps.
      */
     'debug.changes': ({ epoch, since = 0 }: { epoch?: number; since?: number } = {}) => {
-      const l = listOf(shown());
+      const st = shown();
+      const l = listOf(st);
       const reset = epoch !== l.epoch;
-      const rows = shown().exchanges.filter((e) => reset || (l.revs.get(e) ?? 0) > since).map((e) => leanRow(be, shown(), e));
-      return { epoch: l.epoch, rev: l.rev, reset, rows, firstSeq: shown().exchanges.length ? l.seqs.get(shown().exchanges[0]!) : undefined, total: shown().exchanges.length };
+      // what the answer says is fixed now; a row that changes while a long list is built is simply sent again next time (its revision is past `rev`)
+      const head = { epoch: l.epoch, rev: l.rev, reset };
+      const tail = { firstSeq: st.exchanges.length ? l.seqs.get(st.exchanges[0]!) : undefined, total: st.exchanges.length };
+      const picked = st.exchanges.filter((e) => reset || (l.revs.get(e) ?? 0) > since);
+      if (picked.length <= LEAN_AT_ONCE) return { ...head, rows: picked.map((e) => leanRow(be, st, e)), ...tail };
+      // a first load or a view switch: thousands of rows, built in slices so the proxy and the window's calls are not held for the whole list
+      const rows: Array<ReturnType<typeof leanRow>> = [];
+      return inSlices(picked, (e) => void rows.push(leanRow(be, st, e)), 8).then(() => ({ ...head, rows, ...tail }));
     },
     /** Requests the workspace's mock servers received (the Incoming tab), newest last. */
     'debug.incoming': () => state.incoming ?? [],

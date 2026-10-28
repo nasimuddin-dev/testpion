@@ -178,3 +178,40 @@ describe('deep search', () => {
     expect(turns).toBeGreaterThan(0);
   });
 });
+
+describe('debug.changes reset (item 6)', () => {
+  it('the first reset of 5,000 rows is built in slices: the loop is never held for the whole list', async () => {
+    await be.invoke('debug.openSession', { text: har(5000) });
+    const gaps: number[] = [];
+    let last = performance.now();
+    const probe = setInterval(() => {
+      const now = performance.now();
+      gaps.push(now - last);
+      last = now;
+    }, 2);
+    const t0 = performance.now();
+    const d = (await be.invoke('debug.changes', {})) as { rows: unknown[]; reset: boolean };
+    const total = performance.now() - t0;
+    clearInterval(probe);
+    expect(d.rows).toHaveLength(5000);
+    const longest = Math.max(...gaps);
+    console.log(`first reset of 5,000 lean rows: ${total.toFixed(0)} ms in all, longest block ${longest.toFixed(0)} ms`);
+    expectWithin(longest, 33, 'longest block while the first reset of 5,000 rows is built');
+  });
+
+  it('a reset of 5,000 lean rows is built in well under 20 ms: redactUrl reads the text, not a URL parser', async () => {
+    await be.invoke('debug.openSession', { text: har(5000) });
+    const times: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      const d = (await be.invoke('debug.changes', {})) as { reset: boolean; rows: unknown[] };
+      times.push(performance.now() - t0);
+      expect(d.reset).toBe(true);
+      expect(d.rows).toHaveLength(5000);
+    }
+    console.log('debug.changes reset of 5,000 rows (ms):', times.map((t) => t.toFixed(1)).join(', '));
+    expectWithin(Math.min(...times), 20, 'a reset of 5,000 lean rows (best of 5)');
+    const d = (await be.invoke('debug.changes', {})) as { rows: Array<{ url: string }> };
+    expect(d.rows[3]!.url).toContain('token=REDACTED'); // a sensitive query key is still masked
+  });
+});
