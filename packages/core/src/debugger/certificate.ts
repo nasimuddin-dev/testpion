@@ -41,6 +41,15 @@ const SUBJECT = [
   { name: 'organizationName', value: 'TestPion' },
 ];
 
+/** The SHA-1 of the certificate, the way Windows (`certutil`) and macOS (`security -Z`) list it. */
+const sha1Of = (certPem: string) =>
+  createHash('sha1')
+    .update(Buffer.from(forge().asn1.toDer(forge().pki.certificateToAsn1(forge().pki.certificateFromPem(certPem))).getBytes(), 'binary'))
+    .digest('hex');
+
+/** Is this very certificate (not another root of the same name, from an earlier install) in a `certutil` / `security` listing? */
+export const trustListHas = (listing: string, certPem: string) => listing.toLowerCase().replace(/[\s:]/g, '').includes(sha1Of(certPem));
+
 const fingerprintOf = (certPem: string) => {
   const der = forge().asn1.toDer(forge().pki.certificateToAsn1(forge().pki.certificateFromPem(certPem))).getBytes();
   return createHash('sha256')
@@ -176,6 +185,8 @@ export function trustInstructions(path: string): string[] {
 export async function installRootCertificate(root: RootCertificate): Promise<{ where: string }> {
   try {
     if (process.platform === 'win32') {
+      // an earlier install of another root with the same name stays trusted but signs nothing the proxy makes: it goes first
+      await run('certutil', ['-user', '-delstore', 'Root', 'TestPion HTTP Debugger Root']).catch(() => undefined);
       await run('certutil', ['-user', '-addstore', 'Root', root.path]);
       return { where: 'the current user’s Trusted Root Certification Authorities (Windows, Chrome, Edge; Firefox needs its own import)' };
     }
@@ -206,9 +217,10 @@ export async function removeRootCertificate(root: RootCertificate): Promise<void
 /** Is the root in the user's trust store? Best effort (Windows and macOS; elsewhere unknown). */
 export async function rootCertificateTrusted(root: RootCertificate): Promise<boolean | undefined> {
   try {
-    if (process.platform === 'win32') return /TestPion HTTP Debugger Root/.test(await run('certutil', ['-user', '-store', 'Root']));
+    // this root, by its hash: a root of the same name from an earlier install is not this one (the proxy signs with the current key)
+    if (process.platform === 'win32') return trustListHas(await run('certutil', ['-user', '-store', 'Root']), root.certPem);
     if (process.platform === 'darwin')
-      return /TestPion HTTP Debugger Root/.test(await run('security', ['find-certificate', '-c', 'TestPion HTTP Debugger Root', `${process.env.HOME}/Library/Keychains/login.keychain-db`]));
+      return trustListHas(await run('security', ['find-certificate', '-a', '-Z', '-c', 'TestPion HTTP Debugger Root', `${process.env.HOME}/Library/Keychains/login.keychain-db`]), root.certPem);
   } catch {
     return false;
   }
