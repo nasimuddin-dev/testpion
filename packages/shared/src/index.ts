@@ -42,3 +42,4 @@ export * from './graphql-view.js';
 export * from './caching.js';
 export * from './connection-info.js';
 export * from './exchange-view.js';
+export * from './debugger-select.js';

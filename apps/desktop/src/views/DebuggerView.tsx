@@ -67,6 +67,7 @@ import { LibraryTabStrip } from '../components/LibraryTabStrip';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
 import { useDebuggerSession } from '../components/debugger/use-debugger-session';
+import { useGridTools } from '../components/debugger/use-grid-tools';
 import type { Status } from '../components/debugger/use-debugger-session';
 
 interface CaptureOptions {
@@ -359,6 +360,7 @@ export function DebuggerView() {
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'f') return (ev.preventDefault(), filterBox.current?.focus());
     if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'e') return (ev.preventDefault(), void clear());
     if (!rows.length || (ev.target as HTMLElement).tagName === 'INPUT') return;
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'a') return (ev.preventDefault(), setSelectedIds(rows.map((r) => r.id)), setSelected((cur) => cur ?? rows[0]?.id));
     // Shift+F10 / the Menu key: the selected row's menu, as a right-click opens it
     if (isMenuKey(ev) && selected) return void (openRowMenu(ev.currentTarget as HTMLElement, selected) && ev.preventDefault());
     // in the order the grid shows (it may be sorted by another column)
@@ -401,6 +403,19 @@ export function DebuggerView() {
       toastError,
     );
   const sel = detail;
+  // Edit ▸ Select matching…, the command bar, Resend several times and the program picker (use-grid-tools.tsx)
+  const tools = useGridTools({
+    rows,
+    selectedIds,
+    select: (ids) => (setSelectedIds(ids), setSelected(ids[0])),
+    setFilter,
+    openDock,
+    setRuleDraft,
+    onOpen: openInTab,
+    remove: (ids) => void remove(ids),
+    clear,
+    quickRule,
+  });
   // the grid is memoised: the same callbacks on every render, so a keystroke in the filter or the selected exchange
   // arriving doesn't re-render thousands of rows through new props
   const gridSelect = useStableCallbacks({
@@ -417,6 +432,7 @@ export function DebuggerView() {
   const gridActions = useStableCallbacks<GridActions>({
     onOpen: openInTab,
     onResend: (e) => void resend(e),
+    onReplay: (ids, times) => tools.replay(ids, times),
     onKeepEncrypted: (e) => void keepEncrypted(e),
     onReadHttps: () => void readHttps(),
     onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
@@ -494,6 +510,7 @@ export function DebuggerView() {
       icon: <Terminal size={14} />,
       onSelect: () => void startThen(() => call<{ terminal: string }>('debug.openTerminal').then((r) => toast(`${r.terminal} opened with HTTP_PROXY set; only what runs in it is captured`), toastError)),
     },
+    { label: 'A running program…', icon: <Terminal size={14} />, title: 'Pick a program that is running now (like the crosshair): list only what it sends', onSelect: () => void startThen(() => tools.pickProgram()) },
     { label: 'A phone or another computer…', icon: <Smartphone size={14} />, onSelect: () => void startThen(() => setDialog('lan')) },
     // WF-12: a client that can't use a proxy points at a local address that forwards to the API (no certificate needed)
     { label: LABEL.captureReverseProxy, icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
@@ -899,6 +916,15 @@ export function DebuggerView() {
                       </Button>
                     }
                   />
+                  <Menu
+                    width={240}
+                    items={tools.editItems}
+                    trigger={
+                      <Button size="sm" title="Select rows by a condition, select all, or use the command bar">
+                        Edit <ChevronDown size={12} />
+                      </Button>
+                    }
+                  />
                   <BreakpointSplit rules={rules} onRules={setRules} onCustom={() => setRuleDraft(customBreakpointRule())} />
                   {filtersOn && (
                     <Button size="sm" variant="ghost" icon={<X size={13} />} title="Show every exchange again: clear the text, the dropdowns, the checkboxes and the chips" data-clear-filters onClick={() => setFilter(noFilter)}>
@@ -1044,6 +1070,7 @@ export function DebuggerView() {
           }}
         />
       )}
+      {tools.dialogs}
       {flowFrom && <CreateFlowDialog ids={flowFrom.ids} since={flowFrom.since} onClose={() => setFlowFrom(undefined)} />}
       {datasetFrom && <RagCaptureDialog initial={{ from: 'exchanges', exchanges: datasetFrom.ids, label: `${plural(datasetFrom.ids.length, 'exchange')} of the Debugger` }} onClose={() => setDatasetFrom(undefined)} />}
       {saveFrom && <SaveToCollectionDialog ids={saveFrom.ids} since={saveFrom.since} onClose={() => setSaveFrom(undefined)} />}

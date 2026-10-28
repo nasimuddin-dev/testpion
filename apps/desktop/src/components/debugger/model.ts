@@ -61,6 +61,10 @@ export interface Exchange {
   /** The person's comment on it and a colour mark (saved in the HAR). */
   note?: string;
   mark?: string;
+  /** In the list: what the Caching and Content-Encoding columns show, and the values of the header columns the person added (key `request:name` / `response:name`). */
+  caching?: string;
+  contentEncoding?: string;
+  headerValues?: Record<string, string>;
   /** Rules (DBG-3): the row's colour, the rules that acted, where a redirect sent it, a reply rule answered, a breakpoint edited it. */
   highlight?: string;
   /** A highlight rule's text colours per theme, bold, whole row. */

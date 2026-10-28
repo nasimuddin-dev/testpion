@@ -94,8 +94,8 @@ A WebSocket through the proxy is one row (status 101, *live* while open) with a 
 ## What you can do with a row
 
 - **Open** (**Open as request** in the right-click menu, or the rail's **Submitter**): the exchange becomes a request in a tab, to change and send; double-click does the same. (Older versions called this *Edit & Submit*.)
-- **Resend**: send it again as it was (the response lands in History).
-- **cURL**: copy it as a cURL command.
+- **Resend**: send it again as it was (the response lands in History). The row menu's **Resend** has more: *Once*, *Resend 10 times*, *Resend the selected, in order* and *Resend…* (see *Resend many times* below).
+- **Copy**: the URL, the headers, or the request as code: **As cURL**, **As PowerShell**, **As fetch (JavaScript)**, **As HTTPie** (secrets masked).
 - **Ask AI**: the assistant explains what the exchange does, what the response means, why it failed and what to check (it gets the exchange redacted).
 - **Bookmark**, **Delete**.
 
@@ -148,6 +148,15 @@ The tabs at the bottom of Request details and Response details add a view when t
 Binary protocols are decoded on the computer that captured, and what is read out is masked like any body (a `token` inside a MessagePack map shows as `[REDACTED]`). Decoders are bounded: input over 1 MB is not decoded, nesting past 32 levels or 20,000 values stops the read with a note. A body larger than the capture keeps, or one let go to save memory, says so in the tab instead of showing nothing.
 
 An image goes into a saved session (the HAR keeps it as base64); MessagePack and Protobuf bodies do not, because a mask reads text and a secret inside bytes would go unseen. The TLS details are saved with the session.
+
+### The grid's power tools
+
+- **Select matching** (**Edit ▸ Select matching…** in the filter bar): choose rows by conditions on the columns (*Status is at least 400*, *Domain contains api*, *Size is more than 200kb*, *Duration is more than 2s* …); every condition must hold. The dialog counts the matches before you select them. The selected rows are what **Delete**, **Save to collection**, **Create flow**, **Create RAG dataset** and **Resend** work on. **Edit** also has *Select all* (<kbd>Ctrl</kbd>+<kbd>A</kbd>), *Invert the selection* and *Select none*.
+- **Command bar** (<kbd>Ctrl</kbd>+<kbd>K</kbd>, then type `!` and the command, for example `!=404`; `!` alone lists them): ten verbs, each a shortcut to something the Debugger already does. `?text` filters the list; `>200kb` and `<5kb` select larger or smaller responses; `=404` or `=4xx` selects a status; `@host` selects a domain; `select status>=400 and host~api` selects by a condition; `bp /orders` opens the breakpoint rule editor for a URL; `delete` removes the selected rows (asks first); `clear` clears the session (asks first); `hosts` opens the Structure panel. Only works while the Debugger is on screen.
+- **Columns** (the columns icon at the right end of the grid's header, which stays in view when the grid scrolls sideways): besides the usual ones there are **Caching**, **Content-Encoding**, **Client port**, **Protocol** and **TLS** (hidden until you show them), and **Add column from a header…** turns any request or response header (*X-Request-Id*, *Cache-Control*, *Server*) into a sortable column, saved per workspace. Up to 8 header columns; secret headers (Authorization, Cookie, API keys) show as `***`.
+- **Group by** (the layers icon next to it): *None*, *Domain*, *Application* or *Connection*. Each group has a header line with its request count, how many failed and how many bytes; click it to collapse or expand the group, or use *Collapse all groups* / *Expand all groups*. Selecting a row with the arrow keys opens its group. The list stays as fast as without groups (the header lines are rows of the same virtual list).
+- **Resend many times**: the row menu's **Resend** has *Resend 10 times*, *Resend the selected, in order* (select several rows first) and *Resend…*, a dialog for how many times (1 to 200), how many at once (1 to 20), the wait between sends and *Stop at the first failure*. The result is a table: how many were sent, the count of each status, the fastest, middle and slowest time and each send; every send is also in History. Sending several requests to a server that is not on this computer asks first.
+- **A running program** (the **Capture** menu): the list of programs on this computer that hold network connections right now, busiest first. **Capture only** on one makes a rule on the Application column, so only what that program sends is listed (the crosshair of other tools, without dragging anything).
 
 ## Rules
 
@@ -209,6 +218,11 @@ testpion debugger remap api.test=localhost:3000 --keep-host   # host remapping i
 testpion debugger rule --add '{"kind":"fault","match":{"host":"api.test"},"fault":{"action":"error","status":503,"percent":20}}'   # any rule as JSON: map local, rewrite, faults, WebSocket frames; --list, --remove <id>
 testpion debugger certificate --json                      # where the root is, its fingerprint, trusted or not (known: false when this computer cannot tell)
 testpion debugger certificate --install --yes             # trust it (the system may ask); --remove takes it out; --dry-run only says
+testpion debugger exchanges session.har --where "status>=400 and size>200kb" --column response:x-request-id --json   # Select matching, with header columns
+testpion debugger exchanges session.har --group-by domain --json                                                   # Group by: counts, bytes, failures
+testpion debugger replay session.har '#3' --times 20 --concurrency 4 --json    # Resend many times; --dry-run says what would go, --yes for a host that is not yours
+testpion debugger snippet session.har '#3' --lang powershell                   # Copy as: curl, powershell, fetch, httpie, python …
+testpion debugger programs --json                                              # the running programs with connections (the names a Capture only rule uses)
 ```
 
 `--system-proxy` and `--install` / `--remove` change this computer, so without `--yes` a terminal asks and a run that cannot ask (CI, `--non-interactive`) refuses and says what it would do.

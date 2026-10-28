@@ -383,3 +383,7 @@ export * from './eval/rag/metric-compare.js';
 export * from './eval/rag/metric-docs.js';
 export * from './eval/rag/dataset-columns.js';
 export { useMcpSdkBundle } from './mcp-server/sdk.js';
+export { parseWhere, whereText, compileWhere, selectRows, parseCommand, parseAmount, COMMAND_HELP, SELECT_FIELDS } from '@testpion/shared';
+export type { SelectClause, SelectRow, ParsedWhere, DebuggerCommand } from '@testpion/shared';
+export * from './debugger/replay.js';
+export * from './debugger/process-list.js';

@@ -102,6 +102,7 @@ describe('the shape of every tool', () => {
     eval_try_check: 'the offline demo model is free; a call to a paid model is refused until confirm: true (after dry_run shows the cost), the same as the CONFIRM_TOOLS contract',
     // load_test and api_fuzz send many requests, but refuse an external target without their own explicit opt-in (checked in the tool)
     load_test: 'sends traffic only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',
+    debugger_replay: 'sends captured requests again, at most 200; more than one to a host that is not on this computer needs the tool’s own confirm_remote',
     api_fuzz: 'sends requests only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',
     ...Object.fromEntries(
       [

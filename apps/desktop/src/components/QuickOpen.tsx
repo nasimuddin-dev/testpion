@@ -9,6 +9,7 @@ import { CommandPalette, type PaletteCommand } from './Shell';
 import { refIcon } from './RefLink';
 import { Sparkles } from 'lucide-react';
 import { startAskSearch } from './ai/ask-search';
+import { debuggerCommandHandler } from '../lib/debugger-commands';
 
 interface Hit {
   kind: string;
@@ -62,6 +63,7 @@ export function QuickOpen({ commands, here }: { commands: PaletteCommand[]; here
           active,
           open: (ref: ItemRef) => void openRef(ref),
           ask: (question) => startAskSearch({ question }),
+          debuggerCommands: debuggerCommandHandler(),
           switchEnvironment: (name) => useApp.getState().setEnvironment(name),
           setQuery: (p) => setTimeout(() => useApp.getState().set({ paletteOpen: true, paletteQuery: p }), 0),
           noun: (ref) => ITEM_KIND_LABEL[ref.kind],
