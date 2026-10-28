@@ -83,6 +83,8 @@ const toast = (m: string) => useApp.getState().toast(m, 'success');
 const debuggerTabDrafts = persisted<null>('debugger-tab', null);
 
 /** An exchange as a REST request, for Open in a tab and Resend. */
+const noFilter: ListFilter = { application: '', type: '', text: '', deep: false, host: '', method: '', status: '', bookmarked: false, hideTunnels: false, quick: [] };
+
 export function DebuggerView() {
   const { status, setStatus, rules, setRules, held, openBreakpoint, setOpenBreakpoint, loadStatus } = useDebuggerSession();
   const aiOn = useAiEnabled();
@@ -104,7 +106,8 @@ export function DebuggerView() {
   const [ruleDraft, setRuleDraft] = useState<Partial<Rule>>();
   const [httpsBanner, setHttpsBanner] = useState(true);
   const incoming = useIncoming();
-  const [filter, setFilter] = useState<ListFilter>({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false, hideTunnels: false, quick: [] });
+  const [filter, setFilter] = useState<ListFilter>(noFilter);
+  const filtersOn = JSON.stringify(filter) !== JSON.stringify(noFilter);
   const [tab, setTab] = useState<'traffic' | 'stats' | 'rules' | 'connections'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
@@ -861,6 +864,13 @@ export function DebuggerView() {
                     <div className="h-full flex flex-col min-h-0">
                       {side === 'incoming' ? (
                         <IncomingList list={incoming.list} onClear={incoming.clear} selected={incomingSel} onSelect={setIncomingSel} />
+                      ) : !rows.length && !!status?.exchanges && filtersOn ? (
+                        <Empty icon={<Filter size={26} />} title="No exchange matches the filters" data-filtered-empty>
+                          {plural(status.exchanges, 'exchange')} captured, hidden by the filters above.{' '}
+                          <Button size="sm" variant="primary" onClick={() => setFilter(noFilter)}>
+                            Show all
+                          </Button>
+                        </Empty>
                       ) : !rows.length ? (
                         <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
                           {status?.running ? (
