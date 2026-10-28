@@ -49,7 +49,7 @@ export function CiDialog() {
   const environments = useApp(selectEnvironments);
   const [provider, setProvider] = usePersisted<Provider>('aps.ci.provider', 'github', { parse: (v) => (v as Provider) || undefined, text: true });
   const [target, setTarget] = useState<string>(
-    req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : req.tests?.length === 1 ? `file:${req.tests[0]}` : req.tests?.length ? 'selected' : 'tests',
+    req.evaluation ? `evaluation:${req.evaluation}` : req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : req.tests?.length === 1 ? `file:${req.tests[0]}` : req.tests?.length ? 'selected' : 'tests',
   );
   const [environment, setEnvironment] = useState(req.environment ?? useApp.getState().environment ?? '');
   // one flow file: how the pipeline runs it (once, per data row, in several environments), and what it keeps
@@ -64,6 +64,7 @@ export function CiDialog() {
   // a saved RAG evaluation: the pipeline runs `testpion rag run` (its metrics, gates and a report); the judge key is a CI secret
   const evaluations = useLibrary<{ type?: string }>('evaluations');
   const ragEvaluations = evaluations.lib.items.filter((i) => i.data.type === 'rag');
+  const promptEvaluations = evaluations.lib.items.filter((i) => i.data.type !== 'rag');
   const [rag, setRag] = useState({ preset: '', min: '', baseline: '', maxCost: '', compat: '', repeatTarget: '', comment: true, nightly: false, cron: '0 3 * * *', sample: '', regression: true, maxDrop: '' });
   useEffect(() => void call<Array<{ path: string }>>('datasets.list').then((d) => setDatasets(d.map((x) => x.path)), () => setDatasets([])), []);
   const shellCapable = useShellCapable();
@@ -89,7 +90,9 @@ export function CiDialog() {
       // any target: data-changing requests may go to a production environment only when asked
       ...(allowProduction && production ? { allowProduction: true } : {}),
       ...(trustScripts ? { trustScripts: true } : {}),
-      ...(kind === 'rag'
+      ...(kind === 'evaluation'
+        ? { evaluation: value }
+        : kind === 'rag'
         ? {
             ragEvaluation: value,
             ragPreset: rag.preset.trim() || undefined,
@@ -167,6 +170,15 @@ export function CiDialog() {
                   ))}
                 </optgroup>
               )}
+              {promptEvaluations.length > 0 && (
+                <optgroup label="Prompt evaluations">
+                  {promptEvaluations.map((i) => (
+                    <option key={i.id} value={`evaluation:${i.name}`}>
+                      Evaluation: {i.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               {ragEvaluations.length > 0 && (
                 <optgroup label="RAG evaluations">
                   {ragEvaluations.map((i) => (
@@ -215,6 +227,11 @@ export function CiDialog() {
             <Input className="mono" value={openapi} onChange={(e) => setOpenapi(e.target.value)} placeholder="openapi.yaml" />
           </Field>
         </div>
+        {target.startsWith('evaluation:') && (
+          <p className="text-xs text-muted" data-ci-evaluation-note>
+            The pipeline runs this evaluation and fails when a case got worse than the last good run (the last run that passed; the first run has none). It stops at the cap of the evaluation (default $1.00 for a paid model), and the model&apos;s key is a CI secret, listed below.
+          </p>
+        )}
         {target.startsWith('rag:') && (
           <div className="grid grid-cols-3 gap-3 rounded-lg border border-line p-3 text-sm" data-ci-rag-options>
             <Field label="Gates" hint="The pipeline fails when the mean of a metric is under its minimum: faithfulness=0.8 context-recall=0.7">

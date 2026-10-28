@@ -97,6 +97,9 @@ describe('the shape of every tool', () => {
     ...Object.fromEntries(
       ['send_request', 'grpc_call', 'realtime_exchange', 'graphql_operation', 'graphql_subscribe', 'run_collection', 'run_tests', 'run_monitor', 'compare_request_across_environments', 'flow_data_run', 'flow_env_matrix', 'mcp_server_tools', 'mcp_call_tool', 'run_evaluation'].map((n) => [n, SENDS]),
     ),
+    // the AI quality tools: the sample runs only on the offline demo model; trying a check asks for its own confirm: true before a paid model is called
+    eval_sample: 'runs only on the offline demo model (rules, no key, no network) and writes the sample evaluation the way the editor does',
+    eval_try_check: 'the offline demo model is free; a call to a paid model is refused until confirm: true (after dry_run shows the cost), the same as the CONFIRM_TOOLS contract',
     // load_test and api_fuzz send many requests, but refuse an external target without their own explicit opt-in (checked in the tool)
     load_test: 'sends traffic only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',
     api_fuzz: 'sends requests only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',

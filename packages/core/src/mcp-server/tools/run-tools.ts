@@ -3,6 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { createEngineContext } from '../../engine.js';
 import { ApsError } from '../../errors.js';
 import { assertEvaluationRunnable } from '../../eval/rag/preflight.js';
+import { estimateEvaluation, spendPlan } from '../../eval/llm-estimate.js';
 import type { TestResult } from '../../model/types.js';
 import { collectionRealtimeTests } from '../../runner/collection-realtime.js';
 import { runCollection } from '../../runner/collection-run.js';
@@ -150,7 +151,17 @@ export function runTools(d: ModuleToolDeps): Tool[] {
       write: true,
       description:
         'Run a saved evaluation by name or id, like `testpion eval run`: every dataset record through the model, scored by its evaluators (AI-judge scores are labelled as such). Returns totals, mean scores and per-case results with failed checks; the run is recorded in the workspace history. `limit` runs only the first n records (at most 500 here).',
-      inputSchema: { type: 'object', properties: { name: str('Saved evaluation name or id'), environment: str('Environment name'), limit: { type: 'number', description: 'Only the first n dataset records' } }, required: ['name'] },
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: str('Saved evaluation name or id'),
+          environment: str('Environment name'),
+          limit: { type: 'number', description: 'Only the first n dataset records' },
+          max_cost_usd: { type: 'number', description: 'Stop the run once it has cost this much (USD, from the price table). Default $1.00 for a paid model, none for the offline demo model or a model on this computer; 0 = no cap' },
+          confirm: { type: 'boolean', description: 'Go ahead although the estimate is over $0.50 (or 100 calls): ask the user first, then repeat the call with confirm: true' },
+        },
+        required: ['name'],
+      },
       run: async (a) => {
         const environment = checkEnvironment(a.environment);
         const saved = findSavedEvaluation(store, String(a.name ?? ''));
@@ -164,13 +175,29 @@ export function runTools(d: ModuleToolDeps): Tool[] {
             await pre.dispose();
           }
         }
+        // a prompt evaluation: what it costs, the cap that stops it, and asking once when it is big (AU-5, AU-18)
+        let capUsd: number | undefined;
+        let estimate: ReturnType<typeof estimateEvaluation> | undefined;
+        if (saved.type !== 'rag') {
+          const pre = createEngineContext({ store, secrets, settings, environment, aiSurface: 'mcp' });
+          try {
+            estimate = estimateEvaluation(pre.services, { ...saved, limit });
+          } finally {
+            await pre.dispose();
+          }
+          const plan = spendPlan(estimate, typeof a.max_cost_usd === 'number' ? a.max_cost_usd : saved.maxCostUsd);
+          if (plan.ask && a.confirm !== true) throw new ApsError('ValidationError', `${estimate.summary}. ${plan.reason ?? ''} Ask the user, then repeat the call with confirm: true (or lower limit).`.replace(/\s+/g, ' '), { suggestions: [] });
+          capUsd = plan.capUsd;
+        }
         const { summary, ...run } = await recordedRun(environment, {
           name: saved.name,
           tests: evaluationTests({ ...saved, limit }, { store }),
           concurrency: Math.min(8, saved.concurrency || 4),
           retries: saved.retries ?? 0,
+          capUsd,
+          cases: estimate?.cases,
         });
-        return { ...run, scores: summary.scores };
+        return { ...run, scores: summary.scores, ...(estimate ? { estimate: estimate.summary } : {}) };
       },
     },
     {

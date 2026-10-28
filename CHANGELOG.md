@@ -4,6 +4,16 @@
 
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
+### AI quality: the first result without a key, what a run costs, test cases as a table
+
+- **Try the sample (offline)**: AI Lab opens on **Start** (cards by task, your latest runs with how many passed). One click adds the offline demo model, makes the 10-case evaluation *Sample: support intents*, runs it and shows **10 of 10 passed** with an **Offline demo** label. `testpion eval sample`, MCP `eval_sample`, RPC `ai.sample`.
+- **The price beside Run**: *Run 20 cases · about $0.03*, with the cases, calls and time; *free* for the offline demo model and models on this computer; *cost unknown* with **Set a price…** for a model with no price. `testpion eval estimate`, MCP `eval_estimate`, RPC `eval.estimate`.
+- **Spend cap**: a run on a paid model stops at $1.00 (**Options**, **Spend cap (USD)**, `--max-cost`, `max_cost_usd`; 0 is no cap) and says how far it got; a run estimated over $0.50 or 100 calls asks once (`--yes`, `confirm: true`).
+- **The result starts with a sentence**: a chip above the run says *17 of 20 passed*, with cost and time. The empty Run pane says what a run does and offers the sample. **To review** appears after the first verdict.
+- **Run in CI from an evaluation**: **Run in CI…** on the result, `testpion ci github --evaluation NAME`, `ci_config` with `evaluation`. The pipeline runs `eval run NAME --baseline last-good --fail-on-regression --yes`; `--baseline last-good` is the last run that passed.
+- **Test cases as a table**: type in cells, **Paste cases…** from a spreadsheet (columns found and mapped), **Enter** adds a case, thousands of cases stay quick. **Edit as text** keeps the file's own text.
+- **What is a good answer?**: tick the common checks, each with a sentence, and press **Try on case N** to see the reply and why it passed or failed before saving. `testpion eval check`, MCP `eval_try_check`, RPC `eval.tryCheck`. A paid model shows its cost first.
+
 ### Machine safety
 
 - **The system proxy no longer outlives TestPion**: the old setting is written to a private file before it is changed and deleted after it is put back; the next start restores it when a crash or kill left it pointing at TestPion; our own address is never taken for "the old setting"; quitting restores it first, with a limit of its own; a part-way change on macOS or GNOME is undone; the system follows when the proxy moves to another port.

@@ -9,6 +9,7 @@ import { aiRunDeps, runAiTask } from '../../ai/tasks/run.js';
 import type { Proposal } from '../../ai/proposal.js';
 import { createEngineContext, type ContextOptions, type EngineContext } from '../../engine.js';
 import { runTests, type RunEvent } from '../../runner/runner.js';
+import { capRunOptions } from '../../eval/llm-estimate.js';
 import { resultSourceRefs } from '../../runner/result-source.js';
 import { recordRun } from '../../runner/run-records.js';
 import { detectRequestSnippet, parseRequestSnippet } from '../../import/snippet.js';
@@ -88,27 +89,34 @@ export function resultSummarizer(store: WorkspaceStore, redactor: Redactor) {
  */
 export function runRecorder(d: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings }, summarizeResult: ReturnType<typeof resultSummarizer>) {
   const { store, secrets, settings } = d;
-  return async (environment: string | undefined, o: { name: string; tests: Parameters<typeof runTests>[0]['tests']; concurrency: number; retries?: number; plan?: Pick<Parameters<typeof runTests>[0], 'onlyIds' | 'seed'> }) => {
+  return async (environment: string | undefined, o: { name: string; tests: Parameters<typeof runTests>[0]['tests']; concurrency: number; retries?: number; plan?: Pick<Parameters<typeof runTests>[0], 'onlyIds' | 'seed'>; /** Stop once the results have cost this much (USD): a prompt evaluation's spend cap. */ capUsd?: number; /** The cases the run would have, for the message of a run stopped at the cap. */ cases?: number }) => {
     const ctx = createEngineContext({ store, secrets, settings, environment, aiSurface: 'mcp' });
     const runId = shortId('run-');
     const outDir = store.runDir(runId);
     const results: TestResult[] = [];
     try {
-      const summary = await runTests({
-        name: o.name,
-        runId,
-        tests: o.tests,
-        services: ctx.services,
-        concurrency: o.concurrency,
-        ...(o.retries !== undefined ? { retries: o.retries } : {}),
-        resultsFile: join(outDir, 'results.jsonl'),
-        traceMode: 'none',
-        environment,
-        ...(o.plan ?? {}),
-        onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
-      });
+      const capped = capRunOptions(
+        {
+          name: o.name,
+          runId,
+          tests: o.tests,
+          services: ctx.services,
+          concurrency: o.concurrency,
+          ...(o.retries !== undefined ? { retries: o.retries } : {}),
+          resultsFile: join(outDir, 'results.jsonl'),
+          traceMode: 'none',
+          environment,
+          ...(o.plan ?? {}),
+          onEvent: (e: RunEvent) => void (e.type === 'test-end' && results.push(e.result)),
+        },
+        o.capUsd,
+      );
+      const summary = await runTests(capped.options);
+      // a run stopped at its spend cap says so and is not a cancelled one
+      const stopped = capped.guard.stopped ? capped.guard.message(o.cases ?? summary.total) : undefined;
+      if (stopped) summary.cancelled = false;
       await recordRun(store, summary, outDir);
-      return { summary, runId, ref: { kind: 'run' as const, runId }, environment: environment ?? null, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
+      return { ...(stopped ? { stoppedAtCap: stopped, spentUsd: capped.guard.spentUsd } : {}), summary, runId, ref: { kind: 'run' as const, runId }, environment: environment ?? null, total: summary.total, passed: summary.passed, failed: summary.failed, errors: summary.errors, durationMs: summary.durationMs, results: results.slice(0, 200).map(summarizeResult) };
     } finally {
       await ctx.dispose();
     }

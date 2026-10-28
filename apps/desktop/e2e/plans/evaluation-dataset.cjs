@@ -16,7 +16,7 @@ const state = `(() => { const ed = ${EDITOR}; const m = ed?.getModel();
     + ' | preview: ' + (/Preview\\D*(\\d+) case/.exec(document.querySelector('main')?.innerText ?? '')?.[1] ?? '?'); })()`;
 
 const steps = [
-  step('jsonl-records', `await __t.view('Evaluations'); await __t.sleep(1200); return ${state};`),
+  step('jsonl-records', `await __t.view('Evaluations'); await __t.sleep(1200); const edit = vis('main button').find((b) => b.textContent.trim() === 'Edit as text'); if (edit) { await __t.real.click(edit); await __t.sleep(800); } return ${state};`),
   step('json-selected', `${radio('JSON')}?.click(); await __t.sleep(2000); return ${state};`),
   step(
     'broken-json-is-still-marked',
@@ -96,7 +96,7 @@ module.exports = withExpect(steps, {
   'a-broken-line-is-marked-on-its-own': /^lines: 3 \| marked: line 4 \| after the fix: 0$/,
   'run-without-a-key': /^error: No API key for OpenAI \| button: Add the key$/,
   'add-the-key-opens-the-provider': /^view: Providers\d* \| focused: API key \| provider: OpenAI$/,
-  'options-are-closed-and-open-on-a-click': /^closed first: true \| opened: Randomness \| Run at once \| Try again on errors \| Only the first … cases$/,
+  'options-are-closed-and-open-on-a-click': /^closed first: true \| opened: Randomness \| Run at once \| Try again on errors \| Only the first … cases \| Spend cap \(USD\)$/,
   'no-model-says-the-fix': /^note: Choose a model first.* \| run disabled: true \| remedy: Use the offline demo model$/,
   'one-click-offline-demo': /^providers: mock \| note gone: true \| run enabled: true$/,
 });

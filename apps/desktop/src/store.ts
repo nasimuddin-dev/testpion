@@ -52,6 +52,8 @@ export interface Toast {
 export type ToastAction = { label: string; onClick(): void } | { ref: ItemRef; label?: string; newTab?: boolean };
 
 export interface CiRequest {
+  /** A saved prompt evaluation (Evaluations: Run in CI): the pipeline runs it and fails when a case got worse than the last good run. */
+  evaluation?: string;
   suite?: string;
   collection?: string;
   folders?: string[];

@@ -289,7 +289,8 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
                     { value: 'failed', label: `Failed ${counts.failed}`, title: 'Failed and errored' },
                     { value: 'passed', label: `Passed ${counts.passed}` },
                     ...(counts.skipped ? [{ value: 'skipped', label: `Skipped ${counts.skipped}` }] : []),
-                    ...(done ? [{ value: 'unreviewed', label: `To review ${rated?.unreviewed ?? ''}`.trim(), title: 'Not rated good or bad yet (👍 / 👎 on a result)' }] : []),
+                    // "To review" waits for the first verdict: on a run nobody has rated, every result is unreviewed and the count says nothing (AU-7)
+                    ...(done && ((rated?.good ?? 0) + (rated?.bad ?? 0) > 0 || status === 'unreviewed') ? [{ value: 'unreviewed', label: `To review ${rated?.unreviewed ?? ''}`.trim(), title: 'Not rated good or bad yet (👍 / 👎 on a result)' }] : []),
                   ]}
                 />
                 <FilterInput className="flex-1" placeholder="Filter by name" label="Filter results by name" value={query} onChange={setQuery} />
