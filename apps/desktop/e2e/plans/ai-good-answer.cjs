@@ -52,7 +52,7 @@ const steps = [
   ),
   step(
     'a-paid-model-shows-the-cost-first',
-    `${H} await window.aps.invoke('ai.saveProviders', { providers: [{ id: 'paid', name: 'Stand-in paid model', kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:9/v1', apiKey: '{{$env.E2E_NO_KEY}}', defaultModel: 'm' }], keys: {} });
+    `${H} await window.aps.invoke('ai.saveProviders', { providers: [{ id: 'paid', name: 'Stand-in paid model', kind: 'openai-compatible', baseUrl: 'https://api.example.test/v1', apiKey: '{{$env.E2E_NO_KEY}}', defaultModel: 'm' }], keys: {} });
      await __t.view('Home'); await __t.view('Evaluations'); await __t.sleep(1000);
      const sel = vis('main select').find((s) => [...s.options].some((o) => o.textContent.trim() === 'Stand-in paid model'));
      const opt = [...sel.options].find((o) => o.textContent.trim() === 'Stand-in paid model');

@@ -142,10 +142,12 @@ export function GoodAnswerPicker({
             {t?.error && <div className="pl-6 mt-1 text-xs text-bad">{t.error}</div>}
             {t?.result && (
               <div className="pl-6 mt-1 text-xs flex flex-col gap-0.5" data-pick-result={t.result.error ? 'error' : t.result.passed ? 'passed' : 'failed'}>
-                <div>
-                  <span className="text-muted">Case {t.result.caseNumber} reply: </span>
-                  <code className="mono break-all">{t.result.reply || '(empty)'}</code>
-                </div>
+                {!t.result.error && (
+                  <div>
+                    <span className="text-muted">Case {t.result.caseNumber} reply: </span>
+                    <code className="mono break-all">{t.result.reply || '(empty)'}</code>
+                  </div>
+                )}
                 <div className={t.result.error ? 'text-bad' : t.result.passed ? 'text-ok' : 'text-bad'}>
                   {t.result.error ? `Error: ${t.result.error}` : `${t.result.passed ? 'Passed' : 'Failed'}${t.result.reason ? `: ${t.result.reason}` : ''}`}
                   {t.result.costUsd ? <span className="text-muted"> · cost {formatCost(t.result.costUsd)}</span> : null}

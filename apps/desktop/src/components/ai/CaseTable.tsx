@@ -89,7 +89,6 @@ export function CaseTable({
           {shown.map((c) => (
             <span key={c} className={cx('px-2 py-1.5 truncate', vars.includes(c) || c === expectedField ? 'text-accent' : 'text-muted')} title={vars.includes(c) ? `Filled into {{${c}}} in the prompt` : c === expectedField ? 'The answer you expect' : undefined} role="columnheader">
               {c}
-              {c === expectedField && <span className="text-2xs"> (expected)</span>}
             </span>
           ))}
           <span />
@@ -97,6 +96,7 @@ export function CaseTable({
         <div className="flex-1 min-h-0">
           <VirtualList
             name="CaseTable"
+            className="h-full"
             label="Test cases"
             items={rows}
             rowHeight={ROW}

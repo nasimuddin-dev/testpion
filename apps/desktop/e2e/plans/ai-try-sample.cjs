@@ -23,6 +23,14 @@ const steps = [
      return 'run in CI disabled: ' + !!worse?.disabled + ' | why: ' + (worse?.getAttribute('title') ?? 'NO REASON');`,
   ),
   step(
+    'empty-run-pane-says-what-a-run-does',
+    `await __t.view('Evaluations'); await __t.sleep(1200);
+     const empty = vis('main').map((m) => m.innerText).join(' ');
+     const buttons = vis('main button').map((b) => b.textContent.trim());
+     await __t.view('AI Lab'); await __t.sleep(600);
+     return 'title: ' + /Run this evaluation/.test(empty) + ' | steps: ' + /Each test case is sent/.test(empty) + ' | to review hidden: ' + !/To review/.test(empty) + ' | sample button: ' + buttons.includes('Try the sample (offline)');`,
+  ),
+  step(
     'sample-in-one-click',
     `let clicks = 0;
      await __t.real.click(vis('[data-start-sample]')[0]); clicks++;
@@ -63,14 +71,6 @@ const steps = [
      await __t.real.key('Escape'); await __t.sleep(300);
      return 'chosen: ' + sel + ' | command: ' + ok + ' | note: ' + note;`,
   ),
-  step(
-    'new-evaluation-empty-run-pane',
-    `await __t.view('Evaluations');
-     const nw = vis('button').find((b) => /New evaluation/.test(b.getAttribute('aria-label') ?? b.textContent));
-     await __t.real.click(nw); await __t.sleep(800);
-     const empty = vis('main').map((m) => m.innerText).join(' ');
-     return 'title: ' + /Run this evaluation|Overview/.test(empty) + ' | steps: ' + /Each test case is sent/.test(empty) + ' | sample button: ' + vis('main button').some((b) => b.textContent.trim() === 'Try the sample (offline)');`,
-  ),
 ];
 module.exports = withExpect(steps, {
   'start-page': /^tabs: Start,Providers,Playground,Model comparison,RAG,Usage \| selected: Start \| cards: correct,better,documents,worse,agent,models \| sample: Try the sample \(offline\) \| recent: empty$/,
@@ -80,5 +80,5 @@ module.exports = withExpect(steps, {
   'start-lists-the-run': /^row: Sample: support intents.*10 of 10 passed/,
   'open-from-start-shows-the-result': /^headline: 10 of 10 passed \| name: Sample: support intents$/,
   'run-in-ci-from-the-evaluation': /^chosen: Evaluation: Sample: support intents \| command: true \| note: The pipeline runs this evaluation/,
-  'new-evaluation-empty-run-pane': /^title: true \| steps: (true|false) \| sample button: (true|false)$/,
+  'empty-run-pane-says-what-a-run-does': /^title: true \| steps: true \| to review hidden: true \| sample button: true$/,
 });

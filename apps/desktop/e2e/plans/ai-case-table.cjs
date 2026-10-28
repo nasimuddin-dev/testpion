@@ -41,7 +41,7 @@ const steps = [
      const found = dlg.querySelector('[data-paste-found]')?.textContent.trim();
      const selects = [...dlg.querySelectorAll('select')].map((s) => s.options[s.selectedIndex]?.textContent.trim()).join('/');
      await __t.real.click(vis('[data-paste-add]')[0]); await __t.sleep(800);
-     const added = vis('[data-case-cell=input]').map((i) => i.value).filter((v) => /cancel|open/.test(v)).length;
+     const added = vis('[data-case-cell=input]').map((i) => i.value).filter((v) => /^(I want to cancel|When are you open)/.test(v)).length;
      return 'found: ' + found + ' | mapped: ' + selects + ' | cases: ' + count() + ' | pasted rows seen: ' + added;`,
   ),
   step(
@@ -54,14 +54,14 @@ const steps = [
   ),
   step(
     'thousands-of-cases-stay-quick',
-    `${H} await __t.real.click(seg('Edit as text')); await __t.sleep(600);
+    `${H} try { await __t.real.click(seg('Edit as text')); await __t.sleep(600);
      const ed = (window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.offsetParent);
      ed.getModel().setValue(Array.from({ length: 5000 }, (_, i) => JSON.stringify({ input: 'case ' + i, expected: 'x' + i })).join('\\n')); await __t.sleep(800);
      const t0 = performance.now();
      await __t.real.click(seg('Table')); await painted(); await painted();
      const ms = Math.round(performance.now() - t0);
      await __t.sleep(300);
-     return 'cases: ' + count() + ' | drawn: ' + (vis('[data-case-row]').length < 80 ? 'few' : vis('[data-case-row]').length) + ' | ms: ' + (ms < 1500 ? 'quick' : ms);`,
+     return 'cases: ' + count() + ' | drawn: ' + (vis('[data-case-row]').length < 80 ? 'few' : vis('[data-case-row]').length) + ' | ms: ' + (ms < 1500 ? 'quick' : ms); } catch (e) { return 'NO STEP: ' + (e && e.message); }`,
   ),
   step(
     'empty-table-says-what-to-do',
@@ -73,7 +73,7 @@ const steps = [
   ),
 ];
 module.exports = withExpect(steps, {
-  'table-is-the-default': /^cases: 3 \| columns: input,expected \(expected\) \| rows drawn: 3$/,
+  'table-is-the-default': /^cases: 3 \| columns: input,expected \| rows drawn: 3$/,
   'type-in-a-cell': /^text has the edit: true \| lines: 3$/,
   'back-to-the-table': /^cases: 3 \| first input: Please cancel my visit$/,
   'paste-cases-from-a-spreadsheet': /^found: Found 2 cases with 2 columns: message, answer\. \| mapped: message\/answer \| cases: 5 \| pasted rows seen: 2$/,
