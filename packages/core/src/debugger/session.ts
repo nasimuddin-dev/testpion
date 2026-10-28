@@ -1,4 +1,5 @@
 import type { DebuggerExchange } from './proxy.js';
+import type { SessionSpool } from './session-spool.js';
 
 /** A message of a gRPC call is an object already decoded: counted at a flat estimate rather than stringified again. */
 const GRPC_MESSAGE_ESTIMATE = 512;
@@ -31,11 +32,29 @@ export class DebuggerSession {
   private keptBytes = 0;
   /** Where the next eviction looks: everything before it has no body any more. */
   private evictAt = 0;
+  /** Large-session mode (FG-28): where exchanges go when they leave memory, instead of being forgotten. */
+  private spool?: SessionSpool;
 
   constructor(opts: { maxExchanges?: number; maxBodyBytes?: number } = {}) {
     this.maxExchanges = opts.maxExchanges ?? 5000;
     this.maxBodyBytes = opts.maxBodyBytes ?? 200 * 1024 * 1024;
     this.block = Math.max(1, Math.min(100, Math.floor(this.maxExchanges / 50)));
+  }
+
+  /** Turn large-session mode on (give the spool) or off (undefined: what the spool holds is forgotten). */
+  setSpool(spool: SessionSpool | undefined): void {
+    if (this.spool && this.spool !== spool) this.spool.clear();
+    this.spool = spool;
+  }
+
+  /** How many exchanges are on disk, beyond the ones in memory. */
+  get spilled(): number {
+    return this.spool?.count ?? 0;
+  }
+
+  /** The whole session, oldest first: what the spool holds, then the exchanges in memory. */
+  async everything(): Promise<DebuggerExchange[]> {
+    return this.spool?.count ? [...(await this.spool.all()), ...this.items] : this.items.slice();
   }
 
   get length(): number {
@@ -82,12 +101,17 @@ export class DebuggerSession {
   }
 
   clear(): void {
+    this.spool?.clear();
     this.replace([]);
   }
 
   /** A loaded session takes the place of the current one, or joins it. */
   load(loaded: DebuggerExchange[], append = false): void {
-    this.replace(append ? [...this.items, ...loaded] : loaded);
+    if (!append) this.spool?.clear();
+    const all = append ? [...this.items, ...loaded] : loaded;
+    // large-session mode: what does not fit in memory goes to the spool, oldest first
+    if (this.spool && all.length > this.maxExchanges) this.spool.append(all.slice(0, all.length - this.maxExchanges));
+    this.replace(all);
   }
 
   /** The same array, new contents; the budget recounted from what is kept. */
@@ -103,7 +127,9 @@ export class DebuggerSession {
   }
 
   private dropOldest(n: number): void {
-    for (const gone of this.items.splice(0, n)) this.keptBytes -= this.kept.get(gone) ?? 0;
+    const left = this.items.splice(0, n);
+    this.spool?.append(left);
+    for (const gone of left) this.keptBytes -= this.kept.get(gone) ?? 0;
     this.evictAt = Math.max(0, this.evictAt - n);
   }
 }
