@@ -26,7 +26,7 @@ const steps = [
   step(
     'start-capturing',
     `await __t.view('Debugger'); await __t.sleep(500);
-     if (!(await window.aps.invoke('debug.status')).running) button('Start capturing')?.click();
+     if (!(await window.aps.invoke('debug.status')).running) await (async () => { const arrow = [...document.querySelectorAll('main [data-capture-all] button')].find((b) => b.getAttribute('aria-label') === 'Other ways to start'); if (!arrow) return; arrow.click(); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Only a program I point at the proxy/.test(m.textContent)), 3000); if (it) it.click(); })();
      const st = ${waitRunning(true)};
      await window.aps.invoke('debug.clear');
      return 'port ' + st.port;`,

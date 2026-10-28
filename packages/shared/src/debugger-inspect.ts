@@ -13,6 +13,8 @@ export interface InspectedExchange {
   requestBody?: string;
   /** In the Debugger's list the headers come as sizes only: the content type is kept apart. */
   requestContentType?: string;
+  /** The names of the cookies, when the headers' values are masked (the Debugger keeps them apart). */
+  auth?: { cookies?: string[]; setCookies?: string[] };
 }
 
 const decode = (s: string) => {
@@ -49,9 +51,14 @@ export function paramsOf(e: InspectedExchange): { query: Array<[string, string]>
  */
 export const splitSetCookie = (v: string) => v.split(/\n|,(?=\s+[^;,=\s]+=)/).map((x) => x.trim()).filter(Boolean);
 
+const MASK = '***';
+const isMasked = (v: string | undefined) => !!v && /^\*+$/.test(v.trim());
+
 export function cookiesOf(e: InspectedExchange, side: 'request' | 'response'): Array<[string, string]> {
   if (side === 'request') {
     const v = headerOf(e.requestHeaders, 'cookie');
+    // a masked header (secrets are never shown) has no names to split: the names come from the exchange's own list, the values stay masked
+    if (isMasked(v) && e.auth?.cookies?.length) return e.auth.cookies.map((n) => [n, MASK] as [string, string]);
     return v
       ? v
           .split(';')
@@ -64,6 +71,7 @@ export function cookiesOf(e: InspectedExchange, side: 'request' | 'response'): A
       : [];
   }
   const v = headerOf(e.responseHeaders, 'set-cookie');
+  if (isMasked(v) && e.auth?.setCookies?.length) return e.auth.setCookies.map((n) => [n, MASK] as [string, string]);
   return v
     ? splitSetCookie(v).map((c) => {
         const [first = '', ...attrs] = c.split(';');

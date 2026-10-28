@@ -26,6 +26,17 @@ describe('cookiesOf', () => {
   });
 });
 
+describe('cookiesOf with masked headers', () => {
+  it('takes the names from the exchange when the Cookie and Set-Cookie values are masked', () => {
+    const e = ex({ requestHeaders: { cookie: '***' }, responseHeaders: { 'set-cookie': '***' }, auth: { scheme: 'none', cookies: ['sid', 'theme'], setCookies: ['sid'] } });
+    expect(cookiesOf(e, 'request')).toEqual([['sid', '***'], ['theme', '***']]);
+    expect(cookiesOf(e, 'response')).toEqual([['sid', '***']]);
+  });
+  it('does not split a value that holds a comma and a pair (prefs=a=1,b=2)', () => {
+    expect(cookiesOf(ex({ responseHeaders: { 'set-cookie': 'prefs=a=1,b=2; Path=/' } }), 'response').map(([n]) => n)).toEqual(['prefs']);
+  });
+});
+
 describe('adviceFor', () => {
   it('says what to do for a distrusted certificate, a refused connection and a 401', () => {
     expect(adviceFor(ex({ error: 'The program did not trust the TestPion root certificate (install it, or turn HTTPS decryption off for this host)' })).join(' ')).toContain('Keep this host encrypted');

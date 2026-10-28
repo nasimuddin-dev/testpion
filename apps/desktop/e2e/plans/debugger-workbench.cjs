@@ -20,7 +20,7 @@ const steps = [
   step(
     'traffic-in-the-grid',
     `await __t.view('Debugger'); await __t.sleep(600);
-     if (!(await window.aps.invoke('debug.status')).running) { button('Start capturing')?.click(); await __t.sleep(800); }
+     if (!(await window.aps.invoke('debug.status')).running) { await (async () => { const arrow = [...document.querySelectorAll('main [data-capture-all] button')].find((b) => b.getAttribute('aria-label') === 'Other ways to start'); if (!arrow) return; arrow.click(); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Only a program I point at the proxy/.test(m.textContent)), 3000); if (it) it.click(); })(); await __t.sleep(800); }
      await window.aps.invoke('debug.clear').catch(() => undefined);
      for (const q of ['a=1', 'a=2', 'b=1']) await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?' + q });
      await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/nothing-here' });
@@ -71,9 +71,25 @@ const steps = [
      const hits = rule ? rules.hits[rule.id] : -1;
      const chip = document.querySelector('[data-quick-filter]'); const chips = document.querySelectorAll('[data-quick-filter]').length; const hidAtOnce = !row('b=1');
      document.querySelectorAll('[data-quick-filter]').forEach((c) => c.click()); await __t.sleep(200);
+     // the rule is named from what it matches (=), the chip from what the click did to the list (!=); the chip's name says what clicking does
+     const nameOk = !!rule && /^Filter out URL starts with /.test(rule.name) && !rule.name.includes('!=');
+     const chipOk = /^Show the rows hidden by URL does not start with /.test(chip?.getAttribute('aria-label') ?? '') && /The rule stays in Rules/.test(chip?.title ?? '');
      if (rule) await window.aps.invoke('debug.deleteRule', { id: rule.id });
      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-     return 'added: ' + !!rule + ' | dock: ' + dockName + ' | filtered: ' + !listed + ' | others listed: ' + other + ' | hits: ' + hits + ' | at once: ' + hidAtOnce + ' | chip: ' + chips;`,
+     return 'added: ' + !!rule + ' | dock: ' + dockName + ' | filtered: ' + !listed + ' | others listed: ' + other + ' | hits: ' + hits + ' | at once: ' + hidAtOnce + ' | chip: ' + chips + ' | name: ' + nameOk + ' | chip label: ' + chipOk;`,
+  ),
+  step(
+    'row-menu-from-the-keyboard',
+    `// Shift+F10 on the grid opens the selected row's menu, as a right-click does
+     const r = row('a=1'); if (!r) return 'NO ROW';
+     r.click(); await __t.sleep(300);
+     const box = document.querySelector('main [aria-label="Captured exchanges"]'); if (!box) return 'NO GRID BOX';
+     box.focus();
+     box.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+     const m = await __t.waitFor(() => menuItem(/^Filter out$/), 2500);
+     const hasKeep = !!menuItem(/^Keep this host encrypted$/) || !!menuItem(/^See inside HTTPS/);
+     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await __t.sleep(300);
+     return 'menu from the keyboard: ' + !!m + ' | tunnel items on an http row: ' + hasKeep;`,
   ),
   step(
     'capture-only',
@@ -125,7 +141,8 @@ module.exports = withExpect(steps, {
   'traffic-in-the-grid': /^columns: #,Offset \(s\),Duration \(s\),Method,Version,URL,Status,Type,Size \(KB\),Speed \(KB\/s\),Application,Domain,IP address,User \| rows: 4 \| totals: true$/,
   'rail-opens-summary-and-timeline': /^summary: summary:Main,Connection,Request details,Response details,Timing \| phases: sending,waiting,receiving \| multi: Selected items 2$/,
   'structure-by-domain': /^domain: 127\.0\.0\.1:4010 \| Total 4 /,
-  'row-menu-filters-out': /^added: true \| dock: filter \| filtered: true \| others listed: true \| hits: [1-9]\d* \| at once: true \| chip: 1$/,
+  'row-menu-filters-out': /^added: true \| dock: filter \| filtered: true \| others listed: true \| hits: [1-9]\d* \| at once: true \| chip: 1 \| name: true \| chip label: true$/,
+  'row-menu-from-the-keyboard': /^menu from the keyboard: true \| tunnel items on an http row: false$/,
   'capture-only': /^outside hidden: true \| inside listed: true$/,
   'highlight-rule-editor': /^saved: true \| back to: highlight \| coloured: true \| bold: true$/,
   'convert-and-incoming': /^decoded: a b&c \| incoming tab: true \| dock closed: true$/,

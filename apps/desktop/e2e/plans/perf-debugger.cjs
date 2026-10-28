@@ -55,7 +55,7 @@ const steps = [
   step(
     'live-update-is-a-delta',
     `const base = await window.aps.invoke('debug.changes', {});
-     if (!(await window.aps.invoke('debug.status')).running) { vis('main button').find((b) => b.textContent.trim() === 'Start capturing')?.click(); await __t.sleep(800); }
+     if (!(await window.aps.invoke('debug.status')).running) { await (async () => { const arrow = [...document.querySelectorAll('main [data-capture-all] button')].find((b) => b.getAttribute('aria-label') === 'Other ways to start'); if (!arrow) return; arrow.click(); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Only a program I point at the proxy/.test(m.textContent)), 3000); if (it) it.click(); })(); await __t.sleep(800); }
      await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?live=1' });
      await __t.sleep(300);
      const d = await window.aps.invoke('debug.changes', { epoch: base.epoch, since: base.rev });
