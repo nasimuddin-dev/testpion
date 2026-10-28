@@ -1,4 +1,5 @@
 import { execFileChecked } from '../net/process.js';
+import { createOwnerBatcher, parseOwners, psOwnerCommand, windowsOwnerCommand, type OwnerAnswer } from './owner-lookup.js';
 
 /** A program found behind a client port. */
 export interface ProgramInfo {
@@ -114,22 +115,20 @@ function lsofPort(port: number): Promise<ProgramInfo | undefined> {
   });
 }
 
-/** The account a process runs as (DOMAIN\\user on Windows, from CIM: Get-Process -IncludeUserName needs an elevated shell). */
+/** One system query for the accounts of several processes (see owner-lookup.ts). */
+async function queryOwners(pids: number[]): Promise<Map<number, OwnerAnswer>> {
+  const [file, args] = process.platform === 'win32' ? windowsOwnerCommand(pids) : psOwnerCommand(pids);
+  return parseOwners(await spawnText(file, args, 8000));
+}
+
+const ownerBatch = createOwnerBatcher({ query: queryOwners });
+
+/**
+ * The account a process runs as (DOMAIN\user on Windows, from CIM: Get-Process -IncludeUserName needs an elevated shell). The
+ * processes asked about within a quarter of a second are looked up in one query, not one shell each.
+ */
 export function ownerOfProcess(pid: number): Promise<string | undefined> {
-  const id = Math.trunc(pid);
-  const cmd =
-    process.platform === 'win32'
-      ? [
-          'powershell',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            `$o = Get-CimInstance Win32_Process -Filter "ProcessId=${id}" -ErrorAction SilentlyContinue | Invoke-CimMethod -MethodName GetOwner -ErrorAction SilentlyContinue; if ($o.User) { if ($o.Domain) { "$($o.Domain)\\$($o.User)" } else { $o.User } }`,
-          ],
-        ]
-      : ['ps', ['-o', 'user=', '-p', String(id)]];
-  return spawnText(cmd[0] as string, cmd[1] as string[], 8000).then((out) => out.trim() || undefined);
+  return ownerBatch(Math.trunc(pid));
 }
 
 /** A command's stdout, or '' when it fails (a lookup that cannot be made answers "unknown"). */
