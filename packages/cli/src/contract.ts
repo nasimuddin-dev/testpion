@@ -15,6 +15,7 @@ import type { Command } from 'commander';
 import { setAiCostCap } from '@testpion/core';
 import { beginCommand, cli } from './output.js';
 import { CliError, EXIT } from './shared.js';
+import { refuseWhenOpenElsewhere } from './workspace-guard.js';
 import { startDryRun } from './dry-run.js';
 import { CLI_CONFIRM, confirmBeforeRun } from './confirm.js';
 import { PLAN_ONLY, PlanOnly, planFor } from './plan.js';
@@ -112,6 +113,7 @@ export function applyCliContract(program: Command): void {
       c.option('--dry-run', 'change nothing: run against copies and list the files that would be added, changed or deleted');
     // every command takes --json, so an agent never has to know which ones do (a command that prints JSON already keeps its own)
     if (!hasOption(c, '--json') && !hasOption(c, '--jsonl')) c.option('--json', NO_ENVELOPE.has(path) ? 'accepted and ignored: the output of this command is not ours' : 'print the result as one JSON envelope (for scripts and AI agents)');
+    if (WRITE_COMMANDS.has(path) && !path.startsWith('workspace ') && !hasOption(c, '--force') && !hasOption(c, '--yes')) c.option('--force', 'write even when another TestPion has this workspace open');
     if (AI_COMMANDS.has(path) && !hasOption(c, '--max-cost')) c.option('--max-cost <usd>', 'refuse before anything is sent when one AI call could cost more than this many US dollars (the price table; a local model is free)');
     if (PLAN_ONLY[path] && !hasOption(c, '--dry-run')) c.option('--dry-run', 'change nothing: print what it would do (git is not run)');
     if (CLI_CONFIRM.some((e) => e.command === path) && !hasOption(c, '--yes')) c.option('--yes', 'confirm: required when it cannot ask (--non-interactive, CI); --dry-run shows what it would do first');
@@ -126,6 +128,7 @@ export function applyCliContract(program: Command): void {
       { ...o, json: NO_ENVELOPE.has(path) ? false : o.json, jsonl: o.jsonl === true || (JSON_MEANS_JSONL.has(path) && o.json === true) },
       [action, action.parent].some((c) => !!c && (hasOption(c, '--json') || hasOption(c, '--jsonl'))),
     );
+    if (WRITE_COMMANDS.has(path) && !path.startsWith('workspace ')) refuseWhenOpenElsewhere(o as Record<string, unknown>); // another TestPion has this workspace open (workspace-guard.ts)
     // one AI call may not cost more than --max-cost
     if (AI_COMMANDS.has(path) && typeof (o as { maxCost?: unknown }).maxCost === 'string') {
       const cap = Number((o as { maxCost: string }).maxCost);

@@ -1,4 +1,4 @@
-import { EncryptedFileSecretStore, normalizeError, sweepWorkspaceAsync, type WorkspaceStore } from '@testpion/core';
+import { EncryptedFileSecretStore, acquireWorkspaceLock, lockMessage, normalizeError, sweepWorkspaceAsync, type WorkspaceLock, type WorkspaceStore } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 /**
@@ -129,8 +129,40 @@ export function noteSlowCall(be: Backend, method: string, ms: number): void {
   if (be.slowRpcs.length > 100) be.slowRpcs.length = 100;
 }
 
+const locks = new WeakMap<Backend, WorkspaceLock>(); // registry: the lock of each session's open workspace
+
+/**
+ * The open workspace is held with an advisory lock (core storage/workspace-lock.ts). When another TestPion already has it, the
+ * window is told in plain words (`workspace.problem` kind 'locked', and `ws.current` carries it as `lockedBy`) and the log warns;
+ * nothing is blocked: both can read, and the person decides.
+ */
+export function holdWorkspaceLock(be: Backend, store: WorkspaceStore): string | undefined {
+  locks.get(be)?.release();
+  locks.delete(be);
+  if (be.host.serverMode) return undefined;
+  const lock = acquireWorkspaceLock(be.host.appDir, store.root, 'app');
+  locks.set(be, lock);
+  const message = lock.heldBy ? lockMessage(lock.heldBy) : undefined;
+  if (message) {
+    be.logger.warn(message);
+    noteProblem(be, message);
+    for (const ms of [0, 4000]) {
+      const t = setTimeout(() => be.host.emit('workspace.problem', { kind: 'locked', code: 'workspace-locked', message }), ms);
+      t.unref();
+      be.deferred.push(t);
+    }
+  }
+  lockedBy.set(be, message);
+  return message;
+}
+const lockedBy = new WeakMap<Backend, string | undefined>(); // registry: what the window is told for the open workspace
+
+/** The sentence for the window when another TestPion has the open workspace (undefined: nobody does). */
+export const workspaceLockedBy = (be: Backend): string | undefined => lockedBy.get(be);
+
 /** Leftovers of crashes and cut-short runs are removed shortly after a workspace opens (never on the way in: opening stays fast). */
 export function scheduleSweep(be: Backend, store: WorkspaceStore, afterMs = 5000): void {
+  holdWorkspaceLock(be, store); // an open workspace is announced to other TestPions; told when it already is
   const t = setTimeout(() => {
     if (be.store !== store) return;
     // asynchronous and in slices of a few milliseconds: the window's calls are served between them (housekeeping-async.ts)

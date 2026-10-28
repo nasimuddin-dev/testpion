@@ -11,6 +11,7 @@ export * from './errors-envelope.js';
 export * from './storage/housekeeping.js';
 export * from './storage/housekeeping-async.js';
 export * from './storage/run-marker.js';
+export * from './storage/workspace-lock.js';
 export * from './util/concurrency.js';
 // yaml loaded at first use (keeps it off the app's startup path): use these instead of importing 'yaml'
 export { parseYaml, stringifyYaml } from './util/lazy-yaml.js';

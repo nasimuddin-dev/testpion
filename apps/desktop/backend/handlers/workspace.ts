@@ -50,6 +50,7 @@ import {
   importFileFilters,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { workspaceLockedBy } from '../backend-health.js';
 import { takeOpenLinks } from '../open-links.js';
 import { isExamplesWorkspace } from '../backend-examples.js';
 import { saveText } from './save-text.js';
@@ -97,6 +98,8 @@ export function workspaceHandlers(be: Backend): Handlers {
         path: be.store.root,
         environments: be.store.listEnvironments({ etag: true }),
         migrations: be.store.migrationsApplied,
+        // another TestPion has this workspace open (the window shows it as a notice; nothing is blocked)
+        lockedBy: workspaceLockedBy(be),
         // the examples workspace that ships with the app: Home shows its first-run help and a way out to the user's own
         examples: isExamplesWorkspace(be),
       },
