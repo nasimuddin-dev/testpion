@@ -24,6 +24,12 @@ export interface IncomingRequest {
   ms?: number;
 }
 
+/** A header shown as a grid column. */
+export interface HeaderColumn {
+  name: string;
+  side: 'request' | 'response';
+}
+
 export interface ListSync {
   rev: number;
   epoch: number;
@@ -70,6 +76,9 @@ export interface DebuggerState {
    * the grid's #) and a revision; `rev` is the latest; `epoch` changes when the list is replaced or rows removed.
    */
   list?: ListSync;
+  /** Header columns the grid shows (FG-12): the lean rows carry these headers' values. Set by the window (debug.columns). */
+  columns?: HeaderColumn[];
+  columnsGen?: number;
   /** Put everything back (the system proxy) and stop the timers; the backend calls it when it is disposed. */
   release?(): Promise<void>;
   /** The exchanges of the session on screen (the live capture, or a saved session's tab): what selections refer to. */

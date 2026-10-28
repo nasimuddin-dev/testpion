@@ -83,21 +83,26 @@ export interface RpcParamTypes {
   'debug.annotate': RpcCommonParams & { ids: string[]; note?: string; mark?: string };
   'debug.autoBreakpoint': RpcCommonParams & { mode: string };
   'debug.certificate': RpcCommonParams & { action?: string };
+  'debug.columns': RpcCommonParams & { columns?: unknown[] };
   'debug.createFlow': RpcCommonParams & { ids?: string[]; since?: string; name?: string; drop?: string[]; keepNoise?: boolean; noiseHosts?: string[]; dryRun?: boolean; overwrite?: boolean };
   'debug.decrypt': RpcCommonParams & { on?: boolean; noDecrypt?: string[] };
   'debug.delete': RpcCommonParams & { ids: string[] };
   'debug.deleteSession': RpcCommonParams & { name: string };
-  'debug.exchanges': RpcCommonParams & { host?: string; method?: string; text?: string; kind?: string; application?: string; type?: string; limit?: number; offset?: number };
+  'debug.exchanges': RpcCommonParams & { where?: string; host?: string; method?: string; text?: string; kind?: string; application?: string; type?: string; limit?: number; offset?: number };
   'debug.openBrowser': RpcCommonParams & { browser?: string; url?: string };
   'debug.openSession': RpcCommonParams & { name?: string; path?: string; text?: string; base64?: string; append?: boolean };
   'debug.pause': RpcCommonParams & { on?: boolean };
   'debug.profile': RpcCommonParams & { action: string; name: string; from?: string };
+  'debug.programs': RpcCommonParams;
   'debug.record': RpcCommonParams & { on?: boolean };
+  'debug.replay': RpcCommonParams & { ids: string[]; times?: number; concurrency?: number; delayMs?: number; stopOnFailure?: boolean; confirmRemote?: boolean };
   'debug.resumeAll': RpcCommonParams & { abort?: boolean };
   'debug.saveFilterPreset': RpcCommonParams & { name: string; filter: Record<string, unknown> };
   'debug.saveRule': RpcCommonParams & { rule: Record<string, unknown> };
   'debug.saveToCollection': RpcCommonParams & { ids?: string[]; since?: string; name?: string; group?: string; keepNoise?: boolean };
+  'debug.select': RpcCommonParams & { where: string };
   'debug.selfTest': RpcCommonParams & { url: string; method?: string; headers?: Record<string, unknown>; body?: string };
+  'debug.snippet': RpcCommonParams & { id: string; language: string };
   'debug.start': RpcCommonParams & { port?: number; lan?: boolean };
   'debug.systemProxy': RpcCommonParams & { on: boolean };
   'debug.view': RpcCommonParams & { session?: string };
@@ -359,4 +364,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 342;
+export const RPC_METHOD_COUNT = 347;

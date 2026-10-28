@@ -1,5 +1,5 @@
 import { aiHidden } from './ai-visible';
-import type { ItemRef } from '@testpion/shared';
+import { COMMAND_HELP, parseCommand, type DebuggerCommand, type ItemRef } from '@testpion/shared';
 
 /**
  * WF-01 Quick Open: one palette for items and commands, its mode chosen by the first character typed, as in VS Code
@@ -8,9 +8,9 @@ import type { ItemRef } from '@testpion/shared';
  * Ctrl+P opens it on items, Ctrl+K (and the top bar's Commands) on commands, Ctrl+Shift+E on environments: the mode it
  * opens in is the one plain text searches; a prefix typed first switches it. Pure: App.tsx gives it the lists.
  */
-export type QuickMode = 'items' | 'commands' | 'here' | 'environments' | 'ask' | 'help';
+export type QuickMode = 'items' | 'commands' | 'here' | 'environments' | 'ask' | 'debugger' | 'help';
 
-export const MODE_OF_PREFIX: Readonly<Record<string, QuickMode>> = { '>': 'commands', '@': 'here', '#': 'environments', '~': 'ask', '?': 'help' };
+export const MODE_OF_PREFIX: Readonly<Record<string, QuickMode>> = { '>': 'commands', '@': 'here', '#': 'environments', '~': 'ask', '!': 'debugger', '?': 'help' };
 
 /** The mode a query is in (a prefix typed first, else the mode it opened in), and the text after the prefix. */
 export function parseQuickQuery(q: string, base: QuickMode = 'items'): { mode: QuickMode; text: string } {
@@ -46,6 +46,8 @@ export interface QuickSources {
   ask(question: string): void;
   /** Reopen the palette in a mode (the help rows). */
   setQuery(prefix: string): void;
+  /** The HTTP Debugger's command bar (`!`): what a command does and how to run it; unset while the Debugger is not on screen. */
+  debuggerCommands?: { describe(c: DebuggerCommand): string; run(c: DebuggerCommand): void };
   /** What a kind of item is called ("Request", "Test file"). */
   noun(ref: ItemRef): string;
 }
@@ -56,6 +58,7 @@ const HELP: Array<[string, string]> = [
   ['@', 'What is on screen: the focused editor'],
   ['#', 'Switch environment, or find a variable'],
   ['~', 'Ask in your own words about history, runs and traces (AI)'],
+  ['!', 'HTTP Debugger command bar: select rows, filter, set a breakpoint'],
 ];
 
 /** The row that asks the typed text as a question (Ask…, AI-12). */
@@ -94,6 +97,21 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
         placeholder: 'Ask: failed payment calls last week over 2 s…',
         empty: 'Type a question and press Enter: history, runs, test results and traces, in your own words',
       };
+    case 'debugger': {
+      const d = s.debuggerCommands;
+      if (!d) return { rows: [], text: '', placeholder: 'HTTP Debugger commands…', empty: 'Open the HTTP Debugger first (Go to Debugger), then press Ctrl+K and type !' };
+      if (!text)
+        return {
+          rows: COMMAND_HELP.map((h) => ({ id: `dbg-help:${h.syntax}`, label: h.syntax, detail: h.says, hint: 'Use', group: 'Debugger commands', run: () => s.setQuery(`!${h.syntax}`) })),
+          text: '',
+          placeholder: 'Debugger: ?text  >200kb  =404  @host  select …  bp url  delete  clear  hosts',
+          empty: '',
+        };
+      const p = parseCommand(text);
+      return p.ok
+        ? { rows: [{ id: 'dbg-run', label: d.describe(p.command), hint: 'Enter', group: 'Debugger', run: () => d.run(p.command) }], text: '', placeholder: 'Debugger: ?text  >200kb  =404  @host  select …  bp url  delete  clear  hosts', empty: '' }
+        : { rows: [], text: '', placeholder: 'Debugger: ?text  >200kb  =404  @host  select …  bp url  delete  clear  hosts', empty: p.error };
+    }
     case 'help':
       return {
         rows: HELP.map(([p, label]) => ({ id: `help:${p || 'items'}`, label, hint: p || 'type', run: () => s.setQuery(p) })),

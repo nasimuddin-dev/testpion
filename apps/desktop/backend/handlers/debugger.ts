@@ -45,6 +45,7 @@ import { activeRules, holdBreakpoint } from './debugger-rules.js';
 import { cachedLeanRow, cachedSessionStats, DeepSearchCache, inSlices, startMs } from './debugger-stats.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
 import { AUTOSAVE, sessionSaver } from './debugger-save.js';
+import { cachingOf, debuggerGridHandlers, headerValues, whereTestOf } from './debugger-grid.js';
 import { settleWithin } from '../backend-health.js';
 
 export { newDebuggerState, type DebuggerState, type IncomingRequest };
@@ -94,7 +95,7 @@ const LEAN_AT_ONCE = 300;
 function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
   const l = listOf(state);
   // built once per revision (a reset of thousands of rows reads them from here)
-  return cachedLeanRow(e, { rev: l.revs.get(e) ?? 0, seq: l.seqs.get(e), firstAt: l.firstAt, gen: be.logger.redactor.generation }, () => buildLeanRow(be, state, e));
+  return cachedLeanRow(e, { rev: l.revs.get(e) ?? 0, seq: l.seqs.get(e), firstAt: l.firstAt, gen: be.logger.redactor.generation * 10000 + ((be.debugger?.columnsGen ?? 0) % 10000) }, () => buildLeanRow(be, state, e));
 }
 function buildLeanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
   const { requestBody: _rb, responseBody: _sb, frames, events, grpc, requestHeaders, responseHeaders, trailers: _t, ...rest } = e;
@@ -109,6 +110,8 @@ function buildLeanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
     requestHeaderBytes: size(requestHeaders),
     responseHeaderBytes: responseHeaders ? size(responseHeaders) : undefined,
     requestContentType: requestHeaders['content-type'],
+    ...cachingOf(responseHeaders),
+    ...(be.debugger?.columns?.length ? { headerValues: headerValues(be, be.debugger.columns, requestHeaders, responseHeaders) } : {}),
     ...(frames ? { frameCount: frames.length } : {}),
     ...(events ? { eventCount: events.length } : {}),
     ...(grpc ? { grpc: { ...grpc, requests: [], responses: [], message: grpc.message && be.logger.redactor.redactString(grpc.message) } } : {}),
@@ -409,6 +412,7 @@ export function debuggerHandlers(be: Backend): Handlers {
 
   const trust = trustChecker(); // the root's trust in the store, kept for 30 s
   const handlers: Handlers = {
+    ...debuggerGridHandlers(be, { state, shown, redacted: (e) => redacted(be, e), replaced: () => replaced(shown()) }),
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
     'debug.selfTest': ({ url, method, headers, body }: { url: string; /** Plain http only: the request to send (a flow to record in the e2e suite). */ method?: string; headers?: Record<string, string>; body?: string }) =>
@@ -655,9 +659,12 @@ export function debuggerHandlers(be: Backend): Handlers {
       application,
       type,
       idsOnly,
+      where,
       limit,
       offset = 0,
     }: {
+      /** A condition (status>=400 and host~api, see shared/debugger-select.ts). */
+      where?: string;
       /** Only the ids of the matches (a search in headers and bodies, the rest is filtered in the window). */
       idsOnly?: boolean;
       host?: string;
@@ -680,7 +687,9 @@ export function debuggerHandlers(be: Backend): Handlers {
       const needle = text?.toLowerCase();
       const needleRe = needle ? new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : undefined;
       const l = listOf(shown());
+      const whereTest = where ? whereTestOf(where) : undefined;
       const pass = (e: DebuggerExchange) => {
+        if (whereTest && !whereTest(e)) return false;
         if (host && !e.host.toLowerCase().includes(host.toLowerCase())) return false;
         if (method && e.method !== method.toUpperCase()) return false;
         if (kind && e.kind !== kind) return false;

@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Columns3, Copy, MessageSquare, Palette, Database, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Columns3, Copy, Layers, MessageSquare, Palette, Database, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
@@ -15,10 +15,15 @@ import { useEventLog } from '../../lib/use-rpc';
 import { usePersisted } from '../../lib/sticky';
 import { copyText } from '../../lib/clipboard';
 import { LABEL } from '../../lib/vocabulary';
+import { plural } from '../../lib/format';
 import { negatedLabel, quickRuleName, type QuickKind } from './quick-filter';
 import { certificateError } from './ExchangeExtras';
 import { REQUIRE_AUTH_PRESET, TRAFFIC_PRESETS, USER_AGENT_PRESETS } from './presets';
 import { MARKS } from './marks';
+import { COLUMNS, DEFAULT_HIDDEN, EXTRA_KEY, HIDDEN_KEY, MAX_HEADER_COLUMNS, OPTIONAL_COLUMNS, columnShown, headerColumn, headerKey, parseHidden, plainCell, type BuiltInColumnId, type Column, type ColumnId, type HeaderColumnDef } from './grid-columns';
+import { GROUP_LABEL, groupKeyOf, groupRows, isGroup, type GridItem, type GroupBy } from './grouping';
+import { HeaderColumnDialog } from './HeaderColumnDialog';
+import { useSticky } from '../../lib/sticky';
 
 /** The whole exchange: the grid's rows are lean (no headers, no bodies). */
 const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
@@ -41,6 +46,12 @@ async function saveBody(e: Exchange, side: 'request' | 'response') {
   if (!x || (side === 'request' ? x.requestBody : x.responseBody) === undefined) return useApp.getState().toast(`The ${side} body was not kept (binary or larger than the capture keeps)`, 'error');
   await saveExchangeBody(x, side);
 }
+/** The exchange as code in a language (the backend writes it: secrets masked), put on the clipboard. */
+const copyCode = (e: Exchange, language: string, what: string) =>
+  void call<{ text: string }>('debug.snippet', { id: e.id, language }).then(
+    (r) => void copyText(r.text, what),
+    (err) => toastError(err),
+  );
 const headerLines = (h?: Record<string, string>) =>
   Object.entries(h ?? {})
     .map(([k, v]) => `${k}: ${v}`)
@@ -49,42 +60,6 @@ const headerLines = (h?: Record<string, string>) =>
 // drawn in thousands of rows: made once, so a re-rendered row reuses them
 const BOOKMARK_ICON = <Star size={10} className="fill-current text-warn" />;
 const TLS_ICON = <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />;
-
-type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid' | 'comment';
-interface Column {
-  id: ColumnId;
-  label: string;
-  width: number;
-  /** Grows to fill the row (the URL). */
-  grow?: boolean;
-  align?: 'right';
-  sort(e: Exchange): string | number;
-}
-const COLUMNS: Column[] = [
-  { id: 'seq', label: '#', width: 48, align: 'right', sort: (e) => e.seq ?? 0 },
-  { id: 'offset', label: 'Offset (s)', width: 72, align: 'right', sort: (e) => e.offsetSec ?? 0 },
-  { id: 'duration', label: 'Duration (s)', width: 80, align: 'right', sort: (e) => e.durationMs ?? -1 },
-  { id: 'method', label: 'Method', width: 64, sort: (e) => e.method },
-  { id: 'version', label: 'Version', width: 72, sort: (e) => versionOf(e) },
-  { id: 'url', label: 'URL', width: 280, grow: true, sort: (e) => e.url },
-  { id: 'status', label: 'Status', width: 72, align: 'right', sort: (e) => e.status ?? (e.error ? 999 : -1) },
-  { id: 'type', label: 'Type', width: 140, sort: (e) => e.contentType ?? '' },
-  { id: 'size', label: 'Size (KB)', width: 72, align: 'right', sort: (e) => e.responseBodyBytes },
-  { id: 'speed', label: 'Speed (KB/s)', width: 88, align: 'right', sort: (e) => Number(speedOf(e)) || 0 },
-  { id: 'application', label: 'Application', width: 110, sort: (e) => e.application ?? '' },
-  { id: 'domain', label: 'Domain', width: 150, sort: (e) => e.host },
-  { id: 'ip', label: 'IP address', width: 140, sort: (e) => e.serverAddress ?? '' },
-  { id: 'user', label: 'User', width: 120, sort: (e) => e.user ?? '' },
-  { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
-  { id: 'comment', label: 'Comments', width: 200, sort: (e) => e.note ?? '' },
-];
-// Comments is shown the first time a note is added (the row menu does it)
-const DEFAULT_HIDDEN: ColumnId[] = ['pid', 'comment'];
-const HIDDEN_KEY = 'testpion.debugger.hiddenColumns';
-const parseHidden = (raw: string): ColumnId[] | undefined => {
-  const v = JSON.parse(raw) as unknown;
-  return Array.isArray(v) ? (v as ColumnId[]) : undefined;
-};
 
 const theme = () => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 const statusClass = (e: Exchange) => (e.error || (e.status ?? 0) >= 400 ? 'text-bad' : (e.status ?? 0) >= 300 ? 'text-warn' : e.status ? 'text-ok' : 'text-muted');
@@ -112,6 +87,8 @@ function quickMatches(e: Exchange): QuickMatch[] {
 export interface GridActions {
   onOpen(e: Exchange): void;
   onResend(e: Exchange): void;
+  /** Send these exchanges again: `times` sends at once (Resend 10 times), or undefined to open the Resend… dialog. */
+  onReplay(ids: string[], times?: number): void;
   /** Stop decrypting this exchange's host (a program that does not trust the TestPion certificate); it stays a tunnel. */
   onKeepEncrypted(e: Exchange): void;
   onBookmark(e: Exchange): void;
@@ -167,20 +144,42 @@ export const DebuggerGrid = memo(function DebuggerGrid({
 }) {
   const [sort, setSort] = useState<{ col: ColumnId; desc: boolean }>({ col: 'seq', desc: false });
   const [hidden, setHidden] = usePersisted<ColumnId[]>(HIDDEN_KEY, DEFAULT_HIDDEN, { parse: parseHidden });
+  const [extra, setExtra] = usePersisted<ColumnId[]>(EXTRA_KEY, [], { parse: parseHidden });
+  // headers turned into columns (FG-12), kept per workspace; the backend puts their values on the list's rows
+  const [headerCols, setHeaderCols] = useSticky<HeaderColumnDef[]>('debugger.headerColumns', [], { persist: true });
+  const [headerDialog, setHeaderDialog] = useState(false);
+  const [groupBy, setGroupBy] = usePersisted<GroupBy>('testpion.debugger.groupBy', 'none', { parse: (raw) => (['none', 'domain', 'application', 'connection'].includes(JSON.parse(raw) as string) ? (JSON.parse(raw) as GroupBy) : 'none') });
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [menu, setMenu] = useState<{ x: number; y: number; e: Exchange }>();
-  const cols = COLUMNS.filter((c) => !hidden.includes(c.id));
+  useEffect(() => {
+    void call('debug.columns', { columns: headerCols }).catch(() => undefined);
+  }, [headerCols]);
+  const all = useMemo(() => [...COLUMNS, ...headerCols.map(headerColumn)], [headerCols]);
+  const cols = all.filter((c) => (c.id.startsWith('h:') ? true : columnShown(c.id, hidden, extra)));
   const minWidth = cols.reduce((n, c) => n + c.width, 0);
   // the sorted rows are kept between syncs: the rows that came in or changed are inserted by binary search (sorted-rows.ts)
   const sorter = useRef(new SortedRows());
   const sorted = useMemo(() => {
-    const c = COLUMNS.find((x) => x.id === sort.col)!;
+    const c = all.find((x) => x.id === sort.col) ?? COLUMNS[0]!;
     if (sort.col === 'seq' && !sort.desc) return rows;
-    return sorter.current.sort(rows, sort.col, sort.desc, c.sort);
-  }, [rows, sort]);
-  useEffect(() => onOrder?.(sorted), [sorted, onOrder]);
+    return sorter.current.sort(rows, c.id, sort.desc, c.sort);
+  }, [rows, sort, all]);
+  // grouped: a header line before each group's rows, in the same virtual list (a collapsed group is its header alone)
+  const grouped = useMemo(() => groupRows(sorted, groupBy, collapsed), [sorted, groupBy, collapsed]);
+  const order = grouped.order;
+  useEffect(() => onOrder?.(order), [order, onOrder]);
+  // a row selected inside a collapsed group (arrow keys, a link) opens its group
+  useEffect(() => {
+    if (groupBy === 'none' || !selected || !collapsed.size) return;
+    const e = rows.find((r) => r.id === selected);
+    const k = e && groupKeyOf(e, groupBy);
+    if (k !== undefined && collapsed.has(k)) setCollapsed((c) => new Set([...c].filter((x) => x !== k)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
+  const toggleGroup = (key: string) => setCollapsed((c) => (c.has(key) ? new Set([...c].filter((x) => x !== key)) : new Set([...c, key])));
   const toggleColumn = (id: ColumnId) => {
-    const next = hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id];
-    setHidden(next);
+    if (OPTIONAL_COLUMNS.includes(id)) return setExtra(extra.includes(id) ? extra.filter((x) => x !== id) : [...extra, id]);
+    setHidden(hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id]);
   };
   const click = (ev: ReactMouseEvent, e: Exchange) => {
     if (ev.ctrlKey || ev.metaKey) {
@@ -188,12 +187,12 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       return onSelect(e.id, ids);
     }
     if (ev.shiftKey && selected) {
-      const a = sorted.findIndex((x) => x.id === selected);
-      const b = sorted.findIndex((x) => x.id === e.id);
+      const a = order.findIndex((x) => x.id === selected);
+      const b = order.findIndex((x) => x.id === e.id);
       if (a >= 0 && b >= 0)
         return onSelect(
           e.id,
-          sorted.slice(Math.min(a, b), Math.max(a, b) + 1).map((x) => x.id),
+          order.slice(Math.min(a, b), Math.max(a, b) + 1).map((x) => x.id),
         );
     }
     onSelect(e.id, [e.id]);
@@ -272,6 +271,15 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         return e.pid ?? '';
       case 'comment':
         return <span title={e.note}>{e.note ?? ''}</span>;
+      case 'caching':
+      case 'encoding':
+      case 'port':
+      case 'protocol':
+      case 'tls':
+        return plainCell(c.id as BuiltInColumnId, e);
+      default:
+        // a header column (FG-12)
+        return e.headerValues?.[c.id.slice(2)] ?? '';
     }
   };
   const rowMenu = (e: Exchange): MenuItem[] => {
@@ -298,6 +306,9 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         items: [
           { label: 'URL', onSelect: () => void copyText(e.url, 'the URL') },
           { label: 'As cURL', onSelect: () => copyWhole(e, 'as cURL', curlOf) },
+          { label: 'As PowerShell', onSelect: () => copyCode(e, 'powershell', 'as PowerShell') },
+          { label: 'As fetch (JavaScript)', onSelect: () => copyCode(e, 'fetch', 'as fetch') },
+          { label: 'As HTTPie', onSelect: () => copyCode(e, 'httpie', 'as HTTPie') },
           { label: 'Request headers', onSelect: () => copyWhole(e, 'the request headers', (x) => headerLines(x.requestHeaders)) },
           { label: 'Response headers', onSelect: () => copyWhole(e, 'the response headers', (x) => headerLines(x.responseHeaders)) },
         ],
@@ -325,7 +336,24 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         ],
       },
       { label: LABEL.openAsRequest, icon: <ExternalLink size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onOpen(e) },
-      { label: 'Resend', icon: <Play size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onResend(e) },
+      {
+        label: 'Resend',
+        icon: <Play size={14} />,
+        disabled: e.kind === 'tunnel',
+        reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it',
+        onSelect: () => undefined,
+        items: [
+          { label: 'Once', onSelect: () => actions.onResend(e) },
+          { label: 'Resend 10 times', title: 'Ten sends, one after another; the result is a table of statuses and times', onSelect: () => actions.onReplay([e.id], 10) },
+          {
+            label: ids.length > 1 ? `Resend the ${ids.length} selected, in order` : 'Resend the selected, in order',
+            disabled: ids.length < 2,
+            reason: 'Select several rows first (Ctrl+click or Shift+click)',
+            onSelect: () => actions.onReplay(ids, ids.length),
+          },
+          { label: 'Resend…', separator: true, title: 'How many times, how many at once, the wait between and whether to stop at the first failure', onSelect: () => actions.onReplay(ids) },
+        ],
+      },
       // keeping a host encrypted means something only while decryption is on (or this tunnel failed on the certificate); otherwise the tunnel's item is the way in
       ...(e.kind === 'tunnel'
         ? [
@@ -413,7 +441,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       { label: ids.length > 1 ? `Delete ${ids.length} selected` : 'Delete', icon: <Trash2 size={14} />, shortcut: 'Del', danger: true, separator: true, onSelect: () => actions.onDelete(ids) },
     ];
   };
-  const index = sorted.findIndex((x) => x.id === selected);
+  const index = selected ? grouped.items.findIndex((x) => !isGroup(x) && x.id === selected) : -1;
   return (
     <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden" data-debugger-grid>
       <div className="h-full flex flex-col" style={{ minWidth }}>
@@ -434,21 +462,40 @@ export const DebuggerGrid = memo(function DebuggerGrid({
             </button>
           ))}
           <Menu
-            width={200}
-            items={COLUMNS.map((c) => ({ label: `${hidden.includes(c.id) ? '  ' : '✓ '}${c.label}`, onSelect: () => toggleColumn(c.id) }))}
+            width={260}
+            items={[
+              ...COLUMNS.map<MenuItem>((c) => ({ label: `${columnShown(c.id, hidden, extra) ? '✓ ' : '  '}${c.label}`, onSelect: () => toggleColumn(c.id) })),
+              ...headerCols.map<MenuItem>((h, i) => ({ label: `✓ ${h.name} (${h.side})`, title: 'A header column: click to remove it', separator: i === 0, onSelect: () => setHeaderCols(headerCols.filter((x) => headerKey(x) !== headerKey(h))) })),
+              { label: 'Add column from a header…', separator: !headerCols.length, disabled: headerCols.length >= MAX_HEADER_COLUMNS, reason: `At most ${MAX_HEADER_COLUMNS} header columns: remove one first`, onSelect: () => setHeaderDialog(true) },
+            ]}
             trigger={
-              <button type="button" className="h-full px-2 hover:text-fg" aria-label="Columns" title="Show or hide columns">
+              <button type="button" className="h-full px-2 hover:text-fg" aria-label="Columns" title="Show or hide columns, or add one from a header">
                 <Columns3 size={12} />
+              </button>
+            }
+          />
+          <Menu
+            width={220}
+            items={[
+              ...(Object.keys(GROUP_LABEL) as GroupBy[]).map<MenuItem>((g) => ({ label: `${groupBy === g ? '✓ ' : '  '}${GROUP_LABEL[g]}`, onSelect: () => (setGroupBy(g), setCollapsed(new Set())) })),
+              { label: 'Collapse all groups', separator: true, disabled: groupBy === 'none', reason: 'Group the rows first', onSelect: () => setCollapsed(new Set(rows.map((r) => groupKeyOf(r, groupBy)).filter((k): k is string => k !== undefined))) },
+              { label: 'Expand all groups', disabled: groupBy === 'none', reason: 'Group the rows first', onSelect: () => setCollapsed(new Set()) },
+            ]}
+            trigger={
+              <button type="button" className={cx('h-full px-2 hover:text-fg', groupBy !== 'none' && 'text-accent')} aria-label="Group by" title={groupBy === 'none' ? 'Group the rows by domain, application or connection' : `Grouped by ${GROUP_LABEL[groupBy].toLowerCase()}`} data-group-by={groupBy}>
+                <Layers size={12} />
               </button>
             }
           />
         </div>
         <VirtualList
           className="flex-1"
-          items={sorted}
+          items={grouped.items}
           rowHeight={24}
           scrollToIndex={index >= 0 ? index : undefined}
-          render={(e) => {
+          render={(item) => {
+            if (isGroup(item)) return <GroupLine g={item} onToggle={toggleGroup} />;
+            const e = item;
             const style = e.highlightStyle;
             const rowColour = style?.row ? (theme() === 'light' ? (style.light ?? style.dark) : (style.dark ?? style.light)) : undefined;
             const isSel = selectedIds.includes(e.id) || e.id === selected;
@@ -495,6 +542,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
           }}
         />
       </div>
+      {headerDialog && <HeaderColumnDialog existing={headerCols} onAdd={(c) => setHeaderCols([...headerCols, c])} onClose={() => setHeaderDialog(false)} />}
       {menu && (
         <div className="fixed" style={{ left: menu.x, top: menu.y }}>
           <Menu open onOpenChange={(o) => !o && setMenu(undefined)} align="start" width={280} items={rowMenu(menu.e)} trigger={<span className="block w-px h-px" aria-hidden />} />
@@ -503,6 +551,27 @@ export const DebuggerGrid = memo(function DebuggerGrid({
     </div>
   );
 });
+
+/** A group's header line (FG-17): a row of the same virtual list, with how many requests, how many failed and how big. */
+function GroupLine({ g, onToggle }: { g: Extract<GridItem, { group: true }>; onToggle(key: string): void }) {
+  return (
+    <div
+      role="row"
+      aria-expanded={!g.collapsed}
+      data-group={g.key}
+      className="flex items-center gap-2 h-[24px] px-2 text-xs font-semibold bg-panel border-b border-line cursor-pointer hover:bg-hover select-none"
+      onClick={() => onToggle(g.key)}
+      title={g.collapsed ? 'Show this group' : 'Hide this group'}
+    >
+      {g.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+      <span className="truncate">{g.label}</span>
+      <span className="text-muted font-normal tabular-nums">
+        {plural(g.count, 'request')}
+        {g.errors ? <span className="text-bad"> · {g.errors} failed</span> : null} · {formatBytes(g.bytes)}
+      </span>
+    </div>
+  );
+}
 
 /** The footer: how many requests are listed (or selected), their size and their time. */
 export const GridTotals = memo(function GridTotals({ rows, selectedIds, total }: { rows: Exchange[]; selectedIds: string[]; total?: number }) {
