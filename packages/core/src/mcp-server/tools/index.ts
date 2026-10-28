@@ -65,7 +65,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...gitOpsTools({ store, redactor }),
     ...gitSetupTools({ store, redactor }),
     ...openApiTools({ store, readSpecRef: d.readSpec, context: (environment) => createEngineContext({ store, secrets, settings, environment }) }),
-    ...debuggerTools({ redactor, store, session: d.captured, readOnly: d.readOnly }),
+    ...debuggerTools({ redactor, store, session: d.captured, readOnly: d.readOnly, secrets }),
     ...recordingTools({ store, redactor, secrets, session: d.captured }),
     ...flowGraphTools({ store }),
     ...scaleTools({ store, secrets, settings, redactor, checkEnvironment }),

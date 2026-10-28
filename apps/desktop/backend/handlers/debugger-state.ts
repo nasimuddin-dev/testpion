@@ -1,5 +1,5 @@
 /** The Debugger's state in the backend (handlers/debugger.ts uses it; debugger-rules.ts and debugger-reverse.ts read it). */
-import { DebuggerSession, type DebuggerExchange, type DebuggerProxy, type DebuggerRulesFile, type NetworkSpeed } from '@testpion/core';
+import { DebuggerSession, type DebuggerExchange, type DebuggerProxy, type DebuggerRulesFile, type Gateway, type GatewayConfig, type NetworkSpeed } from '@testpion/core';
 import { type LeafCertificate, type RootCertificate, type SystemProxySnapshot } from '@testpion/core/desktop';
 import type { PendingBreakpoint } from './debugger-rules.js';
 
@@ -63,6 +63,12 @@ export interface DebuggerState {
   leafFor?(host: string): LeafCertificate;
   /** The Network speed switch (FG-1): while set, the proxy paces the traffic it forwards. Not saved: a restart is full speed. */
   speed?: NetworkSpeed;
+  /** FG-9: the gateway, extra authorities and client certificates, resolved (the proxy reads `gateway` for every upstream connection), the saved settings, and a one-line account of them. */
+  gateway?: Gateway;
+  gatewayConfig?: GatewayConfig;
+  gatewaySummary?: string;
+  /** FG-28: large-session mode is on (older exchanges go to a file instead of being forgotten). */
+  spoolOn?: boolean;
   /** Listening on the local network (a phone, another computer), not only on this computer. */
   lan?: boolean;
   /** Requests TestPion's mock servers received (the Incoming tab): at most the last 2000. */

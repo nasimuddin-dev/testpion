@@ -1,8 +1,13 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Command, Option } from 'commander';
 import { createInterface } from 'node:readline';
+import { addGatewayOptions, gatewayFromFlags, type GatewayFlags } from './debug-enterprise.js';
 import {
+  DebuggerSession,
+  SessionSpool,
   describeNetworkSpeed,
   parseNetworkSpeed,
   collectionFromExchanges,
@@ -404,7 +409,7 @@ ${cyan(r.url)}`);
 
   // `debugger capture` (and its older spelling `debug`): one definition
   const defineCapture = (cmd: Command): Command =>
-    cmd
+    addGatewayOptions(cmd)
     .description("the HTTP Debugger from the terminal: a proxy other programs send through (HTTP_PROXY=…); every exchange is printed as it happens, and the session can be saved as HAR")
     .option('-p, --port <port>', 'port to listen on (default: 8899)', '8899')
     .option('--lan', 'listen on every interface (a phone, another computer), not only this one')
@@ -416,6 +421,7 @@ ${cyan(r.url)}`);
     .option('--down-kbps <n>', 'with --throttle custom: download kilobits per second')
     .option('--up-kbps <n>', 'with --throttle custom: upload kilobits per second (default: as --down-kbps)')
     .option('--latency-ms <n>', 'with --throttle custom: milliseconds added to every request')
+    .option('--large-session', 'keep the whole session: past 5,000 exchanges the older ones are written to a temporary file (masked) instead of forgotten, and -o / --save-collection include them')
     .option('--paused', 'start with listing paused: the proxy forwards, nothing is printed or saved; type resume (then Enter) to list, pause to stop listing again')
     .option('--dry-run', 'change nothing: print what it would do')
     .option('-w, --workspace <nameOrPath>', "decode gRPC messages with the .proto files of this workspace's gRPC calls (default: the nearest workspace.json, if any)")
@@ -423,7 +429,7 @@ ${cyan(r.url)}`);
     .option('--save-collection [name]', 'when stopped, save the exchanges as requests in a new collection of the workspace (secrets become variables, never saved)')
     .option('--to <collection>', 'with --save-collection: add them to this collection instead (in a folder [name] when given)')
     .addOption(new Option('--group <how>', 'with --save-collection: a folder per host, per first path segment, or none').choices(['host', 'path', 'none']).default('host'))
-    .action(async (o: { port: string; lan?: boolean; paused?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; throttle?: string; downKbps?: string; upKbps?: string; latencyMs?: string; to?: string; group: CaptureGrouping }) => {
+    .action(async (o: { port: string; lan?: boolean; paused?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; throttle?: string; downKbps?: string; upKbps?: string; latencyMs?: string; to?: string; group: CaptureGrouping; largeSession?: boolean } & GatewayFlags) => {
       if (o.dryRun) {
         const wouldDo = [`start the proxy on port ${Number(o.port) || 8899}${o.lan ? ' on every interface' : ''}`, ...(o.decrypt ? ['decrypt HTTPS with the TestPion root certificate'] : []), ...(o.systemProxy ? ['point this computer’s proxy setting at it (Ctrl+C puts it back)'] : []), ...(o.out ? [`save the session as HAR to ${o.out} when stopped`] : [])];
         if (machine()) emitEvent('dry-run', { wouldDo });
@@ -467,7 +473,13 @@ ${cyan(r.url)}`);
       if (speed) console.error(dim(`Network speed: ${describeNetworkSpeed(speed)}`));
       // listing can be paused while the proxy goes on forwarding (FG-13): `pause` and `resume` on the terminal's input
       let paused = !!o.paused;
+      const { gateway, summary: gatewaySummary } = gatewayFromFlags(o);
+      if (gatewaySummary) console.error(dim(`Connections: ${gatewaySummary}`));
+      const session = new DebuggerSession();
+      if (o.largeSession) session.setSpool(new SessionSpool(join(tmpdir(), `testpion-spool-${process.pid}.jsonl`), redactor));
       const proxy = await startDebuggerProxy({
+        session,
+        gateway: () => gateway,
         listing: () => !paused,
         grpcDecode: grpcDecoder(grpcMethodIndex(protoRoots)),
         rootCertificatePem: () => root?.certPem,
@@ -511,14 +523,15 @@ ${cyan(r.url)}`);
       });
       control?.close();
       if (snapshot) await disengageSystemProxy(debuggerCertDir(), snapshot);
+      const everything = (await session.everything()).filter((e) => e.kind === 'http');
       if (o.out) {
-        const entries = proxy.exchanges.filter((e) => e.kind === 'http');
+        const entries = everything;
         writeFileSync(o.out, JSON.stringify(exchangesToHar(entries, redactor, ENGINE_VERSION), null, 2));
         console.error(`Saved ${entries.length} exchanges to ${o.out}`);
       }
       // WF-12: the same Save to collection as the app's Debugger and debugger_save_to_collection
       if (o.saveCollection || o.to) {
-        const entries = proxy.exchanges.filter((e) => e.kind === 'http');
+        const entries = everything;
         await withWorkspace(o.workspace, (store) => {
           const name = typeof o.saveCollection === 'string' ? o.saveCollection : undefined;
           const existing = o.to ? store.listCollections().find((c) => c.id === o.to || c.name.toLowerCase() === o.to!.toLowerCase()) : undefined;
@@ -533,6 +546,7 @@ ${cyan(r.url)}`);
         });
       }
       await proxy.close();
+      session.setSpool(undefined);
     });
   // grouped by groups.ts: `debug capture` (what `debug` alone runs; `debugger` is the same word) and `debug certificate`
   defineCapture(program.command('debug'));

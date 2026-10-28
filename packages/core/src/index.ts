@@ -175,6 +175,7 @@ export * from './debugger/saz-export.js';
 export * from './debugger/farx.js';
 export * from './debugger/session-diff.js';
 export * from './debugger/bundle.js';
+export * from './debugger/session-files.js';
 export * from './debugger/session-spool.js';
 export * from './debugger/launcher.js';
 export * from './debugger/upstream-route.js';

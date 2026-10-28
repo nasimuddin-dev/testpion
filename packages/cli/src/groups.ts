@@ -37,6 +37,12 @@ const MOVES: Move[] = [
   { from: 'debug-remap', group: 'debug', as: 'remap' },
   { from: 'debug-rule', group: 'debug', as: 'rule' },
   { from: 'debug-show', group: 'debug', as: 'show' },
+  { from: 'debug-export', group: 'debug', as: 'export' },
+  { from: 'debug-farx', group: 'debug', as: 'farx' },
+  { from: 'debug-diff', group: 'debug', as: 'diff' },
+  { from: 'debug-open', group: 'debug', as: 'open' },
+  { from: 'debug-gateway', group: 'debug', as: 'gateway' },
+  { from: 'debug-launch', group: 'debug', as: 'launch' },
   { from: 'runs', group: 'history', as: 'runs' },
   { from: 'trust', group: 'workspace', as: 'trust' },
 ];

@@ -29,6 +29,7 @@ import {
 import type { Backend, Handlers } from '../backend.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { debuggerSpeedHandlers } from './debugger-speed.js';
+import { debuggerEnterpriseHandlers } from './debugger-enterprise.js';
 import { newDebuggerState, type DebuggerState } from './debugger-state.js';
 
 export interface PendingBreakpoint {
@@ -67,7 +68,7 @@ export const activeRules = (be: Backend, state: DebuggerState): DebuggerRule[] =
 };
 
 /** The rules file written without holding the thread (a busy file is waited for with timers, see atomicWriteAsync). */
-async function save(be: Backend, state: DebuggerState) {
+export async function saveRules(be: Backend, state: DebuggerState) {
   const f = rulesOf(be, state);
   await atomicWriteAsync(be.ws.path(RULES_FILE), stableText(debuggerRulesFileValue(f)));
   be.host.emit('debug.rules', { active: f.active, count: (f.profiles[f.active] ?? []).filter((r) => r.enabled).length });
@@ -170,6 +171,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
   };
   return {
     ...debuggerSpeedHandlers(be, state),
+    ...debuggerEnterpriseHandlers(be, state),
     'debug.rules': () => list(),
     'debug.resetRuleHits': () => {
       state.proxy?.resetRuleHits();
@@ -189,7 +191,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
         rules.push(rule);
         added.push(rule);
       }
-      if (added.length) await save(be, state);
+      if (added.length) await saveRules(be, state);
       return { ...list(), imported: added.length, file: hostsPath };
     },
     /** Add a preset (filled in for a host when given), or save a rule (new or changed). */
@@ -199,7 +201,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       const f = file();
       const rule = cleanRule(p.rule);
       (f.profiles[f.active] ??= []).push(rule);
-      await save(be, state);
+      await saveRules(be, state);
       return { ...list(), rule };
     },
     'debug.saveRule': async ({ rule }: { rule: Partial<DebuggerRule> }) => {
@@ -209,13 +211,13 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       const clean = cleanRule(rule, i >= 0 ? rule.id : undefined);
       if (i >= 0) rules[i] = clean;
       else rules.push(clean);
-      await save(be, state);
+      await saveRules(be, state);
       return { ...list(), rule: clean };
     },
     'debug.deleteRule': async ({ id }: { id: string }) => {
       const f = file();
       f.profiles[f.active] = (f.profiles[f.active] ?? []).filter((r) => r.id !== id);
-      await save(be, state);
+      await saveRules(be, state);
       return list();
     },
     'debug.setRuleEnabled': async ({ id, enabled }: { id: string; enabled: boolean }) => {
@@ -223,7 +225,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       const r = (f.profiles[f.active] ?? []).find((x) => x.id === id);
       if (!r) throw new ApsError('ValidationError', 'No such rule');
       r.enabled = enabled;
-      await save(be, state);
+      await saveRules(be, state);
       return list();
     },
     'debug.moveRule': async ({ id, to }: { id: string; to: number }) => {
@@ -233,7 +235,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       if (i < 0) throw new ApsError('ValidationError', 'No such rule');
       const [r] = rules.splice(i, 1);
       rules.splice(Math.max(0, Math.min(rules.length, to)), 0, r!);
-      await save(be, state);
+      await saveRules(be, state);
       return list();
     },
     /** Profiles: a named set of rules, switched as one (Offline, Slow network, Mock payments, …). */
@@ -258,7 +260,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
         delete f.profiles[from];
         if (f.active === from) f.active = n;
       }
-      await save(be, state);
+      await saveRules(be, state);
       return list();
     },
     /** What the active rules would do to a request like this one (the Rules tab's "test a URL"). */
@@ -311,7 +313,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       }
       const f = file();
       f.profiles[f.active] = withAutoBreakpoint(f.profiles[f.active] ?? [], m);
-      await save(be, state);
+      await saveRules(be, state);
       return list();
     },
     /** Let every held exchange go on as it was, or abort them all. */
@@ -337,13 +339,13 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       const n = name.trim();
       if (!n) throw new ApsError('ValidationError', 'A preset needs a name');
       f.filterPresets = [...(f.filterPresets ?? []).filter((p) => p.name !== n), { name: n, filter }];
-      await save(be, state);
+      await saveRules(be, state);
       return f.filterPresets;
     },
     'debug.deleteFilterPreset': async ({ name }: { name: string }) => {
       const f = file();
       f.filterPresets = (f.filterPresets ?? []).filter((p) => p.name !== name);
-      await save(be, state);
+      await saveRules(be, state);
       return f.filterPresets;
     },
 

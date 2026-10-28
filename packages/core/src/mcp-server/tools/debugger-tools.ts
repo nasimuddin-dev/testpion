@@ -18,12 +18,20 @@ import { resolve } from 'node:path';
 import { Redactor } from '../../util/redact.js';
 import { ApsError } from '../../errors.js';
 import { str, type Tool, limitArg } from '../tool.js';
+import { connectionProperties, diffForAgent, exchangesFromFile, gatewayFromArgs } from './debugger-enterprise-tools.js';
+import { exchangesToSaz } from '../../debugger/saz-export.js';
+import { createShareBundle } from '../../debugger/bundle.js';
+import { rulesFromFarx, describeFarxImport } from '../../debugger/farx.js';
+import { planLaunch, startLaunch, LAUNCH_KINDS, type LaunchKind } from '../../debugger/launcher.js';
+import { strictHarRedactor } from '../../debugger/har.js';
+import type { Gateway } from '../../debugger/gateway.js';
+import type { SecretReader } from '../../vars/variables.js';
 
 /**
  * The HTTP Debugger for agents: start the proxy, point a program at it, read what it sent and got. The capture lives
  * in this server process; secrets in URLs, headers and bodies pass the redactor before an agent sees them.
  */
-export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /** The capture's list, when other tools read it too (flow_from_exchanges). */ session?: DebuggerExchange[]; /** A read-only server: nothing here may change the capture. */ readOnly?: boolean }): Tool[] {
+export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /** The capture's list, when other tools read it too (flow_from_exchanges). */ session?: DebuggerExchange[]; /** A read-only server: nothing here may change the capture. */ readOnly?: boolean; /** The secret store: a gateway password or a key passphrase is read by name. */ secrets?: SecretReader }): Tool[] {
   let proxy: DebuggerProxy | undefined;
   /** Listing is paused: the proxy forwards, rules act, nothing new is listed. */
   let paused = false;
@@ -42,6 +50,10 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     if (was) await disengageSystemProxy(debuggerCertDir(), was);
   };
   let guarded = false;
+  /** FG-9: the gateway of this capture, a line about it, and the root certificate's path when HTTPS is decrypted (for the launcher). */
+  let gateway: Gateway | undefined;
+  let gatewaySummary: string | undefined;
+  let rootPath: string | undefined;
   const session: DebuggerExchange[] = d.session ?? [];
   /** The rules of this server process (an agent adds them; the proxy reads them on every request). */
   const rules: DebuggerRule[] = [];
@@ -110,7 +122,12 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear', 'pause', 'resume'], description: 'pause: the proxy keeps forwarding but stops listing new traffic; resume lists again' },
+          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear', 'pause', 'resume', 'launch'], description: 'pause: the proxy keeps forwarding but stops listing new traffic; resume lists again; launch starts a program through the running proxy (command, args)' },
+          ...connectionProperties,
+          command: { type: 'string', description: 'With launch: the program to start (a runtime is recognised by its name: node, python, java, dotnet, curl, a Chromium browser, firefox)' },
+          args: { type: 'array', items: { type: 'string' }, description: 'With launch: its arguments' },
+          kind: { type: 'string', enum: [...LAUNCH_KINDS], description: 'With launch: the runtime when the name does not say' },
+          preview: { type: 'boolean', description: 'With launch: only say what would be set (the switches, the variables, the notes)' },
           port: { type: 'number', description: 'With start: the port (default: any free one)' },
           decrypt: { type: 'boolean', description: 'With start: decrypt HTTPS with the TestPion root certificate (the program must trust it: the result says where the file is)' },
           system_proxy: { type: 'boolean', description: 'With start: capture the whole computer' },
@@ -118,15 +135,28 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         required: ['action'],
       },
       run: async (a) => {
-        const status = () => ({ running: !!proxy, paused, url: proxy?.url, port: proxy?.port, systemProxy: !!systemProxy, exchanges: session.length });
+        const status = () => ({ running: !!proxy, paused, url: proxy?.url, port: proxy?.port, systemProxy: !!systemProxy, exchanges: session.length, ...(gatewaySummary ? { gateway: gatewaySummary } : {}) });
+        if (a.action === 'launch') {
+          if (!proxy) throw new ApsError('ConfigurationError', 'Start the proxy first (action start), then launch the program');
+          const plan = planLaunch({ command: String(a.command ?? ''), args: Array.isArray(a.args) ? a.args.map(String) : [], proxyUrl: proxy.url, kind: a.kind as LaunchKind | undefined, caPath: rootPath });
+          const view = { kind: plan.kind, command: plan.command, args: plan.args, variables: Object.keys(plan.env), notes: plan.notes };
+          if (a.preview === true) return { ...view, started: false };
+          const r = await startLaunch(plan, { cwd: d.store?.root });
+          return { ...view, started: true, pid: r.pid, next: 'Use the program, then call debugger_exchanges.' };
+        }
         if (a.action === 'start') {
+          const connections = gatewayFromArgs(a, d.secrets); // before anything is stopped: a wrong setting changes nothing
           await proxy?.close();
           await restoreSystem();
+          gateway = connections.gateway;
+          gatewaySummary = connections.summary;
           const root = a.decrypt ? ensureRootCertificate(debuggerCertDir()) : undefined;
+          rootPath = root?.path;
           const leaf = root ? leafSigner(root) : undefined;
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
             rules: () => rules,
+            gateway: () => gateway,
             speed: () => speed,
             workspaceRoot: () => d.store?.root,
             listing: () => !paused,
@@ -303,33 +333,42 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['save', 'open'] },
-          path: str('The .har file (open also reads Fiddler .saz)'),
+          action: { type: 'string', enum: ['save', 'open', 'export_saz', 'bundle', 'diff'], description: 'export_saz writes a Fiddler session archive (masked); bundle writes a .tpbundle (masked HAR, active rules, environment facts, notes) to share with a colleague or support; diff compares the captured session with the earlier run in path (or path with other)' },
+          path: str('The file: .har (open also reads Fiddler .saz and .tpbundle); with export_saz the .saz to write; with bundle the .tpbundle; with diff the earlier run (HAR, SAZ or bundle)'),
+          other: str('With diff: a second file to compare path with, instead of the captured session'),
+          notes: str('With bundle: a text for the person who opens it (masked like the rest)'),
+          with_rules: { type: 'boolean', description: 'With bundle: include the active rules (default true)' },
+          ignore_query: { type: 'boolean', description: 'With diff: match requests without their query string' },
+          include_size: { type: 'boolean', description: 'With diff: also report a different response size' },
           append: { type: 'boolean', description: 'With open: add to the session instead of replacing it' },
         },
         required: ['action', 'path'],
       },
-      run: (a) => {
+      run: async (a) => {
         const file = resolve(String(a.path));
+        if (a.action === 'export_saz') {
+          writeFileSync(file, await exchangesToSaz(session, strictHarRedactor(red)));
+          return { saved: file, exchanges: session.length, masked: true };
+        }
+        if (a.action === 'bundle') {
+          const { bytes, manifest } = await createShareBundle({ name: String(a.path).replace(/^.*[\\/]/, '').replace(/\.tpbundle$/i, ''), exchanges: session, rules: a.with_rules === false ? [] : rules.filter((r) => r.enabled), notes: typeof a.notes === 'string' ? a.notes : undefined, redactor: red, state: { running: !!proxy, port: proxy?.port, systemProxy: !!systemProxy, networkSpeed: speed ? describeNetworkSpeed(speed) : undefined } });
+          writeFileSync(file, bytes);
+          return { saved: file, masked: true, exchanges: manifest.exchanges, rules: manifest.rules, hasNotes: manifest.hasNotes };
+        }
+        if (a.action === 'diff') {
+          const before = exchangesFromFile(file).exchanges;
+          const after = typeof a.other === 'string' && a.other ? exchangesFromFile(resolve(a.other)).exchanges : session;
+          return diffForAgent(before, after, red, { ignoreQuery: a.ignore_query === true, includeSize: a.include_size === true });
+        }
         if (a.action === 'save') {
           writeFileSync(file, JSON.stringify(exchangesToHar(session, red), null, 2));
           return { saved: file, exchanges: session.length };
         }
-        const bytes = readFileSync(file);
-        let loaded: DebuggerExchange[];
-        if (bytes.subarray(0, 2).toString('latin1') === 'PK') loaded = exchangesFromSaz(bytes);
-        else {
-          let har: unknown;
-          try {
-            har = JSON.parse(bytes.toString('utf8'));
-          } catch (e) {
-            throw new ApsError('ValidationError', `Not a HAR or SAZ file: ${(e as Error).message}`);
-          }
-          loaded = exchangesFromHar(har);
-        }
+        const opened = exchangesFromFile(file);
+        const loaded = opened.exchanges;
         if (!a.append) session.length = 0;
         session.push(...loaded);
-        return { loaded: loaded.length, exchanges: session.length };
+        return { loaded: loaded.length, exchanges: session.length, kind: opened.kind, ...(opened.bundle ? { bundle: { name: opened.bundle.manifest.name, createdAt: opened.bundle.manifest.createdAt, rules: opened.bundle.rules.length, environment: opened.bundle.environment, notes: opened.bundle.notes && red.redactString(opened.bundle.notes) } } : {}) };
       },
     },
     {
@@ -340,7 +379,9 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume', 'speed'] },
+          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume', 'speed', 'import_farx'], description: 'import_farx maps a Fiddler AutoResponder file (.farx) in path into rules, best effort (dry_run only reports); each rule says whether it was imported, imported switched off, or skipped and why' },
+          path: str('With import_farx: the .farx file'),
+          dry_run: { type: 'boolean', description: 'With import_farx: report only' },
           speed: { type: 'string', description: 'With speed: off, modem, edge, slow-3g, 3g, slow-4g or custom (omit to read the current speed)' },
           down_kbps: { type: 'number', description: 'With speed custom: download kilobits per second' },
           up_kbps: { type: 'number', description: 'With speed custom: upload kilobits per second (default as down)' },
@@ -378,6 +419,11 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
             }
           }
           return { speed: speed ?? null, label: describeNetworkSpeed(speed), presets: NETWORK_SPEEDS.map((s) => s.preset) };
+        }
+        if (a.action === 'import_farx') {
+          const r = rulesFromFarx(readFileSync(resolve(String(a.path))));
+          if (a.dry_run !== true) rules.push(...r.rules);
+          return { summary: describeFarxImport(r), partial: true, applied: a.dry_run !== true && r.rules.length > 0, items: r.items, ...list() };
         }
         if (a.action === 'held') return heldList();
         if (a.action === 'resume') {

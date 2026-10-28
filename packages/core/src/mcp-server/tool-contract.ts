@@ -169,7 +169,13 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   git_resolve: { describe: (a) => `overwrite the conflicted file ${q(a.path)} with ${a.side ? `"${String(a.side)}"` : 'the chosen sides'} (the other side's changes in it are dropped)` },
   git_sync: { describe: () => 'pull (merging the remote changes into the workspace files) and push the local commits' },
   // the Debugger changes this computer, not the workspace: the OS proxy setting and the trust store
-  debugger_capture: { when: (a) => a.action === 'start' && a.system_proxy === true, describe: () => 'point this computer’s proxy setting at the Debugger proxy, so every program that follows it is captured (stop puts it back)' },
+  debugger_capture: {
+    when: (a) => (a.action === 'start' && (a.system_proxy === true || typeof a.upstream === 'string' || a.upstream_system === true)) || (a.action === 'launch' && a.preview !== true),
+    describe: (a) =>
+      a.action === 'launch'
+        ? `start the program ${q(a.command)} on this computer with proxy variables and switches that send its traffic through the Debugger`
+        : [a.system_proxy === true || !(typeof a.upstream === 'string' || a.upstream_system === true) ? 'point this computer’s proxy setting at the Debugger proxy, so every program that follows it is captured (stop puts it back)' : '', typeof a.upstream === 'string' || a.upstream_system === true ? `forward everything the proxy captures through the gateway ${typeof a.upstream === 'string' ? q(a.upstream) : 'named by the environment (HTTP_PROXY)'}` : ''].filter(Boolean).join('; '),
+  },
   debugger_certificate: {
     when: (a) => a.action === 'install' || a.action === 'remove',
     describe: (a) => (a.action === 'remove' ? 'remove the TestPion HTTP Debugger root certificate from this computer’s trust store' : 'add the TestPion HTTP Debugger root certificate to this computer’s trust store: programs here then trust what TestPion signs (the system may ask the user too)'),

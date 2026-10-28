@@ -1,3 +1,4 @@
+import { request as httpRequest } from 'node:http';
 import { Agent as HttpsAgent } from 'node:https';
 import { connect as tcpConnect, isIP, Socket } from 'node:net';
 import { connect as tlsConnect, rootCertificates } from 'node:tls';
@@ -177,3 +178,45 @@ export function createUpstream(o: { trustedCa(): string[] | undefined; insecure(
 }
 
 export type Upstream = ReturnType<typeof createUpstream>;
+
+/**
+ * Try a gateway: open a tunnel (https) or ask for the head of the page (http) through it, and say what happened in words. Never
+ * rejects; `via` is `direct` when the gateway does not apply to the URL (the bypass list, loopback).
+ */
+export async function probeGateway(gw: Gateway, url: string, timeoutMs = 8000): Promise<{ via: string; ok: boolean; ms: number; message: string }> {
+  const t0 = Date.now();
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return { via: 'none', ok: false, ms: 0, message: `"${url}" is not a URL` };
+  }
+  const p = gw.proxyFor(u);
+  if (!p) return { via: 'direct', ok: true, ms: 0, message: `${u.host} is not sent through the gateway (direct, or on the bypass list)` };
+  return new Promise((resolve) => {
+    let done = false;
+    const end = (ok: boolean, message: string) => {
+      if (done) return;
+      done = true;
+      resolve({ via: p.label, ok, ms: Date.now() - t0, message });
+    };
+    const timer = setTimeout(() => end(false, `No answer from ${p.label} in ${timeoutMs / 1000} s`), timeoutMs);
+    timer.unref();
+    if (u.protocol === 'https:') {
+      const s = connectViaProxy(p, u.hostname, Number(u.port) || 443, () => {
+        clearTimeout(timer);
+        end(true, `${p.label} opened a tunnel to ${u.host}`);
+        s.destroy();
+      });
+      s.once('error', (e) => (clearTimeout(timer), end(false, e.message.includes('ECONNREFUSED') ? `${p.label} refused the connection` : e.message)));
+      return;
+    }
+    const req = httpRequest({ hostname: p.host, port: p.port, method: 'HEAD', path: u.href, headers: { host: u.host, ...(p.auth ? { 'proxy-authorization': p.auth } : {}) }, timeout: timeoutMs }, (res) => {
+      clearTimeout(timer);
+      res.resume();
+      end(res.statusCode !== 407 && (res.statusCode ?? 0) < 500, res.statusCode === 407 ? `${p.label} wants a user name and password` : `${p.label} answered ${res.statusCode} for ${u.host}`);
+    });
+    req.once('error', (e) => (clearTimeout(timer), end(false, e.message)));
+    req.end();
+  });
+}

@@ -22,6 +22,7 @@ import { registerRunCommands } from './commands/run.js';
 import { registerEvaluationCommands } from './commands/evaluations.js';
 import { registerServeCommands } from './commands/serve.js';
 import { registerDebugNotesCommands } from './commands/debug-notes.js';
+import { registerDebugEnterpriseCommands } from './commands/debug-enterprise.js';
 import { registerDataCommands } from './commands/data.js';
 import { registerImportCommands } from './commands/import.js';
 import { registerWorkspaceCommands } from './commands/workspace.js';
@@ -72,6 +73,7 @@ export function buildProgram(): Command {
   registerEvaluationCommands(program);
   registerServeCommands(program);
   registerDebugNotesCommands(program);
+  registerDebugEnterpriseCommands(program);
   registerDataCommands(program);
   registerImportCommands(program);
   registerWorkspaceCommands(program);
