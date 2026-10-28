@@ -1,4 +1,9 @@
-import { parse, type Node } from 'acorn';
+import type { Node } from 'acorn';
+import { nodeRequire } from '../../util/lazy-require.js';
+
+// acorn (220 KB) loads with the first script converted, not at startup (see util/lazy-require.ts): the CLI and the app start without it
+let acornMod: typeof import('acorn') | undefined;
+const acorn = (): typeof import('acorn') => (acornMod ??= typeof require === 'function' ? require('acorn') : nodeRequire('acorn'));
 
 /**
  * A small ESTree layer for the script converter: parse a script (acorn), walk it with the scope chain of every node,
@@ -27,7 +32,7 @@ export class ScriptParseError extends Error {
 export function parseScript(code: string): ParsedScript {
   try {
     // a script is a function body in the sandbox: top-level await and return are allowed
-    const ast = parse(code, { ecmaVersion: 'latest', sourceType: 'script', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, allowHashBang: true }) as N;
+    const ast = acorn().parse(code, { ecmaVersion: 'latest', sourceType: 'script', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true, allowHashBang: true }) as N;
     return { ast, topLevel: declaredIn(ast) };
   } catch (e) {
     const loc = (e as { loc?: { line: number; column: number } }).loc;

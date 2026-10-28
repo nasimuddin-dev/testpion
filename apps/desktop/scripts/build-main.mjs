@@ -22,8 +22,8 @@ await build({ ...mainOptions, entryPoints: [join(root, 'backend/web-server.ts')]
 // drivers loaded on first use (see LAZY_MODULES): beside the bundles, in dist-electron/lazy
 await buildLazyModules(build, out, root);
 
-// a size budget for what every start has to read and compile (17.4 MB before the lazy libraries moved out, 7.5 MB after)
-const MAIN_BUDGET_MB = 8;
+// a size budget for what every start has to read and compile (17.4 MB before the lazy libraries moved out, 6.9 MB after the updater, QR code and acorn moved too)
+const MAIN_BUDGET_MB = 7.5;
 const mb = (f) => statSync(join(out, f)).size / 1048576;
 console.log(`built electron main (${mb('main.cjs').toFixed(1)} MB), CLI (${mb('cli.cjs').toFixed(1)} MB), preload and web bridge`);
 if (mb('main.cjs') > MAIN_BUDGET_MB) {
