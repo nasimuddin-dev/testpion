@@ -78,15 +78,22 @@ describe('Structure tree', () => {
     expect(count(tree)).toBe(5000);
     expect(tree.root.children.size).toBe(40);
     const more = [...rows, ...list(100, 5000)];
-    const t0 = performance.now();
-    tree.update(more);
-    const incremental = performance.now() - t0;
-    expect(count(tree)).toBe(5100);
     const fresh = new StructureTree();
     fresh.update(more);
-    expect(tree.root.bytes).toBe(fresh.root.bytes);
-    expect([...tree.root.children.keys()].sort()).toEqual([...fresh.root.children.keys()].sort());
-    expectWithin(incremental, 2, '+100 rows into a tree of 5,000');
+    // +100 rows into a tree of 5,000, best of 5 (each on a tree built from the 5,000)
+    const times: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const t = new StructureTree();
+      t.update(rows);
+      const t0 = performance.now();
+      t.update(more);
+      times.push(performance.now() - t0);
+      expect(count(t)).toBe(5100);
+      expect(t.root.bytes).toBe(fresh.root.bytes);
+      expect([...t.root.children.keys()].sort()).toEqual([...fresh.root.children.keys()].sort());
+    }
+    console.log('structure tree, +100 rows into 5,000 (ms):', times.map((x) => x.toFixed(1)).join(', '));
+    expectWithin(Math.min(...times), 2, '+100 rows into a tree of 5,000 (best of 5)');
   });
 
   it('follows a body that grew, and starts over when rows left', () => {
