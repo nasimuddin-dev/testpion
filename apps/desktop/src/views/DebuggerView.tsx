@@ -865,11 +865,8 @@ export function DebuggerView() {
                       {side === 'incoming' ? (
                         <IncomingList list={incoming.list} onClear={incoming.clear} selected={incomingSel} onSelect={setIncomingSel} />
                       ) : !rows.length && !!status?.exchanges && filtersOn ? (
-                        <Empty icon={<Filter size={26} />} title="No exchange matches the filters" data-filtered-empty>
-                          {plural(status.exchanges, 'exchange')} captured, hidden by the filters above.{' '}
-                          <Button size="sm" variant="primary" onClick={() => setFilter(noFilter)}>
-                            Show all
-                          </Button>
+                        <Empty icon={<Filter size={26} />} title="No exchange matches the filters" actions={[{ label: 'Show all', onClick: () => setFilter(noFilter) }]}>
+                          {plural(status.exchanges, 'exchange')} captured, hidden by the filters above.
                         </Empty>
                       ) : !rows.length ? (
                         <Empty icon={<Bug size={26} />} title={status?.running ? 'Waiting for traffic' : 'Not capturing'}>
