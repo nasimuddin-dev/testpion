@@ -278,6 +278,8 @@ export interface Frame {
   bytes: number;
   text?: string;
   truncated?: boolean;
+  /** A frame rule acted on it. */
+  ruled?: 'dropped' | 'edited' | 'held';
 }
 export interface StreamEvent {
   at: string;
@@ -317,7 +319,10 @@ export const FramesView = memo(function FramesView({ frames, open }: { frames: F
               <tr key={i} className="border-t border-line/60 align-top" data-frame={f.direction}>
                 <td className="py-1 pr-2 whitespace-nowrap text-muted tabular-nums">{time(f.at)}</td>
                 <td className={f.direction === 'sent' ? 'py-1 pr-2 text-accent' : 'py-1 pr-2 text-ok'}>{f.direction === 'sent' ? '↑' : '↓'}</td>
-                <td className="py-1 pr-2 text-muted">{f.opcode}</td>
+                <td className="py-1 pr-2 text-muted">
+                  {f.opcode}
+                  {f.ruled && <span className="ml-1 text-warn" title={f.ruled === 'dropped' ? 'A rule dropped this frame: it was never forwarded' : f.ruled === 'edited' ? 'A rule changed this frame: the text shown is what was forwarded' : 'A rule paused this frame; it was forwarded after'}>{f.ruled}</span>}
+                </td>
                 <td className="py-1 pr-2 mono break-all">
                   {f.text ?? <span className="text-muted">({f.bytes} bytes)</span>}
                   {f.truncated ? ' …' : ''}

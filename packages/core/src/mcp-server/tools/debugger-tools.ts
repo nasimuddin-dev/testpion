@@ -1,6 +1,8 @@
 import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../../debugger/proxy.js';
 import { exchangesFromHar, exchangesToHar } from '../../debugger/har.js';
 import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
+import { checkRuleShape } from '../../debugger/rule-shape.js';
+import { describeNetworkSpeed, NETWORK_SPEEDS, parseNetworkSpeed, type NetworkSpeed } from '../../debugger/network-speed.js';
 import { annotate, AUTO_BREAKPOINT_LABEL, autoBreakpointMode, cleanAnnotation, parseAutoBreakpointMode, withAutoBreakpoint } from '../../debugger/auto-breakpoint.js';
 import { shortId } from '../../util/ids.js';
 import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrust, rootStanding, trustInstructions } from '../../debugger/certificate.js';
@@ -43,6 +45,8 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
   const session: DebuggerExchange[] = d.session ?? [];
   /** The rules of this server process (an agent adds them; the proxy reads them on every request). */
   const rules: DebuggerRule[] = [];
+  /** The Network speed switch (debugger_rules action speed). */
+  let speed: NetworkSpeed | undefined;
   const red = d.redactor;
   const safe = (e: DebuggerExchange, bodies: boolean) => {
     const headers = (h?: Record<string, string>) => (h ? red.redactHeaders(h) : h);
@@ -119,6 +123,8 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
             rules: () => rules,
+            speed: () => speed,
+            workspaceRoot: () => d.store?.root,
             listing: () => !paused,
             onBreakpoint: (e, phase) =>
               new Promise<BreakpointEdits | undefined>((resolve) => {
@@ -316,11 +322,15 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       name: 'debugger_rules',
       write: true,
       description:
-        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore (filter out) | only (capture only: when any is on, only what one matches is listed) | highlight | modify | reply | redirect, match {host, url, method, application} as globs plus an optional where {column: status|url|method|host|application|user|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}, and the kind's fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body}; redirect {host, scheme}), enable / disable or remove one. Breakpoints: action breakpoints with mode off | request (every request) | response (every response) | post (only POST) | errors (only responses with status 400+) keeps one managed rule \"Auto breakpoint\" (the exchange is held until action resume, or 2 minutes); held lists what is held; resume lets one (id) or all go on, or abort them. Custom breakpoint rules need the app's window.",
+        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore (filter out) | only (capture only: when any is on, only what one matches is listed) | highlight | modify | reply | redirect, match {host, url, method, application} as globs plus an optional where {column: status|url|method|host|application|user|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}, and the kind's fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body, or file / folder + stripPrefix of the workspace: map local}; redirect {host, scheme, rewrite {from, to, regex}}; modify also requestReplace / responseReplace [{find, replace, regex, ignoreCase}] and setStatus; kind remap {remap {to, scheme: auto|http|https, preserveHost}} with match.host as the host to move; kind fault {fault {action: drop|timeout|truncate|error, percent, bytes, status, timeoutMs}}; kind frame (WebSocket) {frame {direction: sent|received|both, when, action: drop|replace|break|delay, find, replace, regex, delayMs}}), enable / disable or remove one. Network speed: action speed with speed off | modem | edge | slow-3g | 3g | slow-4g, or custom with down_kbps / up_kbps / latency_ms, paces every forwarded request and response. Breakpoints: action breakpoints with mode off | request (every request) | response (every response) | post (only POST) | errors (only responses with status 400+) keeps one managed rule \"Auto breakpoint\" (the exchange is held until action resume, or 2 minutes); held lists what is held; resume lets one (id) or all go on, or abort them. Custom breakpoint rules need the app's window.",
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume'] },
+          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume', 'speed'] },
+          speed: { type: 'string', description: 'With speed: off, modem, edge, slow-3g, 3g, slow-4g or custom (omit to read the current speed)' },
+          down_kbps: { type: 'number', description: 'With speed custom: download kilobits per second' },
+          up_kbps: { type: 'number', description: 'With speed custom: upload kilobits per second (default as down)' },
+          latency_ms: { type: 'number', description: 'With speed custom: added to every request' },
           mode: { type: 'string', enum: ['off', 'request', 'response', 'post', 'errors'], description: 'With breakpoints: which traffic is held (off removes the Auto breakpoint rule)' },
           abort: { type: 'boolean', description: 'With resume: abort the held exchange(s) with a 502 instead of sending them on' },
           preset: str('With add: a preset id from the presets action'),
@@ -345,6 +355,16 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           rules.splice(0, rules.length, ...next);
           return { mode, label: AUTO_BREAKPOINT_LABEL[mode], ...list(), ...heldList() };
         }
+        if (a.action === 'speed') {
+          if (a.speed !== undefined) {
+            try {
+              speed = parseNetworkSpeed({ preset: String(a.speed), downKbps: a.down_kbps as number | undefined, upKbps: a.up_kbps as number | undefined, latencyMs: a.latency_ms as number | undefined });
+            } catch (err) {
+              throw new ApsError('ValidationError', (err as Error).message);
+            }
+          }
+          return { speed: speed ?? null, label: describeNetworkSpeed(speed), presets: NETWORK_SPEEDS.map((s) => s.preset) };
+        }
         if (a.action === 'held') return heldList();
         if (a.action === 'resume') {
           const one = typeof a.id === 'string' ? held.get(a.id) : undefined;
@@ -358,7 +378,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         if (a.action === 'add') {
           const from = typeof a.preset === 'string' ? rulePresets(typeof a.host === 'string' ? a.host : undefined).find((p) => p.id === a.preset)?.rule : (a.rule as Partial<DebuggerRule> | undefined);
           if (!from) throw new ApsError('ValidationError', 'add needs a preset id or a rule object');
-          if (!['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
+          if (!['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
           if (from.kind === 'breakpoint') throw new ApsError('ValidationError', 'A custom breakpoint needs the app window; use action breakpoints for the automatic ones, or modify / reply here');
           const rule: DebuggerRule = {
             ...(from as DebuggerRule),
@@ -367,6 +387,8 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
             enabled: from.enabled !== false,
             match: from.match ?? {},
           };
+          const problem = checkRuleShape(rule);
+          if (problem) throw new ApsError('ValidationError', problem);
           rules.push(rule);
           return { added: { ...rule, summary: describeRule(rule) }, ...list() };
         }

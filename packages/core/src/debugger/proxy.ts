@@ -1,10 +1,9 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, isIP, type Socket } from 'node:net';
-import { lookup as dnsLookupAll } from 'node:dns/promises';
+import { createLanGuard } from './lan-guard.js';
 import { guardedLookup, upstreamAgents } from './upstream-guard.js';
 import { PROXY_PAGE_HEADERS, proxyPageHtml, remoteHttpAgent } from './proxy-page.js';
-import { isLocalOnlyAddress } from '../net/policy.js';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
   connect as h2connect,
@@ -21,13 +20,17 @@ import { DebuggerSession } from './session.js';
 export { applicationOfPort, ownerOfProcess, type ProgramInfo };
 import { PassThrough, type Duplex, type Readable } from 'node:stream';
 import { ApsError } from '../errors.js';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { sleep } from '../util/concurrency.js';
 import { flattenHeaders } from '../util/headers.js';
 import { BoundedMap } from '../util/collections.js';
 import { currentNet } from '../net/proxy.js';
 import { applyHeaderEdits, decideRequest, highlightRuleForResponse, ruleMatches, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
+import { forH2, forH2Out, holdBody, isH2, textLike, withoutPseudo } from './http-util.js';
+import { decodeBody, dropConnection, hangRequest, localReply, redirectTarget, rewriteBody, writeCutResponse } from './shaping.js';
+import { Pacer, pacedBody, type NetworkSpeed } from './network-speed.js';
+import { createFrameRelay, frameBreaker, frameDecider, responseHead } from './ws-relay.js';
 import type { LeafCertificate } from './certificate.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
 
@@ -129,7 +132,7 @@ export interface BreakpointEdits {
   status?: number;
 }
 
-interface DebuggerProxyOptions {
+export interface DebuggerProxyOptions {
   port?: number;
   /** The session the captured exchanges go into (the app shares one across stop / start); a new one otherwise. */
   session?: DebuggerSession;
@@ -155,6 +158,12 @@ interface DebuggerProxyOptions {
   ownerOf?(pid: number): Promise<string | undefined>;
   /** The active rules, read for every request (so edits apply at once). */
   rules?(): DebuggerRule[];
+  /** The Network speed switch (FG-1), read for every request: while one is set, requests and responses are paced to it. */
+  speed?(): NetworkSpeed | undefined;
+  /** The workspace folder that map-local replies (FG-6) read files from; none: such a reply says so. */
+  workspaceRoot?(): string | undefined;
+  /** The dice of fault rules that fail a share of requests (default Math.random); replaceable in tests. */
+  random?(): number;
   /** Asked for every request: false while listing is paused (the traffic is still forwarded, rules still act, nothing is listed). */
   listing?(): boolean;
   /** A breakpoint rule matched: show the exchange, resolve with edits (or nothing) to let it go on. */
@@ -199,54 +208,6 @@ export interface DebuggerProxy {
 }
 
 const MAX_FRAMES = 500;
-/** Headers HTTP/2 forbids (connection-specific) and HTTP/2's pseudo-headers, which HTTP/1.1 has no place for. */
-const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade', 'http2-settings', 'te']);
-const forH2 = (h: Record<string, string | string[] | number | undefined>) =>
-  Object.fromEntries(Object.entries(h).filter(([k, v]) => v !== undefined && !HOP_BY_HOP.has(k.toLowerCase()) && !k.startsWith(':')));
-const withoutPseudo = (h: Record<string, string | string[] | number | undefined>) =>
-  Object.fromEntries(Object.entries(h).filter(([k, v]) => v !== undefined && !k.startsWith(':'))) as Record<string, string | string[]>;
-const forH2Out = (h: Record<string, string | string[] | number | undefined>) => forH2(h) as Record<string, string | string[]>;
-/** The HTTP/2 compatibility response has the same methods as ServerResponse; it is handled as one and told apart here. */
-const isH2 = (res: ServerResponse): boolean => 'stream' in res && !!(res as unknown as Http2ServerResponse).stream;
-const textLike = (ct: string | undefined) => !ct || /json|text|xml|javascript|html|form|yaml|graphql|csv|urlencoded/i.test(ct);
-
-/**
- * The most a request or response body is held in memory so that rules and breakpoints can change it. A body over it is not held:
- * what has arrived is sent on and the rest follows as it comes (rules that change the body, and body breakpoints, do not apply to it).
- */
-const HOLD_LIMIT = 64 * 1024 * 1024;
-
-/**
- * A body whole (it is forwarded after the rules, which may change it), as the bytes it has: no text conversion. Over `limit` the
- * stream is paused with what has arrived so far, for the caller to send on (`over`).
- */
-const holdBody = (stream: NodeJS.ReadableStream, limit = HOLD_LIMIT) =>
-  new Promise<{ body: Buffer; over?: false } | { chunks: Buffer[]; bytes: number; over: true }>((resolve) => {
-    const chunks: Buffer[] = [];
-    let bytes = 0;
-    const settle = () => {
-      stream.off('data', onData);
-      stream.off('end', onEnd);
-      stream.off('error', onEnd);
-    };
-    const onData = (c: Buffer) => {
-      chunks.push(c);
-      bytes += c.length;
-      if (bytes > limit) {
-        settle();
-        stream.pause();
-        resolve({ chunks, bytes, over: true });
-      }
-    };
-    const onEnd = () => {
-      settle();
-      resolve({ body: Buffer.concat(chunks, bytes) });
-    };
-    stream.on('data', onData);
-    stream.on('end', onEnd);
-    stream.on('error', onEnd);
-  });
-
 /** The program that owns a local TCP port, best effort, per platform; undefined when unknown. */
 export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promise<DebuggerProxy> {
   const maxBody = opts.maxBodyBytes ?? 512 * 1024;
@@ -265,7 +226,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     hits.set(id, (hits.get(id) ?? 0) + 1);
   };
   const decideAndCount = (rules: DebuggerRule[], e: DebuggerExchange) => {
-    const d = decideRequest(rules, e);
+    const d = decideRequest(rules, e, opts.random);
     if (opts.listing && !opts.listing()) d.ignore = true; // paused: forwarded, not listed
     for (const id of d.appliedIds) countHit(e, id);
     // the first highlight's style goes with its colour
@@ -310,6 +271,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     return p;
   };
   const recorded = new WeakSet<DebuggerExchange>();
+  /** The Network speed an exchange was started under (it keeps it even if the switch changes meanwhile). */
+  const shapes = new WeakMap<DebuggerExchange, NetworkSpeed>();
   /** Rules that decide on the program need it before the request is decided: wait for the lookup (at most 1.5 s). */
   const needsProgram = (rules: DebuggerRule[]) => rules.some((r) => r.enabled && (r.kind === 'only' || r.kind === 'ignore') && (r.match.application || r.match.where?.column === 'application'));
   const programFirst = (p: Promise<unknown>, rules: DebuggerRule[]) => (needsProgram(rules) ? Promise.race([p, sleep(1500)]) : undefined);
@@ -383,39 +346,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   };
 
   /** LAN mode: who may use the proxy, and what a client that is not this computer may reach through it. */
-  const pairingSecret = opts.lan ? (opts.lanSecret ?? randomBytes(15).toString('base64url')) : undefined;
-  const paired = new Map<string, number>();
-  const PAIRED_MS = 8 * 3600_000;
-  const isOwnAddress = (a?: string) => !a || a === '::1' || a === '127.0.0.1' || a.startsWith('127.') || /^::ffff:127\./i.test(a);
-  const secretMatches = (given: string) => {
-    const a = Buffer.from(given);
-    const b = Buffer.from(pairingSecret ?? '');
-    return a.length === b.length && b.length > 0 && timingSafeEqual(a, b);
-  };
-  /** Whether a client that is not this computer is paired: its address opened the paired page lately, or it sent the secret as the password. */
-  const isPaired = (address: string, header: string | string[] | undefined): boolean => {
-    const until = paired.get(address);
-    if (until && until > Date.now()) return true;
-    const h = Array.isArray(header) ? header[0] : header;
-    const m = /^(basic|bearer)\s+(.+)$/i.exec(h ?? '');
-    if (!m) return false;
-    const given = m[1]!.toLowerCase() === 'bearer' ? m[2]!.trim() : Buffer.from(m[2]!.trim(), 'base64').toString('utf8').replace(/^[^:]*:/, '');
-    return secretMatches(given);
-  };
-  /** Not this computer and not paired (always false when the proxy is not on the LAN). */
-  const unpaired = (socket: { remoteAddress?: string } | undefined, header: string | string[] | undefined) => !!pairingSecret && !isOwnAddress(socket?.remoteAddress) && !isPaired(socket?.remoteAddress ?? '', header);
-  /** A client that is not this computer must not reach this computer's loopback or link-local addresses through the proxy. */
-  async function refusedTarget(socket: { remoteAddress?: string } | undefined, host: string): Promise<boolean> {
-    if (!pairingSecret || isOwnAddress(socket?.remoteAddress)) return false;
-    const h = host.replace(/^\[|\]$/g, '');
-    if (isIP(h)) return isLocalOnlyAddress(h);
-    if (/^localhost$|\.localhost$/i.test(h)) return true;
-    try {
-      return (await dnsLookupAll(h, { all: true })).some((a) => isLocalOnlyAddress(a.address));
-    } catch {
-      return false; // does not resolve: the connection fails by itself
-    }
-  }
+  const lanGuard = createLanGuard(opts.lan, opts.lanSecret);
+  const { pairingSecret, isOwnAddress, unpaired, refusedTarget } = lanGuard;
 
   /** Every connection to the proxy, so close() ends them all (tunnels, upgrades and injected TLS sockets included). */
   const sockets = new Set<Duplex>();
@@ -465,6 +397,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
     if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
+    const speed = opts.speed?.();
+    if (speed) shapes.set(e, speed);
     // gRPC: forwarded over HTTP/2 as it streams (messages both ways, then trailers); rules may ignore or highlight it
     if (h2 && /^application\/grpc/i.test(String(req.headers['content-type'] ?? ''))) {
       void application(e.clientPort).then((a) => {
@@ -521,12 +455,19 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         e.requestBodyBytes = bodyToSend.length;
         e.requestHeaders['content-length'] = String(bodyToSend.length);
       }
+      if (decision.requestReplace && !streamed && Buffer.isBuffer(bodyToSend)) {
+        const changed = rewriteBody(bodyToSend, String(req.headers['content-type'] ?? ''), req.headers['content-encoding'] as string | undefined, decision.requestReplace);
+        if (changed) {
+          bodyToSend = changed;
+          e.requestBody = changed.subarray(0, maxBody).toString('utf8');
+          e.requestBodyBytes = changed.length;
+          e.requestHeaders['content-length'] = String(changed.length);
+          delete e.requestHeaders['content-encoding'];
+        }
+      }
       if (decision.redirect) {
-        const to = new URL(target.href);
-        to.host = decision.redirect.host;
-        if (decision.redirect.scheme) to.protocol = `${decision.redirect.scheme}:`;
-        e.redirectedTo = to.href;
-        target = to;
+        target = redirectTarget(target, decision.redirect);
+        e.redirectedTo = target.href;
       }
     }
     record(e, 'request');
@@ -561,28 +502,42 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       }
     }
     if (decision?.delayMs) await sleep(decision.delayMs);
+    if (decision?.fault && decision.fault.action !== 'truncate') {
+      // a failure injected by a rule: the connection is cut, or the request is never answered
+      const failed = (why: string) => {
+        e.error = why;
+        e.durationMs = Date.now() - t0;
+        record(e, 'response');
+      };
+      if (decision.fault.action === 'drop') (dropConnection(res), failed('Connection dropped by a rule'));
+      else hangRequest(res, decision.fault.timeoutMs, failed);
+      return;
+    }
     if (decision?.reply) {
       const r = decision.reply;
       if (r.delayMs) await sleep(r.delayMs);
-      const headers = Object.fromEntries(Object.entries(r.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
-      const body = r.body ?? '';
-      if (body && !headers['content-type']) headers['content-type'] = 'application/json';
+      // map local: the body is a file of the workspace, read now
+      const local = r.file || r.folder ? await localReply(opts.workspaceRoot?.(), r, target) : undefined;
+      const headers = local?.headers ?? Object.fromEntries(Object.entries(r.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+      const status = local?.status ?? r.status;
+      const body: string | Buffer = local?.body ?? r.body ?? '';
+      if (body.length && !headers['content-type']) headers['content-type'] = 'application/json';
       e.repliedByRule = true;
       e.waitMs = Date.now() - t0;
-      e.status = r.status;
+      e.status = status;
       e.statusText = 'Rule';
       e.responseHeaders = headers;
       e.contentType = headers['content-type'];
-      e.responseBody = body;
+      e.responseBody = typeof body === 'string' ? body : textLike(e.contentType) ? body.subarray(0, maxBody).toString('utf8') : undefined;
       e.responseBodyBytes = Buffer.byteLength(body);
       e.durationMs = Date.now() - t0;
-      res.writeHead(r.status, isH2(res) ? forH2(headers) : headers).end(body);
+      res.writeHead(status, isH2(res) ? forH2(headers) : headers).end(body);
       record(e, 'response');
       void appPromise;
       return;
     }
     // modify rules on the response, or a response breakpoint: the body is held whole, then sent
-    const holdResponse = !!(decision?.responseHeaders || decision?.responseBody !== undefined || decision?.breakpoint === 'response');
+    const holdResponse = !!(decision?.hold || decision?.breakpoint === 'response');
     forward(target, e.method, e.requestHeaders, bodyToSend, res, e, decision, holdResponse ? (decision?.breakpoint === 'response' ? opts.onBreakpoint : undefined) : undefined, true);
   }
 
@@ -591,7 +546,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     const pem = opts.rootCertificatePem?.();
     // opening the page from the QR code (/?pair=<secret>) pairs this device's address
     const asked = /[?&]pair=([^&\s]+)/.exec(req.url ?? '');
-    if (pairingSecret && asked && !isOwnAddress(req.socket?.remoteAddress) && secretMatches(asked[1]!.replace(/%([0-9a-f]{2})/gi, (_m, h: string) => String.fromCharCode(parseInt(h, 16))))) paired.set(req.socket.remoteAddress!, Date.now() + PAIRED_MS);
+    if (pairingSecret && asked && !isOwnAddress(req.socket?.remoteAddress) && lanGuard.secretMatches(asked[1]!.replace(/%([0-9a-f]{2})/gi, (_m, h: string) => String.fromCharCode(parseInt(h, 16))))) lanGuard.pair(req.socket.remoteAddress!);
     if (/^\/testpion-root\.(pem|crt|cer)$/.test(req.url ?? '')) {
       if (!pem) return void res.writeHead(404, { 'content-type': 'text/plain' }).end('HTTPS decryption is off: no root certificate to download.');
       return void res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="testpion-root.crt"' }).end(pem);
@@ -717,10 +672,14 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     const h = { ...headers };
     delete h['proxy-connection'];
     delete h['proxy-authorization'];
-    if (e.redirectedTo) h.host = target.host;
-    const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
+    // a remap that keeps the host: the Host header and the TLS name stay the original's, only the address is another
+    const keepHost = !!(e.redirectedTo && decision?.redirect?.preserveHost);
+    if (e.redirectedTo && !keepHost) h.host = target.host;
+    const speed = shapes.get(e);
+    const hold = !!(decision?.hold || breakpoint);
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) }, async (ures) => {
+    const sni = keepHost && !isIP(e.host.replace(/:\d+$/, '')) ? { servername: e.host.replace(/:\d+$/, '') } : {};
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...sni, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -732,6 +691,13 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       const bp = breakpoint ?? (opts.onBreakpoint && decision?.lateBreakpoints?.some((r) => ruleMatches(r, e, 'response')) ? opts.onBreakpoint : undefined);
       if (!hold && !bp) {
         res.writeHead(ures.statusCode ?? 502, isH2(res) ? forH2(ures.headers) : ures.headers);
+        // Network speed: the response goes to the program through a pacer
+        const pacer = speed ? new Pacer(speed.downKbps) : undefined;
+        const sink: { write(c: Buffer): unknown; end(): unknown } = pacer ?? res;
+        if (pacer) {
+          pacer.pipe(res);
+          res.once('close', () => pacer.destroy());
+        }
         const chunks: Buffer[] = [];
         let kept = 0;
         // Server-Sent Events: the stream stays open; every event is listed as it comes
@@ -755,10 +721,10 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
             kept += Math.min(c.length, maxBody - kept);
           }
           events?.push(c);
-          res.write(c);
+          sink.write(c);
         });
         ures.on('end', () => {
-          res.end();
+          sink.end();
           events?.end();
           if (keep) e.responseBody = Buffer.concat(chunks).toString('utf8');
           e.responseBodyTruncated = e.responseBodyBytes > maxBody;
@@ -768,7 +734,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         ures.on('error', (err) => {
           e.error = err.message;
           e.open = undefined;
-          res.end();
+          sink.end();
           done();
         });
         return;
@@ -800,8 +766,13 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.responseBodyBytes = heldResponse.body.length;
       let outBody: Buffer = heldResponse.body;
       let outHeaders = applyHeaderEdits(e.responseHeaders, decision?.responseHeaders);
-      if (decision?.responseBody !== undefined) outBody = Buffer.from(decision.responseBody, 'utf8');
-      if (keep) e.responseBody = outBody.subarray(0, maxBody).toString('utf8');
+      // the body keeps its content-encoding unless a rule or an edit replaced it
+      let changed = false;
+      if (decision?.setStatus) e.status = decision.setStatus;
+      if (decision?.responseBody !== undefined) (outBody = Buffer.from(decision.responseBody, 'utf8')), (changed = true);
+      const rewritten = decision?.responseReplace ? rewriteBody(outBody, e.contentType, ures.headers['content-encoding'], decision.responseReplace) : undefined;
+      if (rewritten) (outBody = rewritten), (changed = true);
+      if (keep) e.responseBody = (changed ? outBody : (decodeBody(outBody, ures.headers['content-encoding']) ?? outBody)).subarray(0, maxBody).toString('utf8');
       if (bp) {
         const edits = await bp(e, 'response').catch(() => undefined);
         if (edits?.abort) {
@@ -818,20 +789,35 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           if (edits.body !== undefined) {
             outBody = Buffer.from(edits.body, 'utf8');
             e.responseBody = edits.body;
+            changed = true;
           }
         }
       }
       delete outHeaders['content-length'];
       delete outHeaders['transfer-encoding'];
-      delete outHeaders['content-encoding'];
+      if (changed) delete outHeaders['content-encoding'];
       outHeaders['content-length'] = String(outBody.length);
       e.responseHeaders = outHeaders;
       e.responseBodyBytes = outBody.length;
       e.responseBodyTruncated = outBody.length > maxBody;
-      res.writeHead(e.status ?? 502, isH2(res) ? forH2(outHeaders) : outHeaders).end(outBody);
+      const head = isH2(res) ? forH2(outHeaders) : outHeaders;
+      if (decision?.fault?.action === 'truncate') {
+        // a failure injected by a rule: the head says the whole body is coming, part of it is sent, the connection is cut
+        const cut = Math.min(decision.fault.bytes ?? 0, outBody.length);
+        e.error = `The response was cut after ${cut} of ${outBody.length} bytes (by a rule)`;
+        e.responseBodyBytes = cut;
+        writeCutResponse(res, e.status ?? 502, head, outBody, cut);
+      } else if (speed) {
+        res.writeHead(e.status ?? 502, head);
+        const pacer = pacedBody(outBody, speed.downKbps);
+        res.once('close', () => (pacer.destroy(), done()));
+        pacer.pipe(res);
+        return;
+      } else res.writeHead(e.status ?? 502, head).end(outBody);
       done();
     });
     const done = () => {
+      if (e.durationMs !== undefined) return;
       e.durationMs = Date.now() - t0;
       if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
@@ -853,8 +839,11 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     });
     // the request is sent whole when the last byte has gone out
     up.once('finish', () => (e.sendMs = Date.now() - t0));
-    if (body && !Buffer.isBuffer(body)) body.pipe(up);
-    else up.end(body);
+    // Network speed: the request body goes out at the upload speed, after the latency
+    const payload = speed && body ? pacedBody(body, speed.upKbps) : body;
+    const send = () => (payload && !Buffer.isBuffer(payload) ? payload.pipe(up) : up.end(payload));
+    if (speed?.latencyMs) setTimeout(send, speed.latencyMs).unref?.();
+    else send();
   }
 
   // WebSocket: the upgrade goes to the server; both directions are read frame by frame on the way
@@ -899,19 +888,21 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     if (decision?.highlight) e.highlight = decision.highlight;
     if (decision?.applied.length) e.rules = decision.applied;
     if (decision?.redirect) {
-      const to = new URL(target.href);
-      to.host = decision.redirect.host;
-      if (decision.redirect.scheme) to.protocol = `${decision.redirect.scheme}:`;
-      e.redirectedTo = to.href.replace(/^http/, 'ws');
-      target = to;
+      target = redirectTarget(target, decision.redirect);
+      e.redirectedTo = target.href.replace(/^http/, 'ws');
     }
     if (listed) record(e, 'request');
     const h = { ...req.headers };
     delete h['proxy-connection'];
     delete h['proxy-authorization']; // the pairing secret of a device on the network is for this proxy, not for the server
-    if (e.redirectedTo) h.host = target.host;
+    // frame rules read the frames: the server is asked not to compress them
+    const frameRules = decision?.frames?.length ? decision.frames : undefined;
+    if (frameRules) delete h['sec-websocket-extensions'];
+    const keepHost = !!(e.redirectedTo && decision?.redirect?.preserveHost);
+    if (e.redirectedTo && !keepHost) h.host = target.host;
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) });
+    const sni = keepHost && !isIP(e.host.replace(/:\d+$/, '')) ? { servername: e.host.replace(/:\d+$/, '') } : {};
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...sni, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -933,23 +924,16 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.statusText = ures.statusMessage;
       e.responseHeaders = flattenHeaders(ures.headers);
       e.open = true;
-      const lines = [
-        `HTTP/1.1 ${ures.statusCode} ${ures.statusMessage}`,
-        ...Object.entries(ures.headers).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => `${k}: ${x}`) : v !== undefined ? [`${k}: ${v}`] : [])),
-      ];
-      socket.write(lines.join('\r\n') + '\r\n\r\n');
-      const sent = webSocketFrameParser('sent', frame);
-      const received = webSocketFrameParser('received', frame);
-      if (head.length) {
-        sent.push(head);
-        upSocket.write(head);
-      }
-      if (upHead.length) {
-        received.push(upHead);
-        socket.write(upHead);
-      }
-      socket.on('data', (c: Buffer) => (sent.push(c), upSocket.write(c)));
-      upSocket.on('data', (c: Buffer) => (received.push(c), socket.write(c)));
+      socket.write(responseHead(ures));
+      // with frame rules the relay writes what it forwards; without, the bytes go on untouched and the parser only reads along
+      const pause = frameRules && opts.onBreakpoint ? frameBreaker(opts.onBreakpoint, e) : undefined;
+      const sent = frameRules ? createFrameRelay({ direction: 'sent', decide: frameDecider(frameRules, 'sent', pause), write: (b) => void upSocket.write(b), onFrame: frame }) : webSocketFrameParser('sent', frame);
+      const received = frameRules ? createFrameRelay({ direction: 'received', decide: frameDecider(frameRules, 'received', pause), write: (b) => void socket.write(b), onFrame: frame }) : webSocketFrameParser('received', frame);
+      const plain = !frameRules;
+      if (head.length) (sent.push(head), plain && upSocket.write(head));
+      if (upHead.length) (received.push(upHead), plain && socket.write(upHead));
+      socket.on('data', (c: Buffer) => (sent.push(c), plain && upSocket.write(c)));
+      upSocket.on('data', (c: Buffer) => (received.push(c), plain && socket.write(c)));
       // half-open sockets: one side ending is the connection closing
       socket.on('end', () => (finish(), upSocket.end()));
       upSocket.on('end', () => (finish(), socket.end()));
@@ -965,11 +949,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.status = ures.statusCode;
       e.statusText = ures.statusMessage;
       e.responseHeaders = flattenHeaders(ures.headers);
-      const lines = [
-        `HTTP/1.1 ${ures.statusCode} ${ures.statusMessage}`,
-        ...Object.entries(ures.headers).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => `${k}: ${x}`) : v !== undefined ? [`${k}: ${v}`] : [])),
-      ];
-      socket.write(lines.join('\r\n') + '\r\n\r\n');
+      socket.write(responseHead(ures));
       ures.on('data', (c: Buffer) => socket.write(c));
       ures.on('end', () => (socket.end(), finish()));
     });
@@ -1120,8 +1100,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     }
 
     function opaque() {
-      const to = decision?.redirect ? { host: decision.redirect.host.split(':')[0]!, port: Number(decision.redirect.host.split(':')[1]) || port } : { host, port };
-      if (decision?.redirect) e.redirectedTo = `https://${to.host}:${to.port}`;
+      const to = decision?.redirect?.host ? { host: decision.redirect.host.split(':')[0]!, port: Number(decision.redirect.host.split(':')[1]) || port } : { host, port };
+      if (decision?.redirect?.host) e.redirectedTo = `https://${to.host}:${to.port}`;
       e.connectionId = connectionOf(socket);
       if (listed) record(e, 'request');
       const upstream = tcpConnect({ port: to.port, host: to.host!, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}) }, () => {

@@ -381,6 +381,11 @@ export const DebuggerGrid = memo(function DebuggerGrid({
                   ),
               },
               {
+                label: 'Reply with a file…',
+                title: 'Answer this URL with a file of the workspace (read at every request)',
+                onSelect: () => actions.onNewRule({ kind: 'reply', enabled: true, match: { host: e.host, url: e.url.split('?')[0] + '*' }, reply: { status: 200, file: '' } }),
+              },
+              {
                 label: 'New auto-reply rule…',
                 separator: true,
                 onSelect: () => actions.onNewRule({ kind: 'reply', enabled: true, match: { host: e.host, url: e.url.split('?')[0] + '*' }, reply: { status: 200 } }),
@@ -406,6 +411,18 @@ export const DebuggerGrid = memo(function DebuggerGrid({
             label: 'Redirect connections…',
             icon: <Shuffle size={14} />,
             onSelect: () => actions.onNewRule({ kind: 'redirect', enabled: true, match: { host: e.host }, redirect: { host: 'localhost:3000', scheme: 'http' } }),
+          },
+          {
+            label: 'Remap this host…',
+            icon: <Shuffle size={14} />,
+            title: `Reach ${e.host} at another address, keeping the Host header`,
+            onSelect: () => actions.onNewRule({ kind: 'remap', enabled: true, match: { host: e.host.replace(/:\d+$/, '') }, remap: { to: 'localhost:3000', preserveHost: true } }),
+          },
+          {
+            label: 'Inject a failure…',
+            icon: <Wrench size={14} />,
+            title: `Drop, cut or never answer the requests to ${e.host}`,
+            onSelect: () => actions.onNewRule({ kind: 'fault', enabled: true, match: { host: e.host }, fault: { action: 'drop' } }),
           },
         ],
       },
