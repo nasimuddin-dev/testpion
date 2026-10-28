@@ -1,4 +1,4 @@
-import { execFileSyncChecked } from '../net/process.js';
+import { execFileChecked, execFileSyncChecked } from '../net/process.js';
 
 /**
  * The Windows counterpart of mode 0600 / 0700. A file written "private" (secrets.json, current values, the log, saved Debugger
@@ -39,6 +39,27 @@ export function restrictToOwner(path: string, kind: 'file' | 'dir'): boolean {
   if (!who) return false;
   try {
     runner('icacls', [path, '/inheritance:r', '/grant:r', `${who}:${kind === 'dir' ? '(OI)(CI)F' : 'F'}`]);
+    return true;
+  } catch {
+    return false; // never fatal
+  }
+}
+
+/**
+ * `restrictToOwner` without holding the thread: icacls runs as a child process and is waited for with a promise (a write that
+ * must not block the window or the proxy uses this one). A test runner set with `setAclTestHooks` is called as it is.
+ */
+export async function restrictToOwnerAsync(path: string, kind: 'file' | 'dir'): Promise<boolean> {
+  if (platform !== 'win32') return false;
+  const key = `${kind}:${path.toLowerCase()}`;
+  if (done.has(key)) return false;
+  done.add(key);
+  const who = account();
+  if (!who) return false;
+  const args = [path, '/inheritance:r', '/grant:r', `${who}:${kind === 'dir' ? '(OI)(CI)F' : 'F'}`];
+  try {
+    if (runner !== defaultRunner) runner('icacls', args);
+    else await new Promise<void>((resolve, reject) => execFileChecked('file permissions (icacls)', 'icacls', args, { timeout: 5000, windowsHide: true }, (err) => (err ? reject(err) : resolve())));
     return true;
   } catch {
     return false; // never fatal

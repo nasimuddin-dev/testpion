@@ -13,13 +13,10 @@ import {
   grpcMethodIndex,
   workspaceProtoRoots,
   batcher,
-  noteOwnChange,
   CAPTURE_SESSIONS_DIR,
   captureSessionFileName,
   recordCaptureSession,
   removeOwned,
-  writeOwned,
-  PRIVATE_FILE_MODE,
 } from '@testpion/core';
 import {
   ensureRootCertificate,
@@ -32,9 +29,11 @@ import {
   regenerateRootCertificate,
   rootStanding,
   removeRootCertificate,
-  restoreSystemProxy,
-  rootCertificateTrusted,
-  setSystemProxy,
+  checkStartUrl,
+  disengageSystemProxy,
+  engageSystemProxy,
+  repairSystemProxy,
+  trustChecker,
   trustInstructions,
   type BrowserName,
   type RootCertificate,
@@ -42,6 +41,8 @@ import {
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
+import { AUTOSAVE, sessionSaver } from './debugger-save.js';
+import { settleWithin } from '../backend-health.js';
 
 export { newDebuggerState, type DebuggerState, type IncomingRequest };
 import type { Backend, Handlers } from '../backend.js';
@@ -51,7 +52,6 @@ let qrcodeMod: Promise<typeof import('qrcode')> | undefined;
 const qrcode = () => (qrcodeMod ??= import('qrcode').then((m) => ((m as { default?: typeof import('qrcode') }).default ?? m) as typeof import('qrcode')));
 import { request as httpRequest } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { rename, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { request as httpsRequest } from 'node:https';
 import { connect as h2connect } from 'node:http2';
@@ -134,9 +134,8 @@ export function recordIncoming(be: Backend, r: Omit<IncomingRequest, 'id' | 'tim
 }
 
 const SESSIONS_DIR = CAPTURE_SESSIONS_DIR;
-const AUTOSAVE = 'autosave';
-/** The longest AutoSave works without letting the proxy serve what waits. */
-const AUTOSAVE_SLICE_MS = 10;
+/** The most a session file or pasted text opened in the Debugger may hold when the host sets no limit of its own. */
+const OPEN_BYTES = 256 * 1024 * 1024;
 /** The bodies all saved sessions open in tabs may hold together (the live capture's own budget, DebuggerSession). */
 const VIEWS_BODY_BUDGET = 200 * 1024 * 1024;
 
@@ -309,56 +308,25 @@ export function debuggerHandlers(be: Backend): Handlers {
   // the output builders (output.save) read the session on screen as HAR through this, not through the RPC by name
   be.outputProviders.har = () => exchangesToHar(shown().exchanges, be.logger.redactor, ENGINE_VERSION);
   const sessionsDir = () => be.ws.path(SESSIONS_DIR);
+  const saver = sessionSaver(be, state);
   const sessionFile = (name: string) => {
     const file = captureSessionFileName(name); // the same name a capture ref (History) finds it by
     if (file === '.har') throw new ApsError('ValidationError', 'A session needs a name');
+    // the AutoSave is not in the workspace (it holds whatever the machine sent): the app's data folder
+    if (file === `${AUTOSAVE}.har`) return saver.autosaveFile();
     return be.ws.safePath(file, sessionsDir());
   };
-  const writeSession = (name: string) => {
+  const writeSession = async (name: string) => {
     mkdirSync(sessionsDir(), { recursive: true, mode: 0o700 });
     const file = sessionFile(name);
+    if (file === saver.autosaveFile()) throw new ApsError('ValidationError', `"${AUTOSAVE}" is the name of the AutoSave file; pick another name`);
     if (file !== viewing) views.delete(file); // a tab showing it later reads it again (the one on screen stays as shown)
-    writeOwned(file, JSON.stringify(exchangesToHar(state.exchanges, be.logger.redactor, ENGINE_VERSION), null, 2), { mode: PRIVATE_FILE_MODE }); // atomic and private: a crash while saving keeps the previous file
-    return { name: basename(file, '.har'), path: file, exchanges: state.exchanges.length };
+    const count = state.exchanges.length;
+    await saver.save(file); // made and written a few exchanges at a time, atomic and private: a crash while saving keeps the previous file
+    return { name: basename(file, '.har'), path: file, exchanges: count };
   };
   const touch = () => {
     state.dirty = true;
-  };
-  /**
-   * AutoSave writes the session without holding up the proxy: the HAR is made a few exchanges at a time (each slice
-   * at most ~10 ms, then the event loop serves what waits), not pretty-printed, and written in the background
-   * (to a temporary file first, so a crash never leaves half a session).
-   */
-  let autosaving = false;
-  const autosaveNow = async () => {
-    if (autosaving || !state.dirty || !state.exchanges.length) return;
-    autosaving = true;
-    // changes from here on make it dirty again
-    state.dirty = false;
-    try {
-      const items = state.exchanges.slice();
-      const shell = JSON.stringify(exchangesToHar([], be.logger.redactor, ENGINE_VERSION));
-      const at = shell.indexOf('"entries":[]') + '"entries":['.length;
-      const parts: string[] = [];
-      let slice = performance.now();
-      for (const e of items) {
-        parts.push(JSON.stringify(exchangesToHar([e], be.logger.redactor, ENGINE_VERSION).log.entries[0]));
-        if (performance.now() - slice > AUTOSAVE_SLICE_MS) {
-          await new Promise((r) => setImmediate(r));
-          slice = performance.now();
-        }
-      }
-      mkdirSync(sessionsDir(), { recursive: true, mode: 0o700 });
-      const file = sessionFile(AUTOSAVE);
-      await writeFile(`${file}.tmp`, shell.slice(0, at) + parts.join(',') + shell.slice(at), { mode: PRIVATE_FILE_MODE });
-      await rename(`${file}.tmp`, file);
-      noteOwnChange(file); // the app's own write (the watcher does not report it; the views hear of it)
-    } catch (e) {
-      state.dirty = true;
-      be.logger.warn(`Debugger autosave failed: ${(e as Error).message}`);
-    } finally {
-      autosaving = false;
-    }
   };
   const stopAutosave = () => {
     clearInterval(state.autosave);
@@ -366,31 +334,47 @@ export function debuggerHandlers(be: Backend): Handlers {
   };
   const startAutosave = () => {
     stopAutosave();
-    state.autosave = setInterval(() => void autosaveNow(), 60_000);
+    state.autosave = setInterval(() => void saver.autosaveNow(), 60_000);
     (state.autosave as { unref?(): void }).unref?.();
   };
   // the window learns of new and changed exchanges at most once per 50 ms (a flood is thousands a second); it reads
   // the changes itself (debug.changes), so the signal carries only how many and the latest ids
   const signals = batcher<string>((ids) => be.host.emit('debug.exchange', { phase: 'batch', count: ids.length, ids: [...new Set(ids.slice(-20))] }), 50);
+  /** The folder of the system proxy record (state.systemProxy on disk): what the start of the app repairs. */
+  const proxyDir = () => join(be.host.appDir, 'debugger');
+  // a system proxy a crashed or killed TestPion left pointing here is put back before anything switches it again
+  const repaired = repairSystemProxy(proxyDir()).then(
+    (r) => {
+      if (r === 'restored') be.logger.warn('The system proxy still pointed at TestPion from an earlier run: it was put back');
+    },
+    (e) => be.logger.warn(`Could not check the system proxy: ${(e as Error).message}`),
+  );
+  saver.tidy(sessionsDir);
+  /** Point the system proxy at the running proxy (the setting is kept on disk first). */
+  const engageSystem = async () => {
+    await repaired;
+    if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
+    state.systemProxy = await engageSystemProxy(proxyDir(), state.proxy.url);
+    be.logger.info(`System proxy set to ${state.proxy.url}`);
+  };
+  /** Put the system proxy back; when that fails the setting and its file are kept so the next stop, quit or start tries again. */
   const restoreSystem = async () => {
     const s = state.systemProxy;
     if (!s) return;
-    state.systemProxy = undefined;
-    await restoreSystemProxy(s).catch((e) => be.logger.warn(`Could not restore the system proxy: ${(e as Error).message}`));
-    be.logger.info('System proxy restored');
+    try {
+      await disengageSystemProxy(proxyDir(), s);
+      state.systemProxy = undefined;
+      be.logger.info('System proxy restored');
+    } catch (e) {
+      be.logger.warn(`Could not restore the system proxy: ${(e as Error).message}`);
+    }
   };
   state.release = async () => {
     stopAutosave();
-    // quitting (or a workspace switch) with exchanges not yet saved: keep them, as stopping the capture does
-    if (state.dirty && state.exchanges.length) {
-      try {
-        writeSession(AUTOSAVE);
-        state.dirty = false;
-      } catch (e) {
-        be.logger.warn(`Debugger session not saved at shutdown: ${(e as Error).message}`);
-      }
-    }
-    await restoreSystem();
+    // the system proxy first and with a limit of its own: nothing may keep the computer pointing at a proxy that is gone
+    await settleWithin([restoreSystem()], 3000);
+    // quitting (or a workspace switch) with exchanges not yet saved: the write in flight is awaited, then what changed since is written
+    await settleWithin([saver.flush()], 2500);
   };
   // one store for every capture mode: what the reverse proxy forwards joins the session like the proxy's exchanges
   state.capture = (e) => {
@@ -405,17 +389,12 @@ export function debuggerHandlers(be: Backend): Handlers {
     state.proxy = undefined;
     stopAutosave();
     await restoreSystem();
-    if (state.dirty && state.exchanges.length) {
-      try {
-        writeSession(AUTOSAVE);
-        state.dirty = false;
-      } catch {
-        /* the next save */
-      }
-    }
+    // kept as the AutoSave, written in the background; Stop answers once it is done or after a moment (it goes on, quitting waits for it)
+    await settleWithin([saver.flush()], 1500);
     return status();
   };
 
+  const trust = trustChecker(); // the root's trust in the store, kept for 30 s
   const handlers: Handlers = {
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
@@ -535,6 +514,15 @@ export function debuggerHandlers(be: Backend): Handlers {
       });
       startAutosave();
       be.logger.info(`HTTP Debugger listening on ${state.proxy.url}`);
+      // the proxy moved to another port while the system proxy was ours: the system follows
+      if (state.systemProxy) {
+        try {
+          state.systemProxy = await engageSystemProxy(proxyDir(), state.proxy.url, state.systemProxy);
+        } catch (e) {
+          be.logger.warn(`Could not point the system proxy at ${state.proxy.url}: ${(e as Error).message}`);
+          await restoreSystem();
+        }
+      }
       return status();
     },
     'debug.stop': stop,
@@ -559,7 +547,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     /** The browsers found on this computer, the shell lines to paste, and whether the system proxy is ours. */
     'debug.captureOptions': () => ({
       browsers: installedBrowsers().map(({ name, label, systemProxy }) => ({ name, label, systemProxy: !!systemProxy })),
-      shells: state.proxy ? proxyShellLines(state.proxy.url) : [],
+      shells: state.proxy ? proxyShellLines(state.proxy.url, state.decrypt ? certificateOf(be, state).path : undefined) : [],
       systemProxy: !!state.systemProxy,
       platform: process.platform,
     }),
@@ -569,10 +557,8 @@ export function debuggerHandlers(be: Backend): Handlers {
      */
     'debug.openBrowser': async ({ browser, url }: { browser?: BrowserName; url?: string }) => {
       if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
-      if (installedBrowsers().find((b) => b.name === browser)?.systemProxy && !state.systemProxy) {
-        state.systemProxy = await setSystemProxy(state.proxy.url);
-        be.logger.info(`System proxy set to ${state.proxy.url} for ${browser}`);
-      }
+      if (url !== undefined) url = checkStartUrl(url); // before anything is changed
+      if (installedBrowsers().find((b) => b.name === browser)?.systemProxy && !state.systemProxy) await engageSystem();
       const r = openBrowserWithProxy(state.proxy.url, browser, url);
       be.logger.info(`Debugger: opened ${r.browser} through ${state.proxy.url}`);
       return r;
@@ -580,7 +566,8 @@ export function debuggerHandlers(be: Backend): Handlers {
     /** A terminal whose shell sends through the proxy. */
     'debug.openTerminal': () => {
       if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
-      return openTerminalWithProxy(state.proxy.url);
+      // with HTTPS decryption on, the shell also trusts the root certificate (NODE_EXTRA_CA_CERTS, REQUESTS_CA_BUNDLE, SSL_CERT_FILE, CURL_CA_BUNDLE)
+      return openTerminalWithProxy(state.proxy.url, state.decrypt ? certificateOf(be, state).path : undefined);
     },
     /** HTTPS decryption on or off (the program must trust the root certificate), and the hosts kept opaque (globs). */
     'debug.decrypt': ({ on, noDecrypt }: { on?: boolean; noDecrypt?: string[] }) => {
@@ -598,11 +585,18 @@ export function debuggerHandlers(be: Backend): Handlers {
         state.root = regenerateRootCertificate(join(be.host.appDir, 'debugger'));
         state.leafFor = leafSigner(state.root);
         root = state.root;
+        trust.invalidate();
       }
       let note: string | undefined;
-      if (action === 'install') note = `Installed into ${(await installRootCertificate(root)).where}`;
+      if (action === 'install') {
+        trust.invalidate();
+        const r = await installRootCertificate(root);
+        trust.invalidate();
+        note = `Installed into ${r.where}${r.removedOld ? ` (${r.removedOld} older TestPion root${r.removedOld === 1 ? '' : 's'} removed)` : ''}${r.leftOld ? ` (${r.leftOld} older TestPion root${r.leftOld === 1 ? '' : 's'} could not be removed: remove them by hand)` : ''}`;
+      }
       if (action === 'remove') {
         await removeRootCertificate(root);
+        trust.invalidate();
         note = 'Removed from the trust store';
       }
       if (action === 'export') {
@@ -614,17 +608,15 @@ export function debuggerHandlers(be: Backend): Handlers {
         );
         return { ...r, fingerprint: root.fingerprint };
       }
-      const trusted = await rootCertificateTrusted(root);
-      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, instructions: trustInstructions(root.path), note, platform: process.platform };
+      // `known` is false when this computer could not say (Linux, a tool that failed): `trusted` is then absent, never a "no"
+      const { trusted, known } = await trust.check(root);
+      return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known, instructions: trustInstructions(root.path), note, platform: process.platform };
     },
     /** Switch the system proxy to ours (every program that honours it) and back. */
     'debug.systemProxy': async ({ on }: { on: boolean }) => {
       if (on) {
         if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first');
-        if (!state.systemProxy) {
-          state.systemProxy = await setSystemProxy(state.proxy.url);
-          be.logger.info(`System proxy set to ${state.proxy.url}`);
-        }
+        if (!state.systemProxy) await engageSystem();
       } else await restoreSystem();
       return status();
     },
@@ -818,26 +810,37 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     'debug.sessions': () => {
       const dir = sessionsDir();
-      if (!existsSync(dir)) return [];
-      return readdirSync(dir)
-        .filter((f) => /\.har$/i.test(f))
-        .map((f) => {
-          const st = statSync(join(dir, f));
-          return { name: basename(f, '.har'), path: join(dir, f), bytes: st.size, savedAt: st.mtime.toISOString(), autosave: basename(f, '.har') === AUTOSAVE };
-        })
-        .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+      saver.tidy(sessionsDir); // an AutoSave an earlier version left in the workspace moves to the app's data folder
+      const entry = (file: string) => {
+        const st = statSync(file);
+        const name = basename(file, '.har');
+        return { name, path: file, bytes: st.size, savedAt: st.mtime.toISOString(), autosave: name === AUTOSAVE };
+      };
+      const own = existsSync(dir) ? readdirSync(dir).filter((f) => /\.har$/i.test(f) && f.toLowerCase() !== `${AUTOSAVE}.har`) : [];
+      // the AutoSave is listed with the others, but lives in the app's data folder
+      return [...own.map((f) => entry(join(dir, f))), ...(existsSync(saver.autosaveFile()) ? [entry(saver.autosaveFile())] : [])].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
     },
-    'debug.saveSession': ({ name }: { name: string }) => {
+    'debug.saveSession': async ({ name }: { name: string }) => {
       if (!state.exchanges.length) throw new ApsError('ValidationError', 'Nothing captured yet');
-      const r = writeSession(name);
-      state.dirty = false;
+      const rev = listOf(state).rev;
+      const r = await writeSession(name);
+      if (listOf(state).rev === rev) state.dirty = false; // nothing changed while it was written
       // History: this capture session, saved (opens it in the Debugger again)
       const entry = recordCaptureSession(be.ws, state.exchanges, { result: 'session', ref: { kind: 'capture', name: r.name }, target: r.name }, be.logger.redactor);
       return { ...r, historyId: entry.id };
     },
     /** Open a saved session (or any HAR file by path): its exchanges replace the session, or join it with `append`. */
     'debug.openSession': ({ name, path, text, base64, append }: { name?: string; path?: string; text?: string; /** A SAZ (zip) file's bytes. */ base64?: string; append?: boolean }) => {
-      const bytes = base64 ? Buffer.from(base64, 'base64') : text !== undefined ? Buffer.from(text, 'utf8') : readFileSync(path ? be.ws.safePath(path) : sessionFile(name ?? ''));
+      // a pasted text, a dropped file or a path is bounded by what this host accepts for an import (the bridge's own body limit is the same)
+      const cap = be.host.importBytes ?? OPEN_BYTES;
+      const tooBig = () => new ApsError('ValidationError', `That session is larger than the ${Math.round(cap / 1024 / 1024)} MB the Debugger opens`);
+      if ((base64 && base64.length * 0.75 > cap) || (text !== undefined && text.length > cap)) throw tooBig();
+      let file: string | undefined;
+      if (!base64 && text === undefined) {
+        file = path ? be.ws.safePath(path) : sessionFile(name ?? '');
+        if (existsSync(file) && statSync(file).size > cap) throw tooBig();
+      }
+      const bytes = base64 ? Buffer.from(base64, 'base64') : text !== undefined ? Buffer.from(text, 'utf8') : readFileSync(file!);
       let loaded: DebuggerExchange[];
       if (bytes.subarray(0, 2).toString('latin1') === 'PK') {
         try {

@@ -40,7 +40,6 @@ debug.addPreset
 debug.bookmark
 debug.breakpoints
 debug.captureOptions
-debug.certificate
 debug.changes
 debug.clear
 debug.clearIncoming
@@ -52,7 +51,6 @@ debug.har
 debug.incoming
 debug.lan
 debug.moveRule
-debug.openBrowser
 debug.openTerminal
 debug.resetRuleHits
 debug.resumeBreakpoint
@@ -60,14 +58,11 @@ debug.ruleCheck
 debug.rulePresets
 debug.rules
 debug.saveSession
-debug.selfTest
 debug.sessions
 debug.setRuleEnabled
-debug.start
 debug.stats
 debug.status
 debug.stop
-debug.systemProxy
 env.list
 env.matrix
 env.reorder

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ApsError } from '../errors.js';
-import { sha1Hex } from '../util/hash.js';
+import { sha1Hex, sha256Hex } from '../util/hash.js';
 
 // node-forge (800 KB) loads with the first certificate made or read, not at startup (see util/lazy-require.ts)
 let forgeMod: typeof import('node-forge') | undefined;
@@ -41,14 +41,46 @@ const SUBJECT = [
   { name: 'organizationName', value: 'TestPion' },
 ];
 
-/** The SHA-1 of the certificate, the way Windows (`certutil`) and macOS (`security -Z`) list it. */
-const sha1Of = (certPem: string) =>
-  createHash('sha1')
-    .update(Buffer.from(forge().asn1.toDer(forge().pki.certificateToAsn1(forge().pki.certificateFromPem(certPem))).getBytes(), 'binary'))
-    .digest('hex');
+const NAME = 'TestPion HTTP Debugger Root';
 
-/** Is this very certificate (not another root of the same name, from an earlier install) in a `certutil` / `security` listing? */
-export const trustListHas = (listing: string, certPem: string) => listing.toLowerCase().replace(/[\s:]/g, '').includes(sha1Of(certPem));
+/** The two hashes trust stores list a certificate by, lower-case hex without separators. */
+const hashesOf = (certPem: string) => {
+  const der = Buffer.from(forge().asn1.toDer(forge().pki.certificateToAsn1(forge().pki.certificateFromPem(certPem))).getBytes(), 'binary');
+  return { sha1: sha1Hex(der), sha256: sha256Hex(der) };
+};
+
+/** One certificate of a `certutil -store` / `security find-certificate -Z` listing. */
+export interface ListedCertificate {
+  sha1?: string;
+  sha256?: string;
+  /** The listing says it is a root of the name TestPion gives its root. */
+  ours: boolean;
+}
+
+const hexOf = (v: string) => v.replace(/[\s:]/g, '').toLowerCase();
+
+/**
+ * The certificates of a listing, read by their labelled lines: `Cert Hash(sha1):` / `Cert Hash(sha256):` (Windows certutil, one
+ * block per certificate under a `==== Certificate N ====` line) and `SHA-1 hash:` / `SHA-256 hash:` (macOS security, a block
+ * per `SHA-256 hash:` line). Nothing is matched by searching the text for a hash.
+ */
+export function parseTrustListing(listing: string): ListedCertificate[] {
+  const blocks = listing.split(/^(?==+ .*Certificate.* =+\s*$)|^(?=SHA-256 hash:)/m);
+  const out: ListedCertificate[] = [];
+  for (const block of blocks) {
+    const sha1 = /^\s*(?:Cert Hash\(sha1\)|SHA-1 hash):[ \t]*([0-9A-Fa-f :]+?)\s*$/m.exec(block)?.[1];
+    const sha256 = /^\s*(?:Cert Hash\(sha256\)|SHA-256 hash):[ \t]*([0-9A-Fa-f :]+?)\s*$/m.exec(block)?.[1];
+    if (!sha1 && !sha256) continue;
+    out.push({ ...(sha1 ? { sha1: hexOf(sha1) } : {}), ...(sha256 ? { sha256: hexOf(sha256) } : {}), ours: block.includes(NAME) });
+  }
+  return out;
+}
+
+/** Is this very certificate (not another root of the same name, from an earlier install) in a `certutil` / `security` listing? Compared by SHA-1, else SHA-256. */
+export const trustListHas = (listing: string, certPem: string) => {
+  const h = hashesOf(certPem);
+  return parseTrustListing(listing).some((c) => (c.sha1 ? c.sha1 === h.sha1 : c.sha256 === h.sha256));
+};
 
 const fingerprintOf = (certPem: string) => {
   const der = forge().asn1.toDer(forge().pki.certificateToAsn1(forge().pki.certificateFromPem(certPem))).getBytes();
@@ -155,20 +187,31 @@ export function leafSigner(root: RootCertificate): (host: string) => LeafCertifi
   };
 }
 
-const run = (cmd: string, args: string[]) =>
+type Run = (cmd: string, args: string[]) => Promise<string>;
+const defaultRun: Run = (cmd, args) =>
   new Promise<string>((resolve, reject) => {
     execFileChecked(`certificate tool ${cmd}`, cmd, args, { timeout: 20_000, windowsHide: true }, (err, out, errOut) => (err ? reject(new Error(String(errOut || out || err.message).trim())) : resolve(String(out))));
   });
+let hooks: { run?: Run; platform?: NodeJS.Platform } = {}; // bounded: one object; only tests set it
+/** For tests: a scripted `run` (the certificate tool) and a platform. No argument restores. */
+export function setCertificateTestHooks(h: typeof hooks = {}): void {
+  hooks = h;
+}
+const run: Run = (cmd, args) => (hooks.run ?? defaultRun)(cmd, args);
+const plat = () => hooks.platform ?? process.platform;
+const keychain = () => `${process.env.HOME}/Library/Keychains/login.keychain-db`;
+const nssDb = () => `sql:${process.env.HOME}/.pki/nssdb`;
 
 /** How to trust the root here, for the UI when the one-click install is not possible. */
 export function trustInstructions(path: string): string[] {
-  if (process.platform === 'win32')
+  const platform = plat();
+  if (platform === 'win32')
     return [
       `certutil -user -addstore Root "${path}"`,
       'Or: double-click the file ▸ Install Certificate ▸ Current User ▸ Place in "Trusted Root Certification Authorities".',
       'Firefox: Settings ▸ Privacy & Security ▸ Certificates ▸ View ▸ Authorities ▸ Import (or enable security.enterprise_roots.enabled).',
     ];
-  if (process.platform === 'darwin')
+  if (platform === 'darwin')
     return [
       `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "${path}"`,
       'Or: open the file in Keychain Access ▸ login ▸ double-click it ▸ Trust ▸ Always Trust.',
@@ -176,53 +219,135 @@ export function trustInstructions(path: string): string[] {
     ];
   return [
     `sudo cp "${path}" /usr/local/share/ca-certificates/testpion-root.crt && sudo update-ca-certificates`,
-    `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "TestPion HTTP Debugger Root" -i "${path}"   # Chrome / Chromium`,
+    `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "${NAME}" -i "${path}"   # Chrome / Chromium`,
     'Firefox: Settings ▸ Privacy & Security ▸ Certificates ▸ View ▸ Authorities ▸ Import.',
   ];
 }
 
-/** Install the root into the user's trust store (no administrator rights: the current user's store). */
-export async function installRootCertificate(root: RootCertificate): Promise<{ where: string }> {
+/** Roots of TestPion's name in a store that are not `root` itself: what an earlier install left, trusted but signing nothing the proxy makes. */
+const otherRoots = (listing: string, root: RootCertificate) => {
+  const mine = hashesOf(root.certPem);
+  return parseTrustListing(listing).filter((c) => c.ours && c.sha1 && c.sha1 !== mine.sha1);
+};
+
+/**
+ * Install the root into the user's trust store (no administrator rights: the current user's store). The new root is added
+ * FIRST; only when that worked are other roots of the same name taken out, one by one by their hash, so a failed install
+ * never leaves the computer with no TestPion root at all. Taking an old one out is best effort (`removedOld`, `leftOld`).
+ */
+export async function installRootCertificate(root: RootCertificate): Promise<{ where: string; removedOld: number; leftOld: number }> {
+  const platform = plat();
+  let removedOld = 0;
+  let leftOld = 0;
+  const sweep = async (list: () => Promise<string>, remove: (sha1: string) => Promise<unknown>) => {
+    let old: ListedCertificate[] = [];
+    try {
+      old = otherRoots(await list(), root);
+    } catch {
+      return; // not listed: nothing is taken out
+    }
+    for (const c of old) {
+      try {
+        await remove(c.sha1!);
+        removedOld++;
+      } catch {
+        leftOld++;
+      }
+    }
+  };
   try {
-    if (process.platform === 'win32') {
-      // an earlier install of another root with the same name stays trusted but signs nothing the proxy makes: it goes first
-      await run('certutil', ['-user', '-delstore', 'Root', 'TestPion HTTP Debugger Root']).catch(() => undefined);
+    if (platform === 'win32') {
       await run('certutil', ['-user', '-addstore', 'Root', root.path]);
-      return { where: 'the current user’s Trusted Root Certification Authorities (Windows, Chrome, Edge; Firefox needs its own import)' };
+      await sweep(
+        () => run('certutil', ['-user', '-store', 'Root']),
+        (sha1) => run('certutil', ['-user', '-delstore', 'Root', sha1]),
+      );
+      return { where: 'the current user’s Trusted Root Certification Authorities (Windows, Chrome, Edge; Firefox needs its own import)', removedOld, leftOld };
     }
-    if (process.platform === 'darwin') {
-      await run('security', ['add-trusted-cert', '-r', 'trustRoot', '-k', `${process.env.HOME}/Library/Keychains/login.keychain-db`, root.path]);
-      return { where: 'the login keychain (Safari, Chrome; Firefox needs its own import)' };
+    if (platform === 'darwin') {
+      await run('security', ['add-trusted-cert', '-r', 'trustRoot', '-k', keychain(), root.path]);
+      await sweep(
+        () => run('security', ['find-certificate', '-a', '-Z', '-c', NAME, keychain()]),
+        (sha1) => run('security', ['delete-certificate', '-Z', sha1, keychain()]),
+      );
+      return { where: 'the login keychain (Safari, Chrome; Firefox needs its own import)', removedOld, leftOld };
     }
-    await run('certutil', ['-d', `sql:${process.env.HOME}/.pki/nssdb`, '-A', '-t', 'C,,', '-n', 'TestPion HTTP Debugger Root', '-i', root.path]);
-    return { where: 'the NSS database (Chrome / Chromium; the system store and Firefox need their own import)' };
+    // NSS keeps one certificate per nickname: an older root of the name goes first, and only when it is not this one
+    const present = await run('certutil', ['-d', nssDb(), '-L', '-n', NAME, '-a']).catch(() => undefined);
+    if (present !== undefined && /-----BEGIN CERTIFICATE-----/.test(present)) {
+      let same = false;
+      try {
+        same = hashesOf(present.slice(present.indexOf('-----BEGIN CERTIFICATE-----'))).sha1 === hashesOf(root.certPem).sha1;
+      } catch {
+        /* not readable: replaced */
+      }
+      if (same) return { where: 'the NSS database (Chrome / Chromium; the system store and Firefox need their own import)', removedOld, leftOld };
+      await run('certutil', ['-d', nssDb(), '-D', '-n', NAME]);
+      removedOld++;
+    }
+    await run('certutil', ['-d', nssDb(), '-A', '-t', 'C,,', '-n', NAME, '-i', root.path]);
+    return { where: 'the NSS database (Chrome / Chromium; the system store and Firefox need their own import)', removedOld, leftOld };
   } catch (e) {
     throw new ApsError('ConfigurationError', `Could not install the root certificate: ${(e as Error).message}`, { suggestions: trustInstructions(root.path) });
   }
 }
 
-/** Remove the root from the user's trust store. */
+/** Remove the root from the user's trust store (this very certificate, by its hash, where the tool can; else by the name). */
 export async function removeRootCertificate(root: RootCertificate): Promise<void> {
+  const platform = plat();
+  const sha1 = hashesOf(root.certPem).sha1;
   try {
-    if (process.platform === 'win32') await run('certutil', ['-user', '-delstore', 'Root', 'TestPion HTTP Debugger Root']);
-    else if (process.platform === 'darwin') await run('security', ['delete-certificate', '-c', 'TestPion HTTP Debugger Root', `${process.env.HOME}/Library/Keychains/login.keychain-db`]);
-    else await run('certutil', ['-d', `sql:${process.env.HOME}/.pki/nssdb`, '-D', '-n', 'TestPion HTTP Debugger Root']);
+    if (platform === 'win32') await run('certutil', ['-user', '-delstore', 'Root', sha1]);
+    else if (platform === 'darwin') await run('security', ['delete-certificate', '-Z', sha1, keychain()]);
+    else await run('certutil', ['-d', nssDb(), '-D', '-n', NAME]);
   } catch (e) {
     throw new ApsError('ConfigurationError', `Could not remove the root certificate: ${(e as Error).message}`, {
-      suggestions: ['Remove "TestPion HTTP Debugger Root" by hand from the trust store it was installed in.'],
+      suggestions: [`Remove "${NAME}" by hand from the trust store it was installed in.`],
     });
   }
 }
 
-/** Is the root in the user's trust store? Best effort (Windows and macOS; elsewhere unknown). */
-export async function rootCertificateTrusted(root: RootCertificate): Promise<boolean | undefined> {
+/** Whether the computer trusts the root: `known` is false when the answer could not be had (Linux, a tool that failed), and then `trusted` is absent. */
+export interface RootTrust {
+  trusted?: boolean;
+  known: boolean;
+}
+
+/**
+ * Is the root in the user's trust store? Windows and macOS; elsewhere, and whenever the tool fails, unknown (never "no"
+ * only because a command did not run). This very certificate counts, by hash; another root of the same name does not.
+ */
+export async function rootCertificateTrust(root: RootCertificate): Promise<RootTrust> {
+  const platform = plat();
   try {
-    // this root, by its hash: a root of the same name from an earlier install is not this one (the proxy signs with the current key)
-    if (process.platform === 'win32') return trustListHas(await run('certutil', ['-user', '-store', 'Root']), root.certPem);
-    if (process.platform === 'darwin')
-      return trustListHas(await run('security', ['find-certificate', '-a', '-Z', '-c', 'TestPion HTTP Debugger Root', `${process.env.HOME}/Library/Keychains/login.keychain-db`]), root.certPem);
-  } catch {
-    return false;
+    if (platform === 'win32') return { trusted: trustListHas(await run('certutil', ['-user', '-store', 'Root']), root.certPem), known: true };
+    if (platform === 'darwin') return { trusted: trustListHas(await run('security', ['find-certificate', '-a', '-Z', '-c', NAME, keychain()]), root.certPem), known: true };
+  } catch (e) {
+    // security exits with an error when the keychain has no certificate of that name: that is a plain "not trusted"
+    if (platform === 'darwin' && /could not be found|item not found/i.test((e as Error).message)) return { trusted: false, known: true };
+    return { known: false };
   }
-  return undefined;
+  return { known: false };
+}
+
+/**
+ * `rootCertificateTrust` with the answer kept for `ttlMs` (30 s) per certificate: the settings page asks on every open and a
+ * `certutil -store` of a large store takes a second. `invalidate()` after an install, a removal or a new root.
+ */
+export function trustChecker(ttlMs = 30_000, now: () => number = Date.now): { check(root: RootCertificate): Promise<RootTrust>; invalidate(): void } {
+  const cache = new Map<string, { at: number; value: RootTrust }>(); // bounded: one entry per root of this session (cleared on every change)
+  return {
+    async check(root) {
+      const hit = cache.get(root.fingerprint);
+      if (hit && now() - hit.at < ttlMs) return hit.value;
+      const value = await rootCertificateTrust(root);
+      // an unknown answer (a tool that failed) is asked again next time
+      if (value.known) {
+        cache.clear();
+        cache.set(root.fingerprint, { at: now(), value });
+      }
+      return value;
+    },
+    invalidate: () => cache.clear(),
+  };
 }

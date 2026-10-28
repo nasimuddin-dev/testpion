@@ -5,3 +5,4 @@
  */
 export * from './debugger/capture.js';
 export * from './debugger/certificate.js';
+export * from './debugger/system-proxy.js';

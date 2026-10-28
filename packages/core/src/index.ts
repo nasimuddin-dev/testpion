@@ -155,6 +155,7 @@ export * from './runner/test-schema.js';
 export * from './debugger/proxy.js';
 export * from './debugger/session.js';
 export * from './debugger/har.js';
+export * from './debugger/har-file.js';
 export * from './debugger/capture-history.js';
 export * from './debugger/rules.js';
 export * from './debugger/frames.js';

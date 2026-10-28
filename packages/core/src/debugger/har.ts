@@ -1,4 +1,4 @@
-import type { Redactor } from '../util/redact.js';
+import { maskSensitiveText, type Redactor } from '../util/redact.js';
 import { shortId } from '../util/ids.js';
 import type { DebuggerExchange } from './proxy.js';
 import type { DebuggerSseEvent, WebSocketFrame } from './frames.js';
@@ -62,67 +62,120 @@ interface HarEntry {
   };
 }
 
-export function exchangesToHar(exchanges: DebuggerExchange[], redactor: Redactor, version = '1'): HarLog {
+/** What writing a HAR needs of a redactor (the app's, or the stricter one of `strictHarRedactor`). */
+export type HarRedactor = Pick<Redactor, 'redactHeaders' | 'redactUrl' | 'redactString'>;
+
+/** One exchange as a HAR entry; values pass the redactor. */
+export function harEntry(e: DebuggerExchange, redactor: HarRedactor): HarEntry {
   const headers = (h?: Record<string, string>) => Object.entries(redactor.redactHeaders(h ?? {})).map(([name, value]) => ({ name, value }));
   return {
-    log: {
-      version: '1.2',
-      creator: { name: 'TestPion HTTP Debugger', version },
-      entries: exchanges.map((e) => ({
-        startedDateTime: e.startedAt,
-        time: e.durationMs ?? 0,
-        request: {
-          method: e.method,
-          url: redactor.redactUrl(e.url),
-          httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
-          headers: headers(e.requestHeaders),
-          queryString: [],
-          cookies: [],
-          headersSize: -1,
-          bodySize: e.requestBodyBytes,
-          ...(e.requestBody ? { postData: { mimeType: e.requestHeaders['content-type'] ?? '', text: redactor.redactString(e.requestBody) } } : {}),
-        },
-        response: {
-          status: e.status ?? 0,
-          statusText: e.statusText ?? '',
-          httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
-          headers: headers(e.responseHeaders),
-          cookies: [],
-          content: { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBody ? redactor.redactString(e.responseBody) : '' },
-          redirectURL: '',
-          headersSize: -1,
-          bodySize: e.responseBodyBytes,
-        },
-        cache: {},
-        // HAR's three phases: sending the request, waiting for the first byte of the answer, receiving it
-        timings: {
-          send: Math.min(e.sendMs ?? 0, e.waitMs ?? 0),
-          wait: Math.max(0, (e.waitMs ?? 0) - Math.min(e.sendMs ?? 0, e.waitMs ?? 0)),
-          receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)),
-        },
-        ...(e.serverAddress ? { serverIPAddress: e.serverAddress.replace(/:\d+$/, '').replace(/^\[|\]$/g, '') } : {}),
-        ...(e.application ? { comment: `application: ${e.application}` } : {}),
-        _testpion: {
-          id: e.id,
-          kind: e.kind,
-          application: e.application,
-          clientPort: e.clientPort,
-          bookmarked: e.bookmarked,
-          error: e.error,
-          truncated: e.responseBodyTruncated,
-          tls: e.tls,
-          frames: e.frames?.map((f) => ({ ...f, text: f.text && redactor.redactString(f.text) })),
-          events: e.events?.map((ev) => ({ ...ev, data: redactor.redactString(ev.data) })),
-          highlight: e.highlight,
-          rules: e.rules,
-          pid: e.pid,
-          user: e.user,
-          serverAddress: e.serverAddress,
-          highlightStyle: e.highlightStyle,
-        },
-      })),
+    startedDateTime: e.startedAt,
+    time: e.durationMs ?? 0,
+    request: {
+      method: e.method,
+      url: redactor.redactUrl(e.url),
+      httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
+      headers: headers(e.requestHeaders),
+      queryString: [],
+      cookies: [],
+      headersSize: -1,
+      bodySize: e.requestBodyBytes,
+      ...(e.requestBody ? { postData: { mimeType: e.requestHeaders['content-type'] ?? '', text: redactor.redactString(e.requestBody) } } : {}),
+    },
+    response: {
+      status: e.status ?? 0,
+      statusText: e.statusText ?? '',
+      httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
+      headers: headers(e.responseHeaders),
+      cookies: [],
+      content: { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBody ? redactor.redactString(e.responseBody) : '' },
+      redirectURL: '',
+      headersSize: -1,
+      bodySize: e.responseBodyBytes,
+    },
+    cache: {},
+    // HAR's three phases: sending the request, waiting for the first byte of the answer, receiving it
+    timings: {
+      send: Math.min(e.sendMs ?? 0, e.waitMs ?? 0),
+      wait: Math.max(0, (e.waitMs ?? 0) - Math.min(e.sendMs ?? 0, e.waitMs ?? 0)),
+      receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)),
+    },
+    ...(e.serverAddress ? { serverIPAddress: e.serverAddress.replace(/:\d+$/, '').replace(/^\[|\]$/g, '') } : {}),
+    ...(e.application ? { comment: `application: ${e.application}` } : {}),
+    _testpion: {
+      id: e.id,
+      kind: e.kind,
+      application: e.application,
+      clientPort: e.clientPort,
+      bookmarked: e.bookmarked,
+      error: e.error,
+      truncated: e.responseBodyTruncated,
+      tls: e.tls,
+      frames: e.frames?.map((f) => ({ ...f, text: f.text && redactor.redactString(f.text) })),
+      events: e.events?.map((ev) => ({ ...ev, data: redactor.redactString(ev.data) })),
+      highlight: e.highlight,
+      rules: e.rules,
+      pid: e.pid,
+      user: e.user,
+      serverAddress: e.serverAddress,
+      highlightStyle: e.highlightStyle,
     },
   };
+}
+
+export function exchangesToHar(exchanges: DebuggerExchange[], redactor: HarRedactor, version = '1'): HarLog {
+  return { log: { version: '1.2', creator: { name: 'TestPion HTTP Debugger', version }, entries: exchanges.map((e) => harEntry(e, redactor)) } };
+}
+
+/**
+ * A redactor for a file the user did not ask for (the AutoSave): everything `redactor` masks, plus the credential-bearing
+ * headers whatever the user's field list says (Authorization, Cookie, Set-Cookie, API keys) and the tokens found by their
+ * shape in every value (JWTs, Bearer and Basic schemes, `access_token=`, provider keys, private keys).
+ */
+export function strictHarRedactor(redactor: HarRedactor): HarRedactor {
+  const always = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token']);
+  // a token under a well-known JSON key is masked whatever its shape (the shape detector reads `access_token=...`, not `"access_token":"..."`)
+  const jsonToken = /("(?:access_?token|refresh_?token|id_?token|auth_?token|token|password|passwd|secret|client_?secret|api_?key)"\s*:\s*")([^"\\]{4,})(")/gi;
+  const mask = (v: string) => maskSensitiveText(redactor.redactString(v), { pii: false }).replace(jsonToken, '$1[REDACTED]$3');
+  return {
+    redactString: mask,
+    redactUrl: (u) => maskSensitiveText(redactor.redactUrl(u), { pii: false }),
+    redactHeaders: (h) => Object.fromEntries(Object.entries(redactor.redactHeaders(h)).map(([k, v]) => [k, always.has(k.toLowerCase()) ? '***' : mask(v)])),
+  };
+}
+
+/**
+ * The HAR as text in pieces of about `pieceBytes`, built a few exchanges at a time: after `sliceMs` of work it yields to the
+ * event loop (`pause`, setImmediate by default), so a session of thousands of exchanges is never one long block on the main
+ * thread. The pieces joined are the same document `JSON.stringify(exchangesToHar(...))` gives (compact).
+ */
+export async function* harPieces(
+  exchanges: DebuggerExchange[],
+  redactor: HarRedactor,
+  version = '1',
+  o: { sliceMs?: number; pieceBytes?: number; pause?: () => Promise<void> } = {},
+): AsyncGenerator<string> {
+  const sliceMs = o.sliceMs ?? 5;
+  const pieceBytes = o.pieceBytes ?? 128 * 1024;
+  const pause = o.pause ?? (() => new Promise<void>((r) => setImmediate(r)));
+  yield `{"log":{"version":"1.2","creator":${JSON.stringify({ name: 'TestPion HTTP Debugger', version })},"entries":[`;
+  let piece = '';
+  let slice = performance.now();
+  let first = true;
+  for (const e of exchanges) {
+    piece += (first ? '' : ',') + JSON.stringify(harEntry(e, redactor));
+    first = false;
+    if (piece.length >= pieceBytes) {
+      yield piece;
+      piece = '';
+    }
+    if (performance.now() - slice > sliceMs) {
+      await pause();
+      slice = performance.now();
+    }
+  }
+  if (piece) yield piece;
+  yield ']}}';
 }
 
 /** A HAR file (ours or another tool's) as exchanges, for opening a saved session. */

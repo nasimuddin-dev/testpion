@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { copyFile, mkdir, open as openFile, rename as renameFile, rm } from 'node:fs/promises';
 import { ApsError } from '../errors.js';
 import { sha1Hex } from '../util/hash.js';
-import { restrictToOwner } from './private-acl.js';
+import { restrictToOwner, restrictToOwnerAsync } from './private-acl.js';
 
 /**
  * End a write stream and wait until its file descriptor is closed. `end(cb)` only waits for 'finish'; the
@@ -488,6 +488,38 @@ export async function atomicWriteAsync(path: string, data: string | Buffer): Pro
     forgetText(path);
   }
   recordOwn(path, contentFingerprint(bytes), undefined, bytes.length >= OWN_STAT_MIN_BYTES ? statSigOf(path) : undefined);
+}
+
+/**
+ * `atomicWriteAsync` for a file that is made piece by piece (a captured session of hundreds of megabytes): the pieces are written as they
+ * come (the producer may yield to the event loop between them, so nothing holds the thread), to a temp file beside the target, which is
+ * synced and renamed over it at the end. A producer that throws, or a failed write, removes the temp file and leaves the target as it was.
+ * `mode` 0o600 makes the file (and on Windows its folder) private to the user.
+ */
+export async function atomicWriteChunks(path: string, chunks: AsyncIterable<string | Buffer>, opts: { mode?: number } = {}): Promise<void> {
+  const priv = opts.mode === PRIVATE_FILE_MODE;
+  await mkdir(dirname(path), { recursive: true, ...(priv ? { mode: PRIVATE_DIR_MODE } : {}) });
+  if (priv) await restrictToOwnerAsync(dirname(path), 'dir');
+  const tmp = `${path}.tmp-${process.pid}-${randomBytes(4).toString('hex')}`;
+  const fh = await openFile(tmp, 'w', opts.mode);
+  try {
+    for await (const c of chunks) await fh.write(typeof c === 'string' ? Buffer.from(c, 'utf8') : c);
+    await fh.sync();
+  } catch (e) {
+    await fh.close().catch(() => undefined);
+    await rm(tmp, { force: true });
+    throw e;
+  }
+  await fh.close();
+  try {
+    await renameWithRetryAsync(tmp, path);
+  } catch (e) {
+    await rm(tmp, { force: true });
+    throw e;
+  } finally {
+    forgetText(path);
+  }
+  noteOwnChange(path, { stat: true }); // the app's own write (the folder watcher does not report it)
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
