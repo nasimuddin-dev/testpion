@@ -170,6 +170,8 @@ export * from './debugger/shaping.js';
 export * from './debugger/rule-shape.js';
 export * from './debugger/ws-relay.js';
 export * from './debugger/saz.js';
+export * from './debugger/gateway.js';
+export * from './debugger/upstream-route.js';
 export * from './debugger/grpc.js';
 export * from './runner/datasets.js';
 export * from './runner/generate-dataset.js';

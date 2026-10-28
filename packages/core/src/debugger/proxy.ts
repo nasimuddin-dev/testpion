@@ -2,8 +2,10 @@ import { createServer, request as httpRequest, type IncomingMessage, type Server
 import { request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, isIP, type Socket } from 'node:net';
 import { createLanGuard } from './lan-guard.js';
-import { guardedLookup, upstreamAgents } from './upstream-guard.js';
-import { PROXY_PAGE_HEADERS, proxyPageHtml, remoteHttpAgent } from './proxy-page.js';
+import { guardedLookup } from './upstream-guard.js';
+import { createUpstream } from './upstream-route.js';
+import type { Gateway } from './gateway.js';
+import { PROXY_PAGE_HEADERS, proxyPageHtml } from './proxy-page.js';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
   connect as h2connect,
@@ -166,6 +168,8 @@ export interface DebuggerProxyOptions {
   rules?(): DebuggerRule[];
   /** The Network speed switch (FG-1), read for every request: while one is set, requests and responses are paced to it. */
   speed?(): NetworkSpeed | undefined;
+  /** The corporate gateway, client certificates and extra authorities (FG-9), read for every upstream connection; none: connect directly. */
+  gateway?(): Gateway | undefined;
   /** The workspace folder that map-local replies (FG-6) read files from; none: such a reply says so. */
   workspaceRoot?(): string | undefined;
   /** The dice of fault rules that fail a share of requests (default Math.random); replaceable in tests. */
@@ -329,13 +333,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   const rulesNow = () => opts.rules?.() ?? [];
   const net = currentNet(); // the session that started the proxy: its certificates apply to its connections
   const trustedCa = () => net.trustedCa();
-  const upstreamTls = () => ({ ca: trustedCa(), rejectUnauthorized: !opts.decrypt?.insecureUpstream });
-  /*
-   * One https.Agent for the upstream requests of a trust configuration: with the CA list in every request's options (hundreds of
-   * certificates) each request hashed it to find its agent. A new one is made only when the trusted CAs change.
-   */
-  const upstreamHttps = upstreamAgents(trustedCa, () => !!opts.decrypt?.insecureUpstream);
-  const remoteHttp = remoteHttpAgent(); // plain-HTTP keep-alive pool of the devices on the network
+  /** How upstream requests, HTTP/2 sessions and tunnels are made: agents per trust configuration, the gateway, client certificates (upstream-route.ts). */
+  const upstream = createUpstream({ trustedCa, insecure: () => !!opts.decrypt?.insecureUpstream, gateway: () => opts.gateway?.() });
   /** TLS contexts of the leaf certificates handed to clients, by certificate (parsing the PEM for every tunnel was repeated work). */
   const contexts = new BoundedMap<string, ReturnType<typeof createSecureContext>>(500);
   const contextFor = (leaf: { cert: string; key: string }) => {
@@ -587,7 +586,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     const key = `${remoteExchanges.has(e) ? 'remote' : 'local'} ${target.origin}`;
     let session = h2Sessions.get(key);
     if (!session || session.closed || session.destroyed) {
-      session = h2connect(target.origin, { ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {}) });
+      session = h2connect(target.origin, upstream.h2(target, remoteExchanges.has(e)));
       session.on('error', () => undefined);
       session.on('close', () => h2Sessions.delete(key));
       h2Sessions.set(key, session);
@@ -686,7 +685,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     const hold = !!(decision?.hold || breakpoint);
     const secure = target.protocol === 'https:';
     const sni = keepHost && !isIP(e.host.replace(/:\d+$/, '')) ? { servername: e.host.replace(/:\d+$/, '') } : {};
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...sni, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) }, async (ures) => {
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...sni, ...upstream.options(target, h, remoteExchanges.has(e)) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -913,7 +912,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     if (e.redirectedTo && !keepHost) h.host = target.host;
     const secure = target.protocol === 'https:';
     const sni = keepHost && !isIP(e.host.replace(/:\d+$/, '')) ? { servername: e.host.replace(/:\d+$/, '') } : {};
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...sni, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) });
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...sni, ...upstream.options(target, h, remoteExchanges.has(e)) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -1115,12 +1114,13 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (decision?.redirect?.host) e.redirectedTo = `https://${to.host}:${to.port}`;
       e.connectionId = connectionOf(socket);
       if (listed) record(e, 'request');
-      const upstream = tcpConnect({ port: to.port, host: to.host!, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}) }, () => {
-        upstream.pipe(socket);
-        socket.pipe(upstream);
+      const tunnel = upstream.connect({ host: to.host!, port: to.port }, remoteExchanges.has(e), (headBytes) => {
+        e.responseBodyBytes -= headBytes; // the gateway's answer is not the server's
+        tunnel.pipe(socket);
+        socket.pipe(tunnel);
         socket.resume();
       });
-      upstream.on('data', (c: Buffer) => (e.responseBodyBytes += c.length));
+      tunnel.on('data', (c: Buffer) => (e.responseBodyBytes += c.length));
       socket.on('data', (c: Buffer) => (e.requestBodyBytes += c.length));
       const finish = (err?: Error) => {
         if (e.durationMs !== undefined) return;
@@ -1129,14 +1129,14 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         else e.status = 200;
         if (listed) record(e, 'response');
       };
-      upstream.on('error', (err) => {
+      tunnel.on('error', (err) => {
         finish(err);
         socket.destroy();
       });
-      socket.on('error', () => (finish(), upstream.destroy()));
-      upstream.on('close', () => finish());
+      socket.on('error', () => (finish(), tunnel.destroy()));
+      tunnel.on('close', () => finish());
       socket.on('close', () => finish());
-      socket.on('end', () => (finish(), upstream.end()));
+      socket.on('end', () => (finish(), tunnel.end()));
     }
   }
 
@@ -1170,8 +1170,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         // upstream HTTP/2 sessions and the upstream agent's idle connections outlived the proxy
         for (const sess of h2Sessions.values()) sess.destroy();
         h2Sessions.clear();
-        upstreamHttps.destroy();
-        remoteHttp.destroy();
+        upstream.destroy();
         server.closeAllConnections?.();
         server.close(() => resolve());
       }),
