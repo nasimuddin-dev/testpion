@@ -9,7 +9,9 @@ import { trustListHas } from '../../packages/core/src/debugger/certificate.js';
 const pem = (n: 'a' | 'b') => readFileSync(join(__dirname, '../fixtures/debugger-roots', `root-${n}.pem`), 'utf8');
 const sha1 = (p: string) => createHash('sha1').update(Buffer.from(p.replace(/-----[^-]+-----|\s/g, ''), 'base64')).digest('hex');
 /** The store listing certutil prints: the hash in groups of two. */
-const listing = (p: string) => `Cert Hash(sha1): ${sha1(p).replace(/(..)/g, '$1 ').trim()}\n  Subject: CN=TestPion HTTP Debugger Root`;
+let n = 0;
+const listing = (p: string) => `================ Certificate ${n++} ================
+Cert Hash(sha1): ${sha1(p).replace(/(..)/g, '$1 ').trim()}\n  Subject: CN=TestPion HTTP Debugger Root`;
 
 describe('root certificate trust', () => {
   it('matches by hash: the old root of the same name is not the new one', () => {

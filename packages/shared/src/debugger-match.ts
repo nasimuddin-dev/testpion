@@ -37,8 +37,8 @@ const MAX_PATTERN = 500;
 const CACHE_SIZE = 200;
 const NEVER = /(?!)/;
 
-// bounded: least recently used, at most CACHE_SIZE compiled patterns (one per distinct rule or chip pattern)
-const compiled = new Map<string, RegExp | null>();
+// at most CACHE_SIZE compiled patterns (one per distinct rule or chip pattern), least recently used out
+const compiled = new Map<string, RegExp | null>(); // bounded: CACHE_SIZE, least recently used
 
 const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

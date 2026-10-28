@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { debuggerTools } from '../../packages/core/src/mcp-server/tools/debugger-tools';
 import { CONFIRM_TOOLS } from '../../packages/core/src/mcp-server/tool-contract';
-import { fakeSystemProxyValue } from '../../packages/core/src/debugger/capture';
+import { fakeSystemProxyValue } from '../../packages/core/src/debugger/system-proxy';
 import { Redactor } from '../../packages/core/src/util/redact';
 import type { DebuggerExchange } from '../../packages/core/src/debugger/proxy';
 
