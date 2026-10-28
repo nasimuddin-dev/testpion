@@ -253,8 +253,8 @@ function newSlot(rt: QuickJSRuntime): Slot {
     fn('__host_package', (name) => {
       try {
         return JSON.stringify(current.requirePackage?.(name ?? '') ?? null);
-      } catch {
-        return 'null';
+      } catch (e) {
+        return JSON.stringify({ __error: (e as Error).message }); // the host failed (a worker: the main thread did not answer); not the same as "no such package"
       }
     });
     fn('__host_hash', (a, s) => createHash(alg(a)).update(s ?? '').digest('hex'));
