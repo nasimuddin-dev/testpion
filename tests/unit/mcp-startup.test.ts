@@ -66,9 +66,11 @@ describe('tools/list size', () => {
   });
   it('the full profile (compact entries, the default) stays under 200 KB for every tool', async () => {
     const { bytes, count } = await size();
-    console.log(`full tools/list: ${count} tools, ${(bytes / 1024).toFixed(0)} KB`);
+    console.log(`full tools/list: ${count} tools, ${bytes} chars, headroom under the 200 KiB gate: ${200 * 1024 - bytes} chars`);
     expect(count).toBeGreaterThan(200);
     expect(bytes).toBeLessThan(200 * 1024);
+    // the soft line: new tools need room (about 1 KB each); parameters many tools share are said once in the instructions, not per tool
+    expect(bytes, 'less than 8 KB of headroom is left under the 200 KiB gate').toBeLessThan(200 * 1024 - 8 * 1024);
   });
   it('the verbose profile keeps the complete text and stays under 330 KB', async () => {
     const { bytes, count } = await size('verbose');
