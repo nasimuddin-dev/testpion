@@ -567,6 +567,8 @@ export type ErrorKind =
   | 'ScriptError'
   /** A save over a newer version of the same thing (another window, a git pull, the CLI): nothing was written. details: { theirs, mine }. */
   | 'ConflictError'
+  /** This user may not use this part of TestPion (a server host's permission for a method group; the desktop owner may use all). */
+  | 'Forbidden'
   /** A bug in TestPion itself (a TypeError, an unexpected exception): not the user's request or server. */
   | 'InternalError';
 

@@ -8,6 +8,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ApsError, shortId } from '@testpion/core';
+import { ALWAYS_METHODS, RPC_GROUPS, SERVER_DEFAULT_GROUPS, methodGroup } from './capabilities.js';
 
 export interface CallUser {
   id: string;
@@ -136,4 +137,19 @@ export class Calls {
   cancelAll(): void {
     for (const c of this.open.values()) c.abort();
   }
+}
+
+/**
+ * Throws `Forbidden` (plain words) when the caller may not use the method's group. On a server host a call without a user of its own
+ * (still the desktop's `LOCAL_USER`) holds `SERVER_DEFAULT_GROUPS`, never everything.
+ */
+export function requireCapability(ctx: Pick<RequestContext, 'user' | 'can'>, method: string, serverMode?: boolean): void {
+  const group = methodGroup(method);
+  if (ALWAYS_METHODS.has(method)) return;
+  const allowed = serverMode && ctx.user === LOCAL_USER ? SERVER_DEFAULT_GROUPS.has(group) : ctx.can(group);
+  if (!allowed)
+    throw new ApsError('Forbidden', `You are not allowed to use "${group}" here (${method}): ${RPC_GROUPS[group] ?? 'this part of TestPion'}.`, {
+      suggestions: ['Ask the person who runs this server to allow the "' + group + '" group for your account.'],
+      details: { group, method, user: ctx.user.id },
+    });
 }

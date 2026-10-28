@@ -1,3 +1,4 @@
+import { serverUser } from '../../apps/desktop/backend/capabilities.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,7 +34,8 @@ describe('a server host refuses paths on its own computer', () => {
     await expect(be.invoke('git.openFolder', { path: outside })).rejects.toThrow(refused);
     await expect(be.invoke('ws.open', { ref: outside })).rejects.toThrow(refused);
     await expect(be.invoke('col.previewDataFile', { path: join(outside, 'passwd.csv') })).rejects.toThrow(refused);
-    await expect(be.invoke('terminal.create', { cwd: outside })).rejects.toThrow(refused);
+    // a server host does not hand the terminal group out by default (capabilities.ts): this user holds every group, so the path gate is what answers
+    await expect(be.invoke('terminal.create', { cwd: outside }, { user: serverUser('t', '*') })).rejects.toThrow(refused);
     await expect(be.invoke('bundle.preview', { path: join(outside, 'x.testpion.zip') })).rejects.toThrow(refused);
   });
 

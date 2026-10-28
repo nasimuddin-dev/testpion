@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import * as nodeModule from 'node:module';
 import { createRequire } from 'node:module';
 import { Backend } from '../backend/backend.js';
+import { LOCAL_USER } from '../backend/request-context.js';
 import { openLinksIn, queueOpenLink } from '../backend/open-links.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
 import { installAppMenu, installTextContextMenu } from './app-menu.js';
@@ -348,7 +349,7 @@ function start(): void {
     if (!win || e.sender !== win.webContents || e.senderFrame !== win.webContents.mainFrame) return { ok: false, error: normalizeError(new Error('Not allowed')) };
     try {
       const be = await backendReady;
-      return { ok: true, data: await be.invoke(method, params, { requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined }) };
+      return { ok: true, data: await be.invoke(method, params, { requestId: typeof meta?.requestId === 'string' ? meta.requestId : undefined, user: LOCAL_USER }) };
     } catch (err) {
       // a plain object keeps kind and suggestions (IPC would reduce an Error to its message)
       return { ok: false, error: normalizeError(err) };

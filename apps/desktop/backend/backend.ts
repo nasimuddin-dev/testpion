@@ -141,7 +141,7 @@ import { findNodeName, readRunData } from './run-data.js';
 import { applyNetSettings } from './net-apply.js';
 import { mockInfo as mockInfoImpl, refreshMock as refreshMockImpl } from './mock-state.js';
 import { appServices, scriptWorkersWanted, type AppServices } from './app-services.js';
-import { Calls, linkedController, raceAbort, type CallMeta, type RequestContext } from './request-context.js';
+import { Calls, linkedController, raceAbort, requireCapability, type CallMeta, type RequestContext } from './request-context.js';
 
 /** How long after start the monitor scheduler and the background git fetch begin (the window's first paint comes first). */
 const SCHEDULERS_DELAY_MS = 3000;
@@ -564,6 +564,7 @@ export class Backend {
       this.host.emit('data.changed', { method, ...one, ...(written ?? {}) });
     };
     try {
+      requireCapability(ctx, method, this.host.serverMode); // the caller's permission for the method's group (capabilities.ts)
       params = checkRpcParams(method, params); // "<method>: missing <param>" before anything runs
       for (const p of hostPathsOf(method, params)) assertHostPath(p, method); // a place on this computer: only where the host allows local files
       await prefetchSecretsFor(this, params); // the environment's secret manager references, before they're needed
