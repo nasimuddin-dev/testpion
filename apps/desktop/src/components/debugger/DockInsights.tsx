@@ -342,7 +342,7 @@ const kidsOf = (n: Node): Node[] => (n.sorted ??= [...n.children.values()].sort(
 /** Structure (F6): the requests listed, by domain then path (each segment a level), with counts and sizes. */
 export function StructurePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: string): void }) {
   const [open, setOpen] = useState<string[]>([]);
-  const tree = useRef<StructureTree>();
+  const tree = useRef<StructureTree | undefined>(undefined);
   const root = useMemo(() => (tree.current ??= new StructureTree()).update(rows), [rows]);
   if (!rows.length) return <Empty title="No requests">Domains and their paths show here as traffic comes in.</Empty>;
   const render = (n: Node, key: string, depth: number): ReactNode[] => {

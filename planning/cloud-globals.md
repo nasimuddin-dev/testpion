@@ -40,7 +40,6 @@ Bounded caches that carry a `bounded:` note on their own line are not repeated h
 | `packages/core/src/debugger/programs.ts#processNames` | desktop-only | Same. |
 | `packages/core/src/debugger/programs.ts#snapshotPending` | desktop-only | Same. |
 | `packages/core/src/debugger/proxy.ts#idSeq` | counter | Monotonic id source (ids only need to be unique inside one proxy session). |
-| `packages/core/src/debugger/rules.ts#patterns` | cache | Compiled RegExps of rule patterns; cleared at 200 (see `compiled` next to it). |
 | `packages/core/src/eval/check-registry.ts#sortedTypes` | registry | Derived from the check registry. |
 | `packages/core/src/eval/check-registry.ts#resolver` | registry | Set once by the host at start-up (provider resolver of the AI checks). Ticket: pass it in ExecServices (stage 2). |
 | `packages/core/src/eval/rag/custom/compile.ts#lastSync` | cache | Last custom-metric sync (one folder); re-run when the stamp changes. |
