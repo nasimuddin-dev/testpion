@@ -106,6 +106,56 @@ describe('vocabulary', () => {
     expect(railTarget(order, 0)).toBeUndefined();
   });
 
+  // the docs name what the screen says: the words the app retired or hides are not in the docs either (2026-10-27 review). The release
+  // notes and the generated migration pages keep the words of their day; DOCS_KNOWN is the older pages still to be reworded: it only shrinks.
+  const DOCS = join(__dirname, '../../docs');
+  const mdFiles = (dir: string): string[] =>
+    readdirSync(dir).flatMap((f) => (/^(node_modules|\.vitepress|public|migrate)$/.test(f) ? [] : statSync(join(dir, f)).isDirectory() ? mdFiles(join(dir, f)) : f.endsWith('.md') ? [join(dir, f)] : []));
+  const DOCS_KNOWN = new Set<string>([
+    'ai-testing/ai-features.md: preferStable',
+    'ai-testing/ai-features.md: TODO(import)',
+    'ai-testing/ai-features.md: Suggest assertions',
+    'ai-testing/mcp-server.md: stable format',
+    'ai-testing/mcp-server.md: merge and diff drivers',
+    'ai-testing/mcp-server.md: runtime variables',
+    'ai-testing/overview.md: Suggest assertions',
+    'api-testing/collections.md: TODO(import)',
+    'api-testing/grpc.md: Move to',
+    'api-testing/rest.md: Suggest assertions',
+    'api-testing/websocket.md: Move to',
+    'architecture/design.md: Suggest assertions',
+    'architecture/execution-engine.md: runtime variables',
+    'cli/reference.md: textconv',
+    'cli/reference.md: stable format',
+    'cli/reference.md: pre-commit hook',
+    'cli/reference.md: tracked files',
+    'cli/reference.md: merge and diff drivers',
+    'cli/reference.md: TODO(import)',
+    'getting-started/git.md: textconv',
+    'getting-started/git.md: stable format',
+    'getting-started/git.md: pre-commit hook',
+    'getting-started/git.md: attribute files',
+    'getting-started/git.md: LFS server',
+    'getting-started/git.md: .ref file',
+    'getting-started/import-fidelity.md: TODO(import)',
+    'getting-started/import-fidelity.md: runtime variables',
+    'test-runner/overview.md: runtime variables',
+  ]);
+  it('the docs use no jargon word and no retired label as a label (the HTTP Debugger page: none at all)', () => {
+    const found: string[] = [];
+    for (const f of mdFiles(DOCS)) {
+      const rel = f.slice(DOCS.length + 1).replace(/\\/g, '/');
+      if (/^(changelog\.md|getting-started\/whats-new\.md)$/.test(rel)) continue;
+      const text = readFileSync(f, 'utf8');
+      for (const w of JARGON) if (text.includes(w) && !DOCS_KNOWN.has(`${rel}: ${w}`)) found.push(`${rel}: ${w}`);
+      // a retired label named as a current one: in bold (**Start capturing**) or as a button
+      for (const w of RETIRED_LABELS) if (text.includes(`**${w}**`) && !DOCS_KNOWN.has(`${rel}: ${w}`)) found.push(`${rel}: ${w}`);
+    }
+    expect(found).toEqual([]);
+    // the Debugger page is clean without an allowance
+    expect([...DOCS_KNOWN].filter((k) => k.startsWith('api-testing/http-debugger.md'))).toEqual([]);
+  });
+
   it('the words of the tools underneath are not in what a screen shows: each is said in plain words', () => {
     // the text a person reads: string literals and JSX text (comments and identifiers are not), in every component and view
     const literal = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]+</g;

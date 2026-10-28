@@ -4,6 +4,15 @@
 
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
+### HTTP Debugger
+
+- **One button starts it all**: **Capture all traffic** starts the proxy, points the system proxy at it (localhost too on Windows) and asks once to see inside HTTPS. The small arrow offers **Only a program I point at the proxy**; the duplicate "Start capturing" button is gone, and **Capture** keeps the narrower ways (a browser, a terminal, a phone, one API).
+- **HTTPS in one click, asked once**: a trusted certificate just turns decryption on; when this computer cannot tell (Linux) the steps are shown once and nothing is installed; a refusal (**Keep HTTPS as tunnels**) can be undone later from **HTTPS ▸ See inside HTTPS…** or the notice. If the system proxy cannot be set, nothing else is asked or installed. The certificate is trusted by its fingerprint.
+- **Quick filters you can trust**: **Capture only** and **Filter out** in a row's menu use the same matcher as the rules (ports, method lists, program globs), several **Capture only** chips keep the rows of any of them, and a rule is named from what it matches (*Filter out Domain = x*), not with `!=`. Chips are not saved in filter presets, read clearly in light mode, and say the rule stays.
+- **Inspector tabs**: **Params**, **Cookies**, **Summary** (the same table as the dock) and **Error** with what to check; **Hide tunnels**, **Clear filters** and **Remove all** (rules, with Undo) are labelled buttons; **Save session** and **Clear** sit at the right behind a divider and are the same actions as in the Session menu.
+- **Menus that fit and work from the keyboard**: the row menu opens with <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key; **Keep this host encrypted** shows only when it means something.
+- **For agents and scripts**: `testpion debugger capture --system-proxy --decrypt --yes --json`, `testpion debugger certificate [--install]`, MCP `debugger_certificate`, `debugger_no_decrypt`, `system_proxy` on `debugger_capture` (asks the user), and `hide_tunnels` and `include: params | cookies | summary` on `debugger_exchanges`.
+
 ### Cloud foundation, stage 1
 
 Nothing changes for the desktop app; the engine is now safe to host for several people in one process (planning/cloud-stage-1.md).
