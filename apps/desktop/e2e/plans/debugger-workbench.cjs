@@ -125,7 +125,7 @@ module.exports = withExpect(steps, {
   'traffic-in-the-grid': /^columns: #,Offset \(s\),Duration \(s\),Method,Version,URL,Status,Type,Size \(KB\),Speed \(KB\/s\),Application,Domain,IP address,User \| rows: 4 \| totals: true$/,
   'rail-opens-summary-and-timeline': /^summary: summary:Main,Connection,Request details,Response details,Timing \| phases: sending,waiting,receiving \| multi: Selected items 2$/,
   'structure-by-domain': /^domain: 127\.0\.0\.1:4010 \| Total 4 /,
-  'row-menu-filters-out': /^added: true \| dock: filter \| filtered: true \| others listed: true \| hits: [1-9]\d*$/,
+  'row-menu-filters-out': /^added: true \| dock: filter \| filtered: true \| others listed: true \| hits: [1-9]\d* \| at once: true \| chip: 1$/,
   'capture-only': /^outside hidden: true \| inside listed: true$/,
   'highlight-rule-editor': /^saved: true \| back to: highlight \| coloured: true \| bold: true$/,
   'convert-and-incoming': /^decoded: a b&c \| incoming tab: true \| dock closed: true$/,
