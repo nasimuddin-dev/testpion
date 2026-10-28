@@ -136,8 +136,32 @@ export function installedBrowsers(): InstalledBrowser[] {
 }
 
 /**
+ * What a browser is started with to send through the proxy: its switches, and for Firefox the preferences of its profile.
+ * HTTP/3 (QUIC) goes over UDP and bypasses an HTTP proxy, so it is turned off (FG-27): the traffic then falls back to HTTP/2 or 1.1 and shows up.
+ */
+export function browserLaunch(name: BrowserName, proxyUrl: string, profileDir: string, startUrl: string): { args: string[]; userJs?: string } {
+  if (name === 'firefox') {
+    const { host, port } = hostPort(proxyUrl);
+    const userJs = [
+      'user_pref("network.proxy.type", 1);',
+      `user_pref("network.proxy.http", "${host}");`,
+      `user_pref("network.proxy.http_port", ${port});`,
+      `user_pref("network.proxy.ssl", "${host}");`,
+      `user_pref("network.proxy.ssl_port", ${port});`,
+      'user_pref("network.proxy.no_proxies_on", "");',
+      'user_pref("network.proxy.allow_hijacking_localhost", true);',
+      'user_pref("network.http.http3.enable", false);',
+      'user_pref("browser.shell.checkDefaultBrowser", false);',
+      'user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);',
+    ].join('\n');
+    return { args: ['-profile', profileDir, '-no-remote', startUrl], userJs };
+  }
+  return { args: [`--proxy-server=${proxyUrl}`, '--proxy-bypass-list=<-loopback>', '--disable-quic', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check', startUrl] };
+}
+
+/**
  * Start a browser that sends through the proxy, with a profile of its own (your real profile, cookies and extensions
- * stay out of it). Chromium browsers take `--proxy-server`; Firefox takes a profile folder with the proxy in user.js.
+ * stay out of it). Chromium browsers take `--proxy-server` (and `--disable-quic`); Firefox takes a profile folder with the proxy in user.js (and HTTP/3 off).
  * Safari has neither: it is opened as it is, and it sends through TestPion only while the system proxy points here
  * (the caller sets it first; `systemProxy` in the answer says so).
  */
@@ -157,27 +181,9 @@ export function openBrowserWithProxy(proxyUrl: string, browser?: BrowserName, st
   }
   const profileDir = join(tmpdir(), 'testpion-debugger', b.name);
   mkdirSync(profileDir, { recursive: true });
-  let args: string[];
-  if (b.name === 'firefox') {
-    const { host, port } = hostPort(proxyUrl);
-    writeFileSync(
-      join(profileDir, 'user.js'),
-      [
-        'user_pref("network.proxy.type", 1);',
-        `user_pref("network.proxy.http", "${host}");`,
-        `user_pref("network.proxy.http_port", ${port});`,
-        `user_pref("network.proxy.ssl", "${host}");`,
-        `user_pref("network.proxy.ssl_port", ${port});`,
-        'user_pref("network.proxy.no_proxies_on", "");',
-        'user_pref("network.proxy.allow_hijacking_localhost", true);',
-        'user_pref("browser.shell.checkDefaultBrowser", false);',
-        'user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);',
-      ].join('\n'),
-    );
-    args = ['-profile', profileDir, '-no-remote', startUrl];
-  } else {
-    args = [`--proxy-server=${proxyUrl}`, '--proxy-bypass-list=<-loopback>', `--user-data-dir=${profileDir}`, '--no-first-run', '--no-default-browser-check', startUrl];
-  }
+  const launch = browserLaunch(b.name, proxyUrl, profileDir, startUrl);
+  if (launch.userJs) writeFileSync(join(profileDir, 'user.js'), launch.userJs);
+  const args = launch.args;
   const child = spawnChecked('browser launch', b.path, args, { detached: true, stdio: 'ignore', windowsHide: false });
   child.on('error', () => undefined);
   child.unref();

@@ -47,6 +47,7 @@ interface HarEntry {
     application?: string;
     clientPort?: number;
     bookmarked?: boolean;
+    mark?: string;
     error?: string;
     truncated?: boolean;
     tls?: boolean;
@@ -101,13 +102,15 @@ export function harEntry(e: DebuggerExchange, redactor: HarRedactor): HarEntry {
       receive: Math.max(0, (e.durationMs ?? 0) - (e.waitMs ?? 0)),
     },
     ...(e.serverAddress ? { serverIPAddress: e.serverAddress.replace(/:\d+$/, '').replace(/^\[|\]$/g, '') } : {}),
-    ...(e.application ? { comment: `application: ${e.application}` } : {}),
+    // the comment is the person's note (HAR 1.2); a capture without one keeps naming the program there, as other tools read it
+    ...(e.note ? { comment: redactor.redactString(e.note) } : e.application ? { comment: `application: ${e.application}` } : {}),
     _testpion: {
       id: e.id,
       kind: e.kind,
       application: e.application,
       clientPort: e.clientPort,
       bookmarked: e.bookmarked,
+      mark: e.mark,
       error: e.error,
       truncated: e.responseBodyTruncated,
       tls: e.tls,
@@ -248,6 +251,8 @@ export function exchangesFromHar(har: unknown): DebuggerExchange[] {
         ...(obj(t?.highlightStyle) ? { highlightStyle: obj(t?.highlightStyle) as DebuggerExchange['highlightStyle'] } : {}),
         error: str(t?.error),
         bookmarked: bool(t?.bookmarked),
+        ...(comment && !comment.startsWith('application: ') ? { note: comment } : {}),
+        ...(str(t?.mark) ? { mark: str(t?.mark) } : {}),
         tls: bool(t?.tls),
         frames: list<NonNullable<DebuggerExchange['frames']>[number]>(t?.frames),
         events: list<NonNullable<DebuggerExchange['events']>[number]>(t?.events),

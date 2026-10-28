@@ -121,6 +121,15 @@ The **Session** menu keeps captures: **Save session…** (also a button at the r
 
 Secrets (Authorization headers, API keys, passwords in bodies) are masked wherever the session is shown or saved; the proxy listens on this computer only unless you ask for the LAN.
 
+### One-click tools
+
+- **Breakpoints** (a split button in the filter bar): the button holds every request (a second click turns it off), the arrow chooses *Off*, *Every request*, *Every response*, *Only POST*, *Only errors* (responses with a status of 400 or more) or *Custom…* (the rule editor, for a breakpoint by domain, URL, method or status). It keeps one rule, **Auto breakpoint**, in the active profile, so it shows in the Rules tab like any other and the bar above the traffic still warns while it is on. When several exchanges are held, **Resume all** lets them go on. Terminal: `testpion debugger breakpoints errors --rules debugger/rules.json`; agents: `debugger_rules` with `action: breakpoints`, `held`, `resume`.
+- **Pause** (the header, next to Stop): the proxy keeps forwarding and rules keep acting, but new traffic is not listed until **Resume**. A notice above the traffic says so. Terminal: `debugger capture --paused`, then `pause` and `resume` lines on its input; agents: `debugger_capture` with `action: pause` or `resume`.
+- **Hide 304s** (a checkbox in the filter bar) leaves out the *Not Modified* answers; it is saved in filter presets.
+- **Notes and marks**: right-click a row for **Add a note…** and **Mark** (a colour). The note shows in the **Comments** column (shown the first time you add one; the column menu hides it) and a marked row is coloured. Both are saved with the session: the note is the HAR entry's `comment`, the colour is in the entry's `_testpion` data. Terminal: `testpion debugger annotate session.har <id|#3> --note "…" --mark red`; agents: `debugger_exchange` with `action: annotate`.
+- **Change this traffic** also offers *Disable caching*, *Remove all encodings*, *Ask for gzip*, **User agent** (Chrome, Firefox, Safari, iPhone, Android phone, Search bot) and *Require proxy sign-in (plain HTTP)*, each a rule for the row's domain. Require proxy sign-in answers a plain HTTP request that carries no proxy credentials with a 407, so the program asks for them (any user name and password pass; requests inside decrypted HTTPS are not asked). The same are in `testpion debugger presets` and the Presets list of the Rules tab.
+- **Browsers started by the Debugger** run without HTTP/3 (Chromium `--disable-quic`, Firefox `network.http.http3.enable=false`), which would otherwise go around an HTTP proxy.
+
 ## Rules
 
 The **Rules** tab is what the proxy does to matching traffic, in the order listed:

@@ -162,6 +162,8 @@ export * from './debugger/har.js';
 export * from './debugger/har-file.js';
 export * from './debugger/capture-history.js';
 export * from './debugger/rules.js';
+export * from './debugger/auto-breakpoint.js';
+export * from './debugger/har-annotate.js';
 export * from './debugger/frames.js';
 export * from './debugger/saz.js';
 export * from './debugger/grpc.js';

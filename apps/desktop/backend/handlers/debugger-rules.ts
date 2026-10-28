@@ -5,6 +5,10 @@
  */
 import {
   ApsError,
+  autoBreakpointMode,
+  hasCustomBreakpoint,
+  parseAutoBreakpointMode,
+  withAutoBreakpoint,
   decideRequest,
   defaultRules,
   describeRule,
@@ -146,6 +150,9 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       profiles: Object.keys(f.profiles),
       rules: rules.map((r) => ({ ...r, summary: describeRule(r) })),
       activeCount: rules.filter((r) => r.enabled).length,
+      // the filter strip's Breakpoints button: the managed rule's mode, and whether rules of the person's own also pause traffic
+      autoBreakpoint: autoBreakpointMode(rules),
+      customBreakpoint: hasCustomBreakpoint(rules),
       filterPresets: f.filterPresets ?? [],
       // how many requests each rule acted on in this capture
       hits: state.proxy?.ruleHits() ?? {},
@@ -263,6 +270,26 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
     },
 
     /* ---- breakpoints */
+
+    /** One-click automatic breakpoints (FG-5): the managed "Auto breakpoint" rule set to a mode (off removes it). */
+    'debug.autoBreakpoint': async ({ mode }: { mode: string }) => {
+      let m: ReturnType<typeof parseAutoBreakpointMode>;
+      try {
+        m = parseAutoBreakpointMode(mode);
+      } catch (err) {
+        throw new ApsError('ValidationError', (err as Error).message);
+      }
+      const f = file();
+      f.profiles[f.active] = withAutoBreakpoint(f.profiles[f.active] ?? [], m);
+      await save(be, state);
+      return list();
+    },
+    /** Let every held exchange go on as it was, or abort them all. */
+    'debug.resumeAll': ({ abort }: { abort?: boolean } = {}) => {
+      const all = [...(state.breakpoints?.values() ?? [])];
+      for (const bp of all) bp.resolve(abort ? { abort: true } : undefined);
+      return { released: all.length, held: state.breakpoints?.size ?? 0 };
+    },
 
     'debug.breakpoints': () => [...(state.breakpoints?.values() ?? [])].map(({ id, phase, exchange, since }) => ({ id, phase, since, exchange })),
     /** Let a held exchange go on, with edits, as it was, or aborted. */

@@ -98,7 +98,7 @@ export const CLI_NO_CONFIRM: Record<string, string> = {
   write_test_file: 'the CLI writes test files through generate / tests-from-spec (their --overwrite asks)',
   generate_tests: 'generate tests has no --overwrite; tests-from-spec --overwrite asks',
   flow_webhook_set: 'flow edit --no-webhook is one line of a flow file, shown by --dry-run',
-  debugger_rules: 'the CLI has no Debugger rules twin',
+  debugger_rules: 'debug breakpoints and debug presets --add write the rules file you named (--dry-run shows it); removing rules is editing that file',
   debugger_session: 'the CLI has no Debugger session twin',
   ai_attempt_fix: 'ai attempt-fix is the run: you named the proposal and --times',
   ai_run_task: 'an AI call from an agent asks because the agent spends your money; on the command line you typed the call, and --dry-run / --max-cost bound it',

@@ -1,10 +1,12 @@
 import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../../debugger/proxy.js';
 import { exchangesFromHar, exchangesToHar } from '../../debugger/har.js';
 import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
+import { annotate, AUTO_BREAKPOINT_LABEL, autoBreakpointMode, cleanAnnotation, parseAutoBreakpointMode, withAutoBreakpoint } from '../../debugger/auto-breakpoint.js';
 import { shortId } from '../../util/ids.js';
 import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrust, rootStanding, trustInstructions } from '../../debugger/certificate.js';
 import { disengageSystemProxy, engageSystemProxy, type SystemProxySnapshot } from '../../debugger/system-proxy.js';
 import { adviceFor, cookiesOf, hostMatches, paramsOf } from '@testpion/shared';
+import type { BreakpointEdits } from '../../debugger/proxy.js';
 import { exchangesFromSaz } from '../../debugger/saz.js';
 import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../../debugger/grpc.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -19,8 +21,15 @@ import { str, type Tool, limitArg } from '../tool.js';
  * The HTTP Debugger for agents: start the proxy, point a program at it, read what it sent and got. The capture lives
  * in this server process; secrets in URLs, headers and bodies pass the redactor before an agent sees them.
  */
-export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /** The capture's list, when other tools read it too (flow_from_exchanges). */ session?: DebuggerExchange[] }): Tool[] {
+export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /** The capture's list, when other tools read it too (flow_from_exchanges). */ session?: DebuggerExchange[]; /** A read-only server: nothing here may change the capture. */ readOnly?: boolean }): Tool[] {
   let proxy: DebuggerProxy | undefined;
+  /** Listing is paused: the proxy forwards, rules act, nothing new is listed. */
+  let paused = false;
+  /** Exchanges held at a breakpoint, waiting for debugger_rules resume (each is let go after 2 minutes). */
+  const held = new Map<string, { phase: 'request' | 'response'; exchange: DebuggerExchange; since: string; release(edits?: BreakpointEdits): void }>(); // bounded: every hold ends within 2 minutes
+  const releaseAll = (edits?: BreakpointEdits) => {
+    for (const h of [...held.values()]) h.release(edits);
+  };
   /** The OS proxy as it was before `system_proxy`, to put back on stop (and when the process is told to end). */
   let systemProxy: SystemProxySnapshot | undefined;
   /** Hosts that stay opaque tunnels while HTTPS is decrypted (globs). */
@@ -42,6 +51,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     return {
       ...rest,
       url: red.redactUrl(e.url),
+      ...(e.note ? { note: red.redactString(e.note) } : {}),
       requestHeaders: headers(e.requestHeaders),
       responseHeaders: headers(e.responseHeaders),
       ...(grpc
@@ -92,7 +102,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear'] },
+          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear', 'pause', 'resume'], description: 'pause: the proxy keeps forwarding but stops listing new traffic; resume lists again' },
           port: { type: 'number', description: 'With start: the port (default: any free one)' },
           decrypt: { type: 'boolean', description: 'With start: decrypt HTTPS with the TestPion root certificate (the program must trust it: the result says where the file is)' },
           system_proxy: { type: 'boolean', description: 'With start: capture the whole computer' },
@@ -100,7 +110,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         required: ['action'],
       },
       run: async (a) => {
-        const status = () => ({ running: !!proxy, url: proxy?.url, port: proxy?.port, systemProxy: !!systemProxy, exchanges: session.length });
+        const status = () => ({ running: !!proxy, paused, url: proxy?.url, port: proxy?.port, systemProxy: !!systemProxy, exchanges: session.length });
         if (a.action === 'start') {
           await proxy?.close();
           await restoreSystem();
@@ -109,6 +119,14 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
             rules: () => rules,
+            listing: () => !paused,
+            onBreakpoint: (e, phase) =>
+              new Promise<BreakpointEdits | undefined>((resolve) => {
+                const id = shortId('bp-');
+                const timer = setTimeout(() => release(), 120_000);
+                const release = (edits?: BreakpointEdits) => (clearTimeout(timer), held.delete(id), resolve(edits));
+                held.set(id, { phase, exchange: e, since: new Date().toISOString(), release });
+              }),
             grpcDecode: grpcDecoder(grpcMethodIndex(workspaceProtoRoots(d.store))),
             ...(leaf ? { decrypt: { leafFor: leaf, enabled: (h: string) => !noDecrypt.some((p) => hostMatches(p, h)) } } : {}),
             onExchange: (e, phase) => {
@@ -132,7 +150,13 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
             next: `Run the program with HTTP_PROXY=${proxy.url} and HTTPS_PROXY=${proxy.url}${root ? ` and trust ${root.path} (Node: NODE_EXTRA_CA_CERTS, Python: REQUESTS_CA_BUNDLE, curl: --cacert)` : ''}, then call debugger_exchanges.`,
           };
         }
+        if (a.action === 'pause' || a.action === 'resume') {
+          paused = a.action === 'pause';
+          return status();
+        }
         if (a.action === 'stop') {
+          paused = false;
+          releaseAll();
           await restoreSystem();
           await proxy?.close();
           proxy = undefined;
@@ -188,6 +212,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           deep: { type: 'boolean', description: 'With text: search headers and bodies too' },
           limit: { type: 'number', description: 'How many (default 200, max 2000)' },
           hide_tunnels: { type: 'boolean', description: 'Leave out HTTPS tunnels' },
+          hide_304: { type: 'boolean', description: 'Leave out 304 Not Modified answers' },
           include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary'] }, description: 'Add inspector data' },
         },
       },
@@ -197,6 +222,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           if (a.host && !e.host.toLowerCase().includes(String(a.host).toLowerCase())) return false;
           if (a.method && e.method !== String(a.method).toUpperCase()) return false;
           if (a.hide_tunnels === true && e.kind === 'tunnel') return false;
+          if (a.hide_304 === true && e.status === 304) return false;
           if (a.status && !statusMatches(String(a.status) as DebuggerRule['match']['status'], e.status, e.error)) return false;
           if (needle) {
             if (`${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''}`.toLowerCase().includes(needle)) return true;
@@ -223,11 +249,29 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     },
     {
       name: 'debugger_exchange',
-      description: 'One captured exchange whole: request and response headers and bodies (redacted), timings, the program that sent it.',
-      inputSchema: { type: 'object', properties: { id: str('The exchange id (from debugger_exchanges)') }, required: ['id'] },
+      description:
+        'One captured exchange whole: request and response headers and bodies (redacted), timings, the program that sent it, and the note and colour mark on it. With action annotate: set (or, with an empty value, remove) its note and mark; a note is saved in the HAR as the entry comment.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: str('The exchange id (from debugger_exchanges)'),
+          action: { type: 'string', enum: ['get', 'annotate'], description: 'get (default) reads it; annotate sets note and / or mark' },
+          note: str('With annotate: a comment (up to 2000 characters; empty removes it)'),
+          mark: { type: 'string', enum: ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'grey', ''], description: 'With annotate: a colour mark (empty removes it)' },
+        },
+        required: ['id'],
+      },
       run: (a) => {
         const e = session.find((x) => x.id === a.id);
         if (!e) throw new ApsError('ValidationError', `No exchange ${String(a.id)} in the session`);
+        if (a.action === 'annotate') {
+          if (d.readOnly) throw new ApsError('ValidationError', 'This server is read-only: it cannot annotate an exchange');
+          try {
+            annotate(e, cleanAnnotation({ note: a.note, mark: a.mark }));
+          } catch (err) {
+            throw new ApsError('ValidationError', (err as Error).message);
+          }
+        }
         return safe(e, true);
       },
     },
@@ -272,27 +316,50 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       name: 'debugger_rules',
       write: true,
       description:
-        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore (filter out) | only (capture only: when any is on, only what one matches is listed) | highlight | modify | reply | redirect, match {host, url, method, application} as globs plus an optional where {column: status|url|method|host|application|user|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}, and the kind's fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body}; redirect {host, scheme}), enable / disable or remove one. Breakpoints need the app's window.",
+        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore (filter out) | only (capture only: when any is on, only what one matches is listed) | highlight | modify | reply | redirect, match {host, url, method, application} as globs plus an optional where {column: status|url|method|host|application|user|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}, and the kind's fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body}; redirect {host, scheme}), enable / disable or remove one. Breakpoints: action breakpoints with mode off | request (every request) | response (every response) | post (only POST) | errors (only responses with status 400+) keeps one managed rule \"Auto breakpoint\" (the exchange is held until action resume, or 2 minutes); held lists what is held; resume lets one (id) or all go on, or abort them. Custom breakpoint rules need the app's window.",
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear'] },
+          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume'] },
+          mode: { type: 'string', enum: ['off', 'request', 'response', 'post', 'errors'], description: 'With breakpoints: which traffic is held (off removes the Auto breakpoint rule)' },
+          abort: { type: 'boolean', description: 'With resume: abort the held exchange(s) with a 502 instead of sending them on' },
           preset: str('With add: a preset id from the presets action'),
           host: str('With add + preset: the host the preset applies to'),
           rule: { type: 'object', description: 'With add: the rule (see the description)' },
-          id: str('With remove / enable / disable: the rule id'),
+          id: str('With remove / enable / disable: the rule id; with resume: the held exchange id (omit for all)'),
         },
         required: ['action'],
       },
       run: (a) => {
         const hits = proxy?.ruleHits() ?? {};
-        const list = () => ({ rules: rules.map((r) => ({ ...r, summary: describeRule(r), hits: hits[r.id] ?? 0 })) });
+        const list = () => ({ autoBreakpoint: autoBreakpointMode(rules), rules: rules.map((r) => ({ ...r, summary: describeRule(r), hits: hits[r.id] ?? 0 })) });
+        const heldList = () => ({ held: [...held.entries()].map(([id, h]) => ({ id, phase: h.phase, method: h.exchange.method, url: red.redactUrl(h.exchange.url), since: h.since })) });
+        if (a.action === 'breakpoints') {
+          let mode: ReturnType<typeof parseAutoBreakpointMode>;
+          try {
+            mode = parseAutoBreakpointMode(a.mode);
+          } catch (err) {
+            throw new ApsError('ValidationError', (err as Error).message);
+          }
+          const next = withAutoBreakpoint(rules, mode);
+          rules.splice(0, rules.length, ...next);
+          return { mode, label: AUTO_BREAKPOINT_LABEL[mode], ...list(), ...heldList() };
+        }
+        if (a.action === 'held') return heldList();
+        if (a.action === 'resume') {
+          const one = typeof a.id === 'string' ? held.get(a.id) : undefined;
+          if (typeof a.id === 'string' && !one) throw new ApsError('ValidationError', `No held exchange ${a.id}`);
+          const released = one ? 1 : held.size;
+          if (one) one.release(a.abort === true ? { abort: true } : undefined);
+          else releaseAll(a.abort === true ? { abort: true } : undefined);
+          return { released, ...heldList() };
+        }
         if (a.action === 'presets') return { presets: rulePresets(typeof a.host === 'string' ? a.host : undefined).map((p) => ({ id: p.id, label: p.label })) };
         if (a.action === 'add') {
           const from = typeof a.preset === 'string' ? rulePresets(typeof a.host === 'string' ? a.host : undefined).find((p) => p.id === a.preset)?.rule : (a.rule as Partial<DebuggerRule> | undefined);
           if (!from) throw new ApsError('ValidationError', 'add needs a preset id or a rule object');
           if (!['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
-          if (from.kind === 'breakpoint') throw new ApsError('ValidationError', 'Breakpoints need the app window to edit the held exchange; use modify or reply here');
+          if (from.kind === 'breakpoint') throw new ApsError('ValidationError', 'A custom breakpoint needs the app window; use action breakpoints for the automatic ones, or modify / reply here');
           const rule: DebuggerRule = {
             ...(from as DebuggerRule),
             id: shortId('rule-'),

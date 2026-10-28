@@ -5,6 +5,8 @@ import { loadRules, type HeldBreakpoint, type RulesState } from '../DebuggerRule
 
 export interface Status {
   running: boolean;
+  /** Listing is paused: the proxy forwards, nothing new is listed. */
+  paused?: boolean;
   url?: string;
   port?: number;
   exchanges: number;

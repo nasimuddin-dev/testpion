@@ -1,6 +1,8 @@
 /** RPC handlers: the HTTP Debugger (planning/http-debugger.md): a local proxy other programs send through, and what it saw. */
 import {
   ApsError,
+  annotate,
+  cleanAnnotation,
   shortId,
   ENGINE_VERSION,
   exchangesFromHar,
@@ -264,6 +266,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     // rules that change what programs send or get (not ignore / highlight): the status bar shows them wherever you are
     changingRules: state.proxy ? activeRules(be, state).filter((r) => r.enabled && (r.kind === 'modify' || r.kind === 'reply' || r.kind === 'redirect' || r.kind === 'breakpoint')).length : 0,
     running: !!state.proxy,
+    paused: !!state.paused,
     url: state.proxy?.url,
     port: state.proxy?.port,
     exchanges: state.exchanges.length,
@@ -393,6 +396,7 @@ export function debuggerHandlers(be: Backend): Handlers {
     signals.push(e.id);
   };
   const stop = async () => {
+    state.paused = false;
     for (const bp of [...(state.breakpoints?.values() ?? [])]) bp.resolve(undefined);
     await state.proxy?.close();
     state.proxy = undefined;
@@ -510,6 +514,7 @@ export function debuggerHandlers(be: Backend): Handlers {
         grpcDecode: protos.decode,
         rootCertificatePem: () => (state.decrypt ? certificateOf(be, state).certPem : undefined),
         rules: () => activeRules(be, state),
+        listing: () => !state.paused,
         onBreakpoint: (e, phase) => holdBreakpoint(be, state, e, phase),
         decrypt: {
           leafFor: (host) => (certificateOf(be, state), state.leafFor!(host)),
@@ -535,6 +540,12 @@ export function debuggerHandlers(be: Backend): Handlers {
       return status();
     },
     'debug.stop': stop,
+    /** Pause or resume listing (FG-13): the proxy keeps forwarding, nothing new is listed while paused. */
+    'debug.pause': ({ on }: { on?: boolean } = {}) => {
+      state.paused = on ?? !state.paused;
+      be.logger.info(`HTTP Debugger: listing ${state.paused ? 'paused' : 'resumed'}`);
+      return status();
+    },
 
     /* ---- capture helpers: the ways a program ends up sending through the proxy */
 
@@ -745,6 +756,23 @@ export function debuggerHandlers(be: Backend): Handlers {
       touch();
       return true;
     },
+    /** A note and a colour mark on exchanges (FG-11): an empty value removes it. Saved in the HAR as the entry's comment. */
+    'debug.annotate': ({ ids, note, mark }: { ids: string[]; note?: string; mark?: string }) => {
+      let a: ReturnType<typeof cleanAnnotation>;
+      try {
+        a = cleanAnnotation({ note, mark });
+      } catch (err) {
+        throw new ApsError('ValidationError', (err as Error).message);
+      }
+      const set = new Set(ids);
+      const hit = shown().exchanges.filter((x) => set.has(x.id));
+      for (const e of hit) {
+        annotate(e, a);
+        changed(shown(), e);
+      }
+      touch();
+      return { annotated: hit.length };
+    },
     'debug.delete': ({ ids }: { ids: string[] }) => {
       const set = new Set(ids);
       shown().session.remove(set);
@@ -855,7 +883,7 @@ export function debuggerHandlers(be: Backend): Handlers {
   };
   // the status bar shows the Debugger wherever you are (running, rules that change traffic, the system proxy):
   // whatever changes that state says so
-  for (const name of ['debug.start', 'debug.stop', 'debug.systemProxy', 'debug.openBrowser', 'debug.decrypt', 'debug.clear']) {
+  for (const name of ['debug.start', 'debug.stop', 'debug.pause', 'debug.systemProxy', 'debug.openBrowser', 'debug.decrypt', 'debug.clear']) {
     const h = handlers[name]!;
     handlers[name] = async (p: unknown) => {
       const r = await h(p);

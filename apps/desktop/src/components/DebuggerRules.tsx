@@ -33,7 +33,7 @@ export interface Rule {
   name: string;
   enabled: boolean;
   kind: RuleKind;
-  match: { host?: string; url?: string; method?: string; application?: string; status?: string | number; minMs?: number; minBytes?: number; where?: RuleCondition };
+  match: { host?: string; url?: string; method?: string; application?: string; status?: string | number; minMs?: number; minBytes?: number; where?: RuleCondition; noProxyAuth?: boolean };
   color?: string;
   style?: { dark?: string; light?: string; bold?: boolean; row?: boolean };
   requestHeaders?: HeaderEdit[];
@@ -51,6 +51,9 @@ export interface RulesState {
   profiles: string[];
   rules: Rule[];
   activeCount: number;
+  /** The filter strip's Breakpoints button: the managed "Auto breakpoint" rule's mode, and whether breakpoint rules of the person's own are on. */
+  autoBreakpoint?: 'off' | 'request' | 'response' | 'post' | 'errors';
+  customBreakpoint?: boolean;
   filterPresets: Array<{ name: string; filter: Record<string, unknown> }>;
   /** How many requests each rule acted on in this capture, by rule id. */
   hits?: Record<string, number>;
