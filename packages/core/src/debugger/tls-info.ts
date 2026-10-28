@@ -59,3 +59,11 @@ export function tlsInfoOf(sock: TLSSocket | undefined): TlsInfo | undefined {
   }
   return info;
 }
+
+/** Reads the TLS details of an upstream socket once its handshake is done (a reused socket has finished it already). */
+export function watchTls(sock: import('node:net').Socket, set: (t: TlsInfo | undefined) => void): void {
+  const tls = sock as TLSSocket;
+  const read = () => set(tlsInfoOf(tls));
+  if (tls.encrypted && !sock.connecting && tls.getProtocol?.()) read();
+  else sock.once('secureConnect', read);
+}

@@ -1,4 +1,4 @@
-import { formatBytes, type DecodedJwt } from '@testpion/shared';
+import { formatBytes, type DecodedJwt, type TlsInfo } from '@testpion/shared';
 import type { HttpRequestSpec } from '../../types';
 import type { Frame, GrpcCall, StreamEvent } from '../DebuggerTools';
 
@@ -69,6 +69,12 @@ export interface Exchange {
   redirectedTo?: string;
   repliedByRule?: boolean;
   edited?: boolean;
+  /** FG-20 (list rows): the GraphQL operation a call runs, as `query GetUser`. */
+  graphql?: string;
+  /** FG-8 (debug.exchange only): an image response as base64 (other binary bodies are decoded on the host, see debug.bodyView). */
+  responseBodyBase64?: string;
+  /** FG-10 (debug.exchange only): the TLS connection to the server. */
+  connection?: TlsInfo;
   /** The Auth inspector's reading (debug.exchange only). */
   auth?: { scheme: string; user?: string; jwt?: DecodedJwt; cookies: string[]; setCookies: string[]; note?: string };
 }

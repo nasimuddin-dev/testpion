@@ -182,6 +182,8 @@ function exchangeViewRaw(e: ViewExchange, view: ExchangeViewName, side: 'request
         if (bytes.length > MAX_DECODE_BYTES) return no(view, side, `The body is over ${MAX_DECODE_BYTES / 1024} KB: it is not decoded.`);
         if (view === 'msgpack') {
           const r = decodeMessagePack(bytes);
+          // a lone number, string or flag followed by more data is how plain text reads as MessagePack: not MessagePack
+          if (r.trailing > 0 && (r.value === null || typeof r.value !== 'object')) return no(view, side, 'This does not look like MessagePack: the first value is followed by data that is not part of it.');
           return made(view, side, { value: r.value, trailingBytes: r.trailing }, (d) => json(d.value) + (d.trailingBytes ? `\n(${d.trailingBytes} bytes follow the value)` : ''));
         }
         const fields = decodeProtobufRaw(bytes);

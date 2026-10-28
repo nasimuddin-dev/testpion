@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { bodyViewsOf, imageFacts, parseForm, parseXml, svgFacts, xmlOutline, keepsBytes } from '../../packages/shared/src/body-views';
 import { decodeMessagePack, decodeProtobufRaw, decodeSignalR, decodeSocketIo, protobufText, protobufToJson, DecodeError, base64Of } from '../../packages/shared/src/binary-decode';
 import { formatGraphql, graphqlOf } from '../../packages/shared/src/graphql-view';
@@ -229,5 +231,19 @@ describe('exchangeView (CLI and MCP share it)', () => {
     expect(exchangeView({ url: 'u' }, 'xml')).toMatchObject({ ok: false, error: expect.stringMatching(/not kept/) });
     expect(exchangeView({ url: 'u', responseBody: 'c1' }, 'msgpack')).toMatchObject({ ok: false, error: expect.stringMatching(/Not MessagePack/) });
     expect(exchangeView({ url: 'u', status: 200 }, 'tls')).toMatchObject({ ok: false });
+  });
+});
+
+describe('the HTML preview is inert', () => {
+  const src = readFileSync(join(__dirname, '../../apps/desktop/src/components/debugger/BodyViews.tsx'), 'utf8');
+  it('is a frame with an empty sandbox and a policy that allows no script, no network and no form', () => {
+    expect(src).toMatch(/<iframe[^>]*\bsandbox=""/);
+    expect(src).not.toMatch(/allow-scripts|allow-same-origin|allow-popups|allow-forms|allow-top-navigation/);
+    const csp = /PREVIEW_CSP = "([^"]+)"/.exec(src)![1]!;
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).not.toMatch(/script-src|https?:|connect-src/);
+    expect(csp).toContain('img-src data:');
+    // the policy is the first thing in the document, ahead of the page's own markup
+    expect(src).toMatch(/Content-Security-Policy" content="\$\{PREVIEW_CSP\}"><base target="_blank">\$\{html\}/);
   });
 });

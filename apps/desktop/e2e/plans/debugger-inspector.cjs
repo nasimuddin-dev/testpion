@@ -75,6 +75,6 @@ module.exports = withExpect(steps, {
   'send-an-exchange-with-a-query-and-a-cookie': /^request tabs: Header,Content,Raw,JSON,Params,Cookies,Summary,Auth,Hex$/,
   'params-decoded': /^query: q=hello world \| tag=a&b \| flag=$/,
   'cookies-both-sides': /^request cookies: sid=\*\*\* \| theme=\*\*\* \| response cookies tab: (true|false) \| response sets none: (true|false)$/,
-  'summary-tab-is-the-docks-summary': /^groups: Main,Connection,Request details,Response details,Timing \| url: true \| overview tab: false$/,
+  'summary-tab-is-the-docks-summary': /^groups: Main,Connection,Caching,Request details,Response details,Timing \| url: true \| overview tab: false$/,
   'error-tab-on-a-404': /^error says: 404 \| advice: true$/,
 });

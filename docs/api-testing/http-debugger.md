@@ -23,7 +23,7 @@ The Traffic tab is laid out like a desktop HTTP debugger:
 | **Filter bar** | The text filter first (**In bodies** searches headers and bodies too), then All applications, All domains, All types, method, status, **Bookmarked**, **Hide tunnels** (leaves out the HTTPS tunnels that are not decrypted), the chips of the quick filters you chose from a row's menu, saved **Presets**, and **Clear filters** (shown while a filter is on: it puts the text, the dropdowns, the checkboxes and the chips back to nothing). At the far right, behind a divider: **Save session** and **Clear**, then the download button and the number of filter-out / capture-only rules on (click it for the Filter panel). |
 | **Grid** | `#`, Offset (seconds since the session's first request), Duration (s), Method, Version, URL, Status, Type, Size (KB), Speed (KB/s), Application (the program behind the connection, found while it is open; one that exits within milliseconds, such as a single curl, may show none), Domain, IP address, User (the account the program runs as), and PID on demand. Click a header to sort, again to reverse; the columns button shows or hides columns (remembered). Ctrl+click and Shift+click select several. |
 | **Outgoing / Incoming** | Outgoing is what programs sent through the proxy; **Incoming requests** lists what your programs sent to TestPion's own mock servers (a collection's **Mock** tab), with the example that answered; click one for its headers and body and the mock's answer in the same panes (**Open** makes it a request tab). |
-| **Request details / Response details** | Side by side under the grid once a row is selected (until then, a one-line hint). Each is a header table with the start line first (`[Request] POST /pet HTTP/1.1`, `[Response] HTTP/1.1 404 Not Found`) and **Filter headers**; tabs at the bottom: **Header**, **Content**, **Raw**, **JSON**, plus **Params** (the query string and a form body, decoded, one row each), **Cookies**, **Summary**, **Auth** and **Hex** on the request; **Cookies** (what the response sets, with the attributes), **Error** (a failure or a 4xx or 5xx, with what to check), **Hex**, **gRPC**, **Frames** or **Events** on the response when the exchange has them. |
+| **Request details / Response details** | Side by side under the grid once a row is selected (until then, a one-line hint). Each is a header table with the start line first (`[Request] POST /pet HTTP/1.1`, `[Response] HTTP/1.1 404 Not Found`) and **Filter headers**; tabs at the bottom: **Header**, **Content**, **Raw**, **JSON**, plus **Params** (the query string and a form body, decoded, one row each), **Cookies**, **Summary**, **Auth** and **Hex** on the request; **Cookies** (what the response sets, with the attributes), **Error** (a failure or a 4xx or 5xx, with what to check), **Hex**, **gRPC**, **Frames** or **Events** on the response when the exchange has them. A body that is more than text gets a tab of its own: see [Content views](#content-views). |
 | **Dock** (right) | One panel at a time, chosen from the rail; its title says which. The pin in its header unpins it: the dock folds into a tab on the right edge and the grid takes the width; hover or click the tab (or a rail button) and the panel slides over the grid, and it slides away when the pointer leaves it, on Esc or on a click elsewhere. Pin it to dock it again (remembered). Its width is dragged at its left edge. |
 | **Footer** | How many requests are listed (or selected), their size and their total time. |
 
@@ -36,7 +36,7 @@ Once HTTPS traffic shows up as tunnels, a one-line notice offers **See inside HT
 - **Auto-reply**: the rules that answer without the server.
 - **Modify**: the rules that change headers and bodies, add a delay, or redirect a host.
 - **Timeline**: the selected request's **Sending**, **Waiting** and **Receiving** as bars, with its total time and size; several selected requests show on one time axis.
-- **Summary**: the selected request in groups: **Main** (PID, application, user, IP address, total size), **Connection** (protocol, HTTPS, connection and stream id, client port), **Request details** and **Response details** (header and content sizes, content types, status), **Timing**, and, when they apply, **Rules and errors** (the rules that acted, a redirect, a breakpoint edit, the error). The request side's **Summary** tab shows the same table, so there is one summary.
+- **Summary**: the selected request in groups: **Main** (PID, application, user, IP address, total size), **Connection** (protocol, HTTPS, connection and stream id, client port), **Request details** and **Response details** (header and content sizes, content types, status), **TLS and certificate** (version, cipher, the certificate's subject, issuer, validity and names, with findings in plain words: expired, expiring soon, a name that does not match, an old protocol), **Caching** (would a browser keep this response, for how long, and how it is checked again), **Timing**, and, when they apply, **Rules and errors** (the rules that acted, a redirect, a breakpoint edit, the error). The request side's **Summary** tab shows the same table, so there is one summary.
 - **Structure**: the listed requests by domain, then path segment by segment, with counts and sizes and a total; double-click one to select its first request.
 - **Performance**: where the time and bytes go: the share of time spent waiting for servers, the slowest responses, the largest responses, the slowest transfers (KB/s) and every domain's average and slowest time.
 - **Convert**: paste a value; **URL decode** and **URL encode** run the shown conversion (their arrows pick another: Base64, hex, HTML, JWT, timestamp, JSON format or minify) into the result box; **Other readings** lists every decoding that makes sense. The header's **Decode** button opens it.
@@ -130,6 +130,25 @@ Secrets (Authorization headers, API keys, passwords in bodies) are masked wherev
 - **Change this traffic** also offers *Disable caching*, *Remove all encodings*, *Ask for gzip*, **User agent** (Chrome, Firefox, Safari, iPhone, Android phone, Search bot) and *Require proxy sign-in (plain HTTP)*, each a rule for the row's domain. Require proxy sign-in answers a plain HTTP request that carries no proxy credentials with a 407, so the program asks for them (any user name and password pass; requests inside decrypted HTTPS are not asked). The same are in `testpion debugger presets` and the Presets list of the Rules tab.
 - **Browsers started by the Debugger** run without HTTP/3 (Chromium `--disable-quic`, Firefox `network.http.http3.enable=false`), which would otherwise go around an HTTP proxy.
 
+### Content views
+
+The tabs at the bottom of Request details and Response details add a view when the body is more than text. The view is chosen from the content type and, when it is missing, from the first bytes.
+
+| Tab | When | What it shows |
+|---|---|---|
+| **Image** | PNG, JPEG, GIF, WebP, BMP, ICO, SVG | The picture, with its format, size in pixels and bytes. An SVG is drawn as a picture, so nothing in it runs. Images up to the capture's body limit (512 KB) are kept. |
+| **XML** | any XML | A tree you can fold, with attributes. A DOCTYPE is skipped and entities it declares are never expanded. |
+| **Preview** | HTML | The page drawn in a sandboxed frame: scripts, forms and network loads are off, so it shows what the markup says and nothing more. |
+| **Form** | URL-encoded and multipart bodies | A table of fields, or of parts with file name, type and size (a file's content is not shown). |
+| **GraphQL** | a request with a `query` (JSON, a batch, `application/graphql` or a GET) | The operation type and name, the query laid out, the variables, and the response's `errors` with path and code. The grid also marks the row (`query GetUser` after the URL), and the **GraphQL operation** column (hidden until you show it) sorts by it. |
+| **MessagePack**, **Protobuf** | the matching content types | Decoded without a schema: MessagePack as a tree, Protobuf field by field like `protoc --decode_raw` (nested messages, strings, numbers, fixed-width values also as floats). |
+| **SignalR**, **Socket.IO** | text bodies in those framings | One row per message: kind, hub method or event name, data. |
+| **Syntax** | CSS, JavaScript, SQL, shell | The text with colours. |
+
+Binary protocols are decoded on the computer that captured, and what is read out is masked like any body (a `token` inside a MessagePack map shows as `[REDACTED]`). Decoders are bounded: input over 1 MB is not decoded, nesting past 32 levels or 20,000 values stops the read with a note. A body larger than the capture keeps, or one let go to save memory, says so in the tab instead of showing nothing.
+
+An image goes into a saved session (the HAR keeps it as base64); MessagePack and Protobuf bodies do not, because a mask reads text and a secret inside bytes would go unseen. The TLS details are saved with the session.
+
 ## Rules
 
 The **Rules** tab is what the proxy does to matching traffic, in the order listed:
@@ -180,7 +199,18 @@ testpion debugger certificate --install --yes             # trust it (the system
 
 `--system-proxy` and `--install` / `--remove` change this computer, so without `--yes` a terminal asks and a run that cannot ask (CI, `--non-interactive`) refuses and says what it would do.
 
-AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS, `system_proxy` for the whole computer, which asks the user), `debugger_certificate` (info, install, remove; install and remove ask the user), `debugger_no_decrypt` (the hosts kept as tunnels), `debugger_exchanges` (the list, with filters; `deep` searches bodies; `hide_tunnels` leaves the tunnels out; `include` adds `params`, `cookies` or `summary` to each exchange, and the advice for a failure), `debugger_exchange` (one, with bodies), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture only and a `where` condition on a column with a `style`: an agent can take an API offline, slow it down, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did. `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
+```bash
+testpion debugger show session.har '#3'                    # which views fit the response of the third entry
+testpion debugger show session.har <id> --view xml         # an XML tree as indented text
+testpion debugger show session.har <id> --view msgpack --side request --json
+testpion debugger show session.har <id> --view graphql --json   # operation, query, variables, errors
+testpion debugger show session.har <id> --view caching     # would a browser cache it, in words
+testpion debugger show session.har <id> --view tls         # version, cipher, certificate findings
+```
+
+Views: `list`, `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `syntax`, `caching`, `tls`. A view that cannot be produced says why (`ok: false` and `error` with `--json`; exit code 2 without).
+
+AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS, `system_proxy` for the whole computer, which asks the user), `debugger_certificate` (info, install, remove; install and remove ask the user), `debugger_no_decrypt` (the hosts kept as tunnels), `debugger_exchanges` (the list, with filters; `deep` searches bodies; `hide_tunnels` leaves the tunnels out; `include` adds `params`, `cookies`, `summary`, `caching`, `tls` or `graphql` to each exchange, and the advice for a failure), `debugger_exchange` (one, with bodies; `view` reads a body as the window shows it: `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `caching`, `tls`, with `side` request or response),  `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture only and a `where` condition on a column with a `style`: an agent can take an API offline, slow it down, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did. `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
 
 ## Coming next
 

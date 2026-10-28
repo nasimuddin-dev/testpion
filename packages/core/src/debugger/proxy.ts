@@ -30,7 +30,7 @@ import { applyHeaderEdits, decideRequest, highlightRuleForResponse, ruleMatches,
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
 import type { LeafCertificate } from './certificate.js';
 import { keepsBytes, type TlsInfo } from '@testpion/shared';
-import { tlsInfoOf } from './tls-info.js';
+import { watchTls } from './tls-info.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
 
 /**
@@ -119,10 +119,9 @@ export interface DebuggerExchange {
   grpc?: GrpcCapture;
   /** HTTP/2 trailers (gRPC's status lives there). */
   trailers?: Record<string, string>;
-  /** FG-8: a body that is not text but has a view (an image, MessagePack, Protobuf), kept whole as base64 when it fits the body limit. */
-  requestBodyBase64?: string;
-  responseBodyBase64?: string;
-  /** FG-10: the TLS connection to the server (version, cipher, ALPN, certificate chain). */
+  /** FG-8: a body with a view that is not text (image, MessagePack, Protobuf), whole as base64 if it fits the body limit. */
+  requestBodyBase64?: string; responseBodyBase64?: string;
+  /** FG-10: the TLS connection to the server. */
   connection?: TlsInfo;
 }
 
@@ -861,12 +860,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       const at = () => (e.serverAddress = sock.remoteAddress ? `${sock.remoteAddress}:${sock.remotePort}` : undefined);
       if (sock.remoteAddress) at();
       else sock.once('connect', at);
-      // the TLS details of an https upstream: read once the handshake is done (a reused socket has finished it already)
-      if (target.protocol === 'https:') {
-        const read = () => (e.connection = tlsInfoOf(sock as TLSSocket) ?? e.connection);
-        if ((sock as TLSSocket).encrypted && !sock.connecting && (sock as TLSSocket).getProtocol?.()) read();
-        else sock.once('secureConnect', read);
-      }
+      if (target.protocol === 'https:') watchTls(sock, (t) => (e.connection = t ?? e.connection));
     });
     // the request is sent whole when the last byte has gone out
     up.once('finish', () => (e.sendMs = Date.now() - t0));
