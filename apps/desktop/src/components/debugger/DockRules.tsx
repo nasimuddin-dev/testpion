@@ -243,7 +243,7 @@ export function ModifyPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
   return (
     <RuleList
       state={state}
-      kinds={['modify', 'redirect']}
+      kinds={['modify', 'redirect', 'remap', 'fault', 'frame']}
       onChange={onChange}
       onEdit={onEdit}
       add={{
@@ -251,9 +251,12 @@ export function ModifyPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
         items: [
           { label: 'Modify headers', onSelect: () => onNewRule({ kind: 'modify', enabled: true, match: {}, requestHeaders: [{ op: 'set', name: 'X-Debug', value: 'testpion' }] }) },
           { label: 'Redirect connections', onSelect: () => onNewRule({ kind: 'redirect', enabled: true, match: {}, redirect: { host: 'localhost:3000', scheme: 'http' } }) },
+          { label: 'Remap a host', onSelect: () => onNewRule({ kind: 'remap', enabled: true, match: {}, remap: { to: 'localhost:3000', preserveHost: true } }) },
+          { label: 'Inject a failure', onSelect: () => onNewRule({ kind: 'fault', enabled: true, match: {}, fault: { action: 'drop' } }) },
+          { label: 'Change WebSocket frames', onSelect: () => onNewRule({ kind: 'frame', enabled: true, match: {}, frame: { action: 'drop', direction: 'received' } }) },
         ],
       }}
-      empty="A modify rule changes the headers or bodies of the requests it matches, or delays them; a redirect rule sends a host's requests to another host (a local build, a staging server)."
+      empty="A modify rule changes the headers or bodies of the requests it matches, or delays them; a redirect rule sends a host's requests to another host or path (a local build, a staging server); a remap reaches a host at another address, like a hosts-file entry; a failure drops, cuts or never answers a request; a frame rule drops or changes WebSocket frames."
     />
   );
 }

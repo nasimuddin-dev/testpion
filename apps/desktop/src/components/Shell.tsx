@@ -180,25 +180,27 @@ export function TopBar() {
  * change what programs send or get, and when the system proxy points at it (so a forgotten capture is never invisible).
  */
 function DebuggerSegment() {
-  const [st, setSt] = useState<{ running: boolean; port?: number; changingRules: number; systemProxy: boolean }>();
+  const [st, setSt] = useState<{ running: boolean; port?: number; changingRules: number; systemProxy: boolean; speed?: { preset: string } | null }>();
   useEffect(() => {
     const load = () => void call<typeof st>('debug.status').then(setSt, () => undefined);
     load();
     const offState = on<typeof st>('debug.state', (s) => setSt(s));
     const offRules = on('debug.rules', load);
-    return () => (offState(), offRules());
+    const offSpeed = on('debug.speed', load);
+    return () => (offState(), offRules(), offSpeed());
   }, []);
   if (!st?.running) return null;
-  const warn = st.changingRules > 0 || st.systemProxy;
+  const warn = st.changingRules > 0 || st.systemProxy || !!st.speed;
   return (
     <button
       className={cx('flex items-center gap-1 hover:text-fg', warn && 'text-warn')}
-      title={`HTTP Debugger capturing on port ${st.port}${st.changingRules ? `; ${plural(st.changingRules, 'rule')} change traffic` : ''}${st.systemProxy ? '; the system proxy points here' : ''}. Click to open it.`}
+      title={`HTTP Debugger capturing on port ${st.port}${st.changingRules ? `; ${plural(st.changingRules, 'rule')} change traffic` : ''}${st.systemProxy ? '; the system proxy points here' : ''}${st.speed ? `; network speed: ${st.speed.preset}` : ''}. Click to open it.`}
       onClick={() => useApp.getState().setView('debugger')}
     >
       <Bug size={12} /> Debugger :{st.port}
       {st.changingRules > 0 && ` · ${plural(st.changingRules, 'rule')} active`}
       {st.systemProxy && ' · system proxy'}
+      {st.speed && ` · speed ${st.speed.preset}`}
     </button>
   );
 }

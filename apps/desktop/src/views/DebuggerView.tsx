@@ -34,6 +34,7 @@ import { persisted, promptText, toastError, useApp, attempt, confirmAction } fro
 import { createCaptureFlow } from '../components/debugger/capture-flow';
 import { sessionActions, ActionButton } from '../components/debugger/session-actions';
 import { BreakpointSplit, PauseButton, customBreakpointRule } from '../components/debugger/CaptureControls';
+import { NetworkSpeedMenu } from '../components/debugger/NetworkSpeedMenu';
 import { applyPreset, chipAria, chipText, chipTitle, presetOf } from '../components/debugger/quick-filter';
 import { isMenuKey, openRowMenu } from '../components/debugger/row-menu-key';
 import { certificateError } from '../components/debugger/ExchangeExtras';
@@ -560,6 +561,7 @@ export function DebuggerView() {
                 Stop
               </Button>
             )}
+            <NetworkSpeedMenu />
             {status?.running && <PauseButton paused={!!status.paused} onChange={(paused) => setStatus((s) => s && { ...s, paused })} />}
             {!status?.systemProxy && (
               <span data-capture-all className="inline-flex">

@@ -1,19 +1,20 @@
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Play, Scale, Trash2, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
-import { promptText, toastError, attempt } from '../store';
+import { promptText, toastError, attempt, useApp } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
 import { LABEL } from '../lib/vocabulary';
 import { deleteRuleWithUndo } from './debugger/DockRules';
 import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
+import { FaultFields, FrameFields, ModifyShapingFields, RedirectRewriteFields, RemapFields, ReplySourceFields } from './debugger/RuleShapingFields';
 
 /**
  * The HTTP Debugger's rules (planning/http-debugger.md, DBG-3): the Rules tab (profiles, the list, presets, a URL to
  * test against them), the rule editor, the breakpoint dialog (an exchange held for editing) and the compare dialog.
  */
 
-export type RuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+export type RuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint' | 'remap' | 'fault' | 'frame';
 export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'user' | 'type' | 'version' | 'ip' | 'duration' | 'size';
 export type RuleOperator = 'equals' | 'not-equals' | 'contains' | 'starts-with' | 'ends-with' | 'between' | 'greater-than' | 'less-than' | 'matches';
 export interface RuleCondition {
@@ -41,9 +42,15 @@ export interface Rule {
   requestBody?: string;
   responseBody?: string;
   delayMs?: number;
-  reply?: { status: number; headers?: Record<string, string>; body?: string; delayMs?: number };
-  redirect?: { host: string; scheme?: 'http' | 'https' };
+  reply?: { status: number; headers?: Record<string, string>; body?: string; delayMs?: number; file?: string; folder?: string; stripPrefix?: string };
+  redirect?: { host?: string; scheme?: 'http' | 'https'; rewrite?: { from: string; to: string; regex?: boolean } };
   breakpoint?: 'request' | 'response';
+  requestReplace?: Array<{ find: string; replace: string; regex?: boolean; ignoreCase?: boolean }>;
+  responseReplace?: Array<{ find: string; replace: string; regex?: boolean; ignoreCase?: boolean }>;
+  setStatus?: number;
+  remap?: { to: string; scheme?: 'auto' | 'http' | 'https'; preserveHost?: boolean };
+  fault?: { action: 'drop' | 'timeout' | 'truncate' | 'error'; percent?: number; bytes?: number; status?: number; timeoutMs?: number };
+  frame?: { direction?: 'sent' | 'received' | 'both'; when?: string; action: 'drop' | 'replace' | 'break' | 'delay'; find?: string; replace?: string; regex?: boolean; delayMs?: number };
   summary?: string;
 }
 export interface RulesState {
@@ -65,7 +72,7 @@ export interface HeldBreakpoint {
   exchange: { id: string; method: string; url: string; requestHeaders: Record<string, string>; requestBody?: string; status?: number; responseHeaders?: Record<string, string>; responseBody?: string };
 }
 
-const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', only: 'ok', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad' };
+const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', only: 'ok', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad', remap: 'warn', fault: 'bad', frame: 'warn' };
 export const HIGHLIGHT_CLASS: Record<string, string> = {
   red: 'border-l-2 border-l-bad bg-bad/10',
   orange: 'border-l-2 border-l-warn bg-warn/10',
@@ -130,9 +137,16 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
       onSelect: () => void confirmDelete({ what: `the profile "${state?.active ?? ''}"`, detail: 'Its rules go with it.', run: () => act('debug.profile', { action: 'delete', name: state?.active }) }),
     },
   ];
+  const importHosts = async () => {
+    await attempt(async () => {
+      const r = await call<RulesState & { imported: number; file: string }>('debug.importHosts');
+      onChange(r);
+      useApp.getState().toast(r.imported ? `Added ${r.imported} remap rule${r.imported > 1 ? 's' : ''} from ${r.file}, switched off` : 'Nothing new in the hosts file', 'success');
+    });
+  };
   const testUrl = async () => {
     try {
-      const r = await call<{ applied: string[]; ignore: boolean; highlight?: string; reply?: number; redirect?: string; breakpoint?: string; delayMs: number }>('debug.ruleCheck', { url: check.url });
+      const r = await call<{ applied: string[]; ignore: boolean; highlight?: string; reply?: number; redirect?: string; breakpoint?: string; delayMs: number; fault?: string; setStatus?: number; frames?: number }>('debug.ruleCheck', { url: check.url });
       const parts = [
         r.ignore && 'not listed (filtered out, or outside Capture only)',
         r.highlight && `highlighted ${r.highlight}`,
@@ -140,6 +154,9 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
         r.redirect && `redirected to ${r.redirect}`,
         r.breakpoint && `paused at the ${r.breakpoint}`,
         r.delayMs && `delayed ${r.delayMs} ms`,
+        r.fault && `fails: ${r.fault}`,
+        r.setStatus && `answered with ${r.setStatus}`,
+        r.frames && `${r.frames} WebSocket frame rule${r.frames > 1 ? 's' : ''}`,
       ].filter(Boolean);
       setCheck({ ...check, result: r.applied.length ? `${r.applied.join(', ')}: ${parts.join(', ') || 'headers changed'}` : 'No rule matches' });
     } catch (e) {
@@ -166,13 +183,22 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
             </Button>
           }
         />
+        <Menu
+          width={260}
+          items={[{ label: 'Import the hosts file as remap rules', icon: <Zap size={14} />, title: 'Adds the entries of this computer’s hosts file as remap rules that are switched off; turn on the ones you want', onSelect: () => void importHosts() }]}
+          trigger={
+            <Button size="sm" data-hosts-menu>
+              Host remapping…
+            </Button>
+          }
+        />
         <Button size="sm" variant="primary" icon={<Plus size={13} />} onClick={() => setEditing({ kind: 'modify', enabled: true, match: host ? { host } : {} })}>
           New rule
         </Button>
       </div>
       <p className="text-xs text-muted">
         Rules act on the traffic that matches them, in this order: <b>capture only</b> lists just what one of them matches, <b>filter out</b> hides it, <b>highlight</b> colours the row, <b>modify</b> changes headers, bodies or adds a delay, <b>reply</b> answers
-        without the server, <b>redirect</b> sends it to another host, <b>breakpoint</b> pauses it for editing. Globs (<span className="mono">*.example.com</span>) or /regular expressions/ match hosts
+        without the server, <b>redirect</b> sends it to another host or path, <b>remap</b> reaches a host at another address, <b>fault</b> drops, cuts or never answers a request, <b>frame</b> changes WebSocket frames, <b>breakpoint</b> pauses it for editing. Globs (<span className="mono">*.example.com</span>) or /regular expressions/ match hosts
         and URLs. The profile is saved in <span className="mono">debugger/rules.json</span>, committed with the workspace.
       </p>
       {!state?.rules.length ? (
@@ -184,7 +210,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
             { label: 'Presets', icon: <Zap size={13} />, items: presets.map<MenuItem>((p) => ({ label: p.label, icon: <Zap size={14} />, onSelect: () => void act('debug.addPreset', { preset: p.id, host }) })) },
           ]}
         >
-          A rule filters, highlights, changes, answers, redirects or pauses the traffic it matches.
+          A rule filters, highlights, changes, answers, redirects, breaks or pauses the traffic it matches.
         </Empty>
       ) : (
         <table className="text-sm w-full">
@@ -290,8 +316,14 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
       kind,
       requestHeaders: kind === 'modify' ? parseEdits(reqEdits) : undefined,
       responseHeaders: kind === 'modify' ? parseEdits(resEdits) : undefined,
-      reply: kind === 'reply' ? { status: Number(r.reply?.status) || 200, headers: parseHeaders(replyHeaders), body: r.reply?.body ?? '', delayMs: r.reply?.delayMs } : undefined,
-      redirect: kind === 'redirect' ? r.redirect : undefined,
+      reply: kind === 'reply' ? { ...r.reply, status: Number(r.reply?.status) || 200, headers: parseHeaders(replyHeaders), body: r.reply?.file !== undefined || r.reply?.folder !== undefined ? undefined : (r.reply?.body ?? ''), delayMs: r.reply?.delayMs } : undefined,
+      redirect: kind === 'redirect' ? { ...r.redirect, rewrite: r.redirect?.rewrite?.from ? r.redirect.rewrite : undefined } : undefined,
+      requestReplace: kind === 'modify' ? r.requestReplace?.filter((x) => x.find) : undefined,
+      responseReplace: kind === 'modify' ? r.responseReplace?.filter((x) => x.find) : undefined,
+      setStatus: kind === 'modify' ? r.setStatus : undefined,
+      remap: kind === 'remap' ? r.remap : undefined,
+      fault: kind === 'fault' ? (r.fault ?? { action: 'drop' }) : undefined,
+      frame: kind === 'frame' ? (r.frame ?? { action: 'drop' }) : undefined,
       breakpoint: kind === 'breakpoint' ? (r.breakpoint ?? 'request') : undefined,
       color: kind === 'highlight' ? (r.color ?? 'yellow') : undefined,
     });
@@ -329,6 +361,9 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
               <option value="reply">Reply without the server</option>
               <option value="redirect">Redirect to another host</option>
               <option value="breakpoint">Breakpoint (pause for editing)</option>
+              <option value="remap">Remap a host to another address</option>
+              <option value="fault">Inject a failure</option>
+              <option value="frame">Change WebSocket frames</option>
             </Select>
           </Field>
         </div>
@@ -392,6 +427,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
                 {area(r.responseBody ?? '', (v) => set({ responseBody: v || undefined }), '')}
               </Field>
             </div>
+            <ModifyShapingFields r={r} set={set} />
             <Field label="Delay before forwarding (ms)" className="w-48">
               <Input type="number" value={r.delayMs ?? ''} onChange={(e) => set({ delayMs: e.target.value ? Number(e.target.value) : undefined })} />
             </Field>
@@ -414,12 +450,13 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
             <Field label="Headers" hint="Name: value per line">
               {area(replyHeaders, setReplyHeaders, 'content-type: application/json', 2)}
             </Field>
-            <Field label="Body">{area(r.reply?.body ?? '', (v) => set({ reply: { ...(r.reply ?? { status: 200 }), body: v } }), '{"ok":true}', 5)}</Field>
+            <ReplySourceFields r={r} set={set} />
+            {r.reply?.file === undefined && r.reply?.folder === undefined && <Field label="Body">{area(r.reply?.body ?? '', (v) => set({ reply: { ...(r.reply ?? { status: 200 }), body: v } }), '{"ok":true}', 5)}</Field>}
           </>
         )}
         {kind === 'redirect' && (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="To host" hint="host:port; the path stays">
+            <Field label="To host" hint="host:port; the path stays unless you change it below. Empty: the same host">
               <Input className="mono" value={r.redirect?.host ?? ''} onChange={(e) => set({ redirect: { ...(r.redirect ?? { host: '' }), host: e.target.value } })} placeholder="localhost:3000" />
             </Field>
             <Field label="Scheme">
@@ -431,6 +468,10 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
             </Field>
           </div>
         )}
+        {kind === 'redirect' && <RedirectRewriteFields r={r} set={set} />}
+        {kind === 'remap' && <RemapFields r={r} set={set} />}
+        {kind === 'fault' && <FaultFields r={r} set={set} />}
+        {kind === 'frame' && <FrameFields r={r} set={set} />}
         {kind === 'breakpoint' && (
           <Field label="Pause" className="w-64">
             <Select value={r.breakpoint ?? 'request'} onChange={(e) => set({ breakpoint: e.target.value as 'request' | 'response' })}>

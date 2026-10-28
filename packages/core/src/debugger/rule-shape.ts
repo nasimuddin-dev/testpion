@@ -68,6 +68,7 @@ export function checkRuleShape(r: DebuggerRule): string | undefined {
     case 'reply': {
       const p = r.reply;
       if (!p) return undefined;
+      if (p.file === '' || p.folder === '') return 'Name the file or folder to answer from'
       if (p.file && p.folder) return 'A reply reads one file or one folder, not both';
       for (const [v, what] of [[p.file, 'The file'], [p.folder, 'The folder']] as const) if (v && !isInsidePath(v)) return `${what} must be a path inside the workspace (no .., no drive or root)`;
       if (p.stripPrefix && !p.stripPrefix.startsWith('/')) return 'The part of the path to leave out starts with /';
