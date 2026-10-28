@@ -134,8 +134,9 @@ export function Menu({
           onKeyDown={(e) => e.stopPropagation()}
           align={align}
           sideOffset={4}
-          style={{ minWidth: width }}
-          className="z-[70] rounded-xl border border-line bg-popover p-1 shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150"
+          collisionPadding={8}
+          style={{ minWidth: width, maxHeight: 'var(--radix-popper-available-height)' }}
+          className="z-[70] overflow-y-auto rounded-xl border border-line bg-popover p-1 shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150"
         >
           <MenuItems items={typeof items === 'function' ? items() : items} />
         </MenuPrimitive.Content>

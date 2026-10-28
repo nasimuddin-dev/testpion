@@ -104,7 +104,7 @@ export function DebuggerView() {
   const [ruleDraft, setRuleDraft] = useState<Partial<Rule>>();
   const [httpsBanner, setHttpsBanner] = useState(true);
   const incoming = useIncoming();
-  const [filter, setFilter] = useState<ListFilter>({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false });
+  const [filter, setFilter] = useState<ListFilter>({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false, hideTunnels: false });
   const [tab, setTab] = useState<'traffic' | 'stats' | 'rules' | 'connections'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
@@ -229,11 +229,20 @@ export function DebuggerView() {
   const saveToCollection = (ids: string[]) => (ids.length ? setSaveFrom({ ids }) : useApp.getState().toast('Select the exchanges to save (Ctrl+click, Shift+click)', 'error'));
   const createDataset = (ids: string[]) => (ids.length ? setDatasetFrom({ ids }) : useApp.getState().toast('Select the exchanges to make a dataset of (Ctrl+click, Shift+click)', 'error'));
   const selection = () => (selectedIds.length > 1 ? selectedIds : selected ? [selected] : []);
-  const openInTab = (e: Exchange) => useApp.getState().openIntent('rest', { request: toRequest(e), name: `${e.method} ${new URL(e.url).pathname}` });
+  const openInTab = (e: Exchange) => e.kind === 'tunnel' ? useApp.getState().toast('A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', 'info') : useApp.getState().openIntent('rest', { request: toRequest(e), name: `${e.method} ${new URL(e.url).pathname}` });
   const resend = async (e: Exchange) => {
     try {
       await call('http.send', { request: toRequest(e), environment: useApp.getState().environment, id: `dbg-resend-${e.id}` });
       toast('Sent again (see the History view for the response)');
+    } catch (err) {
+      toastError(err);
+    }
+  };
+  const keepEncrypted = async (e: Exchange) => {
+    const host = e.host.replace(/:\d+$/, '');
+    try {
+      setStatus(await call<Status>('debug.decrypt', { noDecrypt: [...new Set([...(status?.noDecrypt ?? []), host])] }));
+      toast(`${host} stays encrypted from now on (HTTPS menu ▸ Keep hosts encrypted lists them)`);
     } catch (err) {
       toastError(err);
     }
@@ -378,6 +387,7 @@ export function DebuggerView() {
   const gridActions = useStableCallbacks<GridActions>({
     onOpen: openInTab,
     onResend: (e) => void resend(e),
+    onKeepEncrypted: (e) => void keepEncrypted(e),
     onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
     onCompare: setCompareA,
     onDelete: (ids) => void remove(ids),
@@ -394,6 +404,7 @@ export function DebuggerView() {
   const paneActions = useStableCallbacks({
     onOpen: () => sel && openInTab(sel),
     onResend: () => sel && void resend(sel),
+    onKeepEncrypted: () => sel && void keepEncrypted(sel),
     onAsk: () => sel && ask(sel),
     onBookmark: async () => sel && (await call('debug.bookmark', { id: sel.id, on: !sel.bookmarked }), void load(), setDetail({ ...sel, bookmarked: !sel.bookmarked })),
     onDelete: () => sel && void remove([sel.id]),
@@ -764,6 +775,9 @@ export function DebuggerView() {
                   <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap">
                     <input type="checkbox" checked={filter.bookmarked} onChange={(e) => setFilter({ ...filter, bookmarked: e.target.checked })} /> Bookmarked
                   </label>
+                  <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Leave out the HTTPS tunnels (CONNECT) that are not decrypted">
+                    <input type="checkbox" checked={filter.hideTunnels} onChange={(e) => setFilter({ ...filter, hideTunnels: e.target.checked })} /> Hide tunnels
+                  </label>
                   <Menu
                     width={260}
                     items={[
@@ -804,6 +818,14 @@ export function DebuggerView() {
                       </Button>
                     }
                   />
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <Button size="sm" variant="ghost" icon={<Save size={13} />} disabled={!rows.length} title={rows.length ? 'Save the session to open it later' : 'Nothing captured yet'} onClick={() => void saveSession()}>
+                      Save session
+                    </Button>
+                    <Button size="sm" variant="ghost" icon={<Trash2 size={13} />} disabled={!status?.exchanges} title={status?.exchanges ? 'Forget every captured exchange (Ctrl+E)' : 'Nothing captured yet'} onClick={() => void clear()}>
+                      Clear
+                    </Button>
+                  </span>
                   <OutputActions spec={outputSpec}>
                     <button
                       type="button"

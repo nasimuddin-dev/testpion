@@ -1,6 +1,7 @@
 import { prettyBody } from '../../lib/pretty';
+import { CookiesView, ErrorView, OverviewView, ParamsView, cookiesOf, paramsOf } from './ExchangeExtras';
 import { CodeBlock } from '../CodeBlock';
-import { Bot, ChevronDown, Copy, ExternalLink, Pause, Play, Scale, Star, X } from 'lucide-react';
+import { Bot, ChevronDown, Copy, ExternalLink, Lock, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { Badge, Button, Empty, FilterInput, Menu, SectionTitle, Split, statusTone, Tabs } from '../ui';
@@ -26,6 +27,7 @@ export interface ExchangeActions {
   onOpen(): void;
   onAsk?(): void;
   onResend?(): void;
+  onKeepEncrypted?(): void;
   onBookmark?(): void;
   onDelete?(): void;
   onCompare?(): void;
@@ -81,11 +83,16 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
           {e.method} {e.url}
         </span>
         <OutputActions spec={spec}>
-          <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={a.onOpen} title="Open as request: in a tab, to change and send">
+          <Button size="sm" variant="ghost" icon={<ExternalLink size={12} />} onClick={a.onOpen} disabled={e.kind === 'tunnel'} title={e.kind === 'tunnel' ? 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it' : 'Open as request: in a tab, to change and send'}>
             Open
           </Button>
+          {a.onKeepEncrypted && e.kind === 'tunnel' && (
+            <Button size="sm" variant="ghost" icon={<Lock size={12} />} onClick={a.onKeepEncrypted} title="Stop decrypting this host: a program that does not trust the TestPion certificate, or pins its own">
+              Keep host encrypted
+            </Button>
+          )}
           {a.onResend && (
-            <Button size="sm" variant="ghost" icon={<Play size={12} />} onClick={a.onResend} title="Send it again as it was">
+            <Button size="sm" variant="ghost" icon={<Play size={12} />} onClick={a.onResend} disabled={e.kind === 'tunnel'} title={e.kind === 'tunnel' ? 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it' : 'Send it again as it was'}>
               Resend
             </Button>
           )}
@@ -169,6 +176,9 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
             bodyNote={bodyNote(e, 'request', formatBytes)}
             raw={raw.request}
             extra={[
+              ...(tunnel ? [] : [{ id: 'params', label: 'Params', badge: (() => { const p = paramsOf(e); return p.query.length + p.form.length || undefined; })(), render: () => <ParamsView e={e} /> }]),
+              ...(tunnel ? [] : [{ id: 'cookies', label: 'Cookies', badge: cookiesOf(e, 'request').length || undefined, render: () => <CookiesView e={e} side="request" /> }]),
+              { id: 'overview', label: 'Overview', render: () => <OverviewView e={e} /> },
               {
                 id: 'auth',
                 label: 'Auth',
@@ -195,6 +205,8 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
             raw={raw.response}
             initial={e.grpc ? 'grpc' : e.frames ? 'frames' : e.events?.length ? 'events' : undefined}
             extra={[
+              ...(tunnel ? [] : [{ id: 'cookies', label: 'Cookies', badge: cookiesOf(e, 'response').length || undefined, render: () => <CookiesView e={e} side="response" /> }]),
+              ...(e.error || (e.status && e.status >= 400) ? [{ id: 'error', label: 'Error', badge: '!', render: () => <ErrorView e={e} /> }] : []),
               { id: 'hex', label: 'Hex', render: () => <HexView text={e.responseBody} /> },
               ...(e.grpc ? [{ id: 'grpc', label: 'gRPC', badge: e.grpc.requests.length + e.grpc.responses.length, render: () => <GrpcView call={e.grpc!} open={e.open} /> }] : []),
               ...(e.frames ? [{ id: 'frames', label: 'Frames', badge: e.frames.length, render: () => <FramesView frames={e.frames!} open={e.open} /> }] : []),

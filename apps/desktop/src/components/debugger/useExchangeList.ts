@@ -12,6 +12,8 @@ export interface ListFilter {
   method: string;
   status: '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error';
   bookmarked: boolean;
+  /** Hide the CONNECT tunnels (HTTPS that is not decrypted): the usual first filter of a capture. */
+  hideTunnels: boolean;
 }
 
 interface Changes {
@@ -37,11 +39,12 @@ export function filterRows(all: Exchange[], f: ListFilter, deepIds?: Set<string>
   const host = f.host.toLowerCase();
   const method = f.method.toUpperCase();
   const type = f.type.toLowerCase();
-  if (!needle && !host && !method && !type && !f.application && !f.status && !f.bookmarked) return all;
+  if (!needle && !host && !method && !type && !f.application && !f.status && !f.bookmarked && !f.hideTunnels) return all;
   return all.filter((e) => {
     if (host && !e.host.toLowerCase().includes(host)) return false;
     if (method && e.method !== method) return false;
     if (f.bookmarked && !e.bookmarked) return false;
+    if (f.hideTunnels && e.kind === 'tunnel') return false;
     if (f.application && (e.application ?? '') !== f.application) return false;
     if (type && (e.contentType ?? '').split(';')[0]!.trim().toLowerCase() !== type) return false;
     if (f.status && !statusOk(e, f.status)) return false;

@@ -107,6 +107,8 @@ function quickMatches(e: Exchange): QuickMatch[] {
 export interface GridActions {
   onOpen(e: Exchange): void;
   onResend(e: Exchange): void;
+  /** Stop decrypting this exchange's host (a program that does not trust the TestPion certificate); it stays a tunnel. */
+  onKeepEncrypted(e: Exchange): void;
   onBookmark(e: Exchange): void;
   onCompare(e: Exchange): void;
   onDelete(ids: string[]): void;
@@ -291,8 +293,9 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         ],
       },
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },
-      { label: LABEL.openAsRequest, icon: <ExternalLink size={14} />, onSelect: () => actions.onOpen(e) },
-      { label: 'Resend', icon: <Play size={14} />, onSelect: () => actions.onResend(e) },
+      { label: LABEL.openAsRequest, icon: <ExternalLink size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onOpen(e) },
+      { label: 'Resend', icon: <Play size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onResend(e) },
+      ...(e.kind === 'tunnel' ? [{ label: 'Keep this host encrypted', icon: <Lock size={14} />, title: 'Stop decrypting this host (a program that does not trust the TestPion certificate, or pins its own)', onSelect: () => actions.onKeepEncrypted(e) }] : []),
       { label: 'Compare with…', onSelect: () => actions.onCompare(e) },
       { label: ids.length > 1 ? `Create flow from ${ids.length} selected…` : 'Create flow from selection…', icon: <Workflow size={14} />, onSelect: () => actions.onCreateFlow(ids) },
       { label: ids.length > 1 ? `Save ${ids.length} selected to collection…` : 'Save to collection…', icon: <FolderPlus size={14} />, onSelect: () => actions.onSaveToCollection(ids) },
@@ -308,47 +311,55 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         items: rulesOf('highlight', 'Highlight', { color: 'blue', style: { dark: '#60a5fa', light: '#1d4ed8', bold: true } }),
       },
       {
-        label: 'Auto-reply',
-        icon: <Reply size={14} />,
+        label: 'Change this traffic',
+        icon: <Wrench size={14} />,
+        title: 'Answer it yourself, change its headers or send it somewhere else',
         onSelect: () => undefined,
         items: [
           {
-            label: 'Reply with this response from now on',
-            // the row is lean: the response's headers and body come with the whole exchange
-            onSelect: () =>
-              void whole(e).then(
-                (x) =>
-                  actions.onQuickRule(
-                    'reply',
-                    `Reply ${x.status ?? 200} for ${x.method} ${x.url.split('?')[0]}`,
-                    { method: x.method, url: x.url.split('?')[0] + '*' },
-                    {
-                      reply: {
-                        status: x.status ?? 200,
-                        headers: Object.fromEntries(Object.entries(x.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
-                        body: x.responseBody ?? '',
-                      },
-                    },
+            label: 'Auto-reply',
+            icon: <Reply size={14} />,
+            onSelect: () => undefined,
+            items: [
+              {
+                label: 'Reply with this response from now on',
+                // the row is lean: the response's headers and body come with the whole exchange
+                onSelect: () =>
+                  void whole(e).then(
+                    (x) =>
+                      actions.onQuickRule(
+                        'reply',
+                        `Reply ${x.status ?? 200} for ${x.method} ${x.url.split('?')[0]}`,
+                        { method: x.method, url: x.url.split('?')[0] + '*' },
+                        {
+                          reply: {
+                            status: x.status ?? 200,
+                            headers: Object.fromEntries(Object.entries(x.responseHeaders ?? {}).filter(([k]) => /^content-type$/i.test(k))),
+                            body: x.responseBody ?? '',
+                          },
+                        },
+                      ),
+                    () => undefined,
                   ),
-                () => undefined,
-              ),
+              },
+              {
+                label: 'New auto-reply rule…',
+                separator: true,
+                onSelect: () => actions.onNewRule({ kind: 'reply', enabled: true, match: { host: e.host, url: e.url.split('?')[0] + '*' }, reply: { status: 200 } }),
+              },
+            ],
           },
           {
-            label: 'New auto-reply rule…',
-            separator: true,
-            onSelect: () => actions.onNewRule({ kind: 'reply', enabled: true, match: { host: e.host, url: e.url.split('?')[0] + '*' }, reply: { status: 200 } }),
+            label: 'Modify headers…',
+            icon: <Wrench size={14} />,
+            onSelect: () => actions.onNewRule({ kind: 'modify', enabled: true, match: { host: e.host }, requestHeaders: [{ op: 'set', name: 'X-Debug', value: 'testpion' }] }),
+          },
+          {
+            label: 'Redirect connections…',
+            icon: <Shuffle size={14} />,
+            onSelect: () => actions.onNewRule({ kind: 'redirect', enabled: true, match: { host: e.host }, redirect: { host: 'localhost:3000', scheme: 'http' } }),
           },
         ],
-      },
-      {
-        label: 'Modify headers…',
-        icon: <Wrench size={14} />,
-        onSelect: () => actions.onNewRule({ kind: 'modify', enabled: true, match: { host: e.host }, requestHeaders: [{ op: 'set', name: 'X-Debug', value: 'testpion' }] }),
-      },
-      {
-        label: 'Redirect connections…',
-        icon: <Shuffle size={14} />,
-        onSelect: () => actions.onNewRule({ kind: 'redirect', enabled: true, match: { host: e.host }, redirect: { host: 'localhost:3000', scheme: 'http' } }),
       },
       ...(e.httpVersion === '2' ? [{ label: 'HTTP/2 connection tree', icon: <Network size={14} />, onSelect: actions.onConnections }] : []),
       { label: ids.length > 1 ? `Delete ${ids.length} selected` : 'Delete', icon: <Trash2 size={14} />, shortcut: 'Del', danger: true, separator: true, onSelect: () => actions.onDelete(ids) },
