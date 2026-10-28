@@ -1,66 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { CheckConfig } from '../types';
 import { Button, cx, IconButton, Select } from './ui';
-
-interface CheckDef {
-  type: string;
-  label: string;
-  group: string;
-  fields: Array<'path' | 'expected' | 'max' | 'min' | 'threshold' | 'header' | 'tool' | 'schema' | 'criteria' | 'judge' | 'method' | 'values' | 'spec' | 'operationId' | 'snapshot'>;
-  hint?: string;
-}
-
-const CHECK_DEFS: CheckDef[] = [
-  { type: 'status', label: 'Status code', group: 'Response', fields: ['expected'], hint: '200, 2xx, [200,201], success, error' },
-  { type: 'latency', label: 'Latency ≤ (ms)', group: 'Response', fields: ['max'] },
-  { type: 'header', label: 'Header', group: 'Response', fields: ['header', 'expected'] },
-  { type: 'jwt', label: 'JWT valid', group: 'Response', fields: ['path', 'header', 'min'], hint: 'the token at path, in a header (e.g. authorization) or the first one in the body: decodes and is not expired (min: seconds it must still be valid); claims to compare in test files' },
-  { type: 'certificate', label: 'Certificate valid for (days)', group: 'Response', fields: ['min'], hint: 'HTTPS: fails when the server certificate expires in fewer days than min (default 14), or has expired' },
-  { type: 'security-headers', label: 'Security headers', group: 'Response', fields: ['values'], hint: 'HSTS, nosniff, clickjacking, CORS with credentials, server version; list items to skip: hsts, nosniff, frame, cors, server-version' },
-  { type: 'exists', label: 'Exists', group: 'Body', fields: ['path'] },
-  { type: 'not-exists', label: 'Does not exist', group: 'Body', fields: ['path'] },
-  { type: 'equals', label: 'Equals', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'not-equals', label: 'Not equals', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'contains', label: 'Contains', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'not-contains', label: 'Does not contain', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'regex', label: 'Matches a pattern (regular expression)', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'type', label: 'Type is', group: 'Body', fields: ['path', 'expected'], hint: 'string, number, integer, boolean, object, array, null' },
-  { type: 'length', label: 'Length', group: 'Body', fields: ['path', 'expected'] },
-  { type: 'threshold', label: 'Number within', group: 'Body', fields: ['path', 'min', 'max'] },
-  { type: 'json-schema', label: 'JSON Schema', group: 'Body', fields: ['path', 'schema'] },
-  { type: 'is-json', label: 'Is valid JSON', group: 'Body', fields: [] },
-  { type: 'snapshot', label: 'Matches snapshot', group: 'Body', fields: ['path', 'snapshot'], hint: 'shape: the same fields and types, values may change; values: the same values too' },
-  { type: 'openapi', label: 'Matches OpenAPI contract', group: 'Response', fields: ['spec', 'operationId'], hint: 'status, content type and body checked against the operation in the OpenAPI document' },
-  { type: 'graphql-no-errors', label: 'No GraphQL errors', group: 'GraphQL', fields: [] },
-  { type: 'graphql-errors', label: 'GraphQL error contains', group: 'GraphQL', fields: ['expected'] },
-  { type: 'exact-match', label: 'Exact match', group: 'AI', fields: ['path', 'expected'] },
-  { type: 'tokens', label: 'Tokens ≤', group: 'AI', fields: ['max'] },
-  { type: 'first-token', label: 'Time to first token ≤ (ms)', group: 'AI', fields: ['max'] },
-  { type: 'cost', label: 'Cost ≤ (USD)', group: 'AI', fields: ['max'] },
-  { type: 'similarity', label: 'Similarity ≥', group: 'AI', fields: ['expected', 'threshold', 'method'], hint: 'method: lexical | f1 | embedding' },
-  { type: 'llm-judge', label: 'LLM-as-judge', group: 'AI', fields: ['criteria', 'judge', 'threshold'] },
-  { type: 'refusal', label: 'Refuses', group: 'Safety', fields: [] },
-  { type: 'not-refusal', label: 'Does not refuse', group: 'Safety', fields: [] },
-  { type: 'no-leak', label: 'No sensitive data leak', group: 'Safety', fields: ['values'] },
-  { type: 'tool-called', label: 'Tool called', group: 'Agent', fields: ['tool'] },
-  { type: 'tool-not-called', label: 'Tool not called', group: 'Agent', fields: ['tool'] },
-  { type: 'max-tool-calls', label: 'Max tool calls', group: 'Agent', fields: ['max'] },
-  { type: 'tool-args-valid', label: 'Tool args match schema', group: 'Agent', fields: [] },
-  { type: 'context-precision', label: 'Context precision', group: 'RAG', fields: ['threshold', 'judge'], hint: 'the useful documents ranked first; with a judge, each document gets a verdict' },
-  { type: 'context-recall', label: 'Context recall', group: 'RAG', fields: ['expected', 'threshold', 'judge'], hint: "the reference answer's statements found in the retrieved context" },
-  { type: 'context-entity-recall', label: 'Context entity recall', group: 'RAG', fields: ['expected', 'threshold'], hint: "the reference's names, numbers and dates found in the retrieved context (no model)" },
-  { type: 'groundedness', label: 'Groundedness (faithfulness)', group: 'RAG', fields: ['threshold', 'judge'], hint: "the answer's claims supported by the retrieved context; with a judge, claim by claim" },
-  { type: 'answer-correctness', label: 'Answer correctness', group: 'RAG', fields: ['expected', 'threshold', 'judge'], hint: "the answer's facts against the reference answer (F1); with a judge, claim by claim" },
-  { type: 'answer-relevance', label: 'Answer relevance', group: 'RAG', fields: ['threshold', 'judge'] },
-  { type: 'citation', label: 'Citations valid', group: 'RAG', fields: [] },
-  { type: 'normalized-match', label: 'Matches the reference (normalised)', group: 'RAG', fields: ['expected'], hint: 'the answer equals the reference once case, punctuation and articles are ignored (no model); blank: the dataset record’s reference' },
-  { type: 'token-f1', label: 'Token F1 ≥', group: 'RAG', fields: ['expected', 'threshold'], hint: 'words shared with the reference answer, as precision and recall (no model); default threshold 0.5' },
-  { type: 'rouge', label: 'ROUGE-L ≥', group: 'RAG', fields: ['expected', 'threshold'], hint: 'the longest run of words in the same order as the reference (no model); default threshold 0.5' },
-  { type: 'context-recall-ids', label: 'Context recall by id', group: 'RAG', fields: ['threshold'], hint: 'the gold chunk ids (the record’s reference_ids) that were retrieved (no model); default threshold 0.8' },
-  { type: 'context-precision-ids', label: 'Context precision by id', group: 'RAG', fields: ['threshold'], hint: 'the retrieved chunk ids that are gold ids (no model); default threshold 0.5' },
-  { type: 'rag-faithfulness', label: 'Faithfulness (judge)', group: 'RAG', fields: ['threshold'], hint: 'the share of the answer’s claims the retrieved documents support; needs a judge model (evaluation setting); default threshold 0.8' },
-  { type: 'rag-answer-relevance', label: 'Answer relevance (judge)', group: 'RAG', fields: ['threshold'], hint: 'the share of the answer’s statements that are relevant to the question; needs a judge model; default threshold 0.7' },
-];
+import { CHECK_DEFS, CHECK_GROUP_LABEL, type CheckDef } from '../lib/check-defs';
 
 function parseExpected(s: string): unknown {
   const t = s.trim();
@@ -84,12 +25,12 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
   return (
     <div className="p-3 flex flex-col gap-2 text-sm">
       {checks.map((c, i) => {
-        const def = CHECK_DEFS.find((d) => d.type === c.type) ?? { type: c.type, label: c.type, group: '', fields: ['path', 'expected'] as CheckDef['fields'] };
+        const def: CheckDef = CHECK_DEFS.find((d) => d.type === c.type) ?? { type: c.type, label: c.type, group: '', fields: ['path', 'expected'], what: '' };
         return (
           <div key={i} className="flex flex-wrap items-center gap-2 rounded-md border border-line bg-panel px-2 py-1.5">
             <Select className="h-7 min-h-7 py-0" value={c.type} onChange={(e) => set(i, { type: e.target.value })} aria-label="Check type">
               {Object.entries(byGroup).map(([g, ds]) => (
-                <optgroup key={g} label={g}>
+                <optgroup key={g} label={CHECK_GROUP_LABEL[g] ?? g}>
                   {ds.map((d) => (
                     <option key={d.type} value={d.type}>
                       {d.label}
@@ -111,9 +52,9 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
             )}
             {def.fields.includes('method') && (
               <Select className="h-7 min-h-7 py-0" value={String(c.method ?? 'lexical')} onChange={(e) => set(i, { method: e.target.value })}>
-                <option value="lexical">lexical</option>
-                <option value="f1">token F1</option>
-                <option value="embedding">embedding</option>
+                <option value="lexical">wording</option>
+                <option value="f1">shared words</option>
+                <option value="embedding">meaning</option>
               </Select>
             )}
             {def.fields.includes('values') && (
@@ -125,12 +66,12 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
               />
             )}
             {def.fields.includes('criteria') && (
-              <input className="field h-7 min-h-7 flex-1 min-w-48" placeholder="Criteria, e.g. The answer is polite and correct" value={String(c.criteria ?? '')} onChange={(e) => set(i, { criteria: e.target.value })} />
+              <input className="field h-7 min-h-7 flex-1 min-w-48" placeholder="Grading rule, e.g. The answer is polite and correct" value={String(c.criteria ?? '')} onChange={(e) => set(i, { criteria: e.target.value })} />
             )}
             {def.fields.includes('judge') && (
               <input
                 className="field h-7 min-h-7 mono w-48"
-                placeholder="judge provider/model"
+                placeholder="AI reviewer provider/model"
                 value={c.judge ? `${(c.judge as { provider: string }).provider}/${(c.judge as { name?: string }).name ?? ''}` : ''}
                 onChange={(e) => {
                   const [provider, ...rest] = e.target.value.split('/');
@@ -191,6 +132,11 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
             <IconButton label="Remove check" className={cx('ml-auto')} onClick={() => onChange(checks.filter((_, j) => j !== i))}>
               <Trash2 />
             </IconButton>
+            {def.what && (
+              <div className="basis-full text-xs text-muted leading-snug" data-check-what={c.type}>
+                {def.what}
+              </div>
+            )}
           </div>
         );
       })}

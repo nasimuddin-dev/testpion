@@ -58,11 +58,11 @@ const steps = [
   step(
     'a-rag-evaluation-with-the-metrics-tab',
     `await __t.view('Evaluations'); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'RAG')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
      await __t.sleep(500);
-     ${setSelect(`document.querySelector('select[aria-label="Judge provider"]')`, 'RAG mock judge')}
+     ${setSelect(`document.querySelector('select[aria-label="AI reviewer provider"]')`, 'RAG mock judge')}
      await __t.sleep(500);
      await __t.real.click('input[aria-label="Evaluation name"]'); await __t.real.key('a', { ctrl: true }); await __t.real.type('R3 views'); await __t.sleep(300);
      const t = tab('Metrics'); if (!t) return 'NO TAB Metrics';
@@ -164,7 +164,7 @@ const steps = [
     `await __t.view('Evaluations'); await __t.sleep(800);
      const clear = vis('[data-rag-picker] button').find((b) => b.textContent.trim() === 'Clear'); if (clear) { await __t.real.click(clear); await __t.sleep(400); }
      await __t.real.click('[data-rag-preset="rag-triad"]'); await __t.sleep(800);
-     const dsTab = tab('Dataset'); await __t.real.click(dsTab); await __t.sleep(500);
+     const dsTab = tab('Test cases'); await __t.real.click(dsTab); await __t.sleep(500);
      const ed = ${EDITOR_IN('main')}; if (!ed) return 'NO EDITOR';
      ed.getModel().setValue('{"id":"hours","question":"What time does the clinic open?","reference":"The clinic opens at 8am on weekdays.","reference_ids":["doc-1"],"tags":["hours"]}\\n{"id":"cancel","question":"Can appointments be cancelled?","reference":"Up to 24 hours before.","reference_ids":["doc-3"],"tags":["policy"]}\\n{"id":"parking","question":"Is there parking at the clinic?","reference":"I do not know.","reference_ids":["doc-1"],"tags":["policy"]}'); await __t.sleep(500);
      await __t.real.click(${runButton});

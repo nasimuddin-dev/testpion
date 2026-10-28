@@ -29,6 +29,7 @@ import { RagGatesField } from '../components/rag/RagGatesField';
 import { RagJudgeOptions } from '../components/rag/RagJudgeOptions';
 import { RagAuthorAction } from '../components/rag/RagAuthorAction';
 import { useRpc } from '../lib/use-rpc';
+import { ensureOfflineDemo, OFFLINE_DEMO_LABEL, OFFLINE_DEMO_NOTE } from '../lib/offline-demo';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { CodeEditor } from '../components/CodeEditor';
 import { RunPanel } from '../components/RunPanel';
@@ -108,6 +109,8 @@ export function EvaluationsView() {
   const d = tabs.d;
   const setD = tabs.setD;
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
+  // (a callout about a missing model waits until the providers are known)
+  const [providersKnown, setProvidersKnown] = useState(false);
   const [runId, setRunId] = useSticky<string | undefined>('eval:runId', undefined);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [sub, setSub] = useSticky<'prompt' | 'dataset' | 'evaluators'>('eval:sub', 'dataset');
@@ -123,13 +126,16 @@ export function EvaluationsView() {
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then((p) => {
       setProviders(p);
+      setProvidersKnown(true);
       if (!d.provider && p[0]) set({ provider: p[0].id, model: p[0].defaultModel ?? '' });
-    });
+    }, () => setProvidersKnown(true));
     const loadRuns = () => void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError);
     loadRuns();
     // a finished run replaces its placeholder row (passed / total, duration) in the list and the overview
     const off = on<{ runId: string }>('run.finished', () => loadRuns());
-    return off;
+    // the providers change elsewhere too (AI Lab ▸ Providers, a file edited on disk): the note about a missing model follows
+    const offData = on('data.changed', () => void call<ProviderConfig[]>('ai.providers').then(setProviders, () => undefined));
+    return () => (off(), offData());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const saved = useLibrary<Draft>('evaluations');
@@ -223,6 +229,18 @@ export function EvaluationsView() {
     [saved.lib.items],
   );
 
+  /** What stops a run, with its one-click remedy (AU-8): Run is never disabled without one. */
+  const problem: 'cases' | 'model' | undefined = !count ? 'cases' : !ragTarget && providersKnown && !providers.some((x) => x.id === d.provider) ? 'model' : undefined;
+  const useDemo = async () => {
+    await attempt(async () => {
+      const r = await ensureOfflineDemo(providers);
+      setProviders(await call<ProviderConfig[]>('ai.providers'));
+      set({ provider: r.provider.id, model: r.provider.defaultModel ?? 'demo' });
+      useApp.getState().toast('Using the offline demo model. Its answers come from rules, so use it to try things out.', 'success');
+    });
+  };
+  const addExampleCases = () => set(d.type === 'rag' ? { dataset: RAG_STARTER_DATASET, datasetFormat: 'jsonl' } : { dataset: drafts.defaults.dataset, datasetFormat: 'jsonl', expectedField: drafts.defaults.expectedField });
+  const remedy = problem === 'cases' ? { label: 'Add example cases', onClick: addExampleCases } : problem === 'model' ? { label: OFFLINE_DEMO_LABEL, onClick: () => void useDemo() } : undefined;
   /** A run that asks a judge or an embedding model is estimated first (calls, tokens, cost, caps); a run of free metrics starts at once. */
   const spends = d.type === 'rag' && !!ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e));
   const run = () => (spends ? setEstimating(true) : void runDraft(d));
@@ -355,78 +373,102 @@ export function EvaluationsView() {
           <div className="flex gap-2 flex-wrap">
             <Input className="flex-1 min-w-40 font-medium" value={d.name} onChange={(e) => set({ name: e.target.value })} aria-label="Evaluation name" />
             <Select value={d.type} onChange={(e) => setType(e.target.value as Draft['type'])} aria-label="Evaluation type">
-              <option value="llm">Prompt / LLM</option>
-              <option value="rag">RAG</option>
+              <option value="llm">Prompt or chatbot</option>
+              <option value="rag">Bot with sources</option>
             </Select>
             <Button className="shrink-0" icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this evaluation to run it again later'} onClick={() => void saveEval()}>
               {current && dirty ? 'Save*' : 'Save'}
             </Button>
-            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!count || (!ragTarget && !d.provider)} reason={!count ? 'The dataset has no cases' : 'Choose a provider or a RAG target first'} data-eval-run>
+            <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!!problem || (!ragTarget && !d.provider)} reason={!count ? 'There are no test cases yet: add example cases' : 'Choose a model first: use the offline demo model'} data-eval-run>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
             </Button>
           </div>
+          {problem && remedy && (
+            <Callout
+              tone="warn"
+              data-eval-problem={problem}
+              action={
+                <Button size="sm" variant="primary" onClick={remedy.onClick} data-eval-remedy>
+                  {remedy.label}
+                </Button>
+              }
+            >
+              {problem === 'cases' ? 'There are no test cases to run yet. Add the example cases, or paste your own on the Test cases tab.' : `Choose a model first, or use the offline demo model. ${OFFLINE_DEMO_NOTE}`}
+            </Callout>
+          )}
           {d.type === 'rag' && (
             <div className="flex items-end gap-2" data-rag-target-row>
-              <Field label="RAG target" className="flex-1 min-w-0" hint={ragTarget ? undefined : 'Without a target the contexts and answers written in the dataset are scored.'}>
-                <Select value={d.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })} aria-label="RAG target" data-rag-target>
-                  <option value="">None: score what the dataset holds</option>
+              <Field label="My bot" className="flex-1 min-w-0" hint={ragTarget ? undefined : 'Without a bot, the sources and answers written in the test cases are scored.'}>
+                <Select value={d.target ?? ''} onChange={(e) => set({ target: e.target.value || undefined })} aria-label="My bot" data-rag-target>
+                  <option value="">None: score what the test cases hold</option>
                   <NamedOptions items={ragTargets.lib.items} />
                 </Select>
               </Field>
-              <Button icon={<Database size={13} />} onClick={() => setConnect(true)} title="Connect a RAG system: request, probe, click-to-map" data-rag-connect-open>
+              <Button icon={<Database size={13} />} onClick={() => setConnect(true)} title="Connect your bot: its request, a test call, then click where the answer is" data-rag-connect-open>
                 Connect…
               </Button>
             </div>
           )}
           {d.type === 'rag' && ragTarget && <RagAuthorAction target={ragTarget.name} />}
-          {/* two rows, so the fields fit however narrow the pane is */}
-          {ragTarget ? (
-            <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0" data-rag-judge>
-              <Field label="Judge provider" hint="Judged metrics only">
-                <Select value={d.judge?.provider ?? ''} onChange={(e) => set({ judge: { ...d.judge, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } })} aria-label="Judge provider">
-                  <option value="">The AI settings’ large model</option>
+          {!ragTarget && (
+            <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
+              <Field label="Provider">
+                <Select value={d.provider} onChange={(e) => set({ provider: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? '' })}>
                   <NamedOptions items={providers} />
                 </Select>
               </Field>
-              <Field label="Judge model">
-                <Input className="mono" value={d.judge?.model ?? ''} placeholder="the provider’s default" onChange={(e) => set({ judge: { ...d.judge, model: e.target.value || undefined } })} aria-label="Judge model" />
+              <Field label="Model">
+                <Input className="mono" value={d.model} onChange={(e) => set({ model: e.target.value })} />
               </Field>
             </div>
-          ) : (
-          <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
-            <Field label="Provider">
-              <Select value={d.provider} onChange={(e) => set({ provider: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? '' })}>
-                <NamedOptions items={providers} />
-              </Select>
-            </Field>
-            <Field label="Model">
-              <Input className="mono" value={d.model} onChange={(e) => set({ model: e.target.value })} />
-            </Field>
-          </div>
           )}
           {ragTarget && <RagJudgeOptions judge={d.judge ?? {}} maxCostUsd={d.maxJudgeCostUsd} maxCalls={d.maxJudgeCalls} providers={providers} onChange={set} />}
-          <div className="grid grid-cols-4 gap-2 [&>*]:min-w-0">
-            <Field label="Temp.">
-              <Input type="number" step="0.1" value={d.temperature ?? ''} onChange={(e) => set({ temperature: e.target.value === '' ? undefined : Number(e.target.value) })} />
-            </Field>
-            <Field label="Workers">
-              <Input type="number" min={1} max={64} value={d.concurrency} onChange={(e) => set({ concurrency: Math.max(1, Number(e.target.value)) })} />
-            </Field>
-            <Field label="Retries">
-              <Input type="number" min={0} value={d.retries} onChange={(e) => set({ retries: Math.max(0, Number(e.target.value)) })} />
-            </Field>
-            <Field label="Limit">
-              <Input type="number" value={d.limit ?? ''} placeholder="all" onChange={(e) => set({ limit: e.target.value ? Number(e.target.value) : undefined })} />
-            </Field>
-          </div>
+          {/* AU-6: the settings an expert changes sit under Options, closed; the defaults are fine for a first run */}
+          <details className="text-xs rounded-lg border border-line px-2 py-1" data-eval-options>
+            <summary className="cursor-pointer text-muted select-none">
+              Options
+              <span className="ml-1">
+                · randomness {d.temperature ?? 'default'} · {d.concurrency} at once · try again {d.retries}× · {d.limit ? `first ${d.limit} cases` : 'all cases'}
+              </span>
+            </summary>
+            <div className="grid gap-2 mt-2 pb-1">
+              {ragTarget && (
+                <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0" data-rag-judge>
+                  <Field label="AI reviewer provider" hint="Only for checks an AI reviewer grades">
+                    <Select value={d.judge?.provider ?? ''} onChange={(e) => set({ judge: { ...d.judge, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined } })} aria-label="AI reviewer provider">
+                      <option value="">The AI settings’ large model</option>
+                      <NamedOptions items={providers} />
+                    </Select>
+                  </Field>
+                  <Field label="AI reviewer model">
+                    <Input className="mono" value={d.judge?.model ?? ''} placeholder="the provider’s default" onChange={(e) => set({ judge: { ...d.judge, model: e.target.value || undefined } })} aria-label="AI reviewer model" />
+                  </Field>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
+                <Field label="Randomness" hint="0 gives the same answer every time">
+                  <Input type="number" step="0.1" value={d.temperature ?? ''} onChange={(e) => set({ temperature: e.target.value === '' ? undefined : Number(e.target.value) })} />
+                </Field>
+                <Field label="Run at once" hint="How many cases are sent together">
+                  <Input type="number" min={1} max={64} value={d.concurrency} onChange={(e) => set({ concurrency: Math.max(1, Number(e.target.value)) })} />
+                </Field>
+                <Field label="Try again on errors" hint="How many times a failed call is repeated">
+                  <Input type="number" min={0} value={d.retries} onChange={(e) => set({ retries: Math.max(0, Number(e.target.value)) })} />
+                </Field>
+                <Field label="Only the first … cases" hint="Leave empty to run them all">
+                  <Input type="number" value={d.limit ?? ''} placeholder="all" onChange={(e) => set({ limit: e.target.value ? Number(e.target.value) : undefined })} />
+                </Field>
+              </div>
+            </div>
+          </details>
         </div>
         <Tabs label="Evaluation"
           value={sub}
           onChange={setSub}
           tabs={[
-            { id: 'dataset', label: 'Dataset', badge: count },
+            { id: 'dataset', label: 'Test cases', badge: count },
             ...(ragTarget ? [] : [{ id: 'prompt' as const, label: d.type === 'rag' ? 'Prompt (optional)' : 'Prompt' }]),
-            { id: 'evaluators', label: d.type === 'rag' ? 'Metrics' : 'Evaluators', badge: d.evaluators.length },
+            { id: 'evaluators', label: d.type === 'rag' ? 'Metrics' : 'Checks', badge: d.evaluators.length },
           ]}
         />
         <div className="flex-1 min-h-0">
@@ -439,18 +481,18 @@ export function EvaluationsView() {
                   </label>
                 ))}
                 <label className="ml-auto flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-                  expected field
+                  Expected answer column
                   <Input className="h-6 min-h-6 w-24 text-xs" value={d.expectedField} onChange={(e) => set({ expectedField: e.target.value })} />
                 </label>
                 {d.type === 'rag' && (
                   <>
-                    <Button size="sm" onClick={() => setImporting(true)} title="Read a dataset of another tool (Ragas, DeepEval, BEIR, NVIDIA, promptfoo; only data is read) as RAG records" data-rag-import>
+                    <Button size="sm" onClick={() => setImporting(true)} title="Read the test cases of another tool (Ragas, DeepEval, BEIR, NVIDIA, promptfoo; only data is read) as cases for a bot with sources" data-rag-import>
                       Import…
                     </Button>
-                    <Button size="sm" onClick={() => setMapper(true)} title="Choose which column is the question, the reference answer, the gold chunk ids …" data-rag-map-columns>
+                    <Button size="sm" onClick={() => setMapper(true)} title="Choose which column is the question, the expected answer, the right document ids …" data-rag-map-columns>
                       Map columns…
                     </Button>
-                    <Select className="h-7 min-h-7 py-0 text-xs max-w-32" aria-label="Export the dataset" value="" onChange={(e) => e.target.value && void exportRag(e.target.value as 'ragas' | 'deepeval')}>
+                    <Select className="h-7 min-h-7 py-0 text-xs max-w-32" aria-label="Export the test cases" value="" onChange={(e) => e.target.value && void exportRag(e.target.value as 'ragas' | 'deepeval')}>
                       <option value="">Export as…</option>
                       <option value="ragas">Ragas</option>
                       <option value="deepeval">DeepEval</option>
@@ -468,7 +510,7 @@ export function EvaluationsView() {
                 {datasets.length > 0 && (
                   <Select
                     className="h-7 min-h-7 py-0 text-xs max-w-48"
-                    aria-label="Load a workspace dataset"
+                    aria-label="Load saved test cases"
                     value=""
                     onChange={async (e) => {
                       if (!e.target.value) return;
@@ -480,7 +522,7 @@ export function EvaluationsView() {
                       }
                     }}
                   >
-                    <option value="">or a workspace dataset…</option>
+                    <option value="">or saved test cases…</option>
                     {datasets.map((x) => (
                       <option key={x.path} value={x.path}>
                         {x.name}
@@ -508,8 +550,8 @@ export function EvaluationsView() {
                   <CodeEditor language={EDITOR_LANGUAGE[readAs]} value={d.dataset} onChange={(dataset) => set({ dataset })} />
                   <div className="h-full overflow-auto p-2 text-xs">
                     <div className="text-muted mb-1">
-                      Preview · {count} records · each record's fields are available as {'{{field}}'} in the prompt and evaluators
-                      {d.type === 'rag' && (ragTarget ? ' · RAG records: question, reference (the expected answer), reference_ids (the gold document ids), reference_contexts' : ' · RAG records need question, contexts [{id,text}] and optionally answer/expected')}
+                      Preview · {count} cases · each column is available as {'{{column}}'} in the prompt and checks
+                      {d.type === 'rag' && (ragTarget ? ' · for a bot with sources: question, reference (the expected answer), reference_ids (the right document ids), reference_contexts' : ' · cases for a bot with sources need question, contexts [{id,text}] and optionally answer/expected')}
                     </div>
                     {preview.length > 0 && (
                       <table className="w-full">
@@ -562,11 +604,11 @@ export function EvaluationsView() {
           {sub === 'evaluators' && (
             <div className="overflow-auto h-full">
               <p className="px-3 pt-3 text-xs text-muted">
-                Deterministic checks are the source of truth for deterministic requirements. Similarity/RAG heuristics are approximate; LLM-judge scores are model-generated and labelled as such.
+                Checks with fixed rules are the ones to rely on. Checks of meaning and of sources are approximate, and an AI reviewer’s grades come from a model, so they are labelled as such.
               </p>
               {ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e)) && (
                 <Callout tone="accent" className="mx-3 mt-2" data-rag-judge-note>
-                  {d.judge?.provider ? `Judged metrics ask ${providers.find((p) => p.id === d.judge?.provider)?.name ?? d.judge.provider}${d.judge.model ? ` / ${d.judge.model}` : ''}.` : 'Judged metrics ask the AI settings’ large model.'} The run stops before the first question, and says what to configure, when no judge is set. Verdicts are kept: running again costs nothing.
+                  {d.judge?.provider ? `Checks graded by an AI reviewer ask ${providers.find((p) => p.id === d.judge?.provider)?.name ?? d.judge.provider}${d.judge.model ? ` / ${d.judge.model}` : ''}.` : 'Checks graded by an AI reviewer ask the AI settings’ large model.'} If no AI reviewer is set, the run stops before the first question and says what to set up. Grades are kept: running again costs nothing.
                 </Callout>
               )}
               {d.type === 'rag' ? (
@@ -576,7 +618,7 @@ export function EvaluationsView() {
                   columns={previewKeys}
                   hasTarget={!!ragTarget}
                   onTry={setTryCheck}
-                  footer={ragTarget ? <MetricEstimateLine draft={d} env={env} /> : <span className="text-muted">Choose a RAG target to see what a run costs.</span>}
+                  footer={ragTarget ? <MetricEstimateLine draft={d} env={env} /> : <span className="text-muted">Choose a bot to see what a run costs.</span>}
                 />
               ) : (
                 <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
@@ -632,9 +674,9 @@ export function EvaluationsView() {
               <Empty
                 icon={<FlaskConical size={28} />}
                 title="Run an evaluation"
-                actions={[{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run, disabled: !count, title: 'The dataset has no cases' }]}
+                actions={remedy ? [{ label: remedy.label, icon: <Play size={12} />, onClick: remedy.onClick }] : [{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run }]}
               >
-                An evaluation runs every record of the dataset through the prompt and the model, and scores each answer with the evaluators. Records stream with bounded concurrency, retries and rate limiting; the results are kept on disk and can be compared with a baseline.
+                An evaluation sends every test case to the prompt and the model, and checks each answer with your checks. The results are kept, so you can compare runs later.
               </Empty>
             )}
           </div>

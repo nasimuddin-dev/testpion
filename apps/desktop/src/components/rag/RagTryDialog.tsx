@@ -168,8 +168,8 @@ export function RagTryDialog({
                 <span className="ml-auto">
                   <Toggle checked={allowImages} onChange={setAllowImages} data-rag-try-allow-images="" title="Pictures of the sample go to the judge as data. A picture cannot be masked; the judge must be able to see." label="Send pictures" />
                 </span>
-                <span className="text-xs text-muted">Judge</span>
-                <Select className="h-7 min-h-7 py-0 text-xs max-w-44" aria-label="Judge for this try" value={j.provider ?? ''} onChange={(e) => setJ({ provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })}>
+                <span className="text-xs text-muted">AI reviewer</span>
+                <Select className="h-7 min-h-7 py-0 text-xs max-w-44" aria-label="AI reviewer for this try" value={j.provider ?? ''} onChange={(e) => setJ({ provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })}>
                   <option value="">{judge?.provider ? 'The evaluation’s judge' : 'The AI settings’ large model'}</option>
                   <NamedOptions items={providers} />
                 </Select>

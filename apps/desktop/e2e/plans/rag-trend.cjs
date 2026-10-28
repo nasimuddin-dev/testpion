@@ -51,14 +51,14 @@ const steps = [
   step(
     'an-evaluation-of-type-rag',
     `await __t.view('Evaluations'); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'RAG')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
      await __t.sleep(500);
-     ${setSelect(`document.querySelector('select[aria-label="Judge provider"]')`, 'RAG mock judge')}
+     ${setSelect(`document.querySelector('select[aria-label="AI reviewer provider"]')`, 'RAG mock judge')}
      await __t.sleep(500);
      await __t.real.click('input[aria-label="Evaluation name"]'); await __t.real.key('a', { ctrl: true }); await __t.real.type('Clinic trend'); await __t.sleep(300);
-     const ds = tab('Dataset'); if (!ds) return 'NO TAB Dataset';
+     const ds = tab('Test cases'); if (!ds) return 'NO TAB Test cases';
      await __t.real.click(ds); await __t.sleep(500);
      const ed = ${EDITOR_IN('main')}; if (!ed) return 'NO EDITOR';
      ed.getModel().setValue('{"id":"hours","question":"What time does the clinic open?","reference":"The clinic opens at 8am on weekdays.","reference_ids":["doc-1"],"tags":["hours"]}\\n{"id":"parking","question":"Is there parking at the clinic?","reference":"The clinic opens at 8am on weekdays.","reference_ids":["doc-1"],"tags":["parking"]}'); await __t.sleep(500);

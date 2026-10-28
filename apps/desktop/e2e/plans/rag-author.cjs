@@ -51,7 +51,7 @@ const steps = [
   step(
     'the-data-says-what-it-can-support',
     `await __t.view('Evaluations'); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'RAG')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
      const box = await __t.waitFor(() => document.querySelector('[data-rag-author]'), 6000); if (!box) return 'NO AUTHOR BOX';

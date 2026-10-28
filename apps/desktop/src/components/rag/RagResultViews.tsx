@@ -320,14 +320,14 @@ export function RagRescoreDialog({ runId, evaluators, evaluation, judge, provide
           </label>
         </div>
         <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
-          <Field label="Judge">
-            <Select value={j.provider ?? ''} onChange={(e) => setJ({ ...j, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })} aria-label="Judge provider">
+          <Field label="AI reviewer">
+            <Select value={j.provider ?? ''} onChange={(e) => setJ({ ...j, provider: e.target.value || undefined, model: providers.find((p) => p.id === e.target.value)?.defaultModel || undefined })} aria-label="AI reviewer provider">
               <option value="">The AI settings’ large model</option>
               <NamedOptions items={providers} />
             </Select>
           </Field>
           <Field label="Model">
-            <Input className="mono" value={j.model ?? ''} placeholder={provider?.defaultModel ?? ''} onChange={(e) => setJ({ ...j, model: e.target.value || undefined })} aria-label="Judge model" />
+            <Input className="mono" value={j.model ?? ''} placeholder={provider?.defaultModel ?? ''} onChange={(e) => setJ({ ...j, model: e.target.value || undefined })} aria-label="AI reviewer model" />
           </Field>
         </div>
         <RagJudgeOptions judge={j} providers={providers} onChange={(p) => p.judge && setJ(p.judge)} />

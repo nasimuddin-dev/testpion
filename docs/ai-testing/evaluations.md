@@ -1,6 +1,6 @@
 ---
 title: "AI evaluation"
-description: "Evaluate LLM output with deterministic, semantic and LLM-as-judge evaluators over streamed datasets, with regression baselines."
+description: "Check LLM output with deterministic, semantic and AI-reviewer checks over streamed test cases, with regression baselines."
 ---
 
 ::: v-pre
@@ -9,9 +9,9 @@ description: "Evaluate LLM output with deterministic, semantic and LLM-as-judge 
 
 ## Saved evaluations
 
-An evaluation of type **RAG** sends the questions of its dataset to a RAG system you connect (HTTP, SSE, WebSocket, gRPC or an MCP tool) and scores the answers and the documents it retrieved; its Provider and Model become the *judge* of the judged metrics. See [RAG testing](/ai-testing/rag).
+An evaluation of type **Bot with sources** (RAG) sends the questions of its test cases to a bot you connect (HTTP, SSE, WebSocket, gRPC or an MCP tool) and scores the answers and the documents it retrieved; its **AI reviewer** (under **Options**) grades the checks that need one. See [RAG testing](/ai-testing/rag).
 
-Save an evaluation (its dataset, prompt, model, parameters and evaluators) with **Save** next to **Run**, and it appears under **Saved** in the sidebar. Group evaluations in folders (**New folder**, drag and drop, or **Move to folder**); every list keeps its items in folders, and items that have none are in **General**. Right-click one to right-click one to **Run** it again, rename, duplicate or delete it (a delete happens at once, with **Undo** in the message). **Save** updates the evaluation you opened (it shows `Save*` when there are changes). **Save current evaluation** in a folder's menu saves a copy there. The **Runs** pane lists the runs of your evaluations, each with the environment it ran against (**PRODUCTION** in red); pick one to see its results.
+Save an evaluation (its test cases, prompt, model, options and checks) with **Save** next to **Run**, and it appears under **Saved** in the sidebar. Group evaluations in folders (**New folder**, drag and drop, or **Move to folder**); every list keeps its items in folders, and items that have none are in **General**. Right-click one to right-click one to **Run** it again, rename, duplicate or delete it (a delete happens at once, with **Undo** in the message). **Save** updates the evaluation you opened (it shows `Save*` when there are changes). **Save current evaluation** in a folder's menu saves a copy there. The **Runs** pane lists the runs of your evaluations, each with the environment it ran against (**PRODUCTION** in red); pick one to see its results.
 
 Evaluations open in tabs, like requests: each tab keeps its own unsaved changes, a single click in the **Saved** list opens a preview tab (its name in italics) that the next click replaces, and a double-click keeps it. The first line of the view says where the evaluation is (*Evaluations › folder › name*), and its ⋯ has **Copy link**. See [Finding your way around](/getting-started/finding-your-way#open-an-item).
 
@@ -26,14 +26,20 @@ testpion eval run "Intent classification" -e Staging --limit 50 -r console junit
 
 `eval run` exits `1` when a case fails, writes the usual reports, and works with `--baseline` / `--save-baseline` for regression checks. Against an environment marked as [production](/api-testing/environments#production), data-changing requests need `--allow-production` (the app asks once per run). AI agents use the `list_evaluations` and `run_evaluation` tools of `testpion mcp-server`.
 
-## Evaluator types
+## In the editor
 
-| Source | Evaluators |
+The first row has the evaluation's name, its type (**Prompt or chatbot** or **Bot with sources**), **Save** and **Run**. Under it, **Provider** and **Model** say what is tested. When no model is connected yet, a note says **Choose a model first** and offers **Use the offline demo model**: one click adds the demo model (no key, no network; its answers come from rules, so it is for trying things out) and **Run** works. When there are no test cases, **Add example cases** fills in a small set.
+
+The expert settings are under **Options**, closed until you open them: **Randomness** (0 gives the same answer every time), **Run at once** (how many cases are sent together), **Try again on errors** and **Only the first … cases**; for a bot with sources also the **AI reviewer provider** and **AI reviewer model**. The tabs are **Test cases** (the data, with the **Expected answer column**), **Prompt** and **Checks**. Beside every check one sentence says what it decides.
+
+## Check types {#evaluator-types}
+
+| Source | Checks |
 |---|---|
 | Deterministic | `exact-match`, `equals`, `contains`, `not-contains`, `regex`, `json-schema`, `json-path`, `type`, `length`, `threshold`, `latency`, `tokens`, `cost`, `is-json` |
 | Heuristic | lexical `similarity` (cosine or token F1), RAG metrics, `refusal`, `no-leak` |
 | Semantic | `similarity` with `method: embedding` using a provider's embeddings |
-| AI judge | `llm-judge` with configurable `judge` model, `criteria` and `threshold` |
+| AI reviewer | `llm-judge` (**Graded by an AI reviewer**) with a configurable `judge` model, `criteria` (the grading rule) and `threshold` |
 
 Every check result carries its **source**, and the UI and reports label AI-judge results clearly. Judge runs record the provider, model, temperature, prompt version and a config hash so they can be reproduced. They are **not** treated as deterministic.
 

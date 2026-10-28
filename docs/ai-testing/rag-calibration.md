@@ -27,7 +27,7 @@ Label at least 30 samples, with passes **and** fails: a metric with 8 labels, al
 
 ## The report {#report}
 
-**Calibrate judge…** in the matrix header (or `testpion rag calibrate`) shows, per metric:
+**Calibrate the AI reviewer…** in the matrix header (or `testpion rag calibrate`) shows, per metric:
 
 | Number | Meaning |
 |---|---|
