@@ -158,7 +158,7 @@ export class DeepSearchCache {
 }
 
 /** Run `step` over `items`, giving the event loop a turn whenever `sliceMs` have passed (a search over the bodies of a long session). */
-export async function inSlices<T>(items: T[], step: (x: T) => void, sliceMs = 8): Promise<void> {
+export async function inSlices<T>(items: T[], step: (x: T) => void, sliceMs = 5): Promise<void> {
   let t0 = performance.now();
   for (const x of items) {
     step(x);

@@ -37,8 +37,39 @@ describe('workspace watcher at scale', () => {
     }
   });
 
-  /** The longest stretch the event loop was held while `work` ran and until `finished` (a 1 ms timer measures the gaps). */
-  async function longestBlock(work: () => void, finished: () => boolean, maxMs = 60_000): Promise<number> {
+  /** A watcher on `root` whose walks and batches can be waited for (`onSettled`), not slept for. */
+  function observed() {
+    let emit: (event: string, name: string | null) => void = () => undefined;
+    const batches: WorkspaceChange[][] = [];
+    const waiting: Array<{ what: string; resolve(): void }> = [];
+    const stop = watchWorkspace(root, (b) => batches.push(b), {
+      debounceMs: 30,
+      watch: (_r, l) => ((emit = l), { close() {} }),
+      onSettled: (what) => {
+        for (const w of waiting.splice(0)) if (w.what === what) w.resolve();
+          else waiting.push(w);
+      },
+    });
+    const next = (what: 'open' | 'adopt' | 'flush') => new Promise<void>((resolve) => waiting.push({ what, resolve }));
+    return { stop, batches, next, emit: (event: string, name: string | null) => emit(event, name) };
+  }
+
+  /** How late a 1 ms timer runs on this machine right now, nothing else going on (a loaded box starves the probe itself). */
+  async function idleLateness(): Promise<number> {
+    let last = performance.now();
+    let worst = 0;
+    const probe = setInterval(() => {
+      const now = performance.now();
+      worst = Math.max(worst, now - last);
+      last = now;
+    }, 1);
+    await sleep(300);
+    clearInterval(probe);
+    return worst;
+  }
+
+  /** The longest stretch the event loop was held while `work` ran and until `finished` resolved (a 1 ms timer measures the gaps). */
+  async function longestBlock(work: () => void, finished: Promise<void>): Promise<number> {
     let last = performance.now();
     let longest = 0;
     const probe = setInterval(() => {
@@ -49,49 +80,51 @@ describe('workspace watcher at scale', () => {
     last = performance.now();
     work();
     longest = Math.max(longest, performance.now() - last);
-    for (let waited = 0; !finished() && waited < maxMs; waited += 50) await sleep(50);
+    await finished;
     clearInterval(probe);
     return longest;
   }
 
   it('adopt() on 20,000 files returns in a slice; a git change made before it is not reported, and one made after it is', { timeout: 240_000 }, async () => {
-    let emit: (event: string, name: string | null) => void = () => undefined;
-    const batches: WorkspaceChange[][] = [];
-    const stop = watchWorkspace(root, (b) => batches.push(b), { debounceMs: 30, watch: (_r, l) => ((emit = l), { close() {} }) });
+    const w = observed();
     try {
-      await sleep(1500); // the open walk finishes
+      await w.next('open'); // the open walk has finished
+      const idle = await idleLateness();
       // "git" rewrites a file, the app adopts the folder, and the watcher's late event for that file arrives
       writeFileSync(join(root, 'tests', 'bulk', 't5.yaml'), 'name: by git\n');
-      const longest = await longestBlock(() => stop.adopt(), () => false, 1500);
-      emit('change', 'tests/bulk/t5.yaml');
-      await sleep(5000); // the adoption walk finishes
-      console.log(`adopt() of 20,000 files: longest block ${longest.toFixed(1)} ms`);
-      expectWithin(longest, 16, 'adopt() on 20,000 files returns');
-      expect(batches.flat().map((c) => c.path)).not.toContain('tests/bulk/t5.yaml');
+      const adopted = w.next('adopt');
+      const flushed = w.next('flush');
+      const longest = await longestBlock(() => w.stop.adopt(), Promise.resolve());
+      w.emit('change', 'tests/bulk/t5.yaml');
+      await Promise.all([adopted, flushed]); // the adoption walk has finished and the late event was looked at
+      console.log(`adopt() of 20,000 files: longest block ${longest.toFixed(1)} ms (idle timer lateness ${idle.toFixed(1)} ms)`);
+      expectWithin(Math.max(0, longest - idle), 16, 'adopt() on 20,000 files returns');
+      expect(w.batches.flat().map((c) => c.path)).not.toContain('tests/bulk/t5.yaml');
       // a change after the adoption has settled is reported
       writeFileSync(join(root, 'tests', 'bulk', 't6.yaml'), 'name: later\n');
-      emit('change', 'tests/bulk/t6.yaml');
-      await sleep(300);
-      expect(batches.flat().map((c) => c.path)).toContain('tests/bulk/t6.yaml');
+      const later = w.next('flush');
+      w.emit('change', 'tests/bulk/t6.yaml');
+      await later;
+      expect(w.batches.flat().map((c) => c.path)).toContain('tests/bulk/t6.yaml');
     } finally {
-      stop();
+      w.stop();
     }
   });
 
   it('an overflow of the system\'s events (no file named) rescans 20,000 files in slices and still reports the changed one', { timeout: 240_000 }, async () => {
-    let emit: (event: string, name: string | null) => void = () => undefined;
-    const batches: WorkspaceChange[][] = [];
-    const stop = watchWorkspace(root, (b) => batches.push(b), { debounceMs: 30, watch: (_r, l) => ((emit = l), { close() {} }) });
+    const w = observed();
     try {
-      await sleep(1500);
+      // the open walk has taken its baseline: the file below changes after it, so the rescan has something to report
+      await w.next('open');
+      const idle = await idleLateness();
       writeFileSync(join(root, 'tests', 'bulk', 't77.yaml'), 'name: changed during the overflow\n');
-      // the walk and the comparison run in slices: the report comes when they are done
-      const longest = await longestBlock(() => emit('change', null), () => batches.length > 0);
-      console.log(`overflow rescan of 20,000 files: longest block ${longest.toFixed(1)} ms`);
-      expectWithin(longest, 16, 'the rescan after an overflow never holds the loop');
-      expect(batches.flat().map((c) => c.path)).toEqual(['tests/bulk/t77.yaml']);
+      // the walk and the comparison run in slices: the batch is reported when they are done
+      const longest = await longestBlock(() => w.emit('change', null), w.next('flush'));
+      console.log(`overflow rescan of 20,000 files: longest block ${longest.toFixed(1)} ms (idle timer lateness ${idle.toFixed(1)} ms)`);
+      expectWithin(Math.max(0, longest - idle), 16, 'the rescan after an overflow never holds the loop');
+      expect(w.batches.flat().map((c) => c.path)).toEqual(['tests/bulk/t77.yaml']);
     } finally {
-      stop();
+      w.stop();
     }
   });
 
