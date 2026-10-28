@@ -1,4 +1,4 @@
-import { EncryptedFileSecretStore, normalizeError, sweepWorkspace, type WorkspaceStore } from '@testpion/core';
+import { EncryptedFileSecretStore, normalizeError, sweepWorkspaceAsync, type WorkspaceStore } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 /**
@@ -132,13 +132,17 @@ export function noteSlowCall(be: Backend, method: string, ms: number): void {
 /** Leftovers of crashes and cut-short runs are removed shortly after a workspace opens (never on the way in: opening stays fast). */
 export function scheduleSweep(be: Backend, store: WorkspaceStore, afterMs = 5000): void {
   const t = setTimeout(() => {
-    try {
-      if (be.store !== store) return;
-      const r = sweepWorkspace(store, { keepRuns: be.runs.keys(), retention: be.settings.retention });
-      if (r.tmp + r.payloads + r.runs + r.inline + r.trash + r.pruned) be.logger.info('Removed leftovers from earlier sessions', { ...r });
-    } catch (e) {
-      be.logger.warn(`Clean-up of leftovers failed: ${(e as Error).message}`);
-    }
+    if (be.store !== store) return;
+    // asynchronous and in slices of a few milliseconds: the window's calls are served between them (housekeeping-async.ts)
+    sweepWorkspaceAsync(store, { keepRuns: be.runs.keys(), retention: be.settings.retention, stopped: () => be.store !== store }).then(
+      ({ warnings, ...r }) => {
+        for (const w of warnings ?? []) be.logger.warn(w);
+        // the first sweep after an update may delete runs beyond the retention: said as a warning, not as routine housekeeping
+        if (r.pruned) be.logger.warn(`The retention setting removed ${r.pruned} old run(s)`, { ...r });
+        else if (r.tmp + r.payloads + r.runs + r.inline + r.trash) be.logger.info('Removed leftovers from earlier sessions', { ...r });
+      },
+      (e: unknown) => be.logger.warn(`Clean-up of leftovers failed: ${(e as Error).message}`),
+    );
   }, afterMs);
   t.unref();
   be.deferred.push(t);

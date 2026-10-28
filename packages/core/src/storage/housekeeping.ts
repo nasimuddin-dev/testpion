@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import type { WorkspaceStore } from './workspace.js';
 import { expireTrash } from './trash.js';
 import { pruneRuns, retentionOf } from './storage-usage.js';
+import { RUNNING_FILE, pidAlive, removeStaleMarker, runInProgress } from './run-marker.js';
 
 /**
  * What a crash, a cancelled run or a failed rename leaves behind, removed (planning/review-2026-10-22-robustness.md R-2, R-4, C-3):
@@ -18,24 +19,20 @@ export interface SweepResult {
   trash: number;
   /** Runs deleted by the retention setting (newest N, none older than D days). */
   pruned: number;
+  /** Things the sweep could not do or chose not to (retention skipped because the baselines could not be listed, a run that would not delete). */
+  warnings?: string[];
 }
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
-const TMP = /\.tmp-(\d+)-[0-9a-f]+$/;
+export const HOUR = 3_600_000;
+export const DAY = 24 * HOUR;
+export const TMP = /\.tmp-(\d+)-[0-9a-f]+$/;
 /** Folders whose files are written atomically by the workspace (a leftover temp file sits next to its target). */
-const TMP_FOLDERS = ['collections', 'environments', 'library', 'tests', 'datasets', 'specs', 'mocks', 'flows', '.local', ''];
+export const TMP_FOLDERS = ['collections', 'environments', 'library', 'tests', 'datasets', 'specs', 'mocks', 'flows', '.local', ''];
+/** What else lives in runs/ besides run folders: the load history, scale test results, monitor results, certificate checks. Never an orphan. */
+export const NOT_RUNS: ReadonlySet<string> = new Set(['load', 'scale', 'monitors', 'certificates.json']);
+export const alive = pidAlive;
 
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'EPERM'; // it exists, it is another user's
-  }
-}
-
-const ageOf = (path: string, now: number): number => {
+export const ageOf = (path: string, now: number): number => {
   try {
     return now - statSync(path).mtimeMs;
   } catch {
@@ -43,7 +40,7 @@ const ageOf = (path: string, now: number): number => {
   }
 };
 
-function rm(path: string): boolean {
+export function rm(path: string): boolean {
   try {
     rmSync(path, { recursive: true, force: true });
     return true;
@@ -112,19 +109,23 @@ export function sweepWorkspace(store: WorkspaceStore, o: { now?: number; keepRun
         for (const g of readdirSync(path)) if (ageOf(join(path, g), now) > HOUR && rm(join(path, g))) out.inline++;
         continue;
       }
-      if (refs.runIds.has(f) || keep.has(f)) continue;
+      if (NOT_RUNS.has(f) || f.startsWith('.') || refs.runIds.has(f) || keep.has(f)) continue;
+      // another process's run (the CLI, a second window) marks its folder while it works
+      if (runInProgress(path, now)) continue;
       // no history row and no summary: a run that was cut short (the app quit, the folder was made and the run never started)
-      if (!existsSync(join(path, 'summary.json')) && newestAge(path, now) > HOUR && rm(path)) out.runs++;
+      if (!existsSync(join(path, 'summary.json')) && newestAge(path, now) > HOUR) {
+        if (rm(path)) out.runs++;
+      } else removeStaleMarker(path);
     }
   }
   return out;
 }
 
 /** How long ago anything in a folder (one level) was written: a run still writing results is not an orphan. */
-function newestAge(dir: string, now: number): number {
+export function newestAge(dir: string, now: number): number {
   let age = ageOf(dir, now);
   try {
-    for (const f of readdirSync(dir)) age = Math.min(age, ageOf(join(dir, f), now));
+    for (const f of readdirSync(dir)) if (f !== RUNNING_FILE) age = Math.min(age, ageOf(join(dir, f), now)); // the marker has its own rule (run-marker.ts)
   } catch {
     /* gone */
   }

@@ -1,6 +1,7 @@
 import { ENGINE_VERSION } from '../version.js';
 import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname } from 'node:path';
+import { startRunMarker } from '../storage/run-marker.js';
 import { fileLines } from '../util/file-lines.js';
 import type { RunSummary, TestCase, TestResult, TestStatus, Trace } from '../model/types.js';
 import { ApsError, isAbortError, normalizeError } from '../errors.js';
@@ -253,8 +254,10 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
   // many workers write concurrently: share one drain wait instead of one listener per writer
   let drain: Promise<void> | undefined;
   let drained: (() => void) | undefined;
+  let endMarker: (() => void) | undefined;
   if (opts.resultsFile) {
     mkdirSync(dirname(opts.resultsFile), { recursive: true });
+    endMarker = startRunMarker(dirname(opts.resultsFile)); // another process's housekeeping leaves a run in progress alone
     out = createWriteStream(opts.resultsFile, { flags: opts.resume ? 'a' : 'w' });
     out.on('error', (e) => {
       outError ??= e;
@@ -698,8 +701,12 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
       await exec({ ...t, name: `[teardown] ${t.name}` }).catch(() => undefined);
     }
     opts.signal?.removeEventListener('abort', onAbort);
-    await flushTraces();
-    if (out) await endAndClose(out);
+    try {
+      await flushTraces();
+      if (out) await endAndClose(out);
+    } finally {
+      endMarker?.();
+    }
   }
   if (outError)
     throw new ApsError('ConfigurationError', `The run's results could not be written to ${opts.resultsFile}: ${outError.message}`, {
