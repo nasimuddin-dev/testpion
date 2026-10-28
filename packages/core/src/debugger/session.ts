@@ -6,7 +6,7 @@ const STREAM_ITEM_OVERHEAD = 64;
 
 /** What an exchange keeps in memory that the budget counts, in characters: its bodies, its WebSocket frames, SSE events and gRPC messages. */
 function sizeOf(e: DebuggerExchange): number {
-  let n = (e.requestBody?.length ?? 0) + (e.responseBody?.length ?? 0);
+  let n = (e.requestBody?.length ?? 0) + (e.responseBody?.length ?? 0) + (e.requestBodyBase64?.length ?? 0) + (e.responseBodyBase64?.length ?? 0);
   if (e.frames) for (const f of e.frames) n += (f.text?.length ?? 0) + STREAM_ITEM_OVERHEAD;
   if (e.events) for (const ev of e.events) n += ev.data.length + STREAM_ITEM_OVERHEAD;
   if (e.grpc) n += (e.grpc.requests.length + e.grpc.responses.length) * GRPC_MESSAGE_ESTIMATE;
@@ -64,6 +64,8 @@ export class DebuggerSession {
       if (old === e || !this.kept.get(old)) continue;
       delete old.requestBody;
       delete old.responseBody;
+      delete old.requestBodyBase64;
+      delete old.responseBodyBase64;
       // streams count too: 500 frames or events of 64 KB each per direction were outside the budget (about 32 MB per streaming exchange)
       delete old.frames;
       delete old.events;

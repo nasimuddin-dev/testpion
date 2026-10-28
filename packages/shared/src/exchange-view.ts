@@ -75,9 +75,35 @@ function bytesForDecoding(s: ReturnType<typeof sideOf>): Bytes | undefined {
 }
 
 const json = (v: unknown) => JSON.stringify(v, null, 2);
+/** How the text of a result is drawn from its data, so masked data can be drawn again. */
+const renderers = new WeakMap<object, (d: any) => string>(); // bounded: keys are results, collected with them
+const made = (view: ExchangeViewName, side: 'request' | 'response', data: unknown, render: (d: any) => string): ExchangeViewResult => {
+  const r: ExchangeViewResult = { view, side, ok: true, data, text: render(data) };
+  renderers.set(r, render);
+  return r;
+};
 const no = (view: ExchangeViewName, side: 'request' | 'response', error: string): ExchangeViewResult => ({ view, side, ok: false, error });
 
-export function exchangeView(e: ViewExchange, view: ExchangeViewName, side: 'request' | 'response' = 'response'): ExchangeViewResult {
+/** What masks secrets: the redactor of the host (core's `Redactor` fits). */
+export interface ViewMask {
+  redact(v: unknown): unknown;
+  redactString(s: string): string;
+}
+
+/**
+ * The body of one side read as `view`. With a `mask`, what a decoder read out (a token inside a MessagePack map, a variable of a
+ * GraphQL call) is masked on the data and the text is drawn again from the masked data, so a key-based mask holds in the text too.
+ */
+export function exchangeView(e: ViewExchange, view: ExchangeViewName, side: 'request' | 'response' = 'response', mask?: ViewMask): ExchangeViewResult {
+  const r = exchangeViewRaw(e, view, side);
+  if (!mask || !r.ok || r.view === 'image') return r;
+  const data = r.data === undefined ? undefined : mask.redact(r.data);
+  const render = renderers.get(r);
+  const text = render && data !== undefined ? render(data) : r.text;
+  return { ...r, data, ...(text !== undefined ? { text: mask.redactString(text) } : {}) };
+}
+
+function exchangeViewRaw(e: ViewExchange, view: ExchangeViewName, side: 'request' | 'response'): ExchangeViewResult {
   const s = sideOf(e, side);
   const kept = s.text !== undefined || s.bytes !== undefined;
   const need = (what: string) => no(view, side, `The ${side} body was not kept (${what}). Capture it again, or open a HAR that has it.`);
@@ -86,26 +112,27 @@ export function exchangeView(e: ViewExchange, view: ExchangeViewName, side: 'req
       case 'list': {
         const gql = graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestContentType ?? headerOf(e.requestHeaders, 'content-type'), requestBody: e.requestBody, responseBody: e.responseBody });
         const views = bodyViewsOf({ contentType: s.ct, url: e.url, text: s.text, bytes: s.bytes, graphql: !!gql });
-        return { view, side, ok: true, data: { views, contentType: s.ct, kept }, text: views.length ? `Views for the ${side}: ${views.join(', ')}` : `No special view for the ${side} (${s.ct ?? 'no content type'}): use the plain body.` };
+        return made(view, side, { views, contentType: s.ct, kept }, (d) => (d.views.length ? `Views for the ${side}: ${d.views.join(', ')}` : `No special view for the ${side} (${s.ct ?? 'no content type'}): use the plain body.`));
       }
       case 'caching': {
         const r = cachingOf(e);
-        return { view, side: 'response', ok: true, data: r, text: [r.summary, ...r.notes, r.validators.length ? `Validators: ${r.validators.map((v) => `${v.header}: ${v.value}`).join('; ')}` : ''].filter(Boolean).join('\n') };
+        return made(view, 'response', r, (d) => [d.summary, ...d.notes, d.validators.length ? `Validators: ${d.validators.map((v: { header: string; value: string }) => `${v.header}: ${v.value}`).join('; ')}` : ''].filter(Boolean).join('\n'));
       }
       case 'tls': {
         if (!e.connection) return no(view, 'response', 'No TLS details were recorded for this exchange (plain HTTP, a tunnel that was not decrypted, or captured before this was recorded).');
         const f = tlsFindings(e.connection, e.host ?? '');
-        return { view, side: 'response', ok: true, data: { ...e.connection, findings: f }, text: [`${e.connection.version ?? '?'} ${e.connection.cipher ?? ''}${e.connection.alpn ? ` (${e.connection.alpn})` : ''}`, ...f.map((x) => `${x.level}: ${x.text}`)].join('\n') };
+        return made(view, 'response', { ...e.connection, findings: f }, (d) => [`${d.version ?? '?'} ${d.cipher ?? ''}${d.alpn ? ` (${d.alpn})` : ''}`, ...d.findings.map((x: { level: string; text: string }) => `${x.level}: ${x.text}`)].join('\n'));
       }
       case 'graphql': {
         const g = graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestContentType ?? headerOf(e.requestHeaders, 'content-type'), requestBody: e.requestBody, responseBody: e.responseBody });
         if (!g) return no(view, 'request', 'This is not a GraphQL call: its request has no "query".');
-        const text = [
-          g.label,
-          ...g.operations.map((o) => `${o.query}${o.variables !== undefined ? `\nvariables: ${json(o.variables)}` : ''}`),
-          ...(g.errors.length ? ['errors:', ...g.errors.map((x) => `- ${x.message}${x.path ? ` (at ${x.path})` : ''}${x.code ? ` [${x.code}]` : ''}`)] : []),
-        ].join('\n');
-        return { view, side: 'request', ok: true, data: g, text };
+        return made(view, 'request', g, (d: typeof g) =>
+          [
+            d.label,
+            ...d.operations.map((o) => `${o.query}${o.variables !== undefined ? `\nvariables: ${json(o.variables)}` : ''}`),
+            ...(d.errors.length ? ['errors:', ...d.errors.map((x) => `- ${x.message}${x.path ? ` (at ${x.path})` : ''}${x.code ? ` [${x.code}]` : ''}`)] : []),
+          ].join('\n'),
+        );
       }
       default:
         break;
@@ -116,11 +143,11 @@ export function exchangeView(e: ViewExchange, view: ExchangeViewName, side: 'req
         if (s.bytes) {
           const f = imageFacts(s.bytes, s.total ?? s.bytes.length);
           if (!f) return no(view, side, 'The bytes are not a PNG, JPEG, GIF, WebP, BMP or ICO image.');
-          return { view, side, ok: true, data: f, text: `${f.format}${f.width ? ` ${f.width}x${f.height}` : ''}, ${f.bytes} bytes${f.note ? `, ${f.note}` : ''}` };
+          return made(view, side, f, (d) => `${d.format}${d.width ? ` ${d.width}x${d.height}` : ''}, ${d.bytes} bytes${d.note ? `, ${d.note}` : ''}`);
         }
         if (s.text && /<svg[\s>]/i.test(s.text)) {
           const f = svgFacts(s.text, s.total ?? s.text.length);
-          return { view, side, ok: true, data: f, text: `svg${f.width ? ` ${f.width}x${f.height}` : ''}, ${f.bytes} bytes${f.note ? `, ${f.note}` : ''}` };
+          return made(view, side, f, (d) => `svg${d.width ? ` ${d.width}x${d.height}` : ''}, ${d.bytes} bytes${d.note ? `, ${d.note}` : ''}`);
         }
         return no(view, side, 'The body is not an image.');
       }
@@ -128,13 +155,13 @@ export function exchangeView(e: ViewExchange, view: ExchangeViewName, side: 'req
         if (!s.text) return no(view, side, 'The body is not text.');
         const r = parseXml(s.text);
         if (!r.root) return no(view, side, r.error ?? 'Not XML.');
-        return { view, side, ok: true, data: { elements: r.elements, truncated: r.truncated, error: r.error, root: r.root }, text: `${xmlOutline(r.root)}${r.error ? `\n(${r.error})` : ''}` };
+        return made(view, side, { elements: r.elements, truncated: r.truncated, error: r.error, root: r.root }, (d) => `${xmlOutline(d.root)}${d.error ? `\n(${d.error})` : ''}`);
       }
       case 'form': {
         if (!s.text) return no(view, side, 'The body is not text.');
         const r = parseForm(s.ct, s.text);
         if (!r) return no(view, side, 'The body is not a form: its type is not application/x-www-form-urlencoded or multipart/*.');
-        return { view, side, ok: true, data: r, text: r.parts.map((p) => `${p.name}${p.filename ? ` (file ${p.filename}${p.contentType ? `, ${p.contentType}` : ''}, ${p.size} bytes)` : ''}${p.value !== undefined ? ` = ${p.value}` : ''}`).join('\n') };
+        return made(view, side, r, (d: typeof r) => d.parts.map((p) => `${p.name}${p.filename ? ` (file ${p.filename}${p.contentType ? `, ${p.contentType}` : ''}, ${p.size} bytes)` : ''}${p.value !== undefined ? ` = ${p.value}` : ''}`).join('\n'));
       }
       case 'syntax': {
         if (!s.text) return no(view, side, 'The body is not text.');
@@ -148,17 +175,17 @@ export function exchangeView(e: ViewExchange, view: ExchangeViewName, side: 'req
           if (!s.text) return no(view, side, 'The body is not text.');
           const m = view === 'signalr' ? decodeSignalR(s.text) : decodeSocketIo(s.text);
           if (!m) return no(view, side, `The body is not ${view === 'signalr' ? 'SignalR JSON (messages end with the 0x1e separator)' : 'Socket.IO / Engine.IO text packets'}.`);
-          return { view, side, ok: true, data: { messages: m }, text: m.map((x) => `${x.kind}${x.name ? ` ${x.name}` : ''}${x.data !== undefined ? ` ${JSON.stringify(x.data)}` : ''}`).join('\n') };
+          return made(view, side, { messages: m }, (d) => d.messages.map((x: { kind: string; name?: string; data?: unknown }) => `${x.kind}${x.name ? ` ${x.name}` : ''}${x.data !== undefined ? ` ${JSON.stringify(x.data)}` : ''}`).join('\n'));
         }
         const bytes = bytesForDecoding(s);
         if (!bytes) return no(view, side, 'There is no body to decode.');
         if (bytes.length > MAX_DECODE_BYTES) return no(view, side, `The body is over ${MAX_DECODE_BYTES / 1024} KB: it is not decoded.`);
         if (view === 'msgpack') {
           const r = decodeMessagePack(bytes);
-          return { view, side, ok: true, data: { value: r.value, trailingBytes: r.trailing }, text: json(r.value) + (r.trailing ? `\n(${r.trailing} bytes follow the value)` : '') };
+          return made(view, side, { value: r.value, trailingBytes: r.trailing }, (d) => json(d.value) + (d.trailingBytes ? `\n(${d.trailingBytes} bytes follow the value)` : ''));
         }
         const fields = decodeProtobufRaw(bytes);
-        return { view, side, ok: true, data: { fields, json: protobufToJson(fields) }, text: protobufText(fields) };
+        return made(view, side, { fields, json: protobufToJson(fields) }, (d) => protobufText(d.fields));
       }
       default:
         return no(view, side, `Unknown view ${String(view)}`);

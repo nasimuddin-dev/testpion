@@ -42,6 +42,8 @@ import {
 } from '@testpion/core/desktop';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
+import { runExchangeView } from './debugger-views.js';
+import { graphqlOf, looksLikeGraphql } from '@testpion/shared';
 import { cachedLeanRow, cachedSessionStats, DeepSearchCache, inSlices, startMs } from './debugger-stats.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
 import { AUTOSAVE, sessionSaver } from './debugger-save.js';
@@ -97,7 +99,7 @@ function leanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
   return cachedLeanRow(e, { rev: l.revs.get(e) ?? 0, seq: l.seqs.get(e), firstAt: l.firstAt, gen: be.logger.redactor.generation }, () => buildLeanRow(be, state, e));
 }
 function buildLeanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
-  const { requestBody: _rb, responseBody: _sb, frames, events, grpc, requestHeaders, responseHeaders, trailers: _t, ...rest } = e;
+  const { requestBody: _rb, responseBody: _sb, requestBodyBase64: _qb, responseBodyBase64: _pb, connection: _cx, frames, events, grpc, requestHeaders, responseHeaders, trailers: _t, ...rest } = e;
   const l = listOf(state);
   const size = (h?: Record<string, string>) => Object.entries(h ?? {}).reduce((n, [k, v]) => n + k.length + 2 + v.length + 2, 0);
   return {
@@ -109,10 +111,18 @@ function buildLeanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
     requestHeaderBytes: size(requestHeaders),
     responseHeaderBytes: responseHeaders ? size(responseHeaders) : undefined,
     requestContentType: requestHeaders['content-type'],
+    ...gqlOf(e),
     ...(frames ? { frameCount: frames.length } : {}),
     ...(events ? { eventCount: events.length } : {}),
     ...(grpc ? { grpc: { ...grpc, requests: [], responses: [], message: grpc.message && be.logger.redactor.redactString(grpc.message) } } : {}),
   };
+}
+
+/** GraphQL calls get `graphql: "query GetUser"` for the list (the row is built once per change, so the request body is read once). */
+function gqlOf(e: DebuggerExchange): { graphql?: string } {
+  if (e.kind !== 'http' || !e.requestBody || !looksLikeGraphql({ url: e.url, requestContentType: e.requestHeaders['content-type'], requestBody: e.requestBody })) return {};
+  const g = graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestHeaders['content-type'], requestBody: e.requestBody });
+  return g ? { graphql: g.label } : {};
 }
 
 /** Keep a request a mock server received for the Debugger's Incoming tab (and tell the window). */
@@ -183,6 +193,9 @@ function redacted(be: Backend, e: DebuggerExchange): DebuggerExchange {
     responseHeaders: headers(e.responseHeaders),
     requestBody: e.requestBody && red.redactString(e.requestBody),
     responseBody: e.responseBody && red.redactString(e.responseBody),
+    // bytes are not masked: only an image goes to the window as bytes; a binary protocol is decoded on the host (debug.view), where its text is masked
+    requestBodyBase64: undefined,
+    responseBodyBase64: /^image\//i.test(e.contentType ?? '') ? e.responseBodyBase64 : undefined,
     trailers: headers(e.trailers),
     frames: e.frames?.map((f) => (f.text ? { ...f, text: red.redactString(f.text) } : f)),
     events: e.events?.map((ev) => ({ ...ev, data: red.redactString(ev.data) })),
@@ -738,6 +751,12 @@ export function debuggerHandlers(be: Backend): Handlers {
     'debug.incoming': () => state.incoming ?? [],
     'debug.clearIncoming': () => {
       state.incoming = [];
+    },
+    /** A body view of one exchange (image facts, XML tree, form parts, GraphQL, MessagePack, Protobuf, SignalR, Socket.IO, caching, TLS): decoded on the host, masked like the bodies. */
+    'debug.view': ({ id, view, side }: { id: string; view: string; side?: string }) => {
+      const e = shown().exchanges.find((x) => x.id === id);
+      if (!e) throw new ApsError('ValidationError', 'That exchange is no longer in the session');
+      return runExchangeView(be, e, view, side);
     },
     /** One exchange whole (bodies included, redacted), with the Auth inspector's reading of its credentials (never the secret itself). */
     'debug.exchange': ({ id }: { id: string }) => {

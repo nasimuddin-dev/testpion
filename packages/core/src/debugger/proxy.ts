@@ -29,6 +29,8 @@ import { currentNet } from '../net/proxy.js';
 import { applyHeaderEdits, decideRequest, highlightRuleForResponse, ruleMatches, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
 import type { LeafCertificate } from './certificate.js';
+import { keepsBytes, type TlsInfo } from '@testpion/shared';
+import { tlsInfoOf } from './tls-info.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
 
 /**
@@ -117,6 +119,11 @@ export interface DebuggerExchange {
   grpc?: GrpcCapture;
   /** HTTP/2 trailers (gRPC's status lives there). */
   trailers?: Record<string, string>;
+  /** FG-8: a body that is not text but has a view (an image, MessagePack, Protobuf), kept whole as base64 when it fits the body limit. */
+  requestBodyBase64?: string;
+  responseBodyBase64?: string;
+  /** FG-10: the TLS connection to the server (version, cipher, ALPN, certificate chain). */
+  connection?: TlsInfo;
 }
 
 /** What a breakpoint hands back: edits to apply, or nothing to let it go on as it was. */
@@ -500,6 +507,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.requestBodyBytes = reqBody.length;
       e.requestBodyTruncated = reqBody.length > maxBody;
       if (reqBody.length && textLike(req.headers['content-type'])) e.requestBody = reqBody.subarray(0, maxBody).toString('utf8');
+      else if (reqBody.length && reqBody.length <= maxBody && keepsBytes(req.headers['content-type'])) e.requestBodyBase64 = reqBody.toString('base64');
       bodyToSend = reqBody.length ? reqBody : undefined;
     }
 
@@ -728,6 +736,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.responseHeaders = flattenHeaders(ures.headers);
       e.contentType = ures.headers['content-type'];
       const keep = textLike(e.contentType);
+      const keepBin = !keep && keepsBytes(e.contentType);
       // a response breakpoint on the status (Only errors) is known once the headers are in
       const bp = breakpoint ?? (opts.onBreakpoint && decision?.lateBreakpoints?.some((r) => ruleMatches(r, e, 'response')) ? opts.onBreakpoint : undefined);
       if (!hold && !bp) {
@@ -750,7 +759,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         }
         ures.on('data', (c: Buffer) => {
           e.responseBodyBytes += c.length;
-          if (keep && kept < maxBody) {
+          if ((keep || keepBin) && kept < maxBody) {
             chunks.push(c.subarray(0, maxBody - kept));
             kept += Math.min(c.length, maxBody - kept);
           }
@@ -761,6 +770,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           res.end();
           events?.end();
           if (keep) e.responseBody = Buffer.concat(chunks).toString('utf8');
+          else if (keepBin && e.responseBodyBytes <= maxBody) e.responseBodyBase64 = Buffer.concat(chunks).toString('base64');
           e.responseBodyTruncated = e.responseBodyBytes > maxBody;
           e.open = undefined;
           done();
@@ -802,6 +812,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       let outHeaders = applyHeaderEdits(e.responseHeaders, decision?.responseHeaders);
       if (decision?.responseBody !== undefined) outBody = Buffer.from(decision.responseBody, 'utf8');
       if (keep) e.responseBody = outBody.subarray(0, maxBody).toString('utf8');
+      else if (keepBin && outBody.length <= maxBody) e.responseBodyBase64 = outBody.toString('base64');
       if (bp) {
         const edits = await bp(e, 'response').catch(() => undefined);
         if (edits?.abort) {
@@ -850,6 +861,12 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       const at = () => (e.serverAddress = sock.remoteAddress ? `${sock.remoteAddress}:${sock.remotePort}` : undefined);
       if (sock.remoteAddress) at();
       else sock.once('connect', at);
+      // the TLS details of an https upstream: read once the handshake is done (a reused socket has finished it already)
+      if (target.protocol === 'https:') {
+        const read = () => (e.connection = tlsInfoOf(sock as TLSSocket) ?? e.connection);
+        if ((sock as TLSSocket).encrypted && !sock.connecting && (sock as TLSSocket).getProtocol?.()) read();
+        else sock.once('secureConnect', read);
+      }
     });
     // the request is sent whole when the last byte has gone out
     up.once('finish', () => (e.sendMs = Date.now() - t0));

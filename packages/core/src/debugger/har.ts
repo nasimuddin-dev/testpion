@@ -31,7 +31,7 @@ interface HarEntry {
     httpVersion: string;
     headers: Array<{ name: string; value: string }>;
     cookies: unknown[];
-    content: { size: number; mimeType: string; text?: string };
+    content: { size: number; mimeType: string; text?: string; encoding?: string };
     redirectURL: string;
     headersSize: number;
     bodySize: number;
@@ -60,6 +60,8 @@ interface HarEntry {
     user?: string;
     serverAddress?: string;
     highlightStyle?: DebuggerExchange['highlightStyle'];
+    /** The TLS connection to the server (version, cipher, certificate chain). */
+    connection?: DebuggerExchange['connection'];
   };
 }
 
@@ -67,6 +69,15 @@ interface HarEntry {
 export type HarRedactor = Pick<Redactor, 'redactHeaders' | 'redactUrl' | 'redactString'>;
 
 /** One exchange as a HAR entry; values pass the redactor. */
+/**
+ * The response body for the HAR: text redacted as always; an image as base64 (`encoding`, as HAR 1.2 has it). Other binary
+ * bodies (MessagePack, Protobuf) are not written: a redactor reads text, and a secret inside bytes would pass it unseen.
+ */
+function harContent(e: DebuggerExchange, redactor: HarRedactor): HarEntry['response']['content'] {
+  if (!e.responseBody && e.responseBodyBase64 && /^image\//i.test(e.contentType ?? '')) return { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBodyBase64, encoding: 'base64' };
+  return { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBody ? redactor.redactString(e.responseBody) : '' };
+}
+
 export function harEntry(e: DebuggerExchange, redactor: HarRedactor): HarEntry {
   const headers = (h?: Record<string, string>) => Object.entries(redactor.redactHeaders(h ?? {})).map(([name, value]) => ({ name, value }));
   return {
@@ -89,7 +100,7 @@ export function harEntry(e: DebuggerExchange, redactor: HarRedactor): HarEntry {
       httpVersion: e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
       headers: headers(e.responseHeaders),
       cookies: [],
-      content: { size: e.responseBodyBytes, mimeType: e.contentType ?? '', text: e.responseBody ? redactor.redactString(e.responseBody) : '' },
+      content: harContent(e, redactor),
       redirectURL: '',
       headersSize: -1,
       bodySize: e.responseBodyBytes,
@@ -122,6 +133,7 @@ export function harEntry(e: DebuggerExchange, redactor: HarRedactor): HarEntry {
       user: e.user,
       serverAddress: e.serverAddress,
       highlightStyle: e.highlightStyle,
+      connection: e.connection,
     },
   };
 }
@@ -237,7 +249,9 @@ export function exchangesFromHar(har: unknown): DebuggerExchange[] {
         status: num(res.status) || undefined,
         statusText: str(res.statusText),
         responseHeaders,
-        responseBody: str(content?.text) || undefined,
+        responseBody: str(content?.encoding) === 'base64' ? undefined : str(content?.text) || undefined,
+        ...(str(content?.encoding) === 'base64' && /^image\//i.test(str(content?.mimeType) ?? '') && /^[A-Za-z0-9+/=\s]+$/.test(str(content?.text) ?? '') && (str(content?.text)?.length ?? 0) <= 900_000 ? { responseBodyBase64: str(content?.text)!.replace(/\s+/g, '') } : {}),
+        ...(obj(t?.connection) ? { connection: obj(t?.connection) as DebuggerExchange['connection'] } : {}),
         responseBodyBytes: num(content?.size) ?? num(res.bodySize) ?? 0,
         responseBodyTruncated: bool(t?.truncated),
         contentType: str(content?.mimeType) || responseHeaders['content-type'],
