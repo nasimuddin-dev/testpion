@@ -47,7 +47,7 @@ describe('RequestContext', () => {
   it('a host passes the signed-in user: permissions come from it', async () => {
     let can: boolean[] = [];
     be.handlers['t.can'] = () => ((can = [currentCall()!.can('run'), currentCall()!.can('delete')]), 1);
-    await be.invoke('t.can', {}, { user: { id: 'u-42', permissions: new Set(['run']) } });
+    await be.invoke('t.can', {}, { user: { id: 'u-42', permissions: new Set(['t', 'run']) } });
     expect(can).toEqual([true, false]);
   });
 
