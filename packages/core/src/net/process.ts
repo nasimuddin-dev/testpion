@@ -33,3 +33,37 @@ export function spawnSyncChecked(what: string, command: string, args: readonly s
   assertProcessesAllowed(what);
   return cp.spawnSync(command, args, options);
 }
+
+/** What `killProcessTree` uses (replaced in tests). */
+export interface TreeKillDeps {
+  platform?: NodeJS.Platform;
+  /** Runs `taskkill` (Windows). */
+  taskkill?: (args: string[]) => void;
+  /** `process.kill`. */
+  kill?: (pid: number, signal: NodeJS.Signals) => void;
+}
+
+/**
+ * End a program and everything it started. Killing only the program leaves its children running: on Windows `cmd.exe /c npx …` or a
+ * `shell: true` command is a shell whose child is the real work, and a timeout that ends the shell leaves that work behind, once per
+ * reconnect. Windows: `taskkill /PID <pid> /T /F` (while the parent is alive, so the tree can still be walked). POSIX: the process
+ * group (negative pid) when the program leads one, else the program alone.
+ */
+export function killProcessTree(pid: number | null | undefined, deps: TreeKillDeps = {}): void {
+  if (!pid || pid <= 0) return;
+  const platform = deps.platform ?? process.platform;
+  try {
+    if (platform === 'win32') {
+      (deps.taskkill ?? ((args) => void execFileChecked('process tree kill', 'taskkill', args, { windowsHide: true }, () => undefined)))(['/PID', String(pid), '/T', '/F']);
+      return;
+    }
+    const kill = deps.kill ?? ((p, sig) => void process.kill(p, sig));
+    try {
+      kill(-pid, 'SIGKILL');
+    } catch {
+      kill(pid, 'SIGKILL'); // not the leader of a group
+    }
+  } catch {
+    /* already gone */
+  }
+}
