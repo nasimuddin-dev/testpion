@@ -135,10 +135,10 @@ describe('pauseBefore', () => {
       inFlight++;
       most = Math.max(most, inFlight);
       // longer than the steps' timeout: the pause is before the step starts
-      if (id === 'y') await new Promise((r) => setTimeout(r, 300));
+      if (id === 'y') await new Promise((r) => setTimeout(r, 1500));
       inFlight--;
     };
-    const r = await run(tests, { pauseBefore, timeoutMs: 100, concurrency: 8 });
+    const r = await run(tests, { pauseBefore, timeoutMs: 1000, concurrency: 8 });
     expect(r.summary.passed).toBe(3);
     expect(most).toBe(1);
   });
