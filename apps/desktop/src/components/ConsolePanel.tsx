@@ -35,6 +35,17 @@ export interface ConsoleEntry {
 
 type Filter = 'all' | 'errors' | 'logs';
 
+/** Rows the browser skips laying out and painting while they are off screen (a console of 500 rows, most of them out of view). */
+export const OFFSCREEN_ROW = { contentVisibility: 'auto', containIntrinsicSize: 'auto 28px' } as const;
+
+/** What the filter text is looked for in, lower-cased once per entry (typing in the filter does not rebuild 500 strings per key). */
+const haystacks = new WeakMap<ConsoleEntry, string>();
+const haystackOf = (e: ConsoleEntry): string => {
+  let h = haystacks.get(e);
+  if (h === undefined) haystacks.set(e, (h = `${e.method} ${e.url} ${e.name} ${e.status ?? ''} ${e.logs.map((l) => l.message).join(' ')}`.toLowerCase()));
+  return h;
+};
+
 /** Non-numeric statuses that mean success (MCP calls, WebSocket connect / send / close). */
 const OK_STATUS = new Set(['passed', 'ok', 'open', 'sent', 'closed']);
 const isError = (e: ConsoleEntry) => !!e.error || (typeof e.status === 'number' ? e.status >= 400 : e.status !== undefined && !OK_STATUS.has(e.status)) || !!e.failedChecks;
@@ -60,7 +71,7 @@ export function ConsolePanel() {
     return entries.filter(
       (e) =>
         (filter === 'all' || (filter === 'errors' ? isError(e) : e.logs.length > 0)) &&
-        (!needle || `${e.method} ${e.url} ${e.name} ${e.status ?? ''} ${e.logs.map((l) => l.message).join(' ')}`.toLowerCase().includes(needle)),
+        (!needle || haystackOf(e).includes(needle)),
     );
   }, [entries, filter, q]);
 
@@ -150,7 +161,7 @@ export function ConsolePanel() {
 const ConsoleRow = memo(function ConsoleRow({ e, expanded, onToggle }: { e: ConsoleEntry; expanded: boolean; onToggle(key: string): void }) {
   const hasDetails = !!(e.request || e.response || e.error || e.refs?.length);
   return (
-    <div className="border-b border-line/70" data-console-row={consoleKey(e)}>
+    <div className="border-b border-line/70" style={OFFSCREEN_ROW} data-console-row={consoleKey(e)}>
       <button className={cx('w-full flex items-center gap-2 px-3 py-1 text-left hover:bg-hover', isError(e) && 'text-bad')} onClick={() => hasDetails && onToggle(consoleKey(e))} aria-expanded={hasDetails ? expanded : undefined}>
         <ChevronRight size={12} className={cx('shrink-0 transition-transform', expanded && 'rotate-90', !hasDetails && 'opacity-0')} />
         <span className="text-muted tabular-nums shrink-0">{new Date(e.time).toLocaleTimeString()}</span>

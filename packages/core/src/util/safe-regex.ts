@@ -22,10 +22,17 @@ export const unsafeRegexReason = (pattern: string): string | undefined => analyz
  * repetition inside, many open-ended repetitions in a row): allowed, but run with a deadline (safeTest).
  */
 export function analyzeRegex(pattern: string): { refuse?: string; watch: boolean } {
-  if (pattern.length > MAX_PATTERN) return { refuse: `the pattern is longer than ${MAX_PATTERN} characters`, watch: false };
+  const { refuse, watch } = analyze(pattern);
+  return refuse ? { refuse, watch } : { watch };
+}
+
+/** `analyzeRegex` and how a watched shape is slow: `nested` (a repeated group with a repetition inside) or `degree` open-ended repetitions in a row. */
+function analyze(pattern: string): { refuse?: string; watch: boolean; nested: boolean; degree: number } {
+  if (pattern.length > MAX_PATTERN) return { refuse: `the pattern is longer than ${MAX_PATTERN} characters`, watch: false, nested: false, degree: 0 };
   let watch = false;
+  let nested = false;
   let openEnded = 0;
-  const refuse = (reason: string) => ({ refuse: reason, watch: false });
+  const refuse = (reason: string) => ({ refuse: reason, watch: false, nested: false, degree: 0 });
   interface Frame {
     /** Some unbounded repetition anywhere inside this group. */
     repeatsInside: boolean;
@@ -107,7 +114,7 @@ export function analyzeRegex(pattern: string): { refuse?: string; watch: boolean
       if (quant.unbounded) {
         const g = last?.group;
         if (g?.anyEndRepeats) return refuse('it repeats a group that ends with a repetition (like (a+)+), which can take minutes on a short text');
-        if (g?.repeatsInside) watch = true;
+        if (g?.repeatsInside) watch = nested = true;
         openEnded++;
         // (a|aa)+ , (\w|\d)* : alternatives that can start the same way
         if (g && g.alternatives > 1) {
@@ -127,15 +134,31 @@ export function analyzeRegex(pattern: string): { refuse?: string; watch: boolean
   }
   // .*.*.*x : polynomial, not exponential, but slow on a long text
   if (openEnded >= 4) watch = true;
-  return { watch };
+  // counted quantifiers, back-references and look-arounds are not covered by the n^k estimate: they always get the deadline
+  return { watch, nested: nested || /\{\d|\\[1-9k]|\(\?<?[=!]/.test(pattern), degree: openEnded };
 }
 
-/** Expressions compiled by compileUserRegex whose shape can be slow: `safeTest` runs them with a deadline. */
-const watched = new WeakSet<RegExp>();
+/** Steps a text of a watched pattern may cost in the worst case before it is run under the deadline (a few ms). */
+const PLAIN_STEPS = 2_000_000;
+
+/**
+ * The longest text a watched pattern is run on directly. A shape with `k` open-ended repetitions in a row costs at most about
+ * n^k / k! steps on a text of n characters, so a short text (a URL of 80 characters against `.*a.*b.*c.*d`) cannot blow up and
+ * skips the deadline, which costs about 140 microseconds a call. A repeated group with a repetition inside gets no such limit.
+ */
+export function plainLimit(degree: number, nested: boolean): number {
+  if (nested || degree < 1) return 0;
+  let fact = 1;
+  for (let i = 2; i <= degree; i++) fact *= i;
+  return Math.floor(Math.pow(PLAIN_STEPS * fact, 1 / degree));
+}
+
+/** Expressions compiled by compileUserRegex whose shape can be slow: `safeTest` runs them with a deadline, except on a text this short. */
+const watched = new WeakMap<RegExp, number>(); // bounded: weak, one entry per live user expression
 
 /** The pattern compiled, or an ApsError that says why not (invalid, too long, or a shape that can freeze the app). */
 export function compileUserRegex(pattern: string, flags = '', what = 'The pattern'): RegExp {
-  const a = analyzeRegex(pattern);
+  const a = analyze(pattern);
   if (a.refuse) throw new ApsError('ValidationError', `${what} is refused: ${a.refuse}`, { suggestions: ['Write it without nested repetition, or match a shorter piece of the text.'] });
   let re: RegExp;
   try {
@@ -143,7 +166,7 @@ export function compileUserRegex(pattern: string, flags = '', what = 'The patter
   } catch (e) {
     throw new ApsError('ValidationError', `Not a valid regular expression: ${(e as Error).message}`);
   }
-  if (a.watch) watched.add(re);
+  if (a.watch) watched.set(re, plainLimit(a.degree, a.nested));
   return re;
 }
 
@@ -154,7 +177,8 @@ const replaceScript = new Script('text.replace(re, rep)');
 /** `re.test(text)` with a deadline: a pattern that runs longer than `ms` counts as no match (and `timedOut` says so). */
 export function safeTest(re: RegExp, text: string, ms = 100): { matched: boolean; timedOut?: boolean } {
   // the common shapes cannot blow up (compileUserRegex refused the others): no watchdog, which costs about 10 ms a call
-  if (!watched.has(re)) {
+  const plain = watched.get(re);
+  if (plain === undefined || text.length <= plain) {
     re.lastIndex = 0;
     return { matched: re.test(text.length > MAX_REGEX_INPUT ? text.slice(0, MAX_REGEX_INPUT) : text) };
   }

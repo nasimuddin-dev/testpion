@@ -19,6 +19,8 @@ export class Redactor {
   /** The one regex of every secret value, built when a string is first masked after a secret was added (not once per secret). */
   private valueRegex?: RegExp;
   private valuesChanged = false;
+  /** Moves on whenever what is masked changes (a secret added, the field names set): a cached redaction made before is out of date. */
+  generation = 0;
 
   constructor(fields: string[] = DEFAULT_REDACT_FIELDS) {
     this.fields = secretKeyFields(fields);
@@ -26,6 +28,7 @@ export class Redactor {
 
   setFields(fields: string[]): void {
     this.fields = secretKeyFields(fields);
+    this.generation++;
   }
 
   /** Register a secret value; values shorter than 4 characters are ignored to avoid over-masking. */
@@ -33,6 +36,7 @@ export class Redactor {
     if (!value || typeof value !== 'string' || value.length < 4 || this.values.has(value)) return;
     this.values.add(value);
     this.valuesChanged = true;
+    this.generation++;
   }
 
   private regex(): RegExp | undefined {
@@ -94,8 +98,29 @@ export class Redactor {
     return out as T;
   }
 
+  /**
+   * An absolute URL with no credentials and no sensitive query key, told by reading the text (a `new URL` per call costs
+   * about 6 microseconds, and the Debugger redacts the URL of thousands of rows). Anything unusual (an escaped or `+` key,
+   * no scheme) is left to the parser, so the answer is always the parser's.
+   */
+  private cleanUrl(url: string): boolean {
+    const m = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(url);
+    if (!m || m[1]!.includes('@')) return false;
+    const q = url.indexOf('?', m[0].length);
+    if (q < 0) return true;
+    const hash = url.indexOf('#', q);
+    const query = url.slice(q + 1, hash < 0 ? url.length : hash);
+    for (const pair of query.split('&')) {
+      const eq = pair.indexOf('=');
+      const key = eq < 0 ? pair : pair.slice(0, eq);
+      if (/[%+]/.test(key) || this.isSensitiveKey(key)) return false;
+    }
+    return true;
+  }
+
   /** Redact query-string values of sensitive parameters in a URL. */
   redactUrl(url: string): string {
+    if (this.cleanUrl(url)) return this.redactString(url);
     try {
       const u = new URL(url);
       let changed = false;

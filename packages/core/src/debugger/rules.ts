@@ -1,4 +1,5 @@
 import type { DebuggerExchange } from './proxy.js';
+import { BoundedMap } from '../util/collections.js';
 import { globToRegex } from '../util/glob.js';
 import { compileUserRegex, safeTest } from '../util/safe-regex.js';
 
@@ -93,30 +94,29 @@ export interface DebuggerRulesFile {
   filterPresets?: Array<{ name: string; filter: Record<string, unknown> }>;
 }
 
-/** A glob (`*` any run, `?` one character) or a /regular expression/ as a RegExp; empty means anything. */
+/**
+ * A glob (`*` any run, `?` one character) or a /regular expression/ as a RegExp; empty means anything. Compiled once per
+ * pattern text: a rule is checked on every request (host, URL and program, again on the response).
+ */
 export function patternToRegExp(pattern: string | undefined): RegExp | undefined {
-  const p = pattern?.trim();
-  if (!p) return undefined;
-  const m = /^\/(.+)\/([a-z]*)$/.exec(p);
-  if (m) {
-    const cached = patterns.get(p);
-    if (cached !== undefined) return cached ?? undefined;
-    let re: RegExp | null;
-    try {
-      re = compileUserRegex(m[1]!, m[2]!.includes('i') ? m[2]! : m[2]! + 'i', 'The rule');
-    } catch (e) {
-      // a pattern that can freeze the app (nested repetition) never matches; one that is not valid is ignored, as before
-      re = (e as { message?: string }).message?.includes('is refused') ? NEVER : null;
-    }
-    if (patterns.size >= 200) patterns.clear();
-    patterns.set(p, re);
-    return re ?? undefined;
-  }
-  return globToRegex(p);
+  if (!pattern) return undefined;
+  let re = patterns.get(pattern);
+  if (re === undefined) patterns.set(pattern, (re = compilePattern(pattern.trim())));
+  return re ?? undefined;
 }
-/** Patterns of rules and filters, compiled once (a rule is checked on every request); null: not valid. */
-// bounded: one entry per distinct rule pattern; cleared with the rules (a few hundred at most)
-const patterns = new Map<string, RegExp | null>();
+function compilePattern(p: string): RegExp | null {
+  if (!p) return null;
+  const m = /^\/(.+)\/([a-z]*)$/.exec(p);
+  if (!m) return globToRegex(p);
+  try {
+    return compileUserRegex(m[1]!, m[2]!.includes('i') ? m[2]! : m[2]! + 'i', 'The rule');
+  } catch (e) {
+    // a pattern that can freeze the app (nested repetition) never matches; one that is not valid is ignored, as before
+    return (e as { message?: string }).message?.includes('is refused') ? NEVER : null;
+  }
+}
+/** Patterns of rules and filters, globs and /regular expressions/, keyed by their text; null: empty or not valid. */
+const patterns = new BoundedMap<string, RegExp | null>(512); // bounded: 512 distinct patterns, the oldest goes first
 const NEVER = /(?!)/;
 
 /** Whether an exchange's status (or its failure) is what a rule or a filter asks for: a code, ok / redirect / client-error / server-error, or error. */

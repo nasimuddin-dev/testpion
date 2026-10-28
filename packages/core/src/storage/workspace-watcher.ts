@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync, watch } from 'node:fs';
+import { opendirSync, readFileSync, statSync, watch, type Dir, type Dirent } from 'node:fs';
 import { join, sep } from 'node:path';
 import { watchKindOfPath, type WatchKind } from '@testpion/shared';
 import { forgetOwnWrite, ownWrite, ownWriteStat } from './fsutil.js';
@@ -19,9 +19,18 @@ export interface WorkspaceChange {
   kind: WorkspaceChangeKind;
 }
 
+/**
+ * The next slice of a long job, after the event loop has had its turn. A timer, not `setImmediate().unref()`: while only unreferenced
+ * immediates are waiting, Node's loop may sleep until something else wakes it, and a walk of 20,000 files then crawled at the pace of
+ * unrelated events (a slice every ~200 ms in an idle process).
+ */
+const later = (fn: () => void) => setTimeout(fn, 0).unref();
+
 /** The open walks the folder in slices of this many milliseconds; a burst of events is reported at the latest this long after its first. */
 const SLICE_MS = 8;
 const MAX_WAIT_MS = 5000;
+/** A file's time can run ahead of the clock by a tick or two (up to ~16 ms on Windows): a write this close after `adopt()` still counts as the adopted one. */
+const ADOPT_SLACK_MS = 250;
 const IGNORED_TOP = new Set(['runs', 'traces', 'payloads', 'reports', 'baselines', 'trash', '.local', '.git', 'node_modules']);
 // debugger/*.har: capture sessions are git-ignored and written constantly while a capture runs (debugger/shared/ is tracked and still reported)
 const IGNORED_FILE = /(^|\/)(database\.sqlite.*|metadata\.jsonl|\.template-offered\.json)$|^debugger\/[^/]+\.har$|\.tmp-\d+-[0-9a-f]+$|~$|\.swp$/;
@@ -102,109 +111,165 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     const now = fingerprint(path, 'hash');
     return { now, same: now === before };
   };
-  const snapshot = (dir: string, depth = 0) => {
-    if (depth > 8) return;
-    let entries: import('node:fs').Dirent[] = [];
-    try {
-      entries = readdirSync(join(root, dir), { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      const path = dir ? `${dir}/${e.name}` : e.name;
-      if (!changeKind(path)) continue;
-      if (e.isDirectory()) snapshot(path, depth + 1);
-      else seen.set(path, fingerprint(path, 'stat'));
-    }
-  };
+  /** Set when the watch is stopped: slices still queued do nothing. */
+  let stopped = false;
   /**
-   * The same walk at open, in slices of about 8 ms between event-loop turns: a 50,000-file workspace took 3 s of
-   * stat calls to open, all of it blocking. The first slice runs now (a small workspace is known when this returns).
-   * A file that reports an event before its turn is not in `seen`, so it counts as changed (the safe side), and the
-   * walk never overwrites a file an event already touched.
+   * The folder walked in slices of about SLICE_MS between event-loop turns (50,000 files took 3 s of stat calls, all of it
+   * blocking). `file` gets each file the registry knows (a path `changeKind` ignores is skipped, with its folder); `done`
+   * runs when the walk ends; `current` says whether a newer walk replaced this one. The first slice runs now (a small
+   * workspace is finished when this returns).
    */
-  let walk = 0;
-  const snapshotSliced = () => {
-    const mine = ++walk;
-    const stack: Array<{ dir: string; depth: number; entries?: import('node:fs').Dirent[]; i: number }> = [{ dir: '', depth: 0, i: 0 }];
+  const walkSliced = (current: () => boolean, file: (path: string, kind: WorkspaceChangeKind) => void, done?: () => void) => {
+    // a folder is read entry by entry (`opendirSync`), not whole: one folder of 20,000 files would be one long call
+    const stack: Array<{ dir: string; depth: number; handle?: Dir }> = [{ dir: '', depth: 0 }];
+    const release = () => {
+      for (const f of stack.splice(0)) {
+        try {
+          f.handle?.closeSync();
+        } catch {
+          /* already closed */
+        }
+      }
+    };
     const slice = () => {
-      if (mine !== walk) return;
+      if (stopped || !current()) return release();
       const until = performance.now() + SLICE_MS;
       let n = 0;
       while (stack.length) {
         const f = stack[stack.length - 1]!;
-        if (!f.entries) {
+        if (!f.handle) {
           if (f.depth > 8) {
             stack.pop();
             continue;
           }
           try {
-            f.entries = readdirSync(join(root, f.dir), { withFileTypes: true });
+            f.handle = opendirSync(join(root, f.dir));
           } catch {
             stack.pop();
             continue;
           }
         }
-        if (f.i >= f.entries.length) {
+        let e: Dirent | null = null;
+        try {
+          e = f.handle.readSync();
+        } catch {
+          /* the folder went away: it ends here */
+        }
+        if (!e) {
+          try {
+            f.handle.closeSync();
+          } catch {
+            /* already closed */
+          }
           stack.pop();
           continue;
         }
-        const e = f.entries[f.i++]!;
         const path = f.dir ? `${f.dir}/${e.name}` : e.name;
-        if (!changeKind(path)) continue;
-        if (e.isDirectory()) stack.push({ dir: path, depth: f.depth + 1, i: 0 });
-        else if (!seen.has(path) && !pending.has(path)) seen.set(path, fingerprint(path, 'stat'));
-        if (++n % 64 === 0 && performance.now() > until) break;
+        const kind = changeKind(path);
+        if (!kind) continue;
+        if (e.isDirectory()) stack.push({ dir: path, depth: f.depth + 1 });
+        else file(path, kind);
+        if (++n % 16 === 0 && performance.now() > until) break;
       }
-      if (stack.length && mine === walk) setImmediate(slice).unref();
+      if (stack.length) later(slice);
+      else done?.();
     };
     slice();
+  };
+  /**
+   * Every file's size and time, at open and after `adopt()`. A file that reports an event before its turn is not in
+   * `seen`, so it counts as changed (the safe side), and the walk never overwrites a file an event already touched.
+   */
+  let walk = 0;
+  const snapshotSliced = (done?: () => void) => {
+    const mine = ++walk;
+    walkSliced(
+      () => mine === walk,
+      (path) => {
+        if (!seen.has(path) && !pending.has(path)) seen.set(path, fingerprint(path, 'stat'));
+      },
+      done,
+    );
   };
   snapshotSliced();
   /**
    * The system could not say which files changed: its buffer of events overflowed (a checkout or a merge while the app's
    * thread was busy writes thousands of entries in .git), and the one event left names no file. Every file is looked at
-   * again instead (a stat each; only those that differ are read), so a change in that burst is still reported.
+   * again instead (a stat each; only those that differ are read), so a change in that burst is still reported. The walk
+   * is sliced like the first one, and `done` goes on when it has queued every file.
    */
   let rescanAll = false;
-  const queueEverything = () => {
-    const walkAll = (dir: string, depth: number) => {
-      if (depth > 8) return;
-      let entries: import('node:fs').Dirent[] = [];
-      try {
-        entries = readdirSync(join(root, dir), { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const e of entries) {
-        const path = dir ? `${dir}/${e.name}` : e.name;
-        const kind = changeKind(path);
-        if (!kind) continue;
-        if (e.isDirectory()) walkAll(path, depth + 1);
-        else if (!isKnownOwnWrite(path)) pending.set(path, { path, kind });
-      }
-    };
-    walkAll('', 0);
-    // and those that are gone
-    for (const path of seen.keys()) if (!pending.has(path)) pending.set(path, { path, kind: changeKind(path)! });
+  let rescan = 0;
+  const queueEverything = (done: () => void) => {
+    const mine = ++rescan;
+    const found = new Set<string>();
+    walkSliced(
+      () => mine === rescan,
+      (path, kind) => {
+        found.add(path);
+        if (!isKnownOwnWrite(path)) pending.set(path, { path, kind });
+      },
+      () => {
+        // and those that are gone (the files the walk found are queued or are the app's own writes, known now)
+        for (const path of seen.keys()) if (!found.has(path) && !pending.has(path)) pending.set(path, { path, kind: changeKind(path)! });
+        done();
+      },
+    );
+  };
+  /** True while a batch is being compared (in slices); events that come meanwhile wait in `pending` for the next one. */
+  let flushing = false;
+  /**
+   * After `adopt()`, until the walk has taken every file: a file not walked yet that reports an event and was last written
+   * before `adoptedAt` is the change the app adopted (git's), taken as it is; one written after it is an outside change.
+   */
+  let adopting = false;
+  let adoptedAt = 0;
+  const writtenBeforeAdopt = (path: string): boolean => {
+    try {
+      return statSync(join(root, path)).mtimeMs <= adoptedAt + ADOPT_SLACK_MS;
+    } catch {
+      return true; // gone: nothing to report either way
+    }
   };
   const flush = () => {
     timer = undefined;
     firstEventAt = 0;
+    if (flushing) return; // the running flush starts another when it ends, if more came
+    flushing = true;
+    const report = () => {
+      const entries = [...pending.values()];
+      pending.clear();
+      const batch: WorkspaceChange[] = [];
+      let at = 0;
+      const slice = () => {
+        if (stopped) return void (flushing = false);
+        const until = performance.now() + SLICE_MS;
+        while (at < entries.length) {
+          const c = entries[at++]!;
+          if (adopting && !seen.has(c.path) && writtenBeforeAdopt(c.path)) {
+            const f = fingerprint(c.path, 'stat');
+            if (f !== 'gone' && f !== 'dir') seen.set(c.path, f);
+          } else {
+            const { now, same } = compare(c.path);
+            if (now === 'gone') seen.delete(c.path);
+            else seen.set(c.path, now);
+            // a folder event says nothing by itself: its files report their own changes
+            if (now !== 'dir' && !same) batch.push(c);
+          }
+          // (a file is hashed when its size or time moved: check the clock often)
+          if (at % 16 === 0 && performance.now() > until) break;
+        }
+        if (at < entries.length) return void later(slice);
+        flushing = false;
+        if (batch.length) onChange(batch);
+        if ((pending.size || rescanAll) && !stopped) arm();
+      };
+      slice();
+    };
     if (rescanAll) {
       rescanAll = false;
-      queueEverything();
-    }
-    if (!pending.size) return;
-    const batch = [...pending.values()].filter((c) => {
-      const { now, same } = compare(c.path);
-      if (now === 'gone') seen.delete(c.path);
-      else seen.set(c.path, now);
-      // a folder event says nothing by itself: its files report their own changes
-      return now !== 'dir' && !same;
-    });
-    pending.clear();
-    if (batch.length) onChange(batch);
+      queueEverything(report);
+    } else report();
   };
   const arm = () => {
     // one timer per burst (not a clearTimeout / setTimeout per event: a branch switch is tens of thousands), re-armed
@@ -253,7 +318,6 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     if (wait > 0 && (pending.size || rescanAll)) timer = setTimeout(check, wait);
     else flush();
   };
-  let stopped = false;
   let retries = 0;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   const begin = (): boolean => {
@@ -301,12 +365,17 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     if (timer) clearTimeout(timer);
     timer = undefined;
     walk++;
+    rescan++;
     watcher?.close();
   };
   const adopt = () => {
-    walk++;
+    // events heard so far are about what the app adopts (git's changes): the walk takes the files as they are
+    pending.clear();
     seen.clear();
-    snapshot('');
+    adopting = true;
+    adoptedAt = Date.now();
+    const mine = walk + 1;
+    snapshotSliced(() => void (walk === mine && (adopting = false)));
   };
   return Object.assign(stop, { adopt });
 }

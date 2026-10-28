@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchWorkspace, type WorkspaceChange } from '../../packages/core/src/index.js';
+import { expectWithin } from '../perf-budget';
 
 /**
  * The watcher at scale: opening a 20,000-file workspace must not block the event loop for the whole walk, an outside
@@ -31,6 +32,64 @@ describe('workspace watcher at scale', () => {
       emit('change', 'tests/bulk/t19999.yaml');
       await sleep(400);
       expect(batches.flat().map((c) => c.path)).toContain('tests/bulk/t19999.yaml');
+    } finally {
+      stop();
+    }
+  });
+
+  /** The longest stretch the event loop was held while `work` ran and until `finished` (a 1 ms timer measures the gaps). */
+  async function longestBlock(work: () => void, finished: () => boolean, maxMs = 60_000): Promise<number> {
+    let last = performance.now();
+    let longest = 0;
+    const probe = setInterval(() => {
+      const now = performance.now();
+      longest = Math.max(longest, now - last);
+      last = now;
+    }, 1);
+    last = performance.now();
+    work();
+    longest = Math.max(longest, performance.now() - last);
+    for (let waited = 0; !finished() && waited < maxMs; waited += 50) await sleep(50);
+    clearInterval(probe);
+    return longest;
+  }
+
+  it('adopt() on 20,000 files returns in a slice; a git change made before it is not reported, and one made after it is', { timeout: 240_000 }, async () => {
+    let emit: (event: string, name: string | null) => void = () => undefined;
+    const batches: WorkspaceChange[][] = [];
+    const stop = watchWorkspace(root, (b) => batches.push(b), { debounceMs: 30, watch: (_r, l) => ((emit = l), { close() {} }) });
+    try {
+      await sleep(1500); // the open walk finishes
+      // "git" rewrites a file, the app adopts the folder, and the watcher's late event for that file arrives
+      writeFileSync(join(root, 'tests', 'bulk', 't5.yaml'), 'name: by git\n');
+      const longest = await longestBlock(() => stop.adopt(), () => false, 1500);
+      emit('change', 'tests/bulk/t5.yaml');
+      await sleep(5000); // the adoption walk finishes
+      console.log(`adopt() of 20,000 files: longest block ${longest.toFixed(1)} ms`);
+      expectWithin(longest, 16, 'adopt() on 20,000 files returns');
+      expect(batches.flat().map((c) => c.path)).not.toContain('tests/bulk/t5.yaml');
+      // a change after the adoption has settled is reported
+      writeFileSync(join(root, 'tests', 'bulk', 't6.yaml'), 'name: later\n');
+      emit('change', 'tests/bulk/t6.yaml');
+      await sleep(300);
+      expect(batches.flat().map((c) => c.path)).toContain('tests/bulk/t6.yaml');
+    } finally {
+      stop();
+    }
+  });
+
+  it('an overflow of the system\'s events (no file named) rescans 20,000 files in slices and still reports the changed one', { timeout: 240_000 }, async () => {
+    let emit: (event: string, name: string | null) => void = () => undefined;
+    const batches: WorkspaceChange[][] = [];
+    const stop = watchWorkspace(root, (b) => batches.push(b), { debounceMs: 30, watch: (_r, l) => ((emit = l), { close() {} }) });
+    try {
+      await sleep(1500);
+      writeFileSync(join(root, 'tests', 'bulk', 't77.yaml'), 'name: changed during the overflow\n');
+      // the walk and the comparison run in slices: the report comes when they are done
+      const longest = await longestBlock(() => emit('change', null), () => batches.length > 0);
+      console.log(`overflow rescan of 20,000 files: longest block ${longest.toFixed(1)} ms`);
+      expectWithin(longest, 16, 'the rescan after an overflow never holds the loop');
+      expect(batches.flat().map((c) => c.path)).toEqual(['tests/bulk/t77.yaml']);
     } finally {
       stop();
     }
