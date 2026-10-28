@@ -160,8 +160,18 @@ export function DebuggerView() {
     if (!selected) return setDetail(undefined);
     void call<Exchange>('debug.exchange', { id: selected }).then(setDetail, () => setDetail(undefined));
   }, [selected, selectedRow]);
+  // the statistics are read at most twice a second while rows arrive (the first read is at once)
+  const lastStats = useRef(0);
   useEffect(() => {
-    if (tab === 'stats') void call<Stats>('debug.stats').then(setStats, toastError);
+    if (tab !== 'stats') return;
+    const t = setTimeout(
+      () => {
+        lastStats.current = Date.now();
+        void call<Stats>('debug.stats').then(setStats, toastError);
+      },
+      Math.max(0, lastStats.current + 500 - Date.now()),
+    );
+    return () => clearTimeout(t);
   }, [tab, rows.length]);
   const loadCapture = useCallback(() => call<CaptureOptions>('debug.captureOptions').then(setCapture, () => undefined), []);
   const loadSessions = useCallback(() => call<Session[]>('debug.sessions').then(setSessions, () => setSessions([])), []);
