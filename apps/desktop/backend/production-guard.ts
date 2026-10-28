@@ -46,7 +46,7 @@ const run = (environment: string | undefined, action: string, extra: Partial<Ask
 /** A collection run's requests and how many of them change data (in memory: the collection is already read). */
 function collectionRun(be: Backend, p: Params, action: (name: string) => string): Ask {
   try {
-    const c = be.ws.getCollection(String(p.collectionId));
+    const c = be.ws.collectionView(String(p.collectionId));
     const refs = collectionRequests(c, Array.isArray(p.selection) ? p.selection : undefined);
     const changing = refs.filter((r) =>
       r.node.kind === 'graphql' ? isGraphQLMutation(detectOperation(r.node.request.query ?? '').type, r.node.request.query ?? '') : isDataChangingMethod(r.node.request.method),
@@ -66,7 +66,7 @@ function scriptsSend(be: Backend, p: Params): boolean {
   if (uses(p.preRequestScript) || uses(p.testScript)) return true;
   if (!p.collectionId) return false;
   try {
-    const c = be.ws.getCollection(String(p.collectionId));
+    const c = be.ws.collectionView(String(p.collectionId));
     if (uses(c.preRequestScript) || uses(c.testScript)) return true;
     const folders = p.requestId ? folderChain(c, String(p.requestId)) : [];
     return folders.some((f) => uses(f.preRequestScript) || uses(f.testScript));
@@ -209,7 +209,7 @@ export async function guardProduction<T>(be: Backend, method: string, params: un
   let allowed: boolean | undefined;
   if (rule && be.store) {
     for (const ask of [(await rule(be, p, sessions)) ?? []].flat()) {
-      const env = ask.environment ? be.ws.getEnvironment(ask.environment) : undefined;
+      const env = ask.environment ? be.ws.environmentView(ask.environment) : undefined;
       if (!env?.isProduction) continue;
       if (p.allowProduction === true) allowed = true;
       else if (ask.changesData || ask.run) throw productionRefusal({ ...ask, environment: env.name }, 'Confirm it in the app (it asks before sending), or pass allowProduction: true.');

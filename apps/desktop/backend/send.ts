@@ -4,6 +4,7 @@ import { clipConsole, consoleBody, consoleRefs } from './console-log.js';
 import type { GqlSendParams, HttpSendParams } from './params.js';
 import type { Backend } from './backend.js';
 import { linkedController } from './request-context.js';
+import { bodyTooBigToScan, collectBodySecrets, unscannedBodyNote } from './send-secrets.js';
 
 type Ctx = ReturnType<Backend['context']>;
 type ScriptView = Pick<Parameters<typeof runScript>[1], 'request'> & Partial<Pick<Parameters<typeof runScript>[1], 'response' | 'cookies'>>;
@@ -104,10 +105,11 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
     }
     const { response, prepared } = result;
     failedPayload = response.payloadPath;
-    root.setAttributes({ status: response.status, url: prepared.url, size: response.size });
+    const unscanned = bodyTooBigToScan(spec.body);
+    root.setAttributes({ status: response.status, url: prepared.url, size: response.size, ...(unscanned ? { secretsScanTruncated: true } : {}) });
     // DNS, TCP, TLS, waiting and download as child spans (the Traces waterfall, OTLP export)
     timingSpans(root, response.timeline, sentAt);
-    root.span.input = { method: prepared.method, headers: prepared.headers, body: prepared.bodyPreview };
+    root.span.input = { method: prepared.method, headers: prepared.headers, body: unscanned ? unscannedBodyNote(spec.body) : prepared.bodyPreview };
     // the body is kept (redacted, up to 48 KB) for the trace's Payload tab; the full body is in the payload file
     const tracedBody = response.bodyPreview.length > 48_000 ? `${response.bodyPreview.slice(0, 48_000)}…` : response.bodyPreview;
     root.end({ status: response.status >= 400 ? 'error' : 'ok', output: { status: response.status, headers: response.headers, body: tracedBody } });
@@ -176,21 +178,8 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
         const token = h.value.replace(/^\w+\s+/, '');
         if (token !== h.value && token.length >= 6) ctx.redactor.addSecret(token);
       }
-    // so are sensitive fields of the request body (servers often echo them back)
-    const collect = (v: unknown, key = '', depth = 0): void => {
-      if (depth > 20 || v == null) return;
-      if (typeof v === 'string') {
-        if (key && ctx.redactor.isSensitiveKey(key) && v.length >= 4) ctx.redactor.addSecret(v);
-      } else if (Array.isArray(v)) v.forEach((x) => collect(x, key, depth + 1));
-      else if (typeof v === 'object') for (const [k, x] of Object.entries(v as Record<string, unknown>)) collect(x, k, depth + 1);
-    };
-    if (spec.body && 'content' in spec.body)
-      try {
-        collect(JSON.parse(spec.body.content));
-      } catch {
-        /* not JSON */
-      }
-    else if (spec.body && 'fields' in spec.body) for (const f of spec.body.fields) collect(f.value, f.key);
+    // so are sensitive fields of the request body (servers often echo them back); a huge body is not scanned, and then not shown
+    collectBodySecrets(ctx.redactor, spec.body);
     be.consoleEntry({
       id,
       time: new Date().toISOString(),
@@ -201,7 +190,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       status: response.status,
       durationMs: response.durationMs,
       size: response.size,
-      request: { headers: prepared.headers, body: consoleBody(ctx.redactor, prepared.bodyPreview) },
+      request: { headers: prepared.headers, body: unscanned ? unscannedBodyNote(spec.body) : consoleBody(ctx.redactor, prepared.bodyPreview) },
       response: { headers: ctx.redactor.redact(response.headers), body: consoleBody(ctx.redactor, response.bodyPreview) },
       logs: logsOf(),
       failedChecks: checks.filter((c) => !c.passed).length,

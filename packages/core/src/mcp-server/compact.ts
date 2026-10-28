@@ -58,7 +58,27 @@ function shortenSchema(node: unknown): unknown {
   return out;
 }
 
+/**
+ * Parameters that dozens of tools share (the contract adds them): their text was repeated per tool (~10 KB of the list). The compact
+ * list leaves their description out; the server's instructions say what they mean once, and the verbose profile keeps every text.
+ */
+const SHARED_PARAMETERS = new Set(['limit', 'cursor', 'response_format', 'max_cost_usd', 'dryRun', 'allowProduction', 'environment', 'collection']);
+/** The once-only text for those parameters (appended to the server's instructions in the compact profiles). */
+export const SHARED_PARAMETER_NOTE =
+  'Parameters many tools share: limit and cursor page a list (the result says nextCursor when there is more); response_format is concise (the default, long values are cut and each cut is named) or detailed; ' +
+  'dryRun: true sends or changes nothing and returns what would happen; allowProduction: true lets data-changing requests go to a production environment (only when the user said so); ' +
+  'max_cost_usd refuses an AI call that could cost more than that; confirm is the go-ahead of the user for a delete or overwrite (the code they give you, or true where the host takes no code): without it nothing changes and the result says what would; ' +
+  'environment and collection are names or ids. A parameter listed without a description means one of these.';
+
 /** A tool as `full` lists it: same name, same arguments, shorter words. */
 export function compactTool<T extends Pick<Tool, 'description' | 'inputSchema'>>(t: T): T {
-  return { ...t, description: compactDescription(t.description), inputSchema: shortenSchema(t.inputSchema) as T['inputSchema'] };
+  const schema = shortenSchema(t.inputSchema) as { properties?: Record<string, { description?: unknown }> };
+  const props = schema.properties;
+  if (props)
+    for (const [name, p] of Object.entries(props)) {
+      if (!p || typeof p.description !== 'string') continue;
+      // (a code-style confirm - "A code from the user, not true" - is a safety instruction: it stays)
+      if (SHARED_PARAMETERS.has(name) || (name === 'confirm' && p.description.startsWith('true to go ahead'))) props[name] = Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'description')) as typeof p;
+    }
+  return { ...t, description: compactDescription(t.description), inputSchema: schema as T['inputSchema'] };
 }

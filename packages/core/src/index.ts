@@ -15,6 +15,7 @@ export { parseYaml, stringifyYaml } from './util/lazy-yaml.js';
 export * from './util/stats.js';
 export * from './util/page.js';
 export * from './util/redact.js';
+export * from './util/body-head.js';
 export * from './util/jsonpath.js';
 export * from './log/logger.js';
 export * from './vars/variables.js';

@@ -24,7 +24,7 @@ export const preloadBundleOptions = rest;
  * instead and required at its first use. A name here is one instance for the whole app (every `require` of it gets the same file).
  * (protobufjs and grpc-js stay in the main bundle: they are loaded together and share their descriptors.)
  */
-export const LAZY_MODULES = ['kafkajs', 'mqtt', 'socket.io-client', 'mysql2/promise', 'node-forge', 'node-html-parser', 'handlebars', 'undici', 'graphql', 'quickjs-emscripten-core', '@jitl/quickjs-singlefile-mjs-release-sync', 'pg', 'ajv', 'ajv-formats'];
+export const LAZY_MODULES = ['kafkajs', 'mqtt', 'socket.io-client', 'mysql2/promise', 'node-forge', 'node-html-parser', 'handlebars', 'undici', 'graphql', 'quickjs-emscripten-core', '@jitl/quickjs-singlefile-mjs-release-sync', 'pg', 'ajv', 'ajv-formats', 'acorn', 'electron-updater', 'qrcode'];
 
 /** The MCP SDK's entry points the engine uses: built into ONE lazy file so zod and the SDK's types are one instance, whichever entry asks. */
 export const MCP_SDK_ENTRIES = [
