@@ -82,6 +82,7 @@ export interface RpcParamTypes {
   'datasets.write': RpcCommonParams & { name: string; text: string };
   'debug.annotate': RpcCommonParams & { ids: string[]; note?: string; mark?: string };
   'debug.autoBreakpoint': RpcCommonParams & { mode: string };
+  'debug.bodyView': RpcCommonParams & { id: string; view: string; side?: string };
   'debug.certificate': RpcCommonParams & { action?: string };
   'debug.createFlow': RpcCommonParams & { ids?: string[]; since?: string; name?: string; drop?: string[]; keepNoise?: boolean; noiseHosts?: string[]; dryRun?: boolean; overwrite?: boolean };
   'debug.decrypt': RpcCommonParams & { on?: boolean; noDecrypt?: string[] };
@@ -359,4 +360,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 342;
+export const RPC_METHOD_COUNT = 343;

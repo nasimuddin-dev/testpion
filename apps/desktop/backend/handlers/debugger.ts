@@ -753,7 +753,7 @@ export function debuggerHandlers(be: Backend): Handlers {
       state.incoming = [];
     },
     /** A body view of one exchange (image facts, XML tree, form parts, GraphQL, MessagePack, Protobuf, SignalR, Socket.IO, caching, TLS): decoded on the host, masked like the bodies. */
-    'debug.view': ({ id, view, side }: { id: string; view: string; side?: string }) => {
+    'debug.bodyView': ({ id, view, side }: { id: string; view: string; side?: string }) => {
       const e = shown().exchanges.find((x) => x.id === id);
       if (!e) throw new ApsError('ValidationError', 'That exchange is no longer in the session');
       return runExchangeView(be, e, view, side);
