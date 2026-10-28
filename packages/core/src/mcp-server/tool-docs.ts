@@ -819,9 +819,9 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     narrow: 'Filter with `host`, `method`, `status` or `text`, lower `limit`, or page with `cursor`.',
   },
   debugger_exchange: {
-    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark.',
+    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark; view reads a body as the window shows it (xml, image, form, graphql, msgpack, protobuf, signalr, socketio, caching, tls).',
     whenNot: 'To list exchanges, use `debugger_exchanges`.',
-    example: { id: 'ex-42' },
+    example: { id: 'ex-42', view: 'graphql' },
     narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',
   },
   debugger_session: {

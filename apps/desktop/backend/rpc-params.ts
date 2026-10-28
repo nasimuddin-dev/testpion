@@ -110,6 +110,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'debug.delete': { ids: 'sa' },
   'debug.deleteSession': { name: 's' },
   'debug.exchanges': { host: 's?', method: 's?', text: 's?', kind: 's?', application: 's?', type: 's?', limit: 'n?', offset: 'n?' },
+  'debug.bodyView': { id: 's', view: 's', side: 's?' },
   'debug.openSession': { name: 's?', path: 'wp?', text: 's?', base64: 's?', append: 'b?' },
   'debug.openBrowser': { browser: 's?', url: 's?' },
   'debug.selfTest': { url: 's', method: 's?', headers: 'o?', body: 's?' },

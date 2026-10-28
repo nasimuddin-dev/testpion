@@ -3,6 +3,7 @@ import { Fragment, memo, useMemo, useRef, useState, type ReactNode } from 'react
 import { formatBytes, formatMs } from '@testpion/shared';
 import { cx, Empty, SectionTitle } from '../ui';
 import { headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
+import { cachingRows, tlsRows } from './InspectorSections';
 
 /** The path of an absolute URL, cut by hand (a `new URL` per row costs 20 µs and the tree reads thousands); anything else falls back to the parser. */
 const SCHEME_HOST = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
@@ -221,6 +222,8 @@ export function SummaryPanel({ e }: { e?: Exchange }) {
               ['Client port', e.clientPort],
             ],
           },
+          { title: 'TLS and certificate', rows: tlsRows(e) },
+          { title: 'Caching', rows: cachingRows(e) },
           {
             title: 'Request details',
             rows: [

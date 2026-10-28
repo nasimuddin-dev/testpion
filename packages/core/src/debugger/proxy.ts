@@ -32,6 +32,8 @@ import { decodeBody, dropConnection, hangRequest, localReply, redirectTarget, re
 import { Pacer, pacedBody, type NetworkSpeed } from './network-speed.js';
 import { createFrameRelay, frameBreaker, frameDecider, responseHead } from './ws-relay.js';
 import type { LeafCertificate } from './certificate.js';
+import { keepsBytes, type TlsInfo } from '@testpion/shared';
+import { watchTls } from './tls-info.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
 
 /**
@@ -120,6 +122,10 @@ export interface DebuggerExchange {
   grpc?: GrpcCapture;
   /** HTTP/2 trailers (gRPC's status lives there). */
   trailers?: Record<string, string>;
+  /** FG-8: a body with a view that is not text (image, MessagePack, Protobuf), whole as base64 if it fits the body limit. */
+  requestBodyBase64?: string; responseBodyBase64?: string;
+  /** FG-10: the TLS connection to the server. */
+  connection?: TlsInfo;
 }
 
 /** What a breakpoint hands back: edits to apply, or nothing to let it go on as it was. */
@@ -434,6 +440,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.requestBodyBytes = reqBody.length;
       e.requestBodyTruncated = reqBody.length > maxBody;
       if (reqBody.length && textLike(req.headers['content-type'])) e.requestBody = reqBody.subarray(0, maxBody).toString('utf8');
+      else if (reqBody.length && reqBody.length <= maxBody && keepsBytes(req.headers['content-type'])) e.requestBodyBase64 = reqBody.toString('base64');
       bodyToSend = reqBody.length ? reqBody : undefined;
     }
 
@@ -687,6 +694,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.responseHeaders = flattenHeaders(ures.headers);
       e.contentType = ures.headers['content-type'];
       const keep = textLike(e.contentType);
+      const keepBin = !keep && keepsBytes(e.contentType);
       // a response breakpoint on the status (Only errors) is known once the headers are in
       const bp = breakpoint ?? (opts.onBreakpoint && decision?.lateBreakpoints?.some((r) => ruleMatches(r, e, 'response')) ? opts.onBreakpoint : undefined);
       if (!hold && !bp) {
@@ -716,7 +724,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         }
         ures.on('data', (c: Buffer) => {
           e.responseBodyBytes += c.length;
-          if (keep && kept < maxBody) {
+          if ((keep || keepBin) && kept < maxBody) {
             chunks.push(c.subarray(0, maxBody - kept));
             kept += Math.min(c.length, maxBody - kept);
           }
@@ -727,6 +735,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           sink.end();
           events?.end();
           if (keep) e.responseBody = Buffer.concat(chunks).toString('utf8');
+          else if (keepBin && e.responseBodyBytes <= maxBody) e.responseBodyBase64 = Buffer.concat(chunks).toString('base64');
           e.responseBodyTruncated = e.responseBodyBytes > maxBody;
           e.open = undefined;
           done();
@@ -773,6 +782,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       const rewritten = decision?.responseReplace ? rewriteBody(outBody, e.contentType, ures.headers['content-encoding'], decision.responseReplace) : undefined;
       if (rewritten) (outBody = rewritten), (changed = true);
       if (keep) e.responseBody = (changed ? outBody : (decodeBody(outBody, ures.headers['content-encoding']) ?? outBody)).subarray(0, maxBody).toString('utf8');
+      else if (keepBin && outBody.length <= maxBody) e.responseBodyBase64 = outBody.toString('base64');
       if (bp) {
         const edits = await bp(e, 'response').catch(() => undefined);
         if (edits?.abort) {
@@ -836,6 +846,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       const at = () => (e.serverAddress = sock.remoteAddress ? `${sock.remoteAddress}:${sock.remotePort}` : undefined);
       if (sock.remoteAddress) at();
       else sock.once('connect', at);
+      if (target.protocol === 'https:') watchTls(sock, (t) => (e.connection = t ?? e.connection));
     });
     // the request is sent whole when the last byte has gone out
     up.once('finish', () => (e.sendMs = Date.now() - t0));

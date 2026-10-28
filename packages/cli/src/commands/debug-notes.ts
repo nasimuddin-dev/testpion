@@ -20,9 +20,11 @@ import {
   rulePresets,
   shortId,
   withAutoBreakpoint,
+  exchangesFromHar,
   type DebuggerRule,
   type DebuggerRulesFile,
 } from '@testpion/core';
+import { EXCHANGE_VIEWS, exchangeView, type ExchangeViewName } from '@testpion/shared';
 import { EXIT, CliError, dim, green, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 interface RulesOpts {
@@ -232,5 +234,37 @@ export function registerDebugNotesCommands(program: Command): void {
       if (o.json) return printJson(out);
       if (added) console.log(`${green(o.dryRun ? 'Would add' : 'Added')} ${added.name} to ${file}`);
       if (o.list || (!added && !o.remove)) for (const r of rules) console.log(`${r.enabled ? ' ' : dim('-')} ${r.id.padEnd(22)} ${r.kind.padEnd(10)} ${r.summary}`);
+    });
+
+  program
+    .command('debug-show')
+    .description('read one body of a captured exchange in a HAR file the way the Debugger window shows it: image facts, an XML tree, form parts, GraphQL, MessagePack, Protobuf, SignalR, Socket.IO frames, caching and TLS findings')
+    .argument('<har>', 'the HAR file')
+    .argument('<entry>', 'the exchange id (_testpion.id), or #3 for the third entry')
+    .option('--view <name>', `list (which views fit) | ${EXCHANGE_VIEWS.filter((v) => v !== 'list').join(' | ')}`, 'list')
+    .option('--side <side>', 'request or response (default: response)', 'response')
+    .option(...JSON_RESULT_OPTION)
+    .action((harFile: string, entry: string, o: { view: string; side: string; json?: boolean }) => {
+      if (!(EXCHANGE_VIEWS as readonly string[]).includes(o.view)) throw new CliError(`Unknown view "${o.view}": ${EXCHANGE_VIEWS.join(', ')}`, EXIT.CONFIG_ERROR);
+      if (o.side !== 'request' && o.side !== 'response') throw new CliError('--side is request or response', EXIT.CONFIG_ERROR);
+      let har: unknown;
+      try {
+        har = JSON.parse(readFileSync(harFile, 'utf8'));
+      } catch (e) {
+        throw new CliError(`${harFile}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+      }
+      let list: ReturnType<typeof exchangesFromHar>;
+      try {
+        list = exchangesFromHar(har);
+      } catch (e) {
+        throw new CliError(`${harFile}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+      }
+      const byPlace = /^#(\d+)$/.exec(entry);
+      const found = byPlace ? list[Number(byPlace[1]) - 1] : list.find((x) => x.id === entry);
+      if (!found) throw new CliError(`No entry ${entry} in ${harFile} (use an exchange id, or #1 for the first entry)`, EXIT.CONFIG_ERROR);
+      const r = exchangeView(found, o.view as ExchangeViewName, o.side);
+      if (o.json) return printJson({ id: found.id, url: found.url, ...r });
+      if (!r.ok) throw new CliError(r.error ?? 'That view is not available', EXIT.CONFIG_ERROR);
+      console.log(r.text ?? JSON.stringify(r.data, null, 2));
     });
 }
