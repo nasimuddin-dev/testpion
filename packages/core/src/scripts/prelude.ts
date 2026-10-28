@@ -497,6 +497,7 @@ const __packages = {};
 function __requirePackage(name) {
   if (__packages[name]) return __packages[name].exports;
   const src = JSON.parse(__host_package(name));
+  if (src !== null && typeof src === 'object' && src.__error !== undefined) throw new Error('tp.require("' + name + '"): ' + src.__error);
   if (src === null) throw new Error('tp.require("' + name + '"): there is no package with that name in this workspace (packages/' + name + '.js)');
   const module = { exports: {} };
   __packages[name] = module;

@@ -137,6 +137,8 @@ process.on('unhandledRejection', (e) => {
 
 // A dead page is a white window the user cannot use: log it (stderr is nowhere in the packaged app), reload it once; a second crash
 // within a minute asks (Reload / Quit) instead of looping. The backend keeps running; the reloaded page reattaches its terminals.
+/** An end-to-end plan drives the app: a modal box would idle the run until the runner's kill (no dialog under a plan; the reload or the exit is automatic). */
+const automated = !!(process.env.E2E_PLAN || process.env.TESTPION_E2E);
 const crashes: CrashRecord = { times: [] };
 async function recoverRenderer(d: { reason: string; exitCode: number }): Promise<void> {
   console.error(`[aps] renderer gone: ${d.reason} (exit ${d.exitCode})`);
@@ -149,6 +151,10 @@ async function recoverRenderer(d: { reason: string; exitCode: number }): Promise
   const w = win;
   if (!w || w.isDestroyed()) return;
   if (onRendererCrash(crashes, Date.now(), d.reason) === 'reload') {
+    w.webContents.reload();
+    return;
+  }
+  if (automated) {
     w.webContents.reload();
     return;
   }
@@ -330,6 +336,11 @@ app.whenReady().then(() => {
 
 /** Never fail silently with no window: show what went wrong. */
 function failedToStart(e: unknown): void {
+  if (automated) {
+    console.error(`[aps] TestPion failed to start: ${(e as Error)?.stack ?? String(e)}`);
+    app.exit(1); // no native box under a plan: it would block until the runner's kill
+    return;
+  }
   dialog.showErrorBox('TestPion failed to start', `${(e as Error)?.message ?? String(e)}
 
 Data directory: ${process.env.TESTPION_HOME || defaultAppDir()}`);
@@ -419,6 +430,8 @@ function startBackend(): void {
     // on Linux without a keyring Electron's "encrypted" store has a public key: refused unless the person opts in (storage/secrets.ts)
     cipher: safeStorageCipher(safeStorage as unknown as SafeStorageLike),
     emit,
+    // scripts run in a pool of worker threads, so a slow script never freezes the window (TESTPION_SCRIPT_WORKERS=0 turns it off)
+    scriptWorkers: 1,
     // bundled with the installer (electron-builder extraResources); the repo's copy when running from source
     examplesDir: app.isPackaged ? join(process.resourcesPath, 'examples', 'public-workspace') : join(__dirname, '..', '..', '..', 'examples', 'public-workspace'),
     openExternal: (url) => shell.openExternal(url),
@@ -492,11 +505,10 @@ function startBackend(): void {
     }
   };
 
-  // the window's crash, or a window that never asked about updates, gets the native prompt (see above)
-  win?.webContents.on('render-process-gone', () => void nativeUpdatePrompt('the window crashed'));
+  // a window that never asked about updates gets the native prompt (see above); a crash does not: the window reloads by itself (recoverRenderer)
   const unchecked = () =>
     setTimeout(() => {
-      if (!rendererCheckedUpdates) void nativeUpdatePrompt('the window did not check');
+      if (!rendererCheckedUpdates && !automated) void nativeUpdatePrompt('the window did not check');
     }, 20_000);
   if (win && !win.webContents.isLoading()) unchecked();
   else win?.webContents.once('did-finish-load', unchecked);

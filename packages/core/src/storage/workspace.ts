@@ -11,6 +11,7 @@ import { assertNotNewerOnDisk, looksLikeWorkspace, normalizeCollection, normaliz
 
 export { isWorkspaceDir, looksLikeWorkspace, normalizeCollection, normalizeEnvironment } from './normalize.js';
 import { openMetaStore, type MetaStore } from './metastore.js';
+import { WriteQueue } from './serial-writes.js';
 import type { Baseline } from '../report/regression.js';
 import { moveToTrash } from './trash.js';
 import { writeGitFiles } from './git-files.js';
@@ -412,7 +413,7 @@ export class WorkspaceStore {
   }
   /** `saveScriptPackage` for the app: a busy file is waited for with timers, not by pausing the thread. */
   async saveScriptPackageAsync(name: string, code: string): Promise<void> {
-    await atomicWriteAsync(this.packagePath(name), code);
+    await this.writes.atomic(this.packagePath(name), code);
   }
   deleteScriptPackage(name: string): void {
     removeOwned(this.packagePath(name));
@@ -444,13 +445,9 @@ export class WorkspaceStore {
     });
   }
 
-  /** Asynchronous saves run one after another: each plans its write from what the one before left on disk. */
-  private saves: Promise<unknown> = Promise.resolve();
-  private serial<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.saves.then(fn, fn);
-    this.saves = run.catch(() => undefined);
-    return run;
-  }
+  /** Asynchronous saves run one after another: each plans its write from what the one before left on disk. The other writers queue per file. */
+  private readonly writes = new WriteQueue();
+  private serial = <T>(fn: () => Promise<T>): Promise<T> => this.writes.run('<collections>', fn);
 
   private collectionSaved(p: { file: string; next: Collection }): Collection {
     const fresh = WorkspaceStore.stamp(p.file);
@@ -595,7 +592,7 @@ export class WorkspaceStore {
 
   /** `saveProviders` for the app (see saveCollectionAsync). */
   async saveProvidersAsync(providers: ProviderConfig[]): Promise<void> {
-    await writeJsonAsync(this.path('providers.json'), this.providersValue(providers));
+    await this.writes.json(this.path('providers.json'), this.providersValue(providers));
   }
 
   saveProviders(providers: ProviderConfig[]): void {
@@ -635,7 +632,7 @@ export class WorkspaceStore {
 
   async saveMcpServersAsync(servers: McpServerConfig[]): Promise<void> {
     assertNotNewerOnDisk(this.path('mcp-servers.json'), 'mcp-servers.json');
-    await writeJsonAsync(this.path('mcp-servers.json'), mcpServersFileValue({ schemaVersion: SCHEMA_VERSION, servers }));
+    await this.writes.json(this.path('mcp-servers.json'), mcpServersFileValue({ schemaVersion: SCHEMA_VERSION, servers }));
   }
 
   /* saved items with folders (WebSocket connections, AI prompts, MCP server folders …), one file per kind */
@@ -706,7 +703,7 @@ export class WorkspaceStore {
   }
 
   async writeTestFileAsync(rel: string, content: string): Promise<void> {
-    await atomicWriteAsync(this.safePath(rel, this.path('tests')), /\.ya?ml$/i.test(rel) ? normalizeText(content) : content);
+    await this.writes.atomic(this.safePath(rel, this.path('tests')), /\.ya?ml$/i.test(rel) ? normalizeText(content) : content);
   }
 
   deleteTestFile(rel: string): void {
@@ -767,7 +764,7 @@ export class WorkspaceStore {
 
   /**
    * Persist many traces without holding the process: the files are written through the thread pool (32 at a time),
-   * then the rows go into the database in transactions of 50 with the event loop free in between. A 500-trace batch
+   * then the rows go into the database in transactions of 32 with the event loop free in between. A 500-trace batch
    * used to be 500 synchronous writes inside one transaction (about 750 ms in one block).
    */
   async saveTraces(items: ReadonlyArray<{ trace: Trace; kind: string; runId?: string }>): Promise<void> {
@@ -777,14 +774,13 @@ export class WorkspaceStore {
       return { trace, rel, meta: { id: trace.traceId, name: trace.name, kind, status: trace.status, startTime: trace.startTime, durationMs: (trace.endTime ?? trace.startTime) - trace.startTime, spanCount: trace.spans.length, runId, path: rel } };
     });
     const FILES_AT_ONCE = 32;
-    const ROWS_PER_TRANSACTION = 50;
     for (let i = 0; i < rows.length; i += FILES_AT_ONCE) {
       const chunk = rows.slice(i, i + FILES_AT_ONCE);
       await Promise.all(chunk.map((r) => writeDerivedAsync(this.path(r.rel), JSON.stringify(r.trace))));
       this.meta.batch(() => {
         for (const r of chunk) this.meta.addTrace(r.meta);
       });
-      if ((i + FILES_AT_ONCE) % ROWS_PER_TRANSACTION === 0) await new Promise<void>((r) => setImmediate(r));
+      await new Promise<void>((r) => setImmediate(r)); // the event loop is free between chunks
     }
   }
 
@@ -825,7 +821,7 @@ export class WorkspaceStore {
   }
 
   async saveBaselineAsync(b: Baseline): Promise<void> {
-    await writeJsonAsync(this.path('baselines', `${slugify(b.name)}.json`), b);
+    await this.writes.json(this.path('baselines', `${slugify(b.name)}.json`), b);
   }
 
   /** Ids of the tests that failed or errored in a run ("last": the newest run), for re-running them. */

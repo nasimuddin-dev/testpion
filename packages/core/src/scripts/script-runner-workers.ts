@@ -6,6 +6,7 @@ import { Worker } from 'node:worker_threads';
 import { ApsError } from '../errors.js';
 import type { ExpressionInput, ScriptInput, ScriptOptions, ScriptOutput } from './sandbox.js';
 import type { ScriptRunner } from './script-runner.js';
+import { WatchBudget } from './script-watchdog.js';
 
 /**
  * A pool of worker threads that run user scripts (script-worker.ts): scripts of different runs and users use different cores, and a
@@ -29,6 +30,10 @@ export interface WorkerPoolOptions {
   maxUses?: number;
   /** Time a worker may be busy beyond the job's own limit before it is ended (default 3 s: the engine's start-up and a first parse). */
   slackMs?: number;
+  /** A new worker must say it is ready within this long, else its job fails and the worker is replaced (default 10 s). */
+  startMs?: number;
+  /** How long the worker waits for the host's answer to `tp.require` before the call throws (default 10 s). */
+  requireWaitMs?: number;
 }
 
 interface Slot {
@@ -36,6 +41,8 @@ interface Slot {
   uses: number;
   busy: boolean;
   ready: Promise<void>;
+  /** The worker thread has ended (it will not run another job). */
+  dead?: boolean;
   shared: SharedArrayBuffer;
   idle?: ReturnType<typeof setTimeout>;
 }
@@ -46,12 +53,15 @@ interface Waiter {
 }
 
 const PACKAGE_BYTES = 2 * 1024 * 1024;
+const HEADER = 32; // the require bridge's control words (script-worker.ts)
 
 /** The worker script: an explicit file, TESTPION_SCRIPT_WORKER_FILE, the built script-worker.js next to this module, or the build output of a source checkout. */
 export function findScriptWorkerFile(explicit?: string): string | undefined {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [explicit, process.env.TESTPION_SCRIPT_WORKER_FILE, join(here, 'script-worker.js'), join(here, 'script-worker.cjs'), join(here, '..', 'script-worker.cjs'), join(here, '..', '..', 'dist', 'scripts', 'script-worker.js')];
-  return candidates.find((f): f is string => !!f && existsSync(f));
+  // a packaged app keeps its files in app.asar; a worker thread cannot be started from inside the archive, the build unpacks it beside it
+  const unpacked = (f: string) => f.replace(/([\/])app\.asar([\/])/, '$1app.asar.unpacked$2');
+  return candidates.flatMap((f) => (f ? [unpacked(f), f] : [])).find((f) => existsSync(f));
 }
 
 export class WorkerScriptRunner implements ScriptRunner {
@@ -62,6 +72,8 @@ export class WorkerScriptRunner implements ScriptRunner {
   private readonly idleMs: number;
   private readonly maxUses: number;
   private readonly slackMs: number;
+  private readonly startMs: number;
+  private readonly requireWaitMs: number;
   private readonly slots = new Set<Slot>();
   private readonly waiting: Waiter[] = [];
   private jobSeq = 0;
@@ -78,6 +90,8 @@ export class WorkerScriptRunner implements ScriptRunner {
     this.idleMs = o.idleMs ?? 60_000;
     this.maxUses = o.maxUses ?? 500;
     this.slackMs = o.slackMs ?? 3000;
+    this.startMs = o.startMs ?? 10_000;
+    this.requireWaitMs = o.requireWaitMs ?? 10_000;
   }
 
   get workers(): number {
@@ -85,7 +99,7 @@ export class WorkerScriptRunner implements ScriptRunner {
   }
 
   private spawn(): Slot {
-    const shared = new SharedArrayBuffer(8 + PACKAGE_BYTES);
+    const shared = new SharedArrayBuffer(HEADER + PACKAGE_BYTES);
     const w = new Worker(this.file, { workerData: { pkg: shared }, resourceLimits: { maxOldGenerationSizeMb: this.heapMb, maxYoungGenerationSizeMb: 64 } });
     w.unref(); // an idle worker never keeps the process alive
     this.stats.started++;
@@ -101,6 +115,11 @@ export class WorkerScriptRunner implements ScriptRunner {
       w.once('exit', () => rej(new Error('The script worker ended before it was ready')));
     });
     slot.ready.catch(() => undefined);
+    // a worker that ends while idle leaves the pool at once (a busy one is dropped by its job); one that ends during the hand-over is seen as `dead`
+    w.once('exit', () => {
+      slot.dead = true;
+      if (!slot.busy && this.slots.delete(slot)) clearTimeout(slot.idle);
+    });
     this.slots.add(slot);
     return slot;
   }
@@ -119,7 +138,7 @@ export class WorkerScriptRunner implements ScriptRunner {
     if (this.closed) return Promise.reject(new ApsError('CancelledError', 'The script runner was closed'));
     for (const s of this.slots) {
       if (s.busy) continue;
-      if (s.uses >= this.maxUses) {
+      if (s.dead || s.uses >= this.maxUses) {
         this.drop(s, false);
         continue;
       }
@@ -147,9 +166,17 @@ export class WorkerScriptRunner implements ScriptRunner {
     });
   }
 
+  /**
+   * Gives a worker back. Every path of a job ends here (result, error, exit, watchdog kill, cancel), and every path ends with
+   * "the worker serves the next waiting job, or a replacement is started and serves it": a queued job never waits for a worker
+   * that is gone.
+   */
   private release(slot: Slot, healthy: boolean): void {
     slot.busy = false;
-    if (!healthy || this.closed) return this.drop(slot, !healthy);
+    if (!healthy || this.closed || slot.dead) {
+      this.drop(slot, !healthy);
+      return this.refill();
+    }
     const next = this.waiting.shift();
     if (next) {
       slot.busy = true;
@@ -159,20 +186,47 @@ export class WorkerScriptRunner implements ScriptRunner {
     slot.idle.unref();
   }
 
+  /** Room in the pool and jobs waiting: start workers for them. A worker that cannot be started fails the job it was started for. */
+  private refill(): void {
+    while (!this.closed && this.waiting.length && this.slots.size < this.size) {
+      const waiter = this.waiting.shift()!;
+      try {
+        const s = this.spawn();
+        s.busy = true;
+        waiter.go(s);
+      } catch (e) {
+        waiter.fail(new ApsError('InternalError', `The script worker could not be started: ${(e as Error).message}`));
+      }
+    }
+  }
+
   /** Runs one job; `fns` are the host functions the script may call back. */
   private async job<T>(op: 'script' | 'expression' | 'template' | 'metric', args: unknown[], limitMs: number, signal: AbortSignal | undefined, fns: { sendRequest?: ScriptOptions['sendRequest']; requirePackage?: ScriptOptions['requirePackage'] } = {}, onKilled?: (why: string) => T): Promise<T> {
-    if (signal?.aborted) throw new ApsError('CancelledError', 'The script was cancelled');
-    const slot = await this.acquire(signal);
+    const cancelled = () => new ApsError('CancelledError', 'The script was cancelled');
+    if (signal?.aborted) throw cancelled();
+    let slot = await this.acquire(signal);
+    // a worker that ended between being picked and now is not served; the abort that came while waiting for the worker never fired its listener
+    for (let tries = 0; slot.dead && tries < 3 && !signal?.aborted; tries++) {
+      this.release(slot, false);
+      slot = await this.acquire(signal);
+    }
+    if (signal?.aborted || slot.dead) {
+      this.release(slot, !slot.dead);
+      throw signal?.aborted ? cancelled() : new ApsError('InternalError', 'The script worker ended before it could start the script');
+    }
     slot.uses++;
     const id = ++this.jobSeq;
     return new Promise<T>((resolve, reject) => {
       const w = slot.w;
       let done = false;
+      let started = false;
       let watchdog: ReturnType<typeof setTimeout> | undefined;
-      /** The worker is busy with the engine: arm the watchdog (it is not while the host answers a send). */
-      const arm = () => {
+      const budget = new WatchBudget(limitMs, this.slackMs);
+      const killed = (why: string) => (onKilled ? resolve(onKilled(why)) : reject(new ApsError('TimeoutError', why)));
+      /** The worker is busy with the engine: arm the watchdog with what is left of the budget (it is not armed while the host answers a send). */
+      const arm = (ms: number) => {
         clearTimeout(watchdog);
-        watchdog = setTimeout(() => end(false, () => (onKilled ? resolve(onKilled(`The script did not stop after ${limitMs} ms and was ended`)) : reject(new ApsError('TimeoutError', `The script did not stop after ${limitMs} ms and was ended`)))), limitMs + this.slackMs);
+        watchdog = setTimeout(() => end(false, () => killed(started ? `The script did not stop after ${limitMs} ms and was ended` : `The script worker did not start within ${Math.round(ms)} ms`)), Math.max(0, ms));
         watchdog.unref();
       };
       const end = (healthy: boolean, f: () => void) => {
@@ -187,18 +241,24 @@ export class WorkerScriptRunner implements ScriptRunner {
         this.release(slot, healthy);
         f();
       };
-      const onAbort = () => end(false, () => reject(new ApsError('CancelledError', 'The script was cancelled')));
-      const onError = (e: Error) => end(false, () => (onKilled ? resolve(onKilled(`The script worker failed: ${e.message}`)) : reject(new ApsError('InternalError', `The script worker failed: ${e.message}`))));
-      const onExit = (code: number) => end(false, () => (onKilled ? resolve(onKilled(`The script worker stopped (exit ${code})`)) : reject(new ApsError('InternalError', `The script worker stopped (exit ${code})`))));
-      const onMessage = (m: { type: string; id?: number; reqId?: number; value?: T; message?: string; request?: never; name?: string }) => {
+      const onAbort = () => end(false, () => reject(cancelled()));
+      const failed = (why: string) => end(false, () => (onKilled ? resolve(onKilled(why)) : reject(new ApsError('InternalError', why))));
+      const onError = (e: Error) => failed(`The script worker failed: ${e.message}`);
+      const onExit = (code: number) => failed(`The script worker stopped (exit ${code})`);
+      const onMessage = (m: { type: string; id?: number; reqId?: number; seq?: number; value?: T; kind?: string; message?: string; stack?: string; request?: never; name?: string }) => {
         if (m.id !== id) return;
         switch (m.type) {
           case 'result':
             return end(true, () => resolve(m.value as T));
           case 'error':
-            return end(true, () => reject(new ApsError('ScriptError', m.message ?? 'The script failed')));
+            return end(true, () => {
+              const e = new ApsError((m.kind as ApsError['kind'] | undefined) ?? 'ScriptError', m.message ?? 'The script failed');
+              if (m.stack) e.stack = m.stack;
+              reject(e);
+            });
           case 'send': {
             clearTimeout(watchdog); // the host works now, not the engine
+            budget.pause();
             const reqId = m.reqId;
             void Promise.resolve()
               .then(() => fns.sendRequest?.(m.request as never))
@@ -209,39 +269,58 @@ export class WorkerScriptRunner implements ScriptRunner {
               .then((reply) => {
                 if (done) return;
                 w.postMessage(reply);
-                arm();
+                budget.grantPass();
+                arm(budget.start());
               });
             return;
           }
-          case 'pkg': {
-            // answered at once through the shared buffer the worker waits on
-            const ctl = new Int32Array(slot.shared, 0, 2);
-            let src: string | undefined;
-            try {
-              src = fns.requirePackage?.(m.name ?? '');
-            } catch {
-              src = undefined;
-            }
-            const bytes = src === undefined ? undefined : Buffer.from(src, 'utf8');
-            if (bytes && bytes.length <= PACKAGE_BYTES) {
-              Buffer.from(slot.shared, 8, bytes.length).set(bytes);
-              Atomics.store(ctl, 1, bytes.length);
-            } else Atomics.store(ctl, 1, -1);
-            Atomics.store(ctl, 0, 1);
-            Atomics.notify(ctl, 0);
-          }
+          case 'pkg':
+            return this.answerPackage(slot, m.seq ?? 0, m.name ?? '', fns.requirePackage, () => done);
         }
       };
       signal?.addEventListener('abort', onAbort, { once: true });
       w.on('message', onMessage);
       w.on('error', onError);
       w.on('exit', onExit);
-      arm();
+      // until the worker says it is ready (the engine loads) the watchdog is the start-up limit; the script's clock starts when the job is posted
+      arm(this.startMs);
       void slot.ready.then(
-        () => !done && w.postMessage({ type: 'job', id, op, args, hasSend: !!fns.sendRequest, hasPackages: !!fns.requirePackage }),
+        () => {
+          if (done) return;
+          started = true;
+          w.postMessage({ type: 'job', id, op, args, hasSend: !!fns.sendRequest, hasPackages: !!fns.requirePackage, requireWaitMs: this.requireWaitMs });
+          arm(budget.start());
+        },
         (e: Error) => onError(e),
       );
     });
+  }
+
+  /** The reply of the require bridge: written to the shared buffer the worker waits on, unless the worker has given up on this request. */
+  private answerPackage(slot: Slot, seq: number, name: string, require: ScriptOptions['requirePackage'], finished: () => boolean): void {
+    const ctl = new Int32Array(slot.shared, 0, 8);
+    let status = 1;
+    let bytes: Buffer | undefined;
+    try {
+      const src = require?.(name);
+      if (src !== undefined) {
+        bytes = Buffer.from(src, 'utf8');
+        if (bytes.length > PACKAGE_BYTES) {
+          status = 2;
+          bytes = Buffer.from(`the package "${name}" is larger than ${PACKAGE_BYTES} bytes`, 'utf8');
+        } else status = 0;
+      }
+    } catch (e) {
+      status = 2;
+      bytes = Buffer.from((e as Error).message.slice(0, 1000), 'utf8');
+    }
+    // the worker moved on (it timed out, or the job ended): this answer would be taken for the next request's
+    if (finished() || Atomics.load(ctl, 2) !== seq) return;
+    if (bytes) Buffer.from(slot.shared, HEADER, bytes.length).set(bytes);
+    Atomics.store(ctl, 1, bytes ? bytes.length : -1);
+    Atomics.store(ctl, 4, status);
+    Atomics.store(ctl, 3, seq); // last: the worker reads the rest only after this
+    Atomics.notify(ctl, 3);
   }
 
   runScript(code: string, input: ScriptInput, opts: ScriptOptions = {}): Promise<ScriptOutput> {

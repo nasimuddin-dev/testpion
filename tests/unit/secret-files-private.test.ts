@@ -51,7 +51,9 @@ describe.skipIf(process.platform === 'win32')('sensitive files are written for t
     expect(mode(cv)).toBe(PRIVATE_FILE_MODE);
 
     const log = join(d, 'logs', 'app.log');
-    fileSink(log)({ time: 'now', level: 'INFO', scope: 'x', message: 'hello' } as never);
+    const sink = fileSink(log);
+    sink({ time: 'now', level: 'INFO', scope: 'x', message: 'hello' } as never);
+    sink.flush?.(); // INFO is batched
     expect(mode(log)).toBe(PRIVATE_FILE_MODE);
 
     const har = join(d, 'sessions', 's.har');

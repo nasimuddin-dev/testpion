@@ -8,14 +8,20 @@
  *    waits on (the package source of the workspace, up to the buffer's size).
  */
 import { parentPort, workerData } from 'node:worker_threads';
+import { ApsError } from '../errors.js';
 import { evaluateExpressionInThread, renderTemplateInThread, runMetricScriptInThread, runScriptInThread } from './sandbox.js';
 
 const port = parentPort!;
 const shared = (workerData as { pkg: SharedArrayBuffer }).pkg;
-const ctl = new Int32Array(shared, 0, 2); // [0] 0 = waiting, 1 = answered; [1] byte length, -1 = none
-const HEADER = 8;
+// The require bridge: [0] unused, [1] answer byte length, [2] sequence number asked (worker), [3] sequence number answered (host),
+// [4] status (0 = source, 1 = no such package, 2 = the host failed: the bytes are the message). The host ignores a request the worker has
+// given up on, and the worker ignores an answer for any other number, so a late answer is never taken for the next request's.
+const ctl = new Int32Array(shared, 0, 8);
+const HEADER = 32;
 const replies = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>(); // bounded: the sends of the one job in flight
 let reqSeq = 0;
+let pkgSeq = 0; // bounded: a counter, one per worker thread
+let requireWaitMs = 10_000; // bounded: a number, set by each job of this worker thread
 
 function sendRequest(jobId: number, request: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -25,13 +31,25 @@ function sendRequest(jobId: number, request: unknown): Promise<unknown> {
   });
 }
 
+/** The source of a workspace package: undefined when there is none; an Error when the host failed or did not answer in time (never `undefined` for that). */
 function requirePackage(jobId: number, name: string): string | undefined {
-  Atomics.store(ctl, 0, 0);
-  port.postMessage({ type: 'pkg', id: jobId, name });
-  Atomics.wait(ctl, 0, 0, 5000);
+  const seq = ++pkgSeq;
+  Atomics.store(ctl, 2, seq);
+  port.postMessage({ type: 'pkg', id: jobId, name, seq });
+  const end = Date.now() + requireWaitMs;
+  for (;;) {
+    const got = Atomics.load(ctl, 3);
+    if (got === seq) break;
+    const left = end - Date.now();
+    if (left <= 0) throw new Error(`the host did not answer within ${requireWaitMs} ms (it is busy)`);
+    Atomics.wait(ctl, 3, got, left);
+  }
+  const status = Atomics.load(ctl, 4);
   const len = Atomics.load(ctl, 1);
-  if (Atomics.load(ctl, 0) !== 1 || len < 0) return undefined;
-  return Buffer.from(shared, HEADER, len).toString('utf8');
+  if (status === 1 || len < 0) return undefined;
+  const text = Buffer.from(shared, HEADER, len).toString('utf8');
+  if (status === 2) throw new Error(text);
+  return text;
 }
 
 interface Job {
@@ -41,9 +59,11 @@ interface Job {
   args: unknown[];
   hasSend?: boolean;
   hasPackages?: boolean;
+  requireWaitMs?: number;
 }
 
 async function run(job: Job): Promise<unknown> {
+  if (job.requireWaitMs) requireWaitMs = job.requireWaitMs;
   const a = job.args as never[];
   switch (job.op) {
     case 'script': {
@@ -69,7 +89,7 @@ port.on('message', (m: Job | { type: 'reply'; reqId: number; response?: unknown;
   }
   void run(m).then(
     (value) => port.postMessage({ type: 'result', id: m.id, value }),
-    (e: unknown) => port.postMessage({ type: 'error', id: m.id, message: e instanceof Error ? e.message : String(e) }),
+    (e: unknown) => port.postMessage({ type: 'error', id: m.id, kind: e instanceof ApsError ? e.kind : undefined, message: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? e.stack : undefined }),
   );
 });
 
