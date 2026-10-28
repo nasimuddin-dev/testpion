@@ -1,11 +1,12 @@
 import { ArrowDown, ArrowUp, Columns3, Copy, Database, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
-import { memo, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
 import { useApp, toastError } from '../../store';
 import { confirmDelete } from '../../lib/undo-delete';
 import { Badge, cx, Empty, Menu, Tabs, VirtualList, type MenuItem } from '../ui';
 import { HIGHLIGHT_CLASS, type Rule, type RuleKind } from '../DebuggerRules';
+import { SortedRows } from './sorted-rows';
 import { curlOf, kb, speedOf, toRequest, versionOf, type Exchange, type IncomingRequest } from './model';
 import { saveAsTest, saveAsTestMenuItem } from '../../lib/save-test';
 import { saveExchangeBody } from '../output/debugger-specs';
@@ -73,8 +74,6 @@ const COLUMNS: Column[] = [
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
 ];
 const DEFAULT_HIDDEN: ColumnId[] = ['pid'];
-/** One collator for every sort (a localeCompare per comparison made one each). */
-const COLLATOR = new Intl.Collator();
 const HIDDEN_KEY = 'testpion.debugger.hiddenColumns';
 const parseHidden = (raw: string): ColumnId[] | undefined => {
   const v = JSON.parse(raw) as unknown;
@@ -155,16 +154,12 @@ export const DebuggerGrid = memo(function DebuggerGrid({
   const [menu, setMenu] = useState<{ x: number; y: number; e: Exchange }>();
   const cols = COLUMNS.filter((c) => !hidden.includes(c.id));
   const minWidth = cols.reduce((n, c) => n + c.width, 0);
+  // the sorted rows are kept between syncs: the rows that came in or changed are inserted by binary search (sorted-rows.ts)
+  const sorter = useRef(new SortedRows());
   const sorted = useMemo(() => {
     const c = COLUMNS.find((x) => x.id === sort.col)!;
     if (sort.col === 'seq' && !sort.desc) return rows;
-    // the key of each row once (not twice per comparison), compared with one collator
-    const keyed = rows.map((row) => ({ row, key: c.sort(row) }));
-    keyed.sort((a, b) => {
-      const r = typeof a.key === 'number' && typeof b.key === 'number' ? a.key - b.key : COLLATOR.compare(String(a.key), String(b.key));
-      return sort.desc ? -r : r;
-    });
-    return keyed.map((k) => k.row);
+    return sorter.current.sort(rows, sort.col, sort.desc, c.sort);
   }, [rows, sort]);
   useEffect(() => onOrder?.(sorted), [sorted, onOrder]);
   const toggleColumn = (id: ColumnId) => {

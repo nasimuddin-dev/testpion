@@ -1,10 +1,19 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, memo, useMemo, useRef, useState, type ReactNode } from 'react';
 import { formatBytes, formatMs } from '@testpion/shared';
 import { cx, Empty, SectionTitle } from '../ui';
 import { headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
 
+/** The path of an absolute URL, cut by hand (a `new URL` per row costs 20 µs and the tree reads thousands); anything else falls back to the parser. */
+const SCHEME_HOST = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
 const pathOf = (url: string) => {
+  const m = SCHEME_HOST.exec(url);
+  if (m) {
+    const rest = url.slice(m[0].length);
+    const end = rest.search(/[?#]/);
+    const path = end < 0 ? rest : rest.slice(0, end);
+    return path || '/';
+  }
   try {
     return new URL(url).pathname;
   } catch {
@@ -22,17 +31,38 @@ export function phasesOf(e: Exchange): { sending: number; waiting: number; recei
 
 const BAR = { sending: 'bg-accent', waiting: 'bg-muted/60', receiving: 'bg-ok' } as const;
 
-/** Timeline (F5): one request's Sending / Waiting / Receiving, or several on one time axis; their count, time and size. */
-export function TimelinePanel({ picked }: { picked: Exchange[] }) {
-  if (!picked.length) return <Empty title="Select a request">Its timing shows here: sending, waiting for the server, receiving. Select several (Ctrl / Shift) to see them on one axis.</Empty>;
-  const bytes = picked.reduce((n, e) => {
+/** The rows the Timeline draws for a multi-selection: a range of thousands is summarised, the first rows are drawn. */
+export const TIMELINE_ROWS = 200;
+
+/** What the selection adds up to (one pass, no spreads: the argument limit and the copies of `Math.min(...rows.map())`). */
+export function timelineTotals(picked: Exchange[]): { bytes: number; start: number; end: number; span: number } {
+  let bytes = 0;
+  let start = Infinity;
+  let end = -Infinity;
+  for (const e of picked) {
     const h = headerSizes(e);
-    return n + e.requestBodyBytes + e.responseBodyBytes + h.request + h.response;
-  }, 0);
-  const start = Math.min(...picked.map((e) => Date.parse(e.startedAt)));
-  const end = Math.max(...picked.map((e) => Date.parse(e.startedAt) + (e.durationMs ?? 0)));
-  const span = Math.max(1, end - start);
+    bytes += e.requestBodyBytes + e.responseBodyBytes + h.request + h.response;
+    const s = Date.parse(e.startedAt);
+    start = Math.min(start, s);
+    end = Math.max(end, s + (e.durationMs ?? 0));
+  }
+  return { bytes, start, end, span: Math.max(1, end - start) };
+}
+
+/** Skip the render while every selected exchange is the same object (a sync that changed other rows). */
+function samePicked(a: { picked: Exchange[] }, b: { picked: Exchange[] }): boolean {
+  if (a.picked === b.picked) return true;
+  if (a.picked.length !== b.picked.length) return false;
+  for (let i = 0; i < a.picked.length; i++) if (a.picked[i] !== b.picked[i]) return false;
+  return true;
+}
+
+/** Timeline (F5): one request's Sending / Waiting / Receiving, or several on one time axis; their count, time and size. */
+export const TimelinePanel = memo(function TimelinePanel({ picked }: { picked: Exchange[] }) {
+  const { bytes, start, span } = useMemo(() => timelineTotals(picked), [picked]);
+  if (!picked.length) return <Empty title="Select a request">Its timing shows here: sending, waiting for the server, receiving. Select several (Ctrl / Shift) to see them on one axis.</Empty>;
   const one = picked.length === 1 ? picked[0]! : undefined;
+  const drawn = one ? [] : picked.length > TIMELINE_ROWS ? picked.slice(0, TIMELINE_ROWS) : picked;
   return (
     <div className="flex-1 min-h-0 overflow-auto text-xs" data-timeline>
       <table className="w-full border-collapse">
@@ -66,7 +96,7 @@ export function TimelinePanel({ picked }: { picked: Exchange[] }) {
                   );
                 });
               })()
-            : picked.map((e) => {
+            : drawn.map((e) => {
                 const p = phasesOf(e);
                 const s = Date.parse(e.startedAt) - start;
                 const seg = (ms: number, k: keyof typeof BAR, from: number) => (
@@ -88,6 +118,13 @@ export function TimelinePanel({ picked }: { picked: Exchange[] }) {
                   </tr>
                 );
               })}
+          {!one && picked.length > drawn.length && (
+            <tr className="border-b border-line/60 text-muted" data-timeline-more>
+              <td className="px-2 py-1" colSpan={2}>
+                and {picked.length - drawn.length} more (the totals below count all {picked.length})
+              </td>
+            </tr>
+          )}
           <tr className="font-semibold border-b border-line/60">
             <td className="px-2 py-1">Selected items</td>
             <td className="px-2 py-1 tabular-nums">{picked.length}</td>
@@ -95,7 +132,7 @@ export function TimelinePanel({ picked }: { picked: Exchange[] }) {
           <tr className="font-semibold border-b border-line/60">
             <td className="px-2 py-1">Total time (s)</td>
             <td className="px-2 py-1 tabular-nums" data-total-time>
-              {(picked.length === 1 ? (one!.durationMs ?? 0) / 1000 : span / 1000).toFixed(3)}
+              {(one ? (one.durationMs ?? 0) / 1000 : span / 1000).toFixed(3)}
             </td>
           </tr>
           <tr className="font-semibold border-b border-line/60">
@@ -113,7 +150,7 @@ export function TimelinePanel({ picked }: { picked: Exchange[] }) {
       </div>
     </div>
   );
-}
+}, samePicked);
 
 /** A grouped property table (Summary): a header row per group that folds, then name / value rows. */
 function PropertyTable({ groups }: { groups: Array<{ title: string; rows: Array<[string, ReactNode]> }> }) {
@@ -227,34 +264,90 @@ interface Node {
   bytes: number;
   ids: string[];
   children: Map<string, Node>;
+  /** The children by count, kept until one of them changes. */
+  sorted?: Node[];
 }
+
+const newNode = (name: string): Node => ({ name, count: 0, bytes: 0, ids: [], children: new Map() });
+
+/** The most children of one level the table draws (a domain with thousands of paths stays a short list). */
+export const STRUCTURE_KIDS = 300;
+
+/**
+ * The domain / path tree of a list of exchanges, kept between syncs: an exchange already in the tree costs one lookup (and
+ * a few additions when its size changed), only a new one is parsed. A list that lost rows (cleared, filtered) starts over.
+ */
+export class StructureTree {
+  root: Node = newNode('');
+  private known = new Map<string, { nodes: Node[]; bytes: number; mark: number }>();
+  private pass = 0;
+
+  update(rows: Exchange[]): Node {
+    const pass = ++this.pass;
+    let seen = 0;
+    for (const e of rows) {
+      const bytes = e.requestBodyBytes + e.responseBodyBytes;
+      const k = this.known.get(e.id);
+      if (k) {
+        if (k.mark === pass) continue; // a duplicate id in one list
+        k.mark = pass;
+        seen++;
+        if (k.bytes !== bytes) {
+          const d = bytes - k.bytes;
+          k.bytes = bytes;
+          this.root.bytes += d;
+          for (const n of k.nodes) n.bytes += d;
+        }
+        continue;
+      }
+      seen++;
+      const nodes: Node[] = [];
+      let n = this.root;
+      this.root.count++;
+      this.root.bytes += bytes;
+      this.root.sorted = undefined;
+      const step = (part: string) => {
+        let c = n.children.get(part);
+        if (!c) n.children.set(part, (c = newNode(part)));
+        c.count++;
+        c.bytes += bytes;
+        c.ids.push(e.id);
+        c.sorted = undefined;
+        nodes.push(c);
+        n = c;
+      };
+      step(e.host);
+      const path = pathOf(e.url);
+      for (let from = 0; from < path.length; ) {
+        let to = path.indexOf('/', from);
+        if (to < 0) to = path.length;
+        if (to > from) step(path.slice(from, to));
+        from = to + 1;
+      }
+      this.known.set(e.id, { nodes, bytes, mark: pass });
+    }
+    if (seen !== this.known.size) {
+      // rows left the list: build again from what is there
+      this.root = newNode('');
+      this.known = new Map();
+      this.pass = 0;
+      if (rows.length) return this.update(rows);
+    }
+    return this.root;
+  }
+}
+
+const kidsOf = (n: Node): Node[] => (n.sorted ??= [...n.children.values()].sort((a, b) => b.count - a.count));
 
 /** Structure (F6): the requests listed, by domain then path (each segment a level), with counts and sizes. */
 export function StructurePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: string): void }) {
   const [open, setOpen] = useState<string[]>([]);
-  const root = useMemo(() => {
-    const top: Node = { name: '', count: 0, bytes: 0, ids: [], children: new Map() };
-    for (const e of rows) {
-      const bytes = e.requestBodyBytes + e.responseBodyBytes;
-      const parts = [e.host, ...pathOf(e.url).split('/').filter(Boolean)];
-      let n = top;
-      top.count++;
-      top.bytes += bytes;
-      for (const part of parts) {
-        let c = n.children.get(part);
-        if (!c) n.children.set(part, (c = { name: part, count: 0, bytes: 0, ids: [], children: new Map() }));
-        c.count++;
-        c.bytes += bytes;
-        c.ids.push(e.id);
-        n = c;
-      }
-    }
-    return top;
-  }, [rows]);
+  const tree = useRef<StructureTree>();
+  const root = useMemo(() => (tree.current ??= new StructureTree()).update(rows), [rows]);
   if (!rows.length) return <Empty title="No requests">Domains and their paths show here as traffic comes in.</Empty>;
   const render = (n: Node, key: string, depth: number): ReactNode[] => {
     const isOpen = open.includes(key);
-    const kids = [...n.children.values()].sort((a, b) => b.count - a.count);
+    const kids = kidsOf(n);
     return [
       <tr key={key} className="border-b border-line/60 hover:bg-hover cursor-default" data-structure={key} onDoubleClick={() => onPick(n.ids[0]!)}>
         <td className="py-1 pr-2" style={{ paddingLeft: 8 + depth * 14 }}>
@@ -271,9 +364,19 @@ export function StructurePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: 
         <td className="px-2 py-1 text-right tabular-nums">{n.count}</td>
         <td className="px-2 py-1 text-right tabular-nums">{kb(n.bytes)}</td>
       </tr>,
-      ...(isOpen ? kids.flatMap((c) => render(c, `${key}/${c.name}`, depth + 1)) : []),
+      ...(isOpen ? kids.slice(0, STRUCTURE_KIDS).flatMap((c) => render(c, `${key}/${c.name}`, depth + 1)) : []),
+      ...(isOpen && kids.length > STRUCTURE_KIDS
+        ? [
+            <tr key={`${key}/…more`} className="border-b border-line/60 text-muted" data-structure-more>
+              <td className="py-1 pr-2" style={{ paddingLeft: 8 + (depth + 1) * 14 }} colSpan={3}>
+                and {kids.length - STRUCTURE_KIDS} more
+              </td>
+            </tr>,
+          ]
+        : []),
     ];
   };
+  const domains = kidsOf(root);
   return (
     <div className="flex-1 min-h-0 overflow-auto text-xs" data-structure-panel>
       <table className="w-full border-collapse">
@@ -285,7 +388,14 @@ export function StructurePanel({ rows, onPick }: { rows: Exchange[]; onPick(id: 
           </tr>
         </thead>
         <tbody>
-          {[...root.children.values()].sort((a, b) => b.count - a.count).flatMap((d) => render(d, d.name, 0))}
+          {domains.slice(0, STRUCTURE_KIDS).flatMap((d) => render(d, d.name, 0))}
+          {domains.length > STRUCTURE_KIDS && (
+            <tr className="text-muted" data-structure-more>
+              <td className="px-2 py-1" colSpan={3}>
+                and {domains.length - STRUCTURE_KIDS} more domains
+              </td>
+            </tr>
+          )}
           <tr className="font-semibold">
             <td className="px-2 py-1">Total</td>
             <td className="px-2 py-1 text-right tabular-nums">{root.count}</td>
