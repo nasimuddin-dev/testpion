@@ -816,10 +816,21 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to list what the Debugger captured.',
     whenNot: 'For one exchange with bodies, use `debugger_exchange`; for totals, use `debugger_stats`.',
     example: { host: '127.0.0.1:4010', status: 'server-error', limit: 20 },
-    narrow: 'Filter with `host`, `method`, `status` or `text`, lower `limit`, or page with `cursor`.',
+    narrow: 'Filter with `host`, `method`, `status`, `text` or a `where` condition, lower `limit`, or page with `cursor`.',
+  },
+  debugger_replay: {
+    when: 'Use it to send captured requests again many times (a flaky failure, a rate limit): counts, parallel sends, the statuses and the fastest / middle / slowest time.',
+    whenNot: 'To send one request once and read the answer, use `send_request`; to read what was captured, use `debugger_exchanges`.',
+    example: { ids: ['ex-42'], times: 10, concurrency: 2 },
+    narrow: 'The most is 200 sends; lower `times`.',
+  },
+  debugger_programs: {
+    when: 'Use it to find the name of a running program (to make a Capture only rule on the Application column).',
+    whenNot: 'To see which programs sent captured traffic, use `debugger_stats` (applications).',
+    example: { text: 'chrome' },
   },
   debugger_exchange: {
-    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark.',
+    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark; action snippet writes it as cURL, PowerShell, fetch, HTTPie and more.',
     whenNot: 'To list exchanges, use `debugger_exchanges`.',
     example: { id: 'ex-42' },
     narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',

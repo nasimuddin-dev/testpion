@@ -35,3 +35,4 @@ export * from './rag-metrics.js';
 export * from './rpc.js';
 export * from './debugger-match.js';
 export * from './debugger-inspect.js';
+export * from './debugger-select.js';

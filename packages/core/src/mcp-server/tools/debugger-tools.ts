@@ -5,7 +5,9 @@ import { annotate, AUTO_BREAKPOINT_LABEL, autoBreakpointMode, cleanAnnotation, p
 import { shortId } from '../../util/ids.js';
 import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrust, rootStanding, trustInstructions } from '../../debugger/certificate.js';
 import { disengageSystemProxy, engageSystemProxy, type SystemProxySnapshot } from '../../debugger/system-proxy.js';
-import { adviceFor, cookiesOf, hostMatches, paramsOf } from '@testpion/shared';
+import { adviceFor, compileWhere, cookiesOf, hostMatches, parseWhere, paramsOf } from '@testpion/shared';
+import { generateCode } from '../../codegen/codegen.js';
+import { debuggerReplayTools } from './debugger-replay-tools.js';
 import type { BreakpointEdits } from '../../debugger/proxy.js';
 import { exchangesFromSaz } from '../../debugger/saz.js';
 import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../../debugger/grpc.js';
@@ -94,6 +96,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     error: e.error,
   });
   return [
+    ...debuggerReplayTools({ session, redactor: red, readOnly: d.readOnly }),
     {
       name: 'debugger_capture',
       write: true,
@@ -214,11 +217,24 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           hide_tunnels: { type: 'boolean', description: 'Leave out HTTPS tunnels' },
           hide_304: { type: 'boolean', description: 'Leave out 304 Not Modified answers' },
           include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary'] }, description: 'Add inspector data' },
+          where: str('A condition: status>=400 and host~api and size>200kb. Fields: status method host url type size time app ip user pid note mark kind; operators = != > >= < <= ~ !~ ^= $=; join with and'),
+          columns: { type: 'array', items: { type: 'string' }, description: 'Header columns to add to every row: request:x-request-id, response:cache-control' },
         },
       },
       run: (a) => {
+        let whereTest: ReturnType<typeof compileWhere> | undefined;
+        if (typeof a.where === 'string' && a.where.trim()) {
+          const w = parseWhere(a.where);
+          if (!w.ok) throw new ApsError('ValidationError', w.error);
+          whereTest = compileWhere(w.clauses);
+        }
+        const columns = (Array.isArray(a.columns) ? (a.columns as unknown[]).map(String) : []).slice(0, 8).flatMap((c) => {
+          const m = /^(request|response):(.+)$/i.exec(c.trim());
+          return m ? [{ key: c.trim().toLowerCase(), side: m[1]!.toLowerCase() as 'request' | 'response', name: m[2]!.trim().toLowerCase() }] : [];
+        });
         const needle = typeof a.text === 'string' ? a.text.toLowerCase() : undefined;
         const out = session.filter((e) => {
+          if (whereTest && !whereTest(e)) return false;
           if (a.host && !e.host.toLowerCase().includes(String(a.host).toLowerCase())) return false;
           if (a.method && e.method !== String(a.method).toUpperCase()) return false;
           if (a.hide_tunnels === true && e.kind === 'tunnel') return false;
@@ -243,7 +259,12 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           running: !!proxy,
           url: proxy?.url,
           total: session.length,
-          exchanges: out.slice(-limitArg(a.limit, include.length ? 100 : 200, include.length ? 100 : 2000)).map((e) => ({ ...safe(e, false), ...more(e), ref: { kind: 'exchange', exchangeId: e.id } })),
+          exchanges: out.slice(-limitArg(a.limit, include.length ? 100 : 200, include.length ? 100 : 2000)).map((e) => ({
+            ...safe(e, false),
+            ...more(e),
+            ...(columns.length ? { columns: Object.fromEntries(columns.map((c) => [c.key, red.isSensitiveKey(c.name) ? '***' : ((c.side === 'request' ? e.requestHeaders : e.responseHeaders)?.[c.name] ?? null)])) } : {}),
+            ref: { kind: 'exchange', exchangeId: e.id },
+          })),
         };
       },
     },
@@ -255,7 +276,8 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         type: 'object',
         properties: {
           id: str('The exchange id (from debugger_exchanges)'),
-          action: { type: 'string', enum: ['get', 'annotate'], description: 'get (default) reads it; annotate sets note and / or mark' },
+          action: { type: 'string', enum: ['get', 'annotate', 'snippet'], description: 'get (default) reads it; annotate sets note and / or mark; snippet writes it as code (language: curl, powershell, fetch, httpie, python, go …)' },
+          language: str('With snippet: the language (default curl)'),
           note: str('With annotate: a comment (up to 2000 characters; empty removes it)'),
           mark: { type: 'string', enum: ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'grey', ''], description: 'With annotate: a colour mark (empty removes it)' },
         },
@@ -264,6 +286,15 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       run: (a) => {
         const e = session.find((x) => x.id === a.id);
         if (!e) throw new ApsError('ValidationError', `No exchange ${String(a.id)} in the session`);
+        if (a.action === 'snippet') {
+          const language = typeof a.language === 'string' && a.language ? a.language : 'curl';
+          const headers = Object.entries(red.redactHeaders(e.requestHeaders)).filter(([k]) => !/^(host|content-length|connection|proxy-.*)$/i.test(k)) as Array<[string, string]>;
+          try {
+            return { language, text: generateCode({ method: e.method, url: red.redactUrl(e.url), headers, body: e.requestBody && red.redactString(e.requestBody) }, language) };
+          } catch (err) {
+            throw new ApsError('ValidationError', (err as Error).message);
+          }
+        }
         if (a.action === 'annotate') {
           if (d.readOnly) throw new ApsError('ValidationError', 'This server is read-only: it cannot annotate an exchange');
           try {
