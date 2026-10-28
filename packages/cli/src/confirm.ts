@@ -52,6 +52,9 @@ export const CLI_CONFIRM: CliConfirm[] = [
   { tool: 'git_track_large', command: 'git large', when: (o) => typeof o.track === 'string' && real(o), args: (o) => ({ file: o.track, mode: o.lfs ? 'lfs' : 'reference' }) },
   { tool: 'git_codeowners', command: 'git codeowners', when: (o) => o.write === true && real(o), args: () => ({}) },
   { tool: 'git_sync', command: 'git sync', args: () => ({}) },
+  // the Debugger changes this computer's proxy setting and trust store, like the tools of the same names
+  { tool: 'debugger_capture', command: 'debug capture', when: (o) => o.systemProxy === true && real(o), args: () => ({ action: 'start', system_proxy: true }) },
+  { tool: 'debugger_certificate', command: 'debug certificate', when: (o) => (o.install === true || o.remove === true) && real(o), args: (o) => ({ action: o.remove === true ? 'remove' : 'install' }) },
   { tool: 'collection_tidy', command: 'tidy', when: (o) => real(o) && !o.ai && !o.flow && !!(o.removeDuplicates || o.removeEmptyFolders || o.removeUnusedVariables || o.useCollectionAuth), args: (_o, a) => ({ collection: a[0] }) },
   { tool: 'rename_variable', command: 'vars rename', when: real, args: (_o, a) => ({ from: a[0], to: a[1] }) },
   { tool: 'replace_in_collection', command: 'replace', when: (o) => o.apply === true && real(o), args: (_o, a) => ({ collection: a[0], find: a[1], replace: a[2] }) },

@@ -123,7 +123,7 @@ describe('the shape of every tool', () => {
         'flow_annotate',
         'flow_from_exchanges',
         'import_arazzo',
-        'debugger_capture',
+        'debugger_no_decrypt',
         'debugger_save_to_collection',
         'git_propose_commit',
         'git_stage_item',

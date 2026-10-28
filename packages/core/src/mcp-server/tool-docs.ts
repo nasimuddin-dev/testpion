@@ -798,12 +798,22 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── HTTP Debugger ──────────────────────────────────────────────────────
   debugger_capture: {
-    when: 'Use it to start the HTTP Debugger proxy, then run a program through it to capture its traffic.',
+    when: 'Use it to start the proxy, then run a program through it.',
     whenNot: 'To read what was captured, use `debugger_exchanges`.',
     example: { action: 'start' },
   },
+  debugger_certificate: {
+    when: 'Use it for the HTTPS root certificate.',
+    whenNot: 'To read decrypted traffic, use `debugger_exchanges`.',
+    example: { action: 'info' },
+  },
+  debugger_no_decrypt: {
+    when: 'Use it to keep hosts undecrypted.',
+    whenNot: 'To hide traffic from a list, use `debugger_rules`.',
+    example: { action: 'set', hosts: ['*.bank.example'] },
+  },
   debugger_exchanges: {
-    when: 'Use it to list what the HTTP Debugger captured, filtered by host, method, status class or text.',
+    when: 'Use it to list what the Debugger captured.',
     whenNot: 'For one exchange with bodies, use `debugger_exchange`; for totals, use `debugger_stats`.',
     example: { host: '127.0.0.1:4010', status: 'server-error', limit: 20 },
     narrow: 'Filter with `host`, `method`, `status` or `text`, lower `limit`, or page with `cursor`.',
@@ -815,17 +825,17 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',
   },
   debugger_session: {
-    when: 'Use it to save the captured session as a HAR file, or open a HAR file into the session.',
+    when: 'Use it to save the session as HAR, or open a HAR.',
     whenNot: 'To turn the traffic into a test flow, use `flow_from_exchanges`.',
     example: { action: 'save', path: 'session.har' },
   },
   debugger_rules: {
-    when: 'Use it to list, add or toggle rules that ignore, highlight, modify, reply to or redirect matching traffic.',
+    when: 'Use it to list, add or toggle Debugger rules.',
     whenNot: 'To filter only what you read, use `debugger_exchanges` filters.',
     example: { action: 'add', preset: 'slow', host: '127.0.0.1:4010' },
   },
   debugger_stats: {
-    when: 'Use it to see the captured session in numbers: by host, content type and program, the largest and slowest.',
+    when: 'Use it to see the session in numbers.',
     whenNot: 'For the exchanges themselves, use `debugger_exchanges`.',
     example: {},
   },

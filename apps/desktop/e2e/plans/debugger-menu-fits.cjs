@@ -9,8 +9,8 @@ const steps = [
   step(
     'quick-controls',
     `await __t.view('Debugger');
-     const start = [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Start capturing'); if (!start) return 'NO START';
-     await __t.real.click(start);
+     if (!document.querySelector('main [data-capture-all]')) return 'NO START';
+     await (async () => { const arrow = [...document.querySelectorAll('main [data-capture-all] button')].find((b) => b.getAttribute('aria-label') === 'Other ways to start'); if (!arrow) return; arrow.click(); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Only a program I point at the proxy/.test(m.textContent)), 3000); if (it) it.click(); })();
      await __t.waitFor(() => window.aps.invoke('debug.status').then((s) => s.running), 6000);
      await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health' });
      const row = await __t.waitFor(() => [...document.querySelectorAll('main [role=row]')].find((r) => r.textContent.includes('/health')), 6000); if (!row) return 'NO ROW';

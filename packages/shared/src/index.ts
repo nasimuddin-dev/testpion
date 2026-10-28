@@ -33,3 +33,5 @@ export * from './output/index.js';
 export * from './rag-presets.js';
 export * from './rag-metrics.js';
 export * from './rpc.js';
+export * from './debugger-match.js';
+export * from './debugger-inspect.js';

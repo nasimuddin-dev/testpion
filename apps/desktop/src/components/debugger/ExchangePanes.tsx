@@ -1,5 +1,6 @@
 import { prettyBody } from '../../lib/pretty';
-import { CookiesView, ErrorView, OverviewView, ParamsView, cookiesOf, paramsOf } from './ExchangeExtras';
+import { CookiesView, ErrorView, ParamsView, cookiesOf, paramsOf } from './ExchangeExtras';
+import { SummaryPanel } from './DockInsights';
 import { CodeBlock } from '../CodeBlock';
 import { Bot, ChevronDown, Copy, ExternalLink, Lock, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -178,7 +179,7 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
             extra={[
               ...(tunnel ? [] : [{ id: 'params', label: 'Params', badge: (() => { const p = paramsOf(e); return p.query.length + p.form.length || undefined; })(), render: () => <ParamsView e={e} /> }]),
               ...(tunnel ? [] : [{ id: 'cookies', label: 'Cookies', badge: cookiesOf(e, 'request').length || undefined, render: () => <CookiesView e={e} side="request" /> }]),
-              { id: 'overview', label: 'Overview', render: () => <OverviewView e={e} /> },
+              { id: 'summary', label: 'Summary', render: () => <SummaryPanel e={e} /> },
               {
                 id: 'auth',
                 label: 'Auth',
@@ -199,7 +200,7 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
             body={e.responseBody}
             bodyNote={
               tunnel
-                ? `An HTTPS tunnel: ${formatBytes(e.requestBodyBytes)} sent, ${formatBytes(e.responseBodyBytes)} received, encrypted end to end. Turn on HTTPS tunnel ▸ Decrypt HTTPS and trust the TestPion root certificate to see the requests inside.`
+                ? `An HTTPS tunnel: ${formatBytes(e.requestBodyBytes)} sent, ${formatBytes(e.responseBodyBytes)} received, encrypted end to end. Click Capture all traffic, or HTTPS ▸ See inside HTTPS…: TestPion asks once to trust its certificate, then the requests inside show here.`
                 : bodyNote(e, 'response', formatBytes)
             }
             raw={raw.response}

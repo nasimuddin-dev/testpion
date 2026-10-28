@@ -69,8 +69,12 @@ export function RuleList({
       what: `all ${mine.length} rules of this list`,
       run: async () => {
         let s: RulesState | undefined;
-        for (const { r } of mine) s = await call<RulesState>('debug.deleteRule', { id: r.id });
-        if (s) onChange(s);
+        try {
+          for (const { r } of mine) s = await call<RulesState>('debug.deleteRule', { id: r.id });
+        } finally {
+          // a failure part-way still shows what is left (the panel is not stale)
+          if (s) onChange(s);
+        }
       },
       undo: async () => {
         let s: RulesState | undefined;
@@ -98,9 +102,18 @@ export function RuleList({
         <IconButton size="md" label="Reset hits: count the hits from zero" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>
           <RotateCcw />
         </IconButton>
-        <IconButton size="md" label="Remove every rule of this list (Undo brings them back)" disabled={!rules.length || !!f} reason={!rules.length ? 'No rules to remove' : 'Clear the search box first'} data-clear-rules onClick={clearAll}>
-          <Trash2 />
-        </IconButton>
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={<Trash2 size={12} />}
+          disabled={!rules.length || !!f}
+          reason={!rules.length ? 'No rules to remove' : 'Clear the search box first: Remove all takes the whole list, not the rows found'}
+          title={`Remove all ${rules.length} rules of this list (Undo brings them back)`}
+          data-clear-rules
+          onClick={clearAll}
+        >
+          Remove all
+        </Button>
         {add.items ? <Menu width={220} items={add.items} trigger={addButton} /> : addButton}
       </div>
       {rules.length > 0 && (

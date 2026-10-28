@@ -14,6 +14,8 @@ import { useEventLog } from '../../lib/use-rpc';
 import { usePersisted } from '../../lib/sticky';
 import { copyText } from '../../lib/clipboard';
 import { LABEL } from '../../lib/vocabulary';
+import { negatedLabel, quickRuleName, type QuickKind } from './quick-filter';
+import { certificateError } from './ExchangeExtras';
 
 /** The whole exchange: the grid's rows are lean (no headers, no bodies). */
 const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
@@ -118,7 +120,8 @@ export interface GridActions {
   onSaveToCollection(ids: string[]): void;
   /** These exchanges as a RAG dataset (the Create dataset from captured calls dialog). */
   onCreateDataset(ids: string[]): void;
-  onClear(): void;
+  /** Turn on HTTPS decryption (the one flow, with its question about the certificate). */
+  onReadHttps(): void;
   /** Add a rule straight away (a quick rule from the row's values). */
   onQuickRule(kind: RuleKind, name: string, match: Rule['match'], extra?: Partial<Rule>): void;
   /** Open the rule editor, filled in. */
@@ -141,6 +144,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
   onSelect,
   actions,
   onOrder,
+  decrypt,
 }: {
   rows: Exchange[];
   selected?: string;
@@ -149,6 +153,8 @@ export const DebuggerGrid = memo(function DebuggerGrid({
   actions: GridActions;
   /** The rows in the order shown (the arrow keys follow it). */
   onOrder?(rows: Exchange[]): void;
+  /** HTTPS decryption is on (then a tunnel is a host that failed: it can be kept encrypted). */
+  decrypt: boolean;
 }) {
   const [sort, setSort] = useState<{ col: ColumnId; desc: boolean }>({ col: 'seq', desc: false });
   const [hidden, setHidden] = usePersisted<ColumnId[]>(HIDDEN_KEY, DEFAULT_HIDDEN, { parse: parseHidden });
@@ -269,8 +275,9 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         .filter((q) => !(q.match.where?.column === 'ip' && (kind === 'only' || kind === 'ignore')))
         .map<MenuItem>((q) => {
           // the operator says what the click does: = keeps these rows, != hides them (both at once, and as a rule for what comes)
-          const label = kind === 'ignore' ? q.label.replace(' = ', ' != ').replace('starts with', 'does not start with') : q.label;
-          return { label, onSelect: () => actions.onQuickRule(kind, `${verb} ${label}`, q.match, extra) };
+          // (the menu line says what the click does to the view; the rule is NAMED from what it matches: `Filter out Domain = x`)
+          const label = kind === 'ignore' ? negatedLabel(q.label) : q.label;
+          return { label, onSelect: () => actions.onQuickRule(kind, quickRuleName(kind as QuickKind, q.label), q.match, extra) };
         }),
       { label: `New ${verb.toLowerCase()} rule…`, separator: true, onSelect: () => actions.onNewRule({ kind, enabled: true, match: { host: e.host }, ...extra }) },
       { label: 'See all rules', onSelect: () => actions.onRulesPanel(kind) },
@@ -299,7 +306,14 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },
       { label: LABEL.openAsRequest, icon: <ExternalLink size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onOpen(e) },
       { label: 'Resend', icon: <Play size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onResend(e) },
-      ...(e.kind === 'tunnel' ? [{ label: 'Keep this host encrypted', icon: <Lock size={14} />, title: 'Stop decrypting this host (a program that does not trust the TestPion certificate, or pins its own)', onSelect: () => actions.onKeepEncrypted(e) }] : []),
+      // keeping a host encrypted means something only while decryption is on (or this tunnel failed on the certificate); otherwise the tunnel's item is the way in
+      ...(e.kind === 'tunnel'
+        ? [
+            decrypt || certificateError(e)
+              ? { label: 'Keep this host encrypted', icon: <Lock size={14} />, title: 'Stop decrypting this host (a program that does not trust the TestPion certificate, or pins its own)', onSelect: () => actions.onKeepEncrypted(e) }
+              : { label: 'See inside HTTPS…', icon: <Lock size={14} />, title: 'Turn on HTTPS decryption: TestPion asks once to trust its certificate', onSelect: actions.onReadHttps },
+          ]
+        : []),
       { label: 'Compare with…', onSelect: () => actions.onCompare(e) },
       { label: ids.length > 1 ? `Create flow from ${ids.length} selected…` : 'Create flow from selection…', icon: <Workflow size={14} />, onSelect: () => actions.onCreateFlow(ids) },
       { label: ids.length > 1 ? `Save ${ids.length} selected to collection…` : 'Save to collection…', icon: <FolderPlus size={14} />, onSelect: () => actions.onSaveToCollection(ids) },
@@ -367,7 +381,6 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       },
       ...(e.httpVersion === '2' ? [{ label: 'HTTP/2 connection tree', icon: <Network size={14} />, onSelect: actions.onConnections }] : []),
       { label: ids.length > 1 ? `Delete ${ids.length} selected` : 'Delete', icon: <Trash2 size={14} />, shortcut: 'Del', danger: true, separator: true, onSelect: () => actions.onDelete(ids) },
-      { label: 'Clear', shortcut: 'Ctrl+E', danger: true, onSelect: actions.onClear },
     ];
   };
   const index = sorted.findIndex((x) => x.id === selected);

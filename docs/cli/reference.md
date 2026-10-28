@@ -40,7 +40,8 @@ testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 
 testpion openapi-ops <spec>    List an OpenAPI document's operations by tag (--json: schemas and a request per operation)
 testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
-testpion debug [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [-w workspace] [--json] [--save-collection [name] | --to <collection>] [--group host|path|none]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
+testpion debug (or debugger) [capture] [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [--system-proxy --yes] [--dry-run] [-w workspace] [--json] [--save-collection [name] | --to <collection>] [--group host|path|none]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
+testpion debug certificate [--install | --remove] [--yes] [--dry-run] [--json]   The root certificate HTTPS decryption signs with: where it is, its fingerprint, whether this computer trusts it (`known: false` when it cannot tell); --install and --remove change the trust store and need --yes when the command cannot ask
 testpion mock-mcp <file>      Serve an MCP mock (stdio, or --http) for AI agents and MCP clients
 testpion env set|unset|get <env> -w   Set or remove plain variables of an environment (secrets stay in the app); set --also-in <envs> [--copy] adds them to others where missing
 testpion vars usages|rename -w   Where a variable is used; rename it everywhere

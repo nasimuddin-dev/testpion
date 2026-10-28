@@ -21,7 +21,7 @@ const steps = [
     'start',
     `(async () => {
       await __t.view('Debugger');
-      ${button('Start capturing')}?.click();
+      await (async () => { const arrow = [...document.querySelectorAll('main [data-capture-all] button')].find((b) => b.getAttribute('aria-label') === 'Other ways to start'); if (!arrow) return; arrow.click(); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /Only a program I point at the proxy/.test(m.textContent)), 3000); if (it) it.click(); })();
       const sub = await __t.waitFor(() => [...document.querySelectorAll('main *')].map((x) => x.textContent?.trim() ?? '').find((t) => /^Proxy address http:\\/\\/127\\.0\\.0\\.1:\\d+/.test(t)), 5000);
       const st = await window.aps.invoke('debug.status');
       return (sub ? 'listening' : 'NO STATUS') + ' | port: ' + st.port;
@@ -179,7 +179,7 @@ const steps = [
     `(async () => {
       // the HTTPS menu: decryption on, the certificate dialog shows a fingerprint; the Decode panel reads Base64 and a JWT
       document.querySelector('main button[aria-label="HTTPS (tunnels)"]')?.click(); await __t.sleep(500);
-      [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Decrypt HTTPS/.test(m.textContent.trim()))?.click(); await __t.sleep(800);
+      const seeInside = [...document.querySelectorAll('[role=menuitem]')].find((m) => /^See inside HTTPS/.test(m.textContent.trim())); const offered = !!seeInside; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await __t.sleep(300); await window.aps.invoke('debug.decrypt', { on: true }); await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health' }); await __t.waitFor(() => document.querySelector('main button[aria-label="HTTPS (decrypted)"]'), 5000);
       const st = await window.aps.invoke('debug.status');
       const label = !!document.querySelector('main button[aria-label="HTTPS (decrypted)"]');
       document.querySelector('main button[aria-label="HTTPS (decrypted)"]')?.click(); await __t.sleep(500);
@@ -193,7 +193,7 @@ const steps = [
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
       setter.call(area, 'aGVsbG8gd29ybGQ='); area.dispatchEvent(new Event('input', { bubbles: true })); await __t.sleep(300);
       const b64 = document.querySelector('main [data-convert] [data-decode="Base64 decode"] pre')?.textContent;
-      return 'decrypt on: ' + st.decrypt + ' | label: ' + label + ' | fingerprint: ' + !!fp + ' | base64: ' + b64;
+      return 'decrypt on: ' + st.decrypt + ' | label: ' + label + ' | fingerprint: ' + !!fp + ' | base64: ' + b64 + ' | menu offers See inside HTTPS: ' + offered;
     })()`,
   ],
   [
@@ -247,6 +247,6 @@ module.exports = withExpect(steps, {
   'session-saved-and-opened': /^saved: true \| cleared: true \| opened: true \| in its tab: true$/,
   'rule-replies-without-the-server': /^rule listed: true \| bar: true \| status: 503 \| row 503: true \| badge: true$/,
   'websocket-frames-and-sse-events': /^ws sent: true \| ws received: true \| sse events: 3 \| ws closed: true$/,
-  'https-certificate-and-decode': /^decrypt on: true \| label: true \| fingerprint: true \| base64: hello world$/,
+  'https-certificate-and-decode': /^decrypt on: true \| label: true \| fingerprint: true \| base64: hello world \| menu offers See inside HTTPS: true$/,
   'breakpoint-holds-and-edits': /^added: true \| status: 200 \| edited url listed: true \| dialog gone: true$/,
 });

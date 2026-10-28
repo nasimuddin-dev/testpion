@@ -15,7 +15,7 @@ To capture a program that can use an HTTP proxy (a browser, a terminal, a whole 
 
 ## In the app
 
-In the app, the reverse proxy is a capture mode of the [HTTP Debugger](/api-testing/http-debugger#reverse-proxy-for-one-api): open **Debugger** (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*) and choose **Capture ▸ Reverse proxy for one API…**. The status bar's **Tools ▸ Reverse proxy for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog.
+In the app, the reverse proxy is a capture mode of the [HTTP Debugger](/api-testing/http-debugger#capture-traffic-for-one-api): open **Debugger** (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*) and choose **Capture ▸ Capture traffic for one API…**. The status bar's **Tools ▸ Capture traffic for one API…**, the command palette (*Capture: Reverse Proxy for One API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog.
 
 1. Enter the API's base URL, for example `https://api.example.com`, and optionally a local port. Click **Start recording**.
 2. TestPion shows (and copies) the local address, such as `http://127.0.0.1:52308`. Use it in your app instead of the API's base URL.

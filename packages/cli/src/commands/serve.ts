@@ -40,7 +40,19 @@ import {
   type FeedbackKind,
   startFlowWebhookServer,
 } from '@testpion/core';
-import { debuggerCertDir, ensureRootCertificate, leafSigner } from '@testpion/core/desktop';
+import {
+  debuggerCertDir,
+  ensureRootCertificate,
+  installRootCertificate,
+  leafSigner,
+  removeRootCertificate,
+  restoreSystemProxy,
+  rootCertificateTrusted,
+  rootStanding,
+  setSystemProxy,
+  trustInstructions,
+  type SystemProxySnapshot,
+} from '@testpion/core/desktop';
 import { EXIT, green, red, yellow, dim, bold, cyan, CliError, printJson, withWorkspace, cliSecrets, cliContext, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { emitEvent, machine } from '../output.js';
 import { executeMock } from '../run.js';
@@ -387,20 +399,29 @@ ${cyan(r.url)}`);
       await talk(o.url ? { id: 'cli', name: o.url, transport: 'streamable-http', url: o.url } : o.sse ? { id: 'cli', name: o.sse, transport: 'sse', url: o.sse } : { id: 'cli', name: command.join(' '), transport: 'stdio', command: command[0]!, args: command.slice(1) });
     });
 
-  program
-    .command('debug')
+  // `debugger capture` (and its older spelling `debug`): one definition
+  const defineCapture = (cmd: Command): Command =>
+    cmd
     .description("the HTTP Debugger from the terminal: a proxy other programs send through (HTTP_PROXY=…); every exchange is printed as it happens, and the session can be saved as HAR")
     .option('-p, --port <port>', 'port to listen on (default: 8899)', '8899')
     .option('--lan', 'listen on every interface (a phone, another computer), not only this one')
     .option('-o, --out <file.har>', 'save the session as HAR when stopped (Ctrl+C)')
     .option('--rules <file.json>', "rules to apply (the app's debugger/rules.json: ignore, highlight, modify, reply, redirect); the file is re-read when it changes")
     .option('--decrypt', 'decrypt HTTPS with the TestPion root certificate (~/.testpion/debugger; the program must trust it)')
+    .option('--system-proxy', "point this computer's proxy setting at the capture, so every program that follows it is captured; Ctrl+C puts it back")
+    .option('--dry-run', 'change nothing: print what it would do')
     .option('-w, --workspace <nameOrPath>', "decode gRPC messages with the .proto files of this workspace's gRPC calls (default: the nearest workspace.json, if any)")
     .option('--json', 'print each exchange as one JSON line (for scripts and AI agents)')
     .option('--save-collection [name]', 'when stopped, save the exchanges as requests in a new collection of the workspace (secrets become variables, never saved)')
     .option('--to <collection>', 'with --save-collection: add them to this collection instead (in a folder [name] when given)')
     .addOption(new Option('--group <how>', 'with --save-collection: a folder per host, per first path segment, or none').choices(['host', 'path', 'none']).default('host'))
-    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; to?: string; group: CaptureGrouping }) => {
+    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; to?: string; group: CaptureGrouping }) => {
+      if (o.dryRun) {
+        const wouldDo = [`start the proxy on port ${Number(o.port) || 8899}${o.lan ? ' on every interface' : ''}`, ...(o.decrypt ? ['decrypt HTTPS with the TestPion root certificate'] : []), ...(o.systemProxy ? ['point this computer’s proxy setting at it (Ctrl+C puts it back)'] : []), ...(o.out ? [`save the session as HAR to ${o.out} when stopped`] : [])];
+        if (machine()) emitEvent('dry-run', { wouldDo });
+        else console.log(wouldDo.map((x) => `would ${x}`).join('\n'));
+        return;
+      }
       const redactor = new Redactor();
       // the rules file as the app writes it (profiles) or a plain list; re-read when it changes so edits apply at once
       let rulesCache: { mtime: number; rules: DebuggerRule[] } | undefined;
@@ -444,8 +465,22 @@ ${cyan(r.url)}`);
           }
         },
       });
+      // the OS proxy setting is restored on Ctrl+C (and when the setting cannot be changed, nothing is left running)
+      let snapshot: SystemProxySnapshot | undefined;
+      try {
+        if (o.systemProxy) snapshot = await setSystemProxy(proxy.url);
+      } catch (e) {
+        await proxy.close();
+        throw new CliError(`Could not set the system proxy: ${(e as Error).message}`, EXIT.EXECUTION_ERROR);
+      }
       console.error(`${green('HTTP Debugger')} listening on ${proxy.url}  ${dim(`(HTTP_PROXY=${proxy.url}; Ctrl+C to stop${o.out ? `, saves ${o.out}` : ''})`)}`);
-      await new Promise<void>((resolve) => process.once('SIGINT', () => resolve()));
+      if (snapshot) console.error(dim('The system proxy points here: programs that follow it are captured; Ctrl+C puts it back.'));
+      if (machine()) emitEvent('listening', { url: proxy.url, systemProxy: !!snapshot, decrypt: !!root, ...(root ? { rootCertificate: root.path } : {}) });
+      await new Promise<void>((resolve) => {
+        process.once('SIGINT', () => resolve());
+        process.once('SIGTERM', () => resolve());
+      });
+      if (snapshot) await restoreSystemProxy(snapshot);
       if (o.out) {
         const entries = proxy.exchanges.filter((e) => e.kind === 'http');
         writeFileSync(o.out, JSON.stringify(exchangesToHar(entries, redactor, ENGINE_VERSION), null, 2));
@@ -468,6 +503,34 @@ ${cyan(r.url)}`);
         });
       }
       await proxy.close();
+    });
+  // grouped by groups.ts: `debug capture` (what `debug` alone runs; `debugger` is the same word) and `debug certificate`
+  defineCapture(program.command('debug'));
+  program
+    .command('debug-certificate')
+    .description('the root certificate HTTPS decryption signs with: where it is, whether this computer trusts it; --install trusts it, --remove takes it out')
+    .option('--install', 'add it to the trust store of this computer (the system may ask)')
+    .option('--remove', 'remove it from the trust store')
+    .option('--dry-run', 'change nothing: print what it would do')
+    .option(...JSON_RESULT_OPTION)
+    .action(async (o: { install?: boolean; remove?: boolean; dryRun?: boolean; json?: boolean }) => {
+      if (o.install && o.remove) throw new CliError('Choose --install or --remove, not both', EXIT.CONFIG_ERROR);
+      const root = ensureRootCertificate(debuggerCertDir());
+      const change = o.install ? 'install' : o.remove ? 'remove' : undefined;
+      let note: string | undefined;
+      if (change && o.dryRun) note = `would ${change === 'install' ? 'add the root certificate to the trust store of this computer' : 'remove the root certificate from the trust store'}`;
+      else if (change === 'install') note = `Installed into ${(await installRootCertificate(root)).where}`;
+      else if (change === 'remove') {
+        await removeRootCertificate(root);
+        note = 'Removed from the trust store';
+      }
+      const trusted = await rootCertificateTrusted(root);
+      // trusted undefined: this computer cannot tell (Linux): the steps are for the person
+      const out = { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known: trusted !== undefined, platform: process.platform, ...(note ? { note } : {}), ...(trusted === true ? {} : { instructions: trustInstructions(root.path) }) };
+      if (o.json) return printJson(out);
+      console.log(`${trusted === true ? green('trusted') : trusted === false ? red('not trusted') : yellow('trust unknown')}  ${root.path}\n${dim(`fingerprint ${root.fingerprint}`)}`);
+      if (note) console.log(note);
+      if (trusted !== true) for (const line of trustInstructions(root.path)) console.log(dim(line));
     });
 
   program

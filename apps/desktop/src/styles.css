@@ -29,6 +29,9 @@
   --accent-hover: oklch(0.5 0.2 259);
   --accent-soft: oklch(0.955 0.03 259);
   --accent-fg: oklch(1 0 0);
+  /* a filter chip (quick filters): text on its tint is at least 4.5:1 (tests/unit/token-contrast.test.ts) */
+  --chip: oklch(0.94 0.035 259);
+  --chip-fg: oklch(0.38 0.15 259);
   --brand-from: #2f7bff;
   --brand-to: #8b5cff;
   --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
@@ -101,6 +104,8 @@
   --accent-hover: oklch(0.74 0.16 257);
   --accent-soft: oklch(0.3 0.085 262);
   --accent-fg: oklch(0.16 0.04 270);
+  --chip: oklch(0.3 0.085 262);
+  --chip-fg: oklch(0.88 0.08 257);
   --ok: oklch(0.78 0.15 160);
   --bad: oklch(0.7 0.18 22);
   --warn: oklch(0.83 0.15 80);
@@ -156,6 +161,8 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-chip: var(--chip);
+  --color-chip-fg: var(--chip-fg);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
   --color-warn: var(--warn);

@@ -1,26 +1,28 @@
 /** The root certificate counts as trusted only when this very certificate is in the store, not another root of the same name. */
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { ensureRootCertificate, regenerateRootCertificate, trustListHas } from '../../packages/core/src/debugger/certificate.js';
+import { trustListHas } from '../../packages/core/src/debugger/certificate.js';
+
+// two fixed roots of the same name (tests/fixtures/debugger-roots, valid until 2126): no keys are made on each run
+const pem = (n: 'a' | 'b') => readFileSync(join(__dirname, '../fixtures/debugger-roots', `root-${n}.pem`), 'utf8');
+const sha1 = (p: string) => createHash('sha1').update(Buffer.from(p.replace(/-----[^-]+-----|\s/g, ''), 'base64')).digest('hex');
+/** The store listing certutil prints: the hash in groups of two. */
+const listing = (p: string) => `Cert Hash(sha1): ${sha1(p).replace(/(..)/g, '$1 ').trim()}\n  Subject: CN=TestPion HTTP Debugger Root`;
 
 describe('root certificate trust', () => {
   it('matches by hash: the old root of the same name is not the new one', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'tp-root-'));
-    try {
-      const a = ensureRootCertificate(dir);
-      const listing = (pem: string) => {
-        const hex = createHash('sha1').update(Buffer.from(pem.replace(/-----[^-]+-----|\s/g, ''), 'base64')).digest('hex');
-        return `Cert Hash(sha1): ${hex.replace(/(..)/g, '$1 ').trim()}\n  Subject: CN=TestPion HTTP Debugger Root`;
-      };
-      expect(trustListHas(listing(a.certPem), a.certPem)).toBe(true);
-      const b = regenerateRootCertificate(dir);
-      expect(b.certPem).not.toBe(a.certPem);
-      expect(trustListHas(listing(a.certPem), b.certPem)).toBe(false);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const a = pem('a');
+    const b = pem('b');
+    expect(a).not.toBe(b);
+    expect(trustListHas(listing(a), a)).toBe(true);
+    expect(trustListHas(listing(a), b)).toBe(false);
+    expect(trustListHas(`${listing(a)}\n${listing(b)}`, b)).toBe(true);
+  });
+
+  it('reads the macOS listing too (colon-separated hash lines)', () => {
+    const a = pem('a');
+    expect(trustListHas(`SHA-1 hash: ${sha1(a).toUpperCase().replace(/(..)(?!$)/g, '$1:')}`, a)).toBe(true);
   });
 });

@@ -8,6 +8,8 @@ import { DEFAULT_FOLDER } from '@testpion/shared';
 export const LABEL = {
   /** The one name of the reverse proxy that captures the traffic of one API (menus, the palette, the dialog's title is the same without the …). */
   captureReverseProxy: 'Capture traffic for one API…',
+  /** The Debugger's one way to start: the proxy, the system proxy and HTTPS in one click. */
+  captureAll: 'Capture all traffic',
   /** A new AI prompt in the Playground (AI Lab); an AI test file of the Tests view only. */
   newAiPrompt: 'New AI prompt (Playground)',
   /** Open an item where it lives. */
@@ -155,6 +157,11 @@ export const RETIRED_LABELS = [
   'Move to',
   'Delete folder',
   'Convert scripts to pm.*',
+  // the Debugger starts with one button (2026-10-27 review)
+  'Start capturing',
+  'Start the proxy',
+  'Only tunnels',
+  'Decrypt HTTPS',
 ];
 
 /**

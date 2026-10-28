@@ -168,6 +168,12 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   flow_remove_step: { describe: (a) => `remove the step ${q(a.id)} from tests/${String(a.file ?? '')} (steps that wait for it lose that dependency)` },
   git_resolve: { describe: (a) => `overwrite the conflicted file ${q(a.path)} with ${a.side ? `"${String(a.side)}"` : 'the chosen sides'} (the other side's changes in it are dropped)` },
   git_sync: { describe: () => 'pull (merging the remote changes into the workspace files) and push the local commits' },
+  // the Debugger changes this computer, not the workspace: the OS proxy setting and the trust store
+  debugger_capture: { when: (a) => a.action === 'start' && a.system_proxy === true, describe: () => 'point this computer’s proxy setting at the Debugger proxy, so every program that follows it is captured (stop puts it back)' },
+  debugger_certificate: {
+    when: (a) => a.action === 'install' || a.action === 'remove',
+    describe: (a) => (a.action === 'remove' ? 'remove the TestPion HTTP Debugger root certificate from this computer’s trust store' : 'add the TestPion HTTP Debugger root certificate to this computer’s trust store: programs here then trust what TestPion signs (the system may ask the user too)'),
+  },
   git_restore_item: {
     when: (a) => a.dryRun !== true,
     describe: (a) => `write the version of ${typeof a.ref === 'string' ? q(a.ref) : a.file ? q(a.file) : 'the item'} from commit ${q(a.rev)} over its current content (the change stays uncommitted; git_undo takes it back)`,
