@@ -30,7 +30,7 @@ import { openReverseProxyCapture } from '../lib/capture';
 import { Database, Disc, FolderPlus, Plus, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
-import { persisted, promptText, toastError, useApp, attempt } from '../store';
+import { persisted, promptText, toastError, useApp, attempt, confirmAction } from '../store';
 import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
 import { Badge, Button, cx, Empty, FilterInput, Menu, type MenuItem, PageHeader, SectionTitle, Select, Split, Tabs } from '../components/ui';
 import { formatBytes, formatMs, outputFileName } from '@testpion/shared';
@@ -324,6 +324,32 @@ export function DebuggerView() {
       void load();
     });
   };
+  // see inside HTTPS: the TestPion certificate must be trusted here (asked once, Windows confirms), then decryption goes on
+  const readHttps = async () => {
+    try {
+      const info = await call<{ trusted?: boolean }>('debug.certificate');
+      if (info.trusted !== true) {
+        const ok = await confirmAction({
+          title: 'See inside HTTPS?',
+          message: 'To show the requests inside HTTPS (your API calls), TestPion’s certificate has to be trusted on this computer.',
+          detail: 'Your operating system asks you to confirm. Without it, HTTPS shows only as tunnels, by host. Close and reopen your browser afterwards.',
+          confirmLabel: 'Install and decrypt',
+          cancelLabel: 'Only tunnels',
+        });
+        if (!ok) return;
+        await call('debug.certificate', { action: 'install' });
+        toast('Certificate installed: close and reopen your browser so it trusts it');
+      }
+      setStatus(await call<Status>('debug.decrypt', { on: true }));
+    } catch (err) {
+      toastError(err);
+    }
+  };
+  const captureAll = () =>
+    startThen(async () => {
+      await systemProxy(true);
+      await readHttps();
+    });
   const systemProxy = async (onOff: boolean) => {
     await attempt(async () => {
       setStatus(await call<Status>('debug.systemProxy', { on: onOff }));
@@ -470,7 +496,7 @@ export function DebuggerView() {
     { label: LABEL.captureReverseProxy, icon: <Disc size={14} />, onSelect: () => openReverseProxyCapture() },
     status?.systemProxy
       ? { label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }
-      : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void startThen(() => systemProxy(true)) },
+      : { label: 'Everything on this computer (the system proxy, restored on stop)', icon: <Globe size={14} />, separator: true, onSelect: () => void captureAll() },
     ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => void copyText(s.lines, `the lines for ${s.shell}`)) })),
     { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, reason: 'Stop the proxy first', onSelect: () => void changePort() },
   ];
@@ -538,7 +564,7 @@ export function DebuggerView() {
                 <Button
                   variant={status?.running ? 'default' : 'primary'}
                   icon={<Globe size={13} />}
-                  onClick={() => void startThen(() => systemProxy(true))}
+                  onClick={() => void captureAll()}
                   title="Start the proxy and point this computer's proxy setting at it: browsers and programs that follow the Windows, macOS or Linux proxy setting show up here. Stopping puts the setting back."
                 >
                   Capture all traffic

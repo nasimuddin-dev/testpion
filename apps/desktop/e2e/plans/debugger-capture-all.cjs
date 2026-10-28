@@ -11,6 +11,9 @@ const steps = [
     `await __t.view('Debugger');
       const b = await __t.waitFor(() => ${button('Capture all traffic')}, 6000); if (!b) return 'NO BUTTON';
       await __t.real.click(b);
+      // the certificate question (it is not trusted on a fresh machine): the plan never installs one
+      const ask = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Only tunnels'), 3000);
+      if (ask) await __t.real.click(ask);
       const sub = await __t.waitFor(() => [...document.querySelectorAll('main *')].map((x) => x.textContent?.trim() ?? '').find((t) => /the system proxy points here/.test(t) && /Proxy address http:\\/\\/127\\.0\\.0\\.1:\\d+/.test(t)), 8000);
       const st = await window.aps.invoke('debug.status');
       const gone = !${button('Capture all traffic')};
