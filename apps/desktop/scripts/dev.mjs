@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url);
 execFileSync(process.execPath, [join(root, 'scripts/build-main.mjs')], { stdio: 'inherit' });
 
 const token = randomBytes(16).toString('hex');
-const env = { ...process.env, TESTPION_BRIDGE_TOKEN: token, VITE_TESTPION_BRIDGE: web ? `http://127.0.0.1:5174|${token}` : '' };
+const env = { ...process.env, TESTPION_BRIDGE_TOKEN: token, VITE_TESTPION_BRIDGE: web ? 'http://127.0.0.1:5174' : '' };
 const viteBin = join(dirname(require.resolve('vite/package.json')), 'bin', 'vite.js');
 const vite = spawn(process.execPath, [viteBin, '--port', '5173', '--strictPort'], { cwd: root, env, stdio: 'inherit' });
 

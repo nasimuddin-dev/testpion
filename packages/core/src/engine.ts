@@ -36,8 +36,8 @@ export interface ContextOptions {
   environment?: string;
   collectionId?: string;
   /**
-   * Which OS environment variables `{{$env.NAME}}` may read: 'all' (the CLI and CI, where the pipeline decides what
-   * is in the environment) or a list of names (the app: Settings ▸ Privacy, empty unless the user adds some).
+   * Which OS environment variables `{{$env.NAME}}` may read: 'all' (only the CLI run commands, where the pipeline decides what
+   * is in the environment) or a list of names (the app and the MCP server: Settings ▸ Privacy, empty unless the user adds some).
    */
   envAccess?: 'all' | string[];
   logger?: Logger;
@@ -100,8 +100,9 @@ export function createRagJudgeHost(o: Omit<Parameters<typeof buildRagJudgeHost>[
 export function createEngineContext(opts: ContextOptions): EngineContext {
   const settings = opts.settings ?? defaultSettings();
   const redactor = opts.redactor ?? new Redactor(settings.redactFields);
-  // the caller's choice, else the user's list from Settings when there is one (the MCP server, runs), else every variable (the CLI)
-  const vars = new VariableScope(opts.secrets, redactor, { allowEnv: true, envAccess: opts.envAccess ?? settings.envVariables ?? 'all' });
+  // the caller's choice, else the user's list from Settings, else NO variable: an agent (MCP) or a shared collection must not read
+  // the environment unless the person allowed it. The CLI run commands pass `'all'` themselves (cli/shared.ts).
+  const vars = new VariableScope(opts.secrets, redactor, { allowEnv: true, envAccess: opts.envAccess ?? settings.envVariables ?? [] });
   const { store } = opts;
   // the workspace's own metrics (metrics/*.yaml) are registered before any run, try or estimate can name one
   try {

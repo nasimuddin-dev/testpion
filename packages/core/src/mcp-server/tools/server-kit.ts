@@ -115,6 +115,20 @@ export function runRecorder(d: { store: WorkspaceStore; secrets: SecretStore; se
   };
 }
 
+/**
+ * What the agent is told when `{{$env.NAME}}` was left unresolved because the person has not allowed that OS variable (the MCP server
+ * reads none by default: an API response must not be able to make an agent send the machine's secrets anywhere).
+ */
+export function blockedEnvNotice(blocked: Iterable<string>): { blockedEnvVariables: string[]; envNotice: string } | undefined {
+  const names = [...blocked];
+  if (!names.length) return undefined;
+  const list = names.map((n) => `{{$env.${n}}}`).join(', ');
+  return {
+    blockedEnvVariables: names,
+    envNotice: `${list} was not resolved: this server may not read OS environment variables the person has not allowed. To allow ${names.length === 1 ? 'it' : 'them'}, the person adds ${names.map((n) => `"${n}"`).join(', ')} to Settings > Privacy (setting envVariables), or runs: testpion settings set envVariables ${names.join(',')}. set_settings can do it too, but only with the person's approval; do not work around this.`,
+  };
+}
+
 /** An engine context for one tool call, disposed when it ends (the one place the create / try / finally dispose is written). */
 export async function withEngine<T>(d: { store: WorkspaceStore; secrets: SecretStore; settings?: AppSettings }, o: Omit<ContextOptions, 'store' | 'secrets' | 'settings'>, fn: (ctx: EngineContext) => Promise<T> | T): Promise<T> {
   const ctx = createEngineContext({ ...d, ...o });

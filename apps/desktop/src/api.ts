@@ -40,12 +40,11 @@ declare global {
 }
 
 function webBridge(): Bridge {
-  const cfg = String(import.meta.env.VITE_TESTPION_BRIDGE ?? '');
-  const token = cfg.split('|')[1] ?? '';
+  // the dev server's proxy adds the bridge token as a header (vite.config.ts): the page never holds it, and no URL carries it
   const listeners = new Map<string, Set<(p: unknown) => void>>();
   let es: EventSource | undefined;
   const connect = () => {
-    es = new EventSource(`/__aps/events?token=${token}`);
+    es = new EventSource('/__aps/events');
     es.onmessage = (m) => {
       const { channel, payload } = JSON.parse(m.data);
       for (const l of listeners.get(channel) ?? []) l(payload);
@@ -55,7 +54,7 @@ function webBridge(): Bridge {
     kind: 'web',
     platform: navigator.platform.toLowerCase().includes('mac') ? 'darwin' : navigator.platform.toLowerCase().includes('win') ? 'win32' : 'linux',
     async invoke(method, params, meta) {
-      const res = await fetch(`/__aps/rpc?token=${token}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params, requestId: meta?.requestId, rpcVersion: RPC_VERSION }) });
+      const res = await fetch('/__aps/rpc', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params, requestId: meta?.requestId, rpcVersion: RPC_VERSION }) });
       const r = await res.json();
       if (!r.ok) throw Object.assign(new Error(r.error?.message ?? 'Error'), r.error);
       return r.data;

@@ -283,7 +283,7 @@ export interface RpcParamTypes {
   'secrets.refs': RpcCommonParams & { environment: string };
   'settings.describeCertificates': RpcCommonParams & { pem: string };
   'settings.export': RpcCommonParams;
-  'settings.import': RpcCommonParams & { doc: Record<string, unknown> };
+  'settings.import': RpcCommonParams & { doc: Record<string, unknown>; dryRun?: boolean; confirmSecurity?: boolean };
   'settings.reset': RpcCommonParams & { keys?: string[] };
   'sio.connect': RpcCommonParams & { url: string; path?: string; headers?: unknown[]; auth?: string };
   'stats.requests': RpcCommonParams & { collectionId: string };

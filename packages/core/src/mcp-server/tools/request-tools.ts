@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createEngineContext } from '../../engine.js';
-import { withEngine } from './server-kit.js';
+import { blockedEnvNotice, withEngine } from './server-kit.js';
 import { ApsError } from '../../errors.js';
 import { addRequestToCollection, externalizeSecrets } from '../../import/save-request.js';
 import type { Collection, HttpRequestSpec, TestResult } from '../../model/types.js';
@@ -55,13 +55,15 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
           const { node } = findRequest(c, a.request);
           const ctx = createEngineContext({ store, secrets, settings, environment, collectionId: c.id });
           let result: TestResult | undefined;
+          let blocked: string[] = [];
           try {
             await runCollection({ name: `mcp ${node.name}`, runId: shortId('mcp-'), collection: c, selection: [node.id], services: ctx.services, traceMode: 'none', onEvent: (e: RunEvent) => e.type === 'test-end' && (result = e.result) });
+            blocked = [...ctx.vars.blockedEnv];
           } finally {
             await ctx.dispose();
           }
           if (!result) throw new ApsError('ProtocolError', 'The request did not run');
-          return { ...summarizeResult(result), output: result.output && clip(result.output) };
+          return { ...summarizeResult(result), output: result.output && clip(result.output), ...blockedEnvNotice(blocked) };
         }
         if (!a.url && !a.snippet) throw new ApsError('ValidationError', 'Give collection + request for a saved request, or url (or snippet) for an ad-hoc one');
         return withEngine({ store, secrets, settings }, { environment }, async (ctx) => {
@@ -90,6 +92,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
                 }
               : {}),
             unresolvedVariables: ctx.vars.unresolved.size ? [...ctx.vars.unresolved] : undefined,
+            ...blockedEnvNotice(ctx.vars.blockedEnv),
           };
         });
       },

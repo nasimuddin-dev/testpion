@@ -16,6 +16,8 @@ import { randomBytes } from 'node:crypto';
 import { SURFACE_PAGE } from '../util/page.js';
 import { withAiCostCap } from '../ai/tasks/run.js';
 import { ApsError } from '../errors.js';
+import { WorkspaceManager } from '../storage/workspace-manager.js';
+import { describeSecurityChanges, securityChangesForCall } from '../storage/settings-access.js';
 import type { Tool, ToolDoc } from './tool.js';
 
 /* ------------------------------------------------------------------ which tools */
@@ -154,7 +156,14 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   delete_request: { describe: (a) => `delete the request ${q(a.request)} of the collection ${q(a.collection)} (it goes to no trash: git or a backup brings it back)` },
   import_bundle_apply: { describe: (a) => `import the previewed bundle ${q(a.plan_id)} into the workspace (${a.on_conflict === 'replace' ? 'items that are already here are replaced' : a.on_conflict === 'skip' ? 'items that are already here are kept' : 'items that are already here are kept and the incoming ones renamed'}; undo_import takes it back)` },
   undo_import: { when: (a) => typeof a.import_id === 'string' && !!a.import_id, describe: (a) => `undo the import ${q(a.import_id)}: items it made are removed, items it replaced come back` },
-  set_settings: { describe: (a) => `change the app settings of this computer${a.reset ? ` (reset ${JSON.stringify(a.reset)})` : ''}${a.settings && typeof a.settings === 'object' ? `: ${Object.keys(a.settings as object).join(', ')}` : ''}; it applies to every workspace` },
+  set_settings: {
+    describe: (a) => {
+      const sec = securityChangesForCall(new WorkspaceManager().loadSettings(), a);
+      // security settings decide where requests and secrets go: the confirmation shows old -> new (masked), not only the key
+      const warn = sec.length ? `. SECURITY SETTINGS (they decide where requests and their secrets go, which environment variables a request may read and what is hidden in logs): ${describeSecurityChanges(sec)}. Approve only if you meant exactly this` : '';
+      return `change the app settings of this computer${a.reset ? ` (reset ${JSON.stringify(a.reset)})` : ''}${a.settings && typeof a.settings === 'object' ? `: ${Object.keys(a.settings as object).join(', ')}` : ''}; it applies to every workspace${warn}`;
+    },
+  },
   delete_item: { describe: (a) => `delete ${typeof a.ref === 'string' ? q(a.ref) : JSON.stringify(a.ref ?? '')} to Recently deleted (restore_item puts it back for 30 days)` },
   flow_remove_step: { describe: (a) => `remove the step ${q(a.id)} from tests/${String(a.file ?? '')} (steps that wait for it lose that dependency)` },
   git_resolve: { describe: (a) => `overwrite the conflicted file ${q(a.path)} with ${a.side ? `"${String(a.side)}"` : 'the chosen sides'} (the other side's changes in it are dropped)` },

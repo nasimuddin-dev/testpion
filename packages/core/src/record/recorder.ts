@@ -6,6 +6,7 @@ import { shortId } from '../util/ids.js';
 import { isLoopbackHostHeader, isLoopbackOrigin } from '../net/local-guard.js';
 import type { Redactor } from '../util/redact.js';
 import { externalizeSecrets, type SecretPlaceholder } from '../import/save-request.js';
+import { netFetch } from '../net/proxy.js';
 
 /**
  * Record traffic: a reverse proxy on 127.0.0.1 that forwards every request to a target API (http or
@@ -123,7 +124,7 @@ export async function startRecorder(opts: {
       ex.requestBody = reqText.text;
       const headers = new Headers();
       for (const [k, v] of requestHeaders) if (!HOP.test(k) && k.toLowerCase() !== 'accept-encoding' && k.toLowerCase() !== 'origin') headers.append(k, v);
-      const upstream = await fetch(base + path, { method, headers, body: body.length ? body : undefined, redirect: 'manual' });
+      const upstream = await netFetch(base + path, { method, headers, body: body.length ? body : undefined, redirect: 'manual' });
       const buf = Buffer.from(await upstream.arrayBuffer());
       const out: Record<string, string | string[]> = { ...corsHeaders };
       upstream.headers.forEach((v, k) => {

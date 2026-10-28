@@ -2,6 +2,7 @@ import { ApsError } from '../errors.js';
 import { assertUrlAllowed } from '../net/policy.js';
 import { IMPORT_FILE_EXTENSIONS } from '@testpion/shared';
 import type { RawImportFile } from './inputs.js';
+import { netFetch } from '../net/proxy.js';
 
 /**
  * Import from a repository link (import-compat plan 4d): a GitHub or GitLab link to a folder or a repository whose files
@@ -139,7 +140,7 @@ const notFound = (r: RepoRef) =>
 
 /** The files of a repository folder, read from the service without a token. */
 export async function fetchRepoFiles(r: RepoRef, opts: { fetchImpl?: Fetch; signal?: AbortSignal } = {}): Promise<RepoFetch> {
-  const f: Fetch = opts.fetchImpl ?? ((url, init) => fetch(url, init) as never);
+  const f: Fetch = opts.fetchImpl ?? ((url, init) => netFetch(url, init) as never);
   const skipped: RepoFetch['skipped'] = [];
   const path = r.path.replace(/\/$/, '');
   let entries: Array<{ path: string; size: number }>;

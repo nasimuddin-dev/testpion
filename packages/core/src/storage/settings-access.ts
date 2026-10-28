@@ -24,7 +24,7 @@ export const SETTING_SPECS: Record<string, Spec> = {
   density: { kind: { oneOf: ['comfortable', 'compact'] }, doc: 'Row heights and spacing.' },
   logLevel: { kind: { oneOf: ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'] }, doc: 'How much the app writes to its log.' },
   redactFields: { kind: 'list', doc: 'Field names always hidden in logs, traces, reports and exports.' },
-  envVariables: { kind: 'list', doc: 'OS environment variables that {{$env.NAME}} may read in the app.' },
+  envVariables: { kind: 'list', doc: 'OS environment variables that {{$env.NAME}} may read in the app and in the MCP server (none unless listed here; the CLI run commands read every variable unless this is set). A SECURITY setting.' },
   defaultTimeoutMs: { kind: 'number', doc: 'Request timeout in milliseconds when a request sets none.' },
   maxPreviewBytes: { kind: 'number', doc: 'Largest response body shown in the app, in bytes.' },
   checkForUpdates: { kind: 'boolean', doc: 'Ask GitHub for a newer version when the app starts.' },
@@ -177,4 +177,70 @@ export function importSettings(current: AppSettings, doc: unknown): { next: AppS
   }
   const { next, changed } = applySettings(current, changes);
   return { next, changed: changed.filter((c) => JSON.stringify(c.before ?? null) !== JSON.stringify(c.after ?? null)), skipped };
+}
+
+/* ------------------------------------------------------------------ security settings */
+
+/**
+ * SECURITY settings: the ones that decide where requests and their secrets go, what leaves the computer, which environment variables a
+ * request may read, what is hidden in logs, and what is trusted (proxy, TLS and extra CA, `{{$env}}` access, redaction, script and
+ * command trust, update and telemetry URLs). An agent or an imported file that changes one needs a stronger confirmation, which
+ * shows the old and the new value (masked), not only the key. A key added to SETTING_SPECS later is covered by the pattern.
+ */
+const SECURITY_KEY = /^(proxy(\.|$)|tls(\.|$)|envVariables$|redactFields$)|trust|extraCa|(update|telemetry|crash)\w*(url|endpoint|host)$/i;
+
+export const isSecuritySetting = (key: string): boolean => SECURITY_KEY.test(key);
+
+/** The SECURITY settings among the specs (for the docs and the tests). */
+export const securitySettingKeys = (): string[] => Object.keys(SETTING_SPECS).filter(isSecuritySetting);
+
+export interface SecurityChange {
+  key: string;
+  before: string;
+  after: string;
+}
+
+/** A value as the confirmation shows it: a list joined, a URL without its credentials, a secret-looking key as ***, long text cut. */
+export function showSettingValue(key: string, value: unknown): string {
+  if (value === undefined || value === null || value === '') return '(not set)';
+  if (/pass(word)?|secret|token|api.?key/i.test(key)) return '***';
+  let text = Array.isArray(value) ? (value.length ? value.map(String).join(', ') : '(none)') : typeof value === 'string' ? value : JSON.stringify(value);
+  // http://user:secret@host → http://user:***@host
+  text = text.replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]*):[^\s/@]*@/gi, '$1:***@');
+  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+}
+
+/** Which of `changed` (key, before, after) touch a SECURITY setting, with the values masked for display. */
+export function securityChangesOf(changed: Array<{ key: string; before: unknown; after: unknown }>): SecurityChange[] {
+  return changed.filter((c) => isSecuritySetting(c.key) && JSON.stringify(c.before ?? null) !== JSON.stringify(c.after ?? null)).map((c) => ({ key: c.key, before: showSettingValue(c.key, c.before), after: showSettingValue(c.key, c.after) }));
+}
+
+/** The one-line text of security changes, for a confirmation: `proxy.url: (not set) -> http://x:8080; envVariables: (none) -> AWS_SECRET`. */
+export const describeSecurityChanges = (changes: SecurityChange[]): string => changes.map((c) => `${c.key}: ${c.before} -> ${c.after}`).join('; ');
+
+/**
+ * What `set_settings` with these arguments would change among the SECURITY settings, against the settings as they are now (nothing is saved).
+ * Arguments that do not parse are left out here; the tool itself refuses them when it runs.
+ */
+export function securityChangesForCall(current: AppSettings, a: { settings?: unknown; reset?: unknown }): SecurityChange[] {
+  const changed: Array<{ key: string; before: unknown; after: unknown }> = [];
+  try {
+    if (a.reset) {
+      const keys = a.reset === 'all' ? 'all' : ([] as unknown[]).concat(a.reset).map(String);
+      const { reset } = settingsDefaults(current, keys);
+      const defaults = defaultSettings();
+      for (const key of reset) changed.push({ key, before: read(current, key), after: read(defaults, key) });
+    }
+    if (a.settings && typeof a.settings === 'object') {
+      const changes = Object.fromEntries(
+        Object.entries(a.settings as Record<string, unknown>)
+          .filter(([k]) => SETTING_SPECS[k])
+          .map(([k, v]) => [k, parseSettingValue(k, Array.isArray(v) ? v.join(',') : String(v))]),
+      );
+      changed.push(...applySettings(current, changes).changed);
+    }
+  } catch {
+    /* a call that does not parse changes nothing: the tool says why when it runs */
+  }
+  return securityChangesOf(changed);
 }

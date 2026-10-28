@@ -4,22 +4,23 @@
  * Secrets use an in-memory store in this mode (nothing is written to disk in plain text).
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { ApsError, isLoopbackHostHeader, normalizeError } from '@testpion/core';
 import { Backend } from './backend.js';
 import { RPC_VERSION } from '@testpion/shared';
 import { SseHub } from './sse-hub.js';
+import { bridgeAuth } from './bridge-auth.js';
+import { BRIDGE_USER } from './capabilities.js';
 
 /** Largest RPC request accepted (imports and uploaded files travel as JSON). */
 const MAX_BODY = 64 * 1024 * 1024;
 
 const port = Number(process.env.TESTPION_BRIDGE_PORT ?? 5174);
-const token = process.env.TESTPION_BRIDGE_TOKEN ?? randomBytes(16).toString('hex');
+const givenToken = process.env.TESTPION_BRIDGE_TOKEN;
+const token = givenToken ?? randomBytes(16).toString('hex');
 const hub = new SseHub(); // events to the connected pages, with the socket backpressure honoured (sse-hub.ts)
-const tokenBytes = Buffer.from(token);
-const validToken = (t: unknown) => typeof t === 'string' && t.length === token.length && timingSafeEqual(Buffer.from(t), tokenBytes);
 const reply = (res: ServerResponse, status: number, body: unknown) => {
   if (res.headersSent) return;
   res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
@@ -46,8 +47,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     res.end(page ?? 'This visualization is no longer available.');
     return;
   }
-  if (!validToken(url.searchParams.get('token')) && !validToken(req.headers['x-aps-token'])) {
-    res.writeHead(403).end('forbidden');
+  // the token travels in the x-aps-token header only: one in the URL is refused (history, logs and Referer would keep it)
+  const auth = bridgeAuth(url, req.headers, token);
+  if (auth !== 'ok') {
+    res.writeHead(403, { 'content-type': 'text/plain' }).end(auth === 'token-in-url' ? 'forbidden: send the token in the x-aps-token header, not in the URL' : 'forbidden');
     return;
   }
   if (url.pathname === '/events') {
@@ -80,7 +83,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     res.on('close', () => !res.writableFinished && gone.abort());
     try {
       const requestId = typeof call.requestId === 'string' ? call.requestId : undefined;
-      reply(res, 200, { ok: true, data: (await backend.invoke(call.method, call.params, { requestId, signal: gone.signal })) ?? null });
+      reply(res, 200, { ok: true, data: (await backend.invoke(call.method, call.params, { requestId, signal: gone.signal, user: BRIDGE_USER })) ?? null });
     } catch (e) {
       // errors are plain objects (kind, message, suggestions …) the UI and AI agents can read
       reply(res, 200, { ok: false, error: normalizeError(e) });
@@ -94,5 +97,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 createServer((req, res) => {
   handle(req, res).catch((e) => reply(res, 500, { ok: false, error: normalizeError(e) }));
 }).listen(port, '127.0.0.1', () => {
-  console.log(`[bridge] backend listening on http://127.0.0.1:${port} (token ${token})`);
+  // a token the launcher gave is not printed again; one made here must be, or nobody could call the bridge
+  console.log(`[bridge] backend listening on http://127.0.0.1:${port}${givenToken ? ' (token from TESTPION_BRIDGE_TOKEN; send it as the x-aps-token header)' : ` (send the x-aps-token header: ${token})`}`);
 });

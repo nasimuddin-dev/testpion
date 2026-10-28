@@ -49,6 +49,32 @@ describe('supply chain', () => {
     expect(JSON.parse(read('packages/core/package.json')).dependencies['@modelcontextprotocol/sdk']).toMatch(/\^1\.3[2-9]|\^1\.[4-9]\d/);
   });
 
+  // the 2026-10-27 security review: npm audit --omit=dev was red (4 high, 4 moderate); these are the fixed versions, installed and declared
+  it('the production dependencies the 2026-10-27 audit named are at or above their fixed versions', () => {
+    const installed = (name: string) => JSON.parse(read(`node_modules/${name}/package.json`)).version as string;
+    const floors: Record<string, string> = {
+      undici: '8.12.2', // GHSA-2m5v-pch6-74hx dropped TLS options in Agent({ connect }): the shape of net/proxy.ts; GHSA-4w7w-5xrc-9h26 redirect cache poisoning
+      zod: '4.6.6', // GHSA-mrhx-c7xc-m3w5: the MCP SDK validates agent input with it
+      'body-parser': '2.4.0',
+      hono: '4.13.10',
+      qs: '6.17.0',
+      'ip-address': '10.7.4',
+      'fast-uri': '3.1.9',
+      'node-forge': '1.4.2', // GHSA-86w9-cpqp-85rv
+    };
+    for (const [name, floor] of Object.entries(floors)) expect(atLeast(installed(name), floor), `${name} ${installed(name)} < ${floor}`).toBe(true);
+    const core = JSON.parse(read('packages/core/package.json')).dependencies as Record<string, string>;
+    expect(core.undici).toMatch(/^\^8\.(1[2-9]|[2-9]\d)\./);
+    expect(core['node-forge']).toMatch(/^\^1\.4\.[2-9]/);
+    // the lockfile pins the same: a fresh `npm ci` gets the fixed versions
+    const lock = JSON.parse(read('package-lock.json')).packages as Record<string, { version: string }>;
+    for (const [name, floor] of Object.entries(floors)) expect(atLeast(lock[`node_modules/${name}`]!.version, floor), `lock ${name}`).toBe(true);
+  });
+
+  it('no advisory is waved through the audit gate any more (node-forge 1.4.2 fixed the last one)', () => {
+    expect(JSON.parse(read('scripts/audit-allow.json')).advisories).toEqual([]);
+  });
+
   it('node-pty is the one beta native module: pinned to an exact version, outside the asar', () => {
     const v = JSON.parse(read('apps/desktop/package.json')).devDependencies['@lydell/node-pty'] as string;
     expect(v).toMatch(/^\d+\.\d+\.\d+(-[a-z]+\.\d+)?$/); // exact: no ^ or ~

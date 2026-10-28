@@ -176,7 +176,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'ws.openProblem': {},
   'http.unresolved': { request: 'o', environment: 's?', collectionId: 's?', requestId: 's?', preRequestScript: 's?' },
   'settings.export': {},
-  'settings.import': { doc: 'o' },
+  'settings.import': { doc: 'o', dryRun: 'b?', confirmSecurity: 'b?' },
   'settings.reset': { keys: 'sa?' },
   'ws.revealFile': { path: 'p' },
   'diagnostics.bundle': {},

@@ -140,7 +140,9 @@ export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore()]);
 
 /** An engine context as every command builds it: the workspace, the CLI's secrets, the app settings and an environment. */
 export function cliContext(store: WorkspaceStore, environment?: string, extra: Partial<Omit<ContextOptions, 'store' | 'secrets' | 'settings' | 'environment'>> = {}): EngineContext {
-  return createEngineContext({ store, secrets: cliSecrets(), settings: new WorkspaceManager().loadSettings(), environment, aiEnv: process.env, ...extra });
+  const settings = new WorkspaceManager().loadSettings();
+  // the CLI (CI) reads every OS variable unless Settings lists some: the pipeline decides what is in its environment
+  return createEngineContext({ store, secrets: cliSecrets(), settings, environment, aiEnv: process.env, envAccess: settings.envVariables ?? 'all', ...extra });
 }
 
 /** The collection `ref` names (id or name), or a configuration error listing the collections; `hint` is added to it. */
