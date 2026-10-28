@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react';
 import { Empty } from '../ui';
+import { adviceFor, certificateError, cookiesOf, paramsOf } from '@testpion/shared';
 import type { Exchange } from './model';
+
+// the readers are shared with the MCP tools (@testpion/shared); the window and its tests import them from here
+export { adviceFor, certificateError, cookiesOf, paramsOf };
 
 /** The inspector tabs of a selected exchange beyond headers and body: what it carried, who sent it, what went wrong. */
 
@@ -27,37 +31,6 @@ function Table({ head, rows, name }: { head: [string, string]; rows: Array<[stri
   );
 }
 
-const decode = (s: string) => {
-  try {
-    return decodeURIComponent(s.replace(/\+/g, ' '));
-  } catch {
-    return s;
-  }
-};
-const pairs = (query: string): Array<[string, string]> =>
-  query
-    .split('&')
-    .filter(Boolean)
-    .map((p) => {
-      const i = p.indexOf('=');
-      return i < 0 ? [decode(p), ''] : [decode(p.slice(0, i)), decode(p.slice(i + 1))];
-    });
-
-const headerOf = (h: Record<string, string> | undefined, name: string) => Object.entries(h ?? {}).find(([k]) => k.toLowerCase() === name)?.[1];
-
-/** The query string and, for a form body, its fields: decoded, one row each. */
-export function paramsOf(e: Exchange): { query: Array<[string, string]>; form: Array<[string, string]> } {
-  let query: Array<[string, string]> = [];
-  try {
-    query = pairs(new URL(e.url).search.replace(/^\?/, ''));
-  } catch {
-    /* not a URL: no query */
-  }
-  const type = (e.requestContentType ?? headerOf(e.requestHeaders, 'content-type') ?? '').toLowerCase();
-  const form = type.includes('application/x-www-form-urlencoded') && e.requestBody ? pairs(e.requestBody) : [];
-  return { query, form };
-}
-
 export function ParamsView({ e }: { e: Exchange }) {
   const { query, form } = paramsOf(e);
   if (!query.length && !form.length) return <Empty title="No parameters">The URL has no query string and the body is not a form.</Empty>;
@@ -69,50 +42,10 @@ export function ParamsView({ e }: { e: Exchange }) {
   );
 }
 
-/** `Set-Cookie` headers can arrive joined by commas: split where a new `name=` starts, not inside an Expires date. */
-const splitSetCookie = (v: string) => v.split(/\n|,(?=\s*[^;,=\s]+=)/).map((x) => x.trim()).filter(Boolean);
-
-export function cookiesOf(e: Exchange, side: 'request' | 'response'): Array<[string, string]> {
-  if (side === 'request') {
-    const v = headerOf(e.requestHeaders, 'cookie');
-    return v ? v.split(';').map((p) => p.trim()).filter(Boolean).map((p) => { const i = p.indexOf('='); return (i < 0 ? [p, ''] : [p.slice(0, i), p.slice(i + 1)]) as [string, string]; }) : [];
-  }
-  const v = headerOf(e.responseHeaders, 'set-cookie');
-  return v
-    ? splitSetCookie(v).map((c) => {
-        const [first = '', ...attrs] = c.split(';');
-        const i = first.indexOf('=');
-        return [i < 0 ? first : first.slice(0, i), `${i < 0 ? '' : first.slice(i + 1)}${attrs.length ? `   (${attrs.map((a) => a.trim()).join('; ')})` : ''}`] as [string, string];
-      })
-    : [];
-}
-
 export function CookiesView({ e, side }: { e: Exchange; side: 'request' | 'response' }) {
   const rows = cookiesOf(e, side);
   if (!rows.length) return <Empty title="No cookies">{side === 'request' ? 'The request has no Cookie header.' : 'The response sets no cookies.'}</Empty>;
   return <Table name={`cookies-${side}`} head={['Cookie', side === 'request' ? 'Value' : 'Value and attributes']} rows={rows} />;
-}
-
-/** The program refused TestPion's certificate (it does not trust the root, or pins its own). */
-export const certificateError = (e: Pick<Exchange, 'error'>) => /certificate/i.test(e.error ?? '');
-
-/** What the usual error messages mean and what to do about them. */
-export function adviceFor(e: Exchange): string[] {
-  const m = `${e.error ?? ''}`.toLowerCase();
-  if (certificateError(e))
-    return [
-      'The program refused the certificate TestPion presents for HTTPS. Click HTTPS ▸ See inside HTTPS… (TestPion asks once to trust its certificate) and restart the program.',
-      'Some programs ignore the system certificate store or pin their own certificate (OneDrive, banking, many apps): keep that host encrypted (right-click the row ▸ Keep this host encrypted).',
-    ];
-  if (/econnrefused|refused/.test(m)) return ['Nothing is listening at that address and port. Check the server is running and the port is right.', 'A firewall or a rule that redirects this host can also refuse it.'];
-  if (/enotfound|getaddrinfo|dns/.test(m)) return ['The host name could not be found. Check the spelling and the network (VPN, DNS).'];
-  if (/timed out|timeout|etimedout/.test(m)) return ['The server did not answer in time. Check the server and the network; a slow-down rule would cause this too.'];
-  if (/econnreset|socket hang up|closed/.test(m)) return ['The connection was closed before the answer arrived. The server may have crashed, or a proxy or firewall cut it.'];
-  if (e.status && e.status >= 500) return ['The server failed. Look at the response body for its message, and at the server log.'];
-  if (e.status === 401 || e.status === 403) return ['The server refused the credentials. See the Auth tab: is the token there, not expired, for the right audience or scope?'];
-  if (e.status === 404) return ['The path was not found. Compare the URL (Params and Summary tabs) with what the API expects.'];
-  if (e.status && e.status >= 400) return ['The server rejected the request. Its response body usually says why (Content tab); then check the request headers and the body.'];
-  return [];
 }
 
 export function ErrorView({ e }: { e: Exchange }) {

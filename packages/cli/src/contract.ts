@@ -20,10 +20,10 @@ import { CLI_CONFIRM, confirmBeforeRun } from './confirm.js';
 import { PLAN_ONLY, PlanOnly, planFor } from './plan.js';
 
 /** The commands that stream what happens (a line per result, call or row): they take --jsonl. */
-export const STREAMING_COMMANDS = new Set(['test', 'run', 'run-collection', 'eval run', 'load', 'serve flows', 'debug', 'monitor start', 'record']);
+export const STREAMING_COMMANDS = new Set(['test', 'run', 'run-collection', 'eval run', 'load', 'serve flows', 'debug capture', 'monitor start', 'record']);
 
 /** Commands whose --json printed a line per event before the envelope existed: --json is --jsonl for them. */
-export const JSON_MEANS_JSONL = new Set(['serve flows', 'debug', 'mock collection', 'mock graphql']);
+export const JSON_MEANS_JSONL = new Set(['serve flows', 'debug capture', 'mock collection', 'mock graphql']);
 
 /**
  * Commands whose stdout is not ours (the MCP protocol of a server, what git reads from its drivers): they accept --json

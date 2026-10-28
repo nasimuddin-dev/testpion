@@ -2,7 +2,9 @@ import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '.
 import { exchangesFromHar, exchangesToHar } from '../../debugger/har.js';
 import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
 import { shortId } from '../../util/ids.js';
-import { debuggerCertDir, ensureRootCertificate, leafSigner } from '../../debugger/certificate.js';
+import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrusted, rootStanding, trustInstructions } from '../../debugger/certificate.js';
+import { restoreSystemProxy, setSystemProxy, type SystemProxySnapshot } from '../../debugger/capture.js';
+import { adviceFor, cookiesOf, hostMatches, paramsOf } from '@testpion/shared';
 import { exchangesFromSaz } from '../../debugger/saz.js';
 import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../../debugger/grpc.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -19,6 +21,16 @@ import { str, type Tool, limitArg } from '../tool.js';
  */
 export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /** The capture's list, when other tools read it too (flow_from_exchanges). */ session?: DebuggerExchange[] }): Tool[] {
   let proxy: DebuggerProxy | undefined;
+  /** The OS proxy as it was before `system_proxy`, to put back on stop (and when the process is told to end). */
+  let systemProxy: SystemProxySnapshot | undefined;
+  /** Hosts that stay opaque tunnels while HTTPS is decrypted (globs). */
+  let noDecrypt: string[] = []; // bounded: the list the agent set (at most 200 hosts)
+  const restoreSystem = async () => {
+    const was = systemProxy;
+    systemProxy = undefined;
+    if (was) await restoreSystemProxy(was);
+  };
+  let guarded = false;
   const session: DebuggerExchange[] = d.session ?? [];
   /** The rules of this server process (an agent adds them; the proxy reads them on every request). */
   const rules: DebuggerRule[] = [];
@@ -50,6 +62,27 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         : { ...(frames ? { frameCount: frames.length } : {}), ...(events ? { eventCount: events.length } : {}) }),
     };
   };
+  /** Params and cookies as the inspector tabs show them, with secrets masked. */
+  const inspect = (e: DebuggerExchange) => {
+    const p = paramsOf(e);
+    return {
+      params: { query: red.redact(Object.fromEntries(p.query)) as Record<string, string>, form: red.redact(Object.fromEntries(p.form)) as Record<string, string> },
+      cookies: { request: cookiesOf(e, 'request').map(([n]) => n), response: cookiesOf(e, 'response').map(([n, v]) => ({ name: n, attributes: v.includes('(') ? v.slice(v.indexOf('(')) : undefined })) },
+    };
+  };
+  const summaryOf = (e: DebuggerExchange) => ({
+    protocol: e.kind === 'tunnel' ? 'HTTPS tunnel' : e.httpVersion === '2' ? 'HTTP/2' : 'HTTP/1.1',
+    tls: e.tls ? 'decrypted' : e.kind === 'tunnel' ? 'tunnel (not decrypted)' : 'no',
+    program: e.application,
+    serverAddress: e.serverAddress,
+    requestBytes: e.requestBodyBytes,
+    responseBytes: e.responseBodyBytes,
+    sendMs: e.sendMs,
+    waitMs: e.waitMs,
+    totalMs: e.durationMs,
+    rules: e.rules,
+    error: e.error,
+  });
   return [
     {
       name: 'debugger_capture',
@@ -62,20 +95,22 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           action: { type: 'string', enum: ['start', 'stop', 'status', 'clear'] },
           port: { type: 'number', description: 'With start: the port (default: any free one)' },
           decrypt: { type: 'boolean', description: 'With start: decrypt HTTPS with the TestPion root certificate (the program must trust it: the result says where the file is)' },
+          system_proxy: { type: 'boolean', description: 'With start: capture the whole computer' },
         },
         required: ['action'],
       },
       run: async (a) => {
-        const status = () => ({ running: !!proxy, url: proxy?.url, port: proxy?.port, exchanges: session.length });
+        const status = () => ({ running: !!proxy, url: proxy?.url, port: proxy?.port, systemProxy: !!systemProxy, exchanges: session.length });
         if (a.action === 'start') {
           await proxy?.close();
+          await restoreSystem();
           const root = a.decrypt ? ensureRootCertificate(debuggerCertDir()) : undefined;
           const leaf = root ? leafSigner(root) : undefined;
           proxy = await startDebuggerProxy({
             port: a.port ? Number(a.port) : undefined,
             rules: () => rules,
             grpcDecode: grpcDecoder(grpcMethodIndex(workspaceProtoRoots(d.store))),
-            ...(leaf ? { decrypt: { leafFor: leaf, enabled: () => true } } : {}),
+            ...(leaf ? { decrypt: { leafFor: leaf, enabled: (h: string) => !noDecrypt.some((p) => hostMatches(p, h)) } } : {}),
             onExchange: (e, phase) => {
               if (phase === 'request') {
                 session.push(e);
@@ -83,6 +118,14 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
               }
             },
           });
+          if (a.system_proxy === true) {
+            systemProxy = await setSystemProxy(proxy.url);
+            if (!guarded) {
+              guarded = true;
+              // the OS setting must not outlive this process: put it back when the server is told to end
+              for (const sig of ['SIGINT', 'SIGTERM'] as const) process.once(sig, () => void restoreSystem().finally(() => process.exit(0)));
+            }
+          }
           return {
             ...status(),
             ...(root ? { rootCertificate: root.path, fingerprint: root.fingerprint } : {}),
@@ -90,6 +133,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           };
         }
         if (a.action === 'stop') {
+          await restoreSystem();
           await proxy?.close();
           proxy = undefined;
           return status();
@@ -100,6 +144,34 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           return status();
         }
         return status();
+      },
+    },
+    {
+      name: 'debugger_certificate',
+      write: true,
+      description: 'The HTTPS root certificate: info, install (trust it) or remove.',
+      inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['info', 'install', 'remove'] } }, required: ['action'] },
+      run: async (a) => {
+        const root = ensureRootCertificate(debuggerCertDir());
+        let note: string | undefined;
+        if (a.action === 'install') note = `Installed into ${(await installRootCertificate(root)).where}`;
+        if (a.action === 'remove') {
+          await removeRootCertificate(root);
+          note = 'Removed from the trust store';
+        }
+        const trusted = await rootCertificateTrusted(root);
+        // trusted undefined: this computer cannot tell (Linux): the steps are for the person
+        return { path: root.path, fingerprint: root.fingerprint, notAfter: root.notAfter, ...rootStanding(root.certPem), trusted, known: trusted !== undefined, note, ...(trusted === true ? {} : { instructions: trustInstructions(root.path) }) };
+      },
+    },
+    {
+      name: 'debugger_no_decrypt',
+      write: true,
+      description: 'Hosts kept as HTTPS tunnels while decrypting: list or set (globs).',
+      inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'set'] }, hosts: { type: 'array', items: { type: 'string' }} }, required: ['action'] },
+      run: (a) => {
+        if (a.action === 'set') noDecrypt = (Array.isArray(a.hosts) ? a.hosts : []).map((h) => String(h).trim()).filter(Boolean).slice(0, 200);
+        return { hosts: noDecrypt };
       },
     },
     {
@@ -115,6 +187,8 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           text: str('Only exchanges whose URL, program or type contains this'),
           deep: { type: 'boolean', description: 'With text: search headers and bodies too' },
           limit: { type: 'number', description: 'How many (default 200, max 2000)' },
+          hide_tunnels: { type: 'boolean', description: 'Leave out HTTPS tunnels' },
+          include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary'] }, description: 'Add inspector data' },
         },
       },
       run: (a) => {
@@ -122,6 +196,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         const out = session.filter((e) => {
           if (a.host && !e.host.toLowerCase().includes(String(a.host).toLowerCase())) return false;
           if (a.method && e.method !== String(a.method).toUpperCase()) return false;
+          if (a.hide_tunnels === true && e.kind === 'tunnel') return false;
           if (a.status && !statusMatches(String(a.status) as DebuggerRule['match']['status'], e.status, e.error)) return false;
           if (needle) {
             if (`${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''}`.toLowerCase().includes(needle)) return true;
@@ -131,7 +206,19 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           }
           return true;
         });
-        return { running: !!proxy, url: proxy?.url, total: session.length, exchanges: out.slice(-limitArg(a.limit, 200, 2000)).map((e) => ({ ...safe(e, false), ref: { kind: 'exchange', exchangeId: e.id } })) };
+        const include = Array.isArray(a.include) ? (a.include as unknown[]).map(String) : [];
+        const more = (e: DebuggerExchange) => ({
+          ...(include.includes('params') ? { params: inspect(e).params } : {}),
+          ...(include.includes('cookies') ? { cookies: inspect(e).cookies } : {}),
+          ...(include.includes('summary') ? { summary: summaryOf(e) } : {}),
+          ...(include.length && (e.error || (e.status ?? 0) >= 400) ? { advice: adviceFor(e) } : {}),
+        });
+        return {
+          running: !!proxy,
+          url: proxy?.url,
+          total: session.length,
+          exchanges: out.slice(-limitArg(a.limit, include.length ? 100 : 200, include.length ? 100 : 2000)).map((e) => ({ ...safe(e, false), ...more(e), ref: { kind: 'exchange', exchangeId: e.id } })),
+        };
       },
     },
     {

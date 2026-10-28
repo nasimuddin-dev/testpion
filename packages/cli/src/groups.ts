@@ -29,6 +29,8 @@ const MOVES: Move[] = [
   { from: 'coverage', group: 'openapi', as: 'coverage' },
   { from: 'fuzz', group: 'openapi', as: 'fuzz' },
   // into groups that already exist: the run history kept on disk is part of the history, what a workspace was allowed is part of the workspace
+  { from: 'debug', group: 'debug', as: 'capture', isDefault: true },
+  { from: 'debug-certificate', group: 'debug', as: 'certificate' },
   { from: 'runs', group: 'history', as: 'runs' },
   { from: 'trust', group: 'workspace', as: 'trust' },
 ];
@@ -36,8 +38,12 @@ const MOVES: Move[] = [
 const GROUP_TEXT: Record<string, string> = {
   lint: 'review things before they cause trouble: a collection (the default: `lint <collection>`), test files (`lint tests`), OpenAPI documents (`lint openapi`)',
   mock: "serve a fake API on localhost until Ctrl+C: a collection's saved examples (the default: `mock <collection>`), a fake MCP server (`mock mcp`), typed data for a GraphQL schema (`mock graphql`)",
+  debug: 'the HTTP Debugger from the terminal: a capture (the default: `debug` alone; `--system-proxy` for the whole computer, `--decrypt` for HTTPS) and the root certificate HTTPS decryption needs (`debug certificate`). `debugger` is the same word',
   openapi: 'OpenAPI / Swagger tools: diff two versions, list operations, drift against real traffic, coverage by your runs, fuzz (`lint openapi` checks a document)',
 };
+
+/** Another word for a group (`testpion debugger capture` is `debug capture`). */
+const GROUP_ALIAS: Record<string, string> = { debug: 'debugger' };
 
 /** The old top-level spelling of a command and what it is now (so nothing written for it breaks). */
 export const LEGACY: Record<string, string> = Object.fromEntries(MOVES.filter((m) => m.from !== m.group).map((m) => [m.from, `${m.group} ${m.as}`]));
@@ -81,6 +87,7 @@ export function regroup(program: Command): void {
     let g = groups.get(m.group) ?? program.commands.find((x) => x.name() === m.group);
     if (!g) {
       g = program.command(m.group).description(GROUP_TEXT[m.group] ?? m.group);
+      if (GROUP_ALIAS[m.group]) g.alias(GROUP_ALIAS[m.group]!);
     }
     groups.set(m.group, g);
     c.name(m.as);
