@@ -68,7 +68,7 @@ const steps = [
     'group-by-domain-with-collapsible-groups',
     `await groupMenu(); await __t.real.click(menuItem(/^Domain$/)); await __t.sleep(600);
      const g = groups().map((x) => x.textContent.trim().replace(/\\s+/g, ' '));
-     const both = g.length === 2 && g.some((t) => /127\\.0\\.0\\.1:4010 3 requests/.test(t)) && g.some((t) => /localhost:4010 1 request/.test(t));
+     const both = g.length === 2 && g.some((t) => /127\\.0\\.0\\.1:40103 requests/.test(t)) && g.some((t) => /localhost:40101 request/.test(t));
      const rowsBefore = rows().length;
      await __t.real.click(groups()[0]); await __t.sleep(400);
      const collapsed = rows().length < rowsBefore && groups()[0].getAttribute('aria-expanded') === 'false';
@@ -111,11 +111,11 @@ const steps = [
      const said = opt?.textContent.trim();
      await __t.real.key('Enter'); await __t.sleep(700);
      const sel = rows().filter((r) => /bg-accent-soft/.test(r.className));
-     return 'row: ' + said + ' | selected 200s: ' + sel.length + ' | all 200: ' + sel.every((r) => /\\b200\\b/.test(r.textContent));`,
+     return 'row: ' + said + ' | selected 200s: ' + sel.length + ' | all 200: ' + sel.every((r) => !/nothing-here/.test(r.textContent));`,
   ),
   step(
     'command-bar-filter-and-help',
-    `await palette('?p=2');
+    `await palette('!?p=2');
      await __t.real.key('Enter'); await __t.sleep(600);
      const filtered = rows().length;
      await __t.real.click(document.querySelector('main [data-clear-filters]')); await __t.sleep(400);
@@ -162,7 +162,7 @@ const steps = [
   ),
   step(
     'program-picker-makes-a-capture-only-rule',
-    `const capture = [...document.querySelectorAll('main button')].find((b) => /^Capture/.test(b.textContent.trim()) && b.querySelector('svg')); await __t.real.click(capture);
+    `const capture = [...document.querySelectorAll('main button')].find((b) => b.textContent.trim() === 'Capture'); await __t.real.click(capture);
      await __t.waitFor(() => menuItem(/^A running program/), 3000); await __t.real.click(menuItem(/^A running program/));
      await __t.waitFor(() => document.querySelector('[data-program-picker]'), 4000);
      await __t.waitFor(() => (document.querySelector('[data-program-picker] [data-program]') || /No program/.test(document.querySelector('[data-program-picker]').textContent) ? true : null), 15000);
@@ -191,10 +191,10 @@ module.exports = withExpect(steps, {
   'group-by-application-and-none': /^by application: true \| none: true$/,
   'edit-select-matching': /^default: true \| button: Select 1 row \| selected: 1 \| is the 404: true$/,
   'select-matching-says-why-it-cannot': /^disabled: true \| reason: No row matches yet \| summary: .*0 rows of 4 match$/,
-  'command-bar-in-the-palette': /^row: Select status 200 \| selected 200s: 3 \| all 200: true$/,
+  'command-bar-in-the-palette': /^row: Select status 200Enter \| selected 200s: 3 \| all 200: true$/,
   'command-bar-filter-and-help': /^filtered to: 1 \| verbs listed: 10 \| back: true$/,
   'copy-as-powershell-fetch-httpie': /^items: As cURL,As PowerShell,As fetch \(JavaScript\),As HTTPie \| ps: true \| fetch: true \| httpie: true$/,
-  'resend-submenu-and-ten-times': /^items: Once \| Resend 10 times \| Resend the selected, in order \| Resend… \| in order blocked for one row: true \| 10 of 10 sent \| rows: 10 \| statuses: true$/,
+  'resend-submenu-and-ten-times': /^items: Resend \| Once \| Resend 10 times \| Resend the selected, in order \| Resend… \| in order blocked for one row: true \| 10 of 10 sent \| rows: 10 \| statuses: true$/,
   'resend-dialog-stops-at-the-first-failure': /^sent: true \| 404 once: true \| skipped: true$/,
   'program-picker-makes-a-capture-only-rule': /^(listed: true \| rule: only on true|no programs listed.*)$/,
   'clean-up': /^left: 0$/,

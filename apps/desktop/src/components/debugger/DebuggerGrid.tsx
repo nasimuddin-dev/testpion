@@ -461,6 +461,8 @@ export const DebuggerGrid = memo(function DebuggerGrid({
               {sort.col === c.id && (sort.desc ? <ArrowDown size={10} /> : <ArrowUp size={10} />)}
             </button>
           ))}
+          {/* the two menus stay at the right edge while the grid scrolls sideways (with the dock open the grid is narrower than its columns) */}
+          <div className="sticky right-0 h-full flex items-center shrink-0 ml-auto bg-panel border-l border-line">
           <Menu
             width={260}
             items={[
@@ -487,6 +489,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
               </button>
             }
           />
+          </div>
         </div>
         <VirtualList
           className="flex-1"
@@ -555,19 +558,15 @@ export const DebuggerGrid = memo(function DebuggerGrid({
 /** A group's header line (FG-17): a row of the same virtual list, with how many requests, how many failed and how big. */
 function GroupLine({ g, onToggle }: { g: Extract<GridItem, { group: true }>; onToggle(key: string): void }) {
   return (
-    <div
-      role="row"
-      aria-expanded={!g.collapsed}
-      data-group={g.key}
-      className="flex items-center gap-2 h-[24px] px-2 text-xs font-semibold bg-panel border-b border-line cursor-pointer hover:bg-hover select-none"
-      onClick={() => onToggle(g.key)}
-      title={g.collapsed ? 'Show this group' : 'Hide this group'}
-    >
-      {g.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-      <span className="truncate">{g.label}</span>
-      <span className="text-muted font-normal tabular-nums">
-        {plural(g.count, 'request')}
-        {g.errors ? <span className="text-bad"> · {g.errors} failed</span> : null} · {formatBytes(g.bytes)}
+    <div role="row" aria-expanded={!g.collapsed} data-group={g.key} className="flex items-center h-[24px] text-xs font-semibold bg-panel border-b border-line cursor-pointer hover:bg-hover select-none" onClick={() => onToggle(g.key)} title={g.collapsed ? 'Show this group' : 'Hide this group'}>
+      {/* stays in view while the grid scrolls sideways */}
+      <span className="sticky left-0 flex items-center gap-2 px-2 max-w-full">
+        {g.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        <span className="truncate">{g.label}</span>
+        <span className="text-muted font-normal tabular-nums whitespace-nowrap">
+          {plural(g.count, 'request')}
+          {g.errors ? <span className="text-bad"> · {g.errors} failed</span> : null} · {formatBytes(g.bytes)}
+        </span>
       </span>
     </div>
   );
