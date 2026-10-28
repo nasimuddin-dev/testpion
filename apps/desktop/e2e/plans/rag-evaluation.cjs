@@ -145,7 +145,9 @@ const steps = [
        runs = (await window.aps.invoke('runs.list', { limit: 5 })).items.filter((r) => r.name === 'Clinic RAG');
      }
      const res = runs[0] ? await window.aps.invoke('runs.results', { runId: runs[0].id, limit: 10 }) : { items: [] };
-     const checks = res.items.flatMap((r) => r.checks.map((c) => c.type + ':' + (c.score ?? 'n/a') + (c.passed ? '' : '(failed)')));
+     // results.jsonl is in completion order (concurrency 4): the case is picked by its id, never by its place (hours -> token-f1 0.778, cancel -> 1)
+    const hours = res.items.find((r) => /hours/i.test(String(r.id) + ' ' + String(r.name ?? ''))) ?? res.items[0];
+    const checks = (hours ? hours.checks : []).map((c) => c.type + ':' + (c.score ?? 'n/a') + (c.passed ? '' : '(failed)'));
      return 'estimate: ' + /Judge calls\\s*4/.test(calls) + ' | runs: ' + runs.length + ' | passed: ' + runs[0]?.passed + '/' + runs[0]?.total + ' | judged: ' + res.items.flatMap((r) => r.checks).filter((c) => c.source === 'ai-judge').length + ' | ' + checks.slice(0, 5).join(' ');`,
   ),
   step(
