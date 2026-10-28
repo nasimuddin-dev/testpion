@@ -169,7 +169,7 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
         if (!kind) continue;
         if (e.isDirectory()) stack.push({ dir: path, depth: f.depth + 1 });
         else file(path, kind);
-        if (++n % 64 === 0 && performance.now() > until) break;
+        if (++n % 16 === 0 && performance.now() > until) break;
       }
       if (stack.length) later(slice);
       else done?.();
@@ -369,6 +369,8 @@ export function watchWorkspace(root: string, onChange: (changes: WorkspaceChange
     watcher?.close();
   };
   const adopt = () => {
+    // events heard so far are about what the app adopts (git's changes): the walk takes the files as they are
+    pending.clear();
     seen.clear();
     adopting = true;
     adoptedAt = Date.now();
