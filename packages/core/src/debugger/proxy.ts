@@ -3,6 +3,7 @@ import { request as httpsRequest } from 'node:https';
 import { connect as tcpConnect, isIP, type Socket } from 'node:net';
 import { lookup as dnsLookupAll } from 'node:dns/promises';
 import { guardedLookup, upstreamAgents } from './upstream-guard.js';
+import { PROXY_PAGE_HEADERS, proxyPageHtml, remoteHttpAgent } from './proxy-page.js';
 import { isLocalOnlyAddress } from '../net/policy.js';
 import { createSecureContext, TLSSocket } from 'node:tls';
 import {
@@ -377,6 +378,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
    * certificates) each request hashed it to find its agent. A new one is made only when the trusted CAs change.
    */
   const upstreamHttps = upstreamAgents(trustedCa, () => !!opts.decrypt?.insecureUpstream);
+  const remoteHttp = remoteHttpAgent(); // plain-HTTP keep-alive pool of the devices on the network
   /** TLS contexts of the leaf certificates handed to clients, by certificate (parsing the PEM for every tunnel was repeated work). */
   const contexts = new BoundedMap<string, ReturnType<typeof createSecureContext>>(500);
   const contextFor = (leaf: { cert: string; key: string }) => {
@@ -606,13 +608,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (!pem) return void res.writeHead(404, { 'content-type': 'text/plain' }).end('HTTPS decryption is off: no root certificate to download.');
       return void res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="testpion-root.crt"' }).end(pem);
     }
-    const here = `http://${req.headers.host ?? (req.headers[':authority'] as string | undefined) ?? 'this-computer'}`;
-    const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TestPion HTTP Debugger</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#1b1f2a}code{background:#eef1f6;padding:0 .3em;border-radius:4px}a.b{display:inline-block;margin:.5rem 0;padding:.6rem 1rem;background:#4f6bff;color:#fff;border-radius:8px;text-decoration:none}</style>
-<h1>TestPion HTTP Debugger</h1>
-<p>This device can send its traffic through TestPion: set its Wi-Fi proxy to <b>manual</b>, server <code>${here.replace(/^http:\/\//, '').replace(/:\d+$/, '')}</code>, port <code>${here.split(':').pop()}</code>.</p>
-${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on this device:</p><p><a class="b" href="/testpion-root.crt">Download the root certificate</a></p><p>Android: Settings ▸ Security ▸ Encryption & credentials ▸ Install a certificate ▸ CA certificate. iOS: open the downloaded profile in Settings ▸ General ▸ VPN & Device Management, then Settings ▸ General ▸ About ▸ Certificate Trust Settings ▸ turn it on. Remove it when you are done.</p>` : '<p>HTTPS decryption is off in TestPion, so HTTPS shows as tunnels by host.</p>'}`;
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(page);
+    const here = String(req.headers.host ?? (req.headers[':authority'] as string | undefined) ?? 'this-computer');
+    res.writeHead(200, PROXY_PAGE_HEADERS).end(proxyPageHtml(here, !!pem));
   }
 
   /** A gRPC call over HTTP/2 to the server: messages both ways read along, trailers passed back, the status kept. */
@@ -636,10 +633,11 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     const fromClient = read('request', () => String(req.headers['grpc-encoding'] ?? ''));
     const fromServer = read('response', () => responseEncoding);
     if (listed) record(e, 'request');
-    const key = target.origin;
+    // a session opened for this computer's own clients is never used for a device on the network (it was opened without the address check)
+    const key = `${remoteExchanges.has(e) ? 'remote' : 'local'} ${target.origin}`;
     let session = h2Sessions.get(key);
     if (!session || session.closed || session.destroyed) {
-      session = h2connect(key, { ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {}) });
+      session = h2connect(target.origin, { ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(target.protocol === 'https:' ? { ...upstreamTls(), ALPNProtocols: ['h2'] } : {}) });
       session.on('error', () => undefined);
       session.on('close', () => h2Sessions.delete(key));
       h2Sessions.set(key, session);
@@ -734,7 +732,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     if (e.redirectedTo) h.host = target.host;
     const hold = !!(decision?.responseHeaders || decision?.responseBody !== undefined || breakpoint);
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : {}) }, async (ures) => {
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) }, async (ures) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -920,9 +918,10 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
     if (listed) record(e, 'request');
     const h = { ...req.headers };
     delete h['proxy-connection'];
+    delete h['proxy-authorization']; // the pairing secret of a device on the network is for this proxy, not for the server
     if (e.redirectedTo) h.host = target.host;
     const secure = target.protocol === 'https:';
-    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : {}) });
+    const up = (secure ? httpsRequest : httpRequest)(target, { method: req.method, headers: h, ...(remoteExchanges.has(e) ? { lookup: guardedLookup } : {}), ...(secure ? upstreamHttps(remoteExchanges.has(e)) : remoteExchanges.has(e) ? { agent: remoteHttp } : {}) });
     const report = throttled(e);
     const frame = (f: WebSocketFrame) => {
       e.frames!.push(f);
@@ -1191,6 +1190,7 @@ ${pem ? `<p>To see HTTPS too, install and trust TestPion's root certificate on t
         for (const sess of h2Sessions.values()) sess.destroy();
         h2Sessions.clear();
         upstreamHttps.destroy();
+        remoteHttp.destroy();
         server.closeAllConnections?.();
         server.close(() => resolve());
       }),
