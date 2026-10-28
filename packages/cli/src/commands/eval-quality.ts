@@ -51,7 +51,7 @@ export function registerEvalQualityCommands(ev: Command, runEval: RunEval): void
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
         const d = findSavedEvaluation(store, ref);
-        if (d.type === 'rag') throw new CliError('This is an evaluation of a bot with sources: use `testpion rag estimate`', EXIT.CONFIG_ERROR);
+        if (d.type === 'rag') throw new CliError('This is an evaluation of a bot with sources: use `testpion rag run --estimate`', EXIT.CONFIG_ERROR);
         if (o.environment) requireEnvironment(store, o.environment);
         const ctx = cliContext(store, o.environment);
         try {
@@ -100,12 +100,12 @@ export function registerEvalQualityCommands(ev: Command, runEval: RunEval): void
           if (o.dryRun) return o.json ? printJson(plan) : console.log(`Case ${plan.caseNumber} of ${plan.cases}: ${plan.estimate.summary}. Nothing was sent.`);
           if (!plan.estimate.free && !o.yes) throw new CliError(`This sends case ${plan.caseNumber} to ${d.provider}/${d.model || 'its default model'}${plan.estimate.costUsd !== undefined ? ` (about ${formatEstimateUsd(plan.estimate.costUsd)})` : ''}. Run again with --yes to go ahead.`, EXIT.CONFIG_ERROR);
           const r = await tryEvalCheck({ draft: d, check, caseNumber: Number(o.case) }, { services: ctx.services, store });
+          if (r.passed === false || r.error) process.exitCode = EXIT.TEST_FAILURE;
           if (o.json) return printJson(r);
           console.log(`${bold(`Case ${r.caseNumber} of ${r.cases}`)} ${dim(JSON.stringify(r.input))}`);
           console.log(`reply: ${r.reply}`);
           console.log(r.error ? red(`error: ${r.error}`) : `${r.passed ? green('passed') : red('failed')}${r.reason ? `: ${r.reason}` : ''}`);
           if (r.costUsd) console.log(dim(`cost ${formatEstimateUsd(r.costUsd)}`));
-          if (r.passed === false || r.error) process.exitCode = EXIT.TEST_FAILURE;
         } finally {
           await ctx.dispose();
         }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { AiUsage } from '../components/AiUsage';
 import { call } from '../api';
@@ -9,22 +9,16 @@ import { Playground } from './ai/Playground';
 import { Compare } from './ai/Compare';
 import { Providers } from './ai/Providers';
 import { Rag } from './ai/Rag';
+import { Start } from './ai/Start';
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
-  const [tab, setTab] = useSticky<'playground' | 'compare' | 'rag' | 'providers' | 'usage'>('ai:tab', 'playground');
+  const [tab, setTab] = useSticky<'start' | 'playground' | 'compare' | 'rag' | 'providers' | 'usage'>('ai:tab', 'start');
   const [providers, setProviders] = useState<ProviderConfig[]>();
   const load = useCallback(() => call<ProviderConfig[]>('ai.providers').then(setProviders), []);
   useEffect(() => {
     void load();
   }, [load]);
-  // nothing else here works without a provider: a workspace without one opens on Providers
-  const landed = useRef(false);
-  useEffect(() => {
-    if (!providers || landed.current) return;
-    landed.current = true;
-    if (!providers.length) setTab('providers');
-  }, [providers, setTab]);
   /** A provider to show (a link such as an error's "Add the key"): selected, its key field focused. */
   const [focusProvider, setFocusProvider] = useState<{ id: string; at: number }>();
   /** A RAG target to open (a link to it). */
@@ -41,6 +35,7 @@ export function AiLabView() {
       setFocusProvider({ id: p.providerId, at: Date.now() });
     }
     if (p?.reset) setTab('playground');
+    if (p?.start) setTab('start');
   });
   return (
     <div className="h-full flex flex-col">
@@ -48,7 +43,8 @@ export function AiLabView() {
         value={tab}
         onChange={setTab}
         tabs={[
-          // providers first: the rest needs one
+          // the first page says what AI Lab does and works with no model (the sample); models are set up on the next tabs
+          { id: 'start', label: 'Start', title: 'What do you want to check? Cards by task, the sample, your latest runs' },
           { id: 'providers', label: 'Providers', badge: providers?.length || undefined, title: 'The AI providers prompts are sent to (set up first)' },
           { id: 'playground', label: 'Playground' },
           { id: 'compare', label: 'Model comparison' },
@@ -57,6 +53,7 @@ export function AiLabView() {
         ]}
       />
       <div className="flex-1 min-h-0">
+        {tab === 'start' && <Start providers={providers} onTab={setTab} />}
         {tab === 'playground' && <Playground providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'compare' && <Compare providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'rag' && <Rag openTarget={ragTarget} />}

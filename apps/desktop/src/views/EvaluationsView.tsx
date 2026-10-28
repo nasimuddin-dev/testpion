@@ -12,8 +12,16 @@ import { call, on } from '../api';
 import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
-import { countDatasetRecords, datasetFormatOf, datasetFormatOfName, previewDatasetRecords } from '@testpion/shared';
-import { downloadContent, pickTextFile } from '../lib/files';
+import { countDatasetRecords, datasetFormatOf, previewDatasetRecords } from '@testpion/shared';
+import { downloadContent } from '../lib/files';
+import { CasesPane } from '../components/ai/CasesPane';
+import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
+import { EvalCostLine } from '../components/ai/EvalCostLine';
+import { EvalRunHeadline } from '../components/ai/EvalRunHeadline';
+import { SpendDialog } from '../components/ai/SpendDialog';
+import { shortCost, useEvalEstimate, type EvalEstimateResult } from '../lib/eval-estimate';
+import { formatCost } from '../lib/format';
+import type { TryCheckResult } from '@testpion/core';
 import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { RagConnectDialog } from '../components/rag/RagConnectDialog';
 import { RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/starter';
@@ -57,6 +65,8 @@ interface Draft {
   concurrency: number;
   limit?: number;
   retries: number;
+  /** A prompt evaluation: the run stops once it has cost this much (USD). Unset: $1.00 on a paid model, none on the offline demo model; 0: no cap. */
+  maxCostUsd?: number;
   /** type rag: the RAG target (a library item id) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type rag with a target: the judge of the judged metrics (unset: the AI settings' large model). */
@@ -100,9 +110,6 @@ function MetricEstimateLine({ draft, env }: { draft: Draft; env?: string }) {
 }
 
 /** Evaluation Lab: dataset × prompt × model × evaluators, streamed through the test runner. */
-/** The editor's language for each dataset format: colours, and each format's own checks (JSONL line by line). */
-const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdown' } as const;
-
 export function EvaluationsView() {
   // WF-19: open evaluations are tabs (each its own draft; a single click in the list opens a preview tab)
   const tabs = useLibraryTabs<Draft>('eval', drafts, { canBeEmpty: true });
@@ -123,6 +130,9 @@ export function EvaluationsView() {
   }, []);
   const env = useApp((s) => s.environment);
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
+  // what a run costs, said beside Run before it starts (AU-5); a run over $0.50 asks once (AU-18)
+  const estimate = useEvalEstimate(d, env);
+  const [asking, setAsking] = useState<{ draft: Draft; estimate: EvalEstimateResult }>();
   useEffect(() => {
     void call<ProviderConfig[]>('ai.providers').then((p) => {
       setProviders(p);
@@ -205,7 +215,14 @@ export function EvaluationsView() {
     tabs.setSaved(await saved.put({ name, folder, data: { ...d, name } }));
   };
   // the Collections explorer / search open a saved evaluation
-  useIntent('evaluations', (p) => p?.savedId && void openSaved(p.savedId));
+  useIntent('evaluations', (p) => {
+    if (p?.new) tabs.newTab(drafts.defaults);
+    if (p?.sample) void trySample();
+    else if (p?.savedId)
+      void openSaved(p.savedId).then(() => {
+        if (p.runId) (setRunId(p.runId), setPane('runs'));
+      });
+  });
   const evalRuns = useMemo(() => {
     const names = new Set(saved.lib.items.map((i) => i.name));
     return runs.filter((r) => names.has(r.name) || r.name === d.name);
@@ -243,16 +260,39 @@ export function EvaluationsView() {
   const remedy = problem === 'cases' ? { label: 'Add example cases', onClick: addExampleCases } : problem === 'model' ? { label: OFFLINE_DEMO_LABEL, onClick: () => void useDemo() } : undefined;
   /** A run that asks a judge or an embedding model is estimated first (calls, tokens, cost, caps); a run of free metrics starts at once. */
   const spends = d.type === 'rag' && !!ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e));
-  const run = () => (spends ? setEstimating(true) : void runDraft(d));
-  const runDraft = async (d: Draft) => {
+  const run = () => (spends ? setEstimating(true) : void startRun(d));
+  /** Estimate first: a prompt evaluation over $0.50 (or 100 calls) asks once before it sends anything. */
+  const startRun = async (x: Draft) => {
+    if (x.type === 'llm') {
+      const est = await call<EvalEstimateResult>('eval.estimate', { draft: x, environment: env }).catch(() => undefined);
+      if (est?.plan.ask) return setAsking({ draft: x, estimate: est });
+    }
+    await runDraft(x);
+  };
+  const runDraft = async (d: Draft, confirm = false) => {
     await attempt(async () => {
       // the engine builds the test template, exactly as `testpion eval run` and the run_evaluation MCP tool do
-      const r = await call<{ runId: string }>('eval.runDraft', { draft: d, environment: env });
+      const r = await call<{ runId: string }>('eval.runDraft', { draft: d, environment: env, ...(confirm ? { confirm } : {}) });
       setRunId(r.runId);
       setPane('runs');
       setRuns((rs) => [{ id: r.runId, name: d.name, startedAt: new Date().toISOString(), passed: 0, total: 0, failed: 0, errors: 0 }, ...rs]);
     });
   };
+  /** Try the sample (AU-4): the offline demo model and a 10-case evaluation are made, opened and run. */
+  const trySample = async () => {
+    await attempt(async () => {
+      const r = await call<{ runId: string; evaluation: string }>('ai.sample');
+      setProviders(await call<ProviderConfig[]>('ai.providers'));
+      await saved.reload();
+      await openSaved(r.evaluation);
+      setRunId(r.runId);
+      setPane('runs');
+      setRuns((rs) => [{ id: r.runId, name: 'Sample: support intents', startedAt: new Date().toISOString(), passed: 0, total: 0, failed: 0, errors: 0 }, ...rs]);
+    });
+  };
+  /** Try one check on one case (AU-11). */
+  const tryCheckOnCase = (check: CheckConfig, caseNumber: number, dryRun: boolean) => call<TryCheckResult>('eval.tryCheck', { draft: d, check, caseNumber, dryRun, environment: env });
+  const offline = providers.find((p) => p.id === d.provider)?.kind === 'mock';
 
   return (
     <Split id="eval-sidebar" sidebar initial={18} min={12}>
@@ -280,7 +320,7 @@ export function EvaluationsView() {
                   on: {
                     run: () =>
                       void openSaved(id).then((it) => {
-                        if (it) void runDraft({ ...drafts.load(), ...it.data, name: it.name });
+                        if (it) void startRun({ ...drafts.load(), ...it.data, name: it.name });
                       }),
                   },
                 })}
@@ -338,6 +378,7 @@ export function EvaluationsView() {
       />
     )}
     {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} evaluation={savedId} onClose={() => setTryCheck(undefined)} />}
+    {asking && <SpendDialog estimate={asking.estimate} onClose={() => setAsking(undefined)} onRun={() => (setAsking(undefined), void runDraft(asking.draft, true))} />}
     {mapper && <RagColumnMapper dataset={d.dataset} format={readAs} onApply={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setMapper(false)} />}
     {importing && <RagImportDialog onImport={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setImporting(false)} />}
     <LibraryTabStrip
@@ -381,8 +422,10 @@ export function EvaluationsView() {
             </Button>
             <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!!problem || (!ragTarget && !d.provider)} reason={!count ? 'There are no test cases yet: add example cases' : 'Choose a model first: use the offline demo model'} data-eval-run>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
+              {d.type === 'llm' && count > 0 && shortCost(estimate, formatCost) ? ` · ${shortCost(estimate, formatCost)}` : ''}
             </Button>
           </div>
+          {d.type === 'llm' && count > 0 && <EvalCostLine estimate={estimate} model={d.model} />}
           {problem && remedy && (
             <Callout
               tone="warn"
@@ -458,6 +501,11 @@ export function EvaluationsView() {
                 <Field label="Only the first … cases" hint="Leave empty to run them all">
                   <Input type="number" value={d.limit ?? ''} placeholder="all" onChange={(e) => set({ limit: e.target.value ? Number(e.target.value) : undefined })} />
                 </Field>
+                {d.type === 'llm' && (
+                  <Field label="Spend cap (USD)" hint="The run stops once it has cost this much. Empty: $1.00 on a paid model, none on the offline demo model. 0: no cap">
+                    <Input type="number" min={0} step="0.1" value={d.maxCostUsd ?? ''} placeholder="1.00" onChange={(e) => set({ maxCostUsd: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)) })} aria-label="Spend cap in dollars" data-eval-cap />
+                  </Field>
+                )}
               </div>
             </div>
           </details>
@@ -473,114 +521,21 @@ export function EvaluationsView() {
         />
         <div className="flex-1 min-h-0">
           {(sub === 'dataset' || (sub === 'prompt' && ragTarget)) && (
-            <div className="h-full flex flex-col">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm border-b border-line">
-                {(['jsonl', 'json', 'csv', 'md'] as const).map((f) => (
-                  <label key={f} className="flex items-center gap-1">
-                    <input type="radio" checked={d.datasetFormat === f} onChange={() => set({ datasetFormat: f })} /> {f.toUpperCase()}
-                  </label>
-                ))}
-                <label className="ml-auto flex items-center gap-1 text-xs text-muted whitespace-nowrap">
-                  Expected answer column
-                  <Input className="h-6 min-h-6 w-24 text-xs" value={d.expectedField} onChange={(e) => set({ expectedField: e.target.value })} />
-                </label>
-                {d.type === 'rag' && (
-                  <>
-                    <Button size="sm" onClick={() => setImporting(true)} title="Read the test cases of another tool (Ragas, DeepEval, BEIR, NVIDIA, promptfoo; only data is read) as cases for a bot with sources" data-rag-import>
-                      Import…
-                    </Button>
-                    <Button size="sm" onClick={() => setMapper(true)} title="Choose which column is the question, the expected answer, the right document ids …" data-rag-map-columns>
-                      Map columns…
-                    </Button>
-                    <Select className="h-7 min-h-7 py-0 text-xs max-w-32" aria-label="Export the test cases" value="" onChange={(e) => e.target.value && void exportRag(e.target.value as 'ragas' | 'deepeval')}>
-                      <option value="">Export as…</option>
-                      <option value="ragas">Ragas</option>
-                      <option value="deepeval">DeepEval</option>
-                    </Select>
-                  </>
-                )}
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    void pickTextFile('.jsonl,.json,.csv,.tsv,.md,.ndjson').then((f) => f && set({ dataset: f.text, datasetFormat: datasetFormatOfName(f.name) ?? 'jsonl' }))
-                  }
-                >
-                  Load file…
-                </Button>
-                {datasets.length > 0 && (
-                  <Select
-                    className="h-7 min-h-7 py-0 text-xs max-w-48"
-                    aria-label="Load saved test cases"
-                    value=""
-                    onChange={async (e) => {
-                      if (!e.target.value) return;
-                      try {
-                        const r = await call<{ name: string; text: string }>('datasets.read', { path: e.target.value });
-                        set({ dataset: r.text, datasetFormat: datasetFormatOfName(r.name) ?? 'jsonl' });
-                      } catch (err) {
-                        toastError(err);
-                      }
-                    }}
-                  >
-                    <option value="">or saved test cases…</option>
-                    {datasets.map((x) => (
-                      <option key={x.path} value={x.path}>
-                        {x.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </div>
-              {readAs !== d.datasetFormat && (
-                <Callout
-                  tone="warn"
-                  className="m-2 mb-0"
-                  data-format-mismatch="jsonl"
-                  action={
-                    <Button size="sm" onClick={() => set({ datasetFormat: readAs })}>
-                      Switch to {readAs.toUpperCase()}
-                    </Button>
-                  }
-                >
-                  This text has one JSON object per line, so it is read as {readAs.toUpperCase()}, not as one JSON document.
-                </Callout>
-              )}
-              <div className="flex-1 min-h-0">
-                <Split id="eval-dataset" direction="vertical" initial={65}>
-                  <CodeEditor language={EDITOR_LANGUAGE[readAs]} value={d.dataset} onChange={(dataset) => set({ dataset })} />
-                  <div className="h-full overflow-auto p-2 text-xs">
-                    <div className="text-muted mb-1">
-                      Preview · {count} cases · each column is available as {'{{column}}'} in the prompt and checks
-                      {d.type === 'rag' && (ragTarget ? ' · for a bot with sources: question, reference (the expected answer), reference_ids (the right document ids), reference_contexts' : ' · cases for a bot with sources need question, contexts [{id,text}] and optionally answer/expected')}
-                    </div>
-                    {preview.length > 0 && (
-                      <table className="w-full">
-                        <thead>
-                          <tr>
-                            {previewKeys.map((k) => (
-                              <th key={k} className={cx('text-left px-1 font-medium', vars.includes(k) || k === d.expectedField ? 'text-accent' : 'text-muted')}>
-                                {k}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {preview.map((r, i) => (
-                            <tr key={i} className="border-t border-line">
-                              {previewKeys.map((k) => (
-                                <td key={k} className="px-1 py-0.5 mono truncate max-w-48">
-                                  {typeof r[k] === 'object' ? JSON.stringify(r[k]) : String(r[k] ?? '')}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </Split>
-              </div>
-            </div>
+            <CasesPane
+              d={d}
+              set={(p) => set(p)}
+              count={count}
+              readAs={readAs}
+              preview={preview}
+              previewKeys={previewKeys}
+              vars={vars}
+              ragTarget={!!ragTarget}
+              datasets={datasets}
+              onImport={() => setImporting(true)}
+              onMap={() => setMapper(true)}
+              onExportRag={(to) => void exportRag(to)}
+              onExample={addExampleCases}
+            />
           )}
           {sub === 'prompt' && !ragTarget && (
             <div className="h-full flex flex-col">
@@ -621,7 +576,13 @@ export function EvaluationsView() {
                   footer={ragTarget ? <MetricEstimateLine draft={d} env={env} /> : <span className="text-muted">Choose a bot to see what a run costs.</span>}
                 />
               ) : (
-                <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+                <>
+                  <GoodAnswerPicker evaluators={d.evaluators} onChange={(evaluators) => set({ evaluators })} cases={count} onTry={tryCheckOnCase} />
+                  <details className="mx-3 mb-3 text-sm" data-more-checks open={d.evaluators.length > 0}>
+                    <summary className="cursor-pointer text-muted select-none py-1">More checks and the checks of this evaluation ({d.evaluators.length})</summary>
+                    <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+                  </details>
+                </>
               )}
               {/* the gates belong to the metrics: under the picker, so the form above it keeps its height */}
               {d.type === 'rag' && ragTarget && (
@@ -664,7 +625,12 @@ export function EvaluationsView() {
             <EvalMatrix runs={evalRuns} onRun={() => void run()} />
           </div>
         ) : runId ? (
-          <RunPanel runId={runId} expectedTotal={d.limit ? Math.min(d.limit, count) : count} />
+          <div className="h-full flex flex-col min-h-0">
+            <EvalRunHeadline runId={runId} offline={offline} onCi={() => useApp.getState().set({ ci: { evaluation: current?.name } })} ciReason={current ? undefined : 'Save this evaluation first: the pipeline runs it by name'} />
+            <div className="flex-1 min-h-0">
+              <RunPanel runId={runId} expectedTotal={d.limit ? Math.min(d.limit, count) : count} />
+            </div>
+          </div>
         ) : (
           <div className="h-full flex flex-col">
             {evalRuns.length ? (
@@ -673,10 +639,14 @@ export function EvaluationsView() {
             ) : (
               <Empty
                 icon={<FlaskConical size={28} />}
-                title="Run an evaluation"
-                actions={remedy ? [{ label: remedy.label, icon: <Play size={12} />, onClick: remedy.onClick }] : [{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run }]}
+                title="Run this evaluation"
+                steps={['Each test case is sent to the prompt and the model.', 'Your checks decide whether each answer is good.', 'You see how many passed, with the failures first.']}
+                actions={[
+                  ...(remedy ? [{ label: remedy.label, icon: <Play size={12} />, onClick: remedy.onClick }] : [{ label: `Run ${count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}`.trim(), icon: <Play size={12} />, onClick: run }]),
+                  { label: 'Try the sample (offline)', icon: <FlaskConical size={12} />, onClick: () => void trySample(), title: 'Ten example messages on the offline demo model: no key, no network, a result in a few seconds' },
+                ]}
               >
-                An evaluation sends every test case to the prompt and the model, and checks each answer with your checks. The results are kept, so you can compare runs later.
+                The results are kept, so you can compare runs later.
               </Empty>
             )}
           </div>

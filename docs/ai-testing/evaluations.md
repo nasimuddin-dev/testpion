@@ -32,6 +32,48 @@ The first row has the evaluation's name, its type (**Prompt or chatbot** or **Bo
 
 The expert settings are under **Options**, closed until you open them: **Randomness** (0 gives the same answer every time), **Run at once** (how many cases are sent together), **Try again on errors** and **Only the first … cases**; for a bot with sources also the **AI reviewer provider** and **AI reviewer model**. The tabs are **Test cases** (the data, with the **Expected answer column**), **Prompt** and **Checks**. Beside every check one sentence says what it decides.
 
+## Try the sample
+
+**AI Lab** opens on **Start**: "What do you want to check?" with a card for each job (answers are correct, which is better, answers come from my documents, nothing got worse, an agent uses tools), your latest runs with how many passed, and **Try the sample (offline)**. The sample adds the offline demo model, makes the evaluation *Sample: support intents* (ten support messages to sort into cancellation, refill, booking or other, checked with "the reply contains the expected answer"), runs it, and shows **10 of 10 passed**. Nothing leaves your computer and no key is needed. The demo model answers by rules, so the result shows how a run looks and says nothing about a real model; the result says **Offline demo** to keep that clear. The sample is put back as written each time you try it, so make your own with **Duplicate**.
+
+```bash
+testpion eval sample                 # make it and run it (--no-run only makes it, --json for scripts)
+```
+
+AI agents use the `eval_sample` tool of `testpion mcp-server`.
+
+## Test cases as a table
+
+The **Test cases** tab shows the cases as a table: one row per case, one column per field, cells you type in. Columns named in the prompt as `{{name}}` and the expected answer column are marked. **Enter** in the last row adds a case; **Add column** adds a field. **Paste cases…** takes cells copied from a spreadsheet, a CSV file, JSONL lines or a JSON list: it finds the columns, guesses which one is the input and which is the expected answer (you can change both), and adds the cases to the table or replaces it. **Edit as text** shows the same cases as the text of a file (JSONL, JSON, CSV or Markdown); **Load file…** reads one. The table stays quick with thousands of cases, and holds up to 20,000 (edit larger sets as text). A bot with sources keeps the text editor, with its import and column mapping.
+
+## What is a good answer?
+
+On the **Checks** tab of a prompt evaluation, tick what applies: *Matches the expected answer exactly*, *Contains a word or phrase*, *Matches a pattern*, *Is valid JSON*, *Similar meaning to the expected answer*, *Graded by an AI reviewer*. One sentence under each says what it decides. For each tick, **Try on case N** sends that case to the model and shows the reply, whether the check passed and why (an AI reviewer's reason when it grades), before you save anything. A check of fixed rules on the offline demo model is free and runs at once. A call to a paid model, and any check an AI reviewer grades, show what it costs first and send only when you press **Send**. The other checks, and the ones this evaluation already has, are under **More checks**.
+
+```bash
+testpion eval check "Intent classification" --type contains --expected "{{expected}}" --case 3
+testpion eval check "Intent classification" --type llm-judge --criteria "Polite" --case 1 --dry-run
+```
+
+`--dry-run` says what would be sent and what it costs; a paid model needs `--yes`. AI agents use `eval_try_check` (`dry_run`, and `confirm: true` for a paid model).
+
+## What a run costs, and the spend cap
+
+Beside **Run** a line says what the run will cost before anything is sent: *20 cases · about $0.03 · ~40 s*. It comes from the cases, the prompt and your [price table](/ai-testing/model-pricing); a check an AI reviewer grades doubles the calls. The offline demo model and models on this computer are *free*; a model with no price says *cost unknown* with **Set a price…**.
+
+A run on a paid model stops at a hard cap of **$1.00** (change it under **Options** as **Spend cap (USD)**; `0` means no cap). When it stops it says *Stopped at $1.00 after 14 of 20 cases. Raise the cap to continue.* A run that is estimated over **$0.50** (or 100 calls) asks once before it sends anything. The offline demo model has no cap.
+
+```bash
+testpion eval estimate "Intent classification" --json    # cases, calls, tokens, dollars, seconds, the cap and whether a run asks first
+testpion eval run "Intent classification" --max-cost 2 --yes
+```
+
+`--yes` goes ahead past the question; `--max-cost` sets the cap (`0` for none). A run stopped at its cap exits with an error, so a pipeline never passes on part of the cases. AI agents use `eval_estimate`, and `run_evaluation` takes `max_cost_usd` and `confirm: true`.
+
+## The result, and Run in CI
+
+Above a run, one chip says how many passed (*17 of 20 passed*) with the cost and the time. **Run in CI…** opens the pipeline dialog with this evaluation chosen: the pipeline runs `testpion eval run "name" --baseline last-good --fail-on-regression --yes` and fails when a case got worse than the **last good run** (the last run of this evaluation that passed; the first run has none and becomes it). The model's key is a CI secret the dialog lists. The same file comes from `testpion ci github --evaluation "name"` or the `ci_config` tool with `evaluation`.
+
 ## Check types {#evaluator-types}
 
 | Source | Checks |

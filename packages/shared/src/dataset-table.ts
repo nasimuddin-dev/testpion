@@ -104,7 +104,7 @@ export interface PastedCases {
  * Cases pasted from a spreadsheet (tab separated), a CSV file, JSONL or a JSON list. Recognised by its shape. A paste of
  * one column is a list of inputs. When no header row looks like one, the first column is `input` and the second `expected`.
  */
-export function parsePastedCases(text: string): PastedCases | undefined {
+export function parsePastedCases(text: string, o: { /** true: the first row is the header; false: it is a case; unset: decided from its shape. */ header?: boolean } = {}): PastedCases | undefined {
   const t = text.replace(/^﻿/, '').trim();
   if (!t) return undefined;
   const asJson: DatasetTextFormat | undefined = t.startsWith('[') ? 'json' : t.startsWith('{') ? 'jsonl' : undefined;
@@ -117,7 +117,7 @@ export function parsePastedCases(text: string): PastedCases | undefined {
   if (!cells.length) return undefined;
   const header = cells[0]!;
   const looksLikeHeader = cells.length > 1 && header.every((c) => /^[A-Za-z_][\w.-]{0,40}$/.test(c.trim()) || /^expected (answer|output)$/i.test(c.trim())) && new Set(header.map((c) => c.trim().toLowerCase())).size === header.length && cells.length > 1 && header.length === Math.max(...cells.map((r) => r.length));
-  if (looksLikeHeader) {
+  if (o.header === true || (o.header === undefined && looksLikeHeader)) {
     const rows = rowsOfCells(cells, MAX_TABLE_ROWS);
     return { format: 'csv', rows, columns: header.map((c) => c.trim()), headerless: false };
   }

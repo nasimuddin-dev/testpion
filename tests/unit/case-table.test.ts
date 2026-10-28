@@ -61,3 +61,13 @@ describe('test cases as a table (AU-10)', () => {
     expect(performance.now() - t).toBeLessThan(500);
   });
 });
+
+describe('the first row of a paste', () => {
+  it('can be forced to be a header or a case', () => {
+    const text = 'refill\tcancellation\nI need one\trefill';
+    expect(parsePastedCases(text)!.columns).toEqual(['refill', 'cancellation']);
+    expect(parsePastedCases(text, { header: false })!.rows).toHaveLength(2);
+    expect(parsePastedCases(text, { header: false })!.columns).toEqual(['input', 'expected']);
+    expect(parsePastedCases('Cancel it\tcancellation\nOther\trefill', { header: true })!.columns).toEqual(['Cancel it', 'cancellation']);
+  });
+});

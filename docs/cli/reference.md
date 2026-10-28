@@ -48,6 +48,9 @@ testpion vars usages|rename -w   Where a variable is used; rename it everywhere
 testpion openapi-diff <old> <new>   List breaking changes between two OpenAPI versions (--fail-on-breaking for CI)
 testpion openapi-lint [specs...]     Lint OpenAPI documents: broken $refs, undeclared path parameters, duplicate operationIds …
 testpion eval list|run <name>   Evaluations saved in the app: list them, or run one by name (exit 1 on failures)
+testpion eval sample   Make the sample evaluation (10 cases, the offline demo model, no key) and run it
+testpion eval estimate <name>   What a run would cost before it starts: cases, calls, dollars, seconds, the spend cap
+testpion eval check <name> --type contains --expected x   Try one check on one case: the reply, passed or failed, why
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
 testpion rag targets|probe|connect|metrics|metric|probes|presets|run|rescore|compare|cache|import|export   RAG systems under test: connect, probe, the 138 metrics, your own metrics, run with gates, re-score, compare, convert datasets
@@ -674,6 +677,12 @@ RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/r
 
 `eval run` of a RAG evaluation checks the target and the judge before it sends the first question, and takes `--judge <provider/model>` and
 `--max-judge-cost <usd>`. Without a usable judge it exits `2` and lists what to configure; the verdicts are cached, so a second run costs nothing.
+
+## `eval sample`, `eval estimate`, `eval check`
+
+`eval sample` makes the evaluation *Sample: support intents* (ten messages, the offline demo model, one check) and runs it: `--no-run` only makes it, `--json` prints the run. `eval estimate <name>` says what a run would cost (`--limit`, `--max-cost`, `--json`). `eval check <name>` tries one check on one case (`--type` with `--expected`, `--path`, `--criteria`, or `--check '{json}'`; `--case n`; `--dry-run` sends nothing; a paid model needs `--yes`). See [Evaluations](/ai-testing/evaluations#what-a-run-costs-and-the-spend-cap).
+
+`eval run` stops at a spend cap (`--max-cost <usd>`: $1.00 for a paid model, none for the offline demo model, `0` for no cap), refuses a run estimated over $0.50 or 100 calls until `--yes`, and takes `--baseline last-good`, the last run of the evaluation that passed (the first run has none and becomes it). `ci <provider> --evaluation <name>` writes the pipeline for it.
 
 ## `eval compare` and `eval matrix`
 
