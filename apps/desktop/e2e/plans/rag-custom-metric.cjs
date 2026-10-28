@@ -70,7 +70,7 @@ const steps = [
     'the-metric-is-in-the-picker',
     `await __t.real.key('Escape'); await __t.sleep(400);
      await __t.view('Evaluations'); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'RAG')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      const t = tab('Metrics'); if (!t) return 'NO TAB Metrics';
      await __t.real.click(t);

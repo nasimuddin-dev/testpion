@@ -35,7 +35,7 @@ export function RagAuthorAction({ target }: { target: string }) {
         <Field label="What do you want to find out?" hint="Optional: the AI picks metrics and pass marks for it.">
           <Input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Answers come from the handbook and never invent a dose" aria-label="What do you want to find out" data-rag-author-goal />
         </Field>
-        <Field label="Dataset" hint="Its columns decide which metrics can run.">
+        <Field label="Test cases" hint="Its columns decide which metrics can run.">
           <Select value={dataset} onChange={(e) => setDataset(e.target.value)} aria-label="Dataset to draft the evaluation for" data-rag-author-dataset>
             <option value="">None</option>
             {(context?.datasets ?? []).map((d) => (
@@ -46,7 +46,7 @@ export function RagAuthorAction({ target }: { target: string }) {
           </Select>
         </Field>
       </div>
-      {dataset && <Toggle checked={slice} onChange={setSlice} label="Also save the records it runs as a dataset file" title={`Writes datasets/${dataset.replace(/\.[^.]+$/, '')}-slice.jsonl: a file you can open, compare and reuse (a saved evaluation keeps its dataset inside)`} data-rag-author-slice />}
+      {dataset && <Toggle checked={slice} onChange={setSlice} label="Also save the cases it runs as a test-case file" title={`Writes datasets/${dataset.replace(/\.[^.]+$/, '')}-slice.jsonl: a file you can open, compare and reuse (a saved evaluation keeps its dataset inside)`} data-rag-author-slice />}
       <div className="flex items-center gap-2 flex-wrap">
         <AiAction
           label="Draft an evaluation with AI"

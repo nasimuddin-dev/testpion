@@ -18,7 +18,7 @@ function Confusion({ m }: { m: MetricCalibration }) {
     <table className="text-xs border-collapse" data-rag-confusion={m.metric}>
       <thead>
         <tr>
-          <th className="px-2 py-1 text-left font-normal text-muted">Judge ↓ · You →</th>
+          <th className="px-2 py-1 text-left font-normal text-muted">AI reviewer ↓ · You →</th>
           <th className="px-2 py-1 font-normal text-muted">Pass</th>
           <th className="px-2 py-1 font-normal text-muted">Fail</th>
         </tr>
@@ -27,13 +27,13 @@ function Confusion({ m }: { m: MetricCalibration }) {
         <tr>
           <th className="px-2 py-1 text-left font-normal text-muted">Pass</th>
           <td className={cell}>{c.tp}</td>
-          <td className={cell} title="The judge passed what you failed (too lenient)">
+          <td className={cell} title="The AI reviewer passed what you failed (too lenient)">
             {c.fp}
           </td>
         </tr>
         <tr>
           <th className="px-2 py-1 text-left font-normal text-muted">Fail</th>
-          <td className={cell} title="The judge failed what you passed (too strict)">
+          <td className={cell} title="The AI reviewer failed what you passed (too strict)">
             {c.fn}
           </td>
           <td className={cell}>{c.tn}</td>
@@ -106,7 +106,7 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
         <table className="text-xs" data-rag-calibration-judges>
           <thead>
             <tr className="text-muted">
-              <th className="text-left font-normal pr-3">Judge model</th>
+              <th className="text-left font-normal pr-3">AI reviewer model</th>
               <th className="text-right font-normal pr-3">n</th>
               <th className="text-right font-normal pr-3">kappa</th>
               <th className="text-right font-normal pr-3">accuracy</th>
@@ -152,12 +152,12 @@ function MetricCard({ m, evaluation, run, onUse, onOpen, onApplied }: { m: Metri
       )}
       {m.disagreements.length > 0 && (
         <details open data-rag-disagreements={m.metric}>
-          <summary className="text-xs text-muted cursor-pointer">Where the judge and you disagree ({m.disagreements.length})</summary>
+          <summary className="text-xs text-muted cursor-pointer">Where the AI reviewer and you disagree ({m.disagreements.length})</summary>
           <ul className="mt-1 grid gap-1">
             {m.disagreements.map((d) => (
               <li key={`${d.resultId}`} className="text-xs border border-line/60 rounded px-2 py-1">
                 <div className="flex items-center gap-2">
-                  <Badge tone={d.judge === 'pass' ? 'ok' : 'bad'}>judge {d.judge}</Badge>
+                  <Badge tone={d.judge === 'pass' ? 'ok' : 'bad'}>AI reviewer {d.judge}</Badge>
                   <Badge tone={d.human === 'pass' ? 'ok' : 'bad'}>you {d.human}</Badge>
                   {d.score !== undefined && <span className="text-muted">score {d.score}</span>}
                   {custom && (
@@ -213,7 +213,7 @@ export function RagCalibration({ runId, evaluation, onUseThreshold, onOpenSample
     const source = { kind: 'rag-calibration' as const, runId, ...(report?.labels ? { labels: report.labels } : {}) };
     return {
       id: 'rag.calibration',
-      what: 'Judge calibration report',
+      what: 'AI reviewer calibration report',
       name: outputFileName({ name: `rag-calibration-${runId}`, ext: '' }),
       formats: [
         { format: 'md', label: 'Report (Markdown)', source, default: true },
@@ -234,7 +234,7 @@ export function RagCalibration({ runId, evaluation, onUseThreshold, onOpenSample
     };
   }, [runId, rev]);
   return (
-    <Modal title="Calibrate judge" onClose={onClose} width={880} footer={<Button onClick={onClose}>Close</Button>}>
+    <Modal title="Calibrate the AI reviewer" onClose={onClose} width={880} footer={<Button onClick={onClose}>Close</Button>}>
       <div className="grid gap-3 text-sm" data-rag-calibration data-output="rag.calibration">
         <div className="flex items-center">
           <OutputActions spec={spec} />

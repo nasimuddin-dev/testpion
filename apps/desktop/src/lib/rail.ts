@@ -12,8 +12,8 @@ export interface RailPrefs {
   shown?: RailId[];
 }
 
-/** Shown on a new install: the views most people use every day; the others wait under More…. */
-export const RAIL_DEFAULT_SHOWN: readonly RailId[] = ['home', 'collections', 'tests', 'environments', 'history'];
+/** Shown on a new install: the views most people use every day, and AI Lab and Evaluations (AU-1: a new person should see them); the others wait under More…. */
+export const RAIL_DEFAULT_SHOWN: readonly RailId[] = ['home', 'collections', 'tests', 'ai', 'evaluations', 'environments', 'history'];
 
 export interface RailModel {
   /** Every item, in the person's order. */

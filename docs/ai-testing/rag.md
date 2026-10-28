@@ -162,7 +162,7 @@ Judged metrics ask a model through the AI task `rag-judge` (`testpion ai tasks`)
   wording (its version) or the model asks again. `testpion rag cache clear` empties the cache. A run can stop judging at an amount
   or a number of calls: what is not judged then is n/a, never a guess. The run's summary reports **`judgeCostUsd`**, apart from
   the cost of the system under test.
-* **Judge options** (*Judge options* in the evaluation; `--judges`, `--swap`, `--repeat` …):
+* **AI reviewer options** (*AI reviewer options* in the evaluation; `--judges`, `--swap`, `--repeat` …):
   a **jury** of several judges whose scores are combined (majority, mean or lowest); **both document orders** (a disagreement is a
   tie, which does not pass); **repeat** n times (the first answer may come from the cache, the rest are asked again) and report the
   flip rate of the verdicts; **skip judging when retrieval failed** (`shortCircuit`: the judged answer metrics of a sample whose
@@ -320,7 +320,7 @@ a sample together with its texts: a retrieved chunk that is an image (map its **
 a `data:image/…` URI, an image URL or a file of the workspace is recognised too), or the question's own (an `images` column).
 
 * They are sent to the judge **as data** (base64), read by TestPion itself, so the judge's provider never fetches a private URL. A
-  picture cannot be masked, so **nothing is sent unless the evaluation says so** (**Send pictures to the judge** in Judge options,
+  picture cannot be masked, so **nothing is sent unless the evaluation says so** (**Send pictures to the AI reviewer** in AI reviewer options,
   `--allow-images`, `allow_images`), the AI privacy level is *Full*, and the judge can see: a vision model (Claude, Gemini, GPT-4o …, or a
   local one such as an Ollama `llava`, `qwen2.5vl` or `gemma3`; list others in the provider's `visionModels`). Otherwise the metric is n/a
   with the reason, and nothing is asked. *Local only* keeps them on this computer.

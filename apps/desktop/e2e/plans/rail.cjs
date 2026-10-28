@@ -1,4 +1,4 @@
-// The rail shows 5 views by default and More… for the rest; right-click an item to hide, keep or move it (saved per
+// The rail shows 7 views by default (AI Lab and Evaluations included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
 // computer in the app's settings); Ctrl+Alt+1…9, the tooltips, the shortcuts list and the palette follow the shown views.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -39,8 +39,8 @@ const steps = [
      await __t.view('Git');
      const r = await pick('Git', 'Keep on the rail'); if (r !== 'ok') return r;
      await __t.view('Home');
-     window.dispatchEvent(new KeyboardEvent('keydown', { key: '5', ctrlKey: true, altKey: true, bubbles: true })); await __t.sleep(800);
-     return railLabels() + ' || Ctrl+Alt+5: ' + localStorage.getItem('aps.view');`,
+     window.dispatchEvent(new KeyboardEvent('keydown', { key: '7', ctrlKey: true, altKey: true, bubbles: true })); await __t.sleep(800);
+     return railLabels() + ' || Ctrl+Alt+7: ' + localStorage.getItem('aps.view');`,
   ),
   step('move-git-up', `${H} await __t.view('Home'); const r = await pick('Git', 'Move up'); if (r !== 'ok') return r; return railLabels() + ' || ' + (await saved());`),
   step(
@@ -65,12 +65,12 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'default-rail': /^Home \| Collections \| Tests \| Environments \| History \| More views \| Settings$/,
+  'default-rail': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| History \| More views \| Settings$/,
   'more-reaches-hidden': /^debugger shown: true \| on the rail while open: Debugger \| gone after: true$/,
   'shortcut-follows-shown': /^3: tests \| 9 \(no 9th\): tests$/,
-  'hide-history': /^Home \| Collections \| Tests \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","environments"\]\}$/,
-  'keep-git': /^Home \| Collections \| Tests \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+5: git$/,
-  'move-git-up': /^Home \| Collections \| Tests \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","git","environments"\]\}$/,
-  'palette-hint': /^Go to Git hint: Ctrl\+Alt\+4$/,
-  reset: /^Home \| Collections \| Tests \| Environments \| History \| More views \| Settings \|\| null$/,
+  'hide-history': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","ai","evaluations","environments"\]\}$/,
+  'keep-git': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
+  'move-git-up': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","ai","evaluations","git","environments"\]\}$/,
+  'palette-hint': /^Go to Git hint: Ctrl\+Alt\+6$/,
+  reset: /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| History \| More views \| Settings \|\| null$/,
 });

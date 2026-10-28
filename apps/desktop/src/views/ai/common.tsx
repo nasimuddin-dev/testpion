@@ -166,7 +166,7 @@ export function PromptEditor({ d, set }: { d: Draft; set(p: Partial<Draft>): voi
           { id: 'prompt', label: 'Prompt template' },
           { id: 'system', label: 'System' },
           { id: 'format', label: 'Structured output', badge: d.format !== 'text' ? d.format : undefined },
-          { id: 'evaluators', label: 'Evaluators', badge: d.evaluators.length },
+          { id: 'evaluators', label: 'Checks', badge: d.evaluators.length },
         ]}
       />
       <div className="flex-1 min-h-0">

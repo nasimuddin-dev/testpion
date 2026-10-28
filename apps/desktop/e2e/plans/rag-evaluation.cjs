@@ -115,11 +115,11 @@ const steps = [
   step(
     'a-rag-evaluation',
     `await __t.view('Evaluations'); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'RAG')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
      await __t.sleep(500);
-     ${setSelect(`document.querySelector('select[aria-label="Judge provider"]')`, 'RAG mock judge')}
+     ${setSelect(`document.querySelector('select[aria-label="AI reviewer provider"]')`, 'RAG mock judge')}
      await __t.sleep(500);
      await __t.real.click('input[aria-label="Evaluation name"]'); await __t.real.key('a', { ctrl: true }); await __t.real.type('Clinic RAG'); await __t.sleep(300);
      const run = vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim()));
@@ -179,7 +179,7 @@ const steps = [
     'no-judge-no-run',
     `const s = await window.aps.invoke('settings.get');
      await window.aps.invoke('settings.save', { ...s, assistantProvider: '', assistantModel: '' });
-     ${setSelect(`document.querySelector('select[aria-label="Judge provider"]')`, 'The AI settings')}
+     ${setSelect(`document.querySelector('select[aria-label="AI reviewer provider"]')`, 'The AI settings')}
      await __t.sleep(400);
      const before = (await window.aps.invoke('runs.list', { limit: 20 })).items.length;
      await __t.real.click(vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim())));

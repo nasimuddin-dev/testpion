@@ -32,7 +32,7 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
-    'starts-with-defaults': /^ALIVE \| rail: Home \| Collections \| Tests \| Environments \| History \| More views \| Settings \| density: comfortable \| saved: \[null,null,null\]$/,
+    'starts-with-defaults': /^ALIVE \| rail: Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| History \| More views \| Settings \| density: comfortable \| saved: \[null,null,null\]$/,
     'shortcuts-work': /^palette: true \| keyboard rows: true \| ALIVE$/,
   },
   { settings: { rail: { order: 'home', shown: 5 }, keybindings: ['Mod+K'], density: { compact: true } } },

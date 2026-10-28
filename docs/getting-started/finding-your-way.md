@@ -204,7 +204,7 @@ Deletes that can't be taken back still ask first: **Delete for good** in Recentl
 
 ## The window
 
-- **The rail** on the left: by default Home, Collections (the request editors — REST, GraphQL, gRPC, WebSocket, MCP — open from its explorer and its **New** menu), Tests, Environments and History; **More…** lists the other views (Debugger, Monitors, Load, AI Lab, Evaluations, Traces, Git). See [Choose what the rail shows](#choose-what-the-rail-shows).
+- **The rail** on the left: by default Home, Collections (the request editors — REST, GraphQL, gRPC, WebSocket, MCP — open from its explorer and its **New** menu), Tests, AI Lab, Evaluations, Environments and History; **More…** lists the other views (Debugger, Monitors, Load, Traces, Git). See [Choose what the rail shows](#choose-what-the-rail-shows).
 - **Density**: **Settings ▸ Appearance ▸ Density** ▸ **Compact** fits more on screen (smaller spacing, fields, row heights and small text everywhere, light and dark); **Comfortable** is the default. It is this computer's (`settings.json` `density`) and applies from the first paint; <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Density: Switch Compact / Comfortable** toggles it (see the picture below).
 - **The bottom panel**: **Console**, **Logs**, **Terminal** (a shell in the workspace folder, see [Terminal](/getting-started/terminal)) and **Problems**.
 - **The status bar**: the Problems count, **Terminal**, the environment and **Tools**.
@@ -227,7 +227,7 @@ Under each tab's name one line says what it applies to (**all workspaces on this
 
 ## Choose what the rail shows {#choose-what-the-rail-shows}
 
-The rail shows five views; **More…** under them lists the rest. Every view stays one step away: **More…**, <kbd>Ctrl</kbd>+<kbd>K</kbd> (**Go to …**), <kbd>Ctrl</kbd>+<kbd>P</kbd>, links and the status bar.
+The rail shows seven views; **More…** under them lists the rest. Every view stays one step away: **More…**, <kbd>Ctrl</kbd>+<kbd>K</kbd> (**Go to …**), <kbd>Ctrl</kbd>+<kbd>P</kbd>, links and the status bar.
 
 - **Right-click a rail item** for **Hide from the rail**, **Move up** / **Move down**, **Show on the rail ▸** (a view from More…), **Show every view** and **Reset the rail**.
 - A view opened from **More…** shows on the rail while it is open, under a line; right-click it and pick **Keep on the rail** to keep it there.
@@ -236,7 +236,7 @@ The rail shows five views; **More…** under them lists the rest. Every view sta
 - The choice is this computer's: it is saved in the app's `settings.json` as `rail: { order, shown }` (view ids such as `home`, `collections`, `tests`, `debugger`), not in the workspace. <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Rail: Show every view** / **Rail: Reset to the default views** do the same as the menu.
 
 <figure class="aps-screenshot">
-  <img src="/images/rail-more.jpg" alt="The rail with Home, Collections, Tests, Environments and History, and its More… menu open: Debugger, Monitors, Load, AI Lab, Evaluations, Traces and Git, then Show on the rail, Show every view and Reset the rail" width="1440" height="900" loading="lazy">
+  <img src="/images/rail-more.jpg" alt="The rail with Home, Collections, Tests, AI Lab, Evaluations, Environments and History, and its More… menu open: Debugger, Monitors, Load, Traces and Git, then Show on the rail, Show every view and Reset the rail" width="1440" height="900" loading="lazy">
 </figure>
 
 ## From a result to its source, and again

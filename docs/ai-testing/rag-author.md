@@ -8,8 +8,8 @@ without sending anything to a judge, and offers it for review. Nothing is saved 
 
 ## Draft one {#draft}
 
-**Evaluations**, type RAG, with a RAG target chosen: below the target, **What do you want to find out?** (optional: "answers come
-from the handbook and never invent a dose") and a **Dataset** of the workspace's `datasets/` folder. Beside the button TestPion says
+**Evaluations**, type **Bot with sources**, with a bot chosen under **My bot**: below the target, **What do you want to find out?** (optional: "answers come
+from the handbook and never invent a dose") and a file of **Test cases** from the workspace's `datasets/` folder. Beside the button TestPion says
 how many metrics your data can support ("52 of 138 metrics can run on clinic.jsonl (200 records)"): the others lack an input such as
 gold chunk ids or a reference answer, and their names and what they miss are in its tooltip.
 
@@ -49,7 +49,7 @@ The model answers with a **plan** (choices and reasons); TestPion builds the eva
 * **Metrics**, each with a pass mark and one sentence of why, from the catalogue only.
 * **A dataset slice**: how many records, which tags, every n-th. The slice is stored inside the evaluation (a saved evaluation holds
   its dataset), up to 300 records; the dataset file itself is not changed. Tick **Also save the records it runs as a dataset file** (or pass `--slice-file`, MCP `slice_file`) and the proposal has a second item that writes the same records to `datasets/<name>.jsonl`: a file you can open, compare with the next slice and reuse. It never replaces the dataset the slice is cut from, adds a record only when its id is not in the file, and one Undo removes it with the evaluation.
-* **Judge options**: judged share (for a recurring check of a big dataset), short-circuit (skip the judged answer metrics when a
+* **AI reviewer options**: judged share (for a recurring check of a big dataset), short-circuit (skip the judged answer metrics when a
   retrieval gate already failed), shared claims, a cost and a call limit. The model leaves provider and model to you.
 * **Gates and a baseline**: the lowest mean each metric may have. They are saved in the evaluation (its **Gates** field, `gates:` in the
   library), and `testpion rag run`, a [monitor](./rag.md) of the evaluation and the CI step fail a run under one (`--min metric=value`, or a monitor's own gate, wins for the same

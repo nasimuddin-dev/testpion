@@ -197,3 +197,16 @@ export const JARGON = ['textconv', 'serializer', 'preferStable', 'stable format'
   // words of the engine underneath, in the words of what they mean (the 2026-10-22 review)
   'Matches regex', 'Use regex', 'Glob or /regex/', 'full payload', 'payload bottlenecks', 'Largest payloads', 'runtime variables', 'per execution', 'No assertions', 'Suggest assertions', 'Working directory', 'Capture: reverse proxy', 'Reverse proxy for one API',
 ] as const;
+
+/**
+ * The names of the AI quality tools' own field and check labels that a person should not have to learn (AU-2): each is said
+ * in plain words (Checks, Test cases, Randomness, Run at once, Try again on errors, AI reviewer …). The unit test keeps
+ * them out of the strings of the AI screens (the evaluation editor, its checks, the bot-with-sources pickers) and of the docs.
+ * (Words the docs use for the idea, not for a label, are in AI_JARGON_SCREEN_ONLY.)
+ */
+export const AI_JARGON = [
+  'Judge provider', 'Judge model', 'Judge options', 'Prompt / LLM', 'expected field', 'Temp.', 'Evaluators', 'Faithfulness (judge)', 'Answer relevance (judge)', 'Groundedness (faithfulness)',
+  'Context recall by id', 'Context precision by id', 'Matches snapshot', 'Similarity ≥', 'Token F1 ≥', 'ROUGE-L ≥', 'Calibrate judge',
+] as const;
+/** Kept out of what the AI screens show, but still the idea's name in the docs. */
+export const AI_JARGON_SCREEN_ONLY = ['LLM-as-judge'] as const;

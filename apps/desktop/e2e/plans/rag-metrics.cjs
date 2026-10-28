@@ -43,17 +43,24 @@ const steps = [
   step(
     'a-rag-evaluation-with-the-metrics-tab',
     `await __t.view('Evaluations'); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'RAG')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
      await __t.sleep(500);
-     ${setSelect(`document.querySelector('select[aria-label="Judge provider"]')`, 'RAG mock judge')}
+     ${setSelect(`document.querySelector('select[aria-label="AI reviewer provider"]')`, 'RAG mock judge')}
      await __t.sleep(500);
      await __t.real.click('input[aria-label="Evaluation name"]'); await __t.real.key('a', { ctrl: true }); await __t.real.type('Clinic metrics'); await __t.sleep(300);
      const t = tab('Metrics'); if (!t) return 'NO TAB Metrics';
      await __t.real.click(t);
      const picker = await __t.waitFor(() => document.querySelector('[data-rag-picker] [data-rag-metric]') && document.querySelector('[data-rag-picker]'), 8000); if (!picker) return 'NO PICKER';
      return 'metrics listed: ' + picker.querySelectorAll('[data-rag-metric]').length + ' | groups: ' + picker.querySelectorAll('[data-rag-group]').length + ' | presets: ' + picker.querySelectorAll('[data-rag-preset]').length + ' | judge options: ' + !!document.querySelector('[data-rag-judge-options]');`,
+  ),
+  step(
+    'every-metric-has-a-sentence',
+    `const rows = [...document.querySelectorAll('[data-rag-picker] [data-rag-metric]')];
+     const without = rows.filter((r) => !(r.querySelector('[data-rag-metric-what]')?.textContent ?? '').trim().length);
+     const one = ${row('faithfulness')}?.querySelector('[data-rag-metric-what]')?.textContent ?? 'NONE';
+     return 'rows: ' + rows.length + ' | without a sentence: ' + without.length + ' | faithfulness: ' + one.slice(0, 60);`,
   ),
   step(
     'a-ragas-name-finds-its-metric',
@@ -171,13 +178,13 @@ const steps = [
      const t = await __t.waitFor(() => document.querySelector('[data-rag-try-dialog]'), 5000); if (!t) return 'NO TRY DIALOG';
      await __t.sleep(800);
      const answer = document.querySelector('[data-rag-try-answer]')?.value ?? '';
-     const judge = !!document.querySelector('select[aria-label="Judge for this try"]');
+     const judge = !!document.querySelector('select[aria-label="AI reviewer for this try"]');
      const close = vis('[role=dialog] button').filter((x) => x.textContent.trim() === 'Close'); for (const b of close.reverse()) { await __t.real.click(b); await __t.sleep(300); }
      return 'stored answer prefilled: ' + /clinic opens at 8am/i.test(answer) + ' | judge choice: ' + judge + ' | detail closed: ' + !document.querySelector('[data-rag-detail]');`,
   ),
   step(
     'the-column-mapper',
-    `const dsTab = tab('Dataset'); await __t.real.click(dsTab); await __t.sleep(500);
+    `const dsTab = tab('Test cases'); await __t.real.click(dsTab); await __t.sleep(500);
      const ed = ${EDITOR_IN('main')}; if (!ed) return 'NO EDITOR';
      ed.getModel().setValue('{"prompt":"What time does the clinic open?","gold":"The clinic opens at 8am.","doc_ids":["doc-1"],"topic":"hours"}\\n{"prompt":"Can appointments be cancelled?","gold":"Up to 24 hours before.","doc_ids":["doc-3"],"topic":"policy"}'); await __t.sleep(500);
      await __t.real.click('[data-rag-map-columns]');
@@ -234,6 +241,7 @@ module.exports = withExpect(
   steps,
   {
     'a-rag-evaluation-with-the-metrics-tab': /^metrics listed: 138 \| groups: 13 \| presets: 13 \| judge options: true$/,
+    'every-metric-has-a-sentence': /^rows: 138 \| without a sentence: 0 \| faithfulness: \S+/,
     'a-ragas-name-finds-its-metric': /^LLMContextRecall: context-recall(,context-recall-lexical)? \| nv_context_relevance: context-relevance \| cleared: true$/,
     'a-preset-chooses-the-triad': /^chosen: answer-relevance,context-relevance,faithfulness \| context-relevance mode: chunks(,always run)?$/,
     'the-estimate-follows-the-choice': /^judge calls: 6 \| text: .*judge calls/,

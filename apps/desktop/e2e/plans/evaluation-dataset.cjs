@@ -1,7 +1,9 @@
 // An evaluation's dataset: records pasted one per line while JSON is selected are read as JSONL; the editor does not
 // flag them as broken JSON ("End of file expected"), a note says so and switches the format in one click. JSON that
 // is really broken is still marked. A run on a provider without its key says so with "Add the key", which opens
-// AI Lab ▸ Providers on that provider with its key field focused.
+// AI Lab ▸ Providers on that provider with its key field focused. The expert settings sit under Options, closed (AU-6); a
+// workspace with no model says "Choose a model first" with a one-click "Use the offline demo model" (AU-8), and the Run
+// button is never disabled without such a remedy.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
 
@@ -11,7 +13,7 @@ const state = `(() => { const ed = ${EDITOR}; const m = ed?.getModel();
   return 'checked: ' + vis('main label').filter((l) => l.querySelector('input[type=radio]')?.checked).map((l) => l.textContent.trim()).join(',')
     + ' | note: ' + (vis('main [data-format-mismatch]').length ? 'shown' : 'none')
     + ' | editor errors: ' + (m ? window.__monaco.editor.getModelMarkers({ resource: m.uri }).filter((x) => x.severity === 8).length : 'NO EDITOR')
-    + ' | preview: ' + (/Preview\\D*(\\d+) record/.exec(document.querySelector('main')?.innerText ?? '')?.[1] ?? '?'); })()`;
+    + ' | preview: ' + (/Preview\\D*(\\d+) case/.exec(document.querySelector('main')?.innerText ?? '')?.[1] ?? '?'); })()`;
 
 const steps = [
   step('jsonl-records', `await __t.view('Evaluations'); await __t.sleep(1200); return ${state};`),
@@ -58,6 +60,32 @@ const steps = [
      const f = document.activeElement;
      return 'view: ' + (vis('main [role=tab][aria-selected=true]').map((t) => t.textContent.trim()).join(',')) + ' | focused: ' + (f?.tagName === 'INPUT' ? f.getAttribute('aria-label') || 'an input without a name' : 'nothing') + ' | provider: ' + (/OpenAI/.test(document.querySelector('main')?.innerText ?? '') ? 'OpenAI' : '?');`,
   ),
+  step(
+    'options-are-closed-and-open-on-a-click',
+    `await __t.view('Evaluations'); await __t.sleep(1000);
+     const o = vis('main [data-eval-options]')[0]; if (!o) return 'NO OPTIONS';
+     const closed = !o.open;
+     await __t.real.click(o.querySelector('summary')); await __t.sleep(300);
+     const labels = [...o.querySelectorAll('label')].map((l) => l.firstElementChild?.textContent?.trim()).filter(Boolean).join(' | ');
+     await __t.real.click(o.querySelector('summary')); await __t.sleep(200);
+     return 'closed first: ' + closed + ' | opened: ' + labels;`,
+  ),
+  step(
+    'no-model-says-the-fix',
+    `await window.aps.invoke('ai.saveProviders', { providers: [], keys: {} });
+     await __t.view('Home'); await __t.sleep(400); await __t.view('Evaluations'); await __t.sleep(1200);
+     const note = await __t.waitFor(() => vis('main [data-eval-problem=model]')[0], 8000);
+     const run = vis('main button[data-eval-run]')[0];
+     const fix = note?.querySelector('[data-eval-remedy]');
+     return 'note: ' + (note ? note.textContent.slice(0, 40) : 'NONE') + ' | run disabled: ' + !!run?.disabled + ' | remedy: ' + (fix?.textContent.trim() ?? 'NONE');`,
+  ),
+  step(
+    'one-click-offline-demo',
+    `vis('main [data-eval-remedy]')[0]?.click(); await __t.sleep(1500);
+     const provs = await window.aps.invoke('ai.providers');
+     const run = vis('main button[data-eval-run]')[0];
+     return 'providers: ' + provs.map((p) => p.kind).join(',') + ' | note gone: ' + !vis('main [data-eval-problem]').length + ' | run enabled: ' + !run?.disabled;`,
+  ),
 ];
 module.exports = withExpect(steps, {
   'jsonl-records': /^checked: JSONL \| note: none \| editor errors: 0 \| preview: 3$/,
@@ -68,4 +96,7 @@ module.exports = withExpect(steps, {
   'a-broken-line-is-marked-on-its-own': /^lines: 3 \| marked: line 4 \| after the fix: 0$/,
   'run-without-a-key': /^error: No API key for OpenAI \| button: Add the key$/,
   'add-the-key-opens-the-provider': /^view: Providers\d* \| focused: API key \| provider: OpenAI$/,
+  'options-are-closed-and-open-on-a-click': /^closed first: true \| opened: Randomness \| Run at once \| Try again on errors \| Only the first … cases$/,
+  'no-model-says-the-fix': /^note: Choose a model first.* \| run disabled: true \| remedy: Use the offline demo model$/,
+  'one-click-offline-demo': /^providers: mock \| note gone: true \| run enabled: true$/,
 });

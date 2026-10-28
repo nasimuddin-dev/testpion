@@ -15,7 +15,7 @@ type Catalogue = MetricCatalogue;
 
 const KIND_BADGE: Record<string, { label: string; tone: 'ok' | 'judge' | 'accent' | 'default'; title: string }> = {
   deterministic: { label: 'no model', tone: 'ok', title: 'Computed from numbers and text: free, instant, the same every time' },
-  judged: { label: 'judge', tone: 'judge', title: 'Asks a judge model, which receives the question, answer and documents of each sample' },
+  judged: { label: 'AI reviewer', tone: 'judge', title: 'Asks an AI reviewer model, which receives the question, answer and documents of each sample' },
   embedding: { label: 'embeddings', tone: 'accent', title: 'Uses an embedding model' },
   sql: { label: 'SQL', tone: 'default', title: 'Runs SQL' },
 };
@@ -184,7 +184,7 @@ export function MetricPicker({
           options={[
             { value: 'all', label: 'All' },
             { value: 'free', label: 'No model', title: 'Metrics that run without any model' },
-            { value: 'judged', label: 'Judge', title: 'Metrics that ask a judge or an embedding model' },
+            { value: 'judged', label: 'AI reviewer', title: 'Metrics that ask an AI reviewer or an embedding model' },
             { value: 'selected', label: `Selected ${total}` },
           ]}
         />
@@ -220,13 +220,18 @@ export function MetricPicker({
                             {kind.label}
                           </Badge>
                           {r.direction === 'lower' && <Badge title="A lower score is better">lower is better</Badge>}
-                          <span className="text-xs text-muted">{r.calls === '0' ? '' : `judge calls: ${r.calls}`}</span>
+                          <span className="text-xs text-muted">{r.calls === '0' ? '' : `AI reviewer calls: ${r.calls}`}</span>
                           {r.custom && (
                             <button className="text-xs text-accent hover:underline" onClick={() => setEditing({ id: r.id.replace(/^custom\//, '') })} data-rag-edit-metric={r.id}>
                               Edit
                             </button>
                           )}
                         </div>
+                        {r.what && (
+                          <div className="text-xs text-muted leading-snug" data-rag-metric-what>
+                            {r.what}
+                          </div>
+                        )}
                         {missing.length > 0 && (
                           <div className="text-xs text-warn" data-rag-missing>
                             needs {missing.join(', ')}: the dataset does not have {missing.length > 1 ? 'them' : 'it'}
@@ -234,7 +239,7 @@ export function MetricPicker({
                         )}
                       </div>
                       {onTry && (
-                        <Button size="sm" icon={<FlaskConical size={12} />} onClick={() => onTry(on ? evaluators[idx[0]!]! : { type: r.id })} title="Run this metric on one sample, and see what a judge would receive" data-rag-try>
+                        <Button size="sm" icon={<FlaskConical size={12} />} onClick={() => onTry(on ? evaluators[idx[0]!]! : { type: r.id })} title="Run this metric on one sample, and see what an AI reviewer would receive" data-rag-try>
                           Try
                         </Button>
                       )}

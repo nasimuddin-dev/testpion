@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { BUNDLE_HINT, JARGON, LABEL, MENU_GROUPS, MENU_TEXT, RETIRED_LABELS, SET_ASIDE_HINT, STAGE_HINT } from '../../apps/desktop/src/lib/vocabulary';
+import { AI_JARGON, AI_JARGON_SCREEN_ONLY, BUNDLE_HINT, JARGON, LABEL, MENU_GROUPS, MENU_TEXT, RETIRED_LABELS, SET_ASIDE_HINT, STAGE_HINT } from '../../apps/desktop/src/lib/vocabulary';
 import { railOrder, railShortcut, railTarget } from '../../apps/desktop/src/lib/rail';
+import { CHECK_DEFS } from '../../apps/desktop/src/lib/check-defs';
+import { metricCatalogueRows } from '../../packages/core/src/index';
 
 // WF-13: one word per action and one menu order everywhere; the shortcuts follow the rail.
 const SRC = join(__dirname, '../../apps/desktop/src');
@@ -148,6 +150,7 @@ describe('vocabulary', () => {
       if (/^(changelog\.md|getting-started\/whats-new\.md)$/.test(rel)) continue;
       const text = readFileSync(f, 'utf8');
       for (const w of JARGON) if (text.includes(w) && !DOCS_KNOWN.has(`${rel}: ${w}`)) found.push(`${rel}: ${w}`);
+      for (const w of AI_JARGON) if (text.includes(w) && !DOCS_KNOWN.has(`${rel}: ${w}`)) found.push(`${rel}: ${w}`);
       // a retired label named as a current one: in bold (**Start capturing**) or as a button
       for (const w of RETIRED_LABELS) if (text.includes(`**${w}**`) && !DOCS_KNOWN.has(`${rel}: ${w}`)) found.push(`${rel}: ${w}`);
     }
@@ -205,6 +208,35 @@ describe('vocabulary', () => {
         }
     }
     expect(found).toEqual([]);
+  });
+
+  it('the AI quality screens use plain names: no field or check label of the tools underneath (AU-2)', () => {
+    const literal = /'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]+</g;
+    const AI_FILES = /^(components\/AssertionEditor\.tsx|components\/rag\/|views\/EvaluationsView\.tsx|views\/ai\/|lib\/check-defs\.ts)/;
+    const found: string[] = [];
+    for (const f of files(SRC)) {
+      const rel = f.slice(SRC.length + 1).replace(/\\/g, '/');
+      if (!AI_FILES.test(rel)) continue;
+      const code = readFileSync(f, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .split('\n')
+        .filter((l) => !/^\s*\/\//.test(l))
+        .join('\n');
+      for (const m of code.matchAll(literal)) for (const w of [...AI_JARGON, ...AI_JARGON_SCREEN_ONLY]) if (m[0].includes(w)) found.push(`${rel}: ${w}`);
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('every check says in one sentence what it decides; so does every metric of the catalogue (AU-3)', () => {
+    expect(CHECK_DEFS.length).toBeGreaterThan(40);
+    expect(new Set(CHECK_DEFS.map((d) => d.type)).size).toBe(CHECK_DEFS.length);
+    for (const d of CHECK_DEFS) {
+      expect(d.what, d.type).toMatch(/^[A-Z].{12,}\.$/);
+      expect(d.what.split('. ').length, `${d.type} is one sentence`).toBe(1);
+    }
+    const rows = metricCatalogueRows();
+    expect(rows.length).toBeGreaterThan(100);
+    expect(rows.filter((r) => !r.what || r.what.trim().length < 10).map((r) => r.id)).toEqual([]);
   });
 
   it('stage, set aside and bundle are explained once, in plain words', () => {
