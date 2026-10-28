@@ -1,6 +1,7 @@
 import type { Span, SpanKind, Trace } from '../model/types.js';
 import { spanId as newSpanId, traceId as newTraceId } from '../util/ids.js';
-import type { Redactor } from '../util/redact.js';
+import { redactedHead, type Redactor } from '../util/redact.js';
+import { headOfValue } from '../util/body-head.js';
 
 /** Max serialized size of a span's input/output kept in a trace (larger payloads are truncated). */
 const MAX_IO_CHARS = 64 * 1024;
@@ -78,12 +79,21 @@ export class Tracer {
     for (const l of this.listeners) l(span, phase);
   }
 
-  /** @internal Redact and bound the size of recorded data. */
+  /**
+   * @internal Redact and bound the size of recorded data. A big value is cut to its head BEFORE it is redacted and serialised
+   * (a 14 MB GraphQL result was deep-copied and pretty-printed whole to keep 64 KB of it); a small one takes the same path as ever.
+   */
   clean(v: unknown): unknown {
-    const r = this.redactor ? this.redactor.redact(v) : v;
-    if (typeof r === 'string') return r.length > MAX_IO_CHARS ? r.slice(0, MAX_IO_CHARS) + `… [truncated ${r.length - MAX_IO_CHARS} chars]` : r;
+    if (typeof v === 'string') {
+      if (v.length <= MAX_IO_CHARS) return this.redactor ? this.redactor.redactString(v) : v;
+      const head = this.redactor ? redactedHead(this.redactor, v, MAX_IO_CHARS).head : v.slice(0, MAX_IO_CHARS);
+      return head + `… [truncated ${v.length - MAX_IO_CHARS} chars]`;
+    }
+    const h = headOfValue(v, MAX_IO_CHARS);
+    const r = this.redactor ? this.redactor.redact(h.cut ? h.value : v) : h.cut ? h.value : v;
     try {
       const s = JSON.stringify(r);
+      if (h.cut) return { truncated: true, preview: (s ?? '').slice(0, MAX_IO_CHARS) };
       if (s && s.length > MAX_IO_CHARS) return { truncated: true, preview: s.slice(0, MAX_IO_CHARS), originalChars: s.length };
     } catch {
       return String(r);

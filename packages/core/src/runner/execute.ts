@@ -26,6 +26,7 @@ import { ApsError, normalizeError } from '../errors.js';
 import type { VariableScope } from '../vars/variables.js';
 import { timingSpans, type Tracer, type SpanHandle } from '../trace/tracer.js';
 import { redactedHead, type Redactor } from '../util/redact.js';
+import { summarizeParsed } from '../util/body-head.js';
 import type { Logger } from '../log/logger.js';
 import { executeHttp, timingSummary } from '../protocols/http/client.js';
 import { detectOperation, executeGraphQL, type GraphQLResult } from '../protocols/graphql/graphql.js';
@@ -149,6 +150,9 @@ function summarizeResponse(redactor: Redactor, r: { json?: unknown; bodyPreview:
   if (r.bodyPreview.length > BIG_BODY_CHARS) return summarizeText(redactor, r.bodyPreview, n);
   return summarize(redactor.redact(r.json ?? r.bodyPreview), n);
 }
+
+/** The redacted summary of a parsed result (a GraphQL response, gRPC messages, subscription events): O(summary), see util/body-head.ts. */
+const summarizeValue = (redactor: Redactor, v: unknown, n = OUTPUT_SUMMARY_CHARS): string => summarizeParsed(redactor, v, n);
 
 function sha(s: string): string {
   return sha256Hex(s).slice(0, 12);
@@ -493,11 +497,11 @@ async function runGraphQLSubscription(test: GraphQLTest, r: { endpoint: string; 
     const body = { data: first?.data ?? null, ...(errors.length ? { errors } : {}), events, count: events.length, completed: out.completed, protocol: out.protocol };
     const latencyMs = Date.now() - t0;
     s.setAttributes({ endpoint: svc.redactor.redactUrl(r.endpoint), operationType: 'subscription', events: events.length, errors: errors.length });
-    s.end({ status: errors.length || !events.length ? 'error' : 'ok', output: summarize(body, 16_000) });
+    s.end({ status: errors.length || !events.length ? 'error' : 'ok', output: summarizeValue(svc.redactor, body, 16_000) });
     return {
       // no event at all fails the default check (graphql-no-errors) with the reason
       ctx: { testType: 'graphql', status: 101, headers: [], body, text: JSON.stringify(body), latencyMs, graphqlErrors: errors.length ? errors : events.length ? undefined : [{ message: `No subscription event arrived within ${wait} ms` }] },
-      partial: { input: summarize(r.query, 1000), output: summarize(body) },
+      partial: { input: summarize(r.query, 1000), output: summarizeValue(svc.redactor, body) },
     };
   } catch (e) {
     s.fail(e);
@@ -516,7 +520,7 @@ async function runGraphQL(test: GraphQLTest, scope: VariableScope, svc: ExecServ
     if (out.response.connection?.certificate) svc.onCertificate?.(out.prepared.url, out.response.connection.certificate);
     timingSpans(s, out.response.timeline);
     s.setAttributes({ endpoint: svc.redactor.redactUrl(r.endpoint), status: out.response.status, operationType: out.operationType, errors: out.errors?.length ?? 0 });
-    s.end({ status: out.errors?.length || out.response.status >= 400 ? 'error' : 'ok', output: summarize(out.response.json ?? out.response.bodyPreview, 16_000) });
+    s.end({ status: out.errors?.length || out.response.status >= 400 ? 'error' : 'ok', output: summarizeValue(svc.redactor, out.response.json ?? out.response.bodyPreview, 16_000) });
     return {
       ctx: {
         testType: 'graphql',
@@ -527,7 +531,7 @@ async function runGraphQL(test: GraphQLTest, scope: VariableScope, svc: ExecServ
         latencyMs: out.response.durationMs,
         graphqlErrors: out.errors,
       },
-      partial: { input: summarize(r.query, 1000), output: summarize(out.response.json ?? out.response.bodyPreview) },
+      partial: { input: summarize(r.query, 1000), output: summarizeValue(svc.redactor, out.response.json ?? out.response.bodyPreview) },
       metadata: { timing: timingSummary(out.response) },
     };
   } catch (e) {
@@ -555,7 +559,7 @@ async function runGrpc(test: GrpcTest, scope: VariableScope, svc: ExecServices, 
     );
     const body = out.messages ? out.messages.map((m) => m.data) : (out.response ?? null);
     s.setAttributes({ target: out.target, method: out.method, code: out.code });
-    s.end({ status: out.code === 0 ? 'ok' : 'error', output: summarize(body, 16_000) });
+    s.end({ status: out.code === 0 ? 'ok' : 'error', output: summarizeValue(svc.redactor, body, 16_000) });
     return {
       ctx: {
         testType: 'grpc',
@@ -566,7 +570,7 @@ async function runGrpc(test: GrpcTest, scope: VariableScope, svc: ExecServices, 
         latencyMs: out.durationMs,
         grpc: { code: out.code, codeName: out.codeName, details: out.details, trailers: out.trailers },
       },
-      partial: { input: `${out.method} @ ${out.target}`, output: summarize(svc.redactor.redact(body)) },
+      partial: { input: `${out.method} @ ${out.target}`, output: summarizeValue(svc.redactor, body) },
       metadata: { target: out.target, method: out.method, code: out.codeName },
     };
   } catch (e) {
