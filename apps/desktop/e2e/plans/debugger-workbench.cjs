@@ -69,9 +69,11 @@ const steps = [
      const rules = await window.aps.invoke('debug.rules');
      const rule = rules.rules.find((x) => x.kind === 'ignore' && /health/.test(x.match.url ?? ''));
      const hits = rule ? rules.hits[rule.id] : -1;
+     const chip = document.querySelector('[data-quick-filter]'); const chips = document.querySelectorAll('[data-quick-filter]').length; const hidAtOnce = !row('b=1');
+     document.querySelectorAll('[data-quick-filter]').forEach((c) => c.click()); await __t.sleep(200);
      if (rule) await window.aps.invoke('debug.deleteRule', { id: rule.id });
      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-     return 'added: ' + !!rule + ' | dock: ' + dockName + ' | filtered: ' + !listed + ' | others listed: ' + other + ' | hits: ' + hits;`,
+     return 'added: ' + !!rule + ' | dock: ' + dockName + ' | filtered: ' + !listed + ' | others listed: ' + other + ' | hits: ' + hits + ' | at once: ' + hidAtOnce + ' | chip: ' + chips;`,
   ),
   step(
     'capture-only',

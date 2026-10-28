@@ -104,7 +104,7 @@ export function DebuggerView() {
   const [ruleDraft, setRuleDraft] = useState<Partial<Rule>>();
   const [httpsBanner, setHttpsBanner] = useState(true);
   const incoming = useIncoming();
-  const [filter, setFilter] = useState<ListFilter>({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false, hideTunnels: false });
+  const [filter, setFilter] = useState<ListFilter>({ application: '', type: '', text: '', deep: false, host: '', method: '', status: '' as '' | 'ok' | 'redirect' | 'client-error' | 'server-error' | 'error', bookmarked: false, hideTunnels: false, quick: [] });
   const [tab, setTab] = useState<'traffic' | 'stats' | 'rules' | 'connections'>('traffic');
   const [port, setPort] = useState('8899');
   const [stats, setStats] = useState<Stats>();
@@ -367,7 +367,13 @@ export function DebuggerView() {
   }, [rows, selectedIds, detail]);
   const quickRule = (kind: Rule['kind'], name: string, match: Rule['match'], extra?: Partial<Rule>) =>
     void call<RulesState>('debug.saveRule', { rule: { kind, name, enabled: true, match, ...extra } }).then(
-      (r) => (setRules(r), toast(`Rule added: ${name}`), openDock(kind === 'ignore' || kind === 'only' ? 'filter' : kind === 'reply' ? 'auto-reply' : kind === 'highlight' ? 'highlight' : 'modify')),
+      (r) => (
+        setRules(r),
+        // Capture only / Filter out take effect on the rows already captured, at once (the rule handles what comes next)
+        (kind === 'only' || kind === 'ignore') && setFilter((f) => ({ ...f, quick: [...f.quick, { id: `${Date.now()}-${f.quick.length}`, label: name, keep: kind === 'only', match }] })),
+        toast(`Rule added: ${name}`),
+        openDock(kind === 'ignore' || kind === 'only' ? 'filter' : kind === 'reply' ? 'auto-reply' : kind === 'highlight' ? 'highlight' : 'modify')
+      ),
       toastError,
     );
   const sel = detail;
@@ -778,6 +784,18 @@ export function DebuggerView() {
                   <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Leave out the HTTPS tunnels (CONNECT) that are not decrypted">
                     <input type="checkbox" checked={filter.hideTunnels} onChange={(e) => setFilter({ ...filter, hideTunnels: e.target.checked })} /> Hide tunnels
                   </label>
+                  {filter.quick.map((q) => (
+                    <button
+                      key={q.id}
+                      type="button"
+                      className="flex items-center gap-1 h-6 px-2 rounded-full bg-accent-soft text-accent text-xs whitespace-nowrap hover:bg-hover"
+                      title="Showing the rows this rule keeps; click to show them all again (the rule stays in Rules)"
+                      data-quick-filter
+                      onClick={() => setFilter((f) => ({ ...f, quick: f.quick.filter((x) => x.id !== q.id) }))}
+                    >
+                      {q.label.replace(/^(Capture only|Filter out) /, '')} <X size={11} />
+                    </button>
+                  ))}
                   <Menu
                     width={260}
                     items={[

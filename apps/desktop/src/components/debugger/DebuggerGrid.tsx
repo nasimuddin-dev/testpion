@@ -267,7 +267,11 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       // the server's address is known only after the request went out: not for Capture only / Filter out
       ...qm
         .filter((q) => !(q.match.where?.column === 'ip' && (kind === 'only' || kind === 'ignore')))
-        .map<MenuItem>((q) => ({ label: q.label, onSelect: () => actions.onQuickRule(kind, `${verb} ${q.label}`, q.match, extra) })),
+        .map<MenuItem>((q) => {
+          // the operator says what the click does: = keeps these rows, != hides them (both at once, and as a rule for what comes)
+          const label = kind === 'ignore' ? q.label.replace(' = ', ' != ').replace('starts with', 'does not start with') : q.label;
+          return { label, onSelect: () => actions.onQuickRule(kind, `${verb} ${label}`, q.match, extra) };
+        }),
       { label: `New ${verb.toLowerCase()} rule…`, separator: true, onSelect: () => actions.onNewRule({ kind, enabled: true, match: { host: e.host }, ...extra }) },
       { label: 'See all rules', onSelect: () => actions.onRulesPanel(kind) },
     ];
