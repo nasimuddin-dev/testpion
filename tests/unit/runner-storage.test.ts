@@ -79,6 +79,15 @@ describe('runner', () => {
     expect(summary.tokens.totalTokens).toBeGreaterThan(0);
   });
 
+  it('marks the run folder while it runs (the housekeeping of another process leaves it alone) and removes the mark at the end', async () => {
+    const runDir = join(dir, 'marked');
+    const file = join(runDir, 'results.jsonl');
+    let during = false;
+    await runTests({ name: 'marked', tests: [llmTest(1)], services: services(), resultsFile: file, onEvent: (e) => void (e.type === 'test-end' && (during = existsSync(join(runDir, '.running')))) });
+    expect(during).toBe(true);
+    expect(existsSync(join(runDir, '.running'))).toBe(false);
+  });
+
   it('handles dependencies, skip, retries and setup/teardown', async () => {
     const order: string[] = [];
     const summary = await runTests({
