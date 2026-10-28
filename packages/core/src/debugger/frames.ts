@@ -10,6 +10,8 @@ export interface WebSocketFrame {
   /** Text frames (and binary ones that look like text), up to the limit. */
   text?: string;
   truncated?: boolean;
+  /** A frame rule acted on it: dropped (never forwarded), edited (forwarded changed) or held (paused, then forwarded). */
+  ruled?: 'dropped' | 'edited' | 'held';
 }
 
 export interface DebuggerSseEvent {
@@ -88,20 +90,25 @@ export function webSocketFrameParser(direction: WebSocketFrame['direction'], onF
           for (let i = 0; i < payload.length; i++) un[i] = payload[i]! ^ mask[i & 3]!;
           payload = un;
         }
-        const opcode = OPCODES[b0 & 0x0f] ?? 'other';
-        const frame: WebSocketFrame = { at: new Date().toISOString(), direction, opcode, bytes: len };
-        if (opcode === 'text' || opcode === 'continuation' || (opcode === 'binary' && looksText(payload))) {
-          frame.text = payload.subarray(0, maxText).toString('utf8');
-          frame.truncated = payload.length > maxText;
-        } else if (opcode === 'close' && payload.length >= 2) frame.text = `code ${payload.readUInt16BE(0)}${payload.length > 2 ? ` ${payload.subarray(2, 2 + maxText).toString('utf8')}` : ''}`;
-        onFrame(frame);
+        onFrame(describeFrame(direction, b0 & 0x0f, payload, maxText));
         buf = buf.subarray(off + maskLen + len);
       }
     },
   };
 }
 
-const looksText = (b: Buffer) => {
+/** A frame as the list shows it: its direction, kind, size and (for text and close frames) its text. */
+export function describeFrame(direction: WebSocketFrame['direction'], opcodeNumber: number, payload: Buffer, maxText = 64 * 1024): WebSocketFrame {
+  const opcode = OPCODES[opcodeNumber] ?? 'other';
+  const frame: WebSocketFrame = { at: new Date().toISOString(), direction, opcode, bytes: payload.length };
+  if (opcode === 'text' || opcode === 'continuation' || (opcode === 'binary' && looksText(payload))) {
+    frame.text = payload.subarray(0, maxText).toString('utf8');
+    frame.truncated = payload.length > maxText;
+  } else if (opcode === 'close' && payload.length >= 2) frame.text = `code ${payload.readUInt16BE(0)}${payload.length > 2 ? ` ${payload.subarray(2, 2 + maxText).toString('utf8')}` : ''}`;
+  return frame;
+}
+
+export const looksText = (b: Buffer) => {
   const n = Math.min(b.length, 512);
   for (let i = 0; i < n; i++) {
     const c = b[i]!;

@@ -12,7 +12,42 @@ import { compileUserRegex, safeTest } from '../util/safe-regex.js';
  * request or the response pauses for editing). Rules live in profiles (sets switched as one). Every rule the user
  * makes: there is no built-in list of programs to hide.
  */
-type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint';
+type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint' | 'remap' | 'fault' | 'frame';
+
+/** A find-and-replace on a body: the text as it is, or a regular expression (`$1` in `replace` is a group). */
+export interface TextReplace {
+  find: string;
+  replace: string;
+  regex?: boolean;
+  ignoreCase?: boolean;
+}
+
+/** A failure to inject (FG-7): the connection dropped, no answer at all, the response cut, or an error status. `percent`: how often (default always). */
+export interface FaultSpec {
+  action: 'drop' | 'timeout' | 'truncate' | 'error';
+  /** 1 to 100: the share of matching requests that fail. */
+  percent?: number;
+  /** truncate: the response body is cut after this many bytes. */
+  bytes?: number;
+  /** error: the status answered (default 503). */
+  status?: number;
+  /** timeout: how long the request hangs before the connection is closed (default 30 s, 5 minutes at most). */
+  timeoutMs?: number;
+}
+
+/** What a rule does to the frames of a WebSocket connection (FG-26): drop them, change their text, pause them, or hold them back. */
+export interface FrameSpec {
+  /** Which way (default both): sent by the program, or received from the server. */
+  direction?: 'sent' | 'received' | 'both';
+  /** Only frames whose text contains this (or matches /regex/). */
+  when?: string;
+  action: 'drop' | 'replace' | 'break' | 'delay';
+  /** replace: the text to find (empty: the whole frame) and what to put there. */
+  find?: string;
+  replace?: string;
+  regex?: boolean;
+  delayMs?: number;
+}
 
 /** A grid column a condition looks at. */
 export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'user' | 'type' | 'version' | 'ip' | 'duration' | 'size';
@@ -65,6 +100,29 @@ export interface HeaderEdit {
   value?: string;
 }
 
+/** A canned response; with `file` or `folder` (map local, FG-6) the body is read from the workspace when the request comes. */
+export interface ReplySpec {
+  status: number;
+  headers?: Record<string, string>;
+  body?: string;
+  delayMs?: number;
+  /** A file of the workspace (relative path; `$1` is a group of the rule's /URL regex/). */
+  file?: string;
+  /** A folder of the workspace: the request's path (after `stripPrefix`) names the file in it. */
+  folder?: string;
+  stripPrefix?: string;
+}
+
+/** A redirect: another host (and scheme), and/or a changed path (Map Remote). */
+export interface RedirectSpec {
+  host?: string;
+  scheme?: 'http' | 'https';
+  /** Change the path and query: text, or a regular expression with groups (`$1`). */
+  rewrite?: { from: string; to: string; regex?: boolean };
+  /** Keep the original Host header and TLS name (the remap rule's switch). */
+  preserveHost?: boolean;
+}
+
 export interface DebuggerRule {
   id: string;
   name: string;
@@ -82,9 +140,19 @@ export interface DebuggerRule {
   responseBody?: string;
   delayMs?: number;
   /** reply: the canned response. */
-  reply?: { status: number; headers?: Record<string, string>; body?: string; delayMs?: number };
-  /** redirect: where the request goes instead (the path stays). */
-  redirect?: { host: string; scheme?: 'http' | 'https' };
+  reply?: ReplySpec;
+  /** redirect: where the request goes instead (the path stays unless `rewrite` changes it). */
+  redirect?: RedirectSpec;
+  /** modify: find-and-replace in the bodies, and a status to answer with instead of the server's. */
+  requestReplace?: TextReplace[];
+  responseReplace?: TextReplace[];
+  setStatus?: number;
+  /** remap (FG-4): the host (the rule's Host match) is reached at another host, IP or port. */
+  remap?: { to: string; scheme?: 'auto' | 'http' | 'https'; preserveHost?: boolean };
+  /** fault: a failure to inject. */
+  fault?: FaultSpec;
+  /** frame: what happens to WebSocket frames. */
+  frame?: FrameSpec;
   /** breakpoint: which side pauses. */
   breakpoint?: 'request' | 'response';
 }
@@ -290,6 +358,9 @@ export function describeRule(r: DebuggerRule): string {
         r.responseHeaders?.length && `${r.responseHeaders.length} response header${r.responseHeaders.length > 1 ? 's' : ''}`,
         r.requestBody !== undefined && 'the request body',
         r.responseBody !== undefined && 'the response body',
+        r.requestReplace?.length && `${r.requestReplace.length} replacement${r.requestReplace.length > 1 ? 's' : ''} in the request body`,
+        r.responseReplace?.length && `${r.responseReplace.length} replacement${r.responseReplace.length > 1 ? 's' : ''} in the response body`,
+        r.setStatus && `status ${r.setStatus}`,
         r.delayMs && `a ${r.delayMs} ms delay`,
       ]
         .filter(Boolean)
@@ -297,9 +368,21 @@ export function describeRule(r: DebuggerRule): string {
       return `Modify ${where}: ${what || 'nothing yet'}`;
     }
     case 'reply':
-      return `Reply to ${where} with ${r.reply?.status ?? 200}${r.reply?.delayMs ? ` after ${r.reply.delayMs} ms` : ''}`;
+      return `Reply to ${where} with ${r.reply?.file ? `the file ${r.reply.file}` : r.reply?.folder ? `a file of the folder ${r.reply.folder}` : (r.reply?.status ?? 200)}${r.reply?.delayMs ? ` after ${r.reply.delayMs} ms` : ''}`;
     case 'redirect':
-      return `Redirect ${where} to ${r.redirect?.scheme ? `${r.redirect.scheme}://` : ''}${r.redirect?.host ?? '?'}`;
+      return `Redirect ${where} to ${r.redirect?.host ? `${r.redirect.scheme ? `${r.redirect.scheme}://` : ''}${r.redirect.host}` : 'the same host'}${r.redirect?.rewrite ? `, path ${r.redirect.rewrite.from} becomes ${r.redirect.rewrite.to}` : ''}`;
+    case 'remap':
+      return `Reach ${r.match.host || 'every host'} at ${r.remap?.to ?? '?'}${r.remap?.scheme && r.remap.scheme !== 'auto' ? ` over ${r.remap.scheme}` : ''}${r.remap?.preserveHost ? ', keeping the Host header' : ''}`;
+    case 'fault': {
+      const f = r.fault;
+      const how = !f ? 'nothing yet' : f.action === 'drop' ? 'drop the connection' : f.action === 'timeout' ? 'never answer' : f.action === 'truncate' ? `cut the response after ${f.bytes ?? 0} bytes` : `answer ${f.status ?? 503}`;
+      return `For ${where}: ${how}${f && f.percent !== undefined && f.percent < 100 ? ` in ${f.percent}% of requests` : ''}`;
+    }
+    case 'frame': {
+      const f = r.frame;
+      const what = !f ? 'nothing yet' : f.action === 'drop' ? 'drop' : f.action === 'break' ? 'pause' : f.action === 'delay' ? `hold back ${f.delayMs ?? 0} ms` : 'change the text of';
+      return `WebSocket ${where}: ${what} ${f?.direction === 'sent' ? 'frames the program sends' : f?.direction === 'received' ? 'frames the server sends' : 'frames in both directions'}${f?.when ? ` that contain ${f.when}` : ''}`;
+    }
     case 'breakpoint':
       return `Pause the ${r.breakpoint ?? 'request'} of ${where}`;
   }
@@ -403,6 +486,14 @@ export function rulePresets(host?: string): Array<{ id: string; label: string; r
       label: 'Reply with an empty 200',
       rule: { name: 'Canned 200', enabled: true, kind: 'reply', match, reply: { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' } },
     },
+    { id: 'status-500', label: 'Answer 500 instead of the real status', rule: { name: 'Status 500', enabled: true, kind: 'modify', match, setStatus: 500 } },
+    { id: 'remap-local', label: 'Reach this host at localhost:3000 (keep the Host header)', rule: { name: 'Host to localhost', enabled: true, kind: 'remap', match, remap: { to: 'localhost:3000', preserveHost: true } } },
+    { id: 'fault-drop', label: 'Drop the connection', rule: { name: 'Drop connection', enabled: true, kind: 'fault', match, fault: { action: 'drop' } } },
+    { id: 'fault-timeout', label: 'Never answer (timeout)', rule: { name: 'Timeout', enabled: true, kind: 'fault', match, fault: { action: 'timeout' } } },
+    { id: 'fault-20', label: 'Fail 20% of requests with 503', rule: { name: 'Fail 20%', enabled: true, kind: 'fault', match, fault: { action: 'error', status: 503, percent: 20 } } },
+    { id: 'fault-cut', label: 'Cut each response after 1 KB', rule: { name: 'Cut responses', enabled: true, kind: 'fault', match, fault: { action: 'truncate', bytes: 1024 } } },
+    { id: 'ws-drop', label: 'WebSocket: drop what the server sends', rule: { name: 'Drop server frames', enabled: true, kind: 'frame', match, frame: { direction: 'received', action: 'drop' } } },
+    { id: 'ws-break', label: 'WebSocket: pause every frame', rule: { name: 'Pause frames', enabled: true, kind: 'frame', match, frame: { direction: 'both', action: 'break' } } },
     { id: 'redirect-local', label: 'Redirect to localhost:3000', rule: { name: 'To localhost', enabled: true, kind: 'redirect', match, redirect: { host: 'localhost:3000', scheme: 'http' } } },
     { id: 'break-request', label: 'Pause every request', rule: { name: 'Breakpoint', enabled: true, kind: 'breakpoint', match, breakpoint: 'request' } },
     { id: 'ignore', label: 'Filter out (hide from the list)', rule: { name: 'Filter out', enabled: true, kind: 'ignore', match } },
@@ -423,8 +514,17 @@ interface RequestDecision {
   requestBody?: string;
   delayMs: number;
   reply?: NonNullable<DebuggerRule['reply']>;
-  redirect?: NonNullable<DebuggerRule['redirect']>;
+  redirect?: RedirectSpec;
   breakpoint?: 'request' | 'response';
+  requestReplace?: TextReplace[];
+  responseReplace?: TextReplace[];
+  setStatus?: number;
+  /** A failure to inject that the proxy carries out (an `error` fault is a reply instead). */
+  fault?: FaultSpec;
+  /** The frame rules of a WebSocket upgrade. */
+  frames?: FrameSpec[];
+  /** The response is held whole (rules edit it, or a fault cuts it). */
+  hold: boolean;
   /** Response breakpoints that wait for the response itself (a status condition): checked when the headers arrive. */
   lateBreakpoints?: DebuggerRule[];
   responseHeaders?: HeaderEdit[];
@@ -435,8 +535,8 @@ interface RequestDecision {
 }
 
 /** Fold the active rules into one decision for this request (the first reply / redirect / breakpoint wins; edits add up). */
-export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): RequestDecision {
-  const d: RequestDecision = { ignore: false, delayMs: 0, applied: [], appliedIds: [] };
+export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange, rand: () => number = Math.random): RequestDecision {
+  const d: RequestDecision = { ignore: false, delayMs: 0, hold: false, applied: [], appliedIds: [] };
   // capture only: when any is on, a request none of them matches is not listed
   const only = rules.filter((r) => r.enabled && r.kind === 'only');
   if (only.length) {
@@ -459,13 +559,30 @@ export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): Reque
         if (r.responseHeaders?.length) d.responseHeaders = [...(d.responseHeaders ?? []), ...r.responseHeaders];
         if (r.requestBody !== undefined) d.requestBody = r.requestBody;
         if (r.responseBody !== undefined) d.responseBody = r.responseBody;
+        if (r.requestReplace?.length) d.requestReplace = [...(d.requestReplace ?? []), ...r.requestReplace];
+        if (r.responseReplace?.length) d.responseReplace = [...(d.responseReplace ?? []), ...r.responseReplace];
+        if (r.setStatus) d.setStatus = r.setStatus;
         d.delayMs += r.delayMs ?? 0;
         break;
       case 'reply':
-        d.reply ??= r.reply ?? { status: 200 };
+        d.reply ??= replyFor(r, e);
         break;
       case 'redirect':
-        if (r.redirect?.host) d.redirect ??= r.redirect;
+        if (r.redirect?.host || r.redirect?.rewrite) d.redirect ??= r.redirect;
+        break;
+      case 'remap':
+        if (r.remap?.to) d.redirect ??= { host: r.remap.to, scheme: r.remap.scheme === 'http' || r.remap.scheme === 'https' ? r.remap.scheme : undefined, preserveHost: r.remap.preserveHost };
+        break;
+      case 'fault': {
+        const f = r.fault;
+        // a failure that happens in some of the requests only: the dice are thrown once per request
+        if (!f || (f.percent !== undefined && f.percent < 100 && rand() * 100 >= f.percent)) continue;
+        if (f.action === 'error') d.reply ??= { status: f.status ?? 503, headers: { 'content-type': 'text/plain' }, body: 'Failure injected by a TestPion rule' };
+        else d.fault ??= f;
+        break;
+      }
+      case 'frame':
+        if (r.frame) (d.frames ??= []).push(r.frame);
         break;
       case 'breakpoint':
         d.breakpoint ??= r.breakpoint ?? 'request';
@@ -474,7 +591,16 @@ export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): Reque
     d.applied.push(r.name);
     d.appliedIds.push(r.id);
   }
+  d.hold = !!(d.responseHeaders || d.responseBody !== undefined || d.responseReplace || d.setStatus || d.fault?.action === 'truncate');
   return d;
+}
+
+/** The canned response of a reply rule; a file name gets the groups of the rule's /URL regex/ (`$1`). */
+function replyFor(r: DebuggerRule, e: DebuggerExchange): ReplySpec {
+  const reply = r.reply ?? { status: 200 };
+  if (!reply.file || !reply.file.includes('$') || !r.match.url || !/^\/.+\/[a-z]*$/.test(r.match.url.trim())) return reply;
+  const m = patternToRegExp(r.match.url)?.exec(e.url.slice(0, MAX_URL_TESTED));
+  return { ...reply, file: reply.file.replace(/\$(\d)/g, (_s, n: string) => m?.[Number(n)] ?? '') };
 }
 
 /** The highlight rule that matches once the response is in (its colour, style and id). */
