@@ -327,7 +327,7 @@ const logKey = (l: LogLine) => logKeys.get(l) ?? (logKeys.set(l, ++logKeySeq), l
 /** One log line, memoised: the lines already shown are not rendered (nor their data stringified) again when one arrives. */
 const LogRow = memo(function LogRow({ l }: { l: LogLine }) {
   return (
-    <div className="whitespace-pre-wrap">
+    <div className="whitespace-pre-wrap" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 16px' }}>
       <span className="text-muted">{l.time.slice(11, 23)}</span> <span className={cx(l.level === 'ERROR' && 'text-bad', l.level === 'WARN' && 'text-warn')}>{l.level.padEnd(5)}</span> {l.message}
       {l.data !== undefined && <span className="text-muted"> {JSON.stringify(l.data)}</span>}
     </div>
