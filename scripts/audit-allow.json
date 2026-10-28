@@ -1,11 +1,4 @@
 {
-  "note": "Advisories the dependency gate (scripts/audit-gate.mjs) lets through. Each has the reason it does not apply and a date to look again.",
-  "advisories": [
-    {
-      "id": "GHSA-86w9-cpqp-85rv",
-      "package": "node-forge",
-      "reason": "RSA PKCS#1 v1.5 signature verification accepts extra elements. TestPion uses node-forge to create and read certificates for the HTTP Debugger and the Settings certificate list (packages/core/src/debugger/certificate.ts), never to verify a signature; no fixed release exists yet.",
-      "until": "2027-01-31"
-    }
-  ]
+  "note": "Advisories the dependency gate (scripts/audit-gate.mjs) lets through. Each has the reason it does not apply and a date to look again. node-forge GHSA-86w9-cpqp-85rv was listed here until 1.4.2 fixed it (2026-10-28).",
+  "advisories": []
 }
