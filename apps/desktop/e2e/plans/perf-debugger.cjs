@@ -135,6 +135,47 @@ const steps = [
      await window.aps.invoke('debug.clear');
      return 'structure ms: ' + s + ' | performance ms: ' + p;`,
   ),
+  // a Shift-click range of 2,000 rows with the Timeline (then the Structure) dock open, and 60 more requests arriving
+  // while the grid is sorted by URL: the docks and the sorted list follow the capture without a long frame (the Timeline is
+  // memoised and capped, the Structure tree takes only the new rows, the sorted rows take only the new ones). The proxy
+  // listens on its own port (8899 may be another TestPion's).
+  step(
+    'docks-and-sorting-during-a-capture',
+    `await window.aps.invoke('debug.openSession', { text: ${har} });
+     await __t.waitFor(() => (rows().length > 10 ? true : null), 20000);
+     const st = await window.aps.invoke('debug.status');
+     if (!st.running) await window.aps.invoke('debug.start', { port: ${CAPTURE_PORT} });
+     const rail = (l) => document.querySelector('[data-tool-rail] button[aria-label="' + l + '"]');
+     // the 2,000-row range
+     const list = rows()[0].parentElement.parentElement.parentElement;
+     list.scrollTop = 0; await ${painted}();
+     rows()[0].click(); await ${painted}();
+     const h = rows()[0].getBoundingClientRect().height || 24;
+     list.scrollTop = 1999 * h; await ${painted}(); await __t.sleep(100);
+     rows()[Math.floor(rows().length / 2)].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+     await ${painted}(); await __t.sleep(200);
+     const measure = async (label) => {
+       const longTasks = []; const po = new PerformanceObserver((l) => l.getEntries().forEach((e) => longTasks.push(Math.round(e.duration)))); po.observe({ entryTypes: ['longtask'] });
+       let last = performance.now(); let worst = 0; let running = true;
+       const tick = (t) => { worst = Math.max(worst, t - last); last = t; if (running) requestAnimationFrame(tick); };
+       requestAnimationFrame((t) => { last = t; requestAnimationFrame(tick); });
+       for (let i = 0; i < 60; i += 5) { await Promise.all([0, 1, 2, 3, 4].map((k) => window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?dock=' + label + (i + k) }))); await __t.sleep(60); }
+       await __t.sleep(600);
+       running = false; po.disconnect();
+       return label + ' worst frame ms: ' + Math.round(worst) + ' long tasks: ' + (longTasks.filter((d) => d > 50).join(',') || 'none');
+     };
+     rail('Timeline').click(); await ${painted}(); await __t.sleep(300);
+     const picked = document.querySelector('main [data-timeline] [data-timeline-more], main [data-timeline]') ? (document.querySelector('main [data-dock="timeline"] tbody')?.querySelectorAll('tr').length ?? 0) : -1;
+     const timeline = await measure('timeline');
+     rail('Structure').click(); await ${painted}(); await __t.sleep(300);
+     const structure = await measure('structure');
+     const head = vis('main [data-debugger-grid] [role=columnheader]').find((x) => x.textContent.trim().startsWith('URL'));
+     head.click(); await ${painted}(); await __t.sleep(300);
+     const sorted = await measure('sorted');
+     await window.aps.invoke('debug.stop').catch(() => undefined);
+     await window.aps.invoke('debug.clear');
+     return timeline + ' | ' + structure + ' | ' + sorted + ' | timeline rows: ' + picked;`,
+  ),
   // capturing while a 400 KB JSON response is open on the Content tab: each sync of the list leaves the panes alone (the
   // body is laid out once), so the window keeps its frames while 50 more requests arrive. The proxy listens on its own
   // port (8899 may be another TestPion's).
@@ -176,6 +217,8 @@ module.exports = withExpect(steps, {
   'sort-and-scroll': (r) => (num(r, 'sort') < 600 && num(r, 'scroll frame') < 100 ? undefined : 'slow: ' + r),
   'structure-and-performance': (r) => (num(r, 'structure') < 800 && num(r, 'performance') < 800 ? undefined : 'slow: ' + r),
   'select-2000-rows': (r) => (num(r, 'select range') < 200 ? undefined : 'slow: ' + r),
+  // the docks and the sorted list follow a capture: no long task, no frame over 50 ms with 2,000 rows selected (the Timeline draws at most 200 of them)
+  'docks-and-sorting-during-a-capture': (r) => (/timeline worst frame ms: \d+ long tasks: none/.test(r) && /structure worst frame ms: \d+ long tasks: none/.test(r) && /sorted worst frame ms: \d+ long tasks: none/.test(r) && ['timeline', 'structure', 'sorted'].every((k) => num(r, k + ' worst frame') < 50) && Number(/timeline rows: (\d+)/.exec(r)?.[1]) <= 210 ? undefined : 'janky: ' + r),
   // the panes are not laid out again per sync: no long task, and no frame over 50 ms while 50 requests arrive
   'capture-with-an-open-body': (r) => (num(r, 'worst frame') < 50 && /long tasks: none/.test(r) && /body shown: true/.test(r) ? undefined : 'janky: ' + r),
 });
