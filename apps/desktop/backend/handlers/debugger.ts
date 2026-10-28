@@ -41,6 +41,7 @@ import {
 } from '@testpion/core/desktop';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
+import { cachedSessionStats, DeepSearchCache, inSlices } from './debugger-stats.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
 
 export { newDebuggerState, type DebuggerState, type IncomingRequest };
@@ -245,10 +246,10 @@ function authOf(be: Backend, e: DebuggerExchange): { scheme: string; user?: stri
   return { scheme: scheme || 'unknown', cookies, setCookies };
 }
 
-const statusClass = (e: DebuggerExchange) => (e.error ? 'error' : !e.status ? 'pending' : e.status < 300 ? '2xx' : e.status < 400 ? '3xx' : e.status < 500 ? '4xx' : '5xx');
 
 export function debuggerHandlers(be: Backend): Handlers {
   const state: DebuggerState = (be.debugger ??= newDebuggerState());
+  const deepSearch = new DeepSearchCache();
   const status = () => ({
     /** The saved session on screen (a Debugger tab), when not the live capture. */
     viewing,
@@ -667,7 +668,8 @@ export function debuggerHandlers(be: Backend): Handlers {
     } = {}) => {
       const needle = text?.toLowerCase();
       const needleRe = needle ? new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : undefined;
-      const out = shown().exchanges.filter((e) => {
+      const l = listOf(shown());
+      const pass = (e: DebuggerExchange) => {
         if (host && !e.host.toLowerCase().includes(host.toLowerCase())) return false;
         if (method && e.method !== method.toUpperCase()) return false;
         if (kind && e.kind !== kind) return false;
@@ -679,21 +681,30 @@ export function debuggerHandlers(be: Backend): Handlers {
           const ok = st === 'ok' ? s >= 200 && s < 300 : st === 'redirect' ? s >= 300 && s < 400 : st === 'client-error' ? s >= 400 && s < 500 : st === 'server-error' ? s >= 500 : !!e.error;
           if (!ok) return false;
         }
-        if (needle) {
-          const line = `${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''} ${e.status ?? ''}`.toLowerCase();
-          if (line.includes(needle)) return true;
-          if (!deep) return false;
-          // (a case-insensitive pattern: the bodies - up to 200 MB in all - are not lowercased into copies for every search)
-          const h = (x?: Record<string, string>) => Object.entries(x ?? {}).some(([k, v]) => needleRe!.test(k) || needleRe!.test(v));
-          return h(e.requestHeaders) || h(e.responseHeaders) || (!!e.requestBody && needleRe!.test(e.requestBody)) || (!!e.responseBody && needleRe!.test(e.responseBody));
-        }
         return true;
-      });
-      const n = limit ?? (idsOnly ? 5000 : 200);
-      const end = Math.max(0, out.length - Math.max(0, offset));
-      const page = n > 0 ? out.slice(Math.max(0, end - n), end) : out.slice(0, end);
-      if (idsOnly) return page.map((e) => e.id);
-      return page.map((e) => leanRow(be, shown(), e));
+      };
+      const lineHit = (e: DebuggerExchange) => `${e.method} ${e.url} ${e.application ?? ''} ${e.contentType ?? ''} ${e.status ?? ''}`.toLowerCase().includes(needle!);
+      // (a case-insensitive pattern: the bodies - up to 200 MB in all - are not lowercased into copies for every search)
+      const bodiesHit = (e: DebuggerExchange) => {
+        const h = (x?: Record<string, string>) => Object.entries(x ?? {}).some(([k, v]) => needleRe!.test(k) || needleRe!.test(v));
+        return h(e.requestHeaders) || h(e.responseHeaders) || (!!e.requestBody && needleRe!.test(e.requestBody)) || (!!e.responseBody && needleRe!.test(e.responseBody));
+      };
+      const page = (out: DebuggerExchange[]) => {
+        const n = limit ?? (idsOnly ? 5000 : 200);
+        const end = Math.max(0, out.length - Math.max(0, offset));
+        const rows = n > 0 ? out.slice(Math.max(0, end - n), end) : out.slice(0, end);
+        if (idsOnly) return rows.map((e) => e.id);
+        return rows.map((e) => leanRow(be, shown(), e));
+      };
+      const candidates = shown().exchanges.filter(pass);
+      if (!needle) return page(candidates);
+      if (!deep) return page(candidates.filter(lineHit));
+      // headers and bodies: an exchange is read again only when it changed since the last search of this text, and the reading
+      // gives the main process a turn every few milliseconds
+      const hits = new Set<DebuggerExchange>();
+      return inSlices(candidates, (e) => {
+        if (lineHit(e) || deepSearch.hit(needle, e, l.revs.get(e) ?? 0, bodiesHit)) hits.add(e);
+      }).then(() => page(candidates.filter((e) => hits.has(e))));
     },
     /**
      * The grid's changes since the window last asked: the rows added or changed after revision `since`, or every row
@@ -745,57 +756,8 @@ export function debuggerHandlers(be: Backend): Handlers {
     },
     /** Statistics of the session: by host, by content type, the largest and the slowest, the timeline. */
     'debug.stats': () => {
-      const by = <K extends string>(key: (e: DebuggerExchange) => K | undefined) => {
-        const m = new Map<K, { count: number; bytes: number; ms: number }>();
-        for (const e of shown().exchanges) {
-          const k = key(e);
-          if (!k) continue;
-          const v = m.get(k) ?? { count: 0, bytes: 0, ms: 0 };
-          v.count++;
-          v.bytes += e.responseBodyBytes;
-          v.ms += e.durationMs ?? 0;
-          m.set(k, v);
-        }
-        return [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.bytes - a.bytes);
-      };
-      const done = shown().exchanges.filter((e) => e.durationMs !== undefined);
-      // the overview: requests per time slice (so a burst, a gap or a retry storm shows), and the status mix
-      const times = shown().exchanges.map((e) => Date.parse(e.startedAt)).filter((t) => !Number.isNaN(t));
-      const first = times.length ? Math.min(...times) : 0;
-      const last = times.length ? Math.max(...times) : 0;
-      const span = Math.max(1000, last - first);
-      const buckets = Math.min(60, Math.max(10, Math.ceil(span / 1000)));
-      const slice = span / buckets;
-      const timeline = Array.from({ length: buckets }, (_, i) => ({ t: new Date(first + i * slice).toISOString(), count: 0, errors: 0 }));
-      for (const e of shown().exchanges) {
-        const t = Date.parse(e.startedAt);
-        if (Number.isNaN(t)) continue;
-        const b = timeline[Math.min(buckets - 1, Math.floor((t - first) / slice))]!;
-        b.count++;
-        if (e.error || (e.status ?? 0) >= 400) b.errors++;
-      }
-      const statuses: Record<string, number> = {};
-      for (const e of shown().exchanges) statuses[statusClass(e)] = (statuses[statusClass(e)] ?? 0) + 1;
-      return {
-        total: shown().exchanges.length,
-        bytes: shown().exchanges.reduce((n, e) => n + e.responseBodyBytes, 0),
-        errors: shown().exchanges.filter((e) => e.error || (e.status ?? 0) >= 400).length,
-        firstAt: first ? new Date(first).toISOString() : undefined,
-        lastAt: last ? new Date(last).toISOString() : undefined,
-        timeline,
-        statuses,
-        hosts: by((e) => e.host).slice(0, 20),
-        contentTypes: by((e) => e.contentType?.split(';')[0]?.trim()).slice(0, 20),
-        applications: by((e) => e.application).slice(0, 20),
-        largest: [...done]
-          .sort((a, b) => b.responseBodyBytes - a.responseBodyBytes)
-          .slice(0, 10)
-          .map((e) => ({ id: e.id, method: e.method, url: be.logger.redactor.redactUrl(e.url), bytes: e.responseBodyBytes })),
-        slowest: [...done]
-          .sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0))
-          .slice(0, 10)
-          .map((e) => ({ id: e.id, method: e.method, url: be.logger.redactor.redactUrl(e.url), ms: e.durationMs })),
-      };
+      const l = listOf(shown());
+      return cachedSessionStats(shown().exchanges, `${l.epoch}:${l.rev}:${shown().exchanges.length}`, (u) => be.logger.redactor.redactUrl(u));
     },
     /** The session as HAR (the same format the history exports), for saving and for other tools. */
     'debug.har': () => exchangesToHar(shown().exchanges, be.logger.redactor, ENGINE_VERSION),
