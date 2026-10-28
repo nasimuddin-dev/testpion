@@ -58,7 +58,7 @@ const steps = [
      r.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 }));
      await __t.waitFor(() => menuItem(/^Filter out$/), 2000);
      const sub = menuItem(/^Filter out$/); sub?.focus(); hover(sub);
-     const item = await __t.waitFor(() => menuItem(/^URL starts with .*\\/health$/), 2000);
+     const item = await __t.waitFor(() => menuItem(/^URL does not start with .*\\/health$/), 2000);
      item?.click(); await __t.sleep(600);
      const dockName = dock()?.getAttribute('data-dock');
      await window.aps.invoke('debug.selfTest', { url: 'http://127.0.0.1:4010/health?c=1' });

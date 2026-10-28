@@ -25,7 +25,7 @@ const steps = [
      const menu = await __t.waitFor(() => document.querySelector('[role=menu]'), 3000); if (!menu) return 'NO MENU';
      await __t.sleep(300);
      const r = menu.getBoundingClientRect();
-     const items = [...menu.querySelectorAll(':scope > [role=menuitem]')].map((m) => m.textContent.trim());
+     const items = [...document.querySelectorAll('[role=menuitem]')].filter((m) => m.offsetParent).map((m) => m.textContent.trim());
      const cs = getComputedStyle(menu);
      return 'inside the window: ' + (r.top >= 0 && r.bottom <= innerHeight) + ' | scrolls: ' + (cs.overflowY === 'auto') + ' | change traffic: ' + items.some((t) => t === 'Change this traffic') + ' | flat rule items: ' + items.some((t) => /^(Modify headers|Redirect connections|Auto-reply)/.test(t));`,
   ),
