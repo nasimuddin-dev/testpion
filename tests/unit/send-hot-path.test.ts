@@ -4,7 +4,9 @@ import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, executeHttp, requireEnvironment } from '../../packages/core/src/index.js';
+import { WorkspaceStore, executeHttp, requireEnvironment, prefetchEnvironmentSecrets } from '../../packages/core/src/index.js';
+import { guardProduction } from '../../apps/desktop/backend/production-guard.js';
+import type { Backend } from '../../apps/desktop/backend/backend.js';
 
 let server: Server;
 let base = '';
@@ -87,6 +89,41 @@ describe('script packages', () => {
       writeFileSync(file, 'module.exports = 22;');
       expect(store.readScriptPackage('util')).toBe('module.exports = 22;');
       expect(store.readScriptPackage('missing')).toBeUndefined();
+    } finally {
+      store.close();
+    }
+  });
+});
+
+// review 2026-10-27, 9: the secrets prefetch and the production guard parsed every environment file (and the collection) again on each send
+describe('the guard and the secrets prefetch of a send', () => {
+  it('100 guarded sends with 20 environments and a collection parse nothing while the files are unchanged', async () => {
+    const store = WorkspaceStore.create(join(dir, 'ws-guard'), 'Guard');
+    try {
+      for (let i = 0; i < 20; i++) writeFileSync(store.path('environments', `env${i}.json`), JSON.stringify({ id: `env${i}`, name: `Env ${i}`, isProduction: i === 19, variables: [{ key: 'k', value: String(i), enabled: true }] }));
+      const col = { id: 'big' };
+      const items = Array.from({ length: 2000 }, (_, i) => ({ kind: 'request', id: `r${i}`, name: `R ${i}`, request: { method: 'GET', url: `https://x.test/${i}`, headers: [], preRequestScript: '', testScript: '' } }));
+      store.saveCollection({ id: col.id, name: 'Big', items } as never);
+      let envParses = 0;
+      let colParses = 0;
+      const listEnvs = store.listEnvironments.bind(store);
+      store.listEnvironments = () => (envParses++, listEnvs());
+      const getEnv = store.getEnvironment.bind(store);
+      store.getEnvironment = (n: string) => (envParses++, getEnv(n));
+      const getCol = store.getCollection.bind(store);
+      store.getCollection = ((id: string, o?: { etag?: boolean }) => (colParses++, getCol(id, o))) as typeof store.getCollection;
+      const be = { store: true, ws: store } as unknown as Backend;
+      // (warm: the views are made once)
+      await guardProduction(be, 'http.send', { environment: 'Env 3', collectionId: col.id, requestId: 'r5', request: { method: 'GET', url: 'https://x.test' } }, async () => 1);
+      await prefetchEnvironmentSecrets(store, 'Env 3');
+      envParses = 0;
+      colParses = 0;
+      for (let i = 0; i < 100; i++) {
+        await guardProduction(be, 'http.send', { environment: `Env ${i % 20 === 19 ? 18 : i % 20}`, collectionId: col.id, requestId: `r${i}`, request: { method: 'GET', url: 'https://x.test' } }, async () => 1);
+        await prefetchEnvironmentSecrets(store, `Env ${i % 20}`);
+      }
+      expect(envParses).toBe(0);
+      expect(colParses).toBe(0);
     } finally {
       store.close();
     }

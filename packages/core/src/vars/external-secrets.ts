@@ -217,7 +217,7 @@ export async function prefetchEnvironmentSecrets(store: WorkspaceStore, environm
   if (!environment) return empty;
   let env: Environment | undefined;
   try {
-    env = store.getEnvironment(environment);
+    env = store.environmentView(environment);
   } catch {
     return empty;
   }
