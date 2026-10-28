@@ -58,6 +58,9 @@ export interface Exchange {
   durationMs?: number;
   error?: string;
   bookmarked?: boolean;
+  /** The person's comment on it and a colour mark (saved in the HAR). */
+  note?: string;
+  mark?: string;
   /** Rules (DBG-3): the row's colour, the rules that acted, where a redirect sent it, a reply rule answered, a breakpoint edited it. */
   highlight?: string;
   /** A highlight rule's text colours per theme, bold, whole row. */

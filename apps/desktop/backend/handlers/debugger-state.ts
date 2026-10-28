@@ -52,6 +52,8 @@ export interface DebuggerState {
   dirty?: boolean;
   /** The rules file (handlers/debugger-rules.ts), read once; the proxy asks for the active profile's rules on every request. */
   rules?: DebuggerRulesFile;
+  /** Listing is paused (Pause in the capture bar): the proxy keeps forwarding and rules keep acting, but nothing new is listed. */
+  paused?: boolean;
   /** Exchanges held at a breakpoint, waiting for the window. */
   breakpoints?: Map<string, PendingBreakpoint>;
   /** HTTPS decryption (DBG-4): on or off for the session; hosts kept opaque; the root and the per-host signer. */

@@ -1,6 +1,7 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { Command, Option } from 'commander';
+import { createInterface } from 'node:readline';
 import {
   collectionFromExchanges,
   type CaptureGrouping,
@@ -409,13 +410,14 @@ ${cyan(r.url)}`);
     .option('--rules <file.json>', "rules to apply (the app's debugger/rules.json: ignore, highlight, modify, reply, redirect); the file is re-read when it changes")
     .option('--decrypt', 'decrypt HTTPS with the TestPion root certificate (~/.testpion/debugger; the program must trust it)')
     .option('--system-proxy', "point this computer's proxy setting at the capture, so every program that follows it is captured; Ctrl+C puts it back")
+    .option('--paused', 'start with listing paused: the proxy forwards, nothing is printed or saved; type resume (then Enter) to list, pause to stop listing again')
     .option('--dry-run', 'change nothing: print what it would do')
     .option('-w, --workspace <nameOrPath>', "decode gRPC messages with the .proto files of this workspace's gRPC calls (default: the nearest workspace.json, if any)")
     .option('--json', 'print each exchange as one JSON line (for scripts and AI agents)')
     .option('--save-collection [name]', 'when stopped, save the exchanges as requests in a new collection of the workspace (secrets become variables, never saved)')
     .option('--to <collection>', 'with --save-collection: add them to this collection instead (in a folder [name] when given)')
     .addOption(new Option('--group <how>', 'with --save-collection: a folder per host, per first path segment, or none').choices(['host', 'path', 'none']).default('host'))
-    .action(async (o: { port: string; lan?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; to?: string; group: CaptureGrouping }) => {
+    .action(async (o: { port: string; lan?: boolean; paused?: boolean; out?: string; rules?: string; decrypt?: boolean; systemProxy?: boolean; dryRun?: boolean; workspace?: string; json?: boolean; saveCollection?: string | boolean; to?: string; group: CaptureGrouping }) => {
       if (o.dryRun) {
         const wouldDo = [`start the proxy on port ${Number(o.port) || 8899}${o.lan ? ' on every interface' : ''}`, ...(o.decrypt ? ['decrypt HTTPS with the TestPion root certificate'] : []), ...(o.systemProxy ? ['point this computer’s proxy setting at it (Ctrl+C puts it back)'] : []), ...(o.out ? [`save the session as HAR to ${o.out} when stopped`] : [])];
         if (machine()) emitEvent('dry-run', { wouldDo });
@@ -449,7 +451,10 @@ ${cyan(r.url)}`);
       } catch {
         /* no workspace here: field by field */
       }
+      // listing can be paused while the proxy goes on forwarding (FG-13): `pause` and `resume` on the terminal's input
+      let paused = !!o.paused;
       const proxy = await startDebuggerProxy({
+        listing: () => !paused,
         grpcDecode: grpcDecoder(grpcMethodIndex(protoRoots)),
         rootCertificatePem: () => root?.certPem,
         port: Number(o.port) || undefined,
@@ -475,11 +480,20 @@ ${cyan(r.url)}`);
       }
       console.error(`${green('HTTP Debugger')} listening on ${proxy.url}  ${dim(`(HTTP_PROXY=${proxy.url}; Ctrl+C to stop${o.out ? `, saves ${o.out}` : ''})`)}`);
       if (snapshot) console.error(dim('The system proxy points here: programs that follow it are captured; Ctrl+C puts it back.'));
-      if (machine()) emitEvent('listening', { url: proxy.url, systemProxy: !!snapshot, decrypt: !!root, ...(root ? { rootCertificate: root.path } : {}) });
+      const control = !process.stdin.isTTY || o.paused ? createInterface({ input: process.stdin }) : undefined;
+      control?.on('line', (line) => {
+        const word = line.trim().toLowerCase();
+        if (word !== 'pause' && word !== 'resume') return;
+        paused = word === 'pause';
+        if (machine()) emitEvent('listing', { paused });
+        else console.error(dim(paused ? 'Listing paused: traffic is still forwarded.' : 'Listing resumed.'));
+      });
+      if (machine()) emitEvent('listening', { url: proxy.url, paused, systemProxy: !!snapshot, decrypt: !!root, ...(root ? { rootCertificate: root.path } : {}) });
       await new Promise<void>((resolve) => {
         process.once('SIGINT', () => resolve());
         process.once('SIGTERM', () => resolve());
       });
+      control?.close();
       if (snapshot) await disengageSystemProxy(debuggerCertDir(), snapshot);
       if (o.out) {
         const entries = proxy.exchanges.filter((e) => e.kind === 'http');

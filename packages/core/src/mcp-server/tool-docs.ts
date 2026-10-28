@@ -798,7 +798,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── HTTP Debugger ──────────────────────────────────────────────────────
   debugger_capture: {
-    when: 'Use it to start the proxy, then run a program through it.',
+    when: 'Use it to start the proxy, then run a program through it; pause / resume stop and restart listing without stopping the proxy.',
     whenNot: 'To read what was captured, use `debugger_exchanges`.',
     example: { action: 'start' },
   },
@@ -819,7 +819,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     narrow: 'Filter with `host`, `method`, `status` or `text`, lower `limit`, or page with `cursor`.',
   },
   debugger_exchange: {
-    when: 'Use it to read one captured exchange in full: headers, bodies and timings.',
+    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark.',
     whenNot: 'To list exchanges, use `debugger_exchanges`.',
     example: { id: 'ex-42' },
     narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',
@@ -830,7 +830,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { action: 'save', path: 'session.har' },
   },
   debugger_rules: {
-    when: 'Use it to list, add or toggle Debugger rules.',
+    when: 'Use it to list, add or toggle Debugger rules, or to hold traffic at an automatic breakpoint (breakpoints, held, resume).',
     whenNot: 'To filter only what you read, use `debugger_exchanges` filters.',
     example: { action: 'add', preset: 'slow', host: '127.0.0.1:4010' },
   },

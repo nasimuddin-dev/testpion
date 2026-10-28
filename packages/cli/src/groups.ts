@@ -31,6 +31,9 @@ const MOVES: Move[] = [
   // into groups that already exist: the run history kept on disk is part of the history, what a workspace was allowed is part of the workspace
   { from: 'debug', group: 'debug', as: 'capture', isDefault: true },
   { from: 'debug-certificate', group: 'debug', as: 'certificate' },
+  { from: 'debug-breakpoints', group: 'debug', as: 'breakpoints' },
+  { from: 'debug-annotate', group: 'debug', as: 'annotate' },
+  { from: 'debug-presets', group: 'debug', as: 'presets' },
   { from: 'runs', group: 'history', as: 'runs' },
   { from: 'trust', group: 'workspace', as: 'trust' },
 ];
@@ -38,7 +41,7 @@ const MOVES: Move[] = [
 const GROUP_TEXT: Record<string, string> = {
   lint: 'review things before they cause trouble: a collection (the default: `lint <collection>`), test files (`lint tests`), OpenAPI documents (`lint openapi`)',
   mock: "serve a fake API on localhost until Ctrl+C: a collection's saved examples (the default: `mock <collection>`), a fake MCP server (`mock mcp`), typed data for a GraphQL schema (`mock graphql`)",
-  debug: 'the HTTP Debugger from the terminal: a capture (the default: `debug` alone; `--system-proxy` for the whole computer, `--decrypt` for HTTPS) and the root certificate HTTPS decryption needs (`debug certificate`). `debugger` is the same word',
+  debug: 'the HTTP Debugger from the terminal: a capture (the default: `debug` alone; `--system-proxy` for the whole computer, `--decrypt` for HTTPS) the root certificate HTTPS decryption needs (`debug certificate`), automatic breakpoints (`debug breakpoints`), notes and marks on a HAR (`debug annotate`) and the ready-made rules (`debug presets`). `debugger` is the same word',
   openapi: 'OpenAPI / Swagger tools: diff two versions, list operations, drift against real traffic, coverage by your runs, fuzz (`lint openapi` checks a document)',
 };
 

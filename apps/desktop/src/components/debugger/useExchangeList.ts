@@ -15,6 +15,8 @@ export interface ListFilter {
   bookmarked: boolean;
   /** Hide the CONNECT tunnels (HTTPS that is not decrypted): the usual first filter of a capture. */
   hideTunnels: boolean;
+  /** Hide the 304 Not Modified answers (Fiddler's Hide 304s). */
+  hide304?: boolean;
   /** "Capture only" / "Filter out" chosen in a row's menu, applied at once to the rows already captured. */
   quick: QuickFilter[];
 }
@@ -42,12 +44,13 @@ export function filterRows(all: Exchange[], f: ListFilter, deepIds?: Set<string>
   const host = f.host.toLowerCase();
   const method = f.method.toUpperCase();
   const type = f.type.toLowerCase();
-  if (!needle && !host && !method && !type && !f.application && !f.status && !f.bookmarked && !f.hideTunnels && !f.quick.length) return all;
+  if (!needle && !host && !method && !type && !f.application && !f.status && !f.bookmarked && !f.hideTunnels && !f.hide304 && !f.quick.length) return all;
   return all.filter((e) => {
     if (host && !e.host.toLowerCase().includes(host)) return false;
     if (method && e.method !== method) return false;
     if (f.bookmarked && !e.bookmarked) return false;
     if (f.hideTunnels && e.kind === 'tunnel') return false;
+    if (f.hide304 && e.status === 304) return false;
     if (f.quick.length && !passesQuick(e, f.quick)) return false;
     if (f.application && (e.application ?? '') !== f.application) return false;
     if (type && (e.contentType ?? '').split(';')[0]!.trim().toLowerCase() !== type) return false;

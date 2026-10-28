@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Columns3, Copy, Database, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowUp, Columns3, Copy, MessageSquare, Palette, Database, Download, ExternalLink, Filter, FolderPlus, Highlighter, Lock, Network, Play, Reply, Shuffle, Star, Trash2, Workflow, Wrench } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { formatBytes } from '@testpion/shared';
 import { call } from '../../api';
@@ -17,6 +17,8 @@ import { copyText } from '../../lib/clipboard';
 import { LABEL } from '../../lib/vocabulary';
 import { negatedLabel, quickRuleName, type QuickKind } from './quick-filter';
 import { certificateError } from './ExchangeExtras';
+import { REQUIRE_AUTH_PRESET, TRAFFIC_PRESETS, USER_AGENT_PRESETS } from './presets';
+import { MARKS } from './marks';
 
 /** The whole exchange: the grid's rows are lean (no headers, no bodies). */
 const whole = (e: Exchange) => call<Exchange>('debug.exchange', { id: e.id });
@@ -48,7 +50,7 @@ const headerLines = (h?: Record<string, string>) =>
 const BOOKMARK_ICON = <Star size={10} className="fill-current text-warn" />;
 const TLS_ICON = <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />;
 
-type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid';
+type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid' | 'comment';
 interface Column {
   id: ColumnId;
   label: string;
@@ -74,8 +76,10 @@ const COLUMNS: Column[] = [
   { id: 'ip', label: 'IP address', width: 140, sort: (e) => e.serverAddress ?? '' },
   { id: 'user', label: 'User', width: 120, sort: (e) => e.user ?? '' },
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
+  { id: 'comment', label: 'Comments', width: 200, sort: (e) => e.note ?? '' },
 ];
-const DEFAULT_HIDDEN: ColumnId[] = ['pid'];
+// Comments is shown the first time a note is added (the row menu does it)
+const DEFAULT_HIDDEN: ColumnId[] = ['pid', 'comment'];
 const HIDDEN_KEY = 'testpion.debugger.hiddenColumns';
 const parseHidden = (raw: string): ColumnId[] | undefined => {
   const v = JSON.parse(raw) as unknown;
@@ -111,6 +115,12 @@ export interface GridActions {
   /** Stop decrypting this exchange's host (a program that does not trust the TestPion certificate); it stays a tunnel. */
   onKeepEncrypted(e: Exchange): void;
   onBookmark(e: Exchange): void;
+  /** Ask for a note on these exchanges (the current one is the prompt's start); an empty answer removes it. */
+  onNote(e: Exchange, ids: string[], remove?: boolean): void;
+  /** A colour mark on these exchanges ('' removes it). */
+  onMark(ids: string[], mark: string): void;
+  /** Add a ready-made rule (Disable caching, a user agent …) for the domain of this exchange. */
+  onPreset(e: Exchange, preset: string): void;
   onCompare(e: Exchange): void;
   onDelete(ids: string[]): void;
   /** A test flow of these exchanges (the Create flow dialog). */
@@ -194,6 +204,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
       case 'seq':
         return (
           <span className="flex items-center justify-end gap-1">
+            {e.note && <MessageSquare size={10} className="text-accent" aria-label="has a note" />}
             {e.bookmarked && BOOKMARK_ICON}
             {e.seq}
           </span>
@@ -259,6 +270,8 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         return <span title={e.user}>{e.user?.split('\\').pop() ?? ''}</span>;
       case 'pid':
         return e.pid ?? '';
+      case 'comment':
+        return <span title={e.note}>{e.note ?? ''}</span>;
     }
   };
   const rowMenu = (e: Exchange): MenuItem[] => {
@@ -299,6 +312,18 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         ],
       },
       { label: e.bookmarked ? 'Remove the bookmark' : 'Bookmark', icon: <Star size={14} />, onSelect: () => actions.onBookmark(e) },
+      { label: e.note ? 'Edit the note…' : 'Add a note…', icon: <MessageSquare size={14} />, title: 'A comment on this exchange. It shows in the Comments column and is saved with the session.', onSelect: () => { setHidden((h) => h.filter((x) => x !== 'comment')); actions.onNote(e, ids); } },
+      { label: 'Remove the note', icon: <MessageSquare size={14} />, disabled: !e.note, reason: 'This exchange has no note', onSelect: () => actions.onNote(e, ids, true) },
+      {
+        label: 'Mark',
+        icon: <Palette size={14} />,
+        title: 'Colour the row, to find it again',
+        onSelect: () => undefined,
+        items: [
+          ...MARKS.map<MenuItem>((m) => ({ label: `${e.mark === m.id ? '✓ ' : '  '}${m.label}`, onSelect: () => actions.onMark(ids, m.id) })),
+          { label: 'Remove the mark', separator: true, disabled: !e.mark, reason: 'This exchange has no mark', onSelect: () => actions.onMark(ids, '') },
+        ],
+      },
       { label: LABEL.openAsRequest, icon: <ExternalLink size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onOpen(e) },
       { label: 'Resend', icon: <Play size={14} />, disabled: e.kind === 'tunnel', reason: 'A tunnel is not a request: turn on HTTPS decryption to see the requests inside it', onSelect: () => actions.onResend(e) },
       // keeping a host encrypted means something only while decryption is on (or this tunnel failed on the certificate); otherwise the tunnel's item is the way in
@@ -362,8 +387,18 @@ export const DebuggerGrid = memo(function DebuggerGrid({
               },
             ],
           },
+          ...TRAFFIC_PRESETS.map<MenuItem>((p) => ({ label: p.label, icon: <Wrench size={14} />, title: `${p.title}. Adds a rule for ${e.host}.`, onSelect: () => actions.onPreset(e, p.id) })),
+          {
+            label: 'User agent',
+            icon: <Wrench size={14} />,
+            title: `Send another User-Agent to ${e.host}`,
+            onSelect: () => undefined,
+            items: USER_AGENT_PRESETS.map<MenuItem>((u) => ({ label: u.label, onSelect: () => actions.onPreset(e, u.id) })),
+          },
+          { label: REQUIRE_AUTH_PRESET.label, icon: <Wrench size={14} />, title: REQUIRE_AUTH_PRESET.title, onSelect: () => actions.onPreset(e, REQUIRE_AUTH_PRESET.id) },
           {
             label: 'Modify headers…',
+            separator: true,
             icon: <Wrench size={14} />,
             onSelect: () => actions.onNewRule({ kind: 'modify', enabled: true, match: { host: e.host }, requestHeaders: [{ op: 'set', name: 'X-Debug', value: 'testpion' }] }),
           },
@@ -428,7 +463,7 @@ export const DebuggerGrid = memo(function DebuggerGrid({
                 className={cx(
                   'flex items-center h-[24px] text-xs cursor-default border-b border-line/40 tabular-nums',
                   isSel ? 'bg-accent-soft' : 'hover:bg-hover',
-                  !style && e.highlight ? HIGHLIGHT_CLASS[e.highlight] : '',
+                  e.mark ? HIGHLIGHT_CLASS[e.mark] : !style && e.highlight ? HIGHLIGHT_CLASS[e.highlight] : '',
                   style?.bold && 'font-semibold',
                 )}
                 style={rowColour ? { color: rowColour } : undefined}

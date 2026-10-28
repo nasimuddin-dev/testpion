@@ -26,7 +26,7 @@ import { sleep } from '../util/concurrency.js';
 import { flattenHeaders } from '../util/headers.js';
 import { BoundedMap } from '../util/collections.js';
 import { currentNet } from '../net/proxy.js';
-import { applyHeaderEdits, decideRequest, highlightRuleForResponse, type DebuggerRule, type HighlightStyle } from './rules.js';
+import { applyHeaderEdits, decideRequest, highlightRuleForResponse, ruleMatches, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
 import type { LeafCertificate } from './certificate.js';
 import { GRPC_STATUS, grpcDecoder, grpcDecompress, grpcMessageReader, grpcMethodOf, type GrpcCapture } from './grpc.js';
@@ -87,6 +87,9 @@ export interface DebuggerExchange {
   error?: string;
   /** Set by the user (a star) or a rule (a colour). */
   bookmarked?: boolean;
+  /** The user's comment on it, and a colour mark (red, orange, yellow, green, blue, purple, grey): saved in the HAR. */
+  note?: string;
+  mark?: string;
   /** A highlight rule's text colours, bold and whole row (with `highlight`). */
   highlightStyle?: HighlightStyle;
   highlight?: string;
@@ -152,6 +155,8 @@ interface DebuggerProxyOptions {
   ownerOf?(pid: number): Promise<string | undefined>;
   /** The active rules, read for every request (so edits apply at once). */
   rules?(): DebuggerRule[];
+  /** Asked for every request: false while listing is paused (the traffic is still forwarded, rules still act, nothing is listed). */
+  listing?(): boolean;
   /** A breakpoint rule matched: show the exchange, resolve with edits (or nothing) to let it go on. */
   onBreakpoint?(e: DebuggerExchange, phase: 'request' | 'response'): Promise<BreakpointEdits | undefined>;
   /** HTTPS decryption: a certificate for each host, signed by the root the program trusts; `enabled` is asked per tunnel. */
@@ -204,24 +209,6 @@ const forH2Out = (h: Record<string, string | string[] | number | undefined>) => 
 /** The HTTP/2 compatibility response has the same methods as ServerResponse; it is handled as one and told apart here. */
 const isH2 = (res: ServerResponse): boolean => 'stream' in res && !!(res as unknown as Http2ServerResponse).stream;
 const textLike = (ct: string | undefined) => !ct || /json|text|xml|javascript|html|form|yaml|graphql|csv|urlencoded/i.test(ct);
-
-/** Collect a stream into text, up to `max` bytes (the rest is counted, not kept). */
-function collect(stream: NodeJS.ReadableStream, max: number, keep: boolean): Promise<{ text?: string; bytes: number; truncated: boolean }> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    let bytes = 0;
-    let kept = 0;
-    stream.on('data', (c: Buffer) => {
-      bytes += c.length;
-      if (keep && kept < max) {
-        chunks.push(c.subarray(0, max - kept));
-        kept += Math.min(c.length, max - kept);
-      }
-    });
-    stream.on('end', () => resolve({ text: keep ? Buffer.concat(chunks).toString('utf8') : undefined, bytes, truncated: bytes > max }));
-    stream.on('error', () => resolve({ text: keep ? Buffer.concat(chunks).toString('utf8') : undefined, bytes, truncated: bytes > max }));
-  });
-}
 
 /**
  * The most a request or response body is held in memory so that rules and breakpoints can change it. A body over it is not held:
@@ -279,6 +266,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   };
   const decideAndCount = (rules: DebuggerRule[], e: DebuggerExchange) => {
     const d = decideRequest(rules, e);
+    if (opts.listing && !opts.listing()) d.ignore = true; // paused: forwarded, not listed
     for (const id of d.appliedIds) countHit(e, id);
     // the first highlight's style goes with its colour
     const hl = rules.find((r) => r.enabled && r.kind === 'highlight' && d.appliedIds.includes(r.id));
@@ -483,7 +471,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         setApp(e, a);
       });
       const rules = rulesNow();
-      const decision = rules.length ? decideAndCount(rules, e) : undefined;
+      const decision = rules.length || opts.listing ? decideAndCount(rules, e) : undefined;
       if (decision?.highlight) e.highlight = decision.highlight;
       if (decision?.applied.length) e.rules = decision.applied;
       return forwardGrpc(target, req as Http2ServerRequest, res as unknown as Http2ServerResponse, e, !decision?.ignore);
@@ -517,7 +505,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
 
     const rules = rulesNow();
     await programFirst(appPromise, rules);
-    const decision = rules.length ? decideAndCount(rules, e) : undefined;
+    const decision = rules.length || opts.listing ? decideAndCount(rules, e) : undefined;
     if (decision?.ignore) {
       // not listed; forwarded as is
       forward(target, e.method, { ...requestHeaders }, bodyToSend, res, e, undefined, undefined, false);
@@ -740,7 +728,9 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       e.responseHeaders = flattenHeaders(ures.headers);
       e.contentType = ures.headers['content-type'];
       const keep = textLike(e.contentType);
-      if (!hold) {
+      // a response breakpoint on the status (Only errors) is known once the headers are in
+      const bp = breakpoint ?? (opts.onBreakpoint && decision?.lateBreakpoints?.some((r) => ruleMatches(r, e, 'response')) ? opts.onBreakpoint : undefined);
+      if (!hold && !bp) {
         res.writeHead(ures.statusCode ?? 502, isH2(res) ? forH2(ures.headers) : ures.headers);
         const chunks: Buffer[] = [];
         let kept = 0;
@@ -812,8 +802,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       let outHeaders = applyHeaderEdits(e.responseHeaders, decision?.responseHeaders);
       if (decision?.responseBody !== undefined) outBody = Buffer.from(decision.responseBody, 'utf8');
       if (keep) e.responseBody = outBody.subarray(0, maxBody).toString('utf8');
-      if (breakpoint) {
-        const edits = await breakpoint(e, 'response').catch(() => undefined);
+      if (bp) {
+        const edits = await bp(e, 'response').catch(() => undefined);
         if (edits?.abort) {
           e.error = 'Aborted at the breakpoint';
           e.durationMs = Date.now() - t0;
@@ -904,7 +894,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       setApp(e, a);
     });
     const rules = rulesNow();
-    const decision = rules.length ? decideAndCount(rules, e) : undefined;
+    const decision = rules.length || opts.listing ? decideAndCount(rules, e) : undefined;
     const listed = !decision?.ignore;
     if (decision?.highlight) e.highlight = decision.highlight;
     if (decision?.applied.length) e.rules = decision.applied;
@@ -1016,7 +1006,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       setApp(e, a);
     });
     const rules = rulesNow();
-    const decision = rules.length ? decideAndCount(rules, e) : undefined;
+    const decision = rules.length || opts.listing ? decideAndCount(rules, e) : undefined;
     const listed = !decision?.ignore;
     if (decision?.highlight) e.highlight = decision.highlight;
     if (decision?.applied.length) e.rules = decision.applied;

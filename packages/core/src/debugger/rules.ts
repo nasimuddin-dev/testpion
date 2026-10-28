@@ -55,6 +55,8 @@ interface RuleMatch {
   minBytes?: number;
   /** A condition on one column (the Highlight Rule editor; any kind may use it). */
   where?: RuleCondition;
+  /** Only a request that carries no `Proxy-Authorization` (the "Require proxy sign-in" preset answers it with a 407). */
+  noProxyAuth?: boolean;
 }
 
 export interface HeaderEdit {
@@ -215,6 +217,12 @@ export function conditionHolds(c: RuleCondition, e: DebuggerExchange): boolean {
   }
 }
 
+/** Does the rule look at the response (its status, time, size, type or the server's address)? Then it waits for it. */
+export function waitsForResponse(rule: DebuggerRule): boolean {
+  const m = rule.match;
+  return m.status !== undefined || m.minMs !== undefined || m.minBytes !== undefined || (!!m.where && RESPONSE_COLUMNS.includes(m.where.column));
+}
+
 /** Does the rule match this exchange? Response conditions (status, time, size) wait for the response. */
 export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'request' | 'response'): boolean {
   const m = rule.match;
@@ -233,8 +241,8 @@ export function ruleMatches(rule: DebuggerRule, e: DebuggerExchange, phase: 'req
     return false;
   const app = patternToRegExp(m.application);
   if (app && !safeTest(app, (e.application ?? '').slice(0, MAX_TESTED)).matched) return false;
-  const needsResponse = m.status !== undefined || m.minMs !== undefined || m.minBytes !== undefined || (!!m.where && RESPONSE_COLUMNS.includes(m.where.column));
-  if (needsResponse) {
+  if (m.noProxyAuth && e.requestHeaders['proxy-authorization']) return false;
+  if (waitsForResponse(rule)) {
     if (phase === 'request') return false;
     if (!statusMatches(m.status, e.status, e.error)) return false;
     if (m.minMs !== undefined && (e.durationMs ?? 0) < m.minMs) return false;
@@ -260,7 +268,7 @@ export function applyHeaderEdits(headers: Record<string, string>, edits: HeaderE
 /** One line that says what a rule does, for lists and the rules bar. */
 export function describeRule(r: DebuggerRule): string {
   const cond = r.match.where ? describeCondition(r.match.where) : '';
-  const where = [r.match.method, r.match.host, r.match.url, r.match.application && `from ${r.match.application}`, cond && `where ${cond}`].filter(Boolean).join(' ') || 'everything';
+  const where = [r.match.method, r.match.host, r.match.url, r.match.application && `from ${r.match.application}`, r.match.noProxyAuth && 'without proxy sign-in', cond && `where ${cond}`].filter(Boolean).join(' ') || 'everything';
   switch (r.kind) {
     case 'ignore':
       return `Filter out ${where}`;
@@ -326,6 +334,16 @@ export function defaultRules(): DebuggerRule[] {
   ];
 }
 
+/** The user agents of the "User agent" presets (what Fiddler's User-Agents menu offers, as plain words). */
+export const USER_AGENTS: Array<{ id: string; label: string; value: string }> = [
+  { id: 'chrome', label: 'Chrome (Windows)', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' },
+  { id: 'firefox', label: 'Firefox (Windows)', value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0' },
+  { id: 'safari', label: 'Safari (Mac)', value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15' },
+  { id: 'iphone', label: 'iPhone', value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' },
+  { id: 'android', label: 'Android phone', value: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36' },
+  { id: 'bot', label: 'Search bot', value: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
+];
+
 /** Ready-made rules to add with one click, filled in for a host when one is given. */
 export function rulePresets(host?: string): Array<{ id: string; label: string; rule: Omit<DebuggerRule, 'id'> }> {
   const match: RuleMatch = host ? { host } : {};
@@ -348,21 +366,31 @@ export function rulePresets(host?: string): Array<{ id: string; label: string; r
     },
     {
       id: 'no-cache',
-      label: 'No caching',
+      label: 'Disable caching',
       rule: {
-        name: 'No cache',
+        name: 'Disable caching',
         enabled: true,
         kind: 'modify',
         match,
         requestHeaders: [
           { op: 'remove', name: 'If-None-Match' },
           { op: 'remove', name: 'If-Modified-Since' },
+          { op: 'set', name: 'Cache-Control', value: 'no-cache' },
+          { op: 'set', name: 'Pragma', value: 'no-cache' },
         ],
         responseHeaders: [
           { op: 'set', name: 'Cache-Control', value: 'no-store' },
           { op: 'remove', name: 'ETag' },
         ],
       },
+    },
+    { id: 'no-encoding', label: 'Remove all encodings', rule: { name: 'Remove all encodings', enabled: true, kind: 'modify', match, requestHeaders: [{ op: 'remove', name: 'Accept-Encoding' }] } },
+    { id: 'gzip', label: 'Ask for gzip', rule: { name: 'Ask for gzip', enabled: true, kind: 'modify', match, requestHeaders: [{ op: 'set', name: 'Accept-Encoding', value: 'gzip' }] } },
+    ...USER_AGENTS.map((u) => ({ id: `ua-${u.id}`, label: `User agent: ${u.label}`, rule: { name: `User agent: ${u.label}`, enabled: true, kind: 'modify' as const, match, requestHeaders: [{ op: 'set' as const, name: 'User-Agent', value: u.value }] } })),
+    {
+      id: 'require-auth',
+      label: 'Require proxy sign-in (plain HTTP)',
+      rule: { name: 'Require proxy sign-in', enabled: true, kind: 'reply', match: { url: 'http://*', ...match, noProxyAuth: true }, reply: { status: 407, headers: { 'proxy-authenticate': 'Basic realm="TestPion"', 'content-type': 'text/plain' }, body: 'Proxy authentication required (TestPion rule)' } },
     },
     { id: 'slow', label: 'Slow network: 2 s delay', rule: { name: 'Slow down', enabled: true, kind: 'modify', match, delayMs: 2000 } },
     {
@@ -397,6 +425,8 @@ interface RequestDecision {
   reply?: NonNullable<DebuggerRule['reply']>;
   redirect?: NonNullable<DebuggerRule['redirect']>;
   breakpoint?: 'request' | 'response';
+  /** Response breakpoints that wait for the response itself (a status condition): checked when the headers arrive. */
+  lateBreakpoints?: DebuggerRule[];
   responseHeaders?: HeaderEdit[];
   responseBody?: string;
   /** The names of the rules that acted, and their ids (hit counts). */
@@ -415,6 +445,7 @@ export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange): Reque
     d.appliedIds.push(...hit.map((r) => r.id));
   }
   for (const r of rules) {
+    if (r.enabled && r.kind === 'breakpoint' && r.breakpoint === 'response' && waitsForResponse(r)) (d.lateBreakpoints ??= []).push(r);
     if (!r.enabled || r.kind === 'only' || !ruleMatches(r, e, 'request')) continue;
     switch (r.kind) {
       case 'ignore':

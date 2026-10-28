@@ -33,6 +33,7 @@ import { call } from '../api';
 import { persisted, promptText, toastError, useApp, attempt, confirmAction } from '../store';
 import { createCaptureFlow } from '../components/debugger/capture-flow';
 import { sessionActions, ActionButton } from '../components/debugger/session-actions';
+import { BreakpointSplit, PauseButton, customBreakpointRule } from '../components/debugger/CaptureControls';
 import { applyPreset, chipAria, chipText, chipTitle, presetOf } from '../components/debugger/quick-filter';
 import { isMenuKey, openRowMenu } from '../components/debugger/row-menu-key';
 import { certificateError } from '../components/debugger/ExchangeExtras';
@@ -88,7 +89,7 @@ const toast = (m: string) => useApp.getState().toast(m, 'success');
 const debuggerTabDrafts = persisted<null>('debugger-tab', null);
 
 /** An exchange as a REST request, for Open in a tab and Resend. */
-const noFilter: ListFilter = { application: '', type: '', text: '', deep: false, host: '', method: '', status: '', bookmarked: false, hideTunnels: false, quick: [] };
+const noFilter: ListFilter = { application: '', type: '', text: '', deep: false, host: '', method: '', status: '', bookmarked: false, hideTunnels: false, hide304: false, quick: [] };
 
 export function DebuggerView() {
   const { status, setStatus, rules, setRules, held, openBreakpoint, setOpenBreakpoint, loadStatus } = useDebuggerSession();
@@ -418,6 +419,14 @@ export function DebuggerView() {
     onKeepEncrypted: (e) => void keepEncrypted(e),
     onReadHttps: () => void readHttps(),
     onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
+    onNote: async (e, ids, remove) => {
+      const note = remove ? '' : await promptText(ids.length > 1 ? `Note on ${ids.length} exchanges` : 'Note on this exchange', { message: 'A comment to find it again. It shows in the Comments column and is saved with the session.', value: e.note ?? '', placeholder: 'What to remember about this exchange', okLabel: 'Save' });
+      if (note === null) return;
+      await call('debug.annotate', { ids, note }).then(() => void load(), toastError);
+    },
+    onMark: (ids, mark) => void call('debug.annotate', { ids, mark }).then(() => void load(), toastError),
+    onPreset: (e, preset) =>
+      void call<RulesState>('debug.addPreset', { preset, host: e.host }).then((r) => (setRules(r), toast(`Rule added for ${e.host}`), openDock(preset === 'require-auth' ? 'auto-reply' : 'modify')), toastError),
     onCompare: setCompareA,
     onDelete: (ids) => void remove(ids),
     onCreateFlow: createFlowFrom,
@@ -551,6 +560,7 @@ export function DebuggerView() {
                 Stop
               </Button>
             )}
+            {status?.running && <PauseButton paused={!!status.paused} onChange={(paused) => setStatus((s) => s && { ...s, paused })} />}
             {!status?.systemProxy && (
               <span data-capture-all className="inline-flex">
                 <Button
@@ -739,7 +749,7 @@ export function DebuggerView() {
                     </button>
                   </div>
                 )}
-                {(!!rules?.activeCount || held.length > 0 || compareA) && (
+                {(!!rules?.activeCount || held.length > 0 || compareA || status?.paused) && (
                   <div className="flex items-center gap-3 px-2 py-1 border-b border-line text-xs bg-panel/60" data-rules-bar>
                     {!!rules?.activeCount && (
                       <button
@@ -760,6 +770,16 @@ export function DebuggerView() {
                       >
                         <Pause size={12} /> {held.length} held at a breakpoint · open
                       </button>
+                    )}
+                    {held.length > 1 && (
+                      <Button size="sm" variant="ghost" icon={<Play size={12} />} title="Let every held exchange go on as it was" data-resume-all onClick={() => void call('debug.resumeAll').then(() => undefined, toastError)}>
+                        Resume all
+                      </Button>
+                    )}
+                    {status?.paused && (
+                      <span className="flex items-center gap-1 text-warn font-medium" data-listing-paused title="The proxy still forwards the traffic. New requests are not listed until you resume.">
+                        <Pause size={12} /> Listing paused · new traffic is forwarded but not listed
+                      </span>
                     )}
                     {compareA && (
                       <span className="flex items-center gap-1 text-accent">
@@ -821,6 +841,9 @@ export function DebuggerView() {
                   <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Leave out the HTTPS tunnels (CONNECT) that are not decrypted">
                     <input type="checkbox" checked={filter.hideTunnels} onChange={(e) => setFilter({ ...filter, hideTunnels: e.target.checked })} /> Hide tunnels
                   </label>
+                  <label className="flex items-center gap-1 text-xs text-muted whitespace-nowrap" title="Leave out the 304 Not Modified answers">
+                    <input type="checkbox" checked={!!filter.hide304} onChange={(e) => setFilter({ ...filter, hide304: e.target.checked })} /> Hide 304s
+                  </label>
                   {filter.quick.map((q) => (
                     <button
                       key={q.id}
@@ -874,6 +897,7 @@ export function DebuggerView() {
                       </Button>
                     }
                   />
+                  <BreakpointSplit rules={rules} onRules={setRules} onCustom={() => setRuleDraft(customBreakpointRule())} />
                   {filtersOn && (
                     <Button size="sm" variant="ghost" icon={<X size={13} />} title="Show every exchange again: clear the text, the dropdowns, the checkboxes and the chips" data-clear-filters onClick={() => setFilter(noFilter)}>
                       Clear filters
