@@ -3,7 +3,7 @@
  * cut into tokens whose kinds match the editor theme's colours (styles.css `.syn-*`). Small and fast; texts past
  * MAX_CHARS are shown plain.
  */
-export type CodeLanguage = 'json' | 'yaml' | 'xml' | 'http' | 'plain';
+export type CodeLanguage = 'json' | 'yaml' | 'xml' | 'http' | 'code' | 'css' | 'plain';
 export type TokenKind = 'key' | 'string' | 'number' | 'keyword' | 'comment' | 'tag' | 'attr' | 'punct' | 'method';
 export interface Token {
   text: string;
@@ -126,9 +126,47 @@ function http(text: string): Token[] {
   return out;
 }
 
+const CODE_KEYWORDS = /^(?:function|return|const|let|var|if|else|for|while|do|switch|case|break|continue|new|class|extends|import|export|from|default|async|await|try|catch|finally|throw|typeof|instanceof|in|of|this|null|undefined|true|false|select|insert|update|delete|create|drop|alter|table|where|group|order|by|join|left|right|inner|outer|on|as|values|into|set|and|or|not|limit|query|mutation|subscription|fragment|type|input|enum|interface|union|schema|scalar)$/i;
+
+/** JavaScript, SQL, GraphQL and shell alike: strings, comments, numbers and keywords (no grammar: a guess that is right for reading). */
+function code(text: string): Token[] {
+  const out: Token[] = [];
+  const re = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*|--[^\n]*|#[^\n]*)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|(\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_$][\w$]*\b)|([{}()[\];,.:=<>+\-*/!&|?]+)/g;
+  let last = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index) });
+    if (m[1] !== undefined) out.push({ text: m[1], kind: 'comment' });
+    else if (m[2] !== undefined) out.push({ text: m[2], kind: 'string' });
+    else if (m[3] !== undefined) out.push({ text: m[3], kind: 'number' });
+    else if (m[4] !== undefined) out.push(CODE_KEYWORDS.test(m[4]) ? { text: m[4], kind: 'keyword' } : { text: m[4] });
+    else out.push({ text: m[5]!, kind: 'punct' });
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
+/** CSS: comments, strings, properties (keys), numbers and colours, punctuation. */
+function css(text: string): Token[] {
+  const out: Token[] = [];
+  const re = /(\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|([\w-]+)(\s*:)|(#[0-9a-fA-F]{3,8}\b|-?\b\d+(?:\.\d+)?[a-z%]*)|([{};,])/g;
+  let last = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index) });
+    if (m[1] !== undefined) out.push({ text: m[1], kind: 'comment' });
+    else if (m[2] !== undefined) out.push({ text: m[2], kind: 'string' });
+    else if (m[3] !== undefined) out.push({ text: m[3], kind: 'key' }, { text: m[4]!, kind: 'punct' });
+    else if (m[5] !== undefined) out.push({ text: m[5], kind: 'number' });
+    else out.push({ text: m[6]!, kind: 'punct' });
+    last = re.lastIndex;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
 /** The text as tokens in its language (detected when not given). */
 export function highlight(text: string, language?: CodeLanguage): Token[] {
   if (!text || text.length > MAX_CHARS) return [{ text }];
   const lang = language ?? detectLanguage(text);
-  return lang === 'json' ? json(text) : lang === 'yaml' ? yaml(text) : lang === 'xml' ? xml(text) : lang === 'http' ? http(text) : [{ text }];
+  return lang === 'json' ? json(text) : lang === 'yaml' ? yaml(text) : lang === 'xml' ? xml(text) : lang === 'http' ? http(text) : lang === 'code' ? code(text) : lang === 'css' ? css(text) : [{ text }];
 }
