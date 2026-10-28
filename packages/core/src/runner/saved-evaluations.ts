@@ -31,6 +31,8 @@ export interface SavedEvaluation {
   concurrency: number;
   limit?: number;
   retries: number;
+  /** A prompt evaluation: stop the run once it has cost this much (USD). Unset: $1.00 for a paid model, none for the offline demo model or a model on this computer; 0: no cap. */
+  maxCostUsd?: number;
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */

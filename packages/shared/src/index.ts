@@ -12,6 +12,7 @@ export * from './csv.js';
 export * from './template.js';
 export * from './check-label.js';
 export * from './datasets.js';
+export * from './dataset-table.js';
 export * from './providers.js';
 export * from './flow-graph.js';
 export * from './flow-timeline.js';

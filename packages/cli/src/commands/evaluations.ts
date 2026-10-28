@@ -6,6 +6,10 @@ import {
   WorkspaceManager,
   assertEvaluationRunnable,
   evaluationTests,
+  estimateEvaluation,
+  spendPlan,
+  capRunOptions,
+  formatEstimateUsd,
   findSavedEvaluation,
   listSavedEvaluations,
   runTests,
@@ -17,6 +21,7 @@ import { EXIT, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cli
 import { cli } from '../output.js';
 import { finishRun, printResult } from '../run.js';
 import { registerEvalCompareCommands } from './eval-compare.js';
+import { registerEvalQualityCommands } from './eval-quality.js';
 
 export function registerEvaluationCommands(program: Command): void {
   const ev = program.command('eval').description('evaluations saved in the app (dataset × prompt × model × evaluators): list them, run one by name, compare runs (matrix, compare with a baseline)');
@@ -42,23 +47,28 @@ export function registerEvaluationCommands(program: Command): void {
     .option('--retries <n>', 'retries per failing case (default: the saved setting)')
     .option('--limit <n>', 'only the first n dataset records')
     .option('--judge <provider/model>', 'RAG evaluations: the judge model of the judged metrics (default: the evaluation’s, else TESTPION_AI_PROVIDER / the AI settings’ large model)')
+    .option('--max-cost <usd>', 'stop the run once it has cost this much (USD, from the price table; default $1.00 for a paid model, none for the offline demo model; 0 = no cap)')
+    .option('--yes', 'go ahead when the estimate is over $0.50 (or 100 calls); without it such a run is refused with the estimate')
     .option('--max-judge-cost <usd>', 'RAG evaluations: stop judging once this much (USD, from the price table) is spent; the rest is not scored')
     .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown').default(['console', 'junit', 'json', 'html', 'markdown']))
     .option('-o, --out <dir>', 'output directory for results and reports')
-    .option('--baseline <name>', 'compare results against a saved baseline')
+    .option('--baseline <name>', 'compare results against a saved baseline; "last-good" is the last run of this evaluation that passed (the first run has none and is not compared)')
     .option('--save-baseline <name>', 'save this run as a baseline')
     .option('--fail-on-regression', 'exit 1 when the baseline comparison finds regressions')
     .option('-v, --verbose', 'show passing checks')
     .option('-q, --quiet', 'only print the summary')
-    .action(async (ref: string, o: { judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean }) => {
+    .action(async (ref: string, o: EvalRunOptions) => {
       process.exitCode = await executeEvalRun(ref, o);
     });
   registerEvalCompareCommands(ev);
+  registerEvalQualityCommands(ev, (ref, o) => executeEvalRun(ref, { reporter: ['console', 'junit', 'json', 'html', 'markdown'], ...o }));
 }
+
+export type EvalRunOptions = { maxCost?: string; yes?: boolean; judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean };
 
 async function executeEvalRun(
   ref: string,
-  o: { judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean },
+  o: { maxCost?: string; yes?: boolean; judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean },
 ): Promise<number> {
   const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
@@ -86,6 +96,26 @@ async function executeEvalRun(
     store.close();
     throw e;
   }
+  // a prompt evaluation: what it costs, the cap that stops it, and asking first when it is big (AU-5, AU-18)
+  const est = d.type === 'rag' ? undefined : estimateEvaluation(ctx.services, d);
+  const plan = est ? spendPlan(est, o.maxCost !== undefined ? Number(o.maxCost) : d.maxCostUsd) : undefined;
+  if (est && plan?.ask && !o.yes) {
+    await ctx.dispose();
+    store.close();
+    throw new CliError(`${est.summary}. ${plan.reason ?? ''} Run again with --yes to go ahead, or lower --limit.`.replace(/\s+/g, ' '), EXIT.CONFIG_ERROR);
+  }
+  if (est && !o.quiet) console.log(dim(`estimate: ${est.summary}${plan?.capUsd !== undefined ? ` · stops at ${formatEstimateUsd(plan.capUsd)}` : ''}${est.offline ? ' · Offline demo model: its answers come from rules' : ''}`));
+  // --baseline last-good: the last run of this evaluation that passed (a baseline kept under a name of its own)
+  const lastGood = o.baseline === 'last-good' ? `last-good-${d.name}` : undefined;
+  if (lastGood) {
+    try {
+      store.getBaseline(lastGood);
+      o.baseline = lastGood;
+    } catch {
+      o.baseline = undefined;
+      if (!o.quiet) console.log(dim('no earlier good run to compare with: this run becomes the first'));
+    }
+  }
   const runId = shortId('run-');
   const outDir = o.out ? resolve(o.out) : store.runDir(runId);
   const resultsFile = join(outDir, 'results.jsonl');
@@ -94,8 +124,10 @@ async function executeEvalRun(
     console.log(dim(`evaluation · ${d.provider}${d.model ? `/${d.model}` : ''}${o.environment ? ` · environment: ${o.environment}` : ''} · run: ${runId}`));
   }
   let summary: RunSummary;
+  let guard: ReturnType<typeof capRunOptions>['guard'] | undefined;
   try {
-    summary = await runTests({
+    const capped = capRunOptions(
+      {
       name: d.name,
       runId,
       tests: evaluationTests(d, { store }),
@@ -109,9 +141,22 @@ async function executeEvalRun(
       onEvent: (e: RunEvent) => {
         if (e.type === 'test-end' && (!o.quiet || cli.jsonl)) printResult(e.result, !!o.verbose);
       },
-    });
+      },
+      plan?.capUsd,
+    );
+    guard = capped.guard;
+    summary = await runTests(capped.options);
   } finally {
     await ctx.dispose();
   }
-  return finishRun({ store, summary, outDir, resultsFile, o, emptyMessage: 'The evaluation has no dataset records.' });
+  // a run stopped at its cap is not a cancelled one: it says how far it got and fails, so a pipeline never passes on part of the cases
+  const stopped = guard?.stopped ? guard.message(est?.cases ?? summary.total) : '';
+  if (stopped) {
+    summary = { ...summary, cancelled: false };
+    console.error(stopped);
+  }
+  // the last good run: this run when every case passed (kept after it was compared with the one before)
+  if (lastGood && !stopped && summary.failed + summary.errors === 0 && !summary.cancelled) o.saveBaseline = lastGood;
+  const code = await finishRun({ store, summary, outDir, resultsFile, o, emptyMessage: 'The evaluation has no dataset records.' });
+  return stopped && code === EXIT.SUCCESS ? EXIT.TEST_FAILURE : code;
 }

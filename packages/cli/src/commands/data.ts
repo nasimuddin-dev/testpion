@@ -744,6 +744,7 @@ export function registerDataCommands(program: Command): void {
     .option('--folder <nameOrId>', 'with --collection: only this folder or request (repeatable)', (v: string, prev: string[] = []) => [...prev, v])
     .option('--tests <paths...>', 'test files or folders under tests/ (default: all)')
     .option('--rag-evaluation <name>', 'run a saved RAG evaluation (`testpion rag run`) with its metrics and gates; the judge model\'s key is a CI secret')
+    .option('--evaluation <name>', 'run a saved prompt evaluation (`testpion eval run NAME --baseline last-good --fail-on-regression`): the pipeline fails when a case got worse than the last good run; the model key is a CI secret')
     .option('--rag-preset <id>', 'with --rag-evaluation: a metric preset replacing its metrics')
     .option('--rag-judge <provider/model>', 'with --rag-evaluation: the judge')
     .option('--rag-min <metric=value...>', 'with --rag-evaluation: gates, e.g. faithfulness=0.8 (the mean must reach it)')
@@ -781,6 +782,7 @@ export function registerDataCommands(program: Command): void {
           collection: o.collection,
           folders: o.folder,
           tests: o.tests,
+          ...(o.evaluation ? { evaluation: String(o.evaluation) } : {}),
           ...(o.ragEvaluation ? { ragEvaluation: o.ragEvaluation, ragPreset: o.ragPreset, ragJudge: o.ragJudge, ragMin: o.ragMin, ragBaseline: o.ragBaseline, ragMaxCost: o.ragMaxCost !== undefined ? Number(o.ragMaxCost) : undefined, ragCompat: o.ragCompat, ragRepeatTarget: o.ragRepeatTarget ? Number(o.ragRepeatTarget) : undefined, ragComment: o.ragComment, ragNightly: o.ragNightly, ragSample: o.ragSample ? Number(o.ragSample) : undefined, ragRegression: o.ragRegression, ragMaxDrop: o.ragMaxDrop ? Number(o.ragMaxDrop) : undefined } : {}),
           ...fromRun?.target,
           data: o.data === true ? '' : o.data,
