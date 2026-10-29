@@ -19,6 +19,7 @@ import { specOperations } from '../openapi/spec-gaps.js';
 import { historyResponse } from '../storage/history-compare.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { EVALUATIONS_LIBRARY, type SavedEvaluation } from '../runner/saved-evaluations.js';
+import { shortId } from '../util/ids.js';
 import { jaccard, termSet } from '../eval/rag/testset/lexical.js';
 import { contextOfItem } from './item-context.js';
 import type { ProposalItem, ProposalUndo, VerificationBadge } from './proposal.js';
@@ -103,8 +104,7 @@ const remember = (l: EvalCasesLocal) => {
   while (LOCALS.size > 24) LOCALS.delete(LOCALS.keys().next().value!);
 };
 
-let seq = 0;
-const newToken = () => `ec${Date.now().toString(36)}${(seq++).toString(36)}`;
+const newToken = () => shortId('ec-');
 
 /** The names of the `{{variables}}` of a text, in order of first use. */
 export function promptVariables(text: string): string[] {

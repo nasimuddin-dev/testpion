@@ -131,6 +131,8 @@ export function Wizard({
           </span>
         }
         onClose={onClose}
+        onSubmit={() => (step < 2 ? !(step === 0 && why1) && setStep(step + 1) : !whyRun && !saving && void finish(true))}
+        help="getting-started/check-an-ai-answer"
         width={880}
         footer={
           <>
