@@ -7,14 +7,18 @@ import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOvervie
 import { BarChart3, Bookmark, Database, FlaskConical, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
+import { sameData } from '../lib/same-data';
 import { useIntent } from '../hooks';
 import { call, on } from '../api';
 import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
-import { countDatasetRecords, datasetFormatOf, previewDatasetRecords } from '@testpion/shared';
+import { casesToJsonl, countDatasetRecords, datasetFormatOf, datasetRecords, previewDatasetRecords } from '@testpion/shared';
 import { downloadContent } from '../lib/files';
 import { CasesPane } from '../components/ai/CasesPane';
+import { GenerateCasesDialog } from '../components/ai/GenerateCasesDialog';
+import { TrustReviewer } from '../components/ai/TrustReviewer';
+import { Wizard, type WizardDraft } from './ai/Wizard';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { EvalRunHeadline } from '../components/ai/EvalRunHeadline';
@@ -151,6 +155,9 @@ export function EvaluationsView() {
   const saved = useLibrary<Draft>('evaluations');
   const ragTargets = useLibrary<RagTarget>('rag-targets');
   const [connect, setConnect] = useState(false);
+  // the wizard for "Answers are correct" (AU-12) and the AI case writer (AU-13)
+  const [wizard, setWizard] = useState(false);
+  const [generating, setGenerating] = useState(false);
   // RAG evaluations: the metric catalogue (what each evaluator is), the dialogs, and the estimate before a run
   const [estimating, setEstimating] = useState(false);
   const [tryCheck, setTryCheck] = useState<CheckConfig>();
@@ -196,7 +203,8 @@ export function EvaluationsView() {
           }),
       },
     });
-  const dirty = useMemo(() => !!current && JSON.stringify(current.data) !== JSON.stringify(d), [current, d]);
+  // the saved item as it opens (the editor's own defaults under it): an older item that lacks a field is not "changed"
+  const dirty = useMemo(() => !!current && !sameData({ ...drafts.defaults, ...current.data, name: current.name }, d), [current, d]);
   const openSaved = async (id: string, preview = false) => {
     const it = await saved.find(id);
     if (!it) return undefined;
@@ -217,6 +225,7 @@ export function EvaluationsView() {
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => {
     if (p?.new) tabs.newTab(drafts.defaults);
+    if (p?.wizard) setWizard(true);
     if (p?.sample) void trySample();
     else if (p?.savedId)
       void openSaved(p.savedId).then(() => {
@@ -227,6 +236,8 @@ export function EvaluationsView() {
     const names = new Set(saved.lib.items.map((i) => i.name));
     return runs.filter((r) => names.has(r.name) || r.name === d.name);
   }, [runs, saved.lib.items, d.name]);
+  // the answers to grade in "Trust the AI reviewer" come from the latest finished run of THIS evaluation
+  const trustRun = useMemo(() => runs.find((r) => r.name === d.name && r.total > 0)?.id, [runs, d.name]);
   // the format the text really has: JSON whose text is one object per line is read as JSONL (the editor checks it as such too)
   const readAs = useMemo(() => datasetFormatOf(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
   const count = useMemo(() => countDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
@@ -378,6 +389,36 @@ export function EvaluationsView() {
       />
     )}
     {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} evaluation={savedId} onClose={() => setTryCheck(undefined)} />}
+    {wizard && (
+      <Wizard
+        initial={{ ...(drafts.defaults as WizardDraft), type: 'llm', name: 'New evaluation', provider: providers[0]?.id ?? '', model: providers[0]?.defaultModel ?? '', evaluators: [{ type: 'contains', expected: '{{expected}}', ignoreCase: true }] }}
+        providers={providers}
+        names={saved.lib.items.map((i) => i.name)}
+        onProviders={setProviders}
+        onClose={() => setWizard(false)}
+        onEditor={(w) => (tabs.newTab({ ...drafts.defaults, ...w }), setWizard(false))}
+        onFinish={async (w, runIt) => {
+          const id = await saved.put({ name: w.name, data: { ...drafts.defaults, ...w } });
+          const it = await openSaved(id);
+          setWizard(false);
+          useApp.getState().toast(`Saved "${w.name}"`, 'success');
+          if (runIt && it) await startRun({ ...drafts.defaults, ...it.data, name: it.name });
+        }}
+      />
+    )}
+    {generating && (
+      <GenerateCasesDialog
+        draft={d}
+        evaluation={savedId}
+        providers={providers}
+        onClose={() => setGenerating(false)}
+        onAdd={(records) => {
+          const before = { dataset: d.dataset, datasetFormat: d.datasetFormat };
+          set({ dataset: casesToJsonl([...datasetRecords(d.dataset, d.datasetFormat), ...records]), datasetFormat: 'jsonl' });
+          return () => set(before);
+        }}
+      />
+    )}
     {asking && <SpendDialog estimate={asking.estimate} onClose={() => setAsking(undefined)} onRun={() => (setAsking(undefined), void runDraft(asking.draft, true))} />}
     {mapper && <RagColumnMapper dataset={d.dataset} format={readAs} onApply={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setMapper(false)} />}
     {importing && <RagImportDialog onImport={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onClose={() => setImporting(false)} />}
@@ -535,6 +576,7 @@ export function EvaluationsView() {
               onMap={() => setMapper(true)}
               onExportRag={(to) => void exportRag(to)}
               onExample={addExampleCases}
+              onGenerate={d.type === 'llm' ? () => setGenerating(true) : undefined}
             />
           )}
           {sub === 'prompt' && !ragTarget && (
@@ -578,12 +620,14 @@ export function EvaluationsView() {
               ) : (
                 <>
                   <GoodAnswerPicker evaluators={d.evaluators} onChange={(evaluators) => set({ evaluators })} cases={count} onTry={tryCheckOnCase} />
+                  {d.evaluators.some((e) => /judge|rubric|g-?eval/i.test(e.type)) && <TrustReviewer runId={trustRun} evaluation={savedId} />}
                   <details className="mx-3 mb-3 text-sm" data-more-checks open={d.evaluators.length > 0}>
                     <summary className="cursor-pointer text-muted select-none py-1">More checks and the checks of this evaluation ({d.evaluators.length})</summary>
                     <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
                   </details>
                 </>
               )}
+              {d.type === 'rag' && ragTarget && d.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e)) && <TrustReviewer runId={trustRun} evaluation={savedId} />}
               {/* the gates belong to the metrics: under the picker, so the form above it keeps its height */}
               {d.type === 'rag' && ragTarget && (
                 <div className="px-3 pb-3">
