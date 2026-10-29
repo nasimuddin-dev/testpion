@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.55.1 — 2026-10-29
+
+A fix for 0.55.0. Nothing new to learn; update to get it.
+
+- **Comparing model versions works again on every Node.** Compare (AI quality ▸ Compare) and other calls made from a second session sent their requests with a connection pool that Node 24's built-in fetch refuses, so the second variant never finished ("Waiting for B"). Those requests now use TestPion's own fetch.
+- **Launching a program through the proxy** knows `C:\…\java.exe` style paths on macOS and Linux too.
+- **Tests and CI:** the deep-collection robustness test no longer overflows the stack on Linux and macOS, and the installed-app checks run the command line with the system Node (the installed app deliberately cannot act as Node).
+
 ## 0.55.0 — 2026-10-29
 
 ### HTTP Debugger: shape the traffic

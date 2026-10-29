@@ -1,6 +1,6 @@
 {
   "name": "@testpion/core",
-  "version": "0.55.0",
+  "version": "0.55.1",
   "description": "TestPion core engine: protocol adapters, execution, assertions, evaluation, tracing, storage.",
   "license": "MIT",
   "type": "module",
@@ -33,7 +33,7 @@
     "@grpc/proto-loader": "^0.8.1",
     "@jitl/quickjs-singlefile-mjs-release-sync": "^0.32.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@testpion/shared": "0.55.0",
+    "@testpion/shared": "0.55.1",
     "acorn": "^8.19.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
