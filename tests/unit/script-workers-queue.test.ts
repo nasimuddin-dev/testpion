@@ -94,7 +94,7 @@ d('script worker pool: queue, cancel, watchdog', () => {
   });
 
   it('tp.require: a host that answers late is an error, never undefined, and the late answer is not the next require\'s', async () => {
-    const pool = new WorkerScriptRunner({ size: 1, requireWaitMs: 300 });
+    const pool = new WorkerScriptRunner({ size: 1, requireWaitMs: 500 });
     try {
       const out = await pool.runScript(
         `let aerr = 'none';
@@ -106,7 +106,7 @@ d('script worker pool: queue, cancel, watchdog', () => {
           timeoutMs: 8000,
           requirePackage: (n) => {
             if (n === 'a') {
-              const end = Date.now() + 400; // the main thread is busy
+              const end = Date.now() + 750; // the main thread is busy: longer than the wait (500) and shorter than twice it, with 250 ms to spare each way for a loaded runner
               while (Date.now() < end);
               return 'module.exports = { v: "A" };';
             }

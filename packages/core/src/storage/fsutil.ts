@@ -301,6 +301,18 @@ export function removeOwned(path: string, opts: { recursive?: boolean } = {}): v
   forgetText(path);
 }
 
+/**
+ * Delete a scratch folder (a temporary workspace or dataset) after its work is done. Best effort: on Windows a scanner or indexer can
+ * hold a file for a moment (ENOTEMPTY, EBUSY), so it retries, and a folder that stays never turns a finished run into a failed one.
+ */
+export function removeScratchDir(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+  } catch {
+    /* the OS clears its temp folder */
+  }
+}
+
 /** Rename (move) a file or folder as the app's own change: the old path is gone, the new one holds what moved. */
 export function renameOwned(from: string, to: string): void {
   renameWithRetry(from, to);

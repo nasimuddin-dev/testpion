@@ -1,10 +1,10 @@
 import { spawnSyncChecked } from '../net/process.js';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { kindOfPath, type KindId } from '@testpion/shared';
 import { ApsError } from '../errors.js';
-import { atomicWrite } from '../storage/fsutil.js';
+import { atomicWrite, removeScratchDir } from '../storage/fsutil.js';
 import { repoRoot, runGit, toRepoPath } from './git.js';
 import { matchEol, workspaceFile } from './item-address.js';
 import { isBinaryPath } from './item-changes.js';
@@ -124,7 +124,7 @@ function mergeSegments(base: string, ours: string, theirs: string): Segment[] {
     if (text) out.push({ text });
     return out;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeScratchDir(dir);
   }
 }
 

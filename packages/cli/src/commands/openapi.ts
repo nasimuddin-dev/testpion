@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { basename, resolve as resolvePath, sep } from 'node:path';
 import type { Command } from 'commander';
 import {
@@ -14,6 +14,7 @@ import {
   relativeInside,
   type FuzzVerdict,
   type HttpRequestSpec,
+  removeScratchDir,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, openWorkspace, withWorkspace, cliContext, requireEnvironment, readDefinition, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
@@ -99,7 +100,7 @@ export function registerOpenApiCommands(program: Command): void {
           const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
           close = () => {
             store.close();
-            if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+            if (ephemeral) removeScratchDir(ephemeral);
           };
           const env = requireEnvironment(store, o.environment);
           if (env.isProduction) throw new CliError(`${env.name} is a production environment: fuzzing sends invalid and data-changing requests, so it is not run there`, EXIT.CONFIG_ERROR);

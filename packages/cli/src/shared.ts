@@ -1,5 +1,5 @@
 /** Shared CLI helpers: exit codes, colours, errors, opening workspaces and collections. */
-import { existsSync, mkdtempSync, readFileSync, rmdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import {
@@ -25,6 +25,7 @@ import {
   type LoadSnapshot,
   type Collection,
   type TestResult,
+  removeScratchDir,
 } from '@testpion/core';
 import type { Command } from 'commander';
 import { noteWarning } from './output.js';
@@ -128,7 +129,7 @@ export async function withWorkspace<T>(ref: string | undefined, fn: (store: Work
     return await fn(store, ephemeral);
   } finally {
     store.close();
-    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+    if (ephemeral) removeScratchDir(ephemeral);
   }
 }
 
@@ -198,7 +199,7 @@ export async function loadCollectionRef(ref: string, workspace: string | undefin
 /** A run that failed to start leaves nothing behind: drop the default output folder and the ephemeral workspace. */
 export function cleanupFailedRun(a: { ephemeral?: string; outDir: string; explicitOut: boolean; store: WorkspaceStore }): void {
   if (a.ephemeral && !a.explicitOut) {
-    rmSync(a.outDir, { recursive: true, force: true });
+    removeScratchDir(a.outDir);
     try {
       rmdirSync(dirname(a.outDir)); // ./testpion-results, only when nothing else is in it
     } catch {
@@ -207,7 +208,7 @@ export function cleanupFailedRun(a: { ephemeral?: string; outDir: string; explic
   }
   if (a.ephemeral) {
     a.store.close();
-    rmSync(a.ephemeral, { recursive: true, force: true });
+    removeScratchDir(a.ephemeral);
   }
 }
 

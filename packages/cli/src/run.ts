@@ -1,5 +1,5 @@
 /** Running tests, suites, collections and mock servers from the command line; results, reports and exit codes. */
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, relative, isAbsolute } from 'node:path';
 import { Command, Option } from 'commander';
@@ -52,6 +52,7 @@ import {
   type FlowRunPlan,
   assertProductionStep,
   isDataChangingMethod,
+  removeScratchDir,
 } from '@testpion/core';
 import { cli, emitEvent, machine, noteError, noteWarning } from './output.js';
 import { triageAfterRun } from './run-triage.js';
@@ -167,7 +168,7 @@ export async function executeRun(paths: string[], o: RunCliOptions, label?: stri
     console.log(green('Nothing failed in that run.'));
     await ctx.dispose();
     store.close();
-    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+    if (ephemeral) removeScratchDir(ephemeral);
     return EXIT.SUCCESS;
   }
   // --from / --to / --seed-run: part of one flow file, seeded from an earlier run
@@ -280,7 +281,7 @@ export async function finishRun(a: {
     if (summary.cancelled && a.rerun) console.log(yellow(`Run cancelled. Resume with: ${a.rerun}`));
   }
   store.close();
-  if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+  if (ephemeral) removeScratchDir(ephemeral);
   if (summary.cancelled) {
     noteError(new CliError('The run was cancelled', EXIT.EXECUTION_ERROR));
     return EXIT.EXECUTION_ERROR;
@@ -576,7 +577,7 @@ export async function executeSend(
     }
   } finally {
     store.close();
-    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+    if (ephemeral) removeScratchDir(ephemeral);
   }
   if (!response) {
     if (o.json) printJson({ error: error ?? 'no response', checks });

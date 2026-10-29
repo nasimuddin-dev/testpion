@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CheckConfig, MockTool, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
+import { removeScratchDir } from '../storage/fsutil.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { expandDataset } from './loader.js';
 import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
@@ -184,11 +185,6 @@ export async function* evaluationTests(d: SavedEvaluation, o: { store?: Workspac
     };
     yield* expandDataset(template, join(dir, 'evaluation'));
   } finally {
-    // best effort: on Windows a scanner or indexer can hold a file for a moment (ENOTEMPTY); a leftover temp folder never fails a run
-    try {
-      rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
-    } catch {
-      /* the OS clears its temp folder */
-    }
+    removeScratchDir(dir);
   }
 }

@@ -1,5 +1,5 @@
 /** Commands that run things: test files, suites, collections and load tests; re-generating reports. */
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Command, Option } from 'commander';
 import {
@@ -21,6 +21,7 @@ import {
   productionAllowed,
   relativeInside,
   type LoadTarget,
+  removeScratchDir,
 } from '@testpion/core';
 import { hasTemplate } from '@testpion/shared';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, collectVar, withWorkspace, cliContext, requireCollection, readResults, printLoad, openWorkspace, WORKSPACE_OPTION } from '../shared.js';
@@ -414,12 +415,12 @@ async function openFlowLoad(file: string, workspace: string | undefined, environ
       dispose: async () => {
         await ctx.dispose();
         store.close();
-        if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+        if (ephemeral) removeScratchDir(ephemeral);
       },
     };
   } catch (e) {
     store.close();
-    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+    if (ephemeral) removeScratchDir(ephemeral);
     throw e;
   }
 }

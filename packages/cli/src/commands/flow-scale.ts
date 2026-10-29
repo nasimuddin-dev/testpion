@@ -3,7 +3,7 @@
  * as variables), `testpion test <file> --env-matrix dev,staging` (or -e repeated: the flow in each environment, side
  * by side) and `testpion flow report <file>` (a run's timeline with its critical path, as text, JSON or HTML).
  */
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { Command } from 'commander';
 import {
@@ -24,6 +24,7 @@ import {
   testFileRef,
   type DataRowResult,
   type FlowMatrixResult,
+  removeScratchDir,
 } from '@testpion/core';
 import { formatMs } from '@testpion/shared';
 import { EXIT, CliError, bold, cliContext, dim, green, openWorkspace, printJson, red, requireEnvironment, withWorkspace, yellow, WORKSPACE_OPTION, subcommand } from '../shared.js';
@@ -199,7 +200,7 @@ export async function executeScaleRun(paths: string[], o: ScaleCliOptions): Prom
     }
   } finally {
     store.close();
-    if (ephemeral) rmSync(ephemeral, { recursive: true, force: true });
+    if (ephemeral) removeScratchDir(ephemeral);
   }
 }
 

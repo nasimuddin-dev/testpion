@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { canonicalText, normalizeText } from '../storage/stable-files.js';
-import { atomicWrite, readJson } from '../storage/fsutil.js';
+import { atomicWrite, readJson, removeScratchDir } from '../storage/fsutil.js';
 import { attributesText, ignoreText, installPreCommitHook, isInGitRepository } from '../storage/git-files.js';
 import { collectionFileContent, type WorkspaceStore } from '../storage/workspace.js';
 import type { Collection } from '../model/types.js';
@@ -118,7 +118,7 @@ async function trackedButIgnored(root: string, plannedIgnore?: string): Promise<
     }
     return (await runGit(root, [...args, '--', '.']).catch(() => '')).split('\0').filter(Boolean);
   } finally {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) removeScratchDir(dir);
   }
 }
 

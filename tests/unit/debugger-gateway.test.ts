@@ -85,7 +85,7 @@ beforeAll(async () => {
     decrypt: { leafFor: leafSigner(debuggerRoot), enabled: () => true },
     gateway: () => resolveGateway(config, { secret: (n) => secrets[n] }),
   });
-});
+}, 120_000); // two RSA roots in pure JS: slow on a loaded shared runner
 afterAll(async () => {
   await proxy.close();
   gateway.closeAllConnections?.();
