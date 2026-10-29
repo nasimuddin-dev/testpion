@@ -90,9 +90,16 @@ export interface RpcParamTypes {
   'debug.decrypt': RpcCommonParams & { on?: boolean; noDecrypt?: string[] };
   'debug.delete': RpcCommonParams & { ids: string[] };
   'debug.deleteSession': RpcCommonParams & { name: string };
+  'debug.diff': RpcCommonParams & { with: string; ignoreQuery?: boolean; includeSize?: boolean; includeTunnels?: boolean };
   'debug.exchanges': RpcCommonParams & { where?: string; host?: string; method?: string; text?: string; kind?: string; application?: string; type?: string; limit?: number; offset?: number };
+  'debug.exportSaz': RpcCommonParams & { name?: string };
+  'debug.gateway': RpcCommonParams;
+  'debug.importFarx': RpcCommonParams & { path?: string; base64?: string; text?: string; dryRun?: boolean };
   'debug.importHosts': RpcCommonParams & { path?: string };
+  'debug.largeSession': RpcCommonParams & { on?: boolean };
+  'debug.launch': RpcCommonParams & { command: string; args?: string[]; kind?: string; cwd?: string; preview?: boolean };
   'debug.openBrowser': RpcCommonParams & { browser?: string; url?: string };
+  'debug.openBundle': RpcCommonParams & { path?: string; base64?: string; append?: boolean; withRules?: boolean; rulesOnly?: boolean };
   'debug.openSession': RpcCommonParams & { name?: string; path?: string; text?: string; base64?: string; append?: boolean };
   'debug.pause': RpcCommonParams & { on?: boolean };
   'debug.profile': RpcCommonParams & { action: string; name: string; from?: string };
@@ -105,11 +112,14 @@ export interface RpcParamTypes {
   'debug.saveToCollection': RpcCommonParams & { ids?: string[]; since?: string; name?: string; group?: string; keepNoise?: boolean };
   'debug.select': RpcCommonParams & { where: string };
   'debug.selfTest': RpcCommonParams & { url: string; method?: string; headers?: Record<string, unknown>; body?: string };
+  'debug.setGateway': RpcCommonParams & { config: Record<string, unknown>; password?: string | null; passphrases?: Record<string, unknown> };
   'debug.setSpeed': RpcCommonParams & { preset?: string; downKbps?: number; upKbps?: number; latencyMs?: number };
+  'debug.shareBundle': RpcCommonParams & { name?: string; notes?: string; withRules?: boolean };
   'debug.snippet': RpcCommonParams & { id: string; language: string };
   'debug.speed': RpcCommonParams;
   'debug.start': RpcCommonParams & { port?: number; lan?: boolean };
   'debug.systemProxy': RpcCommonParams & { on: boolean };
+  'debug.testGateway': RpcCommonParams & { url?: string };
   'debug.view': RpcCommonParams & { session?: string };
   'diagnostics.bundle': RpcCommonParams;
   'diagnostics.get': RpcCommonParams;
@@ -157,7 +167,7 @@ export interface RpcParamTypes {
   'git.openFolder': RpcCommonParams & { path: string };
   'git.renameBranch': RpcCommonParams & { from: string; to: string };
   'git.resolve': RpcCommonParams & { path: string; side?: string; resolutions?: Record<string, unknown> };
-  'git.shareSession': RpcCommonParams & { name: string; dryRun?: boolean };
+  'git.shareSession': RpcCommonParams & { name: string; dryRun?: boolean; bundle?: boolean; notes?: string };
   'git.stage': RpcCommonParams & { paths: string[] };
   'git.stashApply': RpcCommonParams & { index?: number; hash?: string; pop?: boolean };
   'git.stashDrop': RpcCommonParams & { index?: number; hash?: string };
@@ -371,4 +381,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 354;
+export const RPC_METHOD_COUNT = 364;

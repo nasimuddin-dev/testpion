@@ -41,6 +41,12 @@ const MOVES: Move[] = [
   { from: 'debug-replay', group: 'debug', as: 'replay' },
   { from: 'debug-snippet', group: 'debug', as: 'snippet' },
   { from: 'debug-programs', group: 'debug', as: 'programs' },
+  { from: 'debug-export', group: 'debug', as: 'export' },
+  { from: 'debug-farx', group: 'debug', as: 'farx' },
+  { from: 'debug-diff', group: 'debug', as: 'diff' },
+  { from: 'debug-open', group: 'debug', as: 'open' },
+  { from: 'debug-gateway', group: 'debug', as: 'gateway' },
+  { from: 'debug-launch', group: 'debug', as: 'launch' },
   { from: 'runs', group: 'history', as: 'runs' },
   { from: 'trust', group: 'workspace', as: 'trust' },
 ];

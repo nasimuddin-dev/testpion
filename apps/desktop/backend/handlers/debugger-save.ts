@@ -50,7 +50,8 @@ export function sessionSaver(be: Backend, state: DebuggerState) {
     },
     /** A session the user asked to save, under their redaction settings. */
     async save(file: string): Promise<void> {
-      await writeHarFile(file, state.exchanges, be.logger.redactor, ENGINE_VERSION);
+      // large-session mode: what spilled to disk is part of the saved session
+      await writeHarFile(file, await state.session.everything(), be.logger.redactor, ENGINE_VERSION);
     },
     /**
      * Earlier versions kept the AutoSave in the workspace's debugger/ folder (git-tracked folder, decrypted traffic): it moves

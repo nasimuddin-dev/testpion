@@ -45,6 +45,7 @@ import { activeRules, holdBreakpoint } from './debugger-rules.js';
 import { runExchangeView } from './debugger-views.js';
 import { graphqlOf, looksLikeGraphql } from '@testpion/shared';
 import { cachedLeanRow, cachedSessionStats, DeepSearchCache, inSlices, startMs } from './debugger-stats.js';
+import { debuggerEnterpriseHandlers, prepareConnections } from './debugger-enterprise.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
 import { AUTOSAVE, sessionSaver } from './debugger-save.js';
 import { cachingOf, debuggerGridHandlers, headerValues, whereTestOf } from './debugger-grid.js';
@@ -282,6 +283,8 @@ export function debuggerHandlers(be: Backend): Handlers {
     // rules that change what programs send or get (not ignore / highlight): the status bar shows them wherever you are
     changingRules: state.proxy ? activeRules(be, state).filter((r) => r.enabled && ['modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame'].includes(r.kind)).length : 0,
     speed: state.speed ?? null,
+    spilled: state.session.spilled,
+    gateway: state.gatewaySummary ?? null,
     running: !!state.proxy,
     paused: !!state.paused,
     url: state.proxy?.url,
@@ -427,6 +430,7 @@ export function debuggerHandlers(be: Backend): Handlers {
   const trust = trustChecker(); // the root's trust in the store, kept for 30 s
   const handlers: Handlers = {
     ...debuggerGridHandlers(be, { state, shown, redacted: (e) => redacted(be, e), replaced: () => replaced(shown()) }),
+    ...debuggerEnterpriseHandlers(be, state),
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
     'debug.selfTest': ({ url, method, headers, body }: { url: string; /** Plain http only: the request to send (a flow to record in the e2e suite). */ method?: string; headers?: Record<string, string>; body?: string }) =>
@@ -525,8 +529,10 @@ export function debuggerHandlers(be: Backend): Handlers {
       await state.proxy?.close();
       const protos = protoDecoder(be);
       state.lan = !!lan;
+      prepareConnections(be, state); // the saved gateway, certificates and large-session mode (refuses to start when they cannot work)
       state.proxy = await startDebuggerProxy({
         session: state.session,
+        gateway: () => state.gateway,
         port,
         lan,
         grpcDecode: protos.decode,
@@ -826,7 +832,7 @@ export function debuggerHandlers(be: Backend): Handlers {
       return cachedSessionStats(shown().exchanges, `${l.epoch}:${l.rev}:${shown().exchanges.length}`, (u) => be.logger.redactor.redactUrl(u));
     },
     /** The session as HAR (the same format the history exports), for saving and for other tools. */
-    'debug.har': () => exchangesToHar(shown().exchanges, be.logger.redactor, ENGINE_VERSION),
+    'debug.har': async () => exchangesToHar(shown() === state ? await state.session.everything() : shown().exchanges, be.logger.redactor, ENGINE_VERSION),
 
     /* ---- sessions: HAR files in the workspace's debugger/ folder (never committed) */
 

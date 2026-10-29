@@ -798,7 +798,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── HTTP Debugger ──────────────────────────────────────────────────────
   debugger_capture: {
-    when: 'Use it to start the proxy, then run a program through it; pause / resume stop and restart listing without stopping the proxy.',
+    when: 'Use it to start the proxy (optionally through a corporate gateway: upstream, no_upstream_for, ca_files, client_certs), then run a program through it, or start one with action launch (right proxy variables and switches for node, python, java, dotnet, curl, browsers); pause / resume stop and restart listing without stopping the proxy.',
     whenNot: 'To read what was captured, use `debugger_exchanges`.',
     example: { action: 'start' },
   },
@@ -836,9 +836,9 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',
   },
   debugger_session: {
-    when: 'Use it to save the session as HAR, or open a HAR.',
+    when: 'Use it to save the session as HAR, open a HAR, SAZ or .tpbundle, export a Fiddler SAZ (export_saz), write a masked .tpbundle to share (bundle), or compare with an earlier run (diff).',
     whenNot: 'To turn the traffic into a test flow, use `flow_from_exchanges`.',
-    example: { action: 'save', path: 'session.har' },
+    example: { action: 'diff', path: 'green-run.har' },
   },
   debugger_rules: {
     when: 'Use it to list, add or toggle Debugger rules, or to hold traffic at an automatic breakpoint (breakpoints, held, resume).',

@@ -104,7 +104,7 @@ const withAuth = (url: string, username?: string, password?: string) => {
   return u.toString();
 };
 
-const splitPem = (pem = '') => pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+export const splitPem = (pem = '') => pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
 
 function systemCertificates(): string[] {
   const get = (tls as unknown as { getCACertificates?: (type: string) => string[] }).getCACertificates;

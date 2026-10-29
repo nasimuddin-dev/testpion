@@ -35,6 +35,7 @@ import { createCaptureFlow } from '../components/debugger/capture-flow';
 import { sessionActions, ActionButton } from '../components/debugger/session-actions';
 import { BreakpointSplit, PauseButton, customBreakpointRule } from '../components/debugger/CaptureControls';
 import { NetworkSpeedMenu } from '../components/debugger/NetworkSpeedMenu';
+import { useDebuggerEnterprise } from '../components/debugger/DebuggerEnterprise';
 import { applyPreset, chipAria, chipText, chipTitle, presetOf } from '../components/debugger/quick-filter';
 import { isMenuKey, openRowMenu } from '../components/debugger/row-menu-key';
 import { certificateError } from '../components/debugger/ExchangeExtras';
@@ -485,6 +486,8 @@ export function DebuggerView() {
 
   // The narrower ways to capture: one program (a browser or a terminal opened through the proxy), a phone, one API. Everything
   // on this computer is the primary button. Each starts the proxy when it is not running yet.
+  // gateway and certificates, starting a program, large sessions, SAZ / Fiddler rules / compare / bundle: components/debugger/DebuggerEnterprise.tsx
+  const ent = useDebuggerEnterprise({ sessions, running: !!status?.running, count: rows.length, spilled: status?.spilled ?? 0, startThen: (fn) => void startThen(fn), reload: () => void load() });
   const captureItems: MenuItem[] = [
     ...(capture?.browsers ?? []).map<MenuItem>((b) =>
       b.systemProxy
@@ -517,6 +520,7 @@ export function DebuggerView() {
     ...(status?.systemProxy ? [{ label: 'Stop capturing everything (restore the system proxy)', icon: <Globe size={14} />, separator: true, onSelect: () => void systemProxy(false) }] : []),
     ...(capture?.shells ?? []).map<MenuItem>((s) => ({ label: `Copy the lines for ${s.shell}`, icon: <Copy size={14} />, onSelect: () => void startThen(() => void copyText(s.lines, `the lines for ${s.shell}`)) })),
     { label: `Proxy port… (${port})`, icon: <Settings2 size={14} />, separator: true, disabled: !!status?.running, reason: 'Stop the proxy first', onSelect: () => void changePort() },
+    ...ent.captureItems,
   ];
   // the session shown (the live capture, or the saved one open): the backend builds it from debug.har, secrets masked by default
   const outputSpec: OutputSpec = {
@@ -549,6 +553,7 @@ export function DebuggerView() {
       .filter((x) => !x.autosave)
       .map<MenuItem>((s) => ({ label: `Share ${s.name} with the team…`, icon: <Users size={14} />, title: 'Put a masked copy of this session in debugger/shared/, which git tracks', onSelect: () => void shareDebuggerSession(s.name) })),
     ...transferItems,
+    ...ent.sessionItems,
     acts.clear,
   ];
 
@@ -566,6 +571,8 @@ export function DebuggerView() {
                 <Copy size={12} />
               </button>
               {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
+              {status.gateway ? ` · leaving through ${status.gateway}` : ''}
+              {status.spilled ? ` · ${status.spilled.toLocaleString()} older exchanges kept on disk` : ''}
             </span>
           ) : (
             'Capture all traffic to see every program on this computer that follows the system proxy, or watch one program: a browser or a terminal opened through the proxy.'
@@ -1046,6 +1053,7 @@ export function DebuggerView() {
         </div>
       )}
       {openBreakpoint && <BreakpointDialog bp={openBreakpoint} onDone={() => setOpenBreakpoint(undefined)} />}
+      {ent.dialogs}
       {dialog === 'certificate' && <CertificateDialog onClose={() => setDialog(undefined)} />}
       {ruleDraft && (
         <RuleDialog

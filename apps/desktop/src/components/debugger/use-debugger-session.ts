@@ -14,6 +14,9 @@ export interface Status {
   autosave: boolean;
   decrypt: boolean;
   noDecrypt: string[];
+  /** Older exchanges kept on disk (large-session mode), and a line about the gateway the traffic leaves through. */
+  spilled?: number;
+  gateway?: string | null;
 }
 
 /**

@@ -213,12 +213,12 @@ describe('what the window says about its own menus', () => {
   // every "Menu ▸ Item" in a string of the window names a menu and an item that exist
   const MENUS: Record<string, string[]> = {
     HTTPS: ['See inside HTTPS', 'Stop decrypting HTTPS', 'Root certificate', 'Keep hosts encrypted'],
-    Capture: ['Proxy port', 'Stop capturing everything', 'Capture traffic for one API'],
-    Session: ['Save session', 'Clear the session', 'Export as HAR', 'Import a HAR file'],
+    Capture: ['Proxy port', 'Stop capturing everything', 'Capture traffic for one API', 'Connections', 'A program'],
+    Session: ['Save session', 'Clear the session', 'Export as HAR', 'Import a HAR file', 'Export as a Fiddler session', 'Import Fiddler rules', 'Compare with an earlier session', 'Share as a bundle', 'Open a bundle'],
     Debugger: ['Save session'],
   };
   it('each named item exists in the code that builds that menu', () => {
-    const built = read('views/DebuggerView.tsx') + read('lib/vocabulary.ts');
+    const built = read('views/DebuggerView.tsx') + read('lib/vocabulary.ts') + read('components/debugger/DebuggerEnterprise.tsx');
     for (const [menu, items] of Object.entries(MENUS)) for (const i of items) expect(built, `${menu} ▸ ${i}`).toContain(i);
   });
 

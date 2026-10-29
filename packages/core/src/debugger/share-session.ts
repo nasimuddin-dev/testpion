@@ -19,6 +19,8 @@ const SHARED_SESSIONS_DIR = `${CAPTURE_SESSIONS_DIR}/shared`;
 
 interface SharedSession {
   name: string;
+  /** A masked HAR, or a share bundle (.tpbundle: the session with its rules, environment and notes). */
+  kind: 'har' | 'bundle';
   /** Workspace path of the shared copy. */
   file: string;
   bytes: number;
@@ -51,9 +53,9 @@ export function listSharedSessions(store: WorkspaceStore): SharedSession[] {
   const dir = store.path(CAPTURE_SESSIONS_DIR, 'shared');
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.har'))
+    .filter((f) => /\.(har|tpbundle)$/i.test(f))
     .sort()
-    .map((f) => ({ name: basename(f, '.har'), file: `${SHARED_SESSIONS_DIR}/${f}`, bytes: statSync(join(dir, f)).size }));
+    .map((f) => ({ name: basename(f).replace(/\.(har|tpbundle)$/i, ''), kind: /\.tpbundle$/i.test(f) ? ('bundle' as const) : ('har' as const), file: `${SHARED_SESSIONS_DIR}/${f}`, bytes: statSync(join(dir, f)).size }));
 }
 
 /** Copy a saved session, masked, to the tracked folder. `dryRun` reports what would be written without writing. */
@@ -92,9 +94,14 @@ export function shareSession(store: WorkspaceStore, name: string, o: { redactor:
 
 /** Stop sharing: the tracked copy is deleted (the commit that removes it is the user's); the saved session stays. */
 export function unshareSession(store: WorkspaceStore, name: string): { name: string; removed: boolean; undoId?: string } {
-  const file = sessionName(name);
-  const target = store.safePath(file, store.path(CAPTURE_SESSIONS_DIR, 'shared'));
-  if (!existsSync(target)) return { name: basename(file, '.har'), removed: false };
+  let file = sessionName(name);
+  let target = store.safePath(file, store.path(CAPTURE_SESSIONS_DIR, 'shared'));
+  if (!existsSync(target)) {
+    // a bundle is shared under the same name
+    file = `${basename(file, '.har')}.tpbundle`;
+    target = store.safePath(file, store.path(CAPTURE_SESSIONS_DIR, 'shared'));
+  }
+  if (!existsSync(target)) return { name: basename(file).replace(/\.(har|tpbundle)$/i, ''), removed: false };
   const rel = `${SHARED_SESSIONS_DIR}/${file}`;
   const undo = beginJournal(store.root, 'unshare-session', `Stop sharing session ${basename(file, '.har')}`, [rel]);
   rmSync(target);
