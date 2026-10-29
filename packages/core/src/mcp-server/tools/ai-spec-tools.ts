@@ -67,7 +67,7 @@ export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStor
           item: { kind: 'spec', path: spec },
           context: { options },
           a,
-          draft: (reason) => draftSpecTestsProposal(store, spec, { ...options, path: a.path ? String(a.path) : undefined, surface: 'mcp', reason }),
+          draft: (reason, services) => draftSpecTestsProposal(store, spec, { ...options, path: a.path ? String(a.path) : undefined, surface: 'mcp', reason, services }),
           next: (p) => `Show the user the files (proposal.items[].after), the tests per category, the coverage before → after (proposal.summary), the notes and the verification; apply with ai_apply_proposal { id: "${p.id}" } after they agree, then run them (run_tests).`,
         });
       },
@@ -104,4 +104,38 @@ export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStor
       },
     },
   ];
+}
+
+/**
+ * `generate_tests` with `ai: true` (AI-4): the same proposal as `spec_tests_generate` (gap-driven positive / negative /
+ * boundary / security tests, the model's ideas built from the document, verified, nothing written until
+ * `ai_apply_proposal`); without it the tool writes the first suite as it always did. One name for an agent that thinks of "generate tests".
+ */
+export function generateTestsWithAi(tools: Tool[]): Tool[] {
+  const gen = tools.find((t) => t.name === 'generate_tests');
+  const ai = tools.find((t) => t.name === 'spec_tests_generate');
+  if (!gen || !ai) return tools;
+  const p = ai.inputSchema.properties;
+  const wrapped: Tool = {
+    ...gen,
+    description: `${gen.description} With \`ai: true\` nothing is written: it proposes tests for the gaps in what is tested (positive, negative, boundary, security) built from the document with TestPion's configured model, validated against the document, with the coverage before → after; apply with ai_apply_proposal after the user agrees (the same as spec_tests_generate; \`gapsOnly\`, \`categories\`, \`operations\`, \`hint\`, \`privacy\`, \`dryRun\` and \`noAi\` apply).`,
+    inputSchema: {
+      ...gen.inputSchema,
+      properties: {
+        ...gen.inputSchema.properties,
+        ai: { type: 'boolean', description: 'Propose gap-driven tests with the configured model instead of writing the first suite (nothing is written)' },
+        categories: p.categories,
+        operations: p.operations,
+        gapsOnly: p.gapsOnly,
+        hint: p.hint,
+        privacy: p.privacy,
+        path: p.path,
+        environment: p.environment,
+        noAi: p.noAi,
+        dryRun: p.dryRun,
+      },
+    },
+    run: (a) => (a.ai === true ? ai.run(a) : gen.run(a)),
+  };
+  return tools.map((t) => (t === gen ? wrapped : t));
 }

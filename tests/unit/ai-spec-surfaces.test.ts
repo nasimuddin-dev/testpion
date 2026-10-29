@@ -66,7 +66,7 @@ describe('MCP: spec_gaps, spec_tests_generate, tidy_import', () => {
       const ran = await call('spec_tests_generate', { spec: 'specs/shop.yaml', categories: ['negative', 'boundary'] });
       const p = ran.proposal;
       expect(p.task).toBe('tests-from-spec');
-      expect(p.items[0].verification.map((b: { verifier: string }) => b.verifier)).toEqual(['test-file', 'spec-tests']);
+      expect(p.items[0].verification.map((b: { verifier: string }) => b.verifier)).toEqual(['test-file', 'spec-tests', 'spec-stable']);
       expect(p.notes.join('\n')).toContain('POST /invoices is not an operation');
       expect(p.summary).toContain('Coverage of the document');
       expect(ran.next).toContain('ai_apply_proposal');

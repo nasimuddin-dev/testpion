@@ -3,6 +3,7 @@ import { createEngineContext } from '../../engine.js';
 import { McpSession } from '../../protocols/mcp/client.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { aiTools } from './ai-tools.js';
+import { generateTestsWithAi } from './ai-spec-tools.js';
 import { arazzoTools } from './arazzo-tools.js';
 import { importTools } from './import-tools.js';
 import { exportConvertTools } from './export-convert-tools.js';
@@ -46,7 +47,7 @@ import { authTools } from './auth-tools.js';
  */
 export function moduleTools(d: ModuleToolDeps): Tool[] {
   const { store, secrets, settings, redactor, findCollection, findRequest, checkEnvironment } = d;
-  return [
+  const tools: Tool[] = [
     ...historyTools({ store, redactor, findCollection, findRequest }),
     ...refTools({ store }),
     ...kindTools({ store }),
@@ -111,4 +112,5 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
       },
     }),
   ];
+  return generateTestsWithAi(tools);
 }

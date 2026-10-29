@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Tests from a spec: ran twice on a mock, and one more way in
+
+- **Stable, checked offline**: the tests TestPion proposes for an API definition now also run twice on a mock built from the document itself (401 without credentials, the documented 4xx for a body that breaks the schema, 404 for an id that does not exist, the example otherwise). The review's *spec-stable* badge names a test that gave another result the second time or cannot pass on the document's mock; nothing is hidden.
+- **Fill coverage gaps with AI** in *API coverage* and *Generate tests from this spec…* in an API definition's *Generate tests* menu open the same From a spec dialog.
+- **CLI and MCP**: `testpion generate tests --ai --gaps-only` (the defaults, now spelled out) and `generate_tests { ai: true }` give the same proposal as `spec_tests_generate`.
+
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
 ### AI quality: the first result without a key, what a run costs, test cases as a table

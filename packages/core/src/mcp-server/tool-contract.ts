@@ -110,6 +110,7 @@ export const AI_COST_TOOLS = new Set([
   'ai_triage_run',
   'ai_analyze_flaky',
   'spec_tests_generate',
+  'generate_tests',
   'tidy_import',
   'security_tests_generate',
   'contract_drift',

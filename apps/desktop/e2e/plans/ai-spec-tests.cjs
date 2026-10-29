@@ -124,7 +124,7 @@ module.exports = withExpect(
   steps,
   {
     'open-from-the-api-definition': /^mode: From a collection or folder \/ Describe in words \/ From a spec\* \| spec: specs\/e2e-shop\.yaml \| gaps: .*of 2 operations called.*open gaps.* \| estimate: true$/,
-    'generate-and-review': /^items: 1 \| badges: test-file=pass,spec-tests=(pass|warn) \| invented dropped: true \| invalid dropped: true \| coverage: true$/,
+    'generate-and-review': /^items: 1 \| badges: test-file=pass,spec-tests=(pass|warn),spec-stable=(pass|warn) \| invented dropped: true \| invalid dropped: true \| coverage: true$/,
     'write-the-tests': /^toast: Wrote 1 test file \(tests\/e2e-shop\/default-gaps\.yaml\).* \| file: true,true,true,true$/,
     'explorer-menu-has-the-item': /^title: true \| closed: true$/,
   },

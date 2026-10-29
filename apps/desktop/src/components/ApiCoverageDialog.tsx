@@ -1,5 +1,6 @@
 import { ScanSearch } from 'lucide-react';
 import { AiAction } from './ai/AiAction';
+import { startFlowGenerate } from './ai/flow-generate';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { type AssistantApplied, toastError } from '../store';
@@ -137,6 +138,16 @@ export function ApiCoverageDialog({ runId, spec: initialSpec, onClose, inline }:
           {result && (
             <>
               <ApiReportBar kind="coverage" report={coverageDoc} />
+              {spec.path && result.report.operations.some((o) => !o.covered || o.untestedStatuses.length) && (
+                <AiAction
+                  label="Fill coverage gaps with AI"
+                  hint="Tests for what the tests and collections never prove about this API definition (positive, negative, boundary, security), checked against the document, with the coverage before and after"
+                  request={{ task: 'tests-from-spec', title: 'Tests for the coverage gaps', item: { kind: 'spec', path: spec.path }, context: {} }}
+                  open={() => startFlowGenerate({ mode: 'spec', spec: spec.path })}
+                  onStart={onClose}
+                  preview={false}
+                />
+              )}
               {result.report.operations.some((o) => !o.covered || o.untestedStatuses.length) && <AiAction label="Suggest tests with AI" request={suggest} onStart={onClose} preview={false} />}
             </>
           )}
