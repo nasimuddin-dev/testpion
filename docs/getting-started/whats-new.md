@@ -1,13 +1,38 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.54 (bundles to save and export everything, imports from every other tool with preview, report and Undo, Git history, restore, stage and conflicts for every item, AI that checks its work: tests from a spec, tidy import, security tests, contract drift, Ask; RAG testing, one row and one menu, a faster command line), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.55 (traffic shaping and AI quality in one place), 0.54 (bundles to save and export everything, imports from every other tool with preview, report and Undo, Git history, restore, stage and conflicts for every item, AI that checks its work: tests from a spec, tidy import, security tests, contract drift, Ask; RAG testing, one row and one menu, a faster command line), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.54](#behaviour-changes-in-0-54), [0.52](#behaviour-changes-in-0-52), [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.54](#behaviour-changes-in-0-54), [0.52](#behaviour-changes-in-0-52), [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.55: traffic you can shape, and AI quality in one place {#whats-new-in-0-55}
+
+0.55 turns the HTTP Debugger into a tool you can change traffic with, and puts every AI check under one rail item.
+
+### Shape and test traffic {#whats-new-shape}
+- **Slow the network down.** **Capture ▸ Network speed** applies 3G, 4G, a slow link or your own numbers. From the terminal: `testpion debugger capture --throttle 3g`.
+- **Change what passes through.** Rules can remap a host, answer from a file or folder, replace text, set a status, fail on purpose (drop, time out, cut the body, answer an error), change WebSocket frames, or run a JavaScript script with `onRequest` and `onResponse`. See [HTTP Debugger](/api-testing/http-debugger).
+- **Pause on purpose.** Automatic breakpoints hold requests that match a rule; ready-made rules switch off caching, strip encodings or ask for gzip.
+- **Read AI traffic.** The **AI call** tab shows a model call in words: prompt, answer, tools, tokens and an estimated cost; MCP calls are listed too.
+
+### Find your way in a big capture {#whats-new-grid}
+- **Select matching**, **Group by**, any header as a column, **Resend many times** and **Copy as** PowerShell, fetch or HTTPie. **Ctrl+K** then `!` runs the same things from the keyboard.
+
+### Work with a team {#whats-new-team}
+- **Connections…** sets a corporate gateway, extra certificate authorities and client certificates. **Start a program through the proxy** sets the right variables for node, python, java, curl and the browsers.
+- **Fiddler files, comparing, sharing.** Export a `.saz`, import Fiddler rules, compare two captures, and share a masked `.tpbundle`. **Keep the whole session** goes beyond 5,000 requests.
+
+### AI quality {#whats-new-ai-quality}
+- **One rail item.** *Start*, *Checks*, *Try a prompt*, *Compare*, *Bots with sources* and *Models and keys* are tabs of **AI quality**.
+- **Check an answer in minutes.** The wizard takes you from a few cases to a result; a sample runs without a key; the price shows beside **Run** and a spend cap stops a run at $1.00.
+- **Cases without typing.** *Generate with AI…* writes cases from a prompt, an API definition, a collection, your documents or real calls, and you accept them.
+- **A report card and a reason.** Each run starts with a sentence (*17 of 20 passed*); a failed case says why, and shows its answer next to the one from the run before. **Compare** runs other models or prompts on the same cases.
+- **Agents and bots with sources.** The same wizard checks which tools an agent should call, and a bot that answers from documents with two goals and five checks.
+- **Trust the AI reviewer.** Grade ten answers yourself and see how often the reviewer agreed.
 
 ## What's new in 0.54: the everything release {#whats-new-in-0-54}
 

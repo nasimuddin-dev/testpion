@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### HTTP Debugger: shape the traffic
+
+- **Network speed** (Capture menu): *3G*, *4G*, *Slow* or your own download, upload and delay, applied to what passes through the proxy. `testpion debugger capture --throttle 3g`, `debug.setSpeed`.
+- **Host remap**: send a name to another address (like a hosts file) for this capture only; **Import a hosts file…** and `testpion debugger remap`.
+- **Map local and redirect**: answer a request from a file or a folder, or rewrite the redirect target; rules can also replace text in a request or a response, set a status, or **fail on purpose** (drop the connection, time out, cut the body, answer an error).
+- **WebSocket frame rules**: change, drop or delay the text frames of a connection.
+- **Automatic breakpoints**, **pause listing**, **ready-made rules** (disable caching, remove encodings, ask for gzip, user agents, require proxy sign-in), **notes and colour marks** saved in the HAR, and `--disable-quic` so browsers use HTTP/1.1 and HTTP/2 through the proxy.
+- **Any rule from JSON**: `testpion debugger rule`, MCP `debugger_rules`; **Presets**: `testpion debugger presets`.
+
+### HTTP Debugger: the grid for power users
+
+- **Select matching** (*Status is at least 400*, *Domain contains api*, …) and a `!` command bar in <kbd>Ctrl</kbd>+<kbd>K</kbd>; **Group by** domain, application or connection; **Columns** for any header and for GraphQL, caching, content encoding, client port and protocol, kept at the right edge of the grid.
+- **Resend many times** (10 times, the selected in order, or *Resend…*), **copy as** PowerShell, fetch or HTTPie, and the **list of programs** that hold network connections, with **Capture only** on one.
+- **Terminal and agents**: `testpion debugger exchanges|replay|snippet|programs|show`, MCP `debugger_exchanges`, `debugger_replay`, `debugger_programs`.
+
+### HTTP Debugger: companies and teams
+
+- **Connections…** (Capture menu): reach servers through the corporate gateway (system settings or an address, with a bypass list), trust extra certificate authorities, and present client certificates to the servers that ask. The gateway password and key passphrases live in the secret store; a capture that cannot read a configured file does not start.
+- **Start a program through the proxy** for node, python, java, dotnet, curl, Chromium and Firefox, with the variables and switches each one reads.
+- **Fiddler files**: **Export as a Fiddler session (.saz)** and **Import Fiddler rules (.farx)** (partial: each rule is reported as imported, imported off or skipped, with the reason).
+- **Compare with an earlier session** (added, removed, status or timing changed), **Share as a bundle (.tpbundle)** (masked session, rules and notes in one file; also `git share-session --bundle`), and **Keep the whole session** for captures beyond 5,000 requests.
+- **Terminal and agents**: `testpion debugger export --saz|--bundle`, `debugger farx|diff|open|gateway|launch`, MCP `debugger_session` and `debugger_capture` (`launch`, gateway options).
+
+### AI quality: agents, bots with sources, one place
+
+- **One rail item, AI quality**, replaces AI Lab and Evaluations, with the tabs *Start*, *Checks*, *Try a prompt*, *Compare*, *Bots with sources* and *Models and keys*. Links and saved layouts that name the old items still work.
+- **Agent checks in the wizard**: choose *An agent with tools*, write mock tools (or tick MCP servers) and per case what the agent **should call** and **should not call**. It saves the same evaluation file (`type: agent`).
+- **Bots with sources wizard**: connect a bot, add questions (generate them from your documents or real calls), pick two goals (answers backed by the sources; the right documents found) and run the standard set of five checks, with **More checks…** for the full catalogue.
+
+### Git: change marks for the last five kinds
+
+- Workspace variables, proto files, script packages, the MCP mock file and the Debugger rules now show the same change mark as every other item.
+
+### Known limits of this release
+
+- **Debugger**: the Fiddler `.farx` import is partial (the format is not published); a SAZ with more than about 6,600 exchanges is over the importer's file limit; the grid still shows the newest 5,000 requests in large-session mode; frame rules change whole text frames only; fault rules do not apply to gRPC or to undecrypted tunnels; map-local replies are not paced by Network speed; binary bodies (MessagePack, Protobuf) are not saved in a HAR; only `http://` gateways are supported.
+- **AI quality**: the case table is for prompt evaluations (bots with sources keep their own editor); Compare is not offered for agents or bots with sources; the spend cap cannot hold for a model with no price; the AI reviewer's cost is an estimate.
+
 ### Tests from a spec: ran twice on a mock, and one more way in
 
 - **Stable, checked offline**: the tests TestPion proposes for an API definition now also run twice on a mock built from the document itself (401 without credentials, the documented 4xx for a body that breaks the schema, 404 for an id that does not exist, the example otherwise). The review's *spec-stable* badge names a test that gave another result the second time or cannot pass on the document's mock; nothing is hidden.
