@@ -1,6 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
-import { casesToJsonl, datasetFormatOfName, datasetRecords, type CaseRow, type DatasetTextFormat } from '@testpion/shared';
+import { casesToJsonl, datasetFormatOfName, datasetRecords, SHOULD_CALL, SHOULD_NOT_CALL, type CaseRow, type DatasetTextFormat } from '@testpion/shared';
 import { call } from '../../api';
 import { useSticky } from '../../lib/sticky';
 import { pickTextFile } from '../../lib/files';
@@ -13,8 +13,11 @@ import { PasteCasesDialog } from './PasteCasesDialog';
 /** The editor's language for each dataset format: colours, and each format's own checks (JSONL line by line). */
 const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdown' } as const;
 
+/** An agent's case columns in plain words (AU-19): the task, and the tools it should and should not call. */
+export const AGENT_HEADINGS: Record<string, string> = { input: 'Task for the agent', [SHOULD_CALL]: 'Should call', [SHOULD_NOT_CALL]: 'Should not call' };
+
 interface CasesDraft {
-  type: 'llm' | 'rag';
+  type: 'llm' | 'rag' | 'agent';
   dataset: string;
   datasetFormat: DatasetTextFormat;
   expectedField: string;
@@ -62,7 +65,7 @@ export function CasesPane({
   const [view, setView] = useSticky<'table' | 'text'>('eval:casesView', 'table', { persist: true });
   const [pasting, setPasting] = useState(false);
   // a bot with sources keeps its text editor: its records hold lists and objects
-  const table = d.type === 'llm' && view === 'table';
+  const table = d.type !== 'rag' && view === 'table';
   const inputName = vars.find((v) => v !== d.expectedField) ?? 'input';
   const apply = (rows: CaseRow[], mode: 'add' | 'replace') => {
     const own = mode === 'add' ? datasetRecords(d.dataset, d.datasetFormat) : [];
@@ -74,7 +77,7 @@ export function CasesPane({
     <div className="h-full flex flex-col">
       {pasting && <PasteCasesDialog inputName={inputName} expectedField={d.expectedField} onApply={apply} onClose={() => setPasting(false)} />}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm border-b border-line">
-        {d.type === 'llm' && (
+        {d.type !== 'rag' && (
           <Segmented
             label="Test cases as"
             size="xs"
@@ -161,7 +164,7 @@ export function CasesPane({
       </div>
       {table ? (
         <div className="flex-1 min-h-0">
-          <CaseTable text={d.dataset} format={d.datasetFormat} expectedField={d.expectedField} vars={vars} onChange={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onPaste={() => setPasting(true)} onExample={onExample} />
+          <CaseTable text={d.dataset} format={d.datasetFormat} expectedField={d.expectedField} vars={vars} onChange={(dataset) => set({ dataset, datasetFormat: 'jsonl' })} onPaste={() => setPasting(true)} onExample={onExample} headings={d.type === 'agent' ? AGENT_HEADINGS : undefined} />
         </div>
       ) : (
         <>

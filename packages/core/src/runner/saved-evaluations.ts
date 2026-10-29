@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { CheckConfig, TestCase } from '../model/types.js';
+import type { CheckConfig, MockTool, TestCase } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { expandDataset } from './loader.js';
@@ -17,7 +17,7 @@ export { datasetFormatOf, countDatasetRecords };
  */
 export interface SavedEvaluation {
   name: string;
-  type: 'llm' | 'rag';
+  type: 'llm' | 'rag' | 'agent';
   provider: string;
   model: string;
   temperature?: number;
@@ -37,6 +37,12 @@ export interface SavedEvaluation {
   passLine?: number;
   /** Compare mode: other versions of this evaluation to run on the same cases, each another prompt version, another model, or both. The evaluation itself is the first variant, "Current". */
   variants?: EvalVariant[];
+  /** type `agent`: tools the agent may call, answered with a fixed result (`{{args.x}}` is filled from the call). */
+  tools?: MockTool[];
+  /** type `agent`: MCP servers (names) whose tools the agent may call. */
+  mcpServers?: string[];
+  /** type `agent`: the most steps (model calls) the agent may take. */
+  maxSteps?: number;
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */
@@ -94,6 +100,20 @@ export function evaluationTemplate(d: SavedEvaluation, target?: RagTarget): Reco
     return { name: d.name, type: 'rag', target, ...(Object.keys(judge).length ? { judge } : {}), ...((d.targetRepeats ?? 1) > 1 ? { targetRepeats: d.targetRepeats } : {}), evaluators: evaluatorsOf(d) };
   }
   if (d.type === 'rag') return { name: d.name, type: 'rag', model, ...(d.prompt.includes('{{context}}') ? { prompt: d.prompt } : {}), evaluators: evaluatorsOf(d) };
+  // an agent: the case's `input` column is the task; its should_call / should_not_call columns become tool checks (runner/loader.ts)
+  if (d.type === 'agent') {
+    return {
+      name: d.name,
+      type: 'agent',
+      model,
+      ...(d.system ? { system: d.system } : {}),
+      input: d.prompt,
+      ...(d.tools?.length ? { tools: d.tools } : {}),
+      ...(d.mcpServers?.length ? { mcpServers: d.mcpServers } : {}),
+      ...(d.maxSteps ? { maxSteps: d.maxSteps } : {}),
+      evaluators: d.evaluators,
+    };
+  }
   return {
     name: d.name,
     type: 'llm',

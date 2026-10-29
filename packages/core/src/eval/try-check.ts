@@ -37,6 +37,8 @@ export interface TryCheckResult {
   score?: number;
   /** The check's own words for why it passed or failed (an AI reviewer's reason). */
   reason?: string;
+  /** An agent evaluation: the case's own tool checks (its should-call and should-not-call columns) and how each did. */
+  caseChecks?: Array<{ type: string; passed: boolean; reason: string }>;
   costUsd?: number;
   model?: string;
   error?: string;
@@ -73,6 +75,7 @@ export async function tryEvalCheck(i: TryCheckInput, o: { services: ExecServices
     dryRun: false,
     reply: got.output ?? '',
     ...(c ? { passed: c.passed, ...(c.score !== undefined ? { score: c.score } : {}), reason: c.message } : {}),
+    ...(got.checks.length > 1 ? { caseChecks: got.checks.slice(1).map((k) => ({ type: k.type, passed: k.passed, reason: k.message })) } : {}),
     ...(got.error ? { error: got.error.message } : {}),
     ...(got.costUsd !== undefined ? { costUsd: got.costUsd } : {}),
     model: got.model,

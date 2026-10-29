@@ -23,7 +23,7 @@ A new workspace's Home starts with **Get started**: the first loop, from a reque
 - **Search** (the box in the top bar, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>) finds requests, collections, test files, environments and their variables, API definitions, datasets, MCP servers, AI providers, saved gRPC calls and connections, monitors, history, traces and runs. A hit opens in the view of its kind: a gRPC call in gRPC, a connection in WebSocket, a SOAP call in the HTTP editor.
 - **Back** and **Forward** (<kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd>, or the mouse's back and forward buttons) return to the places you opened; the arrow beside them, **Recent places**, names each one ("GET List patients · Veterinary API").
 - **Pick up where you left off** on Home, Quick Open with nothing typed and **File ▸ Open Recent…** list the items you opened lately in this workspace, of every kind, newest first.
-- **Tabs** work the same in every view that opens items: requests, test files, monitors, load tests, evaluations, saved AI prompts, environments and the Debugger's sessions. A single click in a list (the Collections explorer included) opens a **preview** tab (its name in italics) that the next click replaces; double-click the tab or the item, press <kbd>Enter</kbd>, or change something in it to keep it. Each tab keeps its own unsaved changes, and the open tabs are kept per workspace. The Debugger's **Live capture** tab is always there: a saved session (**Session ▸ Open …**, or a capture session in History) opens in a tab beside it and leaves the live capture as it is (**Add to the live capture** copies its exchanges in). The AI Lab's **Model comparison** keeps a prompt of its own, apart from the Playground's tabs.
+- **Tabs** work the same in every view that opens items: requests, test files, monitors, load tests, evaluations, saved AI prompts, environments and the Debugger's sessions. A single click in a list (the Collections explorer included) opens a **preview** tab (its name in italics) that the next click replaces; double-click the tab or the item, press <kbd>Enter</kbd>, or change something in it to keep it. Each tab keeps its own unsaved changes, and the open tabs are kept per workspace. The Debugger's **Live capture** tab is always there: a saved session (**Session ▸ Open …**, or a capture session in History) opens in a tab beside it and leaves the live capture as it is (**Add to the live capture** copies its exchanges in). The AI quality's **Model comparison** keeps a prompt of its own, apart from the Playground's tabs.
 - **Reopen closed tab** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>, any tab's right-click menu, **File ▸ Reopen Closed Tab**) opens the tab you closed last, whichever tab bar it was in, when it showed a saved item (a request, a gRPC call, a connection, an MCP server, an API definition, a dataset, a monitor).
 - **Where an item lives** is the first line of every item view: *Collection › Folder › Request*, *Monitors › Nightly*, *API definitions › folder › file*, *Datasets*, *MCP servers*, *Load tests*, *Evaluations*. A folder segment shows that folder in the sidebar; the ⋯ at its end is the item's menu. Switching request tabs makes the sidebar follow (the item's collection and folders open, its row scrolls into view), and every tab's right-click menu has **Reveal in sidebar**.
 - A **named item** (an underlined name with its icon) opens on click. Right-click it for **Open**, **Open in new tab**, **Reveal in sidebar** (requests) and **Copy link**.
@@ -117,7 +117,7 @@ Results that name an item carry a `ref`, the same object everywhere: MCP tool re
 | `test`, `flow` | `path` (inside tests/), `step?` | the test file, the flow designer |
 | `run`, `test-case` | `runId` / `testId` | the run's results, Tests |
 | `history`, `trace`, `exchange` | `historyId` / `traceId` / `exchangeId` | History, Traces, the HTTP Debugger |
-| `mcp-server`, `provider` | `serverId` / `providerId` | MCP, AI Lab ▸ Providers |
+| `mcp-server`, `provider` | `serverId` / `providerId` | MCP, AI quality ▸ Models and keys |
 | `spec`, `dataset` | `path` (specs/…) / `name` (inside datasets/) | the API definition, the dataset |
 | `certificate`, `git-file`, `doc` | `host` / `path` / `url` | Settings ▸ Certificates, Git, a documentation page |
 | `capture` | `name` | a Debugger capture session saved as `debugger/<name>.har`, opened in the Debugger |
@@ -172,7 +172,7 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | Folder of datasets | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Dataset |  | Open <kbd>Enter</kbd>, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path, Export… | Use in a test | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | The sidebar’s blank area | New …, Import… | Recently deleted… | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
-| Saved prompt (AI Lab) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Saved prompt (AI quality) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Saved load test |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Saved evaluation |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Monitor |  | Open <kbd>Enter</kbd>, Open in new tab, Edit |  | Run now, Pause, Resume | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
@@ -204,7 +204,7 @@ Deletes that can't be taken back still ask first: **Delete for good** in Recentl
 
 ## The window
 
-- **The rail** on the left: by default Home, Collections (the request editors — REST, GraphQL, gRPC, WebSocket, MCP — open from its explorer and its **New** menu), Tests, AI Lab, Evaluations, Environments and History; **More…** lists the other views (Debugger, Monitors, Load, Traces, Git). See [Choose what the rail shows](#choose-what-the-rail-shows).
+- **The rail** on the left: by default Home, Collections (the request editors — REST, GraphQL, gRPC, WebSocket, MCP — open from its explorer and its **New** menu), Tests, AI quality, Environments and History; **More…** lists the other views (Debugger, Monitors, Load, Traces, Git). See [Choose what the rail shows](#choose-what-the-rail-shows).
 - **Density**: **Settings ▸ Appearance ▸ Density** ▸ **Compact** fits more on screen (smaller spacing, fields, row heights and small text everywhere, light and dark); **Comfortable** is the default. It is this computer's (`settings.json` `density`) and applies from the first paint; <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Density: Switch Compact / Comfortable** toggles it (see the picture below).
 - **The bottom panel**: **Console**, **Logs**, **Terminal** (a shell in the workspace folder, see [Terminal](/getting-started/terminal)) and **Problems**.
 - **The status bar**: the Problems count, **Terminal**, the environment and **Tools**.
@@ -236,7 +236,7 @@ The rail shows seven views; **More…** under them lists the rest. Every view st
 - The choice is this computer's: it is saved in the app's `settings.json` as `rail: { order, shown }` (view ids such as `home`, `collections`, `tests`, `debugger`), not in the workspace. <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ **Rail: Show every view** / **Rail: Reset to the default views** do the same as the menu.
 
 <figure class="aps-screenshot">
-  <img src="/images/rail-more.jpg" alt="The rail with Home, Collections, Tests, AI Lab, Evaluations, Environments and History, and its More… menu open: Debugger, Monitors, Load, Traces and Git, then Show on the rail, Show every view and Reset the rail" width="1440" height="900" loading="lazy">
+  <img src="/images/rail-more.jpg" alt="The rail with Home, Collections, Tests, AI quality, Environments and History, and its More… menu open: Debugger, Monitors, Load, Traces and Git, then Show on the rail, Show every view and Reset the rail" width="1440" height="900" loading="lazy">
 </figure>
 
 ## From a result to its source, and again

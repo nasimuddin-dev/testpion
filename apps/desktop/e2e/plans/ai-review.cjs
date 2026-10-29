@@ -1,5 +1,5 @@
 // The AI results a person reviews: a RAG test's run opens its result by itself with the claims judged, a result is
-// rated 👍 and leaves the "To review" filter, a Playground answer is kept as a dataset case, and the model
+// rated 👍 (the "To review" filter appears with the first rating, AU-7), a Playground answer is kept as a dataset case, and the model
 // comparison marks the fastest and says which model still needs a key.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, stepWith } = require('../lib.cjs');
@@ -33,7 +33,7 @@ const steps = [
   ),
   step(
     'add-to-dataset',
-    `await __t.view('AI Lab'); await __t.sleep(800); tab('Playground')?.click(); await __t.sleep(600);
+    `await __t.view('AI Lab'); await __t.sleep(800); tab('Try a prompt')?.click(); await __t.sleep(600);
      button('Run')?.click(); await __t.waitFor(() => /Latency/.test(document.querySelector('main')?.innerText ?? ''), 20000); await __t.sleep(400);
      vis('main button').find((b) => b.textContent.trim() === 'Add to dataset')?.click(); await __t.sleep(500);
      const ok = [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Add'); if (!ok) return 'NO DIALOG';
@@ -43,7 +43,7 @@ const steps = [
   ),
   step(
     'comparison-marks',
-    `tab('Model comparison')?.click(); await __t.sleep(600);
+    `tab('Compare')?.click(); await __t.sleep(600);
      const hint = short(vis('main').map((m) => m.innerText).join(' ').match(/OpenAI needs an API key/)?.[0], 60);
      button('Run comparison')?.click(); await __t.sleep(5000);
      const t = vis('main table')[0]?.innerText ?? '';
@@ -52,8 +52,8 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'rag-run-opens-its-result': /^detail=(\d+ not useful, )?\d+ useful \| All Failed 0 Passed 1 To review 1/,
-  'rate-good': /before=To review 1 after=To review 0 pressed=true rowIcon=true/,
+  'rag-run-opens-its-result': /^detail=(\d+ not useful, )?\d+ useful \| All Failed 0 Passed 1/,
+  'rate-good': /before= after=To review 0 pressed=true rowIcon=true/,
   note: /Review: Answer cites the hours document/,
   'add-to-dataset': /Added case \d+ to datasets\/playground-cases\.jsonl/,
   'comparison-marks': /hint=OpenAI needs an API key \| addKey=true \| OpenAI · gpt-4o-mini/,

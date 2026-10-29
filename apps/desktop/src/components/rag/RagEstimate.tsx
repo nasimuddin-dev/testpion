@@ -153,3 +153,15 @@ export function EstimateLoading() {
     </div>
   );
 }
+
+/** The estimate of the draft as one line under the metric picker: it follows the choices (asked again after a pause). */
+export function RagEstimateLine({ draft, env }: { draft: unknown; env?: string }) {
+  const { estimate, error, loading } = useRagEstimate(draft, { environment: env });
+  if (error) return <span className="text-bad">{error}</span>;
+  if (!estimate) return <span className="text-muted">Estimating …</span>;
+  return (
+    <span className={loading ? 'opacity-60' : undefined}>
+      <RagEstimateView estimate={estimate} compact />
+    </span>
+  );
+}

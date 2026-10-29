@@ -75,7 +75,7 @@ const steps = [
   step(
     'model-comparison-opens-it',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim() === 'Model comparison'); if (!t) return 'NO TAB';
+     const t = vis('main [role=tab]').find((x) => x.textContent.trim() === 'Compare'); if (!t) return 'NO TAB';
      await __t.real.click(t); await __t.sleep(800);
      const b = vis('[data-compare-many]')[0]; if (!b) return 'NO BUTTON';
      await __t.real.click(b);
@@ -92,7 +92,7 @@ module.exports = withExpect(
     'run-shows-the-cost-first': /^button: Run 2 variants on 10 cases · free · /,
     'run-and-read-the-table': /^rows: passed=Passed \| 10 of 10 \| 3 of 10 \| A \(\+7\) ;; cost=.*free \| free \| free ;; time=.* \| conclusion: .*B .*passes 7 cases fewer.*7 cases got worse and 0 got better: look at them\.$/,
     'the-matrix-lists-the-cases': /^columns: 2 \| cases: 10 \| baseline set: true \| regressed chip: Regressed 7$/,
-    'model-comparison-opens-it': /^view: Evaluations \| name: Model comparison \| chips: [2-9]$/,
+    'model-comparison-opens-it': /^view: AI quality \| name: Model comparison \| chips: [2-9]$/,
   },
   { prepare },
 );

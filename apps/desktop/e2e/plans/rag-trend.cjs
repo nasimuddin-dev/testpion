@@ -45,7 +45,7 @@ const runOnce = (n) => `await __t.real.click(${runButton});
        runs = (await window.aps.invoke('runs.list', { limit: 10 })).items.filter((r) => r.name === 'Clinic trend');
      }
      return 'runs: ' + runs.length + ' | total: ' + runs.map((r) => r.total).join(',');`;
-const view = (name) => `{ const seg = vis('main [role=radio], main button').find((b) => b.textContent.trim() === ${JSON.stringify(name)}); if (!seg) return 'NO SWITCH ${name}'; await __t.real.click(seg); await __t.sleep(700); }`;
+const view = (name) => `{ const seg = vis('main [role=radio], main button').find((b) => b.getAttribute('role') !== 'tab' && b.textContent.trim() === ${JSON.stringify(name)}); if (!seg) return 'NO SWITCH ${name}'; await __t.real.click(seg); await __t.sleep(700); }`;
 
 const steps = [
   step(

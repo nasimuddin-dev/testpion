@@ -26,7 +26,7 @@ const steps = [
   step(
     'the-metrics-side-lists-nothing-yet',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!t) return 'NO TAB RAG';
+     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!t) return 'NO TAB RAG';
      await __t.real.click(t); await __t.sleep(600);
      const m = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!m) return 'NO SWITCH Metrics';
      await __t.real.click(m);
@@ -102,7 +102,7 @@ const steps = [
   step(
     'a-decision-tree-metric-has-a-tree-editor',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const rag = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!rag) return 'NO TAB RAG';
+     const rag = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!rag) return 'NO TAB RAG';
      await __t.real.click(rag); await __t.sleep(600);
      const sw = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!sw) return 'NO SWITCH Metrics';
      await __t.real.click(sw);

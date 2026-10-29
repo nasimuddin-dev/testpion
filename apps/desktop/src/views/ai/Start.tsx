@@ -5,12 +5,11 @@ import { useApp, toastError } from '../../store';
 import { timeAgo } from '../../lib/format';
 import { useLibrary } from '../../lib/library';
 import type { ProviderConfig } from '../../types';
-import { openDocs } from '../../lib/docs-link';
 import { LABEL } from '../../lib/vocabulary';
 import { Button, Empty, LinkButton, SectionTitle } from '../../components/ui';
 import { RunMiniBar, type RunRow } from '../../components/RunsOverview';
 
-type Tab = 'playground' | 'compare' | 'rag' | 'providers' | 'usage' | 'start';
+type Tab = 'playground' | 'compare' | 'rag' | 'providers' | 'start';
 
 function StartCard({ id, icon, title, children, action, reason, time }: { id: string; icon: ReactNode; title: string; children: ReactNode; action: ReactNode; reason?: string; time?: string }) {
   return (
@@ -87,7 +86,7 @@ export function Start({ providers, onTab }: { providers?: ProviderConfig[]; onTa
             icon={<FileText size={16} />}
             title="Answers come from my documents"
             action={
-              <Button size="sm" onClick={() => onTab('rag')} data-start-go="documents">
+              <Button size="sm" onClick={() => open({ wizard: true, kind: 'bot' })} data-start-go="documents">
                 Start
               </Button>
             }
@@ -107,13 +106,17 @@ export function Start({ providers, onTab }: { providers?: ProviderConfig[]; onTa
           >
             Run an evaluation on every push and fail the build when a case got worse than the last good run.
           </StartCard>
-          <StartCard id="agent" icon={<Wrench size={16} />} title="An agent uses tools" action={
-              <Button size="sm" onClick={() => openDocs('ai-testing/agents')} data-start-go="agent">
-                Open the guide
+          <StartCard
+            id="agent"
+            icon={<Wrench size={16} />}
+            title="An agent uses tools"
+            action={
+              <Button size="sm" onClick={() => open({ wizard: true, kind: 'agent' })} data-start-go="agent">
+                Start
               </Button>
             }
           >
-            Right tools, right arguments. Agent tests are described in a test file; the guide shows how.
+            Right tools, right arguments: list the tools each task should call, and the ones it must never call.
           </StartCard>
           <StartCard
             id="models"

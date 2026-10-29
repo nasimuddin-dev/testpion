@@ -16,7 +16,7 @@ const steps = [
   step(
     'playground-runs-on-openai',
     `await __t.view('AI Lab'); await __t.sleep(800);
-     tab('Playground')?.click(); await __t.sleep(600);
+     tab('Try a prompt')?.click(); await __t.sleep(600);
      const sel = vis('main select[aria-label="Provider"]')[0];
      if (!sel) return 'NO PROVIDER SELECT';
      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, 'openai');

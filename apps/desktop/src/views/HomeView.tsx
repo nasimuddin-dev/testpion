@@ -347,7 +347,7 @@ export function HomeView() {
               <LinkButton  icon={<ArrowRight size={12} />} onClick={() => setView('tests')}>
                 Tests
               </LinkButton>
-              . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and AI Lab has prompts that run on an offline demo model.
+              . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and AI quality has prompts that run on an offline demo model.
             </p>
           ) : examplesSeen ? null : (
             <LinkButton className="relative block mt-3 text-sm" onClick={() => void runMenuCommand('open-examples')}>

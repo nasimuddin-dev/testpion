@@ -3,7 +3,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseYaml } from '../util/lazy-yaml.js';
 import type { AuthConfig, BodyConfig, ForEachSpec, HttpRequestSpec, KeyValue, McpTest, ModelRef, RagTest, SuiteConfig, TestCase, UntilSpec } from '../model/types.js';
-import type { RagTarget } from '@testpion/shared';
+import { agentCaseChecks, type RagTarget } from '@testpion/shared';
 import { docsOf, listOf } from '../eval/rag/lists.js';
 import { turnsOf } from '../eval/rag/record.js';
 import { ApsError } from '../errors.js';
@@ -478,6 +478,9 @@ export async function* expandDataset(template: Record<string, unknown>, file: st
     } else if (t.type === 'agent') {
       t.input = rec[ds.inputField ?? 'input'] ?? tpl.input;
       t.vars = vars;
+      // the case's should_call / should_not_call columns become tool checks for this case (AU-19)
+      const toolChecks = agentCaseChecks(rec);
+      if (toolChecks.length) t.evaluators = [...(Array.isArray(tpl.evaluators) ? tpl.evaluators : []), ...toolChecks];
     } else t.vars = { ...((tpl.vars as object) ?? {}), ...vars };
     // allow evaluators to reference record fields: expected: "{{expected}}"
     t.vars = { ...((t.vars as object) ?? {}), ...vars };

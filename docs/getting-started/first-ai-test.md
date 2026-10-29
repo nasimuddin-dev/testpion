@@ -9,7 +9,7 @@ description: "Run a prompt in the Playground, validate structured output and sav
 
 Starting out? Begin with [Check an AI answer in 5 minutes](/getting-started/check-an-ai-answer): the sample with no key, the 3-step wizard and test cases written by AI. This page is the other way in: one prompt in the Playground, saved as a test file you can run from a terminal. The steps below use your own model.
 
-1. Open **AI Lab → Providers** (AI Lab is on the rail) and add a provider. With the demo servers running, use *OpenAI-compatible* at `http://127.0.0.1:4012/v1`. The built-in **Mock** provider works fully offline.
+1. Open **AI quality → Providers** (AI quality is on the rail) and add a provider. With the demo servers running, use *OpenAI-compatible* at `http://127.0.0.1:4012/v1`. The built-in **Mock** provider works fully offline.
 2. In **Playground**, write a template with variables, such as `Classify: {{message}}`, and fill in the variable.
 3. Choose **Structured output → JSON mode** and press **Run**. Latency, time to first token, tokens and estimated cost appear above the output.
 4. Add checks (for example `exact-match $.intent = cancellation`) and click **Save as test…**. The test is written as YAML under `tests/ai/`:

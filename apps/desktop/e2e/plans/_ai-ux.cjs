@@ -9,7 +9,7 @@ const steps = [
   step('providers-tab', `await __t.view('AI Lab'); await __t.sleep(800); tab('Providers')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText, 400);`),
   step(
     'playground-without-a-key',
-    `tab('Playground')?.click(); await __t.sleep(600);
+    `tab('Try a prompt')?.click(); await __t.sleep(600);
      const sel = vis('main select[aria-label="Provider"]')[0];
      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, 'openai');
      sel.dispatchEvent(new Event('change', { bubbles: true })); await __t.sleep(400);

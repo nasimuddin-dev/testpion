@@ -156,7 +156,7 @@ const steps = [
   step(
     'ai-answer',
     `await __t.view('AI Lab'); await __t.sleep(800);
-     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Playground'))?.click(); await __t.sleep(600);
+     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Try a prompt'))?.click(); await __t.sleep(600);
      if (!(await __t.button('Run'))) return 'NO BUTTON Run';
      await __t.waitFor(() => /Latency/.test(document.querySelector('main')?.innerText ?? ''), 20000); await __t.sleep(400);
      return await save('ai.answers');`,
@@ -164,7 +164,7 @@ const steps = [
   file('ai-answer-file', `return 'answer: ' + (text.length > 20) + ' | footer: ' + /_[^_]+ · /.test(text);`),
   step(
     'ai-comparison',
-    `vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Model comparison'))?.click(); await __t.sleep(600);
+    `vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Compare'))?.click(); await __t.sleep(600);
      await __t.button('Run comparison'); await __t.sleep(5000);
      return await save('ai.compare', 'Measurements (CSV)');`,
   ),

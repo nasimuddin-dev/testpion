@@ -31,7 +31,7 @@ The workspace is copied into your data folder once. You can change it freely: ap
 | MCP over Streamable HTTP, no account | MCP servers ▸ **Public servers** (Petstore MCP, DeepWiki, Hugging Face Hub) and **Docs & search** (Microsoft Learn, Context7, Cloudflare, Astro, the MCP spec through GitMCP); tests in Tests ▸ `mcp/` | petstore.run.mcp.com.ai, mcp.deepwiki.com, huggingface.co/mcp, learn.microsoft.com/api/mcp, mcp.context7.com, docs.mcp.cloudflare.com, mcp.docs.astro.build, gitmcp.io |
 | MCP over stdio, every MCP feature (tools, resources with subscriptions, prompts, completions, logging, long-running progress) | MCP servers ▸ **Reference servers ▸ Everything**; needs Node.js (it starts `npx -y @modelcontextprotocol/server-everything`) | the official reference server |
 | MCP mock (offline) | MCP view ▸ **Weather (offline mock)**, from `mocks/weather.mcp-mock.yaml` | none |
-| AI prompts: JSON output, summaries, a prompt injection | AI Lab ▸ **Saved prompts** | the offline demo model |
+| AI prompts: JSON output, summaries, a prompt injection | AI quality ▸ Try a prompt ▸ **Saved prompts** | the offline demo model |
 | Evaluation over a dataset, safety, RAG, an agent that calls MCP tools | Tests ▸ `ai/`, `agent/` | the offline demo model (+ Petstore MCP for the agent) |
 | Test suites | Tests ▸ **All examples** (everything) and **Offline** (no internet needed) | |
 | Monitor (paused) | Monitors ▸ **Public APIs health** | httpbin.org |
@@ -39,9 +39,9 @@ The workspace is copied into your data folder once. You can change it freely: ap
 
 ## The offline demo model
 
-AI examples use **Offline demo model**, a deterministic stand-in that runs inside TestPion. It classifies the example intents, refuses the prompt injection, answers the RAG question and calls the Petstore MCP tool. It is set up in **AI Lab ▸ Providers**, with rules (regular expression → reply or tool call) in its `x-mock-rules` header. So evaluations, safety tests and the agent test run without an API key and give the same result every time.
+AI examples use **Offline demo model**, a deterministic stand-in that runs inside TestPion. It classifies the example intents, refuses the prompt injection, answers the RAG question and calls the Petstore MCP tool. It is set up in **AI quality ▸ Models and keys**, with rules (regular expression → reply or tool call) in its `x-mock-rules` header. So evaluations, safety tests and the agent test run without an API key and give the same result every time.
 
-To try a real model, add an API key to **OpenAI**, **Anthropic** or **Google Gemini** under **AI Lab ▸ Providers**, or start Ollama locally. Then pick that provider in AI Lab, or change `provider:` in a test file.
+To try a real model, add an API key to **OpenAI**, **Anthropic** or **Google Gemini** under **AI quality ▸ Models and keys**, or start Ollama locally. Then pick that provider in AI quality, or change `provider:` in a test file.
 
 ## From the terminal
 

@@ -661,7 +661,7 @@ testpion ai attempt-fix ai-mvckdy5ve28aa50ec9 --times 5   # apply it, run the te
 
 ## `rag` {#rag}
 
-RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/rag), the metrics are [RAG metrics](/ai-testing/rag-metrics)). All take `--json`.
+RAG systems under test (AI quality ▸ Bots with sources; the guide is [RAG testing](/ai-testing/rag), the metrics are [RAG metrics](/ai-testing/rag-metrics)). All take `--json`.
 
 | Command | What it does |
 |---|---|
@@ -1103,7 +1103,7 @@ testpion history flaky -w my-workspace                                  # every 
 testpion history results run-abc -w my-workspace --status failed -n 100  # the results of a run, a page at a time
 testpion history scores -w my-workspace -q "Intent"                     # mean score per evaluator, run by run
 testpion history mcp-tools -w my-workspace --server weather            # MCP tool calls per tool: count, failures, median / p95
-testpion history llm -w my-workspace                                    # AI Lab prompts per model: tokens, estimated cost, median time
+testpion history llm -w my-workspace                                    # AI quality prompts per model: tokens, estimated cost, median time
 ```
 
 `history list` shows recent responses of requests sent in the app (`--collection`, `--request`, `--failed`, `--kind`, `-q/--query`, `-n/--limit`, `--cursor`: see [Paging](#paging)); with `--json` each has its `ref` (`testpion open` opens it). `--kind capture` lists the HTTP Debugger's capture sessions: each Save to collection, Create flow and Save session, with `capture` (the result, `capture.ref` that opens it, the number of exchanges, `sources`: proxy or reverse, the hosts, `from` / `to`). `history stats` summarises the response times of a request's recent responses (`-n/--limit`, default 50): count, failed (no status or 400+), fastest, mean, median, p95 and slowest. `history diff` compares two of them: the status, timing, header changes (volatile ones such as `date` are flagged) and a field-by-field JSON body diff, or a line diff for text. Values of sensitive fields and headers are masked. `history activity` is the Home dashboard as data: per local day, requests sent and how many failed (4xx/5xx, transport errors, non-OK gRPC codes, MCP tool errors), the median response time, test runs and failed tests; plus requests per type and the slowest requests on average (`-d/--days`, default 14, up to 90).

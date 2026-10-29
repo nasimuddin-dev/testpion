@@ -38,7 +38,7 @@ import { Spinner, TooltipProvider } from './components/ui';
 import { McpClientRequests } from './components/McpClientRequests';
 import { focusTerminal, newTerminal, useShellCapable } from './lib/terminal';
 import { railShortcut } from './lib/rail';
-import { resetRail, useRail } from './lib/use-rail';
+import { goToRail, resetRail, useRail } from './lib/use-rail';
 import { handleGlobalKey } from './lib/key-commands';
 import { applyDensity } from './lib/density';
 import { saveUiPrefs } from './lib/ui-prefs';
@@ -407,7 +407,7 @@ export default function App() {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
       { id: 'new-graphql', label: 'New GraphQL request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
-      { id: 'new-ai', label: LABEL.newAiPrompt, hint: 'AI Lab: prompts and model comparison', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'new-ai', label: LABEL.newAiPrompt, hint: 'AI quality: Try a prompt', run: () => s.openIntent('ai', { reset: true }) },
       { id: 'new-ai-test', label: 'New AI test file', hint: 'Tests: an AI test that passes or fails, for CI', run: () => s.openIntent('tests', { newFile: 'llm' }) },
       { id: 'run-test', label: 'Run test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
       { id: 'run-suite', label: 'Run suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
@@ -437,10 +437,11 @@ export default function App() {
       { id: 'feedback', label: 'Send feedback or report a problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
       { id: 'agents', label: 'Connect an AI agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
       { id: 'load', label: 'New load test', run: () => s.setView('load') },
-      { id: 'compare', label: 'Compare models', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'compare' }) },
-      { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: 'AI Lab', run: () => s.openIntent('ai', { tab: 'usage' }) },
+      { id: 'compare', label: 'Compare models', hint: 'AI quality: Compare', run: () => s.openIntent('ai', { tab: 'compare' }) },
+      { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: 'AI quality: Models and keys', run: () => s.openIntent('ai', { tab: 'usage' }) },
       { id: 'mcp-usage', label: 'MCP tool usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
-      { id: 'eval', label: 'New evaluation', hint: 'Evaluations', run: () => s.setView('evaluations') },
+      { id: 'eval', label: 'New evaluation', hint: 'AI quality: Checks', run: () => s.setView('evaluations') },
+      { id: 'ai-start', label: 'Check an AI answer', hint: 'AI quality: Start', run: () => s.openIntent('ai', { tab: 'start' }) },
       { id: 'shortcuts', label: 'Keyboard shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
       { id: 'keyboard-settings', label: 'Keyboard shortcuts: Change the keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },
       { id: 'git-ready', label: 'Make workspace ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
@@ -482,7 +483,7 @@ export default function App() {
     // every command has an icon: its own, or a generic one for a command added without
     for (const c of cmds) c.icon = createElement(PALETTE_ICONS[c.id] ?? TerminalSquare, { size: 16 });
     // "Go to" commands use the navigation's own icons, with the rail's shortcut when the view is on the rail
-    for (const n of NAV) cmds.push({ id: `go-${n.id}`, label: `Go to ${n.label}`, icon: n.icon, hint: railShortcut(rail.visible, n.id, modKey), run: () => s.setView(n.id) });
+    for (const n of NAV) cmds.push({ id: `go-${n.id}`, label: `Go to ${n.label}`, icon: n.icon, hint: railShortcut(rail.visible, n.id, modKey), run: () => goToRail(n.id) });
     cmds.push({ id: 'density', label: 'Density: Switch compact / comfortable', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void saveUiPrefs({ density: useApp.getState().settings?.density === 'compact' ? 'comfortable' : 'compact' }) });
     cmds.push({ id: 'rail-all', label: 'Rail: Show every view', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void resetRail(true) });
     cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the default views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });

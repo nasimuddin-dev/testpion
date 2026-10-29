@@ -21,6 +21,7 @@ export function CaseTable({
   onChange,
   onPaste,
   onExample,
+  headings,
 }: {
   text: string;
   format: DatasetTextFormat;
@@ -33,6 +34,8 @@ export function CaseTable({
   onPaste(): void;
   /** Put the example cases in (the empty state offers it). */
   onExample(): void;
+  /** Plain words for columns whose name is a code word (an agent's should_call): shown instead of the name. */
+  headings?: Record<string, string>;
 }) {
   const [rows, setRows] = useState<CaseRow[]>(() => datasetRecords(text, format));
   const [extra, setExtra] = useState<string[]>([]);
@@ -87,8 +90,8 @@ export function CaseTable({
         <div className="grid items-center border-b border-line bg-panel text-xs font-medium shrink-0" style={grid} role="row">
           <span className="px-2 text-muted">#</span>
           {shown.map((c) => (
-            <span key={c} className={cx('px-2 py-1.5 truncate', vars.includes(c) || c === expectedField ? 'text-accent' : 'text-muted')} title={vars.includes(c) ? `Filled into {{${c}}} in the prompt` : c === expectedField ? 'The answer you expect' : undefined} role="columnheader">
-              {c}
+            <span key={c} className={cx('px-2 py-1.5 truncate', vars.includes(c) || c === expectedField ? 'text-accent' : 'text-muted')} title={headings?.[c] ? `Column ${c}` : vars.includes(c) ? `Filled into {{${c}}} in the prompt` : c === expectedField ? 'The answer you expect' : undefined} role="columnheader">
+              {headings?.[c] ?? c}
             </span>
           ))}
           <span />

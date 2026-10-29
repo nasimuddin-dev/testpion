@@ -72,7 +72,7 @@ const step = (name, body, shot) => [name, `(async () => { ${H} ${body} })()`, sh
 
 const steps = [
   // AI Lab: saved prompts (the examples keep some loose beside a folder)
-  step('prompts', `await __t.view('AI Lab'); await __t.tab('Playground'); const s = await __t.waitFor(() => listOf('prompt'), 4000); await __t.sleep(600); return report(s, 'prompts');`),
+  step('prompts', `await __t.view('AI Lab'); await __t.tab('Try a prompt'); const s = await __t.waitFor(() => listOf('prompt'), 4000); await __t.sleep(600); return report(s, 'prompts');`),
   step('prompts-general', `const s = listOf('prompt'); const g = rowOf(s, 'General'); const r = rowOf(s, 'Haiku (try with a real model)'); return 'general: ' + !!g + ' | Haiku in: ' + (r ? parentName(r) : 'NO ROW');`),
   step('evaluations', `await __t.view('Evaluations'); const s = await __t.waitFor(() => listOf('evaluation'), 4000); await __t.sleep(600); return report(s, 'evaluations');`),
   step('load-tests', `await __t.view('Load'); const s = await __t.waitFor(() => listOf('load-test'), 4000); await __t.sleep(600); return report(s, 'load tests');`),
@@ -85,7 +85,7 @@ const steps = [
   // General cannot be renamed or deleted
   step('general-menu', `const s = sectionOf('datasets'); const g = rowOf(s, 'General'); if (!g) return 'NO ROW General'; g.scrollIntoView({ block: 'center' }); await __t.real.rightClick(g); if (!(await __t.waitFor(menuOpen, 2000))) return 'NO MENU'; const r = 'rename ' + off('Rename folder') + ' | delete ' + off('Delete folder…'); await close(); return r;`),
   // move an item out of General and back (real input), in a FolderList
-  step('move-out', `await __t.view('AI Lab'); await __t.tab('Playground'); const s = await __t.waitFor(() => listOf('prompt'), 4000); const r = rowOf(s, 'Haiku (try with a real model)'); const ok = await moveTo(r, 'Offline demo model'); return 'moved: ' + ok + ' | now in: ' + parentName(rowOf(listOf('prompt'), 'Haiku (try with a real model)'));`),
+  step('move-out', `await __t.view('AI Lab'); await __t.tab('Try a prompt'); const s = await __t.waitFor(() => listOf('prompt'), 4000); const r = rowOf(s, 'Haiku (try with a real model)'); const ok = await moveTo(r, 'Offline demo model'); return 'moved: ' + ok + ' | now in: ' + parentName(rowOf(listOf('prompt'), 'Haiku (try with a real model)'));`),
   step('move-back', `const r = rowOf(listOf('prompt'), 'Haiku (try with a real model)'); const ok = await moveTo(r, 'General'); return 'moved: ' + ok + ' | now in: ' + parentName(rowOf(listOf('prompt'), 'Haiku (try with a real model)')) + ' | ' + report(listOf('prompt'), 'prompts');`),
   // the same in an explorer section
   step('move-dataset', `await __t.requests(); await __t.sleep(500); const s = sectionOf('datasets'); const name = [...s.querySelectorAll('[data-tree-row]')].filter(visible).find((b) => kindOf(b) === 'dataset')?.getAttribute('data-row-name'); if (!name) return 'NO ROW dataset'; const ok1 = await moveTo(rowOf(s, name), 'New folder…') ; return 'asked: ' + ok1 + ' | dialog: ' + !!document.querySelector('[role=dialog] input');`),

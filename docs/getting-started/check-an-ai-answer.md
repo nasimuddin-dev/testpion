@@ -11,7 +11,7 @@ You have a prompt or a chatbot and want to know whether its answers are right, o
 
 ## 1. See a result first (about 1 minute, no key)
 
-Open **AI Lab**. It opens on **Start**: "What do you want to check?". Press **Try the sample (offline)**.
+Open **AI quality**. It opens on **Start**: "What do you want to check?". Press **Try the sample (offline)**.
 
 TestPion adds the offline demo model, makes the evaluation *Sample: support intents* (ten customer messages to sort into cancellation, refill, booking or other), runs it and shows **10 of 10 passed**. The demo model answers by rules, so the result says how a run looks and nothing about a real model; the result is labelled **Offline demo**. Nothing leaves your computer.
 

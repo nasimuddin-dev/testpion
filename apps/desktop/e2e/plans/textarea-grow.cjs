@@ -15,7 +15,7 @@ const steps = [
   step(
     'playground-input-grows',
     `await __t.view('AI Lab'); await __t.sleep(800);
-     tab('Playground')?.click(); await __t.sleep(600);
+     tab('Try a prompt')?.click(); await __t.sleep(600);
      vis('main *').find((x) => x.children.length === 0 && x.textContent.trim() === 'Summarise a text')?.click(); await __t.sleep(1000);
      const field = () => vis('main label, main [data-field]').map((f) => f.querySelector('textarea')).find(Boolean) ?? vis('main textarea')[0];
      if (!field()) return 'NO FIELD';

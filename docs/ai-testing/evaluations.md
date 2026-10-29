@@ -34,7 +34,7 @@ The expert settings are under **Options**, closed until you open them: **Randomn
 
 ## Try the sample
 
-**AI Lab** opens on **Start**: "What do you want to check?" with a card for each job (answers are correct, which is better, answers come from my documents, nothing got worse, an agent uses tools), your latest runs with how many passed, and **Try the sample (offline)**. The sample adds the offline demo model, makes the evaluation *Sample: support intents* (ten support messages to sort into cancellation, refill, booking or other, checked with "the reply contains the expected answer"), runs it, and shows **10 of 10 passed**. Nothing leaves your computer and no key is needed. The demo model answers by rules, so the result shows how a run looks and says nothing about a real model; the result says **Offline demo** to keep that clear. The sample is put back as written each time you try it, so make your own with **Duplicate**.
+**AI quality** opens on **Start**: "What do you want to check?" with a card for each job (answers are correct, which is better, answers come from my documents, nothing got worse, an agent uses tools), your latest runs with how many passed, and **Try the sample (offline)**. The sample adds the offline demo model, makes the evaluation *Sample: support intents* (ten support messages to sort into cancellation, refill, booking or other, checked with "the reply contains the expected answer"), runs it, and shows **10 of 10 passed**. Nothing leaves your computer and no key is needed. The demo model answers by rules, so the result shows how a run looks and says nothing about a real model; the result says **Offline demo** to keep that clear. The sample is put back as written each time you try it, so make your own with **Duplicate**.
 
 ```bash
 testpion eval sample                 # make it and run it (--no-run only makes it, --json for scripts)
@@ -133,7 +133,7 @@ AI agents use `eval_explain_failure` (`dry_run`, `stored_only`).
 
 **Compare** (beside **Run**, and on the results) runs the same test cases on other versions of the evaluation. The evaluation as it is stays the first version, **Current**; **Add variant** adds another model, another prompt version, or both. **Run 2 variants** shows the total cost first and runs them all. The result is a table: **Passed**, the **Cost** of the cases and the **Average time** per variant, the winner of each row, and one sentence under it, for example *B costs 4x less and runs 2.3x faster, but passes 2 cases fewer. 2 cases got worse and 0 got better: look at them.* There is no single best: each row names its own winner. Below it, the matrix lists every case with its result in each version; **Failed** shows the cases where they differ.
 
-**Model comparison** in AI Lab has **Compare on many cases**: it opens Compare with the prompt, the input as the first test case and one version for each model; add more cases and run.
+**Model comparison** in AI quality has **Compare on many cases**: it opens Compare with the prompt, the input as the first test case and one version for each model; add more cases and run.
 
 ```bash
 testpion eval run "Intent classification" --variants   # every version, one run each ("Intent classification · Shorter")
