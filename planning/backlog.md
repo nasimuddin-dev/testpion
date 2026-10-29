@@ -45,7 +45,7 @@ environment variable only).
 
 | id | item | source | status |
 |---|---|---|---|
-| B-10 | AI-4 tests from an OpenAPI spec, gap-driven (positive/negative/boundary/security) + "From a spec" in the flow generate dialog | ai-features.md | todo |
+| B-10 | AI-4 tests from an OpenAPI spec, gap-driven (positive/negative/boundary/security) + "From a spec" in the flow generate dialog | ai-features.md | done (0.55): gap report, model and deterministic cases, `spec-stable` stability filter (two runs on a mock built from the document), CLI `generate tests --ai`, MCP `generate_tests { ai }`, "Fill coverage gaps with AI". Not done: an e2e step for the new coverage button, the optional live run, removing the older "Suggest tests with AI" button |
 | B-11 | AI-10 import cleanup (Postman/curl/HAR → tidy collection + flows, variables, chaining) | ai-features.md | done (0.51; tidy_import, testpion tidy --ai, Tidy with AI dialog, import-leftovers) |
 | B-12 | Flow leftovers: per-step diff vs the deterministic draft in the flow review; Tests-view generators from a run's stored response; "Prefer stable checks" setting | ai-features.md | done (0.55) |
 | B-13 | AI-8 security tests (BOLA/auth/mass-assignment, deterministic verdicts) | ai-features.md | done (0.55) |
