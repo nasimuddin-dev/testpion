@@ -46,7 +46,7 @@ export function gatewayFromArgs(a: Record<string, unknown>, secrets: SecretReade
   });
   const passwordName = typeof a.upstream_password_secret === 'string' ? a.upstream_password_secret : GATEWAY_PASSWORD_SECRET;
   const password = config.username ? secrets?.get(passwordName) : undefined;
-  if (config.username && password === undefined) throw new ApsError('ConfigurationError', `The secret "${passwordName}" (the gateway password for ${config.username}) is not set`, { suggestions: ['Set it in the app (Settings ▸ Secrets) or as TESTPION_SECRET_* in the environment.'] });
+  if (config.username && password === undefined) throw new ApsError('ConfigurationError', `The secret "${passwordName}" (the gateway password for ${config.username}) is not set`, { suggestions: ['Set it as a secret of an environment in the app, or as TESTPION_SECRET_* in the environment.'] });
   const gateway = resolveGateway(config, {
     secret: (n) => (n === GATEWAY_PASSWORD_SECRET ? password : passphrases.get(n)),
     systemProxyFor: (url) => {

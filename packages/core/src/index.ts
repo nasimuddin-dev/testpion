@@ -297,6 +297,7 @@ export * from './git/secrets-allow.js';
 export * from './git/staged-fix.js';
 export * from './git/fix-setup.js';
 export * from './debugger/share-session.js';
+export * from './debugger/share-bundle.js';
 export * from './storage/trust.js';
 export * from './scripts/script-trust.js';
 export * from './storage/secrets.js';

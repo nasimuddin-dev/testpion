@@ -7,6 +7,7 @@ import {
   fixGitSetup,
   planCodeowners,
   shareSession,
+  shareSessionBundle,
   trackByReference,
   trackWithLfs,
   unshareSession,
@@ -50,8 +51,8 @@ export function gitSetupHandlers(be: Backend): Handlers {
       return dryRun ? run() : rewritten(run);
     },
     /** Share a saved Debugger session: a masked copy in debugger/shared/ (tracked). */
-    'git.shareSession': async ({ name, dryRun }: { name: string; dryRun?: boolean }) => {
-      const r = shareSession(be.ws, name, { redactor: be.logger.redactor, dryRun });
+    'git.shareSession': async ({ name, dryRun, bundle, notes }: { name: string; dryRun?: boolean; bundle?: boolean; notes?: string }) => {
+      const r = bundle ? await shareSessionBundle(be.ws, name, { redactor: be.logger.redactor, dryRun, notes }) : shareSession(be.ws, name, { redactor: be.logger.redactor, dryRun });
       if (r.applied) be.host.emit('data.changed', { method: 'git' });
       return r;
     },

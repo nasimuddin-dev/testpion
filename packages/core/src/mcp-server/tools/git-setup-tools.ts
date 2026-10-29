@@ -1,5 +1,6 @@
 import { ApsError } from '../../errors.js';
 import { listSharedSessions, shareSession, unshareSession } from '../../debugger/share-session.js';
+import { shareSessionBundle } from '../../debugger/share-bundle.js';
 import { writeCodeowners } from '../../git/codeowners.js';
 import { fixGitSetup } from '../../git/fix-setup.js';
 import { checkReferences, findLargeFiles, trackByReference, trackWithLfs } from '../../git/large-files.js';
@@ -72,10 +73,11 @@ export function gitSetupTools({ store, redactor }: { store: WorkspaceStore; reda
       write: true,
       description:
         "Share a saved Debugger session with the team: a copy, masked once more with the redaction every export uses, goes to debugger/shared/<name>.har, which git tracks (the session itself stays git-ignored). `unshare: true` deletes the shared copy. Without `name`, lists the shared sessions. With `dryRun: true` it only reports. Returns an `undoId` for git_undo. Needs `confirm: true` (or the user's yes) when it writes.",
-      inputSchema: { type: 'object', properties: { name: str("The saved session's name"), unshare: { type: 'boolean', description: 'Delete the shared copy instead' }, dryRun } },
+      inputSchema: { type: 'object', properties: { name: str("The saved session's name"), unshare: { type: 'boolean', description: 'Delete the shared copy instead' }, bundle: { type: 'boolean', description: 'Write a share bundle (debugger/shared/<name>.tpbundle: the masked session, the enabled rules, environment facts and notes) instead of a HAR' }, notes: str('With bundle: a text for the person who opens it'), dryRun } },
       run: (a) => {
         if (!a.name) return { shared: listSharedSessions(store) };
-        return a.unshare === true ? unshareSession(store, String(a.name)) : shareSession(store, String(a.name), { redactor, dryRun: a.dryRun === true });
+        if (a.unshare === true) return unshareSession(store, String(a.name));
+        return a.bundle === true ? shareSessionBundle(store, String(a.name), { redactor, dryRun: a.dryRun === true, notes: typeof a.notes === 'string' ? a.notes : undefined }) : shareSession(store, String(a.name), { redactor, dryRun: a.dryRun === true });
       },
     },
     {

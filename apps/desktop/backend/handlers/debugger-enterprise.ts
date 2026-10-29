@@ -259,6 +259,8 @@ export function debuggerEnterpriseHandlers(be: Backend, state: DebuggerState): H
 
     /* ---- FG-28: large-session mode */
     'debug.largeSession': async ({ on }: { on?: boolean } = {}) => {
+      // the saved choice applies as soon as anything asks (after a restart, before capturing starts)
+      if (on === undefined && !state.spoolOn && readConnections(be).largeSession) applySpool(be, state, true);
       if (on !== undefined) {
         applySpool(be, state, on);
         await writeConnections(be, { ...readConnections(be), largeSession: on });
@@ -269,7 +271,7 @@ export function debuggerEnterpriseHandlers(be: Backend, state: DebuggerState): H
 
     /* ---- FG-14: start a program through the proxy */
     'debug.launch': async ({ command, args, kind, cwd, preview }: { command: string; args?: string[]; kind?: string; cwd?: string; preview?: boolean }) => {
-      if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first', { suggestions: ['Capture ▸ Start, then start the program through it.'] });
+      if (!state.proxy) throw new ApsError('ConfigurationError', 'Start capturing first', { suggestions: ['Start capturing (the Capture button), then start the program through it.'] });
       if (kind && !LAUNCH_KINDS.includes(kind as LaunchKind)) throw new ApsError('ValidationError', `kind is one of ${LAUNCH_KINDS.join(', ')}`);
       const plan = planLaunch({ command, args, proxyUrl: state.proxy.url, kind: kind as LaunchKind | undefined, caPath: state.decrypt ? state.root?.path : undefined });
       const view = { kind: plan.kind, command: plan.command, args: plan.args, env: Object.keys(plan.env), notes: plan.notes, detected: kindOf(command) };

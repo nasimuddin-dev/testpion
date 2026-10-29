@@ -29,7 +29,6 @@ import {
 import type { Backend, Handlers } from '../backend.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { debuggerSpeedHandlers } from './debugger-speed.js';
-import { debuggerEnterpriseHandlers } from './debugger-enterprise.js';
 import { newDebuggerState, type DebuggerState } from './debugger-state.js';
 
 export interface PendingBreakpoint {
@@ -171,7 +170,6 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
   };
   return {
     ...debuggerSpeedHandlers(be, state),
-    ...debuggerEnterpriseHandlers(be, state),
     'debug.rules': () => list(),
     'debug.resetRuleHits': () => {
       state.proxy?.resetRuleHits();

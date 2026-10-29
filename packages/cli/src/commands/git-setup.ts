@@ -19,6 +19,7 @@ import {
   readSecretsAllow,
   scanStagedSecrets,
   shareSession,
+  shareSessionBundle,
   textconvFile,
   trackByReference,
   trackWithLfs,
@@ -131,11 +132,14 @@ export function registerGitSetupCommands(git: Command): void {
       git
         .command('share-session')
         .description('share a saved Debugger session: a masked copy goes to debugger/shared/ (tracked); the session itself stays git-ignored')
-        .argument('<name>', "the saved session's name"),
+        .argument('<name>', "the saved session's name")
+        .option('--bundle', 'write a share bundle (.tpbundle: the masked session, the enabled rules, environment facts, notes) instead of a HAR')
+        .option('--notes <text>', 'with --bundle: a note for the person who opens it'),
     ),
   ).action((name: string, o) =>
     withWorkspace(o.workspace, async (s) => {
-      const r = shareSession(s, name, { redactor: new Redactor(new WorkspaceManager().loadSettings().redactFields), dryRun: !!o.dryRun });
+      const redactor = new Redactor(new WorkspaceManager().loadSettings().redactFields);
+      const r = o.bundle ? await shareSessionBundle(s, name, { redactor, dryRun: !!o.dryRun, notes: o.notes }) : shareSession(s, name, { redactor, dryRun: !!o.dryRun });
       out(o.json, r, () => {
         console.log(
           `${r.applied ? green('Shared') : yellow('Would share')} ${bold(r.name)} ${dim(`${r.entries} exchanges → ${r.to}${r.masked ? ' (masked more than the capture had)' : ''}${r.replaced ? ', replacing the shared copy' : ''}`)}`,

@@ -19,7 +19,7 @@ export interface ClientCertificate {
 }
 
 export interface GatewayConfig {
-  /** none: connect directly. system: follow the app's network settings (Settings ▸ Network, HTTP_PROXY and NO_PROXY). manual: the address below. */
+  /** none: connect directly. system: follow the app's network settings (Settings ▸ Proxy, HTTP_PROXY and NO_PROXY). manual: the address below. */
   mode: 'none' | 'system' | 'manual';
   /** manual: `http://host:port` (credentials may be given in the address; a separate user name and the password in the secret store are safer). */
   url?: string;

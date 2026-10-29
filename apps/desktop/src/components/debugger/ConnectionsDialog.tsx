@@ -128,6 +128,7 @@ export function ConnectionsDialog({ onClose }: { onClose(): void }) {
     <Modal
       title="Connections"
       onClose={onClose}
+      onSubmit={() => view && !saving && !incomplete && void save()}
       width={680}
       footer={
         <>
@@ -157,7 +158,7 @@ export function ConnectionsDialog({ onClose }: { onClose(): void }) {
               onChange={(mode) => patch({ mode })}
               options={[
                 { value: 'none', label: 'Connect directly' },
-                { value: 'system', label: 'Follow the system settings', title: `The environment's HTTP_PROXY / HTTPS_PROXY / NO_PROXY, or Settings ▸ Network${view?.app.mode === 'custom' ? ` (${view.app.url})` : ''}` },
+                { value: 'system', label: 'Follow the system settings', title: `The environment's HTTP_PROXY / HTTPS_PROXY / NO_PROXY, or Settings ▸ Proxy${view?.app.mode === 'custom' ? ` (${view.app.url})` : ''}` },
                 { value: 'manual', label: 'This address' },
               ]}
             />
@@ -198,7 +199,7 @@ export function ConnectionsDialog({ onClose }: { onClose(): void }) {
             {cas.map((f, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input className="flex-1" value={f} onChange={(e) => patch({ caFiles: cas.map((x, j) => (j === i ? e.target.value : x)) })} placeholder="C:\certs\corp-root.pem" aria-label={`Certificate file ${i + 1}`} />
-                <IconButton label="Remove this certificate file" onClick={() => patch({ caFiles: cas.filter((_, j) => j !== i) })}><Trash2 size={13} /></IconButton>
+                <IconButton label="Remove this certificate file" onClick={() => patch({ caFiles: cas.filter((_, j) => j !== i) })}><Trash2 /></IconButton>
               </div>
             ))}
           </div>
@@ -223,7 +224,7 @@ export function ConnectionsDialog({ onClose }: { onClose(): void }) {
                 <Field label="Passphrase">
                   <Input type="password" value={passphrases[c.id] ?? ''} onChange={(e) => setPassphrases((p) => ({ ...p, [c.id]: e.target.value }))} disabled={!c.id} title={c.id ? undefined : 'Save the certificate first, then set its passphrase'} placeholder={c.passphraseSet ? '••••••••' : 'none'} autoComplete="new-password" />
                 </Field>
-                <IconButton label="Remove this client certificate" onClick={() => patch({ clientCerts: certs.filter((_, j) => j !== i) })}><Trash2 size={13} /></IconButton>
+                <IconButton label="Remove this client certificate" onClick={() => patch({ clientCerts: certs.filter((_, j) => j !== i) })}><Trash2 /></IconButton>
               </div>
             ))}
           </div>

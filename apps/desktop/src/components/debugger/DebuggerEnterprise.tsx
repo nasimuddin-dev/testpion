@@ -142,6 +142,7 @@ function LaunchDialog({ running, onClose }: { running: boolean; onClose(): void 
     <Modal
       title="Start a program through the proxy"
       onClose={onClose}
+      onSubmit={() => !why && !busy && void go(false)}
       width={560}
       footer={
         <>
@@ -247,6 +248,7 @@ function CompareDialog({ sessions, onClose }: { sessions: Array<{ name: string; 
     <Modal
       title="Compare with an earlier session"
       onClose={onClose}
+      onSubmit={() => name && !busy && void run()}
       width={760}
       footer={
         <>
@@ -406,6 +408,7 @@ function BundleDialog({ bundle, onClose, onRules }: { bundle: OpenedBundle & { b
     <Modal
       title={`Bundle: ${b.name}`}
       onClose={onClose}
+      onSubmit={onClose}
       width={560}
       footer={
         <Button variant="primary" icon={<Check size={13} />} onClick={onClose}>
@@ -471,6 +474,7 @@ function FarxDialog({ report, onClose, onImported }: { report: FarxReport & { te
     <Modal
       title="Import Fiddler rules (partial import)"
       onClose={onClose}
+      onSubmit={() => usable && !done && void apply()}
       width={720}
       footer={
         <>

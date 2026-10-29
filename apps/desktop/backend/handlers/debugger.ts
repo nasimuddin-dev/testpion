@@ -45,7 +45,7 @@ import { activeRules, holdBreakpoint } from './debugger-rules.js';
 import { runExchangeView } from './debugger-views.js';
 import { graphqlOf, looksLikeGraphql } from '@testpion/shared';
 import { cachedLeanRow, cachedSessionStats, DeepSearchCache, inSlices, startMs } from './debugger-stats.js';
-import { prepareConnections } from './debugger-enterprise.js';
+import { debuggerEnterpriseHandlers, prepareConnections } from './debugger-enterprise.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
 import { AUTOSAVE, sessionSaver } from './debugger-save.js';
 import { settleWithin } from '../backend-health.js';
@@ -426,6 +426,7 @@ export function debuggerHandlers(be: Backend): Handlers {
 
   const trust = trustChecker(); // the root's trust in the store, kept for 30 s
   const handlers: Handlers = {
+    ...debuggerEnterpriseHandlers(be, state),
     'debug.status': () => status(),
     /** Send one request through the proxy from this process (the e2e suite's "program"; also a quick check that the proxy works). */
     'debug.selfTest': ({ url, method, headers, body }: { url: string; /** Plain http only: the request to send (a flow to record in the e2e suite). */ method?: string; headers?: Record<string, string>; body?: string }) =>
