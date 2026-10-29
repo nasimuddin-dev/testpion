@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.55.3 — 2026-10-29
+
+A patch release that makes the finishing steps of a run reliable on Windows and re-checks what 0.55.2 shipped.
+
+- **A leftover temporary folder never fails a run or hides its result.** The temporary workspace that `testpion test`, `run`, `flow scale`, `openapi` and the merge-conflict view create is now removed with retries, and a folder that a virus scanner or indexer still holds is left for the system to clear. Before, Windows could answer "directory not empty" from the final clean-up and turn a finished run into an error.
+- **Tests that depend on timing are steadier on shared machines.** The late-answer check of `tp.require`, the Debugger gateway set-up and the command-line start-up check now leave room for a loaded runner; the start-up check keeps the module census as its strict guard.
+- **More of the app is covered by the end-to-end suite.** The "Fill coverage gaps with AI" button of the API Coverage tab, and the change marks of script packages and Debugger rules.
+
 ## 0.55.2 — 2026-10-29
 
 A fix for 0.55.1. Update to get it.
