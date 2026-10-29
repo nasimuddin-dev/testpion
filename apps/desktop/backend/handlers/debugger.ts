@@ -42,7 +42,7 @@ import {
 } from '@testpion/core/desktop';
 import { networkInterfaces } from 'node:os';
 import { activeRules, holdBreakpoint } from './debugger-rules.js';
-import { runExchangeView } from './debugger-views.js';
+import { aiRowOf, runExchangeView } from './debugger-views.js';
 import { graphqlOf, looksLikeGraphql } from '@testpion/shared';
 import { cachedLeanRow, cachedSessionStats, DeepSearchCache, inSlices, startMs } from './debugger-stats.js';
 import { newDebuggerState, type DebuggerState, type IncomingRequest, type ListSync } from './debugger-state.js';
@@ -112,6 +112,7 @@ function buildLeanRow(be: Backend, state: DebuggerState, e: DebuggerExchange) {
     responseHeaderBytes: responseHeaders ? size(responseHeaders) : undefined,
     requestContentType: requestHeaders['content-type'],
     ...gqlOf(e),
+    ...aiRowOf(e),
     ...(frames ? { frameCount: frames.length } : {}),
     ...(events ? { eventCount: events.length } : {}),
     ...(grpc ? { grpc: { ...grpc, requests: [], responses: [], message: grpc.message && be.logger.redactor.redactString(grpc.message) } } : {}),

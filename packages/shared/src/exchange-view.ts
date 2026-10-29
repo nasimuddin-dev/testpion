@@ -9,6 +9,7 @@ import { cachingOf } from './caching.js';
 import { headerOf } from './debugger-inspect.js';
 import { tlsFindings, type TlsInfo } from './connection-info.js';
 import { graphqlOf } from './graphql-view.js';
+import { aiCallOf, aiCallText } from './ai-calls.js';
 
 export interface ViewExchange {
   method?: string;
@@ -29,7 +30,7 @@ export interface ViewExchange {
   connection?: TlsInfo;
 }
 
-export const EXCHANGE_VIEWS = ['list', 'image', 'xml', 'form', 'graphql', 'msgpack', 'protobuf', 'signalr', 'socketio', 'syntax', 'caching', 'tls'] as const;
+export const EXCHANGE_VIEWS = ['list', 'image', 'xml', 'form', 'graphql', 'ai', 'msgpack', 'protobuf', 'signalr', 'socketio', 'syntax', 'caching', 'tls'] as const;
 export type ExchangeViewName = (typeof EXCHANGE_VIEWS)[number];
 
 export interface ExchangeViewResult {
@@ -111,7 +112,7 @@ function exchangeViewRaw(e: ViewExchange, view: ExchangeViewName, side: 'request
     switch (view) {
       case 'list': {
         const gql = graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestContentType ?? headerOf(e.requestHeaders, 'content-type'), requestBody: e.requestBody, responseBody: e.responseBody });
-        const views = bodyViewsOf({ contentType: s.ct, url: e.url, text: s.text, bytes: s.bytes, graphql: !!gql });
+        const views = bodyViewsOf({ contentType: s.ct, url: e.url, text: s.text, bytes: s.bytes, graphql: !!gql, ai: !!aiCallOf(e) });
         return made(view, side, { views, contentType: s.ct, kept }, (d) => (d.views.length ? `Views for the ${side}: ${d.views.join(', ')}` : `No special view for the ${side} (${s.ct ?? 'no content type'}): use the plain body.`));
       }
       case 'caching': {
@@ -122,6 +123,11 @@ function exchangeViewRaw(e: ViewExchange, view: ExchangeViewName, side: 'request
         if (!e.connection) return no(view, 'response', 'No TLS details were recorded for this exchange (plain HTTP, a tunnel that was not decrypted, or captured before this was recorded).');
         const f = tlsFindings(e.connection, e.host ?? '');
         return made(view, 'response', { ...e.connection, findings: f }, (d) => [`${d.version ?? '?'} ${d.cipher ?? ''}${d.alpn ? ` (${d.alpn})` : ''}`, ...d.findings.map((x: { level: string; text: string }) => `${x.level}: ${x.text}`)].join('\n'));
+      }
+      case 'ai': {
+        const c = aiCallOf({ ...e, requestContentType: e.requestContentType ?? headerOf(e.requestHeaders, 'content-type') });
+        if (!c) return no(view, 'request', 'This is not an AI call: the address is not an OpenAI, Anthropic, Gemini or Ollama endpoint and the body is not MCP (JSON-RPC).');
+        return made(view, 'request', c, (d: typeof c) => aiCallText(d));
       }
       case 'graphql': {
         const g = graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestContentType ?? headerOf(e.requestHeaders, 'content-type'), requestBody: e.requestBody, responseBody: e.responseBody });

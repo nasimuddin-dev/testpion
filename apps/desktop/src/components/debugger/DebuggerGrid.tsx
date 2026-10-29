@@ -50,7 +50,7 @@ const headerLines = (h?: Record<string, string>) =>
 const BOOKMARK_ICON = <Star size={10} className="fill-current text-warn" />;
 const TLS_ICON = <Lock size={10} className="inline mr-1 text-ok" aria-label="decrypted HTTPS" />;
 
-type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid' | 'graphql' | 'comment';
+type ColumnId = 'seq' | 'offset' | 'duration' | 'method' | 'version' | 'url' | 'status' | 'type' | 'size' | 'speed' | 'application' | 'domain' | 'ip' | 'user' | 'pid' | 'graphql' | 'ai' | 'comment';
 interface Column {
   id: ColumnId;
   label: string;
@@ -77,10 +77,11 @@ const COLUMNS: Column[] = [
   { id: 'user', label: 'User', width: 120, sort: (e) => e.user ?? '' },
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
   { id: 'graphql', label: 'GraphQL operation', width: 170, sort: (e) => e.graphql ?? '' },
+  { id: 'ai', label: 'AI call', width: 190, sort: (e) => e.ai ?? '' },
   { id: 'comment', label: 'Comments', width: 200, sort: (e) => e.note ?? '' },
 ];
 // Comments is shown the first time a note is added (the row menu does it)
-const DEFAULT_HIDDEN: ColumnId[] = ['pid', 'comment', 'graphql'];
+const DEFAULT_HIDDEN: ColumnId[] = ['pid', 'comment', 'graphql', 'ai'];
 const HIDDEN_KEY = 'testpion.debugger.hiddenColumns';
 const parseHidden = (raw: string): ColumnId[] | undefined => {
   const v = JSON.parse(raw) as unknown;
@@ -234,6 +235,11 @@ export const DebuggerGrid = memo(function DebuggerGrid({
                 {e.graphql}
               </span>
             )}
+            {e.ai && (
+              <span className="ml-1 text-2xs font-bold text-accent" title="An AI call: the provider and model, or an MCP message" data-ai-label>
+                {e.ai}
+              </span>
+            )}
             {!!e.frameCount && (
               <span className="ml-1">
                 <Badge>{e.frameCount} msg</Badge>
@@ -278,6 +284,8 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         return e.pid ?? '';
       case 'graphql':
         return <span title={e.graphql}>{e.graphql ?? ''}</span>;
+      case 'ai':
+        return <span title={e.ai}>{e.ai ?? ''}</span>;
       case 'comment':
         return <span title={e.note}>{e.note ?? ''}</span>;
     }

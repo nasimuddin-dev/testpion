@@ -71,6 +71,8 @@ export interface Exchange {
   edited?: boolean;
   /** FG-20 (list rows): the GraphQL operation a call runs, as `query GetUser`. */
   graphql?: string;
+  /** FG-18 (list rows): the AI call an exchange is, as `OpenAI gpt-4o` or `MCP tools/call get_weather`. */
+  ai?: string;
   /** FG-8 (debug.exchange only): an image response as base64 (other binary bodies are decoded on the host, see debug.bodyView). */
   responseBodyBase64?: string;
   /** FG-10 (debug.exchange only): the TLS connection to the server. */

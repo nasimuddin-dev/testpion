@@ -238,7 +238,7 @@ export function registerDebugNotesCommands(program: Command): void {
 
   program
     .command('debug-show')
-    .description('read one body of a captured exchange in a HAR file the way the Debugger window shows it: image facts, an XML tree, form parts, GraphQL, MessagePack, Protobuf, SignalR, Socket.IO frames, caching and TLS findings')
+    .description('read one body of a captured exchange in a HAR file the way the Debugger window shows it: image facts, an XML tree, form parts, GraphQL, AI calls (LLM and MCP: model, tokens, cost, answer), MessagePack, Protobuf, SignalR, Socket.IO frames, caching and TLS findings')
     .argument('<har>', 'the HAR file')
     .argument('<entry>', 'the exchange id (_testpion.id), or #3 for the third entry')
     .option('--view <name>', `list (which views fit) | ${EXCHANGE_VIEWS.filter((v) => v !== 'list').join(' | ')}`, 'list')

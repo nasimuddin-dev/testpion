@@ -141,6 +141,7 @@ The tabs at the bottom of Request details and Response details add a view when t
 | **Preview** | HTML | The page drawn in a sandboxed frame: scripts, forms and network loads are off, so it shows what the markup says and nothing more. |
 | **Form** | URL-encoded and multipart bodies | A table of fields, or of parts with file name, type and size (a file's content is not shown). |
 | **GraphQL** | a request with a `query` (JSON, a batch, `application/graphql` or a GET) | The operation type and name, the query laid out, the variables, and the response's `errors` with path and code. The grid also marks the row (`query GetUser` after the URL), and the **GraphQL operation** column (hidden until you show it) sorts by it. |
+| **AI call** | a call to OpenAI (and compatible APIs), Anthropic, Gemini or Ollama, or MCP JSON-RPC messages | See "AI traffic" below. The grid marks the row (`OpenAI gpt-4o` after the URL), and the **AI call** column (hidden until you show it) sorts by it. |
 | **MessagePack**, **Protobuf** | the matching content types | Decoded without a schema: MessagePack as a tree, Protobuf field by field like `protoc --decode_raw` (nested messages, strings, numbers, fixed-width values also as floats). |
 | **SignalR**, **Socket.IO** | text bodies in those framings | One row per message: kind, hub method or event name, data. |
 | **Syntax** | CSS, JavaScript, SQL, shell | The text with colours. |
@@ -148,6 +149,19 @@ The tabs at the bottom of Request details and Response details add a view when t
 Binary protocols are decoded on the computer that captured, and what is read out is masked like any body (a `token` inside a MessagePack map shows as `[REDACTED]`). Decoders are bounded: input over 1 MB is not decoded, nesting past 32 levels or 20,000 values stops the read with a note. A body larger than the capture keeps, or one let go to save memory, says so in the tab instead of showing nothing.
 
 An image goes into a saved session (the HAR keeps it as base64); MessagePack and Protobuf bodies do not, because a mask reads text and a secret inside bytes would go unseen. The TLS details are saved with the session.
+
+### AI traffic
+
+When the program you capture talks to a language model, the **AI call** tab reads the exchange in words instead of JSON:
+
+- **Which API and model**: OpenAI chat completions, Responses and embeddings (also OpenAI-compatible hosts), Anthropic messages, Gemini `generateContent` / `streamGenerateContent`, Ollama `/api/chat` and `/api/generate`. The model is read from the response when it names one, else from the request or the address.
+- **What was asked**: the system prompt, the messages with their roles (tool calls and results included), the tools offered to the model, and settings such as temperature and max tokens.
+- **What came back**: the answer. A streamed answer (server-sent events, or the newline-delimited JSON Ollama sends) is put back together, with streamed tool-call arguments joined and parsed. Tool calls the model made are listed with their arguments.
+- **Tokens and cost**: input, output, tokens served from the prompt cache and reasoning tokens when the provider reports them, and a **cost estimate** from list prices per million tokens. It is always labelled an estimate; a model that is not in the price table shows "unknown model" instead of a guess; local Ollama models are free.
+- **A prompt-cache hint**: how much of the input came from the cache, how much was written to it, or, for a long prompt that cached nothing, a pointer to mark the stable start (`cache_control` on Anthropic).
+- **MCP**: JSON-RPC bodies of an MCP server over HTTP list each `initialize` (the server's name and version), `tools/list` (the tool names), `tools/call`, `resources/read` and `prompts/get` with the arguments and the result or error, whether the reply came as JSON or as an event stream.
+
+API keys and tokens never show: anything shaped like `sk-…`, `AIza…`, a bearer credential, a JWT or a cloud key is replaced, and an argument named like a secret (`api_key`, `token`, `password`…) shows as `***`, in a prompt, a tool argument or a tool result. The reader is tolerant: a field that is missing is left out, and a body that is not what its address says gives a note, not an error. Providers change their formats; the readers are small adapters in `packages/shared/src/ai-calls.ts`.
 
 ## Rules
 
@@ -218,11 +232,12 @@ testpion debugger show session.har '#3'                    # which views fit the
 testpion debugger show session.har <id> --view xml         # an XML tree as indented text
 testpion debugger show session.har <id> --view msgpack --side request --json
 testpion debugger show session.har <id> --view graphql --json   # operation, query, variables, errors
+testpion debugger show session.har <id> --view ai          # an LLM or MCP call: model, messages, answer, tokens, cost
 testpion debugger show session.har <id> --view caching     # would a browser cache it, in words
 testpion debugger show session.har <id> --view tls         # version, cipher, certificate findings
 ```
 
-Views: `list`, `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `syntax`, `caching`, `tls`. A view that cannot be produced says why (`ok: false` and `error` with `--json`; exit code 2 without).
+Views: `list`, `image`, `xml`, `form`, `graphql`, `ai`, `msgpack`, `protobuf`, `signalr`, `socketio`, `syntax`, `caching`, `tls`. A view that cannot be produced says why (`ok: false` and `error` with `--json`; exit code 2 without).
 
 AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS, `system_proxy` for the whole computer, which asks the user), `debugger_certificate` (info, install, remove; install and remove ask the user), `debugger_no_decrypt` (the hosts kept as tunnels), `debugger_exchanges` (the list, with filters; `deep` searches bodies; `hide_tunnels` leaves the tunnels out; `include` adds `params`, `cookies`, `summary`, `caching`, `tls` or `graphql` to each exchange, and the advice for a failure), `debugger_exchange` (one, with bodies; `view` reads a body as the window shows it: `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `caching`, `tls`, with `side` request or response), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture only and a `where` condition on a column with a `style`, and `remap`, `fault` and `frame`; `reply` takes a `file` or `folder`, `redirect` a `rewrite`, `modify` `requestReplace` / `responseReplace` / `setStatus`; `action: speed` sets the Network speed: an agent can take an API offline, slow it down, make it fail 20% of the time, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did. `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
 

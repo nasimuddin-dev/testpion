@@ -7,7 +7,7 @@
  */
 import { type Bytes, bytesFromBase64 } from './binary-decode.js';
 
-export type BodyViewId = 'image' | 'xml' | 'html' | 'form' | 'graphql' | 'msgpack' | 'protobuf' | 'signalr' | 'socketio' | 'syntax';
+export type BodyViewId = 'image' | 'xml' | 'html' | 'form' | 'graphql' | 'ai' | 'msgpack' | 'protobuf' | 'signalr' | 'socketio' | 'syntax';
 
 export interface BodyViewInput {
   contentType?: string;
@@ -18,6 +18,8 @@ export interface BodyViewInput {
   bytes?: Bytes;
   /** The request is a GraphQL operation (see graphql-view.ts). */
   graphql?: boolean;
+  /** The exchange is an LLM or MCP call (see ai-calls.ts). */
+  ai?: boolean;
 }
 
 const typeOf = (ct?: string) => (ct ?? '').split(';')[0]!.trim().toLowerCase();
@@ -50,6 +52,7 @@ export function bodyViewsOf(i: BodyViewInput): BodyViewId[] {
     if (!out.includes('image')) out.push('image');
   }
   if (i.graphql || t === 'application/graphql') out.push('graphql');
+  if (i.ai) out.push('ai');
   if (/html/.test(t) || (!t && /^<!doctype html|^<html[\s>]/i.test(head))) out.push('html');
   if (/xml/.test(t) && t !== 'text/html' && !out.includes('image')) out.push('xml');
   else if ((!t || t === 'text/plain') && /^<\?xml\s/i.test(head)) out.push('xml');

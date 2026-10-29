@@ -38,6 +38,8 @@ export * from './debugger-inspect.js';
 export * from './binary-decode.js';
 export * from './body-views.js';
 export * from './graphql-view.js';
+export * from './ai-calls.js';
+export * from './ai-pricing.js';
 export * from './caching.js';
 export * from './connection-info.js';
 export * from './exchange-view.js';

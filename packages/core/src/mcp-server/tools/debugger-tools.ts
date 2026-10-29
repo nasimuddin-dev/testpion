@@ -7,7 +7,7 @@ import { annotate, AUTO_BREAKPOINT_LABEL, autoBreakpointMode, cleanAnnotation, p
 import { shortId } from '../../util/ids.js';
 import { debuggerCertDir, ensureRootCertificate, installRootCertificate, leafSigner, removeRootCertificate, rootCertificateTrust, rootStanding, trustInstructions } from '../../debugger/certificate.js';
 import { disengageSystemProxy, engageSystemProxy, type SystemProxySnapshot } from '../../debugger/system-proxy.js';
-import { adviceFor, cachingOf, cookiesOf, EXCHANGE_VIEWS, exchangeView, graphqlOf, hostMatches, paramsOf, tlsFindings, type ExchangeViewName } from '@testpion/shared';
+import { adviceFor, aiCallOf, cachingOf, cookiesOf, EXCHANGE_VIEWS, exchangeView, graphqlOf, hostMatches, paramsOf, tlsFindings, type ExchangeViewName } from '@testpion/shared';
 import type { BreakpointEdits } from '../../debugger/proxy.js';
 import { exchangesFromSaz } from '../../debugger/saz.js';
 import { grpcDecoder, grpcMethodIndex, workspaceProtoRoots } from '../../debugger/grpc.js';
@@ -51,6 +51,10 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
   const graphqlView = (e: DebuggerExchange) => {
     const g = graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestHeaders['content-type'], requestBody: e.requestBody, responseBody: e.responseBody });
     return g ? red.redact(g) : undefined;
+  };
+  const aiView = (e: DebuggerExchange) => {
+    const c = aiCallOf({ method: e.method, url: e.url, host: e.host, requestHeaders: e.requestHeaders, requestBody: e.requestBody, responseBody: e.responseBody, status: e.status });
+    return c ? red.redact(c) : undefined;
   };
   const safe = (e: DebuggerExchange, bodies: boolean) => {
     const headers = (h?: Record<string, string>) => (h ? red.redactHeaders(h) : h);
@@ -223,7 +227,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           limit: { type: 'number', description: 'How many (default 200, max 2000)' },
           hide_tunnels: { type: 'boolean', description: 'Leave out HTTPS tunnels' },
           hide_304: { type: 'boolean', description: 'Leave out 304 Not Modified answers' },
-          include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary', 'caching', 'tls', 'graphql'] }, description: 'Add inspector data: caching (would a browser cache it), tls (version, cipher, certificate findings), graphql (operation type, name, variables, errors)' },
+          include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary', 'caching', 'tls', 'graphql', 'ai'] }, description: 'Add inspector data: caching (would a browser cache it), tls (version, cipher, certificate findings), graphql (operation type, name, variables, errors), ai (an LLM or MCP call: provider, model, tokens, cost, answer, tool calls)' },
         },
       },
       run: (a) => {
@@ -250,6 +254,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           ...(include.includes('caching') ? { caching: cachingOf(e) } : {}),
           ...(include.includes('tls') && e.connection ? { tls: { ...e.connection, findings: tlsFindings(e.connection, e.host) } } : {}),
           ...(include.includes('graphql') ? { graphql: graphqlView(e) } : {}),
+          ...(include.includes('ai') ? { ai: aiView(e) } : {}),
           ...(include.length && (e.error || (e.status ?? 0) >= 400) ? { advice: adviceFor(e) } : {}),
         });
         return {
@@ -263,7 +268,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     {
       name: 'debugger_exchange',
       description:
-        'One captured exchange whole: request and response headers and bodies (redacted), timings, the program that sent it, and the note and colour mark on it. With action annotate: set (or, with an empty value, remove) its note and mark; a note is saved in the HAR as the entry comment. With view: the body as the Debugger window shows it: list (which views fit), image (format, size, dimensions), xml (a tree), form (urlencoded fields / multipart parts), graphql (operation, formatted query, variables, errors), msgpack, protobuf (field by field, no .proto needed), signalr, socketio, syntax, caching (would a browser cache it, in words), tls (version, cipher, certificate findings); side says request or response (default response). Decoded text is redacted like any body.',
+        'One captured exchange whole: request and response headers and bodies (redacted), timings, the program that sent it, and the note and colour mark on it. With action annotate: set (or, with an empty value, remove) its note and mark; a note is saved in the HAR as the entry comment. With view: the body as the Debugger window shows it: list (which views fit), image (format, size, dimensions), xml (a tree), form (urlencoded fields / multipart parts), graphql (operation, formatted query, variables, errors), ai (an LLM call to OpenAI, Anthropic, Gemini or Ollama, or MCP messages: model, messages, tools offered, the answer with a streamed one put together, tool calls, tokens, cost estimate, prompt-cache hint; keys redacted), msgpack, protobuf (field by field, no .proto needed), signalr, socketio, syntax, caching (would a browser cache it, in words), tls (version, cipher, certificate findings); side says request or response (default response). Decoded text is redacted like any body.',
       inputSchema: {
         type: 'object',
         properties: {
