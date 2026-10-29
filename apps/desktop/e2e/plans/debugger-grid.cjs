@@ -16,8 +16,8 @@ const H = `
   const hover = (el) => { el?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' })); el?.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true, pointerType: 'mouse' })); el?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); };
   const sub = async (label) => { const it = menuItem(new RegExp('^' + label + '$')); if (!it) return false; it.focus(); hover(it); await __t.sleep(400); return true; };
   const rowMenu = async (r) => { await __t.real.rightClick(r); await __t.waitFor(() => menuItem(/^Bookmark$|^Remove the bookmark$/), 3000); };
-  const columnsMenu = async () => { await __t.real.click(document.querySelector('main [data-debugger-grid] [aria-label=Columns]')); await __t.sleep(300); };
-  const groupMenu = async () => { await __t.real.click(document.querySelector('main [data-debugger-grid] [aria-label="Group by"]')); await __t.sleep(300); };
+  const columnsMenu = async () => { if (document.querySelector('[role=menu]')) await closeMenu(); await __t.real.click(document.querySelector('main [data-debugger-grid] [aria-label=Columns]')); await __t.sleep(300); };
+  const groupMenu = async () => { if (document.querySelector('[role=menu]')) await closeMenu(); await __t.real.click(document.querySelector('main [data-debugger-grid] [aria-label="Group by"]')); await __t.sleep(300); };
   const palette = async (text) => { await __t.esc(); await __t.sleep(200); await __t.real.key('k', { ctrl: true }); await __t.waitFor(() => document.querySelector('[role=dialog] input[placeholder]'), 3000); await __t.real.type(text); await __t.sleep(400); };
 `;
 const step = stepOf(H);
@@ -48,6 +48,7 @@ const steps = [
   step(
     'header-as-a-column',
     `await columnsMenu();
+     const mi = menuItem(/^Add column from a header/); mi?.scrollIntoView({ block: 'nearest' }); await __t.sleep(200);
      await __t.real.click(menuItem(/^Add column from a header/)); await __t.waitFor(() => document.querySelector('[data-header-column-dialog]'), 3000);
      const add = () => vis('[role=dialog] button').find((b) => b.textContent.trim() === 'Add column');
      const emptyBlocked = add()?.disabled;
@@ -61,7 +62,7 @@ const steps = [
   step(
     'header-column-is-removed-from-the-columns-menu',
     `await columnsMenu();
-     await __t.real.click(menuItem(/Content-Type \\(response\\)/)); await __t.sleep(800);
+     const hc = menuItem(/Content-Type \\(response\\)/); hc?.scrollIntoView({ block: 'nearest' }); await __t.sleep(200); await __t.real.click(hc); await __t.sleep(800);
      return 'header gone: ' + !headers().includes('Content-Type (response)') + ' | backend: ' + (await window.aps.invoke('debug.columns')).columns.length;`,
   ),
   step(
