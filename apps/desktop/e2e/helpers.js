@@ -25,7 +25,22 @@ window.__t = (() => {
     sleep,
     waitFor,
     esc,
-    view: async (label) => { await esc(); await window.__t.rail(label); await sleep(1200); return !!document.querySelector(`nav [aria-label="${label}"][aria-current="page"]`); },
+    // AI Lab and Evaluations are tabs of the one rail item AI quality (AU-21): 'Evaluations' opens its Checks tab, 'AI Lab' the other tabs (Start unless one was open)
+    view: async (label) => {
+      await esc();
+      const legacy = label === 'AI Lab' || label === 'Evaluations';
+      await window.__t.rail(legacy ? 'AI quality' : label);
+      await sleep(1200);
+      if (legacy) {
+        const tabs = [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].filter((t) => t.offsetParent);
+        const checks = tabs.find((t) => t.textContent.trim() === 'Checks');
+        const onChecks = checks?.getAttribute('aria-selected') === 'true';
+        const want = label === 'Evaluations' ? (onChecks ? undefined : checks) : onChecks ? tabs.find((t) => t.textContent.trim() === 'Start') : undefined;
+        if (want) { want.click(); await sleep(1200); }
+        return !!document.querySelector('nav [aria-label="AI quality"][aria-current="page"]');
+      }
+      return !!document.querySelector(`nav [aria-label="${label}"][aria-current="page"]`);
+    },
     // go to a view by its rail label: its rail button, or (a view the rail doesn't show) the rail's More… menu; no waiting
     rail: async (label) => {
       const b = document.querySelector(`nav [aria-label="${label}"]`);
@@ -81,7 +96,7 @@ window.__t = (() => {
       return [...document.querySelectorAll('[role=menu]:last-of-type [role=menuitem]')].map((m) => m.textContent.trim()).join(' | ') || 'NO MENU';
     },
     header: async (label) => { await esc(); aside()?.querySelector(`button[aria-label^="${label}"]`)?.click(); await sleep(1000); return (document.querySelector('[role=dialog]')?.innerText ?? document.querySelector('[role=menu]')?.innerText ?? 'NOTHING').slice(0, 80); },
-    tab: async (label) => { const all = [...document.querySelectorAll('main [role=tab]')].filter((x) => x.textContent.trim().startsWith(label)); const t = all.find((x) => x.offsetParent !== null) ?? all[0]; t?.click(); await sleep(900); return !!t; },
+    tab: async (label) => { const all = [...document.querySelectorAll('main [role=tab]')].filter((x) => x.textContent.trim().startsWith(label)); const t = all.find((x) => x.offsetParent !== null && !x.closest('[aria-label="AI quality"]')) ?? all.find((x) => x.offsetParent !== null) ?? all[0]; t?.click(); await sleep(900); return !!t; },
     // a response action: a button when the panel is wide, else an item of its ⋯ menu ("Response actions")
     responseAction: async (label) => {
       let b = [...document.querySelectorAll('main button')].find((x) => x.offsetParent && x.textContent.trim() === label);

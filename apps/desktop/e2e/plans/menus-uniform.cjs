@@ -156,7 +156,7 @@ const steps = [
      return 'folder: ' + folder + ' | graphql folders open: ' + gql;`,
   ),
   // the lists of the other views
-  step('prompt', `await __t.view('AI Lab'); await __t.tab('Playground'); await __t.sleep(600); const r = await __t.waitFor(() => node('ai-saved:ai-intent'), 3000); return await both(r);`),
+  step('prompt', `await __t.view('AI Lab'); await __t.tab('Try a prompt'); await __t.sleep(600); const r = await __t.waitFor(() => node('ai-saved:ai-intent'), 3000); return await both(r);`),
   step('prompt-folder', `return await both(node('ai-saved:folder:Offline demo model'));`),
   step('prompt-header', `return await both(node('ai-saved:section'));`),
   step('load-test', `await __t.view('Load'); return await both(await __t.waitFor(() => node('load-saved:lt-e2e'), 3000));`),

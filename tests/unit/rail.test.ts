@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { RAIL_DEFAULT_SHOWN, railChange, railModel, railOrder, railShortcut, railTarget } from '../../apps/desktop/src/lib/rail';
 
-// The rail's model: 7 views shown by default (AI Lab and Evaluations too), More… for the rest, the person's order and choice (per computer);
+// The rail's model: 7 views shown by default (AI quality too), More… for the rest, the person's order and choice (per computer);
 // Ctrl/Cmd+Alt+1…9 count the shown views only.
-const DEFAULTS = ['home', 'collections', 'debugger', 'tests', 'monitors', 'load', 'ai', 'evaluations', 'environments', 'history', 'traces', 'git'];
+const DEFAULTS = ['home', 'collections', 'debugger', 'tests', 'monitors', 'load', 'aiquality', 'environments', 'history', 'traces', 'git'];
 
 describe('rail model', () => {
   it('shows the default five, in the default order, the rest under More…', () => {
     const m = railModel(DEFAULTS);
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'ai', 'evaluations', 'environments', 'history']);
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'environments', 'history']);
     expect(m.visible).toEqual(DEFAULTS.filter((id) => RAIL_DEFAULT_SHOWN.includes(id)));
     expect(m.more).toEqual(['debugger', 'monitors', 'load', 'traces', 'git']);
     expect(m.all).toEqual(DEFAULTS);
@@ -17,22 +17,22 @@ describe('rail model', () => {
   it('the shortcuts follow the shown views', () => {
     const m = railModel(DEFAULTS);
     expect(railTarget(m.visible, 3)).toBe('tests');
-    expect(railTarget(m.visible, 8)).toBeUndefined();
-    expect(railTarget(m.visible, 4)).toBe('ai');
-    expect(railShortcut(m.visible, 'history', 'Ctrl')).toBe('Ctrl+Alt+7');
+    expect(railTarget(m.visible, 7)).toBeUndefined();
+    expect(railTarget(m.visible, 4)).toBe('aiquality');
+    expect(railShortcut(m.visible, 'history', 'Ctrl')).toBe('Ctrl+Alt+6');
     expect(railShortcut(m.visible, 'debugger', 'Ctrl')).toBeUndefined();
   });
 
   it('hides, shows (at the end of the shown ones) and moves items', () => {
     let m = railModel(DEFAULTS);
     m = railModel(DEFAULTS, railChange(m, 'history', 'hide'));
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'ai', 'evaluations', 'environments']);
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'environments']);
     expect(m.more).toContain('history');
     m = railModel(DEFAULTS, railChange(m, 'git', 'show'));
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'ai', 'evaluations', 'environments', 'git']);
-    expect(railTarget(m.visible, 7)).toBe('git');
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'environments', 'git']);
+    expect(railTarget(m.visible, 6)).toBe('git');
     m = railModel(DEFAULTS, railChange(m, 'git', 'up'));
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'ai', 'evaluations', 'git', 'environments']);
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'git', 'environments']);
     m = railModel(DEFAULTS, railChange(m, 'home', 'up')); // already first: nothing changes
     expect(m.visible[0]).toBe('home');
     m = railModel(DEFAULTS, railChange(m, 'environments', 'down')); // already last
@@ -66,5 +66,14 @@ describe('rail model', () => {
       { id: 'tests', group: 'Testing' },
     ]);
     expect(order).toEqual(['home', 'collections', 'tests']);
+  });
+
+  it('a rail saved before AI Lab and Evaluations became AI quality keeps its place and its choice (AU-21)', () => {
+    const old = ['home', 'collections', 'debugger', 'tests', 'monitors', 'load', 'ai', 'evaluations', 'environments', 'history', 'traces', 'git'];
+    const m = railModel(DEFAULTS, { order: old, shown: ['home', 'tests', 'evaluations', 'git'] });
+    expect(m.all).toEqual(DEFAULTS);
+    expect(m.visible).toEqual(['home', 'tests', 'aiquality', 'git']);
+    // hidden in both: stays hidden
+    expect(railModel(DEFAULTS, { order: old, shown: ['home', 'tests'] }).visible).toEqual(['home', 'tests']);
   });
 });

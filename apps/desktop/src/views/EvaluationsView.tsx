@@ -20,6 +20,7 @@ import { GenerateCasesDialog } from '../components/ai/GenerateCasesDialog';
 import { TrustReviewer } from '../components/ai/TrustReviewer';
 import { Wizard, type WizardDraft } from './ai/Wizard';
 import { BotWizard, type BotDraft } from './ai/BotWizard';
+import { AiQualityTabs } from '../components/ai/AiQualityTabs';
 import { AgentToolsEditor } from '../components/ai/AgentToolsEditor';
 import { AGENT_EXAMPLE_CASES, AGENT_PROMPT } from '../lib/agent-eval';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
@@ -341,6 +342,9 @@ export function EvaluationsView() {
   };
 
   return (
+    <div className="h-full flex flex-col">
+    <AiQualityTabs active="checks" models={providers.length} />
+    <div className="flex-1 min-h-0">
     <Split id="eval-sidebar" sidebar initial={18} min={12}>
       <SidebarShell
         id="evaluations"
@@ -783,5 +787,7 @@ export function EvaluationsView() {
     </div>
     </div>
     </Split>
+    </div>
+    </div>
   );
 }

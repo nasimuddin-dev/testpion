@@ -12,8 +12,12 @@ export interface RailPrefs {
   shown?: RailId[];
 }
 
-/** Shown on a new install: the views most people use every day, and AI Lab and Evaluations (AU-1: a new person should see them); the others wait under More…. */
-export const RAIL_DEFAULT_SHOWN: readonly RailId[] = ['home', 'collections', 'tests', 'ai', 'evaluations', 'environments', 'history'];
+/** Shown on a new install: the views most people use every day, and AI quality (AU-1, AU-21: a new person should see it); the others wait under More…. */
+export const RAIL_DEFAULT_SHOWN: readonly RailId[] = ['home', 'collections', 'tests', 'aiquality', 'environments', 'history'];
+
+/** AI Lab and Evaluations became one rail item, AI quality (AU-21): a saved rail keeps the place and the choice of the first of them. */
+const RAIL_ALIASES: Record<string, RailId> = { ai: 'aiquality', evaluations: 'aiquality' };
+const aliased = (ids: readonly RailId[]): RailId[] => ids.map((id) => RAIL_ALIASES[id] ?? id);
 
 export interface RailModel {
   /** Every item, in the person's order. */
@@ -36,7 +40,7 @@ export function railOrder(nav: ReadonlyArray<{ id: string; group: string }>): Ra
  */
 export function railModel(defaults: readonly RailId[], prefs?: RailPrefs): RailModel {
   const known = new Set(defaults);
-  const all = [...new Set((prefs?.order ?? []).filter((id) => known.has(id)))];
+  const all = [...new Set(aliased(prefs?.order ?? []).filter((id) => known.has(id)))];
   for (const [i, id] of defaults.entries()) {
     if (all.includes(id)) continue;
     const before = defaults
@@ -45,7 +49,7 @@ export function railModel(defaults: readonly RailId[], prefs?: RailPrefs): RailM
       .find((p) => all.includes(p));
     all.splice(before ? all.indexOf(before) + 1 : 0, 0, id);
   }
-  const shown = new Set((prefs?.shown ?? RAIL_DEFAULT_SHOWN).filter((id) => known.has(id)));
+  const shown = new Set(aliased(prefs?.shown ?? RAIL_DEFAULT_SHOWN).filter((id) => known.has(id)));
   let visible = all.filter((id) => shown.has(id));
   if (!visible.length) visible = all.slice(0, 1);
   return { all, visible, more: all.filter((id) => !visible.includes(id)) };

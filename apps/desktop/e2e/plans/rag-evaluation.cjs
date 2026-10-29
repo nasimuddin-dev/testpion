@@ -48,7 +48,7 @@ const steps = [
   step(
     'rag-tab-in-ai-lab',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!t) return 'NO TAB RAG';
+     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!t) return 'NO TAB RAG';
      await __t.real.click(t); await __t.sleep(800);
      return 'empty: ' + /No RAG systems yet/.test(document.querySelector('main')?.innerText ?? '');`,
   ),

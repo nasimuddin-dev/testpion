@@ -16,7 +16,7 @@ The quickest way to start is your own Anthropic API key. Anthropic bills your ac
 3. Choose **Claude (Anthropic), with your API key**, paste the key and choose **Save key**. TestPion checks it with Anthropic, then stores it in the OS secret store (Windows Credential Manager / DPAPI, the macOS Keychain, or the Linux secret service). It is never written to the settings file or to a workspace.
 4. Choose the **model**: Claude Opus 5.5 (most capable, the default), Claude Sonnet 5.5 (faster and cheaper) or Claude Haiku 4.5 (fastest and cheapest), then **Save settings**.
 
-The key then powers the AI assistant: explaining errors and responses, where a request's time went (Timeline), why a test failed or keeps flipping between runs (a result's History), why a monitor is failing, drafting requests, GraphQL queries, MCP arguments, assertions and tests, and — on a failed run or a flaky test — [explaining and fixing the failures](./ai-features.md#explain-and-fix-failures-triage) and [finding out why a test is flaky](./ai-features.md#why-is-this-flaky), with fixes it checks before you accept them. It also appears in every workspace's AI Lab and evaluations as the provider **Claude (your API key)**, so tests can use `model: { provider: claude-app, name: claude-sonnet-5-5 }`. To stop using it, turn the assistant off or choose **Remove key**. You can also point the assistant at a provider of the workspace instead, such as a local Ollama model.
+The key then powers the AI assistant: explaining errors and responses, where a request's time went (Timeline), why a test failed or keeps flipping between runs (a result's History), why a monitor is failing, drafting requests, GraphQL queries, MCP arguments, assertions and tests, and — on a failed run or a flaky test — [explaining and fixing the failures](./ai-features.md#explain-and-fix-failures-triage) and [finding out why a test is flaky](./ai-features.md#why-is-this-flaky), with fixes it checks before you accept them. It also appears in every workspace's AI quality item as the provider **Claude (your API key)**, so tests can use `model: { provider: claude-app, name: claude-sonnet-5-5 }`. To stop using it, turn the assistant off or choose **Remove key**. You can also point the assistant at a provider of the workspace instead, such as a local Ollama model.
 
 For the CLI and CI, set the key as the `TESTPION_SECRET_APP_ANTHROPIC_APIKEY` environment variable: `claude-app` is then available there too.
 
@@ -31,6 +31,10 @@ Open it with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd> (press it again to clos
 - **Use an answer where you asked for it.** Generated checks, tests, flows and requests are *proposals*, checked by TestPion first and opened in a review: **Suggest assertions** offers **Add to the checks** (the request's Tests tab) for the checks you tick, **Generate tests** **Add to the Post-response script**; a generated GraphQL query has **Use this query**, and generated MCP arguments have **Use these arguments**. Review what was added before you save. See [Proposals: review, accept, undo](./ai-features.md#proposals-review-accept-undo).
 - **Answers stream in** as they are written, and **Stop** ends one early (what arrived so far is kept). They are formatted (headings, lists, code), and each code block has its own **Copy**.
 - Every answer is labelled as an AI-generated suggestion, with the model that wrote it.
+
+## AI quality: one place, six tabs {#ai-quality}
+
+AI quality is one item on the rail. Its tabs, left to right: **Start** (what do you want to check? cards by task, the sample, your latest runs), **Checks** (your evaluations: test cases, what a good answer is, the runs), **Try a prompt** (one prompt to one model), **Compare** (the same input on several models), **Bots with sources** (RAG systems under test) and **Models and keys** (providers, keys, prices, and **Usage**). The older names still work: Evaluations is the Checks tab, AI Lab the other five, and a rail you arranged before keeps AI quality where AI Lab was. From the command line and for agents nothing changed (`testpion eval ...`, `testpion rag ...`, the MCP tools).
 
 ## Saved prompts
 
@@ -52,7 +56,7 @@ Providers support per-provider rate limits (requests per second or minute, token
 
 ### API keys
 
-A provider's key is kept in the operating system's secret store, never in the workspace: **AI Lab ▸ Providers ▸ the provider ▸ API key**. The list marks the cloud providers that still **need an API key**. In the CLI and in CI the key comes from an environment variable: `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` for a provider whose key is `{{$secret.provider.openai.apiKey}}`, or the variable a `{{$env.NAME}}` key names.
+A provider's key is kept in the operating system's secret store, never in the workspace: **AI quality ▸ Models and keys ▸ the provider ▸ API key**. The list marks the cloud providers that still **need an API key**. In the CLI and in CI the key comes from an environment variable: `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` for a provider whose key is `{{$secret.provider.openai.apiKey}}`, or the variable a `{{$env.NAME}}` key names.
 
 When the key has no value, nothing is sent: the run stops with **No API key for OpenAI**, says where to add it, and the app shows **Add the key**, which opens that provider with its key field ready. Errors from a provider say what to do by status: a key that was not accepted (401), no access to the model (403), no credit left or rate-limited (429), an unknown model or base URL (404), or a problem on the provider's side (5xx).
 
@@ -68,10 +72,10 @@ Each row of the comparison marks the **fastest** (latency, time to first token) 
 
 ## Usage
 
-The AI Lab's **Usage** tab starts with **AI features**: what TestPion's own AI features used (calls, tokens and cost today and over 30 days, per task, model and surface, and what is left of your [limits](./ai-features.md#cost-estimates-caps-and-usage)). Below it, **AI Lab prompts** adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the prompts, `testpion ai usage` the AI features; agents use the `llm_usage` and `ai_usage` MCP tools.
+The the **Usage** view of AI quality ▸ Models and keys starts with **AI features**: what TestPion's own AI features used (calls, tokens and cost today and over 30 days, per task, model and surface, and what is left of your [limits](./ai-features.md#cost-estimates-caps-and-usage)). Below it, **AI quality prompts** adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the prompts, `testpion ai usage` the AI features; agents use the `llm_usage` and `ai_usage` MCP tools.
 
 <figure class="aps-screenshot">
-  <img src="/images/ai-usage.jpg" alt="The AI Lab Usage tab: the AI features section (no AI feature used yet in this workspace), then the AI Lab prompts: prompts run, input and output tokens, estimated cost, tokens per model and a table with median time and time to first token" width="1440" height="900" loading="lazy">
+  <img src="/images/ai-usage.jpg" alt="The AI quality ▸ Models and keys ▸ Usage: the AI features section (no AI feature used yet in this workspace), then the AI quality prompts: prompts run, input and output tokens, estimated cost, tokens per model and a table with median time and time to first token" width="1440" height="900" loading="lazy">
 </figure>
 
 Next: [AI features: privacy, cost and review](./ai-features.md), [prompts](./prompts.md), [evaluations](./evaluations.md), [RAG](./rag.md), [agents](./agents.md), [safety](./safety.md).

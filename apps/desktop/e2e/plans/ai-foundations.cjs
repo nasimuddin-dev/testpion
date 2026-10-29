@@ -70,7 +70,8 @@ const steps = [
   step(
     'usage-view',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     tab('Usage')?.click();
+     tab('Models and keys')?.click(); await __t.sleep(500);
+     [...document.querySelectorAll('[data-models-and-keys] [role=radio]')].find((x) => x.textContent.trim() === 'Usage')?.click();
      const u = await __t.waitFor(() => vis('[data-ai-feature-usage]')[0]?.querySelector('table') && vis('[data-ai-feature-usage]')[0], 8000); if (!u) return 'NO USAGE: ' + short(vis('main')[0]?.innerText, 200);
      return short(u.innerText, 300);`,
   ),

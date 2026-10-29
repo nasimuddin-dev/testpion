@@ -55,7 +55,7 @@ const steps = [
   ),
   step(
     'prompts-tab-menu',
-    `await __t.esc(); await __t.view('AI Lab'); await __t.sleep(800); await __t.tab('Playground'); await __t.sleep(600); const tabs = tabsOf('Open prompts'); if (!tabs.length) return 'NO PROMPT TABS'; return await menuOf(tabs[0]);`,
+    `await __t.esc(); await __t.view('AI Lab'); await __t.sleep(800); await __t.tab('Try a prompt'); await __t.sleep(600); const tabs = tabsOf('Open prompts'); if (!tabs.length) return 'NO PROMPT TABS'; return await menuOf(tabs[0]);`,
   ),
   step(
     'live-capture-tab-is-fixed',

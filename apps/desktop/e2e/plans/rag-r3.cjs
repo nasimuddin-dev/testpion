@@ -38,13 +38,13 @@ async function prepare(ws) {
 
 const row = (id) => `document.querySelector('[data-rag-metric="${id}"]')`;
 const runButton = `vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim()))`;
-const view = (label) => `{ const seg = vis('main [role=radio], main button').find((b) => b.textContent.trim() === ${JSON.stringify(label)}); if (!seg) return 'NO VIEW ${label}'; await __t.real.click(seg); await __t.sleep(700); }`;
+const view = (label) => `{ const seg = vis('main [role=radio], main button').find((b) => b.getAttribute('role') !== 'tab' && b.textContent.trim() === ${JSON.stringify(label)}); if (!seg) return 'NO VIEW ${label}'; await __t.real.click(seg); await __t.sleep(700); }`;
 
 const steps = [
   step(
     'probe-sets-in-ai-lab',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!t) return 'NO TAB RAG';
+     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!t) return 'NO TAB RAG';
      await __t.real.click(t); await __t.sleep(600);
      const box = await __t.waitFor(() => document.querySelector('[data-rag-probes] [data-rag-probe-set]') && document.querySelector('[data-rag-probes]'), 8000); if (!box) return 'NO PROBES';
      const sets = box.querySelectorAll('[data-rag-probe-set]').length;
@@ -147,7 +147,7 @@ const steps = [
   step(
     'the-connect-dialog-maps-tools-a-session-and-a-picture',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (t) { await __t.real.click(t); await __t.sleep(400); }
+     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (t) { await __t.real.click(t); await __t.sleep(400); }
      await __t.real.click('[data-rag-connect-open]');
      const d = await __t.waitFor(() => document.querySelector('[data-rag-connect]'), 5000); if (!d) return 'NO DIALOG';
      const slots = ['toolCalls', 'toolCall.name', 'toolCall.arguments', 'conversationId', 'context.image'].map((s) => s + ':' + !!document.querySelector('[data-rag-slot="' + s + '"]')).join(',');

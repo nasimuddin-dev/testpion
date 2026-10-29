@@ -1,5 +1,6 @@
 import { askAssistant } from './ai/AiAction';
 import { useAiEnabled } from '../lib/use-ai-enabled';
+import { navIdOf } from '../lib/ai-quality';
 import { aiHidden } from '../lib/ai-visible';
 import {
   Activity,
@@ -208,7 +209,7 @@ function DebuggerSegment() {
 /** The ? of the top bar: the docs page of the view on screen (lib/docs-pages.ts), so help is one click away everywhere. */
 function ViewHelp() {
   const view = useApp((s) => s.view);
-  return <HelpLink page={VIEW_DOCS[view]} what={view === 'settings' ? 'Settings' : NAV.find((n) => n.id === view)?.label} />;
+  return <HelpLink page={VIEW_DOCS[view]} what={view === 'settings' ? 'Settings' : NAV.find((n) => n.id === navIdOf(view))?.label} />;
 }
 
 export function StatusBar() {
@@ -750,7 +751,7 @@ export function ProgressHost() {
 function placeLabel(l: NavLocation): string {
   // the item's name when the place was recorded (WF-10), else the view and what kind of item
   if (l.label) return l.label;
-  const view = l.view === 'settings' ? 'Settings' : l.view === 'collections' ? 'Collection settings' : (NAV.find((n) => n.id === l.view)?.label ?? l.view);
+  const view = l.view === 'settings' ? 'Settings' : l.view === 'collections' ? 'Collection settings' : (NAV.find((n) => n.id === navIdOf(l.view))?.label ?? l.view);
   const p = l.payload ?? {};
   const what = p.requestId ? 'request' : p.savedId ? 'saved item' : p.monitorId ? 'monitor' : p.environmentId ? 'environment' : p.serverId ? 'server' : p.historyId ? 'history entry' : p.runId ? 'run' : p.path ? String(p.path) : p.collectionId ? 'collection' : '';
   return what ? `${view} · ${what}` : view;

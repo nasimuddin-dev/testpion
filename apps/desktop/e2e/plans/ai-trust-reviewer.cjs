@@ -79,6 +79,7 @@ const steps = [
     `${H} await __t.view('Home'); await __t.view('Evaluations'); await __t.sleep(1000);
      await __t.real.click(tab('Checks')); await __t.sleep(500);
      const c = await __t.waitFor(() => card(), 6000); if (!c) return 'NO CARD';
+     c.scrollIntoView({ block: 'center' }); await __t.sleep(200);
      if (!cases().length) await __t.real.click(c.querySelector('summary'));
      await __t.waitFor(() => cases().length === 10, 10000);
      card().scrollIntoView({ block: 'start' }); await __t.sleep(150);

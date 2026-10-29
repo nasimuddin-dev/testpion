@@ -1,4 +1,4 @@
-// The rail shows 7 views by default (AI Lab and Evaluations included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
+// The rail shows 6 views by default (AI quality included, so a new person sees it) and More… for the rest; right-click an item to hide, keep or move it (saved per
 // computer in the app's settings); Ctrl+Alt+1…9, the tooltips, the shortcuts list and the palette follow the shown views.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -39,8 +39,8 @@ const steps = [
      await __t.view('Git');
      const r = await pick('Git', 'Keep on the rail'); if (r !== 'ok') return r;
      await __t.view('Home');
-     window.dispatchEvent(new KeyboardEvent('keydown', { key: '7', ctrlKey: true, altKey: true, bubbles: true })); await __t.sleep(800);
-     return railLabels() + ' || Ctrl+Alt+7: ' + localStorage.getItem('aps.view');`,
+     window.dispatchEvent(new KeyboardEvent('keydown', { key: '6', ctrlKey: true, altKey: true, bubbles: true })); await __t.sleep(800);
+     return railLabels() + ' || Ctrl+Alt+6: ' + localStorage.getItem('aps.view');`,
   ),
   step('move-git-up', `${H} await __t.view('Home'); const r = await pick('Git', 'Move up'); if (r !== 'ok') return r; return railLabels() + ' || ' + (await saved());`),
   step(
@@ -54,6 +54,29 @@ const steps = [
      return 'Go to Git hint: ' + hint;`,
   ),
   step(
+    'ai-quality-is-one-item-with-six-tabs',
+    `${H} await __t.view('Home');
+     await __t.real.click(item('AI quality')); await __t.sleep(1200);
+     const tabs = () => [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].filter((t) => t.offsetParent);
+     const names = tabs().map((t) => t.textContent.trim().replace(/\d+$/, '')).join(' | ');
+     const cur = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
+     return 'item: ' + cur + ' | old items on the rail: ' + (!!item('AI Lab') || !!item('Evaluations')) + ' | tabs: ' + names;`,
+  ),
+  step(
+    'checks-and-the-others-stay-under-the-one-item',
+    `${H} const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim().startsWith(t));
+     await __t.real.click(tb('Checks')); await __t.sleep(1200);
+     const onChecks = !!document.querySelector('input[aria-label="Evaluation name"], [data-eval-run]') || /No open evaluations/.test(document.querySelector('main')?.innerText ?? '');
+     const curA = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
+     const selA = tb('Checks').getAttribute('aria-selected');
+     await __t.real.click(tb('Try a prompt')); await __t.sleep(1200);
+     const curB = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
+     const selB = tb('Try a prompt').getAttribute('aria-selected');
+     await __t.real.click(item('Home')); await __t.sleep(600);
+     await __t.real.click(item('AI quality')); await __t.sleep(1000);
+     return 'checks: ' + onChecks + ' ' + curA + ' ' + selA + ' | try a prompt: ' + curB + ' ' + selB + ' | back from Home to the tab used last: ' + tb('Try a prompt').getAttribute('aria-selected');`,
+  ),
+  step(
     'reset',
     `${H}
      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
@@ -65,12 +88,14 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'default-rail': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| History \| More views \| Settings$/,
+  'default-rail': /^Home \| Collections \| Tests \| AI quality \| Environments \| History \| More views \| Settings$/,
   'more-reaches-hidden': /^debugger shown: true \| on the rail while open: Debugger \| gone after: true$/,
   'shortcut-follows-shown': /^3: tests \| 9 \(no 9th\): tests$/,
-  'hide-history': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","ai","evaluations","environments"\]\}$/,
-  'keep-git': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
-  'move-git-up': /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","ai","evaluations","git","environments"\]\}$/,
-  'palette-hint': /^Go to Git hint: Ctrl\+Alt\+6$/,
-  reset: /^Home \| Collections \| Tests \| AI Lab \| Evaluations \| Environments \| History \| More views \| Settings \|\| null$/,
+  'hide-history': /^Home \| Collections \| Tests \| AI quality \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","environments"\]\}$/,
+  'keep-git': /^Home \| Collections \| Tests \| AI quality \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+6: git$/,
+  'move-git-up': /^Home \| Collections \| Tests \| AI quality \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","git","environments"\]\}$/,
+  'palette-hint': /^Go to Git hint: Ctrl\+Alt\+5$/,
+  'ai-quality-is-one-item-with-six-tabs': /^item: AI quality \| old items on the rail: false \| tabs: Start \| Checks \| Try a prompt \| Compare \| Bots with sources \| Models and keys\d* ?$/,
+  'checks-and-the-others-stay-under-the-one-item': /^checks: true AI quality true \| try a prompt: AI quality true \| back from Home to the tab used last: true$/,
+  reset: /^Home \| Collections \| Tests \| AI quality \| Environments \| History \| More views \| Settings \|\| null$/,
 });

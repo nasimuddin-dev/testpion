@@ -39,7 +39,7 @@ const steps = [
   step(
     'the-data-tab-offers-generation',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('RAG')); if (!t) return 'NO TAB RAG';
+     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!t) return 'NO TAB RAG';
      await __t.real.click(t); await __t.sleep(600);
      const d = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Data'); if (!d) return 'NO SWITCH Data';
      await __t.real.click(d);

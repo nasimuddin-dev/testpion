@@ -102,7 +102,7 @@ export function Rag({ openTarget }: { openTarget?: { id: string; at: number } })
             Connect a RAG system
           </Button>
           <Button icon={<FlaskConical size={13} />} onClick={() => useApp.getState().setView('evaluations')}>
-            Open Evaluations
+            Open Checks
           </Button>
         </div>
         <ol className="list-decimal pl-5 text-muted flex flex-col gap-1 max-w-2xl">

@@ -33,7 +33,7 @@ const step = stepOf(H);
 const steps = [
   step('evaluations', `await __t.view('Evaluations'); await __t.sleep(900); return await twoThenNone('Open evaluations', 'New evaluation');`),
   step('load-tests', `await __t.view('Load'); await __t.sleep(900); return await twoThenNone('Open load tests', 'New load test');`),
-  step('prompts', `await __t.view('AI Lab'); await __t.sleep(700); await __t.tab('Playground'); await __t.sleep(900); return await twoThenNone('Open prompts', 'New prompt');`),
+  step('prompts', `await __t.view('AI Lab'); await __t.sleep(700); await __t.tab('Try a prompt'); await __t.sleep(900); return await twoThenNone('Open prompts', 'New prompt');`),
   // an environment opens in a tab from the list; its ✕ closes it and the view says nothing is open
   step(
     'environments',

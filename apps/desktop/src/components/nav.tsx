@@ -1,4 +1,4 @@
-import { AlarmClock, Activity, FolderTree, Bug, FlaskConical, FolderGit2, Gauge, GitBranch, History, House, KeyRound, Network, Plug, Radio, ShieldCheck, Sparkles, Waypoints } from 'lucide-react';
+import { AlarmClock, Activity, FolderTree, Bug, FolderGit2, Gauge, GitBranch, History, House, KeyRound, Network, Plug, Radio, ShieldCheck, Sparkles, Waypoints } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ViewId } from '../store';
 
@@ -7,7 +7,7 @@ import type { ViewId } from '../store';
  * workspace's data. Its order is the rail's default order (lib/rail.ts); the request editors are reached through
  * Collections.
  */
-export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: string; hint?: string }> = [
+export const NAV: Array<{ id: ViewId | 'aiquality'; label: string; icon: ReactNode; group: string; hint?: string }> = [
   { id: 'home', label: 'Home', icon: <House size={18} />, group: 'Start' },
   { id: 'rest', label: 'REST', icon: <Network size={18} />, group: 'Requests', hint: 'REST / HTTP requests' },
   { id: 'graphql', label: 'GraphQL', icon: <GitBranch size={18} />, group: 'Requests' },
@@ -18,8 +18,7 @@ export const NAV: Array<{ id: ViewId; label: string; icon: ReactNode; group: str
   { id: 'tests', label: 'Tests', icon: <ShieldCheck size={18} />, group: 'Testing', hint: 'Test files and runs' },
   { id: 'monitors', label: 'Monitors', icon: <AlarmClock size={18} />, group: 'Testing', hint: 'Scheduled runs' },
   { id: 'load', label: 'Load', icon: <Gauge size={18} />, group: 'Testing', hint: 'Load tests' },
-  { id: 'ai', label: 'AI Lab', icon: <Sparkles size={18} />, group: 'AI', hint: 'Prompts and model comparison' },
-  { id: 'evaluations', label: 'Evaluations', icon: <FlaskConical size={18} />, group: 'AI', hint: 'LLM, RAG and agent evaluations' },
+  { id: 'aiquality', label: 'AI quality', icon: <Sparkles size={18} />, group: 'AI', hint: 'Check prompts, chatbots, agents and bots with sources; compare models; set up models and keys' },
   { id: 'environments', label: 'Environments', icon: <KeyRound size={18} />, group: 'Workspace', hint: 'Environments and variables' },
   { id: 'history', label: 'History', icon: <History size={18} />, group: 'Workspace', hint: 'What you sent, with the response (send it again)' },
   { id: 'traces', label: 'Traces', icon: <Activity size={18} />, group: 'Workspace', hint: 'Timing waterfall of each send and run step' },

@@ -4,7 +4,8 @@ import { AiUsage } from '../components/AiUsage';
 import { call } from '../api';
 import { useIntent } from '../hooks';
 import type { ProviderConfig } from '../types';
-import { Tabs } from '../components/ui';
+import { Segmented } from '../components/ui';
+import { AiQualityTabs } from '../components/ai/AiQualityTabs';
 import { Playground } from './ai/Playground';
 import { Compare } from './ai/Compare';
 import { Providers } from './ai/Providers';
@@ -13,7 +14,9 @@ import { Start } from './ai/Start';
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
-  const [tab, setTab] = useSticky<'start' | 'playground' | 'compare' | 'rag' | 'providers' | 'usage'>('ai:tab', 'start');
+  const [tab, setTab] = useSticky<'start' | 'playground' | 'compare' | 'rag' | 'providers'>('ai:tab', 'start');
+  // Models and keys holds the providers and, beside them, what the AI calls used
+  const [models, setModels] = useSticky<'providers' | 'usage'>('ai:models', 'providers');
   const [providers, setProviders] = useState<ProviderConfig[]>();
   const load = useCallback(() => call<ProviderConfig[]>('ai.providers').then(setProviders), []);
   useEffect(() => {
@@ -25,7 +28,8 @@ export function AiLabView() {
   const [ragTarget, setRagTarget] = useState<{ id: string; at: number }>();
   useIntent('ai', (p) => {
     if (p?.savedId || p?.prompt) setTab('playground');
-    if (p?.tab) setTab(p.tab);
+    if (p?.tab === 'usage') (setTab('providers'), setModels('usage'));
+    else if (p?.tab) (setTab(p.tab), p.tab === 'providers' && setModels('providers'));
     if (p?.ragTargetId) {
       setTab('rag');
       setRagTarget({ id: p.ragTargetId, at: Date.now() });
@@ -39,26 +43,30 @@ export function AiLabView() {
   });
   return (
     <div className="h-full flex flex-col">
-      <Tabs label="AI Lab"
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          // the first page says what AI Lab does and works with no model (the sample); models are set up on the next tabs
-          { id: 'start', label: 'Start', title: 'What do you want to check? Cards by task, the sample, your latest runs' },
-          { id: 'providers', label: 'Providers', badge: providers?.length || undefined, title: 'The AI providers prompts are sent to (set up first)' },
-          { id: 'playground', label: 'Playground' },
-          { id: 'compare', label: 'Model comparison' },
-          { id: 'rag', label: 'RAG', title: 'RAG systems under test: connect an endpoint, map its answer and retrieved documents, then evaluate it in Evaluations' },
-          { id: 'usage', label: 'Usage' },
-        ]}
-      />
+      {/* AU-21: one rail item, AI quality; the first page says what it does and works with no model (the sample) */}
+      <AiQualityTabs active={tab} models={providers?.length} />
       <div className="flex-1 min-h-0">
         {tab === 'start' && <Start providers={providers} onTab={setTab} />}
         {tab === 'playground' && <Playground providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'compare' && <Compare providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'rag' && <Rag openTarget={ragTarget} />}
-        {tab === 'providers' && <Providers providers={providers ?? []} onSaved={load} focus={focusProvider} />}
-        {tab === 'usage' && <AiUsage />}
+        {tab === 'providers' && (
+          <div className="h-full flex flex-col" data-models-and-keys>
+            <div className="px-3 py-1.5 border-b border-line">
+              <Segmented
+                label="Models and keys"
+                size="xs"
+                value={models}
+                onChange={setModels}
+                options={[
+                  { value: 'providers', label: 'Providers', title: 'The AI providers prompts are sent to: keys, models and prices' },
+                  { value: 'usage', label: 'Usage', title: 'Tokens and cost of the AI calls, per model' },
+                ]}
+              />
+            </div>
+            <div className="flex-1 min-h-0">{models === 'usage' ? <AiUsage /> : <Providers providers={providers ?? []} onSaved={load} focus={focusProvider} />}</div>
+          </div>
+        )}
       </div>
     </div>
   );

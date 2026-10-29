@@ -73,9 +73,9 @@ const steps = [
   ),
 ];
 module.exports = withExpect(steps, {
-  'start-page': /^tabs: Start,Providers,Playground,Model comparison,RAG,Usage \| selected: Start \| cards: correct,better,documents,worse,agent,models \| sample: Try the sample \(offline\) \| recent: empty$/,
+  'start-page': /^tabs: Start,Checks,Try a prompt,Compare,Bots with sources,Models and keys \| selected: Start \| cards: correct,better,documents,worse,agent,models \| sample: Try the sample \(offline\) \| recent: empty$/,
   'cards-without-an-evaluation-say-why': /^run in CI disabled: true \| why: Save an evaluation first/,
-  'sample-in-one-click': /^clicks: 1 \| view: Evaluations \| headline: 10 of 10 passed \| offline label: true$/,
+  'sample-in-one-click': /^clicks: 1 \| view: AI quality \| headline: 10 of 10 passed \| offline label: true$/,
   'the-price-is-beside-run': /^run: Run 10 cases · free \| cost: offline \| line: 10 cases · free .*Offline demo/,
   'start-lists-the-run': /^row: Sample: support intents.*10 of 10 passed/,
   'open-from-start-shows-the-result': /^headline: 10 of 10 passed \| name: Sample: support intents$/,

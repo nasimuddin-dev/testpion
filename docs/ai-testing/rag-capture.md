@@ -62,7 +62,7 @@ A captured dataset has the question, the answer the system gave and the passages
 
 ## In the window {#window}
 
-**Create dataset from captured calls** is one dialog, opened from History, from the Debugger and from AI Lab ▸ RAG. Choose the source and
+**Create dataset from captured calls** is one dialog, opened from History, from the Debugger and from AI quality ▸ Bots with sources. Choose the source and
 the target, **Preview** shows what would be written (records, what was skipped and why, what was masked, the first rows), **Create dataset**
 writes `datasets/<name>.jsonl`. It never replaces a file that exists.
 

@@ -1,7 +1,7 @@
 // An evaluation's dataset: records pasted one per line while JSON is selected are read as JSONL; the editor does not
 // flag them as broken JSON ("End of file expected"), a note says so and switches the format in one click. JSON that
 // is really broken is still marked. A run on a provider without its key says so with "Add the key", which opens
-// AI Lab ▸ Providers on that provider with its key field focused. The expert settings sit under Options, closed (AU-6); a
+// AI quality ▸ Models and keys on that provider with its key field focused. The expert settings sit under Options, closed (AU-6); a
 // workspace with no model says "Choose a model first" with a one-click "Use the offline demo model" (AU-8), and the Run
 // button is never disabled without such a remedy.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
@@ -95,7 +95,7 @@ module.exports = withExpect(steps, {
   'every-format-is-coloured': /^language: jsonl \| jsonl: .*string\.key\.json.*string\.value\.json.* \| csv: csv\.column0\S* csv\.column1\S* .*\| markdown: coloured$/,
   'a-broken-line-is-marked-on-its-own': /^lines: 3 \| marked: line 4 \| after the fix: 0$/,
   'run-without-a-key': /^error: No API key for OpenAI \| button: Add the key$/,
-  'add-the-key-opens-the-provider': /^view: Providers\d* \| focused: API key \| provider: OpenAI$/,
+  'add-the-key-opens-the-provider': /^view: Models and keys\d* \| focused: API key \| provider: OpenAI$/,
   'options-are-closed-and-open-on-a-click': /^closed first: true \| opened: Randomness \| Run at once \| Try again on errors \| Only the first … cases \| Pass line \(%\) \| Spend cap \(USD\)$/,
   'no-model-says-the-fix': /^note: Choose a model first.* \| run disabled: true \| remedy: Use the offline demo model$/,
   'one-click-offline-demo': /^providers: mock \| note gone: true \| run enabled: true$/,

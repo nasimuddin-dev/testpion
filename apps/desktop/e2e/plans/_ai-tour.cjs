@@ -3,12 +3,12 @@
 const { withExpect, step } = require('../lib.cjs');
 
 const steps = [
-  step('playground', `await __t.view('AI Lab'); await __t.sleep(800); tab('Playground')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
+  step('playground', `await __t.view('AI Lab'); await __t.sleep(800); tab('Try a prompt')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
   step(
     'playground-run',
     `button('Run')?.click(); await __t.waitFor(() => /Latency/.test(document.querySelector('main')?.innerText ?? ''), 20000); await __t.sleep(600); return short(document.querySelector('main')?.innerText, 600);`,
   ),
-  step('comparison', `tab('Model comparison')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
+  step('comparison', `tab('Compare')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
   step('comparison-run', `vis('main button').find((b) => b.textContent.trim() === 'Run comparison')?.click(); await __t.sleep(6000); return short(document.querySelector('main')?.innerText, 600);`),
   step('usage', `tab('Usage')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
   step('providers', `tab('Providers')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),

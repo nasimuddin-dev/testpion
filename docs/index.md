@@ -30,7 +30,7 @@ features:
     details: Connect over stdio, Streamable HTTP or SSE. Discover tools, resources and prompts, run tools from generated forms, and trace every JSON-RPC message.
     link: /mcp/overview
     linkText: MCP debugging
-  - title: AI Lab
+  - title: AI quality
     details: Test prompts on OpenAI-compatible, Azure, Anthropic, Gemini, Amazon Bedrock and Ollama models — or an offline mock. Streaming, time to first token, tokens, cost and side-by-side comparison.
     link: /ai-testing/overview
     linkText: AI testing
@@ -85,8 +85,8 @@ import { data as release } from "./data/release.data";
     <figcaption>One run across REST, GraphQL, MCP, LLM, RAG and agents.</figcaption>
   </figure>
   <figure class="aps-screenshot">
-    <img src="/images/ai-lab.jpg" alt="The AI Lab playground with a prompt template, streamed JSON output, latency, time to first token and token counts" width="1440" height="900" loading="lazy">
-    <figcaption>AI Lab: prompt, stream and measure.</figcaption>
+    <img src="/images/ai-lab.jpg" alt="The AI quality playground with a prompt template, streamed JSON output, latency, time to first token and token counts" width="1440" height="900" loading="lazy">
+    <figcaption>AI quality: prompt, stream and measure.</figcaption>
   </figure>
   <figure class="aps-screenshot">
     <img src="/images/traces.jpg" alt="A trace waterfall of an agent test with LLM steps, an MCP tool call and evaluation" width="1440" height="900" loading="lazy">
