@@ -28,6 +28,7 @@ beforeAll(() => {
           entry('x', 'GET', 'http://api.test/o.xml', undefined, undefined, 'application/xml', '<a id="1"><b>hi</b></a>'),
           entry('m', 'GET', 'http://api.test/mp', undefined, undefined, 'application/x-msgpack', '81a16101'),
           entry('g', 'POST', 'http://api.test/graphql', 'application/json', JSON.stringify({ query: 'mutation Save { save { id } }' }), 'application/json', '{"errors":[{"message":"nope"}]}'),
+          entry('a', 'POST', 'https://api.openai.com/v1/chat/completions', 'application/json', JSON.stringify({ model: 'gpt-4o', stream: true, messages: [{ role: 'user', content: 'key sk-abcdefghijklmnopqrstuvwx please' }] }), 'text/event-stream', 'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\ndata: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":10,"completion_tokens":2}}\n\ndata: [DONE]\n\n'),
           entry('c', 'GET', 'http://api.test/c', undefined, undefined, 'application/json', '{}', { 'cache-control': 'no-store' }),
         ],
       },
@@ -49,6 +50,15 @@ describe('debugger show', () => {
     expect(json(run(['debugger', 'show', file, 'm', '--view', 'msgpack', '--json'])).data).toMatchObject({ value: { a: 1 } });
     const g = json(run(['debugger', 'show', file, 'g', '--view', 'graphql', '--json']));
     expect(g).toMatchObject({ ok: true, data: { label: 'mutation Save', errors: [{ message: 'nope' }] } });
+  });
+
+  it('reads an LLM call: streamed answer put back together, tokens, cost, key masked', () => {
+    const r = json(run(['debugger', 'show', file, 'a', '--view', 'ai', '--json']));
+    expect(r).toMatchObject({ ok: true, data: { provider: 'openai', model: 'gpt-4o', stream: true, output: { text: 'Hello' }, usage: { inputTokens: 10, outputTokens: 2 } } });
+    expect(r.data.cost.usd).toBeGreaterThan(0);
+    expect(JSON.stringify(r)).not.toContain('abcdefghijkl');
+    expect(run(['debugger', 'show', file, 'a', '--view', 'ai']).out).toContain('Answer');
+    expect(json(run(['debugger', 'show', file, 'x', '--view', 'ai', '--json']))).toMatchObject({ ok: false });
   });
 
   it('says in words whether a response is cached', () => {

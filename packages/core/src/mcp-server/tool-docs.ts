@@ -830,7 +830,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { text: 'chrome' },
   },
   debugger_exchange: {
-    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark; action snippet writes it as cURL, PowerShell, fetch, HTTPie and more; view reads a body as the window shows it (xml, image, form, graphql, msgpack, protobuf, signalr, socketio, caching, tls).',
+    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark; action snippet writes it as cURL, PowerShell, fetch, HTTPie and more; view reads a body as the window shows it (xml, image, form, graphql, ai (LLM and MCP calls), msgpack, protobuf, signalr, socketio, caching, tls).',
     whenNot: 'To list exchanges, use `debugger_exchanges`.',
     example: { id: 'ex-42', view: 'graphql' },
     narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',
@@ -844,6 +844,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     when: 'Use it to list, add or toggle Debugger rules, or to hold traffic at an automatic breakpoint (breakpoints, held, resume).',
     whenNot: 'To filter only what you read, use `debugger_exchanges` filters.',
     example: { action: 'add', preset: 'slow', host: '127.0.0.1:4010' },
+  },
+  debugger_scripts: {
+    when: 'Use it to write, switch on and test JavaScript rule scripts (onRequest / onResponse) that change the traffic the Debugger forwards.',
+    whenNot: 'For plain header, body or status edits, a `debugger_rules` rule is simpler and needs no script.',
+    example: { action: 'test', id: 'rule-1', exchange: 'ex-42' },
+    narrow: 'List first, test a script on one exchange before switching it on.',
   },
   debugger_stats: {
     when: 'Use it to see the session in numbers.',

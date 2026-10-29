@@ -1,12 +1,13 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { bodyViewsOf, bytesOfBase64, formatBytes, plural, graphqlOf, imageFacts, looksLikeGraphql, parseForm, parseXml, svgFacts, syntaxLanguageOf, type BodyViewId, type XmlNode } from '@testpion/shared';
+import { aiLabelOf, bodyViewsOf, bytesOfBase64, formatBytes, plural, graphqlOf, imageFacts, looksLikeGraphql, parseForm, parseXml, svgFacts, syntaxLanguageOf, type BodyViewId, type XmlNode } from '@testpion/shared';
 import { call } from '../../api';
 import { Badge, Empty } from '../ui';
 import { trafficKindLabel } from '../../lib/traffic-kinds';
 import { CodeBlock } from '../CodeBlock';
 import { JsonTree, RawView } from '../JsonView';
 import type { Exchange } from './model';
+import { AiCallView } from './AiCallView';
 
 /**
  * The content-aware views of a body (FG-8, FG-19, FG-20): the tabs that fit what the body is. Which ones is decided by the
@@ -26,6 +27,7 @@ const TAB_NAME: Record<BodyViewId, string> = {
   html: 'Preview',
   form: 'Form',
   graphql: trafficKindLabel('graphql'),
+  ai: 'AI call',
   msgpack: 'MessagePack',
   protobuf: 'Protobuf',
   signalr: 'SignalR',
@@ -71,7 +73,7 @@ export function bodyViewTabs(e: Exchange, side: 'request' | 'response'): ViewTab
   const ct = side === 'request' ? e.requestHeaders['content-type'] : e.contentType;
   if (e.kind === 'tunnel') return [];
   const gql = looksLikeGraphql({ url: e.url, requestContentType: e.requestHeaders['content-type'], requestBody: e.requestBody });
-  const views = bodyViewsOf({ contentType: ct, url: e.url, text, graphql: gql && graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestHeaders['content-type'], requestBody: e.requestBody, responseBody: e.responseBody }) !== undefined });
+  const views = bodyViewsOf({ contentType: ct, url: e.url, text, graphql: gql && graphqlOf({ method: e.method, url: e.url, requestContentType: e.requestHeaders['content-type'], requestBody: e.requestBody, responseBody: e.responseBody }) !== undefined, ai: aiLabelOf({ url: e.url, requestHeaders: e.requestHeaders, requestBody: e.requestBody }) !== undefined });
   return views.map((v) => ({
     id: `view-${v}`,
     label: TAB_NAME[v],
@@ -94,6 +96,8 @@ function ViewBody({ e, side, view }: { e: Exchange; side: 'request' | 'response'
       return <FormView text={text} contentType={ct} />;
     case 'graphql':
       return <GraphqlView e={e} side={side} />;
+    case 'ai':
+      return <AiCallView e={e} />;
     case 'syntax':
       return text ? <RawView text={text} language={syntaxLanguageOf(ct, e.url)} /> : <NotKept side={side} />;
     default:

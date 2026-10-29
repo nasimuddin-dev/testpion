@@ -1,5 +1,6 @@
 import { compileUserRegex } from '../util/safe-regex.js';
 import { isInsidePath } from './shaping.js';
+import { checkScriptSpec } from './script-rules.js';
 import type { DebuggerRule, TextReplace } from './rules.js';
 
 /**
@@ -74,6 +75,8 @@ export function checkRuleShape(r: DebuggerRule): string | undefined {
       if (p.stripPrefix && !p.stripPrefix.startsWith('/')) return 'The part of the path to leave out starts with /';
       return undefined;
     }
+    case 'script':
+      return checkScriptSpec(r.script);
     case 'modify':
       if (r.setStatus !== undefined) {
         const bad = status(r.setStatus, 'The status to answer with');

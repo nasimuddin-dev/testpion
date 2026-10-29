@@ -232,6 +232,11 @@ export const DebuggerGrid = memo(function DebuggerGrid({
                 {e.graphql}
               </span>
             )}
+            {e.ai && (
+              <span className="ml-1 text-2xs font-bold text-accent" title="An AI call: the provider and model, or an MCP message" data-ai-label>
+                {e.ai}
+              </span>
+            )}
             {!!e.frameCount && (
               <span className="ml-1">
                 <Badge>{e.frameCount} msg</Badge>
@@ -276,6 +281,8 @@ export const DebuggerGrid = memo(function DebuggerGrid({
         return e.pid ?? '';
       case 'graphql':
         return <span title={e.graphql}>{e.graphql ?? ''}</span>;
+      case 'ai':
+        return <span title={e.ai}>{e.ai ?? ''}</span>;
       case 'comment':
         return <span title={e.note}>{e.note ?? ''}</span>;
       case 'caching':

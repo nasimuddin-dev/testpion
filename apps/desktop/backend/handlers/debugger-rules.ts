@@ -99,13 +99,13 @@ export function holdBreakpoint(be: Backend, state: DebuggerState, e: DebuggerExc
   });
 }
 
-const validKinds = new Set(['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame']);
+const validKinds = new Set(['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame', 'script']);
 
 /** A rule as sent by the window or an agent, checked. */
-function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
+export function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
   if (!r || typeof r !== 'object') throw new ApsError('ValidationError', 'A rule is an object');
   if (!validKinds.has(String(r.kind)))
-    throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore (filter out), only (capture only), highlight, modify, reply, redirect, breakpoint, remap, fault, frame.'] });
+    throw new ApsError('ValidationError', `Unknown rule kind "${String(r.kind)}"`, { suggestions: ['One of ignore (filter out), only (capture only), highlight, modify, reply, redirect, breakpoint, remap, fault, frame, script.'] });
   const name = String(r.name ?? '').trim() || describeRule({ ...(r as DebuggerRule), name: '' });
   const problem = checkRuleShape(r as DebuggerRule);
   if (problem) throw new ApsError('ValidationError', problem);
@@ -146,6 +146,7 @@ function cleanRule(r: Partial<DebuggerRule>, id?: string): DebuggerRule {
     ...(r.remap ? { remap: r.remap } : {}),
     ...(r.fault ? { fault: r.fault } : {}),
     ...(r.frame ? { frame: r.frame } : {}),
+    ...(r.script ? { script: { ...(r.script.code !== undefined ? { code: String(r.script.code) } : {}), ...(r.script.file ? { file: String(r.script.file) } : {}), ...(r.script.timeoutMs ? { timeoutMs: Number(r.script.timeoutMs) } : {}) } } : {}),
   };
 }
 

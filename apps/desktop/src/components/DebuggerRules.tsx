@@ -7,6 +7,7 @@ import { LABEL } from '../lib/vocabulary';
 import { deleteRuleWithUndo } from './debugger/DockRules';
 import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
 import { CompareView, type Compared } from './ResponseHistory';
+import { ScriptFields, SCRIPT_TEMPLATE } from './debugger/RuleScriptFields';
 import { FaultFields, FrameFields, ModifyShapingFields, RedirectRewriteFields, RemapFields, ReplySourceFields } from './debugger/RuleShapingFields';
 
 /**
@@ -14,7 +15,7 @@ import { FaultFields, FrameFields, ModifyShapingFields, RedirectRewriteFields, R
  * test against them), the rule editor, the breakpoint dialog (an exchange held for editing) and the compare dialog.
  */
 
-export type RuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint' | 'remap' | 'fault' | 'frame';
+export type RuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint' | 'remap' | 'fault' | 'frame' | 'script';
 export type RuleColumn = 'status' | 'url' | 'method' | 'host' | 'application' | 'user' | 'type' | 'version' | 'ip' | 'duration' | 'size';
 export type RuleOperator = 'equals' | 'not-equals' | 'contains' | 'starts-with' | 'ends-with' | 'between' | 'greater-than' | 'less-than' | 'matches';
 export interface RuleCondition {
@@ -51,6 +52,7 @@ export interface Rule {
   remap?: { to: string; scheme?: 'auto' | 'http' | 'https'; preserveHost?: boolean };
   fault?: { action: 'drop' | 'timeout' | 'truncate' | 'error'; percent?: number; bytes?: number; status?: number; timeoutMs?: number };
   frame?: { direction?: 'sent' | 'received' | 'both'; when?: string; action: 'drop' | 'replace' | 'break' | 'delay'; find?: string; replace?: string; regex?: boolean; delayMs?: number };
+  script?: { code?: string; file?: string; timeoutMs?: number };
   summary?: string;
 }
 export interface RulesState {
@@ -72,7 +74,7 @@ export interface HeldBreakpoint {
   exchange: { id: string; method: string; url: string; requestHeaders: Record<string, string>; requestBody?: string; status?: number; responseHeaders?: Record<string, string>; responseBody?: string };
 }
 
-const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', only: 'ok', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad', remap: 'warn', fault: 'bad', frame: 'warn' };
+const KIND_TONE: Record<RuleKind, 'default' | 'ok' | 'bad' | 'warn' | 'accent'> = { ignore: 'default', only: 'ok', highlight: 'accent', modify: 'warn', reply: 'bad', redirect: 'warn', breakpoint: 'bad', remap: 'warn', fault: 'bad', frame: 'warn', script: 'accent' };
 export const HIGHLIGHT_CLASS: Record<string, string> = {
   red: 'border-l-2 border-l-bad bg-bad/10',
   orange: 'border-l-2 border-l-warn bg-warn/10',
@@ -198,7 +200,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
       </div>
       <p className="text-xs text-muted">
         Rules act on the traffic that matches them, in this order: <b>capture only</b> lists just what one of them matches, <b>filter out</b> hides it, <b>highlight</b> colours the row, <b>modify</b> changes headers, bodies or adds a delay, <b>reply</b> answers
-        without the server, <b>redirect</b> sends it to another host or path, <b>remap</b> reaches a host at another address, <b>fault</b> drops, cuts or never answers a request, <b>frame</b> changes WebSocket frames, <b>breakpoint</b> pauses it for editing. Globs (<span className="mono">*.example.com</span>) or /regular expressions/ match hosts
+        without the server, <b>redirect</b> sends it to another host or path, <b>remap</b> reaches a host at another address, <b>fault</b> drops, cuts or never answers a request, <b>frame</b> changes WebSocket frames, <b>script</b> runs JavaScript on the request and the response, <b>breakpoint</b> pauses it for editing. Globs (<span className="mono">*.example.com</span>) or /regular expressions/ match hosts
         and URLs. The profile is saved in <span className="mono">debugger/rules.json</span>, committed with the workspace.
       </p>
       {!state?.rules.length ? (
@@ -324,6 +326,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
       remap: kind === 'remap' ? r.remap : undefined,
       fault: kind === 'fault' ? (r.fault ?? { action: 'drop' }) : undefined,
       frame: kind === 'frame' ? (r.frame ?? { action: 'drop' }) : undefined,
+      script: kind === 'script' ? (r.script ?? { code: SCRIPT_TEMPLATE }) : undefined,
       breakpoint: kind === 'breakpoint' ? (r.breakpoint ?? 'request') : undefined,
       color: kind === 'highlight' ? (r.color ?? 'yellow') : undefined,
     });
@@ -364,6 +367,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
               <option value="remap">Remap a host to another address</option>
               <option value="fault">Inject a failure</option>
               <option value="frame">Change WebSocket frames</option>
+              <option value="script">Run a JavaScript script</option>
             </Select>
           </Field>
         </div>
@@ -472,6 +476,7 @@ export function RuleDialog({ rule, onClose, onSave }: { rule: Partial<Rule>; onC
         {kind === 'remap' && <RemapFields r={r} set={set} />}
         {kind === 'fault' && <FaultFields r={r} set={set} />}
         {kind === 'frame' && <FrameFields r={r} set={set} />}
+        {kind === 'script' && <ScriptFields r={r} set={set} />}
         {kind === 'breakpoint' && (
           <Field label="Pause" className="w-64">
             <Select value={r.breakpoint ?? 'request'} onChange={(e) => set({ breakpoint: e.target.value as 'request' | 'response' })}>

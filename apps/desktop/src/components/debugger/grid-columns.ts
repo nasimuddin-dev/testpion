@@ -18,6 +18,7 @@ export type BuiltInColumnId =
   | 'user'
   | 'pid'
   | 'graphql'
+  | 'ai'
   | 'comment'
   | 'caching'
   | 'encoding'
@@ -66,6 +67,7 @@ export const COLUMNS: Column[] = [
   { id: 'user', label: 'User', width: 120, sort: (e) => e.user ?? '' },
   { id: 'pid', label: 'PID', width: 60, align: 'right', sort: (e) => e.pid ?? 0 },
   { id: 'graphql', label: 'GraphQL operation', width: 170, sort: (e) => e.graphql ?? '' },
+  { id: 'ai', label: 'AI call', width: 190, sort: (e) => e.ai ?? '' },
   { id: 'comment', label: 'Comments', width: 200, sort: (e) => e.note ?? '' },
   { id: 'caching', label: 'Caching', width: 160, sort: (e) => e.caching ?? '' },
   { id: 'encoding', label: 'Content-Encoding', width: 120, sort: (e) => e.contentEncoding ?? '' },
@@ -82,7 +84,7 @@ export const plainCell = (id: BuiltInColumnId, e: Exchange): string | undefined 
 export const headerColumn = (c: HeaderColumnDef): Column => ({ id: headerColumnId(c), label: `${c.name} (${c.side})`, width: 140, sort: (e) => e.headerValues?.[headerKey(c)] ?? '' });
 
 // Comments is shown the first time a note is added (the row menu does it)
-export const DEFAULT_HIDDEN: ColumnId[] = ['pid', 'comment', 'graphql'];
+export const DEFAULT_HIDDEN: ColumnId[] = ['pid', 'comment', 'graphql', 'ai'];
 /** Columns added after people had chosen theirs: shown only when asked for (kept in their own list, so a saved choice of hidden columns does not switch them on). */
 export const OPTIONAL_COLUMNS: ColumnId[] = ['caching', 'encoding', 'port', 'protocol', 'tls'];
 export const EXTRA_KEY = 'testpion.debugger.extraColumns';

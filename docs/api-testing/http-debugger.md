@@ -141,6 +141,7 @@ The tabs at the bottom of Request details and Response details add a view when t
 | **Preview** | HTML | The page drawn in a sandboxed frame: scripts, forms and network loads are off, so it shows what the markup says and nothing more. |
 | **Form** | URL-encoded and multipart bodies | A table of fields, or of parts with file name, type and size (a file's content is not shown). |
 | **GraphQL** | a request with a `query` (JSON, a batch, `application/graphql` or a GET) | The operation type and name, the query laid out, the variables, and the response's `errors` with path and code. The grid also marks the row (`query GetUser` after the URL), and the **GraphQL operation** column (hidden until you show it) sorts by it. |
+| **AI call** | a call to OpenAI (and compatible APIs), Anthropic, Gemini or Ollama, or MCP JSON-RPC messages | See "AI traffic" below. The grid marks the row (`OpenAI gpt-4o` after the URL), and the **AI call** column (hidden until you show it) sorts by it. |
 | **MessagePack**, **Protobuf** | the matching content types | Decoded without a schema: MessagePack as a tree, Protobuf field by field like `protoc --decode_raw` (nested messages, strings, numbers, fixed-width values also as floats). |
 | **SignalR**, **Socket.IO** | text bodies in those framings | One row per message: kind, hub method or event name, data. |
 | **Syntax** | CSS, JavaScript, SQL, shell | The text with colours. |
@@ -157,6 +158,18 @@ An image goes into a saved session (the HAR keeps it as base64); MessagePack and
 - **Group by** (the layers icon next to it): *None*, *Domain*, *Application* or *Connection*. Each group has a header line with its request count, how many failed and how many bytes; click it to collapse or expand the group, or use *Collapse all groups* / *Expand all groups*. Selecting a row with the arrow keys opens its group. The list stays as fast as without groups (the header lines are rows of the same virtual list).
 - **Resend many times**: the row menu's **Resend** has *Resend 10 times*, *Resend the selected, in order* (select several rows first) and *Resend…*, a dialog for how many times (1 to 200), how many at once (1 to 20), the wait between sends and *Stop at the first failure*. The result is a table: how many were sent, the count of each status, the fastest, middle and slowest time and each send; every send is also in History. Sending several requests to a server that is not on this computer asks first.
 - **A running program** (the **Capture** menu): the list of programs on this computer that hold network connections right now, busiest first. **Capture only** on one makes a rule on the Application column, so only what that program sends is listed (the crosshair of other tools, without dragging anything).
+### AI traffic
+
+When the program you capture talks to a language model, the **AI call** tab reads the exchange in words instead of JSON:
+
+- **Which API and model**: OpenAI chat completions, Responses and embeddings (also OpenAI-compatible hosts), Anthropic messages, Gemini `generateContent` / `streamGenerateContent`, Ollama `/api/chat` and `/api/generate`. The model is read from the response when it names one, else from the request or the address.
+- **What was asked**: the system prompt, the messages with their roles (tool calls and results included), the tools offered to the model, and settings such as temperature and max tokens.
+- **What came back**: the answer. A streamed answer (server-sent events, or the newline-delimited JSON Ollama sends) is put back together, with streamed tool-call arguments joined and parsed. Tool calls the model made are listed with their arguments.
+- **Tokens and cost**: input, output, tokens served from the prompt cache and reasoning tokens when the provider reports them, and a **cost estimate** from list prices per million tokens. It is always labelled an estimate; a model that is not in the price table shows "unknown model" instead of a guess; local Ollama models are free.
+- **A prompt-cache hint**: how much of the input came from the cache, how much was written to it, or, for a long prompt that cached nothing, a pointer to mark the stable start (`cache_control` on Anthropic).
+- **MCP**: JSON-RPC bodies of an MCP server over HTTP list each `initialize` (the server's name and version), `tools/list` (the tool names), `tools/call`, `resources/read` and `prompts/get` with the arguments and the result or error, whether the reply came as JSON or as an event stream.
+
+API keys and tokens never show: anything shaped like `sk-…`, `AIza…`, a bearer credential, a JWT or a cloud key is replaced, and an argument named like a secret (`api_key`, `token`, `password`…) shows as `***`, in a prompt, a tool argument or a tool result. The reader is tolerant: a field that is missing is left out, and a body that is not what its address says gives a note, not an error. Providers change their formats; the readers are small adapters in `packages/shared/src/ai-calls.ts`.
 
 ## Rules
 
@@ -210,6 +223,29 @@ Terminal: `testpion debugger capture --upstream http://proxy:3128 --upstream-use
 - **Capture ▸ Keep the whole session (large sessions)** writes the exchanges that leave the 5,000 in memory to a file in the app's data folder (masked like the AutoSave) instead of forgetting them. The list shows the newest 5,000; **Save session**, the exports and the bundle include everything. Turning it off, clearing, or quitting deletes the file. The same switch: `testpion debugger capture --large-session`.
 
 Terminal: `testpion debugger export session.har --saz out.saz --bundle out.tpbundle --notes "fails on login"`, `testpion debugger farx rules.farx --dry-run`, `testpion debugger diff green.har red.har [--ignore-query] [--fail-on-diff]`, `testpion debugger open out.tpbundle`. Agents: `debugger_session` with `action: export_saz | bundle | diff` (`open` also reads a `.saz` and a `.tpbundle`), `debugger_rules` with `action: import_farx`.
+### Script rules
+
+When the rule kinds above are not enough, a **script** rule (Kind ▸ Run a JavaScript script) runs JavaScript on every request and response its Matches selects. It defines `onRequest(ctx)` and / or `onResponse(ctx)`:
+
+```js
+function onRequest(ctx) {
+  ctx.request.headers['x-env'] = 'staging';                 // set a header; `delete` removes one
+  if (ctx.request.url.includes('/admin')) ctx.reply(403, { error: 'blocked' });   // answer here: the server never sees it
+}
+function onResponse(ctx) {
+  if (ctx.response.status === 500) ctx.response.status = 503;
+  ctx.response.body = ctx.response.body.replace('hunter2', '***');
+}
+```
+
+- **What it sees**: `ctx.request` (`method`, `url`, `host`, `headers` with lower-case names, `body` as text, or `undefined` for a body that is not text or is over 1 MB) and, in `onResponse`, `ctx.response` (`status`, `headers`, `body`). Change the fields to change what is sent on. `ctx.reply(status, body, headers)`, `ctx.delay(ms)`, `ctx.highlight(color)`, `ctx.ignore()` and `console.log` do what they say.
+- **What it cannot do**: it runs in the same sandbox as the scripts of a request, so there is no network, no file access, no `require` of modules from disk and no access to environments or secrets. A hook has 100 ms by default (**Time a hook may run**, 10 to 2000 ms) and 16 MB. A script with `onResponse` makes the proxy hold the whole response before it goes on, like the other response edits.
+- **When it fails**: a hook that throws, does not finish in time, or is not valid JavaScript is skipped for that exchange and the traffic goes on unchanged. The rule's name shows `(script error: …)` in the exchange's rules, and the error is kept for the rule.
+- **Test before you switch it on**: the rule editor's **Test** picks a captured exchange, runs both hooks on it and lists what the script would do ("It sets the request header x-env: staging", "It changes the response status to 503") with its log lines. Nothing is sent and nothing changes. A script that fails shows its message and line.
+- **A file instead of text**: **Use a file instead** keeps the script in the workspace (for example `debugger/scripts/auth.js`), so git tracks and reviews it like code. The file is read again when it changes.
+- A script rule works on plain HTTP and decrypted HTTPS requests; WebSocket frames and gRPC have their own rule kinds. Use a declarative rule when one does the job: it is faster and needs no code.
+
+From the terminal and for agents: `testpion debugger script test <script.js> <session.har> <id|#n>` (what it would do on a captured exchange), `script add <script.js> --host api.test` (a rule that reads the file from the workspace; `--inline` keeps the text in the rule) and `script list`; MCP `debugger_scripts` with `action: list | set | enable | disable | remove | test`. The engine is also usable from Node: see [The engine as an SDK](/architecture/engine-sdk).
 
 ## Record a flow
 
@@ -262,11 +298,12 @@ testpion debugger show session.har '#3'                    # which views fit the
 testpion debugger show session.har <id> --view xml         # an XML tree as indented text
 testpion debugger show session.har <id> --view msgpack --side request --json
 testpion debugger show session.har <id> --view graphql --json   # operation, query, variables, errors
+testpion debugger show session.har <id> --view ai          # an LLM or MCP call: model, messages, answer, tokens, cost
 testpion debugger show session.har <id> --view caching     # would a browser cache it, in words
 testpion debugger show session.har <id> --view tls         # version, cipher, certificate findings
 ```
 
-Views: `list`, `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `syntax`, `caching`, `tls`. A view that cannot be produced says why (`ok: false` and `error` with `--json`; exit code 2 without).
+Views: `list`, `image`, `xml`, `form`, `graphql`, `ai`, `msgpack`, `protobuf`, `signalr`, `socketio`, `syntax`, `caching`, `tls`. A view that cannot be produced says why (`ok: false` and `error` with `--json`; exit code 2 without).
 
 AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS, `system_proxy` for the whole computer, which asks the user), `debugger_certificate` (info, install, remove; install and remove ask the user), `debugger_no_decrypt` (the hosts kept as tunnels), `debugger_exchanges` (the list, with filters; `deep` searches bodies; `hide_tunnels` leaves the tunnels out; `include` adds `params`, `cookies`, `summary`, `caching`, `tls` or `graphql` to each exchange, and the advice for a failure), `debugger_exchange` (one, with bodies; `view` reads a body as the window shows it: `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `caching`, `tls`, with `side` request or response), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture only and a `where` condition on a column with a `style`, and `remap`, `fault` and `frame`; `reply` takes a `file` or `folder`, `redirect` a `rewrite`, `modify` `requestReplace` / `responseReplace` / `setStatus`; `action: speed` sets the Network speed: an agent can take an API offline, slow it down, make it fail 20% of the time, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did. `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
 

@@ -172,6 +172,7 @@ export * from './debugger/network-speed.js';
 export * from './debugger/shaping.js';
 export * from './debugger/rule-shape.js';
 export * from './debugger/ws-relay.js';
+export * from './debugger/script-rules.js';
 export * from './debugger/saz.js';
 export * from './debugger/gateway.js';
 export * from './debugger/saz-export.js';

@@ -7,6 +7,7 @@
  */
 import { ApsError, debuggerExchangeFromRecorded, recordCaptureSession, recordedFromDebuggerExchange, recordingToCollection, startRecorder, type RecordedExchange } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { debuggerScriptHandlers } from './debugger-scripts.js';
 import { newDebuggerState } from './debugger.js';
 
 /** The recording the dialog shows: the exchanges it captured (ids in the Debugger's store), and where it forwards. */
@@ -26,6 +27,7 @@ export function debuggerReverseHandlers(be: Backend): Handlers {
     return state().exchanges.filter((e) => want.has(e.id));
   };
   return {
+    ...debuggerScriptHandlers(be),
     /** Start the reverse proxy in front of `target`; each exchange joins the Debugger's session and is sent as `record.exchange`. */
     'record.start': async ({ target, port }: { target: string; port?: number }) => {
       await be.recorder?.close();

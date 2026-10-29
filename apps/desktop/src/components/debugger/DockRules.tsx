@@ -5,6 +5,7 @@ import { toastError, useApp } from '../../store';
 import { deleteWithUndo } from '../../lib/undo-delete';
 import { useDoc } from '../../lib/docs';
 import { Button, cx, Empty, type EmptyAction, Field, FilterInput, IconButton, Input, Menu, type MenuItem, Segmented, Select } from '../ui';
+import { SCRIPT_TEMPLATE } from './RuleScriptFields';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
@@ -243,7 +244,7 @@ export function ModifyPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
   return (
     <RuleList
       state={state}
-      kinds={['modify', 'redirect', 'remap', 'fault', 'frame']}
+      kinds={['modify', 'redirect', 'remap', 'fault', 'frame', 'script']}
       onChange={onChange}
       onEdit={onEdit}
       add={{
@@ -253,10 +254,11 @@ export function ModifyPanel({ state, onChange, onNewRule, onEdit }: { state?: Ru
           { label: 'Redirect connections', onSelect: () => onNewRule({ kind: 'redirect', enabled: true, match: {}, redirect: { host: 'localhost:3000', scheme: 'http' } }) },
           { label: 'Remap a host', onSelect: () => onNewRule({ kind: 'remap', enabled: true, match: {}, remap: { to: 'localhost:3000', preserveHost: true } }) },
           { label: 'Inject a failure', onSelect: () => onNewRule({ kind: 'fault', enabled: true, match: {}, fault: { action: 'drop' } }) },
+          { label: 'Run a script', onSelect: () => onNewRule({ kind: 'script', enabled: true, match: {}, script: { code: SCRIPT_TEMPLATE } }) },
           { label: 'Change WebSocket frames', onSelect: () => onNewRule({ kind: 'frame', enabled: true, match: {}, frame: { action: 'drop', direction: 'received' } }) },
         ],
       }}
-      empty="A modify rule changes the headers or bodies of the requests it matches, or delays them; a redirect rule sends a host's requests to another host or path (a local build, a staging server); a remap reaches a host at another address, like a hosts-file entry; a failure drops, cuts or never answers a request; a frame rule drops or changes WebSocket frames."
+      empty="A modify rule changes the headers or bodies of the requests it matches, or delays them; a redirect rule sends a host's requests to another host or path (a local build, a staging server); a remap reaches a host at another address, like a hosts-file entry; a failure drops, cuts or never answers a request; a frame rule drops or changes WebSocket frames; a script rule runs JavaScript on each request and response it matches."
     />
   );
 }
