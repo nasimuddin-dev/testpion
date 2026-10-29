@@ -1,4 +1,4 @@
-import { Play, Plus, Trash2 } from 'lucide-react';
+import { GitCompareArrows, Play, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSticky } from '../../lib/sticky';
 import { call, type NormalizedError } from '../../api';
@@ -68,6 +68,21 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
           <div className="flex gap-2">
             <Button size="sm" icon={<Plus size={12} />} onClick={() => set({ compare: [...rows, { provider: providers[0]!.id, name: providers[0]!.defaultModel ?? '' }] })}>
               Add model
+            </Button>
+            <Button
+              size="sm"
+              icon={<GitCompareArrows size={12} />}
+              disabled={rows.length < 2}
+              reason="Add a second model to compare on many cases"
+              title="Open this prompt and input as the first test case in Evaluations, one variant per model: add more cases there and compare them all"
+              onClick={() =>
+                useApp.getState().openIntent('evaluations', {
+                  compare: { name: 'Model comparison', system: d.system || undefined, prompt: d.prompt, input: d.input, expected: d.expected, format: d.format, models: rows },
+                })
+              }
+              data-compare-many
+            >
+              Compare on many cases
             </Button>
             <Button size="sm" variant="primary" icon={<Play size={12} />} loading={running} onClick={run} className="ml-auto">
               Run comparison

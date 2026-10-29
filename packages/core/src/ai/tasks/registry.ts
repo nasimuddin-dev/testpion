@@ -672,6 +672,15 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     contextTokens: 8000,
     maxTokens: 900,
   }),
+  T('eval-why', {
+    title: 'Why did this case fail?',
+    description: 'Why one case of an evaluation run failed: what went wrong, whether the prompt, the case or the check is at fault, and the first thing to change. Reads the case the run stored and what each check said; proposes nothing.',
+    tier: 'small',
+    output: md,
+    context: 'case, prompt, reply, expected, failedChecks [{name, type, message, reviewerReason}], passedChecks, model',
+    contextTokens: 6000,
+    maxTokens: 800,
+  }),
   T('rag-draft-metric', {
     title: 'Draft a custom RAG metric',
     description: 'From a description of what good looks like, a custom RAG metric file (metrics/<id>.yaml) of the kind that fits (judge, checklist, rule, formula, embedding set or script) with 4 to 8 examples that must pass or fail. Offered as a proposal; the verifier runs the examples of a rule or script metric and checks the prompts of a judged one.',

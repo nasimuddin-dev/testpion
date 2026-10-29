@@ -7,6 +7,9 @@ import {
   assertEvaluationRunnable,
   evaluationTests,
   estimateEvaluation,
+  evaluationVariants,
+  variantsSummary,
+  type RunnableVariant,
   spendPlan,
   capRunOptions,
   formatEstimateUsd,
@@ -23,6 +26,7 @@ import { finishRun, printResult } from '../run.js';
 import { registerEvalCompareCommands } from './eval-compare.js';
 import { registerEvalQualityCommands } from './eval-quality.js';
 import { registerEvalCasesCommands } from './eval-cases.js';
+import { printVariants, registerEvalReportCommands } from './eval-report.js';
 
 export function registerEvaluationCommands(program: Command): void {
   const ev = program.command('eval').description('evaluations saved in the app (dataset × prompt × model × evaluators): list them, run one by name, compare runs (matrix, compare with a baseline)');
@@ -50,6 +54,7 @@ export function registerEvaluationCommands(program: Command): void {
     .option('--judge <provider/model>', 'RAG evaluations: the judge model of the judged metrics (default: the evaluation’s, else TESTPION_AI_PROVIDER / the AI settings’ large model)')
     .option('--max-cost <usd>', 'stop the run once it has cost this much (USD, from the price table; default $1.00 for a paid model, none for the offline demo model; 0 = no cap)')
     .option('--yes', 'go ahead when the estimate is over $0.50 (or 100 calls); without it such a run is refused with the estimate')
+    .option('--variants', 'compare mode: run the evaluation and each of its variants (other prompt versions and models, set in the app) on the same cases, then print the comparison; a comparison is not a gate, so failed cases do not change the exit code')
     .option('--max-judge-cost <usd>', 'RAG evaluations: stop judging once this much (USD, from the price table) is spent; the rest is not scored')
     .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown').default(['console', 'junit', 'json', 'html', 'markdown']))
     .option('-o, --out <dir>', 'output directory for results and reports')
@@ -59,24 +64,59 @@ export function registerEvaluationCommands(program: Command): void {
     .option('-v, --verbose', 'show passing checks')
     .option('-q, --quiet', 'only print the summary')
     .action(async (ref: string, o: EvalRunOptions) => {
-      process.exitCode = await executeEvalRun(ref, o);
+      process.exitCode = o.variants ? await executeVariantRuns(ref, o) : await executeEvalRun(ref, o);
     });
   registerEvalCompareCommands(ev);
   registerEvalCasesCommands(ev);
+  registerEvalReportCommands(ev);
   registerEvalQualityCommands(ev, (ref, o) => executeEvalRun(ref, { reporter: ['console', 'junit', 'json', 'html', 'markdown'], ...o }));
 }
 
-export type EvalRunOptions = { maxCost?: string; yes?: boolean; judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean };
+export type EvalRunOptions = { variants?: boolean; maxCost?: string; yes?: boolean; judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean };
+
+/** Compare mode: every variant of the evaluation is run as a run of its own ("<name> · <variant>"), then the comparison is printed. */
+async function executeVariantRuns(ref: string, o: EvalRunOptions): Promise<number> {
+  const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+  if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+  let base: ReturnType<typeof findSavedEvaluation>;
+  let list: RunnableVariant[];
+  try {
+    base = findSavedEvaluation(store, ref);
+    if (base.type === 'rag') throw new CliError('Variants compare prompts and models of a prompt evaluation: this is an evaluation of a bot with sources', EXIT.CONFIG_ERROR);
+    list = evaluationVariants(base);
+    if (list.length < 2) throw new CliError(`"${base.name}" has no variants. Add them in the app: open the evaluation and choose Compare.`, EXIT.CONFIG_ERROR);
+  } catch (e) {
+    store.close();
+    throw e instanceof CliError ? e : new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+  }
+  store.close();
+  for (const v of list) {
+    if (!o.quiet) console.log(bold(`Variant ${v.letter}: ${v.label}`));
+    // the variant's own evaluation (its prompt, model); no baseline: this is a comparison, not a gate
+    const code = await executeEvalRun(ref, { ...o, baseline: undefined, saveBaseline: undefined, failOnRegression: false, quiet: o.quiet ?? true }, { ...base, ...v.draft, id: base.id });
+    if (code !== EXIT.SUCCESS && code !== EXIT.TEST_FAILURE) return code;
+  }
+  const again = openWorkspace(o.workspace, undefined, new WorkspaceManager());
+  try {
+    const summary = await variantsSummary(again.store, { evaluation: base });
+    printVariants(summary);
+  } finally {
+    again.store.close();
+  }
+  return EXIT.SUCCESS;
+}
 
 async function executeEvalRun(
   ref: string,
   o: { maxCost?: string; yes?: boolean; judge?: string; maxJudgeCost?: string; workspace?: string; environment?: string; concurrency?: string; retries?: string; limit?: string; reporter: string[]; out?: string; baseline?: string; saveBaseline?: string; failOnRegression?: boolean; verbose?: boolean; quiet?: boolean },
+  /** Compare mode: this variant of the evaluation, run under its own name. */
+  as?: ReturnType<typeof findSavedEvaluation>,
 ): Promise<number> {
   const { store, ephemeral } = openWorkspace(o.workspace, undefined, new WorkspaceManager());
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
   let evaluation: ReturnType<typeof findSavedEvaluation>;
   try {
-    evaluation = findSavedEvaluation(store, ref);
+    evaluation = as ?? findSavedEvaluation(store, ref);
     if (o.environment) requireEnvironment(store, o.environment);
   } catch (e) {
     store.close();

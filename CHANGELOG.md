@@ -21,6 +21,13 @@ Every list of saved items (prompts, evaluations, load tests, monitors, MCP serve
 - **Test cases as a table**: type in cells, **Paste cases…** from a spreadsheet (columns found and mapped), **Enter** adds a case, thousands of cases stay quick. **Edit as text** keeps the file's own text.
 - **What is a good answer?**: tick the common checks, each with a sentence, and press **Try on case N** to see the reply and why it passed or failed before saving. `testpion eval check`, MCP `eval_try_check`, RPC `eval.tryCheck`. A paid model shows its cost first.
 
+### AI quality: the report card, why a case failed, compare versions
+
+- **One report card for a run**: the sentence (*17 of 20 passed*), cost and time, how it compares with the last run, a trend line, the **pass line** (Options), how many cases passed each check, and the failed cases first. The same words come from `testpion eval summary`, MCP `eval_summary` and RPC `eval.summary`. It also tops the RAG metrics and the runs overview of Evaluations.
+- **Why did this fail?** on a failed case: an AI reviewer's own reason when there is one, else the AI assistant explains it (what is sent and the cost shown first). `testpion eval why`, MCP `eval_explain_failure`, task `eval-why`.
+- **Since last run**: a failed case's reply next to its reply in the run before, with whether it got better or worse. `testpion eval diff`, MCP `eval_case_diff`.
+- **Compare**: run the same test cases on other models or prompt versions of one evaluation; a table says who passed more, cost less and was faster, with one sentence. **Model comparison** has **Compare on many cases**. `testpion eval run --variants`, `eval variants`, MCP `run_evaluation` `variants` and `eval_variants`.
+
 ### Machine safety
 
 - **The system proxy no longer outlives TestPion**: the old setting is written to a private file before it is changed and deleted after it is put back; the next start restores it when a crash or kill left it pointing at TestPion; our own address is never taken for "the old setting"; quitting restores it first, with a limit of its own; a part-way change on macOS or GNOME is undone; the system follows when the proxy moves to another port.

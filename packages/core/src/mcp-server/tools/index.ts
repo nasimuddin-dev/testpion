@@ -11,6 +11,7 @@ import { debuggerTools } from './debugger-tools.js';
 import { deployTools } from './deploy-tools.js';
 import { evalAgentTools } from './eval-agent-tools.js';
 import { evalQualityTools } from './eval-quality-tools.js';
+import { evalReportTools } from './eval-report-tools.js';
 import { flowGraphTools } from './flow-graph-tools.js';
 import { gitTools } from './git-tools.js';
 import { historyTools } from './history-tools.js';
@@ -73,6 +74,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...deployTools({ store }),
     ...evalAgentTools({ store }),
     ...evalQualityTools({ store, secrets, settings, checkEnvironment, recordedRun: d.recordedRun }),
+    ...evalReportTools({ store, secrets, settings }),
     ...ragTools({ store, secrets, settings, checkEnvironment }),
     ...ragEvalTools({ store, secrets, settings, checkEnvironment }),
     ...ragMetricTools({ store, secrets, settings, checkEnvironment }),

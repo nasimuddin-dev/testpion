@@ -193,6 +193,7 @@ const ENTRY_POINTS: Record<string, Gate> = {
   'components/rag/RagAuthorAction.tsx': 'component',
   'components/rag/RagConnectDialog.tsx': 'component',
   'components/rag/RagSampleDetail.tsx': 'component',
+  'components/ai/RunReport.tsx': 'component',
   'lib/problems.ts': 'store',
   'views/ApiDefinitionView.tsx': 'hook',
   'views/DebuggerView.tsx': 'hook',

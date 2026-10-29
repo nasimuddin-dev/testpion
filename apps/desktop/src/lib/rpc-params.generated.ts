@@ -133,6 +133,7 @@ export interface RpcParamTypes {
   'env.quickLook': RpcCommonParams;
   'env.save': RpcCommonParams & { env: Record<string, unknown>; secrets?: Record<string, unknown> };
   'env.secretStatus': RpcCommonParams & { envId: string; keys: string[] };
+  'eval.caseDiff': RpcCommonParams & { run: string; case: string; against?: string };
   'eval.casesOfProposal': RpcCommonParams & { id: string; items?: string[] };
   'eval.compare': RpcCommonParams & { run: string; baseline: string; threshold?: number; maxRegressions?: number; failOnMissing?: boolean; limit?: number };
   'eval.estimate': RpcCommonParams & { draft: Record<string, unknown>; limit?: number };
@@ -141,8 +142,12 @@ export interface RpcParamTypes {
   'eval.matrixResult': RpcCommonParams & { runId: string; resultId: string };
   'eval.run': RpcCommonParams & { template: Record<string, unknown>; name?: string; datasetText?: string; datasetPath?: string; datasetFormat?: string; limit?: number };
   'eval.runDraft': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean };
+  'eval.runVariants': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean; dryRun?: boolean };
+  'eval.summary': RpcCommonParams & { run: string; against?: string };
   'eval.trust': RpcCommonParams & { run: string; metric?: string; count?: number; label?: Record<string, unknown> };
   'eval.tryCheck': RpcCommonParams & { draft: Record<string, unknown>; check: Record<string, unknown>; caseNumber?: number; dryRun?: boolean };
+  'eval.variantsSummary': RpcCommonParams & { draft: Record<string, unknown>; runs?: string[] };
+  'eval.why': RpcCommonParams & { run: string; case: string };
   'feedback.compose': RpcCommonParams & { kind: string; title: string; description: string; steps?: string; expected?: string; where?: string; diagnostics?: string[]; errors?: string[] };
   'flows.webhooks.start': RpcCommonParams & { port?: number; host?: string };
   'flows.webhooks.status': RpcCommonParams;
@@ -387,4 +392,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 370;
+export const RPC_METHOD_COUNT = 375;
