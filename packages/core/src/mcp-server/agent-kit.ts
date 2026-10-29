@@ -46,6 +46,7 @@ const DESTRUCTIVE = new Set([
   'git_resolve',
   'git_sync',
   'debugger_rules',
+  'debugger_scripts',
   'debugger_session',
   'delete_request',
   'update_request',
