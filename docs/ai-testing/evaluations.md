@@ -74,6 +74,46 @@ testpion eval run "Intent classification" --max-cost 2 --yes
 
 Above a run, one chip says how many passed (*17 of 20 passed*) with the cost and the time. **Run in CI…** opens the pipeline dialog with this evaluation chosen: the pipeline runs `testpion eval run "name" --baseline last-good --fail-on-regression --yes` and fails when a case got worse than the **last good run** (the last run of this evaluation that passed; the first run has none and becomes it). The model's key is a CI secret the dialog lists. The same file comes from `testpion ci github --evaluation "name"` or the `ci_config` tool with `evaluation`.
 
+## The report card
+
+Above the cases of a run, one report says how it went. First the sentence (*17 of 20 passed*) with the cost, the average and slowest time, and how it compares with the last run of the same evaluation (*Against the last run: +2 passed, 3 got better, 1 got worse*), with a small line of the pass rate of the last runs. A **pass line** (set under **Options** as **Pass line (%)**, for example 80) adds *Pass line 80%: met* with a bar. **By check** says how many cases passed each check, and marks the checks an AI reviewer grades. **Failed first** lists the failed cases, each with the prompt, the answer you expected and the reply, and two buttons: **Why did this fail?** and **Since last run**. A run on the offline demo model says **Offline demo**.
+
+```bash
+testpion eval summary last              # the same words in a terminal (a run id, "last" or an evaluation name)
+testpion eval summary last --json       # headline, byCheck, failures, passLine, vsLast, trend, text
+```
+
+AI agents use `eval_summary`; it returns the numbers and `text`, the report as a few sentences. The sentence a person reads in the window is the one a pipeline or an agent reads.
+
+## Why did this fail?
+
+**Why did this fail?** on a failed case answers in plain words. When an AI reviewer graded the case, its own reason is shown (kept with the run, so no model is called). Otherwise the AI assistant explains it from the prompt, the reply, the expected answer and what each check said: what went wrong, whether the prompt, the case or the check is at fault, and the first thing to change. As for every AI action, **What will be sent…** shows exactly what goes and the estimated cost before anything is sent, secrets are hidden, and the answer is a suggestion you read.
+
+```bash
+testpion eval why last case-7                 # the reviewer's reason, else the AI task (the model you set up)
+testpion eval why last case-7 --dry-run       # what would be sent and the estimate
+testpion eval why last case-7 --no-ai --json  # only a stored reason: never calls a model
+```
+
+AI agents use `eval_explain_failure` (`dry_run`, `stored_only`).
+
+## What changed since the last run
+
+**Since last run** on a failed case shows its reply next to the reply in the run before: whether the case got better or worse, and the difference (the changed fields of a JSON answer, or the lines of a text answer). The last run is the one before it with the same evaluation name; `testpion eval diff last case-7 --against <run>` and the `eval_case_diff` tool compare with another run. To see which cases changed across the whole run, use the **Matrix** with the last run as the baseline.
+
+## Compare versions {#compare}
+
+**Compare** (beside **Run**, and on the results) runs the same test cases on other versions of the evaluation. The evaluation as it is stays the first version, **Current**; **Add variant** adds another model, another prompt version, or both. **Run 2 variants** shows the total cost first and runs them all. The result is a table: **Passed**, the **Cost** of the cases and the **Average time** per variant, the winner of each row, and one sentence under it, for example *B costs 4x less and runs 2.3x faster, but passes 2 cases fewer. 2 cases got worse and 0 got better: look at them.* There is no single best: each row names its own winner. Below it, the matrix lists every case with its result in each version; **Failed** shows the cases where they differ.
+
+**Model comparison** in AI Lab has **Compare on many cases**: it opens Compare with the prompt, the input as the first test case and one version for each model; add more cases and run.
+
+```bash
+testpion eval run "Intent classification" --variants   # every version, one run each ("Intent classification · Shorter")
+testpion eval variants "Intent classification" --json  # the comparison of the latest runs
+```
+
+A comparison is not a gate: failed cases do not change the exit code. AI agents use `run_evaluation` with `variants: true` (the estimate is the total of all versions) and `eval_variants`.
+
 ## Check types {#evaluator-types}
 
 | Source | Checks |

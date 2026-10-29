@@ -183,7 +183,7 @@ function CellDetail({ sel, onClose }: { sel: { runId: string; resultId: string; 
  * cell opens the case (input, output, expected, the judge's reasoning). The backend holds the matrix and answers
  * pages, so 5,000 cases × 10 variants costs the renderer the rows on screen.
  */
-export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the evaluation (the empty matrix's first step). */ onRun(): void }) {
+export function EvalMatrix({ runs: all, onRun, pinned }: { runs: RunRow[]; /** Run the evaluation (the empty matrix's first step). */ onRun(): void; /** Compare mode: these runs, side by side, the first as the baseline (the person can still change them). */ pinned?: { runs: string[]; baseline?: string } }) {
   // finished runs only: a run still going (the view lists it at once, without a duration) has no results to compare yet
   const runs = useMemo(() => all.filter((r) => r.durationMs !== undefined), [all]);
   const [picked, setPicked] = useSticky<string[] | undefined>('eval:matrix:runs', undefined, { persist: true });
@@ -195,6 +195,14 @@ export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the e
   const [query, setQuery] = useState('');
   const [sort, setSort] = useSticky<{ by: Sort; column?: number; dir: 'asc' | 'desc' }>('eval:matrix:sort', { by: 'case', dir: 'asc' });
   const [sel, setSel] = useState<{ row: number; col: number; runId: string; resultId: string; baseline?: { runId: string; resultId: string } }>();
+  // compare mode hands over the runs of the variants (once per set of runs)
+  const pinnedKey = pinned ? `${pinned.runs.join(',')}|${pinned.baseline ?? ''}` : '';
+  useEffect(() => {
+    if (!pinned) return;
+    setPicked(pinned.runs);
+    setBaseline(pinned.baseline ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedKey]);
   // runs deleted since they were picked drop out; none picked (or none left): the newest run of each evaluation
   const known = useMemo(() => new Set(runs.map((r) => r.id)), [runs]);
   const columns = useMemo(() => {
@@ -277,8 +285,8 @@ export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the e
     <div className="h-full flex flex-col min-h-0" data-eval-matrix data-cases={meta?.cases ?? ''} data-total={total} data-baseline={meta?.baseline?.[0]?.runId ?? ''} data-filter={filter} data-output="eval.matrix">
       {/* the variants and the baseline */}
       <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 border-b border-line text-xs">
-        <span className="text-muted mr-1">Variants</span>
-        {columns.map((id) => {
+        {!pinned && <span className="text-muted mr-1">Variants</span>}
+        {!pinned && columns.map((id) => {
           const r = runName(id);
           return (
             <span key={id} className="inline-flex items-center gap-1 rounded-md border border-line bg-panel2 pl-2 pr-0.5 h-6" data-matrix-run={id}>
@@ -296,7 +304,7 @@ export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the e
             </span>
           );
         })}
-        {columns.length < MAX_RUNS && (
+        {!pinned && columns.length < MAX_RUNS && (
           <Select className="h-6 min-h-6 py-0 text-xs max-w-48" aria-label="Add a run" value="" onChange={(e) => e.target.value && setPicked([...columns, e.target.value])}>
             <option value="">+ Add a run…</option>
             {runs
@@ -309,7 +317,7 @@ export function EvalMatrix({ runs: all, onRun }: { runs: RunRow[]; /** Run the e
               ))}
           </Select>
         )}
-        <span className="ml-auto text-muted">Baseline</span>
+        <span className={cx('text-muted', !pinned && 'ml-auto')}>Baseline</span>
         <Select className="h-6 min-h-6 py-0 text-xs max-w-52" aria-label="Baseline run" value={base} onChange={(e) => setBaseline(e.target.value)}>
           <option value="">None</option>
           {runs.slice(0, 200).map((r) => (

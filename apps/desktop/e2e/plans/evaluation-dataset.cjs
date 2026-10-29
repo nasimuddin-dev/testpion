@@ -96,7 +96,7 @@ module.exports = withExpect(steps, {
   'a-broken-line-is-marked-on-its-own': /^lines: 3 \| marked: line 4 \| after the fix: 0$/,
   'run-without-a-key': /^error: No API key for OpenAI \| button: Add the key$/,
   'add-the-key-opens-the-provider': /^view: Providers\d* \| focused: API key \| provider: OpenAI$/,
-  'options-are-closed-and-open-on-a-click': /^closed first: true \| opened: Randomness \| Run at once \| Try again on errors \| Only the first … cases \| Spend cap \(USD\)$/,
+  'options-are-closed-and-open-on-a-click': /^closed first: true \| opened: Randomness \| Run at once \| Try again on errors \| Only the first … cases \| Pass line \(%\) \| Spend cap \(USD\)$/,
   'no-model-says-the-fix': /^note: Choose a model first.* \| run disabled: true \| remedy: Use the offline demo model$/,
   'one-click-offline-demo': /^providers: mock \| note gone: true \| run enabled: true$/,
 });

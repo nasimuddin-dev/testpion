@@ -5,6 +5,7 @@ import { formatMs, plural } from '../lib/format';
 import { axisMs, ChartCard, chartKeys, ChartTip, PointLine, RecentRuns, Swatch, useWidth } from './charts';
 import { Empty, SectionTitle } from './ui';
 import { OutputHeader } from './output/OutputFrame';
+import { RunReport } from './ai/RunReport';
 import type { OutputSpec } from './output/output-core';
 import { outputFileName } from '@testpion/shared';
 
@@ -266,6 +267,7 @@ export function RunsOverview({
   return (
     <div className="h-full flex flex-col min-h-0" data-output="runs.overview">
       <OutputHeader spec={RUNS_SPEC} title="Runs at a glance" />
+      {scores && last.length > 0 && <RunReport runId={last[last.length - 1]!.id} compact />}
       <div className="flex-1 min-h-0 overflow-auto p-3">
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
         <PassRate runs={last} onSelect={onSelect} />

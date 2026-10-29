@@ -4,7 +4,7 @@ import { ItemBreadcrumb } from '../components/ItemBreadcrumb';
 import { openItemMenu } from '../lib/item-menu';
 import { deleteWithUndo } from '../lib/undo-delete';
 import { RunMiniBar, RunsOverview, type RunRow } from '../components/RunsOverview';
-import { BarChart3, Bookmark, Database, FlaskConical, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
+import { BarChart3, Bookmark, Database, FlaskConical, GitCompareArrows, Grid3x3, History, KeyRound, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { useIntent } from '../hooks';
@@ -17,11 +17,12 @@ import { downloadContent } from '../lib/files';
 import { CasesPane } from '../components/ai/CasesPane';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
-import { EvalRunHeadline } from '../components/ai/EvalRunHeadline';
+import { RunReport } from '../components/ai/RunReport';
+import { VariantsPanel } from '../components/ai/VariantsPanel';
 import { SpendDialog } from '../components/ai/SpendDialog';
 import { shortCost, useEvalEstimate, type EvalEstimateResult } from '../lib/eval-estimate';
 import { formatCost } from '../lib/format';
-import type { TryCheckResult } from '@testpion/core';
+import type { EvalVariant, TryCheckResult } from '@testpion/core';
 import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { RagConnectDialog } from '../components/rag/RagConnectDialog';
 import { RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/starter';
@@ -67,6 +68,10 @@ interface Draft {
   retries: number;
   /** A prompt evaluation: the run stops once it has cost this much (USD). Unset: $1.00 on a paid model, none on the offline demo model; 0: no cap. */
   maxCostUsd?: number;
+  /** The report says whether this share of the cases passed (percent). */
+  passLine?: number;
+  /** Compare mode: other versions of this evaluation (another model, another prompt) run on the same cases. */
+  variants?: EvalVariant[];
   /** type rag: the RAG target (a library item id) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type rag with a target: the judge of the judged metrics (unset: the AI settings' large model). */
@@ -109,6 +114,17 @@ function MetricEstimateLine({ draft, env }: { draft: Draft; env?: string }) {
   );
 }
 
+/** What Model comparison (AI Lab) hands over to open compare mode: one prompt, one input, several models. */
+interface CompareHandOver {
+  name?: string;
+  system?: string;
+  prompt: string;
+  input?: string;
+  expected?: string;
+  format?: string;
+  models: Array<{ provider: string; name: string }>;
+}
+
 /** Evaluation Lab: dataset × prompt × model × evaluators, streamed through the test runner. */
 export function EvaluationsView() {
   // WF-19: open evaluations are tabs (each its own draft; a single click in the list opens a preview tab)
@@ -122,7 +138,7 @@ export function EvaluationsView() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [sub, setSub] = useSticky<'prompt' | 'dataset' | 'evaluators'>('eval:sub', 'dataset');
   // the right pane: a run (or the overview of runs), or the matrix of runs side by side, case by case
-  const [pane, setPane] = useSticky<'runs' | 'matrix' | 'metrics'>('eval:pane', 'runs', { persist: true });
+  const [pane, setPane] = useSticky<'runs' | 'matrix' | 'metrics' | 'compare'>('eval:pane', 'runs', { persist: true });
   // dataset files of the workspace (datasets/), offered next to Load file
   const [datasets, setDatasets] = useState<Array<{ path: string; name: string }>>([]);
   useEffect(() => {
@@ -217,6 +233,8 @@ export function EvaluationsView() {
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => {
     if (p?.new) tabs.newTab(drafts.defaults);
+    // Model comparison (AI Lab) hands over its prompt, its input and its models: one case, one variant per model
+    if (p?.compare) openCompare(p.compare as CompareHandOver);
     if (p?.sample) void trySample();
     else if (p?.savedId)
       void openSaved(p.savedId).then(() => {
@@ -225,7 +243,8 @@ export function EvaluationsView() {
   });
   const evalRuns = useMemo(() => {
     const names = new Set(saved.lib.items.map((i) => i.name));
-    return runs.filter((r) => names.has(r.name) || r.name === d.name);
+    // the runs of compare mode are named "<evaluation> · <variant>"
+    return runs.filter((r) => names.has(r.name) || r.name === d.name || r.name.startsWith(`${d.name} · `));
   }, [runs, saved.lib.items, d.name]);
   // the format the text really has: JSON whose text is one object per line is read as JSONL (the editor checks it as such too)
   const readAs = useMemo(() => datasetFormatOf(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
@@ -293,6 +312,23 @@ export function EvaluationsView() {
   /** Try one check on one case (AU-11). */
   const tryCheckOnCase = (check: CheckConfig, caseNumber: number, dryRun: boolean) => call<TryCheckResult>('eval.tryCheck', { draft: d, check, caseNumber, dryRun, environment: env });
   const offline = providers.find((p) => p.id === d.provider)?.kind === 'mock';
+  /** Model comparison (AI Lab) opens compare mode: its prompt and input become the evaluation, its first model Current, the others variants. */
+  const openCompare = (c: CompareHandOver) => {
+    const [first, ...rest] = c.models;
+    const input = c.input ?? '';
+    tabs.newTab({
+      ...drafts.defaults,
+      name: c.name || 'Model comparison',
+      ...(first ? { provider: first.provider, model: first.name } : {}),
+      system: c.system ?? '',
+      prompt: c.prompt || '{{input}}',
+      format: c.format === 'json' ? 'json' : 'text',
+      dataset: JSON.stringify({ input, ...(c.expected !== undefined && c.expected !== '' ? { expected: c.expected } : {}) }),
+      evaluators: c.expected !== undefined && c.expected !== '' ? [{ type: 'contains', expected: '{{expected}}', ignoreCase: true }] : [],
+      variants: rest.map((m) => ({ label: m.name || m.provider, provider: m.provider, model: m.name })),
+    });
+    setPane('compare');
+  };
 
   return (
     <Split id="eval-sidebar" sidebar initial={18} min={12}>
@@ -420,6 +456,11 @@ export function EvaluationsView() {
             <Button className="shrink-0" icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this evaluation to run it again later'} onClick={() => void saveEval()}>
               {current && dirty ? 'Save*' : 'Save'}
             </Button>
+            {d.type === 'llm' && (
+              <Button className="shrink-0" icon={<GitCompareArrows size={13} />} onClick={() => setPane('compare')} title="Run the same test cases on another model or another prompt version and compare them" data-eval-compare-open>
+                Compare
+              </Button>
+            )}
             <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!!problem || (!ragTarget && !d.provider)} reason={!count ? 'There are no test cases yet: add example cases' : 'Choose a model first: use the offline demo model'} data-eval-run>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
               {d.type === 'llm' && count > 0 && shortCost(estimate, formatCost) ? ` · ${shortCost(estimate, formatCost)}` : ''}
@@ -500,6 +541,9 @@ export function EvaluationsView() {
                 </Field>
                 <Field label="Only the first … cases" hint="Leave empty to run them all">
                   <Input type="number" value={d.limit ?? ''} placeholder="all" onChange={(e) => set({ limit: e.target.value ? Number(e.target.value) : undefined })} />
+                </Field>
+                <Field label="Pass line (%)" hint="The report says whether this share of the cases passed. Empty: no pass line">
+                  <Input type="number" min={1} max={100} value={d.passLine ?? ''} placeholder="none" onChange={(e) => set({ passLine: e.target.value === '' ? undefined : Math.min(100, Math.max(1, Number(e.target.value))) })} aria-label="Pass line in percent" data-eval-pass-line-input />
                 </Field>
                 {d.type === 'llm' && (
                   <Field label="Spend cap (USD)" hint="The run stops once it has cost this much. Empty: $1.00 on a paid model, none on the offline demo model. 0: no cap">
@@ -595,7 +639,7 @@ export function EvaluationsView() {
         </div>
       </div>
       <div className="h-full flex flex-col min-h-0">
-        {evalRuns.length > 0 && (
+        {(evalRuns.length > 0 || pane === 'compare') && (
           <div className="flex items-center gap-2 px-2 py-1 border-b border-line">
             <Segmented
               label="Results"
@@ -605,12 +649,17 @@ export function EvaluationsView() {
               options={[
                 { value: 'runs', label: runId ? 'Run' : 'Runs', icon: <History size={12} /> },
                 { value: 'matrix', label: 'Matrix', icon: <Grid3x3 size={12} />, title: 'Runs side by side, case by case, against a baseline' },
+                ...(d.type === 'llm' ? [{ value: 'compare' as const, label: 'Compare', icon: <GitCompareArrows size={12} />, title: 'The evaluation and its variants (another model or prompt version) on the same cases' }] : []),
                 ...(d.type === 'rag' ? [{ value: 'metrics' as const, label: 'Metrics', icon: <BarChart3 size={12} />, title: 'The samples of a run against every metric, with each metric’s mean, interval and distribution' }] : []),
               ]}
             />
           </div>
         )}
-        {pane === 'metrics' && d.type === 'rag' && evalRuns.length > 0 ? (
+        {pane === 'compare' && d.type === 'llm' ? (
+          <div className="flex-1 min-h-0">
+            <VariantsPanel draft={d} onVariants={(variants) => set({ variants: variants.length ? variants : undefined })} providers={providers} environment={env} runs={evalRuns} onClose={() => setPane('runs')} />
+          </div>
+        ) : pane === 'metrics' && d.type === 'rag' && evalRuns.length > 0 ? (
           <div className="flex-1 min-h-0">
             {runId ? (
               <RagMetricMatrix runId={runId} evaluationName={d.name} target={d.target} judge={d.judge} runs={evalRuns} evaluators={d.evaluators} evaluation={savedId} providers={providers} onRescored={(id) => (setRunId(id), void call('runs.list', { limit: 30 }).then((r) => setRuns(r.items), toastError))} />
@@ -626,7 +675,7 @@ export function EvaluationsView() {
           </div>
         ) : runId ? (
           <div className="h-full flex flex-col min-h-0">
-            <EvalRunHeadline runId={runId} offline={offline} onCi={() => useApp.getState().set({ ci: { evaluation: current?.name } })} ciReason={current ? undefined : 'Save this evaluation first: the pipeline runs it by name'} />
+            <RunReport runId={runId} offline={offline} onCi={() => useApp.getState().set({ ci: { evaluation: current?.name } })} ciReason={current ? undefined : 'Save this evaluation first: the pipeline runs it by name'} />
             <div className="flex-1 min-h-0">
               <RunPanel runId={runId} expectedTotal={d.limit ? Math.min(d.limit, count) : count} />
             </div>

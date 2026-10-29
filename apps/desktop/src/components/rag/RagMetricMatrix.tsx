@@ -12,6 +12,7 @@ import { RagByTag, RagCharts, RagCompare, RagPivot, RagRescoreDialog, type RunCh
 import { RagSampleDetail } from './RagSampleDetail';
 import { RagCalibration } from './RagCalibration';
 import { RagTrend } from './RagTrend';
+import { RunReport } from '../ai/RunReport';
 
 const PAGE = 100;
 /** A sample row is one fixed height, so only the rows on screen are drawn (100 rows × 84 metrics is 8,400 cells). */
@@ -276,6 +277,7 @@ export function RagMetricMatrix({
   const w = listWindow({ count: m.rows.length, rowHeight: ROW_H, scrollTop: Math.max(0, win.top - (head.current?.offsetHeight ?? 0)), height: win.height, overscan: 6 });
   return (
     <div className="h-full flex flex-col min-h-0" data-rag-matrix data-output="rag.matrix">
+      <RunReport runId={runId} compact />
       <div className="flex items-center gap-2 px-2 pt-2 flex-wrap">
         <Segmented
           label="View"

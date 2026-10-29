@@ -53,6 +53,10 @@ testpion eval list|run <name>   Evaluations saved in the app: list them, or run 
 testpion eval sample   Make the sample evaluation (10 cases, the offline demo model, no key) and run it
 testpion eval estimate <name>   What a run would cost before it starts: cases, calls, dollars, seconds, the spend cap
 testpion eval check <name> --type contains --expected x   Try one check on one case: the reply, passed or failed, why
+testpion eval summary [run]   How a run went in a few sentences: 17 of 20 passed, the checks, the failed cases, against the last run
+testpion eval why <run> <case>   Why one case failed: an AI reviewer's reason, or the AI assistant (--dry-run shows what would be sent)
+testpion eval diff <run> <case>   A case's answer against the run before it
+testpion eval variants <name>   Compare the versions of an evaluation (eval run <name> --variants runs them)
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
 testpion rag targets|probe|connect|metrics|metric|probes|presets|run|rescore|compare|cache|import|export   RAG systems under test: connect, probe, the 138 metrics, your own metrics, run with gates, re-score, compare, convert datasets
@@ -685,6 +689,10 @@ RAG systems under test (AI Lab ▸ RAG; the guide is [RAG testing](/ai-testing/r
 `eval sample` makes the evaluation *Sample: support intents* (ten messages, the offline demo model, one check) and runs it: `--no-run` only makes it, `--json` prints the run. `eval estimate <name>` says what a run would cost (`--limit`, `--max-cost`, `--json`). `eval check <name>` tries one check on one case (`--type` with `--expected`, `--path`, `--criteria`, or `--check '{json}'`; `--case n`; `--dry-run` sends nothing; a paid model needs `--yes`). See [Evaluations](/ai-testing/evaluations#what-a-run-costs-and-the-spend-cap).
 
 `eval run` stops at a spend cap (`--max-cost <usd>`: $1.00 for a paid model, none for the offline demo model, `0` for no cap), refuses a run estimated over $0.50 or 100 calls until `--yes`, and takes `--baseline last-good`, the last run of the evaluation that passed (the first run has none and becomes it). `ci <provider> --evaluation <name>` writes the pipeline for it.
+
+## `eval summary`, `eval why`, `eval diff`, `eval variants`
+
+`eval summary [run]` prints the report card of a run (an id, `last`, or an evaluation name; `--against <run>` compares with another run than the one before; `--json` has `headline`, `byCheck`, `failures`, `passLine`, `vsLast`, `trend` and `text`). `eval why <run> <case>` says why a failed case failed: the stored reason of an AI reviewer, else the AI task `eval-why` with your model (`--dry-run`, `--no-ai`, `--privacy`). `eval diff <run> <case>` shows the case's answer against the same case in the run before (`--against`). `eval run <name> --variants` runs the evaluation and each of its versions (set in the app's Compare) as runs of their own and prints the comparison; `eval variants <name>` prints it again from the latest runs (`--json`). A case is its key (`case-7`), its result id or its name. See [Evaluations](/ai-testing/evaluations#compare).
 
 ## `eval compare` and `eval matrix`
 
