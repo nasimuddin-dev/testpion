@@ -93,6 +93,7 @@ describe('output surfaces', () => {
       'views/RestView.tsx': 'the live event list (SseEvents is marked itself)',
       'components/CollectionRunner.tsx': 'renders RunPanel (marked run.results)',
       'views/EvaluationsView.tsx': 'renders RunPanel / EvalMatrix (marked)',
+      'components/ai/VariantsPanel.tsx': 'renders EvalMatrix (marked) for the versions of an evaluation',
       'views/TestsView.tsx': 'renders RunPanel / RunTimeline (marked)',
       'components/FlowRunDock.tsx': 'renders RunPanel / RunTimeline (marked)',
       'views/DatasetView.tsx': 'a dataset (a definition you edit), not an output',

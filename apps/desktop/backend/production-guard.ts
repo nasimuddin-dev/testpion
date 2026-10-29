@@ -116,6 +116,7 @@ const RULES: Record<string, Rule> = {
   'tests.matrixRun': (_be, p) => (Array.isArray(p.environments) ? p.environments : []).map((e: unknown) => run(str(e), `Run ${p.file ?? 'the flow'} in several environments`)),
   'eval.run': (_be, p) => run(str(p.environment), `Run the evaluation ${p.name ?? ''}`.trim()),
   'eval.runDraft': (_be, p) => run(str(p.environment), `Run the evaluation ${p.draft?.name ?? ''}`.trim()),
+  'eval.runVariants': (_be, p) => (p.dryRun ? undefined : run(str(p.environment), `Compare the versions of ${p.draft?.name ?? 'the evaluation'}`)),
   // a question to a RAG system is a POST unless the target says it only answers
   'rag.probe': (_be, p) => (p.target?.readOnly ? undefined : message(str(p.environment), 'Ask the RAG system a question')),
   'load.start': (_be, p) => run(str(p.environment), `Start the load test ${p.name ?? ''}`.trim(), { changesData: true }),

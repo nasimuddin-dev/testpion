@@ -210,6 +210,7 @@ describe('the backend boundary: every send and run method', () => {
     'tests.matrixRun': { file: 'a.yaml', environments: ['Dev', 'Production'] },
     'eval.run': { template: {}, environment: 'Production' },
     'eval.runDraft': { draft: { name: 'E' }, environment: 'Production' },
+    'eval.runVariants': { draft: { name: 'E' }, environment: 'Production' },
     'rag.probe': { target: { protocol: 'http', step: {}, mapping: { answer: '$.a' } }, question: 'q', environment: 'Production' },
     'load.start': { config: { target: { kind: 'http', request: { method: 'GET', url: '{{base}}' } } }, environment: 'Production' },
     'flows.webhooks.start': { environment: 'Production' },

@@ -1,4 +1,4 @@
-import { FileCode, Pencil, Play } from 'lucide-react';
+import { FileCode, Pencil, Play, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, asError } from '../../api';
 import { Badge, Button, Empty, Field, Input, Select } from '../ui';
@@ -43,6 +43,7 @@ export function ScriptFields({ r, set }: { r: Partial<Rule>; set: SetRule }) {
   const [result, setResult] = useState<Tested>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let live = true;
     void call<Row[]>('debug.exchanges', { limit: 40, kind: 'http' }).then(
@@ -56,7 +57,7 @@ export function ScriptFields({ r, set }: { r: Partial<Rule>; set: SetRule }) {
     return () => {
       live = false;
     };
-  }, []);
+  }, [reload]);
   const hasCode = script.code !== undefined ? script.code.trim().length > 0 : !!script.file;
   const test = async () => {
     setBusy(true);
@@ -95,7 +96,7 @@ export function ScriptFields({ r, set }: { r: Partial<Rule>; set: SetRule }) {
       </div>
       <Field label="Test on a captured exchange" hint="Runs both hooks on it and says what the script would do. Nothing is sent.">
         {rows && rows.length === 0 ? (
-          <Empty title="Nothing captured yet">Capture some traffic, then come back to test the script on one of its exchanges.</Empty>
+          <Empty title="Nothing captured yet" actions={[{ label: 'Check again', icon: <RotateCcw size={13} />, onClick: () => setReload((n) => n + 1) }]}>Capture some traffic, then come back to test the script on one of its exchanges.</Empty>
         ) : (
           <div className="flex items-center gap-2">
             <Select className="flex-1 min-w-0" aria-label="Exchange to test on" value={pick} onChange={(e) => setPick(e.target.value)}>
