@@ -1,6 +1,6 @@
 {
   "name": "docs",
-  "version": "0.54.1",
+  "version": "0.55.0",
   "private": true,
   "type": "module",
   "description": "TestPion website and documentation (VitePress, deployed to GitHub Pages).",

@@ -529,21 +529,24 @@ module.exports = async function run(win) {
   await shot('mcp-usage');
 
   // ---------------------------------------------------------------- AI Lab: the playground, its usage
-  await nav('AI Lab');
+  await nav('AI quality');
+  await tab('Try a prompt');
   await clickSel('main button[title^="Run"]', 'the Run button of the playground');
   await until(`/tokens/i.test(__cap.screen()) && /"intent"|intent/.test(__cap.screen()) && !__cap.all('main .animate-spin').length`, 'the AI response');
   await shot('ai-lab');
   // tokens, cost and time per model
-  await tab('Usage');
+  await tab('Models and keys');
+  await click('Usage', '[role=radio]');
   await until(`/mock-gpt/.test(__cap.screen())`, 'the AI usage');
   await shot('ai-usage');
-  await tab('Playground');
+  await tab('Try a prompt');
 
   // ---------------------------------------------------------------- Evaluations: three saved variants run, then the matrix
   // three saved evaluations, written through the app (as the Save button does)
   const lib = await invoke('lib.get', { kind: 'evaluations' });
   await invoke('lib.save', { kind: 'evaluations', library: { ...lib, items: [...(lib.items ?? []), ...EVALUATIONS] } });
-  await nav('Evaluations');
+  await nav('AI quality');
+  await tab('Checks');
   const savedRow = (name) => `__cap.all('main [data-tree-row], main button').find((b) => __cap.text(b).startsWith(${J(name)}) && __cap.text(b).includes('cases'))`;
   await clickOn(savedRow('Intent classification'), 'the saved evaluations');
   // the saved one is open (10 cases, not the 3 of the default draft): run it
@@ -958,8 +961,9 @@ module.exports = async function run(win) {
   await shot('settings-ai');
 
   // AI Lab ▸ Usage: the AI features' calls above, from the app
-  await nav('AI Lab');
-  await tab('Usage');
+  await nav('AI quality');
+  await tab('Models and keys');
+  await click('Usage', '[role=radio]');
   await until(`__cap.one('[data-ai-feature-usage] table') && /generate-assertions/.test(__cap.screen('[data-ai-feature-usage]'))`, 'the AI features usage');
   await shot('ai-feature-usage');
 

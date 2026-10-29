@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.55.0 — 2026-10-29
 
 ### HTTP Debugger: shape the traffic
 
