@@ -184,6 +184,11 @@ export async function* evaluationTests(d: SavedEvaluation, o: { store?: Workspac
     };
     yield* expandDataset(template, join(dir, 'evaluation'));
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // best effort: on Windows a scanner or indexer can hold a file for a moment (ENOTEMPTY); a leftover temp folder never fails a run
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+    } catch {
+      /* the OS clears its temp folder */
+    }
   }
 }
