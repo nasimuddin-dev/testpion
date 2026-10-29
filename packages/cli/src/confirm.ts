@@ -87,6 +87,7 @@ export const CLI_NO_CONFIRM: Record<string, string> = {
   rag_generate_testset: 'rag generate-dataset: nothing is written until the proposal is applied (ai apply asks)',
   rag_draft_references: 'rag draft-references: nothing is written until the proposal is applied (ai apply asks)',
   rag_author_evaluation: 'rag author: nothing is saved until the proposal is applied (ai apply asks)',
+  eval_generate_cases: 'eval generate-cases: nothing is added to the evaluation until the proposal is applied (ai apply asks; --apply is the opt-in)',
   save_output: 'output --out writes the new file you named, never over a file',
   export_bundle: 'export writes the file you named, never over a file',
   export_traces: 'the CLI has no trace export to a collector',

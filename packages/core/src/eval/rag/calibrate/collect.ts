@@ -76,10 +76,10 @@ export async function collectSamples(results: AsyncIterable<TestResult>, o: Coll
     const transcript = hash12(transcriptText(turns));
     seenRecords.add(record);
     const labels = byRecord.get(record) ?? [];
-    const answer = rag.sample?.answer;
+    const answer = rag.sample?.answer ?? r.output;
     // a label about another answer, or about a conversation that went differently, says nothing about this one
     const stale = (l: RagLabel) => (l.answerHash !== undefined && answer !== undefined && l.answerHash !== hash12(answer)) || (l.transcriptHash !== undefined && transcript !== undefined && l.transcriptHash !== transcript);
-    const common = { record, resultId: r.id, question: rag.query, answer: answer?.slice(0, 1200), ...(turns?.length ? { conversation: turns.slice(-12).map((t) => ({ role: t.role, content: String(t.content).slice(0, 300) })) } : {}) };
+    const common = { record, resultId: r.id, question: rag.query ?? r.input, answer: answer?.slice(0, 1200), ...(turns?.length ? { conversation: turns.slice(-12).map((t) => ({ role: t.role, content: String(t.content).slice(0, 300) })) } : {}) };
     let overall = false;
     for (const l of labels) {
       if (l.metric === OVERALL) {

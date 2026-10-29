@@ -50,7 +50,7 @@ export async function labelResult(store: WorkspaceStore, i: LabelInput): Promise
       run: i.run,
       resultId: r.id,
       questionHash: hash12(rag.query),
-      answerHash: hash12(rag.sample?.answer),
+      answerHash: hash12(rag.sample?.answer ?? r.output),
       ...(rag.record?.turns?.length ? { transcriptHash: hash12(transcriptText(rag.record.turns)) } : {}),
       ...(i.by ? { by: i.by } : {}),
       ...(i.note ? { note: i.note } : {}),

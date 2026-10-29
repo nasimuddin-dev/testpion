@@ -22,6 +22,7 @@ import { cli } from '../output.js';
 import { finishRun, printResult } from '../run.js';
 import { registerEvalCompareCommands } from './eval-compare.js';
 import { registerEvalQualityCommands } from './eval-quality.js';
+import { registerEvalCasesCommands } from './eval-cases.js';
 
 export function registerEvaluationCommands(program: Command): void {
   const ev = program.command('eval').description('evaluations saved in the app (dataset × prompt × model × evaluators): list them, run one by name, compare runs (matrix, compare with a baseline)');
@@ -61,6 +62,7 @@ export function registerEvaluationCommands(program: Command): void {
       process.exitCode = await executeEvalRun(ref, o);
     });
   registerEvalCompareCommands(ev);
+  registerEvalCasesCommands(ev);
   registerEvalQualityCommands(ev, (ref, o) => executeEvalRun(ref, { reporter: ['console', 'junit', 'json', 'html', 'markdown'], ...o }));
 }
 

@@ -118,6 +118,7 @@ export const AI_COST_TOOLS = new Set([
   'rag_generate_testset',
   'rag_draft_references',
   'rag_author_evaluation',
+  'eval_generate_cases',
 ]);
 const q = (v: unknown) => JSON.stringify(String(v ?? ''));
 
@@ -142,6 +143,7 @@ export const CONFIRM_TOOLS: Record<string, { when?(a: Args): boolean; describe(a
   rag_save_custom_metric: { when: (a) => a.overwrite === true, describe: (a) => `replace the custom metric file metrics/${String(a.id ?? '')}.yaml with the new text (git brings the old one back)` },
   rag_generate_testset: { when: (a) => a.dry_run !== true, describe: (a) => `send passages of ${[...(Array.isArray(a.paths) ? a.paths : []), ...(Array.isArray(a.urls) ? a.urls : [])].map(q).join(', ') || 'the documents'} (redacted) to the AI model, one call per eight questions, and the judge’s check of each reference, which costs money; nothing is written until the proposal is applied` },
   rag_draft_references: { when: (a) => a.dry_run !== true, describe: (a) => `send the questions and the retrieved passages of records of ${q(a.dataset)} (redacted) to the AI model, which costs money; nothing is written until the proposal is applied` },
+  eval_generate_cases: { when: (a) => a.dry_run !== true, describe: (a) => `send the prompt of the evaluation ${q(a.name)}, a few of its cases and the source (${String(a.from ?? 'prompt')}) to the AI model (redacted), which costs money; nothing is added to the evaluation until the proposal is applied` },
   rag_author_evaluation: { when: (a) => a.dry_run !== true, describe: (a) => `send the shape of the RAG target ${q(a.target)}, a few dataset rows and the metric catalogue to the AI model, which costs money; nothing is saved until the proposal is applied` },
   rag_capture_dataset: { when: (a) => a.dry_run !== true, describe: (a) => `write the dataset datasets/${typeof a.name === 'string' && a.name ? a.name : 'captured-<date>'}.jsonl from real calls (personal data and secrets masked${a.overwrite === true ? '; a file of that name is replaced' : '; never over an existing file'})` },
   // an agent's own choice of task and question spends the person's AI credit (on top of the default caps and the session budget)

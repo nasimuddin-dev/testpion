@@ -12,8 +12,21 @@ import { shortId } from '../util/ids.js';
 export const SAMPLE_NAME = 'Sample: support intents';
 /** The id of the offline demo provider the sample runs on (the same one the "Use the offline demo model" button adds). */
 export const OFFLINE_DEMO_ID = 'demo';
+/** What the offline demo model writes when it is asked for test cases (AU-13): six new support messages, so the generator works with no key. */
+const DEMO_CASES = {
+  summary: 'Six new support messages: a cancellation, a refill, a booking and three that need none of them.',
+  cases: [
+    { inputs: { input: 'Please cancel my visit for tomorrow morning' }, expected: 'cancellation', tags: ['cancel'], why: 'A cancellation worded differently from the examples' },
+    { inputs: { input: 'My prescription runs out Friday, can you refill it?' }, expected: 'refill', tags: ['refill'], why: 'A refill with a deadline' },
+    { inputs: { input: 'I would like to book a dental cleaning' }, expected: 'booking', tags: ['book'], why: 'A booking for a service' },
+    { inputs: { input: 'Do you have a phone number for after hours?' }, expected: 'other', tags: ['other'], why: 'A question that is none of the three' },
+    { inputs: { input: 'ok' }, expected: 'other', tags: ['edge'], why: 'A very short message with no request' },
+    { inputs: { input: 'Cancel it. Actually, can I book the Thursday slot instead?' }, expected: 'cancellation', tags: ['edge'], why: 'Two requests in one message: the first one wins' },
+  ],
+};
 /** How the offline demo model answers a customer message of the sample: by the words in it. */
 const DEMO_RULES = [
+  { match: '"existingCount"', response: JSON.stringify(DEMO_CASES) },
   { match: 'Customer:[^\\n]*\\bcancel', response: '{"intent":"cancellation"}' },
   { match: 'Customer:[^\\n]*\\brefill', response: '{"intent":"refill"}' },
   { match: 'Customer:[^\\n]*\\b(book|schedule)', response: '{"intent":"booking"}' },
@@ -62,19 +75,28 @@ export interface SampleResult {
 }
 
 /**
- * Make sure the workspace has the offline demo model and the sample evaluation, as written above (a sample that was
- * edited is put back: make your own with Duplicate). Nothing is run here and nothing is sent anywhere.
+ * The offline demo model of the workspace (id `demo`): added when it is not there, and its rules put back as written (the
+ * sample's answers and the test cases it writes). No key, no network. `ai.demoModel`, the sample and the case generator use it.
  */
-export function ensureSample(store: WorkspaceStore): SampleResult {
+export function ensureDemoModel(store: WorkspaceStore): { provider: ProviderConfig; added: boolean } {
   const preset = PROVIDER_PRESETS.find((p) => p.id === OFFLINE_DEMO_ID && p.kind === 'mock')!;
   const providers = store.getProviders();
   let demo = providers.find((p) => p.id === OFFLINE_DEMO_ID);
-  const providerAdded = !demo;
+  const added = !demo;
   const config: ProviderConfig = { ...(demo ?? { id: preset.id, name: preset.name, kind: preset.kind, baseUrl: preset.baseUrl, defaultModel: preset.defaultModel }), kind: 'mock', headers: [{ key: 'x-mock-rules', value: JSON.stringify(DEMO_RULES) }] };
   if (!demo || demo.headers?.find((h) => h.key.toLowerCase() === 'x-mock-rules')?.value !== config.headers![0]!.value) {
     store.saveProviders(demo ? providers.map((p) => (p === demo ? config : p)) : [...providers, config]);
     demo = config;
   }
+  return { provider: demo, added };
+}
+
+/**
+ * Make sure the workspace has the offline demo model and the sample evaluation, as written above (a sample that was
+ * edited is put back: make your own with Duplicate). Nothing is run here and nothing is sent anywhere.
+ */
+export function ensureSample(store: WorkspaceStore): SampleResult {
+  const { provider: demo, added: providerAdded } = ensureDemoModel(store);
   const lib = store.getLibrary<SavedEvaluation>(EVALUATIONS_LIBRARY);
   const data = sampleEvaluation(demo.id);
   const have = lib.items.find((i) => i.name === SAMPLE_NAME);
