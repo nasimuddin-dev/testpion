@@ -137,7 +137,7 @@ function FailureRow({ runId, f, hasPrevious }: { runId: string; f: EvalReportFai
 export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: string; offline?: boolean; compact?: boolean; onCi?(): void; /** Why Run in CI is not available yet. */ ciReason?: string }) {
   const r = useRpc<EvalReport>('eval.summary', { run: runId }, {
     // the pass line is read from the saved evaluation: a save of the evaluations (written to disk) reads the report again
-    reloadOn: ['run.finished', 'data.changed'],
+    reloadOn: compact ? ['run.finished'] : ['run.finished', 'data.changed'],
     reloadIf: (e: { paths?: string[] } | undefined) => !e?.paths || e.paths.some((p) => p.split('\\').join('/') === 'library/evaluations.json'),
   });
   const [capped, setCapped] = useState<string>();

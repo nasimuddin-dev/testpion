@@ -1,5 +1,5 @@
 import { FlaskConical, GitCompareArrows, Pencil, Play, Plus, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { EvalVariant, EvalVariantsSummary } from '@testpion/core';
 import { call } from '../../api';
 import { attempt, confirmAction } from '../../store';
@@ -71,7 +71,7 @@ function VariantDialog({ initial, draft, providers, taken, onSave, onClose }: { 
         <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
           <Field label="Model provider">
             <Select value={v.provider ?? ''} onChange={(e) => set({ provider: e.target.value || undefined, model: e.target.value ? (providers.find((p) => p.id === e.target.value)?.defaultModel ?? '') : undefined })} aria-label="Variant provider">
-              <option value="">Same as Current</option>
+              <option value="">Same as the evaluation</option>
               <NamedOptions items={providers} />
             </Select>
           </Field>
@@ -102,9 +102,17 @@ export function VariantsPanel({ draft, onVariants, providers, environment, runs,
   // the runs of this session's last comparison: they are what the table shows (else the latest run of each variant)
   const [started, setStarted] = useSticky<string[] | undefined>(`eval:variants:${draft.name}`, undefined);
   const [busy, setBusy] = useState(false);
-  const key = JSON.stringify(started ?? null);
+  const [tick, setTick] = useState(0);
+  const key = JSON.stringify(started ?? null) + tick;
   const slim = useMemo(() => ({ name: draft.name, type: draft.type, provider: draft.provider, model: draft.model, system: draft.system, prompt: draft.prompt, temperature: draft.temperature, variants }), [draft.name, draft.type, draft.provider, draft.model, draft.system, draft.prompt, draft.temperature, variants]);
   const summary = useRpc<EvalVariantsSummary>('eval.variantsSummary', { draft: slim, ...(started ? { runs: started } : {}) }, { reloadOn: ['run.finished'], keep: true, enabled: variants.length > 0, scope: key });
+  // while this session's runs are going, ask again now and then: the finish events can arrive before the summary files are written
+  const waiting = !!started && !!summary && !summary.ready;
+  useEffect(() => {
+    if (!waiting) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1500);
+    return () => clearInterval(t);
+  }, [waiting]);
   const picked = useDebounced(draft, 300);
   const plan = useRpc<RunVariantsPlan>('eval.runVariants', { draft: picked, environment, dryRun: true }, { keep: true, enabled: variants.length > 0 && !!picked.provider, reloadOn: ['data.changed'] });
   const dataRuns = useMemo(() => runs, [runs]);
