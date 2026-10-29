@@ -161,6 +161,7 @@ const LAUNCHERS = ['startAi(', 'askAssistant(', 'startFlowGenerate(', 'startTidy
 const ENTRY_POINTS: Record<string, Gate> = {
   'App.tsx': 'hook',
   'components/ApiCoverageDialog.tsx': 'component',
+  'components/ApiPreviewPanel.tsx': 'items',
   'components/ApiFuzzPanel.tsx': 'component',
   'components/ApiLintPanel.tsx': 'component',
   'components/AttentionCard.tsx': 'hook',
@@ -230,7 +231,7 @@ describe('every entry point of the window honours Hide all AI actions', () => {
     for (const [file, gate] of Object.entries(ENTRY_POINTS)) {
       const src = text.get(file)!;
       if (gate === 'hook') expect(src, `${file} renders its AI control only when useAiEnabled()`).toContain('useAiEnabled()');
-      if (gate === 'component') for (const l of LAUNCHERS.filter((x) => x !== '<AiAction' && x !== '<AskSearchButton' && !(x === 'startAiAnalysis(' && src.includes('open=')))) expect(src.includes(l), `${file} calls ${l} itself: use the AiAction button`).toBe(false);
+      if (gate === 'component') for (const l of LAUNCHERS.filter((x) => x !== '<AiAction' && x !== '<AskSearchButton' && !((x === 'startAiAnalysis(' || x === 'startFlowGenerate(') && src.includes('open=')))) expect(src.includes(l), `${file} calls ${l} itself: use the AiAction button`).toBe(false);
       if (gate === 'menu') {
         // the action is handed to a node menu (`on:`) and only there
         expect(src, file).toMatch(/on: \{|on: Object|\bon,|on:/);

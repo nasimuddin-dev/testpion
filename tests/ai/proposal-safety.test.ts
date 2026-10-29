@@ -159,7 +159,7 @@ describe('AI settings of the wrong shape', () => {
     } catch (e) {
       const err = e as { message: string; suggestions?: string[] };
       expect(err.message).toMatch(/over the cap of 50 per call/);
-      expect(err.suggestions!.join(' ')).toMatch(/Settings ▸ AI assistant ▸ Limits.*"maxTokensPerCall"/);
+      expect(err.suggestions!.join(' ')).toMatch(/Settings ▸ AI assistant ▸ Limits.*ai.maxTokensPerCall/);
     }
   });
 });

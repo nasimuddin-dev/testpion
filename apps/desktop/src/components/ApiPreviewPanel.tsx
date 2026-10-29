@@ -1,12 +1,12 @@
 import { CodeBlock } from './CodeBlock';
-import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, RotateCcw, Sparkles, Workflow } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, FlaskConical, Lock, RotateCcw, Workflow } from 'lucide-react';
 import { useState } from 'react';
 import { confirmAction, useApp } from '../store';
 import { TreeBadge } from './CollectionTree';
 import { Badge, Busy, Button, Empty, Menu } from './ui';
 import { generateTestsFromDefinition } from '../lib/spec-tests';
 import { generateFlows } from '../lib/files';
-import { LABEL } from '../lib/vocabulary';
+import { aiMenuItems } from '../lib/ai-menu';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { startFlowGenerate } from './ai/flow-generate';
 
@@ -130,7 +130,7 @@ export const generateSpecTests = (spec: string) =>
   });
 
 export function ApiPreviewPanel({ outline, error, spec, onRetry }: { outline?: ApiOutline; error?: string; spec?: string; /** Read the document again. */ onRetry(): void }) {
-  const aiOn = useAiEnabled();
+  useAiEnabled(); // the menu below re-renders when "Hide all AI actions" changes
   if (error)
     return (
       <Empty title="Couldn't read the document" actions={[{ label: 'Retry', icon: <RotateCcw size={13} />, onClick: onRetry }]}>
@@ -155,7 +155,7 @@ export function ApiPreviewPanel({ outline, error, spec, onRetry }: { outline?: A
               width={300}
               items={[
                 { label: 'A test per operation (example + an invalid request)', icon: <FlaskConical size={14} />, onSelect: () => void generateSpecTests(spec) },
-                ...(aiOn ? [{ label: LABEL.generateSpecTests, icon: <Sparkles size={14} />, onSelect: () => startFlowGenerate({ mode: 'spec', spec }) }] : []),
+                ...aiMenuItems('generateSpecTests', () => startFlowGenerate({ mode: 'spec', spec })),
                 { label: 'Integration flows (create, read, update, list, delete)', icon: <Workflow size={14} />, onSelect: () => void generateFlows({ path: spec }, confirmAction) },
               ]}
             />

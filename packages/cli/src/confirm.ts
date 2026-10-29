@@ -101,6 +101,7 @@ export const CLI_NO_CONFIRM: Record<string, string> = {
   flow_webhook_set: 'flow edit --no-webhook is one line of a flow file, shown by --dry-run',
   debugger_rules: 'debug breakpoints and debug presets --add write the rules file you named (--dry-run shows it); removing rules is editing that file',
   debugger_session: 'the CLI has no Debugger session twin',
+  debugger_scripts: 'debug script test|add|list: add writes the rules file you named (--dry-run shows it); removing a script rule is editing that file',
   ai_attempt_fix: 'ai attempt-fix is the run: you named the proposal and --times',
   ai_run_task: 'an AI call from an agent asks because the agent spends your money; on the command line you typed the call, and --dry-run / --max-cost bound it',
   flow_generate: 'flow generate is the run: you typed it, --dry-run shows the estimate, --max-cost bounds it, and nothing is written until --apply',

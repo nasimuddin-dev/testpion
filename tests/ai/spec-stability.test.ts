@@ -73,7 +73,10 @@ describe('spec-stable verifier', () => {
     body: '{"item":"x","qty":{{$randomInt(1,20)}}}'
     assertions: [{ type: status, expected: 201 }]`);
       const raw = random;
-      const yaml = `defaults: { type: http }\ntests:\n${raw.join('\n')}\n  - id: stable\n    name: Health\n    method: GET\n    url: "{{baseUrl}}/health"\n    assertions: [{ type: status, expected: 200 }]\n  - id: wrong\n    name: Health says 500\n    method: GET\n    url: "{{baseUrl}}/health"\n    assertions: [{ type: status, expected: 500 }]\n`;
+      // the test that can never pass comes first: the badge names the first five of each kind, and random ones that fail twice would crowd it out
+      const wrong = `  - id: wrong\n    name: Health says 500\n    method: GET\n    url: "{{baseUrl}}/health"\n    assertions: [{ type: status, expected: 500 }]`;
+      const stable = `  - id: stable\n    name: Health\n    method: GET\n    url: "{{baseUrl}}/health"\n    assertions: [{ type: status, expected: 200 }]`;
+      const yaml = `defaults: { type: http }\ntests:\n${[wrong, stable, ...raw].join('\n')}\n`;
       const badge = await verifySpecStable(yaml, loadOpenApi(SHOP_SPEC), ctx.services);
       expect(badge.status).toBe('warn');
       expect(badge.label).toMatch(/unstable/);
