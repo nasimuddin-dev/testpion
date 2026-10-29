@@ -12,7 +12,21 @@ import { compileUserRegex, safeTest } from '../util/safe-regex.js';
  * request or the response pauses for editing). Rules live in profiles (sets switched as one). Every rule the user
  * makes: there is no built-in list of programs to hide.
  */
-type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint' | 'remap' | 'fault' | 'frame';
+type DebuggerRuleKind = 'ignore' | 'only' | 'highlight' | 'modify' | 'reply' | 'redirect' | 'breakpoint' | 'remap' | 'fault' | 'frame' | 'script';
+
+/** The JavaScript of a script rule (FG-21): its text or a file of the workspace, and how long a hook may run (default 100 ms). */
+export interface ScriptSpec {
+  code?: string;
+  file?: string;
+  timeoutMs?: number;
+}
+
+/** Whether the response must be held whole for this rule's `onResponse` (a script file may define it, so it is held too). */
+export function scriptWantsResponse(r: Pick<DebuggerRule, 'script'>): boolean {
+  const s = r.script;
+  if (!s) return false;
+  return s.code !== undefined ? /\bonResponse\b/.test(s.code) : true;
+}
 
 /** A find-and-replace on a body: the text as it is, or a regular expression (`$1` in `replace` is a group). */
 export interface TextReplace {
@@ -155,6 +169,8 @@ export interface DebuggerRule {
   frame?: FrameSpec;
   /** breakpoint: which side pauses. */
   breakpoint?: 'request' | 'response';
+  /** script (FG-21): `onRequest(ctx)` / `onResponse(ctx)`, see script-rules.ts. */
+  script?: ScriptSpec;
 }
 
 export interface DebuggerRulesFile {
@@ -371,6 +387,8 @@ export function describeRule(r: DebuggerRule): string {
       return `Reply to ${where} with ${r.reply?.file ? `the file ${r.reply.file}` : r.reply?.folder ? `a file of the folder ${r.reply.folder}` : (r.reply?.status ?? 200)}${r.reply?.delayMs ? ` after ${r.reply.delayMs} ms` : ''}`;
     case 'redirect':
       return `Redirect ${where} to ${r.redirect?.host ? `${r.redirect.scheme ? `${r.redirect.scheme}://` : ''}${r.redirect.host}` : 'the same host'}${r.redirect?.rewrite ? `, path ${r.redirect.rewrite.from} becomes ${r.redirect.rewrite.to}` : ''}`;
+    case 'script':
+      return `Run a script on ${where}${r.script?.file ? `: ${r.script.file}` : ''}`;
     case 'remap':
       return `Reach ${r.match.host || 'every host'} at ${r.remap?.to ?? '?'}${r.remap?.scheme && r.remap.scheme !== 'auto' ? ` over ${r.remap.scheme}` : ''}${r.remap?.preserveHost ? ', keeping the Host header' : ''}`;
     case 'fault': {
@@ -529,6 +547,8 @@ interface RequestDecision {
   lateBreakpoints?: DebuggerRule[];
   responseHeaders?: HeaderEdit[];
   responseBody?: string;
+  /** The script rules that matched: the proxy runs their hooks (script-rules.ts). */
+  scripts?: DebuggerRule[];
   /** The names of the rules that acted, and their ids (hit counts). */
   applied: string[];
   appliedIds: string[];
@@ -587,11 +607,15 @@ export function decideRequest(rules: DebuggerRule[], e: DebuggerExchange, rand: 
       case 'breakpoint':
         d.breakpoint ??= r.breakpoint ?? 'request';
         break;
+      case 'script':
+        if (r.script) (d.scripts ??= []).push(r);
+        if (r.script && scriptWantsResponse(r)) d.hold = true;
+        break;
     }
     d.applied.push(r.name);
     d.appliedIds.push(r.id);
   }
-  d.hold = !!(d.responseHeaders || d.responseBody !== undefined || d.responseReplace || d.setStatus || d.fault?.action === 'truncate');
+  d.hold ||= !!(d.responseHeaders || d.responseBody !== undefined || d.responseReplace || d.setStatus || d.fault?.action === 'truncate');
   return d;
 }
 

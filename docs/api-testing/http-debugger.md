@@ -190,6 +190,30 @@ Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as
 
 A **frame** rule (Matches picks the connection by host and URL) drops, changes, pauses or holds back the frames of a WebSocket, sent by the program, received from the server, or both, optionally only when the text has a word or matches a /pattern/. *Pause for editing* shows each frame in the breakpoint panel: change its text and continue, or abort to drop it. The Frames list marks the frames a rule dropped, changed or paused. Only whole text frames are changed (a message split into fragments, a binary frame and ping/pong pass as they are), and the server is asked not to compress the frames while a frame rule is on. Terminal: `testpion debugger rule --add '{"kind":"frame","match":{"host":"chat.test"},"frame":{"direction":"received","action":"replace","find":"secret","replace":"***"}}'`.
 
+### Script rules
+
+When the rule kinds above are not enough, a **script** rule (Kind ▸ Run a JavaScript script) runs JavaScript on every request and response its Matches selects. It defines `onRequest(ctx)` and / or `onResponse(ctx)`:
+
+```js
+function onRequest(ctx) {
+  ctx.request.headers['x-env'] = 'staging';                 // set a header; `delete` removes one
+  if (ctx.request.url.includes('/admin')) ctx.reply(403, { error: 'blocked' });   // answer here: the server never sees it
+}
+function onResponse(ctx) {
+  if (ctx.response.status === 500) ctx.response.status = 503;
+  ctx.response.body = ctx.response.body.replace('hunter2', '***');
+}
+```
+
+- **What it sees**: `ctx.request` (`method`, `url`, `host`, `headers` with lower-case names, `body` as text, or `undefined` for a body that is not text or is over 1 MB) and, in `onResponse`, `ctx.response` (`status`, `headers`, `body`). Change the fields to change what is sent on. `ctx.reply(status, body, headers)`, `ctx.delay(ms)`, `ctx.highlight(color)`, `ctx.ignore()` and `console.log` do what they say.
+- **What it cannot do**: it runs in the same sandbox as the scripts of a request, so there is no network, no file access, no `require` of modules from disk and no access to environments or secrets. A hook has 100 ms by default (**Time a hook may run**, 10 to 2000 ms) and 16 MB. A script with `onResponse` makes the proxy hold the whole response before it goes on, like the other response edits.
+- **When it fails**: a hook that throws, does not finish in time, or is not valid JavaScript is skipped for that exchange and the traffic goes on unchanged. The rule's name shows `(script error: …)` in the exchange's rules, and the error is kept for the rule.
+- **Test before you switch it on**: the rule editor's **Test** picks a captured exchange, runs both hooks on it and lists what the script would do ("It sets the request header x-env: staging", "It changes the response status to 503") with its log lines. Nothing is sent and nothing changes. A script that fails shows its message and line.
+- **A file instead of text**: **Use a file instead** keeps the script in the workspace (for example `debugger/scripts/auth.js`), so git tracks and reviews it like code. The file is read again when it changes.
+- A script rule works on plain HTTP and decrypted HTTPS requests; WebSocket frames and gRPC have their own rule kinds. Use a declarative rule when one does the job: it is faster and needs no code.
+
+From the terminal and for agents: `testpion debugger script test <script.js> <session.har> <id|#n>` (what it would do on a captured exchange), `script add <script.js> --host api.test` (a rule that reads the file from the workspace; `--inline` keeps the text in the rule) and `script list`; MCP `debugger_scripts` with `action: list | set | enable | disable | remove | test`. The engine is also usable from Node: see [The engine as an SDK](/architecture/engine-sdk).
+
 ## Record a flow
 
 Select rows and pick **Create flow from selection…** (right-click, or the toolbar's **Flow** menu), or **Flow ▸ Record a flow…** to record what you do next until **Stop recording**: the exchanges become a test flow, with the tokens and ids that pass from one response into a later request extracted and passed as `{{variables}}`, static assets and analytics left out, and secrets turned into variables to set in an environment. The dialog shows the steps and the links it found before anything is written; **Create** opens the flow in the designer. See [Record a flow](/test-runner/integration-testing#record-a-flow).

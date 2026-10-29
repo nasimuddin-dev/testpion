@@ -98,9 +98,11 @@ export interface RpcParamTypes {
   'debug.saveFilterPreset': RpcCommonParams & { name: string; filter: Record<string, unknown> };
   'debug.saveRule': RpcCommonParams & { rule: Record<string, unknown> };
   'debug.saveToCollection': RpcCommonParams & { ids?: string[]; since?: string; name?: string; group?: string; keepNoise?: boolean };
+  'debug.scriptRun': RpcCommonParams & { id: string };
   'debug.selfTest': RpcCommonParams & { url: string; method?: string; headers?: Record<string, unknown>; body?: string };
   'debug.start': RpcCommonParams & { port?: number; lan?: boolean };
   'debug.systemProxy': RpcCommonParams & { on: boolean };
+  'debug.testScript': RpcCommonParams & { rule: Record<string, unknown>; id: string };
   'debug.view': RpcCommonParams & { session?: string };
   'diagnostics.bundle': RpcCommonParams;
   'diagnostics.get': RpcCommonParams;
@@ -360,4 +362,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 343;
+export const RPC_METHOD_COUNT = 345;

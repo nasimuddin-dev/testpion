@@ -196,6 +196,7 @@ const docsSidebar = [
       { text: 'Design', link: '/architecture/design' },
       { text: 'Execution Engine', link: '/architecture/execution-engine' },
       { text: 'Plugin System', link: '/architecture/plugin-system' },
+      { text: 'The engine as an SDK', link: '/architecture/engine-sdk' },
       { text: 'Development', link: '/contributing/development' },
       { text: 'Contributor Notes', link: '/contributing/architecture' },
     ],

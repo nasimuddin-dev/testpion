@@ -1,6 +1,7 @@
 import { startDebuggerProxy, type DebuggerExchange, type DebuggerProxy } from '../../debugger/proxy.js';
 import { exchangesFromHar, exchangesToHar } from '../../debugger/har.js';
-import { describeRule, rulePresets, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
+import { describeRule, rulePresets, ruleMatches, statusMatches, type DebuggerRule } from '../../debugger/rules.js';
+import { lastScriptRun, testRuleScript } from '../../debugger/script-rules.js';
 import { checkRuleShape } from '../../debugger/rule-shape.js';
 import { describeNetworkSpeed, NETWORK_SPEEDS, parseNetworkSpeed, type NetworkSpeed } from '../../debugger/network-speed.js';
 import { annotate, AUTO_BREAKPOINT_LABEL, autoBreakpointMode, cleanAnnotation, parseAutoBreakpointMode, withAutoBreakpoint } from '../../debugger/auto-breakpoint.js';
@@ -397,7 +398,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         if (a.action === 'add') {
           const from = typeof a.preset === 'string' ? rulePresets(typeof a.host === 'string' ? a.host : undefined).find((p) => p.id === a.preset)?.rule : (a.rule as Partial<DebuggerRule> | undefined);
           if (!from) throw new ApsError('ValidationError', 'add needs a preset id or a rule object');
-          if (!['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
+          if (!['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame', 'script'].includes(String(from.kind))) throw new ApsError('ValidationError', `Unknown rule kind "${String(from.kind)}"`);
           if (from.kind === 'breakpoint') throw new ApsError('ValidationError', 'A custom breakpoint needs the app window; use action breakpoints for the automatic ones, or modify / reply here');
           const rule: DebuggerRule = {
             ...(from as DebuggerRule),
@@ -423,6 +424,88 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           return list();
         }
         return list();
+      },
+    },
+    {
+      name: 'debugger_scripts',
+      write: true,
+      description:
+        "JavaScript rule scripts for the HTTP Debugger: a script defines onRequest(ctx) and / or onResponse(ctx) and runs for the traffic its match selects, in a sandbox with no network, files or secrets (100 ms a hook by default, 2 s at most; a hook that fails or runs too long is skipped and the traffic goes on). ctx.request: method, url, host, headers (lower-case names), body (text or undefined); onResponse also ctx.response: status, headers, body. Change them to rewrite the request or the answer; ctx.reply(status, body, headers) answers without the server; ctx.delay(ms); ctx.highlight(color); ctx.ignore(); console.log(...). Actions: list (script rules with their last run), set (add a script rule, or replace the one with id: code or file of the workspace, match host / url / method, timeout_ms, enabled, name), enable / disable / remove (by id), test (run a script, a saved rule's by id or code given here, against a captured exchange and say what it would do; nothing is sent or changed).",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['list', 'set', 'enable', 'disable', 'remove', 'test'] },
+          id: str('With set (to replace), enable, disable, remove, test: the rule id'),
+          name: str('With set: the rule name'),
+          code: str('With set / test: the script text (defines onRequest and / or onResponse)'),
+          file: str('With set / test: a script file of the workspace instead of code, e.g. debugger/scripts/auth.js'),
+          host: str('With set / test: glob on the host the rule matches'),
+          url: str('With set / test: glob (or /regex/) on the URL the rule matches'),
+          method: str('With set / test: the methods the rule matches'),
+          timeout_ms: { type: 'number', description: 'With set / test: how long a hook may run, 10 to 2000 (default 100)' },
+          enabled: { type: 'boolean', description: 'With set: whether the rule is on (default true)' },
+          exchange: str('With test: the id of the captured exchange to run the script on'),
+        },
+        required: ['action'],
+      },
+      run: async (a) => {
+        const scripts = () => rules.filter((r) => r.kind === 'script');
+        const view = () => ({
+          scripts: scripts().map((r) => {
+            const last = lastScriptRun(r.id);
+            return {
+              id: r.id,
+              name: r.name,
+              enabled: r.enabled,
+              match: r.match,
+              summary: describeRule(r),
+              script: r.script?.file ? { file: r.script.file, timeoutMs: r.script.timeoutMs } : { code: r.script?.code, timeoutMs: r.script?.timeoutMs },
+              ...(last ? { lastRun: { phase: last.phase, ran: last.ran, ms: last.ms, error: last.error && red.redactString(last.error), logs: last.logs.map((l) => red.redactString(l)) } } : {}),
+            };
+          }),
+        });
+        const build = (id: string): DebuggerRule => {
+          const existing = rules.find((r) => r.id === a.id);
+          const code = typeof a.code === 'string' ? a.code : undefined;
+          const file = typeof a.file === 'string' && a.file ? a.file : undefined;
+          const script = { ...(code !== undefined ? { code } : file ? { file } : (existing?.script ?? {})), ...(typeof a.timeout_ms === 'number' ? { timeoutMs: a.timeout_ms } : existing?.script?.timeoutMs ? { timeoutMs: existing.script.timeoutMs } : {}) };
+          const match = { ...(existing?.match ?? {}), ...(typeof a.host === 'string' ? { host: a.host } : {}), ...(typeof a.url === 'string' ? { url: a.url } : {}), ...(typeof a.method === 'string' ? { method: a.method } : {}) };
+          const rule: DebuggerRule = { id, name: typeof a.name === 'string' && a.name ? a.name : (existing?.name ?? ''), enabled: a.enabled === undefined ? (existing?.enabled ?? true) : a.enabled !== false, kind: 'script', match, script };
+          rule.name ||= describeRule({ ...rule, name: '' });
+          const problem = checkRuleShape(rule);
+          if (problem) throw new ApsError('ValidationError', problem);
+          return rule;
+        };
+        if (a.action === 'list' || a.action === undefined) return view();
+        if (a.action === 'set') {
+          const id = typeof a.id === 'string' && a.id ? a.id : shortId('rule-');
+          const i = rules.findIndex((r) => r.id === id);
+          if (i >= 0 && rules[i]!.kind !== 'script') throw new ApsError('ValidationError', `Rule ${id} is not a script rule`);
+          const rule = build(id);
+          if (i >= 0) rules[i] = rule;
+          else rules.push(rule);
+          return { saved: id, ...view() };
+        }
+        if (a.action === 'enable' || a.action === 'disable' || a.action === 'remove') {
+          const i = rules.findIndex((r) => r.id === a.id && r.kind === 'script');
+          if (i < 0) throw new ApsError('ValidationError', `No script rule ${String(a.id)}`);
+          if (a.action === 'remove') rules.splice(i, 1);
+          else rules[i]!.enabled = a.action === 'enable';
+          return view();
+        }
+        if (a.action === 'test') {
+          const e = session.find((x) => x.id === a.exchange);
+          if (!e) throw new ApsError('ValidationError', 'test needs exchange: the id of a captured exchange (debugger_exchanges lists them)');
+          let rule: DebuggerRule;
+          if (typeof a.code !== 'string' && typeof a.file !== 'string') {
+            const saved = rules.find((r) => r.id === a.id && r.kind === 'script');
+            if (!saved) throw new ApsError('ValidationError', 'test needs a script rule id, or code (or file) to run');
+            rule = saved;
+          } else rule = build(typeof a.id === 'string' && a.id ? a.id : 'test');
+          const t = await testRuleScript(rule, e, ruleMatches(rule, e, 'request'), d.store?.root);
+          return { exchange: e.id, ...t, phases: t.phases.map((p) => ({ ...p, logs: p.logs.map((l) => red.redactString(l)), does: p.does.map((l) => red.redactString(l)), ...(p.error ? { error: red.redactString(p.error) } : {}) })) };
+        }
+        throw new ApsError('ValidationError', `Unknown action ${String(a.action)}`);
       },
     },
     {

@@ -4,9 +4,11 @@
  *   debugger annotate <har> <ref> a note and a colour mark on one entry of a HAR file (FG-11)
  *   debugger presets              the ready-made rules (Disable caching, User agent, Hide…), listed or added to a rules file (FG-15)
  *   debugger remap                host remapping rules (FG-4): add api.test=localhost:3000, list, remove, import the OS hosts file
+ *   debugger script               JavaScript rule scripts (FG-21): test one on a captured exchange, add one as a rule, list them
  *   debugger rule                 any rule as JSON (map local, rewrite, faults, WebSocket frames: FG-6, FG-7, FG-26), listed, added or removed
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import {
   AUTO_BREAKPOINT_LABEL,
@@ -21,6 +23,8 @@ import {
   shortId,
   withAutoBreakpoint,
   exchangesFromHar,
+  ruleMatches,
+  testRuleScript,
   type DebuggerRule,
   type DebuggerRulesFile,
 } from '@testpion/core';
@@ -194,6 +198,93 @@ export function registerDebugNotesCommands(program: Command): void {
     });
 
   program
+    .command('debug-script')
+    .description(
+      'JavaScript rule scripts (FG-21): a script defines onRequest(ctx) and / or onResponse(ctx) and changes the traffic the Debugger forwards (no network, files or secrets; 100 ms a hook). `debug script test <script.js> <har> <entry>` runs it on a captured exchange and says what it would do, sending nothing; `debug script add <script.js> --host api.test` adds a rule that reads the file from the workspace (--inline keeps the text in the rule); `debug script list` shows the script rules',
+    )
+    .argument('<action>', 'test | add | list')
+    .argument('[script]', 'the script file (test, add)')
+    .argument('[har]', 'test: the HAR file with the exchange')
+    .argument('[entry]', 'test: the exchange id (_testpion.id), or #3 for the third entry')
+    .option('--host <glob>', 'the rule matches this host (add, test)')
+    .option('--url <pattern>', 'the rule matches this URL glob or /regex/ (add, test)')
+    .option('--method <methods>', 'the rule matches these methods (add, test)')
+    .option('--name <name>', 'the rule name (add)')
+    .option('--timeout-ms <ms>', 'how long a hook may run, 10 to 2000 (default 100)')
+    .option('--inline', 'add: keep the script text in the rule instead of reading the file from the workspace')
+    .option('--rules <file.json>', "the rules file (default: the workspace's debugger/rules.json)")
+    .option('--dry-run', 'change nothing: say what would be written')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
+    .action(async (action: string, scriptArg: string | undefined, harArg: string | undefined, entry: string | undefined, o: RulesOpts & { host?: string; url?: string; method?: string; name?: string; timeoutMs?: string; inline?: boolean }) => {
+      if (!['test', 'add', 'list'].includes(action)) throw new CliError('The action is test, add or list', EXIT.CONFIG_ERROR);
+      const timeoutMs = o.timeoutMs ? Number(o.timeoutMs) : undefined;
+      const match = { ...(o.host ? { host: o.host } : {}), ...(o.url ? { url: o.url } : {}), ...(o.method ? { method: o.method } : {}) };
+      const readScript = () => {
+        if (!scriptArg) throw new CliError(`${action} needs the script file`, EXIT.CONFIG_ERROR);
+        try {
+          return readFileSync(scriptArg, 'utf8');
+        } catch (e) {
+          throw new CliError(`${scriptArg}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+        }
+      };
+      if (action === 'list') {
+        const file = await rulesPath(o);
+        const rules = readRules(file).active.filter((r) => r.kind === 'script').map((r) => ({ id: r.id, name: r.name, enabled: r.enabled, match: r.match, script: r.script?.file ?? 'inline', summary: describeRule(r) }));
+        if (o.json) return printJson({ file, scripts: rules });
+        if (!rules.length) console.log(dim('No script rules. Add one with: testpion debugger script add <script.js> --host <host>'));
+        for (const r of rules) console.log(`${r.enabled ? ' ' : dim('-')} ${r.id.padEnd(22)} ${r.summary}`);
+        return;
+      }
+      if (action === 'test') {
+        const code = readScript();
+        if (!harArg || !entry) throw new CliError('test needs a HAR file and an entry: debug script test <script.js> <har> <id|#n>', EXIT.CONFIG_ERROR);
+        let list: ReturnType<typeof exchangesFromHar>;
+        try {
+          list = exchangesFromHar(JSON.parse(readFileSync(harArg, 'utf8')));
+        } catch (e) {
+          throw new CliError(`${harArg}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+        }
+        const byPlace = /^#(\d+)$/.exec(entry);
+        const found = byPlace ? list[Number(byPlace[1]) - 1] : list.find((x) => x.id === entry);
+        if (!found) throw new CliError(`No entry ${entry} in ${harArg} (use an exchange id, or #1 for the first entry)`, EXIT.CONFIG_ERROR);
+        const rule: DebuggerRule = { id: 'test', name: 'Script', enabled: true, kind: 'script', match, script: { code, ...(timeoutMs ? { timeoutMs } : {}) } };
+        const bad = checkRuleShape(rule);
+        if (bad) throw new CliError(bad, EXIT.CONFIG_ERROR);
+        const t = await testRuleScript(rule, found, ruleMatches(rule, found, 'request'), undefined);
+        if (o.json) return printJson({ id: found.id, url: found.url, ...t });
+        if (!t.matches) console.log(dim("This exchange does not match --host / --url / --method, so the rule would not run for it."));
+        for (const ph of t.phases) {
+          console.log(`${ph.phase === 'request' ? 'onRequest' : 'onResponse'}: ${ph.error ? 'failed: ' + ph.error : ph.noHook ? 'not defined' : `ran in ${ph.ms} ms`}`);
+          for (const d of ph.does) console.log(`  it ${d}`);
+          for (const l of ph.logs) console.log(dim(`  log: ${l}`));
+        }
+        if (!t.ok) throw new CliError('The script failed', EXIT.CONFIG_ERROR);
+        return;
+      }
+      // add
+      const code = readScript();
+      const file = await rulesPath(o);
+      const { active, write } = readRules(file);
+      let script: NonNullable<DebuggerRule['script']>;
+      if (o.inline) script = { code };
+      else {
+        const root = await withWorkspace(o.workspace, (store) => store.root);
+        const rel = relative(root, resolve(scriptArg!)).replaceAll('\\', '/');
+        if (!rel || rel.startsWith('..') || isAbsolute(rel)) throw new CliError('The script file is outside the workspace: move it to debugger/scripts/, or use --inline to keep its text in the rule', EXIT.CONFIG_ERROR);
+        script = { file: rel };
+      }
+      if (timeoutMs) script.timeoutMs = timeoutMs;
+      const rule: DebuggerRule = { id: shortId('rule-'), name: o.name ?? '', enabled: true, kind: 'script', match, script };
+      rule.name ||= describeRule(rule);
+      const bad = checkRuleShape(rule) ?? (script.file && !/\bon(Request|Response)\b/.test(code) ? 'The script defines neither onRequest(ctx) nor onResponse(ctx), so it would never do anything' : undefined);
+      if (bad) throw new CliError(bad, EXIT.CONFIG_ERROR);
+      if (!o.dryRun) write([...active, rule]);
+      if (o.json) return printJson({ file, added: { ...rule, summary: describeRule(rule) }, changed: !o.dryRun, ...(o.dryRun ? { dryRun: true } : {}) });
+      console.log(`${green(o.dryRun ? 'Would add' : 'Added')} ${rule.name} to ${file}`);
+    });
+
+  program
     .command('debug-rule')
     .description('any Debugger rule as JSON, so a script or an agent can do what the rule editor does: map local (reply.file / reply.folder), redirect with a path rewrite, modify with requestReplace / responseReplace / setStatus, fault (drop, timeout, truncate, error), frame (WebSocket), remap. `--add \'{"kind":"fault",...}\'` (or @file.json) appends it, --list shows the rules, --remove <id> deletes one')
     .option('--add <json>', 'a rule object, or @path to a JSON file with one')
@@ -215,7 +306,7 @@ export function registerDebugNotesCommands(program: Command): void {
         } catch (e) {
           throw new CliError(`--add is not valid JSON: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
         }
-        const kinds = ['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame'];
+        const kinds = ['ignore', 'only', 'highlight', 'modify', 'reply', 'redirect', 'breakpoint', 'remap', 'fault', 'frame', 'script'];
         if (!raw || typeof raw !== 'object' || !kinds.includes(String(raw.kind))) throw new CliError(`A rule has a kind: ${kinds.join(', ')}`, EXIT.CONFIG_ERROR);
         const rule: DebuggerRule = { ...(raw as DebuggerRule), id: shortId('rule-'), enabled: raw.enabled !== false, match: raw.match ?? {}, name: raw.name ?? '' };
         rule.name = rule.name || describeRule(rule);
