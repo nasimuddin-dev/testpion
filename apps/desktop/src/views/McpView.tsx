@@ -12,6 +12,7 @@ import { useIntent, useSaveShortcut } from '../hooks';
 import type { KeyValue, McpServerConfig } from '../types';
 import { formatMs, uid, plural } from '../lib/format';
 import { CodeEditor } from '../components/CodeEditor';
+import { GitMark } from '../components/GitMark';
 import { JsonTree } from '../components/JsonView';
 import { useSticky } from '../lib/sticky';
 import { KeyValueEditor } from '../components/KeyValueEditor';
@@ -547,7 +548,10 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
               </>
             ) : s.transport === 'mock' ? (
               <Field label="Mock definition" hint="A *.mcp-mock.yaml file in this workspace, with tools and their canned responses, resources and prompts. Connect to a real server and use Save as mock to record one.">
-                <Input className="mono" value={s.mockFile} onChange={(e) => onChange({ ...s, mockFile: e.target.value })} />
+                <div className="flex items-center gap-2">
+                  <Input className="mono flex-1" value={s.mockFile} onChange={(e) => onChange({ ...s, mockFile: e.target.value })} />
+                  <GitMark to={{ kind: 'git-file', path: s.mockFile.replaceAll('\\', '/') }} />
+                </div>
               </Field>
             ) : (
               <>

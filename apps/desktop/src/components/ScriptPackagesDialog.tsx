@@ -4,6 +4,7 @@ import { call } from '../api';
 import { promptText, useApp, attempt } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
 import { CodeEditor } from './CodeEditor';
+import { GitMark } from './GitMark';
 import { Button, cx, Empty, Modal } from './ui';
 
 const NAME = /^(@[A-Za-z0-9][\w.-]*\/)?[A-Za-z0-9][\w.-]*$/;
@@ -92,8 +93,9 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
     >
       <div className="flex h-[60vh] min-h-0 border border-line rounded-md overflow-hidden">
         <div className="w-56 shrink-0 border-r border-line flex flex-col">
-          <div className="p-2 border-b border-line">
-            <Button size="sm" className="w-full" icon={<Plus size={12} />} onClick={() => void create()}>
+          <div className="p-2 border-b border-line flex items-center gap-2">
+            <GitMark to={{ section: 'script-package' }} />
+            <Button size="sm" className="flex-1" icon={<Plus size={12} />} onClick={() => void create()}>
               New package
             </Button>
           </div>
@@ -101,7 +103,9 @@ export function ScriptPackagesDialog({ onClose }: { onClose(): void }) {
             {list.map((p) => (
               <button key={p.name} className={cx('w-full text-left px-3 py-1.5 text-sm mono truncate flex items-center gap-2', sel === p.name ? 'bg-accent-soft text-accent' : 'hover:bg-hover')} onClick={() => setSel(p.name)}>
                 <Package size={12} className="shrink-0 text-muted" />
-                {p.name}
+                <span className="truncate">{p.name}</span>
+                <span className="ml-auto" />
+                <GitMark to={{ kind: 'git-file', path: `packages/${p.name}.js` }} />
               </button>
             ))}
           </div>

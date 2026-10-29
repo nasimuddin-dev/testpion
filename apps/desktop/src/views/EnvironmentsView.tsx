@@ -22,6 +22,7 @@ import type { NodeMenuCtx } from '../lib/node-menu';
 import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/TreeParts';
 import { buildNodeMenu } from '../lib/node-menu';
 import { TreeRowShell } from '../components/TreeRowShell';
+import { GitMark } from '../components/GitMark';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
 import { deliverSave, type SaveResult } from '../lib/files';
 import { AlsoAddDialog } from '../components/AlsoAddTo';
@@ -465,6 +466,10 @@ export function EnvironmentsView() {
         {scope === 'collection' && <CollectionVariablesPane initial={colVarsFor} />}
         {scope === 'workspace' && (
           <div className="p-3 flex flex-col gap-3 overflow-auto h-full">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              Workspace variables
+              <GitMark to={{ kind: 'environment', scope: 'workspace' }} />
+            </div>
             <ScopeHint
               empty={!wsVars.length}
               text="Workspace variables are shared by every collection and environment in this workspace, e.g. an app name or a team id. An environment or collection variable with the same name wins."

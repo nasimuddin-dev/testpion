@@ -25,6 +25,7 @@ import { copyText } from '../lib/clipboard';
 import { useExternalChange } from '../lib/external-change';
 import { jsonLines, jsonPretty, outputFileName, toCsv } from '@testpion/shared';
 import { OutputActions } from '../components/output/OutputFrame';
+import { GitMark } from '../components/GitMark';
 import type { OutputSpec } from '../components/output/output-core';
 
 interface ProtoFile {
@@ -468,7 +469,10 @@ export function GrpcView() {
                   <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => (set({ protoFiles: [...d.protoFiles, { name: `service${d.protoFiles.length || ''}.proto`, text: 'syntax = "proto3";\n\npackage example.v1;\n' }] }), setEditing(d.protoFiles.length))}>
                     New
                   </Button>
-                  <span className="text-xs text-muted ml-auto">{methods.length} methods</span>
+                  <span className="text-xs text-muted ml-auto flex items-center gap-2">
+                    <GitMark to={{ section: 'proto' }} />
+                    {methods.length} methods
+                  </span>
                 </div>
                 {protoError && <div className="px-3 py-2 text-xs text-bad border-b border-line">{protoError}</div>}
                 {d.descriptorSet ? (
@@ -504,6 +508,7 @@ export function GrpcView() {
                         <div key={i} className={cx('group flex items-center gap-2 px-3 h-8 text-sm cursor-pointer hover:bg-hover', editing === i && 'bg-accent-soft')} onClick={() => setEditing(i)}>
                           <FileCode2 size={13} className="text-muted shrink-0" />
                           <Input className="h-6 min-h-6 mono text-xs flex-1" value={f.name} aria-label="Import path" onChange={(e) => set({ protoFiles: d.protoFiles.map((p, j) => (j === i ? { ...p, name: e.target.value } : p)) })} />
+                          <GitMark to={{ kind: 'git-file', path: `protos/${f.name}` }} />
                           <IconButton label="Remove file" className="opacity-0 group-hover:opacity-100" onClick={(e) => (e.stopPropagation(), set({ protoFiles: d.protoFiles.filter((_, j) => j !== i) }), setEditing(undefined))}>
                             <Trash2 />
                           </IconButton>
