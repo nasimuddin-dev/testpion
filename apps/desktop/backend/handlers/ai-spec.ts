@@ -22,7 +22,14 @@ export function aiSpecHandlers(be: Backend): Handlers {
     'ai.specGaps': (p: SpecParams) => specGapsWithDraft(be.ws, p.spec, options(p)),
     /** Tests for the gaps: TestPion's own cases plus the model's ideas, validated against the document; `noAi`: the own cases only. */
     'ai.specTests': async (p: SpecParams & { hint?: string; privacy?: string; path?: string; environment?: string; dryRun?: boolean; noAi?: boolean; requestId?: string }) => {
-      if (p.noAi) return { proposal: await draftSpecTestsProposal(be.ws, p.spec, { ...options(p), path: p.path, surface: 'app', reason: 'Made without AI: the tests TestPion builds from the document for the gaps.' }) };
+      if (p.noAi) {
+        const ctx = be.context({ environment: p.environment });
+        try {
+          return { proposal: await draftSpecTestsProposal(be.ws, p.spec, { ...options(p), path: p.path, surface: 'app', reason: 'Made without AI: the tests TestPion builds from the document for the gaps.', services: ctx.services }) };
+        } finally {
+          await ctx.dispose();
+        }
+      }
       return be.assistant({ task: 'tests-from-spec', item: { kind: 'spec', path: p.spec } as ItemRef, context: { options: options(p) }, hint: p.hint, privacy: p.privacy, path: p.path, environment: p.environment, dryRun: p.dryRun, requestId: p.requestId });
     },
     /** The clean-up of an import as reviewable changes; `noAi`: what TestPion finds itself. */

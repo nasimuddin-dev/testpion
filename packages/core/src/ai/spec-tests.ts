@@ -27,6 +27,7 @@ import { fuzzCases } from '../openapi/fuzz.js';
 import { findOperation, loadOpenApi, type OpenApiDoc } from '../openapi/contract.js';
 import { bodySchemaOf, existingRequests, matchUrl, propertiesOf, requestsOfTestFile, SPEC_CATEGORIES, specGapReport, specOperations, type SpecCategory, type SpecGapReport, type SpecOperation } from '../openapi/spec-gaps.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import type { ExecServices } from '../runner/execute.js';
 import { deref, typeOf } from '../util/json-ref.js';
 import { slugify } from '../util/ids.js';
 import type { AiSurface } from '../storage/ai-usage.js';
@@ -511,13 +512,25 @@ registerVerifier('spec-tests', (item, ctx: VerifyContext) => {
   return { verifier: 'spec-tests', status: 'pass', label: `${n} tests match the document (operations, statuses, requests)` };
 });
 
-export const SPEC_TEST_VERIFIERS = ['test-file', 'spec-tests'];
+/**
+ * The stability filter: the file's tests run twice against a mock built from the document (ai/spec-stability.ts). Needs
+ * the engine's services (the app, the CLI and the MCP server lend them); without them there is no badge.
+ */
+registerVerifier('spec-stable', (item, ctx: VerifyContext) => {
+  if (item.kind !== 'file' && item.kind !== 'flow') return undefined;
+  const spec = (item.data as { spec?: string } | undefined)?.spec;
+  if (!spec || !ctx.store || !ctx.services) return undefined;
+  if (!tryParseYaml(item.after).ok) return undefined;
+  return import('./spec-stability.js').then((m) => m.verifySpecStable(item.after, loadSpec(ctx.store!, spec).doc, ctx.services!, ctx.signal));
+});
+
+export const SPEC_TEST_VERIFIERS = ['test-file', 'spec-tests', 'spec-stable'];
 
 /**
  * The deterministic tests as a proposal, without any model (none set up, or `--no-ai`): the same review, verification
  * and apply as the AI's, labelled as made without AI.
  */
-export async function draftSpecTestsProposal(store: WorkspaceStore, spec: string, o: SpecTestOptions & { path?: string; surface: AiSurface; reason?: string }): Promise<Proposal> {
+export async function draftSpecTestsProposal(store: WorkspaceStore, spec: string, o: SpecTestOptions & { path?: string; surface: AiSurface; reason?: string; services?: ExecServices }): Promise<Proposal> {
   const { local, doc } = analyseSpec(store, spec, { ...o, path: o.path?.trim() ? proposedTestFilePath(store, o.path) : undefined });
   if (!local.scope.length) throw nothingToGenerate(local, spec);
   if (!local.draft.length)
@@ -527,7 +540,7 @@ export async function draftSpecTestsProposal(store: WorkspaceStore, spec: string
   const files = buildSpecFiles(local.draft, local, doc, { store, by: 'TestPion', ai: false });
   const notes = [o.reason ?? 'No AI model is set up: these are the tests TestPion builds from the document for the gaps. A model adds more negative, boundary and security ideas.'];
   const items: ProposalItem[] = itemsOf(files, local, notes, coverageAfter(doc, local, files)).map((d, i) => ({ ...d, id: `i${i + 1}`, verification: [], selected: true }));
-  await verifyItems(items, SPEC_TEST_VERIFIERS, { store });
+  await verifyItems(items, SPEC_TEST_VERIFIERS, { store, services: o.services });
   const data = items.map((i) => i.data as { tests?: number; categories?: Partial<Record<SpecCategory, number>>; coverage?: Coverage });
   const cov = data[0]?.coverage;
   return saveDraftProposal(store, {

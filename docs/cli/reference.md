@@ -911,6 +911,7 @@ testpion generate tests --spec specs/veterinary-api.yaml --no-ai --apply
 | Option | Description |
 |---|---|
 | `--spec <file>` | The API definition in the workspace (required). |
+| `--ai` / `--gaps-only` | Accepted for clarity: the model's ideas (when one is set up) and only what the gaps need are the defaults; `--no-ai` and `--no-gaps-only` turn them off. |
 | `--category <list>` | `positive`, `negative`, `boundary`, `security`, comma separated (default all). |
 | `--operation <list>` | Only these: `"POST /patients"` or an operationId. |
 | `--no-gaps-only` | Every category for every operation, not only what the gaps need. |

@@ -780,8 +780,8 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── Generating ─────────────────────────────────────────────────────────
   generate_tests: {
-    when: 'Use it to write a first test suite from an OpenAPI document: success, contract and negative tests per operation.',
-    whenNot: 'For CRUD flows across operations, use `generate_flows`; to find gaps first, use `api_coverage`.',
+    when: 'Use it to write a first test suite from an OpenAPI document: success, contract and negative tests per operation. With `ai: true` it proposes (writes nothing) gap-driven positive, negative, boundary and security tests with the coverage before and after, like `spec_tests_generate`.',
+    whenNot: 'For CRUD flows across operations, use `generate_flows`; to see the gaps first, use `spec_gaps` (what is never tested) or `api_coverage` (what the last run exercised).',
     example: { spec: 'specs/veterinary-api.yaml', negative: true },
   },
   generate_flows: {

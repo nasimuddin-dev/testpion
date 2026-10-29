@@ -7,6 +7,7 @@
 import { aiRunDeps, runAiTask, type AiTaskRequest } from '../../ai/tasks/run.js';
 import { isAiSetupError } from '../../ai/flow-from-collection.js';
 import type { Proposal } from '../../ai/proposal.js';
+import type { ExecServices } from '../../runner/execute.js';
 import { createEngineContext } from '../../engine.js';
 import { normalizeError } from '../../errors.js';
 import type { AppSettings } from '../../model/types.js';
@@ -35,7 +36,7 @@ interface ProposeCall {
   response?: AiTaskRequest['response'];
   previous?: AiTaskRequest['previous'];
   /** TestPion's own proposal (no model set up, `noAi`). */
-  draft?(reason: string): Promise<Proposal>;
+  draft?(reason: string, services?: ExecServices): Promise<Proposal>;
   /** What the agent should do with the proposal. */
   next(p: Proposal): string;
 }
@@ -45,7 +46,7 @@ export function createProposer({ store, secrets, settings }: { store: WorkspaceS
     const ctx = createEngineContext({ store, secrets, settings, environment: o.a.environment ? String(o.a.environment) : undefined });
     try {
       if (o.a.noAi === true && o.draft) {
-        const p = await o.draft('Made without AI (noAi): the deterministic proposal.');
+        const p = await o.draft('Made without AI (noAi): the deterministic proposal.', ctx.services);
         return { proposal: forAgent(p), next: o.next(p) };
       }
       try {
@@ -73,7 +74,7 @@ export function createProposer({ store, secrets, settings }: { store: WorkspaceS
       } catch (e) {
         if (!isAiSetupError(e) || o.a.dryRun === true || !o.draft) throw e;
         const why = normalizeError(e).message;
-        const p = await o.draft(`No AI model is set up (${why}): this is the deterministic proposal.`);
+        const p = await o.draft(`No AI model is set up (${why}): this is the deterministic proposal.`, ctx.services);
         return { fallback: why, proposal: forAgent(p), next: o.next(p) };
       }
     } finally {

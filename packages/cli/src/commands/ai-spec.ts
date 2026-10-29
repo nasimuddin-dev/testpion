@@ -47,6 +47,7 @@ export function registerAiSpecCommands(program: Command): void {
     .requiredOption('--spec <file>', 'the API definition in the workspace, e.g. specs/clinic.yaml')
     .option('--category <list>', `categories, comma separated (default all): ${SPEC_CATEGORIES.join(', ')}`)
     .option('--operation <list>', 'only these operations, comma separated: "POST /patients" or an operationId (default: every operation with a gap)')
+    .option('--gaps-only', 'only what the gaps need (the default)')
     .option('--no-gaps-only', 'every category for every operation, not only what the gaps need')
     .option('--include-delete', 'also test DELETE operations (they destroy data)')
     .option('--hint <text>', 'an extra instruction for the model, e.g. "orders cannot exceed 10 items"')
@@ -54,6 +55,7 @@ export function registerAiSpecCommands(program: Command): void {
     .option('--path <file>', 'put all the tests in this file under tests/ (default tests/<api>/<tag>-gaps.yaml, free names)')
     .option('--provider <id>', 'provider id or name (default: TESTPION_AI_PROVIDER, then the app settings)')
     .option('--model <name>', 'model name (default: TESTPION_AI_MODEL[_LARGE], then the app settings)')
+    .option('--ai', 'add the configured model’s ideas (the default when a model is set up)')
     .option('--no-ai', 'only the deterministic cases (no model is called)')
     .option('--dry-run', 'send nothing: print what would be sent (messages, sections, tokens, cost, what was masked)')
     .option('--apply', 'write the files whose verification did not fail (else they stay a proposal)')
@@ -65,7 +67,7 @@ export function registerAiSpecCommands(program: Command): void {
         spec: string;
         category?: string;
         operation?: string;
-        gapsOnly: boolean;
+        gapsOnly?: boolean;
         includeDelete?: boolean;
         hint?: string;
         privacy?: string;
@@ -81,7 +83,7 @@ export function registerAiSpecCommands(program: Command): void {
       }) =>
         withWorkspace(o.workspace, async (store) => {
           const spec = o.spec.replace(/\\/g, '/');
-          const options = { categories: categories(o.category), operations: list(o.operation), gapsOnly: o.gapsOnly, includeDelete: o.includeDelete === true };
+          const options = { categories: categories(o.category), operations: list(o.operation), gapsOnly: o.gapsOnly !== false, includeDelete: o.includeDelete === true };
           const ctx = cliContext(store, o.environment);
           try {
             await proposeCommand({
@@ -99,7 +101,7 @@ export function registerAiSpecCommands(program: Command): void {
               ai: o.ai,
               dryRun: o.dryRun,
               apply: o.apply,
-              draft: (reason) => draftSpecTestsProposal(store, spec, { ...options, path: o.path, surface: process.env.CI ? 'ci' : 'cli', reason }),
+              draft: (reason, services) => draftSpecTestsProposal(store, spec, { ...options, path: o.path, surface: process.env.CI ? 'ci' : 'cli', reason, services }),
               appliedHint: (p) => `run them: testpion test ${p.items[0]?.path ? `tests/${p.items[0].path}` : 'tests/…'} -e <environment>`,
               show: (p) => {
                 const count = p.items.reduce((n, i) => n + ((i.data as { tests?: number } | undefined)?.tests ?? 0), 0);

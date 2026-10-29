@@ -4,7 +4,7 @@
  * its verification, and apply it only with `--apply` and only the items whose verification did not fail.
  */
 import { formatUsd, plural } from '@testpion/shared';
-import { aiRunDeps, applyProposal, isAiSetupError, normalizeError, runAiTask, WorkspaceManager, type AiTaskResult, type EngineContext, type Proposal, type WorkspaceStore } from '@testpion/core';
+import { aiRunDeps, applyProposal, isAiSetupError, normalizeError, runAiTask, WorkspaceManager, type AiTaskResult, type EngineContext, type ExecServices, type Proposal, type WorkspaceStore } from '@testpion/core';
 import { dim, green, printJson, yellow } from '../shared.js';
 import { printPreview, printProposal } from './ai-print.js';
 
@@ -26,7 +26,7 @@ interface ProposeOptions {
   dryRun?: boolean;
   apply?: boolean;
   /** TestPion's own proposal (no model set up, `--no-ai`). */
-  draft?(reason: string): Promise<Proposal>;
+  draft?(reason: string, services?: ExecServices): Promise<Proposal>;
   /** What to print after the proposal when it was applied. */
   appliedHint(p: Proposal): string;
   /** The text shown above the proposal (the file or the outline it proposes). */
@@ -41,7 +41,7 @@ export async function proposeCommand(o: ProposeOptions): Promise<void> {
   let fallback: string | undefined;
   if (o.ai === false) {
     if (!o.draft) throw normalizeError(new Error('--no-ai: TestPion makes nothing of this without a model'));
-    proposal = await o.draft('Made without AI (--no-ai): the deterministic proposal.');
+    proposal = await o.draft('Made without AI (--no-ai): the deterministic proposal.', o.ctx.services);
   } else
     try {
       result = await runAiTask(aiRunDeps({ ctx: o.ctx, settings, store: o.store, surface, env: process.env }), {
@@ -61,7 +61,7 @@ export async function proposeCommand(o: ProposeOptions): Promise<void> {
       // no model set up: what TestPion builds itself (AI is an upgrade, not a dependency)
       if (!isAiSetupError(e) || o.dryRun || !o.draft) throw e;
       fallback = normalizeError(e).message;
-      proposal = await o.draft(`No AI model is set up (${fallback}): this is the deterministic proposal.`);
+      proposal = await o.draft(`No AI model is set up (${fallback}): this is the deterministic proposal.`, o.ctx.services);
     }
   if (result?.dryRun) return o.json ? printJson(result) : printPreview(result);
   if (!proposal) throw normalizeError(new Error(`The model proposed nothing usable: ${result?.problems.join('; ') || 'no change'}`));
