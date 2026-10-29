@@ -5,6 +5,7 @@ import { TESTSET_INSTRUCTION } from '../../eval/rag/testset/prompts.js';
 import { REFERENCES_INSTRUCTION } from '../../eval/rag/capture/references-prompts.js';
 import { AUTHOR_INSTRUCTION } from '../../eval/rag/author/types.js';
 import { RAG_EXPLAIN_INSTRUCTION } from '../../eval/rag/explain.js';
+import { EVAL_WHY_INSTRUCTION } from '../../eval/why.js';
 import { SUGGEST_MAPPING_INSTRUCTION } from '../../eval/rag/suggest-mapping.js';
 
 /**
@@ -88,5 +89,6 @@ export const TASK_INSTRUCTIONS: Readonly<Record<AiTaskId, string>> = {
   'rag-draft-references': REFERENCES_INSTRUCTION,
   'rag-author-evaluation': AUTHOR_INSTRUCTION,
   'rag-explain-sample': RAG_EXPLAIN_INSTRUCTION,
+  'eval-why': EVAL_WHY_INSTRUCTION,
   free: 'Answer the developer question about their API/protocol/AI testing work.',
 };

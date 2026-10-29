@@ -2,11 +2,14 @@
 import { compareEvalRuns, evalMatrixPage, evalMatrixResult, type EvalMatrixParams, type EvalMatrixQuery } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { evalQualityHandlers } from './eval-quality.js';
+import { evalReportHandlers } from './eval-report.js';
 
 export function evalMatrixHandlers(be: Backend): Handlers {
   return {
     // the sample, the estimate and the spend cap, and one check tried on one case (eval-quality.ts)
     ...evalQualityHandlers(be),
+    // the report card, why a case failed, a case against the run before, compare mode (eval-report.ts)
+    ...evalReportHandlers(be),
     /**
      * A page of the matrix of `runs` (columns, in order) against `baseline`: the rows asked for with their cells, the
      * column stats, the chip counts and the tags. Built once per set of runs and kept; pages, filters and sorts read it.

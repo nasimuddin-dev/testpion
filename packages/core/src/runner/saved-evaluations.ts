@@ -33,6 +33,10 @@ export interface SavedEvaluation {
   retries: number;
   /** A prompt evaluation: stop the run once it has cost this much (USD). Unset: $1.00 for a paid model, none for the offline demo model or a model on this computer; 0: no cap. */
   maxCostUsd?: number;
+  /** The report says whether this share of the cases passed (percent, 1 to 100): "Pass line 80%: met". */
+  passLine?: number;
+  /** Compare mode: other versions of this evaluation to run on the same cases, each another prompt version, another model, or both. The evaluation itself is the first variant, "Current". */
+  variants?: EvalVariant[];
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */
@@ -47,6 +51,18 @@ export interface SavedEvaluation {
   targetRepeats?: number;
   /** type `rag`: a SQLite file inside the workspace, or a read-only PostgreSQL / MySQL connection, for the SQL metrics (datacompy-score, sql-equivalence). */
   database?: { path?: string; url?: string; connectionEnv?: string; readOnly?: boolean; /** This is a production database: a run asks once before the generated SQL touches it (the production guard). */ production?: boolean };
+}
+
+/** One variant of an evaluation in compare mode: what differs from the evaluation itself. */
+export interface EvalVariant {
+  /** Shown in the comparison ("Shorter prompt", "Haiku"). */
+  label: string;
+  provider?: string;
+  model?: string;
+  /** Another prompt version (the evaluation's own prompt when unset). */
+  prompt?: string;
+  system?: string;
+  temperature?: number;
 }
 
 export const EVALUATIONS_LIBRARY = 'evaluations';

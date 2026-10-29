@@ -18,7 +18,7 @@ export const AI_TASK_IDS = [
   'generate-assertions', 'generate-pm-tests', 'generate-test', 'design-flow', 'flow-from-collection', 'tests-from-spec', 'security-tests',
   'contract-drift', 'write-script', 'explain-script', 'tidy-import', 'import-leftovers', 'triage-run', 'analyze-flaky', 'suggest-coverage-tests',
   'generate-request', 'generate-query', 'generate-args', 'generate-mock-data', 'design-toolset', 'rag-judge', 'rag-suggest-mapping',
-  'rag-explain-sample', 'rag-draft-metric', 'rag-generate-testset', 'rag-draft-references', 'rag-author-evaluation', 'nl-search', 'free',
+  'rag-explain-sample', 'eval-why', 'rag-draft-metric', 'rag-generate-testset', 'rag-draft-references', 'rag-author-evaluation', 'nl-search', 'free',
 ] as const;
 export type AiTaskId = (typeof AI_TASK_IDS)[number];
 

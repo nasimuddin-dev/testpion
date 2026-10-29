@@ -4,6 +4,7 @@ import { createEngineContext } from '../../engine.js';
 import { ApsError } from '../../errors.js';
 import { assertEvaluationRunnable } from '../../eval/rag/preflight.js';
 import { estimateEvaluation, spendPlan } from '../../eval/llm-estimate.js';
+import { evaluationVariants, variantsSummary } from '../../eval/variants.js';
 import type { TestResult } from '../../model/types.js';
 import { collectionRealtimeTests } from '../../runner/collection-realtime.js';
 import { runCollection } from '../../runner/collection-run.js';
@@ -159,6 +160,7 @@ export function runTools(d: ModuleToolDeps): Tool[] {
           limit: { type: 'number', description: 'Only the first n dataset records' },
           max_cost_usd: { type: 'number', description: 'Stop the run once it has cost this much (USD, from the price table). Default $1.00 for a paid model, none for the offline demo model or a model on this computer; 0 = no cap' },
           confirm: { type: 'boolean', description: 'Go ahead although the estimate is over $0.50 (or 100 calls): ask the user first, then repeat the call with confirm: true' },
+          variants: { type: 'boolean', description: 'Compare mode: run the evaluation and each of its variants (other prompt versions and models, set in the app) on the same cases, then return the comparison (see eval_variants). The estimate is the total of all of them.' },
         },
         required: ['name'],
       },
@@ -166,6 +168,35 @@ export function runTools(d: ModuleToolDeps): Tool[] {
         const environment = checkEnvironment(a.environment);
         const saved = findSavedEvaluation(store, String(a.name ?? ''));
         const limit = Math.min(500, typeof a.limit === 'number' && a.limit > 0 ? a.limit : (saved.limit ?? 500));
+        if (a.variants === true) {
+          if (saved.type === 'rag') throw new ApsError('ValidationError', 'Variants compare prompts and models of a prompt evaluation: this is an evaluation of a bot with sources', { suggestions: [] });
+          const list = evaluationVariants({ ...saved, limit });
+          if (list.length < 2) throw new ApsError('ValidationError', `"${saved.name}" has no variants. Add them in the app (Compare on the evaluation).`, { suggestions: [] });
+          // what all of them cost, and asking once when it is big
+          const pre = createEngineContext({ store, secrets, settings, environment, aiSurface: 'mcp' });
+          const plans: Array<{ v: (typeof list)[number]; capUsd?: number; cases: number }> = [];
+          let total = 0;
+          let calls = 0;
+          try {
+            for (const v of list) {
+              const est = estimateEvaluation(pre.services, v.draft);
+              const plan = spendPlan(est, typeof a.max_cost_usd === 'number' ? a.max_cost_usd : saved.maxCostUsd);
+              total += est.costUsd ?? 0;
+              calls += est.calls;
+              plans.push({ v, capUsd: plan.capUsd, cases: est.cases });
+            }
+          } finally {
+            await pre.dispose();
+          }
+          if ((total > 0.5 || calls > 100) && a.confirm !== true)
+            throw new ApsError('ValidationError', `The ${list.length} variants make about ${calls} calls and cost about $${total.toFixed(2)}. Ask the user, then repeat the call with confirm: true (or lower limit).`, { suggestions: [] });
+          const runs: Array<Record<string, unknown>> = [];
+          for (const p of plans) {
+            const { summary, ...run } = await recordedRun(environment, { name: p.v.runName, tests: evaluationTests(p.v.draft, { store }), concurrency: Math.min(8, saved.concurrency || 4), retries: saved.retries ?? 0, capUsd: p.capUsd, cases: p.cases });
+            runs.push({ variant: `${p.v.letter}: ${p.v.label}`, ...run, scores: summary.scores });
+          }
+          return { runs, comparison: await variantsSummary(store, { evaluation: saved }) };
+        }
         // a RAG evaluation: its target and judge are checked before any question is sent (the error says what to configure)
         if (saved.type === 'rag') {
           const pre = createEngineContext({ store, secrets, settings, environment, aiSurface: 'mcp' });
