@@ -2,9 +2,15 @@
 import {
   ApsError,
   capRunOptions,
+  ensureDemoModel,
   ensureSample,
   estimateEvaluation,
   evaluationTests,
+  generateEvalCases,
+  getProposal,
+  recordsOfProposal,
+  trustReviewer,
+  type GenerateCasesOptions,
   assertEvaluationRunnable,
   runTests,
   spendPlan,
@@ -68,8 +74,33 @@ export function evalQualityHandlers(be: Backend): Handlers {
       const r = await startDraftRun(be, made.evaluation, {});
       return { ...r, evaluation: made.evaluation.id, name: made.evaluation.name, offline: true, created: made.created };
     },
+    /** The offline demo model (AU-8): added when the workspace has none, its rules put back as written. No key, no network. */
+    'ai.demoModel': () => {
+      const r = ensureDemoModel(be.ws);
+      if (r.added) be.host.emit('data.changed', { method: 'demoModel' });
+      return { id: r.provider.id, name: r.provider.name, model: r.provider.defaultModel ?? 'demo', added: r.added };
+    },
     /** What an evaluation as edited would cost (AU-5): cases, calls, tokens, dollars, seconds, and the spend cap with whether a run asks first (AU-18). */
     'eval.estimate': ({ draft, environment, limit }: { draft: SavedEvaluation; environment?: string; limit?: number }) => estimateDraft(be, draft, { environment, limit }),
+    /**
+     * Write test cases with AI (AU-13): from the prompt, an API definition, a collection or folder, documents or real calls in
+     * History. Every case is verified and the result is ONE proposal the window reviews (`ProposalReview`) and the person
+     * accepts; `dryRun` answers what would be sent (messages, estimate) and sends nothing. Cases for an unsaved draft come back
+     * in the proposal; the window adds the ticked ones to its draft, a saved evaluation gets them from `ai.applyProposal`.
+     */
+    'eval.generateCases': ({ requestId, environment, ...o }: GenerateCasesOptions & { environment?: string; requestId?: string }) =>
+      be.withAiDeps({ environment, requestId, provider: o.provider, dryRun: o.dryRun }, async (deps) => {
+        const progress = be.batched<{ id?: string; done: number; of: number; text: string }>('eval.cases.progress', 0);
+        try {
+          return await generateEvalCases(deps, be.ws, o, (done, of, text) => (progress.push({ id: requestId, done, of, text }), progress.flush()));
+        } finally {
+          progress.flush();
+        }
+      }),
+    /** The test cases of a proposal (ticked, or the ones named) as records: what the window adds to a draft that is not saved. */
+    'eval.casesOfProposal': ({ id, items }: { id: string; items?: string[] }) => ({ cases: recordsOfProposal(getProposal(be.ws, id), items) }),
+    /** Trust the AI reviewer (AU-23): ten answers of a run to grade yourself, your verdict on one, and how often the AI reviewer agrees. */
+    'eval.trust': ({ run, metric, count, label }: { run: string; metric?: string; count?: number; label?: { result: string; verdict: 'pass' | 'fail' | null } }) => trustReviewer(be.ws, { run, metric, count, label }),
     /** Try one check on one case (AU-11): the reply, passed or failed and why, the cost. `dryRun` says what it would cost and sends nothing. */
     'eval.tryCheck': async ({ draft, check, caseNumber, dryRun, environment }: { draft: SavedEvaluation; check: CheckConfig; caseNumber?: number; dryRun?: boolean; environment?: string }) => {
       const ctx = be.context({ environment });

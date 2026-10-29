@@ -15,7 +15,7 @@ import { noteProposalOutcome, type AiSurface } from '../storage/ai-usage.js';
 import { shortId } from '../util/ids.js';
 import { checkedTestFilePath } from '../storage/test-path.js';
 
-type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'dataset-row' | 'evaluation' | 'text';
+type ProposalItemKind = 'file' | 'flow' | 'assertion' | 'script' | 'request' | 'patch' | 'variable' | 'collection' | 'spec' | 'metric' | 'dataset-row' | 'evaluation' | 'eval-case' | 'text';
 
 /** What a verifier said about an item: `pass` (checked and fine), `fail`, `warn`, `skip` (could not check). */
 export interface VerificationBadge {

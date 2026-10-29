@@ -19,6 +19,7 @@ export interface RpcParamTypes {
   'ai.applyProposal': RpcCommonParams & { id: string; items?: string[]; recordOnly?: boolean };
   'ai.chat': RpcCommonParams & { provider: string; model: string; prompt?: string; system?: string };
   'ai.compare': RpcCommonParams & { models: unknown[]; prompt?: string };
+  'ai.demoModel': RpcCommonParams;
   'ai.discardProposal': RpcCommonParams & { id: string };
   'ai.driftExplain': RpcCommonParams & { spec: string; source?: Record<string, unknown>; hint?: string; privacy?: string; dryRun?: boolean; noAi?: boolean };
   'ai.driftReport': RpcCommonParams & { spec: string; source?: Record<string, unknown> };
@@ -132,12 +133,15 @@ export interface RpcParamTypes {
   'env.quickLook': RpcCommonParams;
   'env.save': RpcCommonParams & { env: Record<string, unknown>; secrets?: Record<string, unknown> };
   'env.secretStatus': RpcCommonParams & { envId: string; keys: string[] };
+  'eval.casesOfProposal': RpcCommonParams & { id: string; items?: string[] };
   'eval.compare': RpcCommonParams & { run: string; baseline: string; threshold?: number; maxRegressions?: number; failOnMissing?: boolean; limit?: number };
   'eval.estimate': RpcCommonParams & { draft: Record<string, unknown>; limit?: number };
+  'eval.generateCases': RpcCommonParams & { source: string; draft: Record<string, unknown>; count?: number; evaluation?: string; spec?: string; collection?: string; folder?: string; paths?: string[]; urls?: string[]; historyLimit?: number; hint?: string; provider?: string; dryRun?: boolean; privacy?: string };
   'eval.matrix': RpcCommonParams & { runs: string[]; baseline?: string; threshold?: number; filter?: string; tag?: string; search?: string; sort?: string; column?: number; dir?: string; offset?: number; limit?: number };
   'eval.matrixResult': RpcCommonParams & { runId: string; resultId: string };
   'eval.run': RpcCommonParams & { template: Record<string, unknown>; name?: string; datasetText?: string; datasetPath?: string; datasetFormat?: string; limit?: number };
   'eval.runDraft': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean };
+  'eval.trust': RpcCommonParams & { run: string; metric?: string; count?: number; label?: Record<string, unknown> };
   'eval.tryCheck': RpcCommonParams & { draft: Record<string, unknown>; check: Record<string, unknown>; caseNumber?: number; dryRun?: boolean };
   'feedback.compose': RpcCommonParams & { kind: string; title: string; description: string; steps?: string; expected?: string; where?: string; diagnostics?: string[]; errors?: string[] };
   'flows.webhooks.start': RpcCommonParams & { port?: number; host?: string };
@@ -383,4 +387,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 366;
+export const RPC_METHOD_COUNT = 370;

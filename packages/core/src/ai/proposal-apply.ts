@@ -26,6 +26,7 @@ import { readMetricFile, removeMetricFile, writeMetricFile } from '../storage/me
 import { parseCustomMetric } from '../eval/rag/custom/file.js';
 import { applyDatasetRowItem, undoDatasetRows } from '../eval/rag/testset/apply.js';
 import { applyEvaluationItem, undoEvaluation } from '../eval/rag/author/apply.js';
+import { applyEvalCaseItem } from './eval-cases.js';
 
 /** The text a fix was made from (`data.fix.base`): a file or script that changed since is not overwritten. */
 function assertUnchanged(item: ProposalItem, current: string | null | undefined): void {
@@ -205,6 +206,8 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
       return applyDatasetRowItem(store, item);
     case 'evaluation':
       return applyEvaluationItem(store, item);
+    case 'eval-case':
+      return applyEvalCaseItem(store, item);
     case 'collection': {
       // a tidy: its operations on the collection as it is now (renames, moves, variables, chains, drops)
       const d = item.data as { collectionId?: string; ops?: TidyOp[] } | undefined;

@@ -28,6 +28,7 @@ import { VERDICT_SCHEMA } from '../../eval/rag/judge-prompts.js';
 import { NL_SEARCH_SCHEMA, validateNlSearch } from '../nl-search.js';
 import { responseOfContext, SUGGEST_MAPPING_SCHEMA, suggestedMappingProblems } from '../../eval/rag/suggest-mapping.js';
 import { proposeMetricDraft } from '../rag-draft-metric.js';
+import { describeEvalCases, EVAL_CASES_SCHEMA, EVAL_CASES_VERSION, prepareEvalCases, proposeEvalCases } from '../eval-cases.js';
 import { ragTestsetTask } from './rag-testset-task.js';
 import { ragReferencesTask } from './rag-references-task.js';
 import { ragAuthorTask } from './rag-author-task.js';
@@ -682,6 +683,24 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     verifiers: ['metric-examples'],
     maxRepairs: 2,
     propose: proposeMetricDraft,
+  }),
+  T('eval-cases', {
+    version: EVAL_CASES_VERSION,
+    title: 'Write test cases for an evaluation',
+    description:
+      'From the prompt under test, an API definition, the saved requests of a collection or folder, or real calls from History: test cases (an input for every variable of the prompt and the expected answer) for an AI evaluation. Every case is verified (it fills every variable, it is not a repeat, it names something the source has) and offered as a proposal; accepted cases are added to the evaluation. Documents go through rag-generate-testset (testpion eval generate-cases --documents).',
+    tier: 'small',
+    output: { kind: 'json', schema: EVAL_CASES_SCHEMA },
+    context: 'source (prompt, spec, collection or history), count (1 to 30), draft (the evaluation: prompt, system, expectedField, evaluators, dataset, datasetFormat), evaluation (its saved id), spec (specs/<file>), collection and folder (ids), history { limit }',
+    contextTokens: 9000,
+    sectionBudgets: { material: 5000 },
+    maxTokens: 3000,
+    temperature: 0.4,
+    maxRepairs: 2,
+    verifiers: ['eval-case-shape', 'eval-case-duplicate', 'eval-case-grounded'],
+    prepareContext: prepareEvalCases,
+    propose: proposeEvalCases,
+    describe: describeEvalCases,
   }),
   ragTestsetTask(),
   ragReferencesTask(),

@@ -84,7 +84,7 @@ const docsSidebar = [
       { text: 'Terminal', link: '/getting-started/terminal' },
       { text: 'Logs', link: '/getting-started/logs' },
       { text: 'Keep your workspace in git', link: '/getting-started/git' },
-      { text: 'Your first AI test', link: '/getting-started/first-ai-test' },
+      { text: 'Check an AI answer in 5 minutes', link: '/getting-started/check-an-ai-answer' },
     ],
   },
   {
@@ -140,6 +140,7 @@ const docsSidebar = [
       { text: 'AI features: privacy, cost, review', link: '/ai-testing/ai-features' },
       { text: 'Prompts', link: '/ai-testing/prompts' },
       { text: 'Evaluations', link: '/ai-testing/evaluations' },
+      { text: 'Glossary: the words of AI testing', link: '/ai-testing/glossary' },
       { text: 'RAG', link: '/ai-testing/rag' },
       { text: 'RAG metrics', link: '/ai-testing/rag-metrics' },
       { text: 'Custom RAG metrics', link: '/ai-testing/custom-metrics' },

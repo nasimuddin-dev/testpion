@@ -105,3 +105,62 @@ describe('the MCP tools', () => {
     }
   }, 120_000);
 });
+
+describe('testpion eval generate-cases | trust (AU-13, AU-23)', () => {
+  it('generate-cases --dry-run sends nothing; --apply adds the ticked cases from the offline demo model; ai undo takes them back', async () => {
+    await cli(['eval', 'sample', '--no-run', '-w', ws, '--json']);
+    const dry = cliData((await cli(['eval', 'generate-cases', SAMPLE, '-w', ws, '--provider', 'demo', '--dry-run', '--json'])).out);
+    expect(dry).toMatchObject({ dryRun: true, source: 'prompt' });
+    expect(JSON.stringify(dry.preview)).toContain('tokens');
+    const made = await cli(['eval', 'generate-cases', SAMPLE, '-w', ws, '--provider', 'demo', '--apply', '--json']);
+    expect(made.status).toBe(0);
+    const d = cliData(made.out);
+    expect(d.proposal.items).toHaveLength(6);
+    expect(d.proposal.task).toBe('eval-cases');
+    expect(d.tally).toMatchObject({ failed: 0 });
+    expect(d.applied.applied).toHaveLength(6);
+    const listed = cliData((await cli(['eval', 'list', '-w', ws, '--json'])).out);
+    expect(listed.find((e: { name: string }) => e.name === SAMPLE).cases).toBe(16);
+    // a second call finds every case already there: all six are repeats, unticked
+    const again = cliData((await cli(['eval', 'generate-cases', SAMPLE, '-w', ws, '--provider', 'demo', '--json'])).out);
+    expect(again.tally.failed).toBe(6);
+    expect(again.proposal.items.every((i: { selected: boolean }) => !i.selected)).toBe(true);
+    const undone = await cli(['ai', 'undo', d.proposal.id, '-w', ws, '--yes', '--json']);
+    expect(undone.status, undone.out + undone.err).toBe(0);
+    expect(cliData((await cli(['eval', 'list', '-w', ws, '--json'])).out).find((e: { name: string }) => e.name === SAMPLE).cases).toBe(10);
+  }, 120_000);
+
+  it('a source that is not there says what to do; an evaluation of a bot with sources points to its own generator', async () => {
+    const noSpec = await cli(['eval', 'generate-cases', SAMPLE, '-w', ws, '--provider', 'demo', '--from', 'spec']);
+    expect(noSpec.status).toBe(2);
+    expect(noSpec.out + noSpec.err).toMatch(/API definition/);
+    const noHistory = await cli(['eval', 'generate-cases', SAMPLE, '-w', ws, '--provider', 'demo', '--from', 'history']);
+    expect(noHistory.status).toBe(2);
+    expect(noHistory.out + noHistory.err).toMatch(/History holds no prompts/);
+  }, 60_000);
+
+  it('eval trust on a run with no AI reviewer says there is nothing to compare; the MCP tools do the same', async () => {
+    const ran = cliData((await cli(['eval', 'sample', '-w', ws, '-q', '--json'])).out);
+    const run = ran.runId ?? ran.run?.runId ?? 'last';
+    const t = cliData((await cli(['eval', 'trust', run, '-w', ws, '--json'])).out);
+    expect(t.metrics).toEqual([]);
+    expect(t.summary).toMatch(/Graded by an AI reviewer/);
+    const s = new McpSession({ id: 'aiq2', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cliPath, 'mcp-server', '-w', ws], env });
+    await s.connect(20_000);
+    const call = async (name: string, args: Record<string, unknown>) => JSON.parse(mcpResultBody(await s.callTool(name, args)).text);
+    try {
+      const dry = await call('eval_generate_cases', { name: SAMPLE, dry_run: true, provider: 'demo' });
+      expect(dry).toMatchObject({ dryRun: true, source: 'prompt' });
+      const gen = await call('eval_generate_cases', { name: SAMPLE, provider: 'demo', count: 6, confirm: true });
+      expect(gen.proposal.items).toHaveLength(6);
+      expect(gen.proposal.items[0]).toMatchObject({ selected: true, case: expect.objectContaining({ input: expect.any(String), expected: expect.any(String) }) });
+      expect(gen.next).toContain('ai_apply_proposal');
+      const trust = await call('eval_trust_reviewer', { run: 'last' });
+      expect(trust.metrics).toEqual([]);
+      const bad = await s.callTool('eval_trust_reviewer', { run: 'last', grade: { result: 'x', verdict: 'maybe' } });
+      expect(mcpResultBody(bad).text).toMatch(/verdict/);
+    } finally {
+      await s.close();
+    }
+  }, 120_000);
+});

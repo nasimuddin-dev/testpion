@@ -4,6 +4,13 @@
 
 Every list of saved items (prompts, evaluations, load tests, monitors, MCP servers, API definitions, datasets) now keeps its items in folders: the ones that have none are in a built-in General folder, which is shown first and cannot be renamed or deleted. Nothing changes in your files.
 
+### AI quality: the wizard, test cases written by AI, a reviewer you can trust
+
+- **The wizard for "Answers are correct"**: the first card on **Start** opens three steps (what are you testing, your cases, what is a good answer) with the cost of the run under every step and **Run** on from step 2. It saves the same evaluation file as the editor (no new format), and **Open the full editor** takes the draft there at any step. From the card to a running evaluation on pasted cases takes six clicks.
+- **Generate test cases with AI**: **Generate with AI…** on the Test cases tab (and in the wizard) writes cases from the prompt, an API definition, the saved requests of a collection or folder, your documents (the `rag generate-dataset` engine) or real calls in History. Each case is verified (fills every variable, not a repeat, names something the source has, looks like a real call) and shown in the proposal review; a failing case is unticked; nothing is added until you accept, and **Undo** takes it back. `testpion eval generate-cases`, MCP `eval_generate_cases`, RPC `eval.generateCases` (AI task `eval-cases`). The offline demo model writes six cases with no key.
+- **Trust the AI reviewer**: on the Checks tab of an evaluation with a check graded by an AI reviewer, grade ten answers of the last run yourself (its verdict stays hidden) and see how often it agreed, with kappa, too lenient / too strict and the answers where you differ. It is the calibration card of bots with sources, moved to one shared card. `testpion eval trust`, MCP `eval_trust_reviewer`, RPC `eval.trust`.
+- **Docs**: one entry page, [Check an AI answer in 5 minutes](/getting-started/check-an-ai-answer), and a [glossary](/ai-testing/glossary) of the plain words.
+
 ### AI quality: the first result without a key, what a run costs, test cases as a table
 
 - **Try the sample (offline)**: AI Lab opens on **Start** (cards by task, your latest runs with how many passed). One click adds the offline demo model, makes the 10-case evaluation *Sample: support intents*, runs it and shows **10 of 10 passed** with an **Offline demo** label. `testpion eval sample`, MCP `eval_sample`, RPC `ai.sample`.

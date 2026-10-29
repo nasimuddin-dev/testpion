@@ -99,6 +99,7 @@ describe('the shape of every tool', () => {
     ),
     // the AI quality tools: the sample runs only on the offline demo model; trying a check asks for its own confirm: true before a paid model is called
     eval_sample: 'runs only on the offline demo model (rules, no key, no network) and writes the sample evaluation the way the editor does',
+    eval_trust_reviewer: 'writes only the person’s own verdict on an answer into labels/ the way rag_label does, and reads the run; nothing is sent to a model',
     eval_try_check: 'the offline demo model is free; a call to a paid model is refused until confirm: true (after dry_run shows the cost), the same as the CONFIRM_TOOLS contract',
     // load_test and api_fuzz send many requests, but refuse an external target without their own explicit opt-in (checked in the tool)
     load_test: 'sends traffic only to a target the workspace owns or after the tool’s own explicit opt-in for an external one',
@@ -341,7 +342,7 @@ describe('agents at the edges (the 2026-10-22 review)', () => {
   });
 
   it('every tool that calls the model takes max_cost_usd', () => {
-    for (const name of ['ai_run_task', 'flow_generate', 'ai_triage_run', 'search_ask', 'write_script', 'rag_generate_testset']) {
+    for (const name of ['ai_run_task', 'flow_generate', 'ai_triage_run', 'search_ask', 'write_script', 'rag_generate_testset', 'eval_generate_cases']) {
       const t = tools.find((x) => x.name === name)!;
       expect(Object.keys((t.inputSchema as { properties: Record<string, unknown> }).properties), name).toContain('max_cost_usd');
     }

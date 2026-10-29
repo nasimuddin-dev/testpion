@@ -63,7 +63,7 @@ export function Start({ providers, onTab }: { providers?: ProviderConfig[]; onTa
             title="Answers are correct"
             time="About 2 minutes"
             action={
-              <Button size="sm" variant="primary" onClick={() => open({ new: true })} data-start-go="correct">
+              <Button size="sm" variant="primary" onClick={() => open({ wizard: true })} data-start-go="correct">
                 Start
               </Button>
             }

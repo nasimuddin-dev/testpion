@@ -1,3 +1,4 @@
+import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { casesToJsonl, datasetFormatOfName, datasetRecords, type CaseRow, type DatasetTextFormat } from '@testpion/shared';
 import { call } from '../../api';
@@ -38,6 +39,7 @@ export function CasesPane({
   onMap,
   onExportRag,
   onExample,
+  onGenerate,
 }: {
   d: CasesDraft;
   set(p: Partial<CasesDraft>): void;
@@ -54,6 +56,8 @@ export function CasesPane({
   onMap(): void;
   onExportRag(to: 'ragas' | 'deepeval'): void;
   onExample(): void;
+  /** Write cases with AI (AU-13): the button is shown for a prompt evaluation when this is given. */
+  onGenerate?(): void;
 }) {
   const [view, setView] = useSticky<'table' | 'text'>('eval:casesView', 'table', { persist: true });
   const [pasting, setPasting] = useState(false);
@@ -117,6 +121,11 @@ export function CasesPane({
               <option value="deepeval">DeepEval</option>
             </Select>
           </>
+        )}
+        {d.type === 'llm' && onGenerate && (
+          <Button size="sm" icon={<Sparkles size={12} />} onClick={onGenerate} title="Have AI write test cases from the prompt, an API definition, saved requests, documents or real calls; you read them before they are added" data-cases-generate>
+            Generate with AI…
+          </Button>
         )}
         {table && (
           <Button size="sm" onClick={() => setPasting(true)} title="Cells copied from a spreadsheet, a CSV file, JSONL lines or a JSON list" data-cases-paste>

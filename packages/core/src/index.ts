@@ -398,3 +398,6 @@ export { parseWhere, whereText, compileWhere, selectRows, parseCommand, parseAmo
 export type { SelectClause, SelectRow, ParsedWhere, DebuggerCommand } from '@testpion/shared';
 export * from './debugger/replay.js';
 export * from './debugger/process-list.js';
+export * from './ai/eval-cases.js';
+export * from './runner/eval-cases-generate.js';
+export * from './runner/trust-reviewer.js';
