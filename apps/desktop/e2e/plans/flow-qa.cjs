@@ -306,7 +306,7 @@ const steps = [
     `const f0 = await flowOf(${JSON.stringify(F_BLOCKS)});
      const out = [];
      const field = (label) => { const ins = inspector(); const l = [...ins.querySelectorAll('label')].find((x) => x.querySelector('span')?.textContent.trim() === label); return l?.querySelector('input, textarea, select'); };
-     const setText = async (el, text, commit = 'Enter') => { await R.click(el); await R.key('a', { ctrl: true }); await R.type(text); await R.key(commit); await sleep(500); };
+     const setText = async (el, text, commit = 'Enter') => { await R.click(el); if (document.activeElement !== el) { el.focus(); await sleep(100); } await R.key('a', { ctrl: true }); await R.type(text); await R.key(commit); await sleep(500); };
      const fit = () => R.click(vis('[data-flow-toolbar] button').find((b) => b.textContent.trim() === 'Fit'));
      for (const s of f0.steps) {
        await fit(); await sleep(200);

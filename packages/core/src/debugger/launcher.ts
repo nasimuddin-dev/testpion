@@ -29,7 +29,7 @@ export interface LaunchPlan {
 
 /** Which runtime a command is, by its file name. */
 export function kindOf(command: string): LaunchKind {
-  const name = basename(command).toLowerCase().replace(/\.(exe|cmd|bat|ps1)$/, '');
+  const name = basename(command.split('\\').join('/')).toLowerCase().replace(/\.(exe|cmd|bat|ps1)$/, '');
   if (/^(node|nodejs|npm|npx|pnpm|yarn|bun|deno|tsx|electron)$/.test(name)) return 'node';
   if (/^(python[\d.]*|py|pip[\d.]*|pipx|poetry|uv)$/.test(name)) return 'python';
   if (/^(java|javaw|mvn|mvnw|gradle|gradlew|kotlin|sbt)$/.test(name)) return 'java';

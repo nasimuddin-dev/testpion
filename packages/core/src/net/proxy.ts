@@ -277,10 +277,12 @@ export function withNet<T>(net: NetConfig | undefined, fn: () => T): T {
  * `fetch` through the current configuration's proxy and trust. The process default keeps using the global dispatcher (which it
  * owns); any other session passes its own pool.
  */
-export function netFetch(input: string | URL, init?: RequestInit): Promise<Response> {
+export async function netFetch(input: string | URL, init?: RequestInit): Promise<Response> {
   const net = currentNet();
   if (net === defaultNet) return fetch(input, init);
-  return fetch(input, { ...init, dispatcher: net.baseDispatcher() } as RequestInit);
+  // undici's own fetch: the global one of an older Node hands a dispatcher of a newer undici a handler it does not accept
+  const { fetch: undiciFetch } = await import('undici');
+  return (await undiciFetch(input, { ...init, dispatcher: net.baseDispatcher() } as never)) as unknown as Response;
 }
 
 export function makeDispatcher(connect: Record<string, unknown> = {}, requestProxy?: string, pool: Record<string, unknown> = {}): Dispatcher {

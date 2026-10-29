@@ -108,7 +108,9 @@ const steps = [
      const root = path.resolve(process.env.E2E_PLAN, '..', '..', '..', '..', '..');
      const cli = path.join(root, 'packages', 'cli', 'bin', 'testpion.js');
      const out = path.join(process.env.E2E_OUT, 'ci-results');
-     const r = spawnSync(process.execPath, [cli, 'test', 'tests/${FILE}', '-w', path.join(home, 'ws'), '-r', 'junit', '-o', out], { cwd: path.join(home, 'ws'), env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', timeout: 120000 });
+     // the installed app has the RunAsNode fuse off (it cannot be turned into a Node.js): its CLI check runs on the system node
+     const installed = /testpion\.exe$/i.test(process.execPath);
+     const r = spawnSync(installed ? 'node' : process.execPath, [cli, 'test', 'tests/${FILE}', '-w', path.join(home, 'ws'), '-r', 'junit', '-o', out], { cwd: path.join(home, 'ws'), env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', timeout: 120000 });
      const junit = fs.existsSync(out) ? fs.readdirSync(out).find((f) => f.endsWith('.xml')) : undefined;
      return 'exit: ' + r.status + ' | junit: ' + !!junit + (r.status ? ' | ' + String(r.stdout + r.stderr).slice(-400) : '');`,
     false,

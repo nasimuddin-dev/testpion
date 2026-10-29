@@ -214,9 +214,10 @@ describe('I-2 .. I-5 hostile files', () => {
   it('a collection nested thousands of levels deep is a ValidationError naming the depth, and the list stays usable', () => {
     const store = ws();
     store.saveCollection(col('ok'));
-    let deep: unknown = [];
-    for (let i = 0; i < 5000; i++) deep = [{ kind: 'folder', id: `f${i}`, name: 'f', items: deep }];
-    writeFileSync(join(store.root, 'collections', 'deep.json'), JSON.stringify({ schemaVersion: '1.0', id: 'deep', name: 'Deep', items: deep }));
+    // built as text: JSON.stringify of a 5,000-deep value overflows the stack of some platforms before the store is even asked
+    let items = '[]';
+    for (let i = 0; i < 5000; i++) items = `[{"kind":"folder","id":"f${i}","name":"f","items":${items}}]`;
+    writeFileSync(join(store.root, 'collections', 'deep.json'), `{"schemaVersion":"1.0","id":"deep","name":"Deep","items":${items}}`);
     const list = store.listCollections();
     expect(list.find((c) => c.id === 'ok')?.problem).toBeUndefined();
     expect(list.find((c) => c.id === 'deep')?.problem).toMatch(new RegExp(`nested deeper than 64 levels`));
