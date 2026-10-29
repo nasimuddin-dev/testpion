@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.55.2 — 2026-10-29
+
+A fix for 0.55.1. Update to get it.
+
+- **Compare and evaluation runs no longer fail on a temporary folder.** On Windows a virus scanner or indexer can hold a file for a moment while a run cleans up its temporary dataset folder; the run then failed with "ENOTEMPTY, Directory not empty" (seen in Compare: the second version never finished). The clean-up now retries and, if the folder still cannot be removed, leaves it to the system instead of failing the run.
+
 ## 0.55.1 — 2026-10-29
 
 A fix for 0.55.0. Nothing new to learn; update to get it.
