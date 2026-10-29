@@ -14,7 +14,7 @@ import { Button, cx, Empty, Field, Input, LinkButton, Modal, NamedOptions, Selec
 /** What the panel reads of the evaluation as edited. */
 export interface VariantsDraft {
   name: string;
-  type: 'llm' | 'rag';
+  type: 'llm' | 'rag' | 'agent';
   provider: string;
   model: string;
   system?: string;

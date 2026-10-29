@@ -1,14 +1,16 @@
-import { ArrowLeft, ArrowRight, CheckCheck, Play } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, CheckCheck, Play } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { casesToJsonl, countDatasetRecords, datasetFormatOf, datasetRecords, previewDatasetRecords } from '@testpion/shared';
-import type { TryCheckResult } from '@testpion/core';
+import { SHOULD_CALL, SHOULD_NOT_CALL, casesToJsonl, countDatasetRecords, datasetFormatOf, datasetRecords, previewDatasetRecords } from '@testpion/shared';
+import type { MockTool, TryCheckResult } from '@testpion/core';
 import { call } from '../../api';
 import { useApp, toastError } from '../../store';
 import { formatCost, plural, templateVars } from '../../lib/format';
 import { OFFLINE_DEMO_NOTE } from '../../lib/offline-demo';
 import { shortCost, useEvalEstimate } from '../../lib/eval-estimate';
 import type { CheckConfig, ProviderConfig } from '../../types';
-import { Badge, Button, Callout, Field, Input, LinkButton, Modal, NamedOptions, Select, Textarea } from '../../components/ui';
+import { Badge, Button, Callout, Field, Input, LinkButton, Modal, NamedOptions, Segmented, Select, Textarea } from '../../components/ui';
+import { AgentToolsEditor } from '../../components/ai/AgentToolsEditor';
+import { AGENT_EXAMPLE_CASES, AGENT_PROMPT } from '../../lib/agent-eval';
 import { CasesPane } from '../../components/ai/CasesPane';
 import { EvalCostLine } from '../../components/ai/EvalCostLine';
 import { GenerateCasesDialog } from '../../components/ai/GenerateCasesDialog';
@@ -17,7 +19,7 @@ import { GoodAnswerPicker } from '../../components/ai/GoodAnswerPicker';
 /** The evaluation the wizard builds: the same fields as a saved evaluation of a prompt or chatbot, nothing more (no new file format). */
 export interface WizardDraft {
   name: string;
-  type: 'llm';
+  type: 'llm' | 'agent';
   provider: string;
   model: string;
   temperature?: number;
@@ -30,13 +32,17 @@ export interface WizardDraft {
   evaluators: CheckConfig[];
   concurrency: number;
   retries: number;
+  /** type agent: the mock tools and the MCP servers the agent may call. */
+  tools?: MockTool[];
+  mcpServers?: string[];
 }
 
-const STEPS = [
-  { id: 'what', title: 'What are you testing?', next: 'Next: your cases' },
-  { id: 'cases', title: 'Your cases', next: 'Next: a good answer' },
-  { id: 'good', title: 'What is a good answer?', next: '' },
-] as const;
+const stepsOf = (agent: boolean) =>
+  [
+    { id: 'what', title: 'What are you testing?' },
+    { id: 'cases', title: 'Your cases' },
+    { id: 'good', title: agent ? 'What does a good run look like?' : 'What is a good answer?' },
+  ] as const;
 
 /**
  * The wizard for "Answers are correct" (AU-12): three steps, one screen each. 1 What are you testing (the prompt with its
@@ -53,6 +59,7 @@ export function Wizard({
   onFinish,
   onEditor,
   onClose,
+  startAs,
 }: {
   initial: WizardDraft;
   providers: ProviderConfig[];
@@ -65,14 +72,27 @@ export function Wizard({
   /** Hand the draft to the full editor without saving. */
   onEditor(d: WizardDraft): void;
   onClose(): void;
+  /** Open with this kind chosen (the Start page's agent card). */
+  startAs?: WizardDraft['type'];
 }) {
   const env = useApp((s) => s.environment);
   const [step, setStep] = useState(0);
   const [d, setD] = useState<WizardDraft>(initial);
+  const agent = d.type === 'agent';
+  const STEPS = stepsOf(agent);
+  // what a prompt evaluation held when the kind was switched to an agent: switching back puts it back
+  const [prompted, setPrompted] = useState<Pick<WizardDraft, 'prompt' | 'dataset' | 'datasetFormat' | 'evaluators' | 'name'>>();
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [datasets, setDatasets] = useState<Array<{ path: string; name: string }>>([]);
   const set = (p: Partial<WizardDraft>) => setD((x) => ({ ...x, ...p }));
+  const setKind = (kind: WizardDraft['type']) => {
+    if (kind === d.type) return;
+    if (kind === 'agent') {
+      setPrompted({ prompt: d.prompt, dataset: d.dataset, datasetFormat: d.datasetFormat, evaluators: d.evaluators, name: d.name });
+      set({ type: 'agent', prompt: AGENT_PROMPT, dataset: AGENT_EXAMPLE_CASES, datasetFormat: 'jsonl', expectedField: 'expected', evaluators: [], name: d.name === 'New evaluation' ? 'New agent evaluation' : d.name });
+    } else set({ type: 'llm', tools: undefined, mcpServers: undefined, ...(prompted ?? {}) });
+  };
   useEffect(() => {
     void call<Array<{ path: string; name: string }>>('datasets.list').then((l) => setDatasets(l.filter((x) => /\.(csv|tsv|json|jsonl|ndjson|md)$/i.test(x.name))), () => setDatasets([]));
   }, []);
@@ -91,6 +111,11 @@ export function Wizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providers.length]);
 
+  useEffect(() => {
+    if (startAs === 'agent') setKind('agent');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const estimate = useEvalEstimate(d, env);
   const count = useMemo(() => countDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
   const readAs = useMemo(() => datasetFormatOf(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
@@ -99,10 +124,12 @@ export function Wizard({
   const vars = useMemo(() => templateVars(d.prompt), [d.prompt]);
   const provider = providers.find((p) => p.id === d.provider);
   const offline = provider?.kind === 'mock';
-  const missingVars = vars.filter((v) => v !== d.expectedField && preview[0] && !(v in preview[0]));
+  // an agent's cases name the tools each should call: that alone is a check
+  const toolColumns = useMemo(() => agent && datasetRecords(d.dataset, d.datasetFormat, 200).some((r) => r[SHOULD_CALL] || r[SHOULD_NOT_CALL]), [agent, d.dataset, d.datasetFormat]);
+  const missingVars = agent ? [] : vars.filter((v) => v !== d.expectedField && preview[0] && !(v in preview[0]));
 
-  const why1 = !d.name.trim() ? 'Give the evaluation a name' : !d.prompt.trim() ? 'Write the prompt you are testing' : !provider ? 'Choose a model' : undefined;
-  const whyRun = why1 ?? (!count ? 'Add at least one test case on the Your cases step' : !d.evaluators.length ? 'Tick at least one way to tell a good answer' : undefined);
+  const why1 = !d.name.trim() ? 'Give the evaluation a name' : !agent && !d.prompt.trim() ? 'Write the prompt you are testing' : !provider ? 'Choose a model' : undefined;
+  const whyRun = why1 ?? (!count ? 'Add at least one test case on the Your cases step' : !d.evaluators.length && !toolColumns ? (agent ? 'Fill Should call or Should not call for a case, or tick a check' : 'Tick at least one way to tell a good answer') : undefined);
   const runLabel = `Run ${count ? plural(count, 'case') : ''}${shortCost(estimate, formatCost) ? ` · ${shortCost(estimate, formatCost)}` : ''}`.trim();
   const freeName = (n: string) => {
     let name = n.trim();
@@ -124,7 +151,7 @@ export function Wizard({
       <Modal
         title={
           <span className="flex items-center gap-2" data-wizard-title>
-            <CheckCheck size={16} /> Answers are correct
+            {agent ? <Bot size={16} /> : <CheckCheck size={16} />} {agent ? 'The agent uses the right tools' : 'Answers are correct'}
             <Badge>
               Step {step + 1} of 3
             </Badge>
@@ -170,16 +197,36 @@ export function Wizard({
           </ol>
           {step === 0 && (
             <div className="grid gap-3 text-sm" data-wizard-what>
+              <Segmented
+                label="What you are testing"
+                value={d.type}
+                onChange={setKind}
+                options={[
+                  { value: 'llm', label: 'A prompt or chatbot', title: 'Each case is sent to the prompt; checks decide whether the answer is good' },
+                  { value: 'agent', label: 'An agent with tools', title: 'Each case is a task; checks decide which tools the agent called' },
+                ]}
+              />
               <Field label="Name">
                 <Input value={d.name} onChange={(e) => set({ name: e.target.value })} aria-label="Evaluation name" data-wizard-name />
               </Field>
-              <Field label="The prompt" hint="Write {{variables}} where each case puts its text. The cases on the next step fill them.">
-                <Textarea rows={6} className="mono" value={d.prompt} onChange={(e) => set({ prompt: e.target.value })} aria-label="Prompt" data-wizard-prompt />
-              </Field>
-              <div className="text-xs text-muted flex items-center gap-1.5 flex-wrap" data-wizard-vars>
-                Variables found:
-                {vars.length ? vars.map((v) => <Badge key={v} tone="accent">{v}</Badge>) : <span>none: the same prompt is sent for every case</span>}
-              </div>
+              {agent ? (
+                <>
+                  <Field label="Instructions for the agent (optional)" hint="What the agent is, and what it may and may not do. Each case supplies the task.">
+                    <Textarea rows={3} value={d.system} onChange={(e) => set({ system: e.target.value })} aria-label="Instructions for the agent" data-wizard-instructions />
+                  </Field>
+                  <AgentToolsEditor tools={d.tools ?? []} mcpServers={d.mcpServers ?? []} onChange={(x) => set({ tools: x.tools.length ? x.tools : undefined, mcpServers: x.mcpServers.length ? x.mcpServers : undefined })} />
+                </>
+              ) : (
+                <>
+                  <Field label="The prompt" hint="Write {{variables}} where each case puts its text. The cases on the next step fill them.">
+                    <Textarea rows={6} className="mono" value={d.prompt} onChange={(e) => set({ prompt: e.target.value })} aria-label="Prompt" data-wizard-prompt />
+                  </Field>
+                  <div className="text-xs text-muted flex items-center gap-1.5 flex-wrap" data-wizard-vars>
+                    Variables found:
+                    {vars.length ? vars.map((v) => <Badge key={v} tone="accent">{v}</Badge>) : <span>none: the same prompt is sent for every case</span>}
+                  </div>
+                </>
+              )}
               <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <Field label="Model provider">
                   <Select value={d.provider} onChange={(e) => set({ provider: e.target.value, model: providers.find((p) => p.id === e.target.value)?.defaultModel ?? '' })} aria-label="Provider" data-wizard-provider>
@@ -202,7 +249,11 @@ export function Wizard({
           )}
           {step === 1 && (
             <div className="flex flex-col gap-2" data-wizard-cases>
-              <p className="text-xs text-muted">5 to 20 cases are enough to start. Add the cases that went wrong before. Each column is available as {'{{column}}'} in the prompt.</p>
+              <p className="text-xs text-muted">
+                {agent
+                  ? 'Each row is a task for the agent. Under Should call, write the tools it must call: a name, or name(argument=value) when the arguments matter. Under Should not call, the tools it must never call. Separate several with commas.'
+                  : '5 to 20 cases are enough to start. Add the cases that went wrong before. Each column is available as {{column}} in the prompt.'}
+              </p>
               {missingVars.length > 0 && <Callout tone="warn">The prompt uses {missingVars.map((v) => `{{${v}}}`).join(', ')}, but the cases have no such column. Add the column, or change the prompt on the first step.</Callout>}
               <div className="h-80 border border-line rounded-lg overflow-hidden">
                 <CasesPane
@@ -218,7 +269,7 @@ export function Wizard({
                   onImport={() => undefined}
                   onMap={() => undefined}
                   onExportRag={() => undefined}
-                  onExample={() => undefined}
+                  onExample={() => agent && set({ dataset: AGENT_EXAMPLE_CASES, datasetFormat: 'jsonl' })}
                   onGenerate={() => setGenerating(true)}
                 />
               </div>
@@ -226,7 +277,7 @@ export function Wizard({
           )}
           {step === 2 && (
             <div className="-mx-3" data-wizard-good>
-              <GoodAnswerPicker evaluators={d.evaluators} onChange={(evaluators) => set({ evaluators })} cases={count} onTry={tryCheck} />
+              <GoodAnswerPicker evaluators={d.evaluators} onChange={(evaluators) => set({ evaluators })} cases={count} onTry={tryCheck} kind={agent ? 'agent' : 'answer'} />
             </div>
           )}
           <div className="mt-auto pt-2 border-t border-line" data-wizard-cost>

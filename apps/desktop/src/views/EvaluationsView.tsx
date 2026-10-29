@@ -19,6 +19,8 @@ import { CasesPane } from '../components/ai/CasesPane';
 import { GenerateCasesDialog } from '../components/ai/GenerateCasesDialog';
 import { TrustReviewer } from '../components/ai/TrustReviewer';
 import { Wizard, type WizardDraft } from './ai/Wizard';
+import { AgentToolsEditor } from '../components/ai/AgentToolsEditor';
+import { AGENT_EXAMPLE_CASES, AGENT_PROMPT } from '../lib/agent-eval';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { RunReport } from '../components/ai/RunReport';
@@ -26,7 +28,7 @@ import { VariantsPanel } from '../components/ai/VariantsPanel';
 import { SpendDialog } from '../components/ai/SpendDialog';
 import { shortCost, useEvalEstimate, type EvalEstimateResult } from '../lib/eval-estimate';
 import { formatCost } from '../lib/format';
-import type { EvalVariant, TryCheckResult } from '@testpion/core';
+import type { EvalVariant, MockTool, TryCheckResult } from '@testpion/core';
 import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { RagConnectDialog } from '../components/rag/RagConnectDialog';
 import { RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/starter';
@@ -51,12 +53,12 @@ import { FolderList } from '../components/FolderList';
 import { SidebarShell } from '../components/SidebarShell';
 import { EnvironmentsPane } from '../components/SidebarPanes';
 import { useLibrary } from '../lib/library';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Segmented, Select, Split, Tabs, NamedOptions } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Segmented, Select, Split, Tabs, NamedOptions, Textarea } from '../components/ui';
 import { EnvBadge } from '../components/EnvSelect';
 
 interface Draft {
   name: string;
-  type: 'llm' | 'rag';
+  type: 'llm' | 'rag' | 'agent';
   provider: string;
   model: string;
   temperature?: number;
@@ -76,6 +78,10 @@ interface Draft {
   passLine?: number;
   /** Compare mode: other versions of this evaluation (another model, another prompt) run on the same cases. */
   variants?: EvalVariant[];
+  /** type agent: tools the agent may call (answered with a fixed result), and the MCP servers whose tools it may call. */
+  tools?: MockTool[];
+  mcpServers?: string[];
+  maxSteps?: number;
   /** type rag: the RAG target (a library item id) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type rag with a target: the judge of the judged metrics (unset: the AI settings' large model). */
@@ -172,7 +178,7 @@ export function EvaluationsView() {
   const ragTargets = useLibrary<RagTarget>('rag-targets');
   const [connect, setConnect] = useState(false);
   // the wizard for "Answers are correct" (AU-12) and the AI case writer (AU-13)
-  const [wizard, setWizard] = useState(false);
+  const [wizard, setWizard] = useState<false | 'llm' | 'agent'>(false);
   const [generating, setGenerating] = useState(false);
   // RAG evaluations: the metric catalogue (what each evaluator is), the dialogs, and the estimate before a run
   const [estimating, setEstimating] = useState(false);
@@ -186,6 +192,10 @@ export function EvaluationsView() {
   const setType = (type: Draft['type']) => {
     // a new RAG evaluation starts with RAG records and metrics instead of the intent-classification example
     const untouched = JSON.stringify(d.evaluators) === JSON.stringify(drafts.defaults.evaluators);
+    if (type === 'agent') {
+      // an agent reads its task from each case's input column; the example cases and tools show what the columns mean
+      return set({ type, prompt: AGENT_PROMPT, ...(d.dataset === drafts.defaults.dataset ? { dataset: AGENT_EXAMPLE_CASES, datasetFormat: 'jsonl' as const, expectedField: 'expected' } : {}), ...(untouched ? { evaluators: [] } : {}) });
+    }
     set({ type, ...(type === 'rag' && untouched ? { evaluators: RAG_STARTER_EVALUATORS, ...(d.dataset === drafts.defaults.dataset ? { dataset: RAG_STARTER_DATASET } : {}) } : {}) });
   };
   const exportRag = async (to: 'ragas' | 'deepeval') => {
@@ -241,7 +251,7 @@ export function EvaluationsView() {
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => {
     if (p?.new) tabs.newTab(drafts.defaults);
-    if (p?.wizard) setWizard(true);
+    if (p?.wizard) setWizard(p.kind === 'agent' ? 'agent' : 'llm');
     // Model comparison (AI Lab) hands over its prompt, its input and its models: one case, one variant per model
     if (p?.compare) openCompare(p.compare as CompareHandOver);
     if (p?.sample) void trySample();
@@ -293,7 +303,7 @@ export function EvaluationsView() {
   const run = () => (spends ? setEstimating(true) : void startRun(d));
   /** Estimate first: a prompt evaluation over $0.50 (or 100 calls) asks once before it sends anything. */
   const startRun = async (x: Draft) => {
-    if (x.type === 'llm') {
+    if (x.type !== 'rag') {
       const est = await call<EvalEstimateResult>('eval.estimate', { draft: x, environment: env }).catch(() => undefined);
       if (est?.plan.ask) return setAsking({ draft: x, estimate: est });
     }
@@ -427,6 +437,7 @@ export function EvaluationsView() {
     {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} evaluation={savedId} onClose={() => setTryCheck(undefined)} />}
     {wizard && (
       <Wizard
+        startAs={wizard}
         initial={{ ...(drafts.defaults as WizardDraft), type: 'llm', name: 'New evaluation', provider: providers[0]?.id ?? '', model: providers[0]?.defaultModel ?? '', evaluators: [{ type: 'contains', expected: '{{expected}}', ignoreCase: true }] }}
         providers={providers}
         names={saved.lib.items.map((i) => i.name)}
@@ -492,6 +503,7 @@ export function EvaluationsView() {
             <Input className="flex-1 min-w-40 font-medium" value={d.name} onChange={(e) => set({ name: e.target.value })} aria-label="Evaluation name" />
             <Select value={d.type} onChange={(e) => setType(e.target.value as Draft['type'])} aria-label="Evaluation type">
               <option value="llm">Prompt or chatbot</option>
+              <option value="agent">Agent with tools</option>
               <option value="rag">Bot with sources</option>
             </Select>
             <Button className="shrink-0" icon={<Save size={13} />} title={current ? `Save changes to "${current.name}"` : 'Save this evaluation to run it again later'} onClick={() => void saveEval()}>
@@ -504,10 +516,10 @@ export function EvaluationsView() {
             )}
             <Button variant="primary" className="shrink-0" icon={<Play size={13} />} onClick={run} disabled={!!problem || (!ragTarget && !d.provider)} reason={!count ? 'There are no test cases yet: add example cases' : 'Choose a model first: use the offline demo model'} data-eval-run>
               Run {count ? `${d.limit ? Math.min(d.limit, count) : count} cases` : ''}
-              {d.type === 'llm' && count > 0 && shortCost(estimate, formatCost) ? ` · ${shortCost(estimate, formatCost)}` : ''}
+              {d.type !== 'rag' && count > 0 && shortCost(estimate, formatCost) ? ` · ${shortCost(estimate, formatCost)}` : ''}
             </Button>
           </div>
-          {d.type === 'llm' && count > 0 && <EvalCostLine estimate={estimate} model={d.model} />}
+          {d.type !== 'rag' && count > 0 && <EvalCostLine estimate={estimate} model={d.model} />}
           {problem && remedy && (
             <Callout
               tone="warn"
@@ -586,7 +598,7 @@ export function EvaluationsView() {
                 <Field label="Pass line (%)" hint="The report says whether this share of the cases passed. Empty: no pass line">
                   <Input type="number" min={1} max={100} value={d.passLine ?? ''} placeholder="none" onChange={(e) => set({ passLine: e.target.value === '' ? undefined : Math.min(100, Math.max(1, Number(e.target.value))) })} aria-label="Pass line in percent" data-eval-pass-line-input />
                 </Field>
-                {d.type === 'llm' && (
+                {d.type !== 'rag' && (
                   <Field label="Spend cap (USD)" hint="The run stops once it has cost this much. Empty: $1.00 on a paid model, none on the offline demo model. 0: no cap">
                     <Input type="number" min={0} step="0.1" value={d.maxCostUsd ?? ''} placeholder="1.00" onChange={(e) => set({ maxCostUsd: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)) })} aria-label="Spend cap in dollars" data-eval-cap />
                   </Field>
@@ -600,7 +612,7 @@ export function EvaluationsView() {
           onChange={setSub}
           tabs={[
             { id: 'dataset', label: 'Test cases', badge: count },
-            ...(ragTarget ? [] : [{ id: 'prompt' as const, label: d.type === 'rag' ? 'Prompt (optional)' : 'Prompt' }]),
+            ...(ragTarget ? [] : [{ id: 'prompt' as const, label: d.type === 'rag' ? 'Prompt (optional)' : d.type === 'agent' ? 'Tools' : 'Prompt' }]),
             { id: 'evaluators', label: d.type === 'rag' ? 'Metrics' : 'Checks', badge: d.evaluators.length },
           ]}
         />
@@ -623,7 +635,15 @@ export function EvaluationsView() {
               onGenerate={d.type === 'llm' ? () => setGenerating(true) : undefined}
             />
           )}
-          {sub === 'prompt' && !ragTarget && (
+          {sub === 'prompt' && d.type === 'agent' && (
+            <div className="h-full overflow-auto p-3 flex flex-col gap-3" data-agent-setup>
+              <Field label="Instructions for the agent (optional)" hint="What the agent is, and what it may and may not do. Each case supplies the task.">
+                <Textarea rows={4} value={d.system} onChange={(e) => set({ system: e.target.value })} aria-label="Instructions for the agent" />
+              </Field>
+              <AgentToolsEditor tools={d.tools ?? []} mcpServers={d.mcpServers ?? []} onChange={(x) => set({ tools: x.tools.length ? x.tools : undefined, mcpServers: x.mcpServers.length ? x.mcpServers : undefined })} />
+            </div>
+          )}
+          {sub === 'prompt' && !ragTarget && d.type !== 'agent' && (
             <div className="h-full flex flex-col">
               <div className="flex items-center gap-3 px-3 py-1.5 text-sm border-b border-line">
                 <label className="flex items-center gap-1">
@@ -663,11 +683,11 @@ export function EvaluationsView() {
                 />
               ) : (
                 <>
-                  <GoodAnswerPicker evaluators={d.evaluators} onChange={(evaluators) => set({ evaluators })} cases={count} onTry={tryCheckOnCase} />
+                  <GoodAnswerPicker evaluators={d.evaluators} onChange={(evaluators) => set({ evaluators })} cases={count} onTry={tryCheckOnCase} kind={d.type === 'agent' ? 'agent' : 'answer'} />
                   {d.evaluators.some((e) => /judge|rubric|g-?eval/i.test(e.type)) && <TrustReviewer runId={trustRun} evaluation={savedId} />}
                   <details className="mx-3 mb-3 text-sm" data-more-checks open={d.evaluators.length > 0}>
                     <summary className="cursor-pointer text-muted select-none py-1">More checks and the checks of this evaluation ({d.evaluators.length})</summary>
-                    <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={['Body', 'AI', 'RAG', 'Safety', 'Response']} />
+                    <AssertionEditor checks={d.evaluators} onChange={(evaluators) => set({ evaluators })} groups={d.type === 'agent' ? ['Agent', 'Body', 'AI', 'Safety', 'Response'] : ['Body', 'AI', 'RAG', 'Safety', 'Response']} />
                   </details>
                 </>
               )}
