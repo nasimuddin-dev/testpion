@@ -159,7 +159,8 @@ describe('deep search', () => {
     console.log(`the same search again: ${second.toFixed(1)} ms`);
     expectWithin(second, 15, 'the same deep search again');
     // the scan gives the loop a turn every few ms: what the loop was held beyond the machine's own idle lateness stays within a slice
-    expect(turns.length, 'the loop ran during the scan').toBeGreaterThan(1);
+    // (a scan finished inside two timer periods on a fast machine has nothing to yield for)
+    if (first > 30) expect(turns.length, 'the loop ran during the scan').toBeGreaterThan(1);
     expectWithin(Math.max(0, longest - idle), 16, 'longest block of a deep search beyond the idle timer lateness');
     // a change to one exchange: it is read again, the answer follows
     await be.invoke('debug.bookmark', { id: exchanges[3].id, on: true });

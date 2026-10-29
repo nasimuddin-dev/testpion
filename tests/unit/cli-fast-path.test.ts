@@ -83,12 +83,13 @@ describe.skipIf(!built)('the root --version and --help from the build index', ()
  * generous bound on a shared box: measured 160 ms best of three (bare node: 46 ms, before: 281-365 ms).
  */
 describe.skipIf(!built || !existsSync(resolve('packages/cli/dist/bundle.js')))('a real command from the bundle', () => {
-  const census = resolve(process.env.TEMP ?? process.env.TMPDIR ?? '.', `tp-census-${process.pid}.js`);
+  const census = join(tmpdir(), `tp-census-${process.pid}.js`);
   const examples = resolve('examples/public-workspace');
   const runCensus = () => {
     const out = census.replace(/\.js$/, '.json');
     writeFileSync(census, `process.on('exit', () => require('node:fs').writeFileSync(${JSON.stringify(out)}, JSON.stringify(process.moduleLoadList)));`);
     const r = spawnSync(process.execPath, ['--require', census, bin, 'collections', '--json', '-w', examples], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+    if (!existsSync(out)) throw new Error(`the command left no module census: exit ${r.status}, signal ${r.signal}, stderr: ${String(r.stderr).slice(0, 600)}, stdout: ${String(r.stdout).slice(0, 200)}`);
     const loaded = JSON.parse(readFileSync(out, 'utf8')) as string[];
     rmSync(out, { force: true });
     return { r, loaded };
