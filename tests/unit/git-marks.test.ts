@@ -114,6 +114,15 @@ function rows(): Row[] {
   return out;
 }
 
+/** Where a kind with no list of its own shows its change mark: the source that holds it and the start of the `to` it passes to <GitMark>. */
+const MARKED_PLACES: Record<string, { file: string; target: string }> = {
+  workspace: { file: 'views/EnvironmentsView.tsx', target: "{ kind: 'environment', scope: 'workspace'" },
+  proto: { file: 'views/GrpcView.tsx', target: "{ kind: 'git-file', path: `protos/" },
+  'script-package': { file: 'components/ScriptPackagesDialog.tsx', target: "{ kind: 'git-file', path: `packages/" },
+  'mcp-mock': { file: 'views/McpView.tsx', target: "{ kind: 'git-file', path: s.mockFile" },
+  'debugger-rules': { file: 'components/DebuggerRules.tsx', target: "{ kind: 'git-file', path: 'debugger/rules.json'" },
+};
+
 const all = rows();
 const versioned = new Set(
   liveKinds()
@@ -146,11 +155,11 @@ describe('every row of a versioned kind says what it is for git', () => {
       }
     // the saved calls and connections under a collection are drawn by one row component from the group's `kind` (a computed kind)
     if (/git=\{\{ folder: r\.g\.kind/.test(readFileSync(join(src, 'components/CollectionTreeRows.tsx'), 'utf8'))) for (const lib of COLLECTION_CALL_LIBRARIES) drawn.add(collectionCallKind(lib));
-    // kinds the window lists as no row of their own: a proto is opened from its gRPC call, a mock from its MCP server, the Debugger rules
-    // are a panel, the workspace file is Environments ▸ Workspace variables, a package is edited in Settings. Their change is a row of
-    // the Git view (kind icon, name, Compare, History, Restore, Discard, Stage), which the gap-matrix test (git-kind-matrix) checks.
-    const GIT_VIEW_ONLY = new Set<string>(['workspace', 'proto', 'script-package', 'mcp-mock', 'debugger-rules']);
-    const missing = [...versioned].filter((id: KindId) => !drawn.has(id) && !GIT_VIEW_ONLY.has(id));
+    // kinds the window lists as no row of their own (a proto is picked in its gRPC call, a mock named by its MCP server, the Debugger
+    // rules are a panel, the workspace file is Environments ▸ Workspace variables, a package is edited in a dialog) draw their mark with
+    // the same <GitMark> from the place that shows them: the file and the target it names.
+    for (const [kind, { file, target }] of Object.entries(MARKED_PLACES)) if (new RegExp(`<GitMark to=\{${target}`).test(readFileSync(join(src, file), 'utf8'))) drawn.add(kind);
+    const missing = [...versioned].filter((id: KindId) => !drawn.has(id));
     expect(missing, 'a versioned kind with no row that shows its change mark: give its rows `git={…}`, or plan the capability').toEqual([]);
   });
 

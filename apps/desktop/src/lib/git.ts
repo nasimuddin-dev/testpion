@@ -140,6 +140,8 @@ const subscribe = (l: () => void) => (listeners.add(l), () => listeners.delete(l
 
 /** The mark one key has right now (an item's own change, a folder's or section's count); undefined: unchanged, or not in git. */
 export function useGitMarkInfo(key: string): GitMarkInfo | undefined {
+  // a mark outside the explorer (the Debugger window, a dialog) keeps the state read too
+  useGitLive();
   return useSyncExternalStore(subscribe, () => state.marks.get(key));
 }
 

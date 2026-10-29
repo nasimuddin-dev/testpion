@@ -6,6 +6,7 @@ import { confirmDelete } from '../lib/undo-delete';
 import { LABEL } from '../lib/vocabulary';
 import { deleteRuleWithUndo } from './debugger/DockRules';
 import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
+import { GitMark } from './GitMark';
 import { CompareView, type Compared } from './ResponseHistory';
 import { ScriptFields, SCRIPT_TEMPLATE } from './debugger/RuleScriptFields';
 import { FaultFields, FrameFields, ModifyShapingFields, RedirectRewriteFields, RemapFields, ReplySourceFields } from './debugger/RuleShapingFields';
@@ -169,6 +170,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
     <div className="flex-1 min-h-0 overflow-auto p-4 grid gap-4 content-start max-w-5xl">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm text-muted">Profile</span>
+        <GitMark to={{ kind: 'git-file', path: 'debugger/rules.json' }} />
         <Select aria-label="Rules profile" value={state?.active ?? ''} onChange={(e) => void act('debug.profile', { action: 'use', name: e.target.value })}>
           {(state?.profiles ?? []).map((p) => (
             <option key={p}>{p}</option>
