@@ -9,7 +9,7 @@ const { withExpect, stepOf } = require('../lib.cjs');
 const H = `
   const items = () => [...document.querySelectorAll('[role=menuitem]')].filter((m) => m.offsetParent);
   const pick = async (re) => { const it = await __t.waitFor(() => items().find((m) => re.test(m.textContent)), 3000); if (!it) return false; await __t.real.click(it); await __t.sleep(400); return true; };
-  const menuButton = (label) => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim().startsWith(label));
+  const menuButton = (label) => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === label);
   const setValue = (el, v) => { const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : el.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v); el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); };
   const dialog = () => document.querySelector('[role=dialog]');
   const btn = (d, text) => [...d.querySelectorAll('button')].find((x) => x.textContent.trim() === text);
@@ -146,7 +146,7 @@ module.exports = withExpect(steps, {
   'session-menu-lists-the-new-items-with-reasons': /^saz: disabled \| farx: enabled \| compare: disabled \| share: disabled \| open: enabled$/,
   'fiddler-rules-are-reported-rule-by-rule': /^3 Fiddler rules: 2 imported, 1 skipped \| partial: true \| applied: false \| imported,imported,skipped$/,
   'compare-two-sessions': /^1 added, 1 removed, 1 changed, 1 the same \(3 vs 3 requests\) \| added: \/new \| removed: \/gone \| changed: \/b:status$/,
-  'compare-dialog-lists-the-differences': /^1 added, 1 removed, 1 changed, 1 the same \(3 vs 3 requests\) \| rows: 1 \| tabs: Changed 1 \/ Added 1 \/ Removed 1$/,
+  'compare-dialog-lists-the-differences': /^1 added, 1 removed, 1 changed, 1 the same \(3 vs 3 requests\) \| rows: 1 \| tabs: Changed1 \/ Added1 \/ Removed1$/,
   'large-session-mode-switches-on-and-off': /^on: true \| off: false \| spilled: 0$/,
   'launch-says-what-it-would-set': /^java: java true started: false \| chrome: chromium true \| bad kind: kind is one of node/,
   'clean-up': /^fiddler rules left: 0$/,
