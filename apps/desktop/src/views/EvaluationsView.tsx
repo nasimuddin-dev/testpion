@@ -19,6 +19,7 @@ import { CasesPane } from '../components/ai/CasesPane';
 import { GenerateCasesDialog } from '../components/ai/GenerateCasesDialog';
 import { TrustReviewer } from '../components/ai/TrustReviewer';
 import { Wizard, type WizardDraft } from './ai/Wizard';
+import { BotWizard, type BotDraft } from './ai/BotWizard';
 import { AgentToolsEditor } from '../components/ai/AgentToolsEditor';
 import { AGENT_EXAMPLE_CASES, AGENT_PROMPT } from '../lib/agent-eval';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
@@ -35,7 +36,7 @@ import { RAG_STARTER_DATASET, RAG_STARTER_EVALUATORS } from '../components/rag/s
 import { MetricPicker } from '../components/rag/MetricPicker';
 import { metricResolver, spendsOnJudge, type MetricCatalogue } from '../components/rag/metric-resolver';
 import { RagEstimateDialog } from '../components/rag/RagEstimateDialog';
-import { RagEstimateView, useRagEstimate } from '../components/rag/RagEstimate';
+import { RagEstimateLine } from '../components/rag/RagEstimate';
 import { RagTryDialog } from '../components/rag/RagTryDialog';
 import { RagMetricMatrix } from '../components/rag/RagMetricMatrix';
 import { RagColumnMapper } from '../components/rag/RagColumnMapper';
@@ -112,18 +113,6 @@ const drafts = persisted<Draft>('eval', {
   retries: 1,
 });
 
-/** The estimate of the draft as one line under the metric picker: it follows the choices (asked again after a pause). */
-function MetricEstimateLine({ draft, env }: { draft: Draft; env?: string }) {
-  const { estimate, error, loading } = useRagEstimate(draft, { environment: env });
-  if (error) return <span className="text-bad">{error}</span>;
-  if (!estimate) return <span className="text-muted">Estimating …</span>;
-  return (
-    <span className={loading ? 'opacity-60' : undefined}>
-      <RagEstimateView estimate={estimate} compact />
-    </span>
-  );
-}
-
 /** What Model comparison (AI Lab) hands over to open compare mode: one prompt, one input, several models. */
 interface CompareHandOver {
   name?: string;
@@ -178,10 +167,10 @@ export function EvaluationsView() {
   const ragTargets = useLibrary<RagTarget>('rag-targets');
   const [connect, setConnect] = useState(false);
   // the wizard for "Answers are correct" (AU-12) and the AI case writer (AU-13)
-  const [wizard, setWizard] = useState<false | 'llm' | 'agent'>(false);
+  const [wizard, setWizard] = useState<false | 'llm' | 'agent' | 'bot'>(false);
   const [generating, setGenerating] = useState(false);
   // RAG evaluations: the metric catalogue (what each evaluator is), the dialogs, and the estimate before a run
-  const [estimating, setEstimating] = useState(false);
+  const [estimating, setEstimating] = useState<boolean | Draft>(false);
   const [tryCheck, setTryCheck] = useState<CheckConfig>();
   const [mapper, setMapper] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -251,7 +240,7 @@ export function EvaluationsView() {
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => {
     if (p?.new) tabs.newTab(drafts.defaults);
-    if (p?.wizard) setWizard(p.kind === 'agent' ? 'agent' : 'llm');
+    if (p?.wizard) setWizard(p.kind === 'agent' ? 'agent' : p.kind === 'bot' ? 'bot' : 'llm');
     // Model comparison (AI Lab) hands over its prompt, its input and its models: one case, one variant per model
     if (p?.compare) openCompare(p.compare as CompareHandOver);
     if (p?.sample) void trySample();
@@ -427,15 +416,39 @@ export function EvaluationsView() {
     {connect && <RagConnectDialog onClose={() => setConnect(false)} onSaved={(id) => void ragTargets.reload().then(() => set({ target: id }))} />}
     {estimating && (
       <RagEstimateDialog
-        draft={d as never}
+        draft={(typeof estimating === 'object' ? estimating : d) as never}
         hasTarget={!!ragTarget}
         firstQuestion={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined}
         onClose={() => setEstimating(false)}
-        onRun={(freeFirst) => (setEstimating(false), void runDraft(freeFirst ? { ...d, evaluators: d.evaluators.filter((e) => !spendsOnJudge(resolveMetric(e.type), e)) } : d))}
+        onRun={(freeFirst) => {
+          const x = typeof estimating === 'object' ? estimating : d;
+          setEstimating(false);
+          void runDraft(freeFirst ? { ...x, evaluators: x.evaluators.filter((e) => !spendsOnJudge(resolveMetric(e.type), e)) } : x);
+        }}
       />
     )}
     {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} evaluation={savedId} onClose={() => setTryCheck(undefined)} />}
-    {wizard && (
+    {wizard === 'bot' && (
+      <BotWizard
+        initial={{ ...(drafts.defaults as BotDraft), type: 'rag', name: 'New bot evaluation', provider: '', model: '', system: '', prompt: '', format: 'text', dataset: RAG_STARTER_DATASET, datasetFormat: 'jsonl', expectedField: 'reference', evaluators: RAG_STARTER_EVALUATORS }}
+        providers={providers}
+        names={saved.lib.items.map((i) => i.name)}
+        onClose={() => setWizard(false)}
+        onEditor={(w) => (tabs.newTab({ ...drafts.defaults, ...w }), setWizard(false))}
+        onFinish={async (w, runIt) => {
+          const id = await saved.put({ name: w.name, data: { ...drafts.defaults, ...w } });
+          const it = await openSaved(id);
+          setWizard(false);
+          useApp.getState().toast(`Saved "${w.name}"`, 'success');
+          if (!runIt || !it) return;
+          const x: Draft = { ...drafts.defaults, ...it.data, name: it.name };
+          // a run that asks a judge is estimated first, as the Run button does
+          if (x.evaluators.some((e) => spendsOnJudge(resolveMetric(e.type), e))) setEstimating(x);
+          else await runDraft(x);
+        }}
+      />
+    )}
+    {(wizard === 'llm' || wizard === 'agent') && (
       <Wizard
         startAs={wizard}
         initial={{ ...(drafts.defaults as WizardDraft), type: 'llm', name: 'New evaluation', provider: providers[0]?.id ?? '', model: providers[0]?.defaultModel ?? '', evaluators: [{ type: 'contains', expected: '{{expected}}', ignoreCase: true }] }}
@@ -679,7 +692,7 @@ export function EvaluationsView() {
                   columns={previewKeys}
                   hasTarget={!!ragTarget}
                   onTry={setTryCheck}
-                  footer={ragTarget ? <MetricEstimateLine draft={d} env={env} /> : <span className="text-muted">Choose a bot to see what a run costs.</span>}
+                  footer={ragTarget ? <RagEstimateLine draft={d} env={env} /> : <span className="text-muted">Choose a bot to see what a run costs.</span>}
                 />
               ) : (
                 <>

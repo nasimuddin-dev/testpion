@@ -68,6 +68,14 @@ mapping:
 limits: { concurrency: 2, requestsPerMinute: 120, retries: 1 }
 ```
 
+## The wizard {#wizard}
+
+AI Lab > Start > **Answers come from my documents** opens a three-step wizard that saves an evaluation of type `rag`, the same file as the full editor makes (so `testpion rag run`, `testpion eval run` and CI run it unchanged).
+
+1. **Which bot?** Choose a connected bot, or **Connect a bot...** (a preset, one test question, click where the answer is).
+2. **Your questions.** The questions as records (a question, a reference answer, the ids of the right documents): type them, load a file, **Generate from documents...**, **From real calls...** or import another tool's file.
+3. **What should be true?** Two goals instead of the whole catalogue: *Answers are backed by the sources* (faithfulness, answer relevance) and *The right documents are found* (context recall by ids). The line **Quality checks: 5 selected (the standard set)** lists what runs; each check has **Try on question 1**; **More checks...** opens the full picker of all metrics. The cost of a run is shown under the step; a run that asks an AI reviewer asks for your yes first.
+
 ## A dataset {#dataset}
 
 An evaluation of type RAG takes records with a **question**, a **reference** answer and, when you have them, the gold

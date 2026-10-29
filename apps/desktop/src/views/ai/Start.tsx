@@ -86,7 +86,7 @@ export function Start({ providers, onTab }: { providers?: ProviderConfig[]; onTa
             icon={<FileText size={16} />}
             title="Answers come from my documents"
             action={
-              <Button size="sm" onClick={() => onTab('rag')} data-start-go="documents">
+              <Button size="sm" onClick={() => open({ wizard: true, kind: 'bot' })} data-start-go="documents">
                 Start
               </Button>
             }
