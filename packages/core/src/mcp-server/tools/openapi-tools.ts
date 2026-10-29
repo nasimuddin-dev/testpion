@@ -19,7 +19,7 @@ export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string
       name: 'generate_tests',
       write: true,
       description:
-        "Write a first test suite from an API definition in the workspace (`spec`, e.g. specs/clinic.yaml): a test file per tag under tests/<api>/ with, per operation, its example request checked for the documented success status, the OpenAPI contract and latency, and one invalid request (a required field left out, a wrong type …) that must get a 4xx; plus tests/<api>.suite.yaml. Existing files are kept unless overwrite. Review the example values (ids, tokens), then run_tests.",
+        "Write a first test suite from an API definition in the workspace (`spec`, e.g. specs/clinic.yaml): a test file per tag under tests/<api>/ with, per operation, its example request checked for the documented success status, the OpenAPI contract and latency, and one invalid request (a missing required field, a wrong type …) that must get a 4xx; plus tests/<api>.suite.yaml. Existing files are kept unless overwrite. Review the example values (ids, tokens), then run_tests.",
       inputSchema: {
         type: 'object',
         properties: {

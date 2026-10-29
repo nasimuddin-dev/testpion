@@ -50,7 +50,7 @@ export function environmentTools(d: ModuleToolDeps): Tool[] {
     },
     {
       name: 'environment_matrix',
-      description: 'Every variable across every environment of the workspace: for each, whether it is set, empty, missing or disabled in each environment (and whether it is a secret), incomplete variables first. Never returns values. Use it to find a variable that one environment lacks.',
+      description: 'Every variable across every environment: for each, whether it is set, empty, missing or disabled per environment (and whether it is a secret), incomplete variables first. Never returns values. Use it to find a variable one environment lacks.',
       inputSchema: { type: 'object', properties: { onlyIncomplete: { type: 'boolean', description: 'Only variables that are missing, empty or disabled somewhere' } } },
       run: (a) => {
         const m = environmentMatrix(store, { secrets });

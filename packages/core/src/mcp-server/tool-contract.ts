@@ -495,7 +495,7 @@ function composeDescription(t: Tool, doc: ToolDoc | undefined): string {
   if (doc) parts.push(`\nWhen to use: ${doc.when}\nWhen not: ${doc.whenNot}\nExample: ${JSON.stringify(doc.example)}`);
   const notes: string[] = [];
   // (the pages, `response_format` and `confirm` parameters describe themselves in the input schema: saying it twice was 30 KB of tools/list)
-  if (CONFIRM_TOOLS[t.name]) notes.push('Deletes or overwrites: needs `confirm: true` (ask the user first).');
+  if (CONFIRM_TOOLS[t.name]) notes.push('Deletes or overwrites: needs `confirm` (ask the user first).');
   if (notes.length) parts.push(notes.join(' '));
   return parts.join('\n');
 }
@@ -526,9 +526,9 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
       properties.cursor = prop('The nextCursor of the page before (omit for the first page)');
       properties.limit = prop(`Page size (default ${DEFAULT_PAGE}, max ${MAX_PAGE})`, 'number');
     }
-    if (big) properties.response_format = prop('concise (default: long values cut, each cut named) or detailed', 'string', { enum: ['concise', 'detailed'] });
+    if (big) properties.response_format = prop('concise (default: long values cut) or detailed', 'string', { enum: ['concise', 'detailed'] });
     if (AI_COST_TOOLS.has(t.name) && !Object.hasOwn(properties, 'max_cost_usd'))
-      properties.max_cost_usd = prop('Refuse before anything is sent when this call could cost more than this many US dollars (the context plus the most the answer may use, at the price of the model). Leave out for no per-call cap; the daily caps always apply', 'number');
+      properties.max_cost_usd = prop('Refuse before sending if the call could cost more than this many USD; the daily caps always apply', 'number');
     const budget = SEND_TOOLS.includes(t.name) ? budgets.send : AI_SPEND_TOOLS.includes(t.name) ? budgets.ai : undefined;
     if (confirm || budget)
       properties.confirm = o.confirmCodes
@@ -538,7 +538,7 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
               : 'Only needed after a long session of sends: the confirmation code the user gives you.',
             'string',
           )
-        : prop('true to go ahead (ask the user first); omitted: nothing changes and the result says what would', 'boolean');
+        : prop('true to go ahead (ask the user first); without it nothing changes', 'boolean');
     const required = t.inputSchema.required?.map((r) => aliases.find(([, k]) => k === r)?.[0] ?? r);
     const doc = t.doc ?? o.docs[t.name];
     return {

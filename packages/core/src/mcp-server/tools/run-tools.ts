@@ -151,16 +151,16 @@ export function runTools(d: ModuleToolDeps): Tool[] {
       name: 'run_evaluation',
       write: true,
       description:
-        'Run a saved evaluation by name or id, like `testpion eval run`: every dataset record through the model, scored by its evaluators (AI-judge scores are labelled as such). Returns totals, mean scores and per-case results with failed checks; the run is recorded in the workspace history. `limit` runs only the first n records (at most 500 here).',
+        'Run a saved evaluation by name or id, like `testpion eval run`: every dataset record through the model, scored by its evaluators (AI-judge scores are labelled). Returns totals, mean scores and per-case results with failed checks; the run is recorded in history. `limit` runs only the first n records (at most 500).',
       inputSchema: {
         type: 'object',
         properties: {
           name: str('Saved evaluation name or id'),
           environment: str('Environment name'),
           limit: { type: 'number', description: 'Only the first n dataset records' },
-          max_cost_usd: { type: 'number', description: 'Stop the run once it has cost this much (USD, from the price table). Default $1.00 for a paid model, none for the offline demo model or a model on this computer; 0 = no cap' },
+          max_cost_usd: { type: 'number', description: 'Stop the run once it has cost this much (USD). Default $1.00 for a paid model, none for the offline demo or a local model; 0 = no cap' },
           confirm: { type: 'boolean', description: 'Go ahead although the estimate is over $0.50 (or 100 calls): ask the user first, then repeat the call with confirm: true' },
-          variants: { type: 'boolean', description: 'Compare mode: run the evaluation and each of its variants (other prompt versions and models, set in the app) on the same cases, then return the comparison (see eval_variants). The estimate is the total of all of them.' },
+          variants: { type: 'boolean', description: 'Compare mode: run the evaluation and each of its variants (other prompt versions and models, set in the app) on the same cases and return the comparison (eval_variants). The estimate covers all of them.' },
         },
         required: ['name'],
       },

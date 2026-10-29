@@ -13,7 +13,7 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
   return [
     {
       name: 'list_monitors',
-      description: 'Monitors of the workspace (collections, or test files / flows under tests/, that run on a schedule; save_monitor adds one): collection and folders or testFile, environment, schedule, enabled, last result (passed / failed / error with counts) and next run.',
+      description: 'Monitors (collections, or test files / flows under tests/, that run on a schedule; save_monitor adds one): collection and folders or testFile, environment, schedule, enabled, last result (passed / failed / error with counts), next run.',
       inputSchema: { type: 'object', properties: {} },
       run: () => listMonitors(store).map((m) => monitorStatus(store, m)),
     },

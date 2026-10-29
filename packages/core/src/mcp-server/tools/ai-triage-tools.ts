@@ -21,7 +21,7 @@ const forAgent = (p: Proposal) => ({ ...p, items: p.items.map((i) => ({ ...i, be
 const PRIVACY = {
   type: 'string',
   enum: ['full', 'metadata', 'names'],
-  description: 'full (redacted, default), metadata (statuses, checks, endpoints and shapes; no body values, no failure messages), names',
+  description: 'full (redacted, default), metadata (statuses, checks, endpoints, shapes; no body values or failure messages), names',
 };
 
 /**

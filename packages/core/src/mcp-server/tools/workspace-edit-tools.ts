@@ -277,7 +277,7 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     {
       name: 'delete_request',
       write: true,
-      description: 'Delete a request or a folder (with everything in it) from a collection. The deleted item is returned, so it can be put back with save_request if that was a mistake. Deleting a whole collection is left to the user (the app keeps it in the trash for 30 days).',
+      description: 'Delete a request or a folder (with everything in it) from a collection. The deleted item is returned, so save_request can put it back. Deleting a whole collection is left to the user (the app keeps it in the trash for 30 days).',
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id'), request: str('Request or folder name or id') }, required: ['collection', 'request'] },
       run: (a) => {
         const c = structuredClone(findCollection(a.collection));
@@ -295,7 +295,7 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     {
       name: 'create_collection',
       write: true,
-      description: 'Create an empty collection (name, optional description and variables). A second call with the same name fails unless `if_exists: "reuse"`, which returns the one that is there. save_request with `create: true` also creates one on the way.',
+      description: 'Create an empty collection (name, optional description and variables). A second call with the same name fails unless `if_exists: "reuse"` (returns the existing one). save_request with `create: true` also creates one.',
       inputSchema: {
         type: 'object',
         properties: { name: str('Collection name'), if_exists: { type: 'string', enum: ['fail', 'reuse'], description: 'When it exists already: fail (refuse, the default) or reuse (return the existing one, nothing changes), so a retry after a timeout never makes a second' }, description: str('What the collection is for (Markdown)'), variables: { type: 'object', description: 'Collection variables {name: value} (plain values only; secrets belong in secret environment variables)' } },

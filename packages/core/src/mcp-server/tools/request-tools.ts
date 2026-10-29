@@ -210,7 +210,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
     },
     {
       name: 'decode_jwt',
-      description: 'Decode a JSON Web Token (a "Bearer " prefix is fine): header, claims, issued at, expires at and seconds left. The signature is NOT verified (no keys). Use it to see what an access or id token says, e.g. its scopes, audience or expiry.',
+      description: 'Decode a JSON Web Token (a "Bearer " prefix is fine): header, claims, issued at, expires at and seconds left. The signature is NOT verified. Use it to see what a token says: scopes, audience, expiry.',
       inputSchema: { type: 'object', properties: { token: str('The JWT') }, required: ['token'] },
       run: (a) => decodeJwt(String(a.token)),
     },

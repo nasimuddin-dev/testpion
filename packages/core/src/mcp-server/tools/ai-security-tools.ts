@@ -41,7 +41,7 @@ export function aiSecurityTools({
           collection: str('The collection: its name or id (list_collections)'),
           folder: str('One folder of it: its name, its path (Orders/Refunds) or its id'),
           identities: {
-            description: 'The variables that hold the two principals’ credentials: {owner: "tokenA", other: "tokenB"} or "owner=tokenA,other=tokenB". The owner is the user the saved requests were written for. Names only, never the credentials.',
+            description: 'The variables that hold the two principals’ credentials: {owner: "tokenA", other: "tokenB"} or "owner=tokenA,other=tokenB". The owner is the user the saved requests were written for. Names only, never credentials.',
           },
           probes: { type: 'array', items: { type: 'string', enum: [...SECURITY_PROBES] }, description: 'Default: all four' },
           includeWrite: { type: 'boolean', description: 'Also probe POST / PUT / PATCH requests (they change data; mass assignment needs them). Default false' },

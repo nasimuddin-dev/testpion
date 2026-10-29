@@ -33,7 +33,7 @@ export function evalQualityTools(d: { store: WorkspaceStore; secrets: SecretStor
       },
       write: true,
       description:
-        `Make the sample evaluation "${SAMPLE_NAME}" (10 support messages to sort into cancellation, refill, booking or other, checked with "the reply contains the expected answer") on the offline demo model, and run it. The demo model answers by rules, so the result shows how a run looks and says nothing about a real model; every answer says so. Returns the evaluation, the run (totals, per-case results) and a one-sentence headline. An edited sample is put back as written: make your own with a copy. \`run: false\` only makes it.`,
+        `Make the sample evaluation "${SAMPLE_NAME}" (10 support messages to sort into cancellation, refill, booking or other, checked with "the reply contains the expected answer") on the offline demo model, and run it. The demo model answers by rules, so the result says nothing about a real model (every answer says so). Returns the evaluation, the run (totals, per-case results) and a headline. An edited sample is put back as written: copy it to make your own. \`run: false\` only makes it.`,
       inputSchema: { type: 'object', properties: { run: { type: 'boolean', description: 'false: make the sample, do not run it (default true)' } } },
       run: async (a) => {
         const made = ensureSample(store);
@@ -56,7 +56,7 @@ export function evalQualityTools(d: { store: WorkspaceStore; secrets: SecretStor
         example: { name: 'Intent classification' },
       },
       description:
-        'What a saved prompt evaluation would cost before it runs: cases, calls (one per case, plus one per case for each check an AI reviewer grades), tokens, dollars from the price table (undefined when the model has no price), seconds, and `plan`: the spend cap that would stop the run ($1.00 for a paid model, none for the offline demo model or a model on this computer) and whether run_evaluation would ask first (estimate over $0.50 or 100 calls). Nothing is sent.',
+        'What a saved prompt evaluation would cost before it runs: cases, calls (one per case, plus one per case for each check an AI reviewer grades), tokens, dollars from the price table (undefined when the model has no price), seconds, and `plan`: the spend cap that would stop the run ($1.00 for a paid model, none for the offline demo or a local model) and whether run_evaluation would ask first (over $0.50 or 100 calls). Nothing is sent.',
       inputSchema: {
         type: 'object',
         properties: { name: str('Saved evaluation name or id'), environment: str('Environment name'), limit: { type: 'number', description: 'Only the first n cases' }, max_cost_usd: { type: 'number', description: 'The cap to plan with (0 = none)' } },
@@ -82,7 +82,7 @@ export function evalQualityTools(d: { store: WorkspaceStore; secrets: SecretStor
       },
       write: true,
       description:
-        'Try one check on one case of a saved evaluation: the case is sent to the evaluation’s model as in a run and the check is applied to the reply. Returns the reply, passed or failed, the check’s reason (an AI reviewer’s reason when it grades), the cost and the model. `dry_run` says what would be sent and what it costs and sends nothing. A model that runs on this computer (the offline demo model) is free; a call to a paid model, and any check an AI reviewer grades, costs money, so they need `confirm: true`: show the user the cost (dry_run) and ask first.',
+        'Try one check on one case of a saved evaluation: the case is sent to the evaluation’s model as in a run and the check is applied to the reply. Returns the reply, passed or failed, the check’s reason (an AI reviewer’s when it grades), the cost and the model. `dry_run` says what would be sent and what it costs, and sends nothing. A local model (the offline demo) is free; a paid model, and any check an AI reviewer grades, costs money and needs `confirm`: show the user the cost (dry_run) and ask first.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -119,7 +119,7 @@ export function evalQualityTools(d: { store: WorkspaceStore; secrets: SecretStor
         example: { name: 'Intent classification', from: 'prompt', count: 10, dry_run: true },
       },
       description:
-        'Write test cases for a saved prompt evaluation with TestPion’s configured model. `from`: prompt (the prompt under test), spec (an API definition under specs/: questions about its operations), collection (the saved requests of a collection, optionally one folder), documents (questions with expected answers from files or https pages, the RAG test-set generator) or history (real prompts sent to a model). Every case is verified (it fills every variable of the prompt, it is not a repeat, it names an operation or request the source has, it looks like a real call) and returned as ONE proposal; a case that failed a check is unticked. Nothing is added to the evaluation here: show the person the cases and badges, then add the ticked ones with ai_apply_proposal { id } (undo with ai_undo_proposal). The prompt and a few existing cases are sent to the model (redacted; the AI privacy level applies). `dry_run` returns what would be sent and the estimate and sends nothing.',
+        'Write test cases for a saved prompt evaluation with TestPion’s configured model. `from`: prompt (the prompt under test), spec (an API definition under specs/: questions about its operations), collection (the saved requests of a collection, optionally one folder), documents (questions with expected answers from files or https pages, the RAG test-set generator) or history (real prompts sent to a model). Every case is verified (fills every prompt variable, is not a repeat, names an operation or request the source has, looks like a real call) and returned as ONE proposal; a case that failed a check is unticked. Nothing is added here: show the person the cases and badges, then add the ticked ones with ai_apply_proposal { id } (undo: ai_undo_proposal). The prompt and a few existing cases go to the model (redacted; the AI privacy level applies). `dry_run` sends nothing and returns what would be sent and the estimate.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -194,7 +194,7 @@ export function evalQualityTools(d: { store: WorkspaceStore; secrets: SecretStor
         example: { run: 'last' },
       },
       description:
-        'Trust the AI reviewer. Without `grade`: returns up to 10 answers of a finished run to grade (input, answer, the reviewer’s rule; the reviewer’s own verdict is hidden so it cannot lean on the person), which ones the person graded already, and, once all are graded, how often the AI reviewer agreed with them (a sentence, the counts, Cohen’s kappa). With `grade: { result, verdict }`: records the person’s verdict (pass or fail; null clears it) on one answer first, then returns the same. Only record a verdict the PERSON gave: never grade for them, or the agreement says nothing.',
+        'Trust the AI reviewer. Without `grade`: returns up to 10 answers of a finished run to grade (input, answer, the reviewer’s rule; its own verdict is hidden), which ones the person graded already, and, once all are graded, how often the AI reviewer agreed (a sentence, the counts, Cohen’s kappa). With `grade: { result, verdict }`: records the person’s verdict (pass or fail; null clears it) on one answer first, then returns the same. Only record a verdict the PERSON gave: never grade for them, or the agreement says nothing.',
       inputSchema: {
         type: 'object',
         properties: {

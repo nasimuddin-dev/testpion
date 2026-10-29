@@ -82,7 +82,7 @@ export function ragTools({ store, secrets, settings, checkEnvironment }: { store
     },
     {
       name: 'rag_export_dataset',
-      description: 'Convert a TestPion RAG dataset (a file of the workspace, or the text) into Ragas (user_input, reference, reference_contexts, response, retrieved_contexts …) or DeepEval (input, expected_output, context, actual_output, retrieval_context …) records, to score the same questions with those tools. Returns up to `limit` records.',
+      description: 'Convert a TestPion RAG dataset (a file of the workspace, or the text) into Ragas (user_input, reference, reference_contexts, response, retrieved_contexts …) or DeepEval (input, expected_output, context, actual_output, retrieval_context …) records, to score the same questions there. Returns up to `limit` records.',
       inputSchema: { type: 'object', properties: { path: str('A file of the workspace'), text: str('The dataset text instead of a file'), format: str('With text: json, jsonl or csv'), to: { type: 'string', enum: ['ragas', 'deepeval'] }, limit: { type: 'number', description: 'Records to return (default 20)' } }, required: ['to'] },
       run: (a) => {
         const { text, format } = datasetText(store, a);

@@ -28,7 +28,7 @@ export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStor
     {
       name: 'spec_gaps',
       description:
-        "What the tests and collections of the workspace never prove about an API definition (deterministic: no model, no key): per operation — is it called, which documented statuses are asserted, is there a negative, a boundary and a security test, is the response checked against the document, which parameters are never sent — and the open gaps, with the coverage in percent. Also how many tests TestPion could build for the gaps without a model.",
+        "What the workspace's tests and collections never prove about an API definition (deterministic: no model, no key): per operation, is it called, which documented statuses are asserted, is there a negative, a boundary and a security test, is the response checked against the document, which parameters are never sent; the open gaps and coverage in percent; how many tests TestPion could build for the gaps without a model.",
       inputSchema: { type: 'object', properties: { spec: str('The API definition in the workspace, e.g. specs/clinic.yaml'), format: { type: 'string', enum: ['json', 'markdown'], description: 'json (default) or a Markdown report' } }, required: ['spec'] },
       run: (a) => {
         const spec = specArg(a);
@@ -41,7 +41,7 @@ export function aiSpecTools({ store, secrets, settings }: { store: WorkspaceStor
     {
       name: 'spec_tests_generate',
       description:
-        "Tests that close the gaps in the tests of an API definition, as a proposal: positive (the documented example, its status, the OpenAPI contract, a shallow JSON Schema), negative (invalid input → 4xx, an unknown id → 404), boundary (a value at and beyond a documented limit) and security (no credentials → 401/403). TestPion builds those from the document itself; with TestPion's configured model (the user's key or a local model) it adds more ideas, built from the document's valid example too — an operation the document does not have is dropped and reported, an undocumented status becomes its class. Every test is validated against the document (operation, status, request against its schema) and the proposal says the coverage before → after, computed. Nothing is written: apply with ai_apply_proposal after the user agrees. Without a model the deterministic cases are the proposal (with a note). `dryRun` returns what would be sent (operations, limits, gaps — no secrets) with the token and cost estimate.",
+        "Tests that close the gaps in the tests of an API definition, as a proposal: positive (documented example, status, OpenAPI contract, shallow JSON Schema), negative (invalid input → 4xx, unknown id → 404), boundary (a value at and beyond a documented limit) and security (no credentials → 401/403). TestPion builds those from the document; with its configured model (the user's key or a local model) it adds ideas built from the valid example too (an operation the document lacks is dropped and reported; an undocumented status becomes its class). Every test is validated against the document and the proposal says the coverage before → after. Nothing is written: apply with ai_apply_proposal after the user agrees. Without a model the deterministic cases are the proposal (with a note). `dryRun` returns what would be sent (operations, limits, gaps; no secrets) with the token and cost estimate.",
       inputSchema: {
         type: 'object',
         properties: {

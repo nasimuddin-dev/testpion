@@ -37,14 +37,14 @@ export function importTools({ store }: { store: WorkspaceStore }): Tool[] {
     },
     {
       name: 'get_import_report',
-      description: 'The compatibility report of an import done in this workspace (the id import_definition returned as `importId`): counts, per-item findings with the item path, field and original text, grouped by code. Without an id, lists the last imports (30 are kept).',
+      description: 'The compatibility report of an import (the `importId` import_definition returned): counts, per-item findings with item path, field and original text, grouped by code. Without an id, lists the last imports (30 kept).',
       inputSchema: { type: 'object', properties: { id: str('The import id (imp-…); omit to list') } },
       run: (a) => (typeof a.id === 'string' && a.id ? readImportReport(store, a.id) : { imports: listImportReceipts(store) }),
     },
     {
       name: 'undo_definition_import',
       write: true,
-      description: 'Take back an import made by import_definition (the id it returned as `importId`): its collections, environments and API definitions go to Recently deleted (restore_item puts them back) and its flow files are removed. Refused, changing nothing, while an imported collection or flow was edited since, unless `force` is true. Bundle imports are taken back by undo_import.',
+      description: 'Take back an import made by import_definition (its `importId`): its collections, environments and API definitions go to Recently deleted (restore_item brings them back) and its flow files are removed. Refused, changing nothing, if an imported collection or flow was edited since, unless `force` is true. Bundle imports: undo_import.',
       inputSchema: { type: 'object', properties: { id: str('The import id (imp-…)'), force: { type: 'boolean', description: 'Undo even if the imported items were edited since' } }, required: ['id'] },
       run: (a) => undoImportReceipt(store, String(a.id), { force: a.force === true }),
     },

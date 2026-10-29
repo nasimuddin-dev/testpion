@@ -55,7 +55,7 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
           days: { type: 'number', description: 'workspace.report: days of activity (1 to 90)' },
           history_id: str('response.body, graphql.response: a History entry whose saved response body is the output'),
           save_to: str(
-            'Write a new file here instead of returning the content: a path under exports/ or .local/exports/ (e.g. exports/run.csv). It must not exist; no other folder, hidden name or program/launcher file is allowed. Needs confirm: true',
+            'Write a new file here instead of returning the content: a path under exports/ or .local/exports/ (e.g. exports/run.csv); it must not exist, no other folder or program file is allowed. Needs confirm',
           ),
         },
         required: ['surface'],

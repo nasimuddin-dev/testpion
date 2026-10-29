@@ -8,8 +8,8 @@ import type { Tool } from './tool.js';
  * What stays: the name, the first sentences (what it does), one line of when to use it, any warning line (a delete asks for
  * `confirm`), and the whole input schema except that parameter descriptions are cut to their first sentence.
  */
-const SHORT_PARAMETER = 40;
-const SHORT_WHAT = 200;
+const SHORT_PARAMETER = 32;
+const SHORT_WHAT = 185;
 const SHORT_WHEN = 120;
 
 const firstSentence = (text: string, max: number): string => {
@@ -38,7 +38,7 @@ export function compactDescription(description: string): string {
   for (const l of lines) {
     if (l.startsWith('When to use: ')) {
       sawWhen = true;
-      out.push(`When: ${firstSentence(l.slice('When to use: '.length), SHORT_WHEN)}`);
+      out.push(`When: ${firstSentence(l.slice('When to use: '.length).replace(/^Use it (to |when |for |if )?/, (_m, w) => (w === 'to ' ? '' : (w ?? '')).trimStart()), SHORT_WHEN)}`);
     } else if (!sawWhen && !out.length) out.push(sentences(l, SHORT_WHAT)); // the first paragraph says what it does; the rest is in the complete entry
     else if (sawWhen && l.trim()) out.push(l); // a warning after the example (a delete needs confirm)
   }

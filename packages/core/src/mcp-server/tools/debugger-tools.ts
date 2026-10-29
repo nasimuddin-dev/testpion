@@ -126,18 +126,18 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       name: 'debugger_capture',
       write: true,
       description:
-        "Start or stop TestPion's HTTP Debugger proxy (a forward proxy on 127.0.0.1). Start it, then run the program to watch with HTTP_PROXY set to the returned url (or a browser with --proxy-server=url); its requests and responses are captured for debugger_exchanges. Plain HTTP is captured whole; HTTPS is listed as a tunnel by host.",
+        "Start or stop TestPion's HTTP Debugger proxy (forward proxy on 127.0.0.1). Run the program to watch with HTTP_PROXY set to the returned url (a browser: --proxy-server=url); traffic is captured for debugger_exchanges. HTTP is captured whole; HTTPS is a tunnel by host unless decrypt.",
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear', 'pause', 'resume', 'launch'], description: 'pause: the proxy keeps forwarding but stops listing new traffic; resume lists again; launch starts a program through the running proxy (command, args)' },
+          action: { type: 'string', enum: ['start', 'stop', 'status', 'clear', 'pause', 'resume', 'launch'], description: 'pause: keep forwarding, stop listing; resume lists again; launch: start command through the running proxy' },
           ...connectionProperties,
-          command: { type: 'string', description: 'With launch: the program to start (a runtime is recognised by its name: node, python, java, dotnet, curl, a Chromium browser, firefox)' },
+          command: { type: 'string', description: 'With launch: the program (runtime recognised by name: node, python, java, dotnet, curl, Chromium, firefox)' },
           args: { type: 'array', items: { type: 'string' }, description: 'With launch: its arguments' },
           kind: { type: 'string', enum: [...LAUNCH_KINDS], description: 'With launch: the runtime when the name does not say' },
-          preview: { type: 'boolean', description: 'With launch: only say what would be set (the switches, the variables, the notes)' },
+          preview: { type: 'boolean', description: 'With launch: only say what would be set' },
           port: { type: 'number', description: 'With start: the port (default: any free one)' },
-          decrypt: { type: 'boolean', description: 'With start: decrypt HTTPS with the TestPion root certificate (the program must trust it: the result says where the file is)' },
+          decrypt: { type: 'boolean', description: 'With start: decrypt HTTPS with the TestPion root certificate (the program must trust it; the result gives the file)' },
           system_proxy: { type: 'boolean', description: 'With start: capture the whole computer' },
         },
         required: ['action'],
@@ -249,7 +249,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     {
       name: 'debugger_exchanges',
       description:
-        'What the HTTP Debugger captured, newest last: method, URL, status, program, content type, bytes, timings (bodies left out; debugger_exchange has them). Filter by host, method, status class (ok, redirect, client-error, server-error, error) or text.',
+        'What the HTTP Debugger captured, newest last: method, URL, status, program, content type, bytes, timings (no bodies: debugger_exchange has them). Filter by host, method, status class (ok, redirect, client-error, server-error, error) or text.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -261,7 +261,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
           limit: { type: 'number', description: 'How many (default 200, max 2000)' },
           hide_tunnels: { type: 'boolean', description: 'Leave out HTTPS tunnels' },
           hide_304: { type: 'boolean', description: 'Leave out 304 Not Modified answers' },
-          include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary', 'caching', 'tls', 'graphql', 'ai'] }, description: 'Add inspector data: caching (would a browser cache it), tls (version, cipher, certificate findings), graphql (operation type, name, variables, errors)' },
+          include: { type: 'array', items: { type: 'string', enum: ['params', 'cookies', 'summary', 'caching', 'tls', 'graphql', 'ai'] }, description: 'Add inspector data: caching (would a browser cache it), tls (version, cipher, certificate findings), graphql (operation, variables, errors)' },
           where: str('A condition: status>=400 and host~api and size>200kb. Fields: status method host url type size time app ip user pid note mark kind; operators = != > >= < <= ~ !~ ^= $=; join with and'),
           columns: { type: 'array', items: { type: 'string' }, description: 'Header columns to add to every row: request:x-request-id, response:cache-control' },
         },
@@ -320,7 +320,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     {
       name: 'debugger_exchange',
       description:
-        'One captured exchange whole: request and response headers and bodies (redacted), timings, the program that sent it, and the note and colour mark on it. With action annotate: set (or, with an empty value, remove) its note and mark; a note is saved in the HAR as the entry comment. With view: the body as the Debugger window shows it: list (which views fit), image (format, size, dimensions), xml (a tree), form (urlencoded fields / multipart parts), graphql (operation, formatted query, variables, errors), ai (an LLM call to OpenAI, Anthropic, Gemini or Ollama, or MCP messages: model, messages, tools offered, the answer with a streamed one put together, tool calls, tokens, cost estimate, prompt-cache hint; keys redacted), msgpack, protobuf (field by field, no .proto needed), signalr, socketio, syntax, caching (would a browser cache it, in words), tls (version, cipher, certificate findings); side says request or response (default response). Decoded text is redacted like any body.',
+        'One captured exchange whole: headers and bodies (redacted), timings, the sending program, its note and colour mark. annotate sets (empty removes) the note and mark; a note is saved in the HAR as the entry comment. view reads the body as the Debugger window shows it: list (which views fit), image, xml (tree), form, graphql (operation, query, variables, errors), ai (LLM call to OpenAI, Anthropic, Gemini or Ollama, or MCP messages: model, messages, tools, the answer with a stream put together, tool calls, tokens, cost estimate; keys redacted), msgpack, protobuf (no .proto needed), signalr, socketio, syntax, caching (would a browser cache it), tls (version, cipher, certificate findings); side: request or response (default response). Decoded text is redacted.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -370,8 +370,8 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['save', 'open', 'export_saz', 'bundle', 'diff'], description: 'export_saz writes a Fiddler session archive (masked); bundle writes a .tpbundle (masked HAR, active rules, environment facts, notes) to share with a colleague or support; diff compares the captured session with the earlier run in path (or path with other)' },
-          path: str('The file: .har (open also reads Fiddler .saz and .tpbundle); with export_saz the .saz to write; with bundle the .tpbundle; with diff the earlier run (HAR, SAZ or bundle)'),
+          action: { type: 'string', enum: ['save', 'open', 'export_saz', 'bundle', 'diff'], description: 'export_saz writes a masked Fiddler archive; bundle writes a masked .tpbundle (HAR, active rules, environment facts, notes) to share; diff compares the session with the earlier run in path (or path with other)' },
+          path: str('The file: .har (open also reads .saz and .tpbundle); export_saz: the .saz to write; bundle: the .tpbundle; diff: the earlier run (HAR, SAZ or bundle)'),
           other: str('With diff: a second file to compare path with, instead of the captured session'),
           notes: str('With bundle: a text for the person who opens it (masked like the rest)'),
           with_rules: { type: 'boolean', description: 'With bundle: include the active rules (default true)' },
@@ -412,11 +412,11 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       name: 'debugger_rules',
       write: true,
       description:
-        "The HTTP Debugger's rules, what the proxy does to matching traffic: list them, add one (a preset by id, filled in for a host, or a rule object: kind ignore (filter out) | only (capture only: when any is on, only what one matches is listed) | highlight | modify | reply | redirect, match {host, url, method, application} as globs plus an optional where {column: status|url|method|host|application|user|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}, and the kind's fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body, or file / folder + stripPrefix of the workspace: map local}; redirect {host, scheme, rewrite {from, to, regex}}; modify also requestReplace / responseReplace [{find, replace, regex, ignoreCase}] and setStatus; kind remap {remap {to, scheme: auto|http|https, preserveHost}} with match.host as the host to move; kind fault {fault {action: drop|timeout|truncate|error, percent, bytes, status, timeoutMs}}; kind frame (WebSocket) {frame {direction: sent|received|both, when, action: drop|replace|break|delay, find, replace, regex, delayMs}}), enable / disable or remove one. Network speed: action speed with speed off | modem | edge | slow-3g | 3g | slow-4g, or custom with down_kbps / up_kbps / latency_ms, paces every forwarded request and response. Breakpoints: action breakpoints with mode off | request (every request) | response (every response) | post (only POST) | errors (only responses with status 400+) keeps one managed rule \"Auto breakpoint\" (the exchange is held until action resume, or 2 minutes); held lists what is held; resume lets one (id) or all go on, or abort them. Custom breakpoint rules need the app's window.",
+        "The HTTP Debugger's rules (what the proxy does to matching traffic): list, add (a preset by id filled in for a host, or a rule object), enable / disable, remove. Rule: kind ignore (filter out) | only (capture only what matches) | highlight | modify | reply | redirect | remap | fault | frame; match {host, url, method, application} globs plus optional where {column: status|url|method|host|application|user|type|version|ip|duration|size, op: equals|not-equals|contains|starts-with|ends-with|between|greater-than|less-than|matches, value, value2, regex}; kind fields: color, style {dark, light (#rrggbb), bold, row}; requestHeaders / responseHeaders [{op: set|remove, name, value}], requestBody, responseBody, delayMs; reply {status, headers, body, or file / folder + stripPrefix: map local}; redirect {host, scheme, rewrite {from, to, regex}}; modify also requestReplace / responseReplace [{find, replace, regex, ignoreCase}], setStatus; remap {to, scheme: auto|http|https, preserveHost} (match.host is the host to move); fault {action: drop|timeout|truncate|error, percent, bytes, status, timeoutMs}; frame (WebSocket) {direction: sent|received|both, when, action: drop|replace|break|delay, find, replace, regex, delayMs}. Speed: action speed with off | modem | edge | slow-3g | 3g | slow-4g, or custom with down_kbps / up_kbps / latency_ms, paces all traffic. Breakpoints: action breakpoints with mode off | request | response | post (POST only) | errors (status 400+) keeps one managed rule \"Auto breakpoint\"; an exchange is held until action resume or 2 minutes; held lists them; resume lets one (id) or all go on, or abort. Custom breakpoint rules need the app's window.",
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume', 'speed', 'import_farx'], description: 'import_farx maps a Fiddler AutoResponder file (.farx) in path into rules, best effort (dry_run only reports); each rule says whether it was imported, imported switched off, or skipped and why' },
+          action: { type: 'string', enum: ['list', 'presets', 'add', 'remove', 'enable', 'disable', 'clear', 'breakpoints', 'held', 'resume', 'speed', 'import_farx'], description: 'import_farx maps a Fiddler AutoResponder file (.farx) in path into rules, best effort (dry_run only reports); each rule says imported, imported off, or skipped and why' },
           path: str('With import_farx: the .farx file'),
           dry_run: { type: 'boolean', description: 'With import_farx: report only' },
           speed: { type: 'string', description: 'With speed: off, modem, edge, slow-3g, 3g, slow-4g or custom (omit to read the current speed)' },
@@ -507,7 +507,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       name: 'debugger_scripts',
       write: true,
       description:
-        "JavaScript rule scripts for the HTTP Debugger: a script defines onRequest(ctx) and / or onResponse(ctx) and runs for the traffic its match selects, in a sandbox with no network, files or secrets (100 ms a hook by default, 2 s at most; a hook that fails or runs too long is skipped and the traffic goes on). ctx.request: method, url, host, headers (lower-case names), body (text or undefined); onResponse also ctx.response: status, headers, body. Change them to rewrite the request or the answer; ctx.reply(status, body, headers) answers without the server; ctx.delay(ms); ctx.highlight(color); ctx.ignore(); console.log(...). Actions: list (script rules with their last run), set (add a script rule, or replace the one with id: code or file of the workspace, match host / url / method, timeout_ms, enabled, name), enable / disable / remove (by id), test (run a script, a saved rule's by id or code given here, against a captured exchange and say what it would do; nothing is sent or changed).",
+        "JavaScript rule scripts for the HTTP Debugger: a script defines onRequest(ctx) and / or onResponse(ctx) and runs for the traffic its match selects, in a sandbox with no network, files or secrets (100 ms a hook by default, 2 s at most; a failing or slow hook is skipped). ctx.request: method, url, host, headers (lower-case), body (text or undefined); onResponse also ctx.response: status, headers, body. Change them to rewrite; ctx.reply(status, body, headers) answers without the server; ctx.delay(ms); ctx.highlight(color); ctx.ignore(); console.log(...). Actions: list (script rules, last run), set (add, or replace the one with id: code or file, match host / url / method, timeout_ms, enabled, name), enable / disable / remove (by id), test (run a saved rule by id, or code given here, against a captured exchange; nothing is sent or changed).",
       inputSchema: {
         type: 'object',
         properties: {
@@ -587,7 +587,7 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
     },
     {
       name: 'debugger_stats',
-      description: 'The captured session in numbers: exchanges, bytes, errors; by host, content type and program; the largest and the slowest.',
+      description: 'The captured session in numbers: exchanges, bytes, errors by host, content type and program; the largest and slowest.',
       inputSchema: { type: 'object', properties: {} },
       run: () => {
         const by = (key: (e: DebuggerExchange) => string | undefined) => {

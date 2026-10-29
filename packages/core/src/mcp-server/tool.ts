@@ -61,7 +61,7 @@ export function withEnvironmentSecrets(store: WorkspaceStore, tools: Tool[]): To
  * whatever the tool). One wrapper for every tool, so a new tool cannot forget it.
  */
 export function withProductionConsent(tools: Tool[], serverAllows: boolean): Tool[] {
-  const prop = { type: 'boolean', description: 'Allow data-changing requests to an environment marked as production (the server must be started with --allow-production too). Ask the user first.' };
+  const prop = { type: 'boolean', description: 'Allow data-changing requests to a production environment (the server needs --allow-production too); ask the user first' };
   return tools.map((t) => {
     const takes = !!t.write && (Object.hasOwn(t.inputSchema.properties, 'environment') || t.name === 'run_monitor');
     return {

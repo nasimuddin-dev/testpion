@@ -193,13 +193,13 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
   },
   openapi_lint: {
     when: 'Use it to find errors and usability problems in an OpenAPI or Swagger document before generating tests from it.',
-    whenNot: 'To compare two versions, use `openapi_diff`; to read it, use `openapi_outline`.',
+    whenNot: 'To compare two versions, use `openapi_diff`; to read it, `openapi_outline`.',
     example: { spec: 'specs/veterinary-api.yaml', severity: 'error' },
     narrow: 'Raise `severity` to `error`, or `disable` noisy rules.',
   },
   ci_config: {
     when: 'Use it to get a CI pipeline file (GitHub, GitLab, Azure, Jenkins) that runs this workspace’s tests on every push.',
-    whenNot: 'To run the tests now, use `run_tests`; to write the AGENTS.md guide, use `agents_init`.',
+    whenNot: 'To run the tests now, use `run_tests`; for the AGENTS.md guide, `agents_init`.',
     example: { provider: 'github', suite: 'smoke', environment: 'Development' },
   },
 
@@ -237,18 +237,18 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { task: 'generate-assertions', item: 'request:veterinary-api:get-pet' },
   },
   flow_generate: {
-    when: "Use it when the user wants TestPion's own model to write an integration flow from a collection or a folder (their key or a local model); it proposes, verified.",
-    whenNot: 'To write CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and use `write_test_file`. Apply the proposal with `ai_apply_proposal`.',
+    when: "Use it when the user wants TestPion's own model to write an integration flow from a collection or folder; it proposes, verified.",
+    whenNot: 'For CRUD flows without a model, use `generate_flows`; to design one yourself, read the requests (`list_requests`, `get_request`) and `write_test_file`. Apply with `ai_apply_proposal`.',
     example: { collection: 'Veterinary API', folder: 'Patients', hint: 'also test pagination' },
   },
   spec_gaps: {
-    when: 'Use it when the user wants to know what the workspace never tests about an API definition: operations never called, documented statuses never asserted, no negative, boundary or security test, no contract check; deterministic, no model needed.',
+    when: 'Use it when the user wants to learn what the workspace never tests about an API definition: operations never called, statuses never asserted, no negative, boundary, security or contract test; deterministic, no model.',
     whenNot: 'For which operations the last run exercised, use `api_coverage`; to write the tests, use `spec_tests_generate` (or `generate_tests` for one happy path and one invalid request per operation).',
     example: { spec: 'specs/veterinary-api.yaml' },
   },
   spec_tests_generate: {
-    when: "Use it when the user wants tests for the gaps in what is tested of an API definition — negative, boundary and security cases, not just one example per operation: TestPion builds them from the document, and its own model (their key or a local model) adds ideas; it proposes, validated against the document, with the coverage before and after.",
-    whenNot: 'For one happy path and one invalid request per operation, use `generate_tests`; to write a test yourself, use `write_test_file`. Apply the proposal with `ai_apply_proposal` after the user agrees. Use `noAi: true` for TestPion’s own cases only.',
+    when: "Use it when the user wants tests for the gaps in an API definition's tests: negative, boundary and security cases, not one example per operation. TestPion builds them from the document, its own model adds ideas; it proposes them validated, with the coverage before and after.",
+    whenNot: 'For one happy path and one invalid request per operation, use `generate_tests`; to write a test yourself, `write_test_file`. Apply with `ai_apply_proposal` after the user agrees. `noAi: true`: TestPion’s own cases only.',
     example: { spec: 'specs/veterinary-api.yaml', categories: ['negative', 'security'] },
   },
   tidy_import: {
@@ -278,9 +278,9 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
   },
   search_ask: {
     when: "Use it to find requests sent, runs, test results or traces from a question in plain words (\"failed payment calls last week over 2 s\", \"flaky tests\", \"traces where a tool timed out\"), or with a query of your own: TestPion's model only translates the question, TestPion runs the query, and the answer says how it was understood.",
-    whenNot: 'To find a request, test, environment or variable by name, use `search_workspace`; to list one kind of history or runs with simple filters, use `history_list` or `list_runs`; to read failures of a run, use `recent_failures`.',
+    whenNot: 'To find a request, test, environment or variable by name, use `search_workspace`; to list history or runs with simple filters, `history_list` or `list_runs`; to read a run’s failures, `recent_failures`.',
     example: { question: 'failed payment calls last week over 2 s', sources: ['history'] },
-    narrow: 'Name the `sources`, and set `limit` (1 to 200) and `offset`: the outcome says `truncated: true` and gives `nextOffset` / `nextCursor` when more matches follow; pass `cursor` (or `offset`) back for the next page.',
+    narrow: 'Name the `sources`, set `limit` (1 to 200) and `offset`: the outcome says `truncated: true` with `nextOffset` / `nextCursor` when more follow; pass `cursor` (or `offset`) back.',
   },
   ai_triage_run: {
     when: "Use it when the user wants TestPion's own model to explain a failed run and propose fixes (their key or a local model): causes with evidence and verified fixes, as a proposal.",
@@ -798,7 +798,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── HTTP Debugger ──────────────────────────────────────────────────────
   debugger_capture: {
-    when: 'Use it to start the proxy (optionally through a corporate gateway: upstream, no_upstream_for, ca_files, client_certs), then run a program through it, or start one with action launch (right proxy variables and switches for node, python, java, dotnet, curl, browsers); pause / resume stop and restart listing without stopping the proxy.',
+    when: 'Use it to start the proxy (optionally through a corporate gateway: upstream, no_upstream_for, ca_files, client_certs), then run a program through it or start one with action launch (proxy variables and switches for node, python, java, dotnet, curl, browsers); pause / resume stop and restart listing.',
     whenNot: 'To read what was captured, use `debugger_exchanges`.',
     example: { action: 'start' },
   },
@@ -820,23 +820,23 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
   },
   debugger_replay: {
     when: 'Use it to send captured requests again many times (a flaky failure, a rate limit): counts, parallel sends, the statuses and the fastest / middle / slowest time.',
-    whenNot: 'To send one request once and read the answer, use `send_request`; to read what was captured, use `debugger_exchanges`.',
+    whenNot: 'To send one request once, use `send_request`; to read what was captured, `debugger_exchanges`.',
     example: { ids: ['ex-42'], times: 10, concurrency: 2 },
     narrow: 'The most is 200 sends; lower `times`.',
   },
   debugger_programs: {
-    when: 'Use it to find the name of a running program (to make a Capture only rule on the Application column).',
+    when: 'Use it to find a running program’s name (for a Capture only rule on the Application column).',
     whenNot: 'To see which programs sent captured traffic, use `debugger_stats` (applications).',
     example: { text: 'chrome' },
   },
   debugger_exchange: {
-    when: 'Use it to read one captured exchange in full: headers, bodies and timings; action annotate sets its note and colour mark; action snippet writes it as cURL, PowerShell, fetch, HTTPie and more; view reads a body as the window shows it (xml, image, form, graphql, ai (LLM and MCP calls), msgpack, protobuf, signalr, socketio, caching, tls).',
+    when: 'Use it to read one captured exchange in full; annotate sets its note and colour mark; snippet writes it as cURL, PowerShell, fetch, HTTPie and more; view reads a body as the window shows it (xml, image, form, graphql, ai, msgpack, protobuf, signalr, socketio, caching, tls).',
     whenNot: 'To list exchanges, use `debugger_exchanges`.',
     example: { id: 'ex-42', view: 'graphql' },
-    narrow: 'Read one exchange at a time; find it first with `debugger_exchanges` and its `text` filter.',
+    narrow: 'One exchange at a time; find it with `debugger_exchanges` and its `text` filter.',
   },
   debugger_session: {
-    when: 'Use it to save the session as HAR, open a HAR, SAZ or .tpbundle, export a Fiddler SAZ (export_saz), write a masked .tpbundle to share (bundle), or compare with an earlier run (diff).',
+    when: 'Use it to save the session as HAR, open a HAR, SAZ or .tpbundle, export a Fiddler SAZ, write a masked .tpbundle to share (bundle), or compare with an earlier run (diff).',
     whenNot: 'To turn the traffic into a test flow, use `flow_from_exchanges`.',
     example: { action: 'diff', path: 'green-run.har' },
   },
@@ -846,8 +846,8 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { action: 'add', preset: 'slow', host: '127.0.0.1:4010' },
   },
   debugger_scripts: {
-    when: 'Use it to write, switch on and test JavaScript rule scripts (onRequest / onResponse) that change the traffic the Debugger forwards.',
-    whenNot: 'For plain header, body or status edits, a `debugger_rules` rule is simpler and needs no script.',
+    when: 'Use it to write, switch on and test JavaScript rule scripts (onRequest / onResponse) that change forwarded traffic.',
+    whenNot: 'For plain header, body or status edits, a `debugger_rules` rule needs no script.',
     example: { action: 'test', id: 'rule-1', exchange: 'ex-42' },
     narrow: 'List first, test a script on one exchange before switching it on.',
   },

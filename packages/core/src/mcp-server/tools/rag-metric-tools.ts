@@ -25,7 +25,7 @@ export function ragMetricTools({ store, secrets, settings, checkEnvironment }: {
     {
       name: 'rag_list_custom_metrics',
       doc: { when: 'Seeing which custom metrics the workspace has, whether each is usable, and what is wrong with the ones that are not.', whenNot: 'Listing the built-in catalogue (rag_metrics lists those too, custom ones included under the group custom).', example: { include_text: false } },
-      description: 'The custom metrics of the workspace (metrics/*.yaml): id, name, kind (judge, checklist, rule, formula, embedding-set, script), version, whether it is registered (usable as custom/<id> anywhere a metric is named), its errors and warnings, and how many examples it has. `include_text` adds each file’s YAML.',
+      description: 'The custom metrics of the workspace (metrics/*.yaml): id, name, kind (judge, checklist, rule, formula, embedding-set, script), version, whether it is registered (usable as custom/<id> wherever a metric is named), errors, warnings and example count. `include_text` adds each file’s YAML.',
       inputSchema: { type: 'object', properties: { include_text: { type: 'boolean', description: 'Add the YAML of each file' } } },
       run: (a) => {
         const sync = syncCustomMetrics(store);

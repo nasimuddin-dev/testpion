@@ -38,7 +38,7 @@ export function gitOpsTools({ store, redactor }: { store: WorkspaceStore; redact
     },
     {
       name: 'git_blame',
-      description: 'Who last changed each field of one item, and when: per field (URL, Headers, Name …) its value now (redacted), the commit that last changed it, or `uncommitted: true` when the change is not committed yet.',
+      description: 'Who last changed each field of one item, and when: per field (URL, Headers, Name …) its value now (redacted), the commit that last changed it, or `uncommitted: true`.',
       inputSchema: { type: 'object', properties: { ...target, limit: { type: 'number', description: 'How many versions to look through (default 200)' } } },
       run: async (a) => {
         const b = await itemBlame(store.root, to(a), Number(a.limit) || undefined);

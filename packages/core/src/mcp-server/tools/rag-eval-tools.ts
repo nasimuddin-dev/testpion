@@ -27,23 +27,23 @@ import { str, type Tool } from '../tool.js';
 
 const strList = (description: string) => ({ type: 'array', items: { type: 'string' }, description });
 const judgeProps = {
-  judge: str('The judge as provider/model (default: the evaluation’s, else the AI settings’ large model). There is never a silent fallback to a mock.'),
-  judges: strList('A jury: several judges as provider/model; `aggregate` combines their scores'),
+  judge: str('The judge as provider/model (default: the evaluation’s, else the AI settings’ large model); never a silent mock'),
+  judges: strList('A jury of judges as provider/model; `aggregate` combines them'),
   aggregate: { type: 'string', enum: ['majority', 'mean', 'min'], description: 'How a jury combines (default majority)' },
-  swap: { type: 'boolean', description: 'Judge the documents in both orders; a disagreement is a tie (not passed)' },
-  repeat: { type: 'number', description: 'Judge n times, asking again after the first (reports the flip rate)' },
-  short_circuit: { type: 'boolean', description: 'Skip the judged answer metrics of a sample whose free retrieval metrics already failed' },
-  share_claims: { type: 'boolean', description: 'Split the answer into claims once, shared by faithfulness and answer-relevance' },
+  swap: { type: 'boolean', description: 'Judge the documents in both orders; a disagreement is a tie (fails)' },
+  repeat: { type: 'number', description: 'Judge n times (reports the flip rate)' },
+  short_circuit: { type: 'boolean', description: 'Skip judged answer metrics of a sample whose free retrieval metrics failed' },
+  share_claims: { type: 'boolean', description: 'Split the answer into claims once for faithfulness and answer-relevance' },
   max_cost_usd: { type: 'number', description: 'Stop judging once this much is spent; the rest is n/a' },
   max_calls: { type: 'number', description: 'Stop judging after this many model calls' },
-  allow_images: { type: 'boolean', description: 'Let pictures of the sample (an image chunk, a question image) go to the judge as data. Off by default: pictures cannot be redacted. The judge must be able to see (a vision model)' },
+  allow_images: { type: 'boolean', description: 'Let pictures of the sample go to the judge as data (off by default: they cannot be redacted; needs a vision model)' },
 };
 const branchProps = {
-  when: { type: 'object', description: 'A decision tree: { "<metric>": "<other metric> < 0.8" } — the metric runs only when the condition on another metric of the sample holds', additionalProperties: { type: 'string' } },
-  unless: { type: 'object', description: 'The opposite of `when`: the metric runs only when the condition does NOT hold', additionalProperties: { type: 'string' } },
+  when: { type: 'object', description: 'Decision tree { "<metric>": "<other metric> < 0.8" }: the metric runs only when the condition on another metric of the sample holds', additionalProperties: { type: 'string' } },
+  unless: { type: 'object', description: 'Opposite of `when`: runs only when the condition does NOT hold', additionalProperties: { type: 'string' } },
 };
 const metricProps = {
-  metrics: strList('Metric names replacing the evaluation’s evaluators: ids, aliases, Ragas names, recall@5, per-turn:faithfulness … (rag_metrics lists them)'),
+  metrics: strList('Metric names replacing the evaluation’s evaluators: ids, aliases, Ragas names, recall@5, per-turn:faithfulness (rag_metrics)'),
   preset: str(`A metric preset: ${METRIC_PRESETS.map((p) => p.id).join(', ')}`),
 };
 
@@ -112,22 +112,22 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       doc: {"when":"Checking a metric on one sample before an evaluation, or seeing exactly what a judge would receive (dry_run).","whenNot":"To score a dataset (rag_run) or to list metrics (rag_metrics).","example":{"metric":"faithfulness","answer":"It opens at 8am.","contexts":["The clinic opens at 8am."],"dry_run":true}},
       write: true,
       description:
-        'Try one metric on one sample. With `dry_run` it shows the exact judge prompts that would be sent (after redaction, with size and cost, and whether the verdict is cached) and sends nothing; without it the sample is scored and the result comes back with its items, the judge and the cost. The sample is given (question, answer, contexts, reference, reference_ids), taken from a finished run (`run_id` + `record`), or probed from a RAG target (`target` + `question`). The other metrics read more: `fields` carries a conversation (`turns`), `reference_tool_calls`, `expected_outcome`, `reference_topics`, `should_refuse`, `canaries`; `tool_calls` the calls the system made; `images` pictures (with `allow_images`, for a vision judge — they go as data and a dry run lists them).',
+        'Try one metric on one sample. `dry_run` shows the judge prompts that would be sent (redacted, with size, cost, cache hit) and sends nothing; otherwise the sample is scored and the result has its items, the judge and the cost. The sample is given (question, answer, contexts, reference, reference_ids), taken from a finished run (`run_id` + `record`), or probed from a RAG target (`target` + `question`). Other metrics read more: `fields` carries `turns`, `reference_tool_calls`, `expected_outcome`, `reference_topics`, `should_refuse`, `canaries`; `tool_calls` the calls the system made; `images` pictures (with `allow_images`, for a vision judge; a dry run lists them).',
       inputSchema: {
         type: 'object',
         properties: {
           metric: str('A metric id, alias or Ragas name (rag_metrics)'),
-          options: { type: 'object', description: 'Metric options, e.g. { mode: "chunks" } or { k: 5 }. A `database` here is ignored: a SQL metric uses the database of a saved evaluation (`evaluation`)' },
-          evaluation: str('A saved evaluation whose `database` the SQL metrics (datacompy-score, sql-equivalence) use. A PostgreSQL or MySQL connection also needs the person to have allowed it on this computer (`testpion rag trust-db`); an agent cannot allow it'),
+          options: { type: 'object', description: 'Metric options, e.g. { mode: "chunks" } or { k: 5 }; a `database` here is ignored (use `evaluation`)' },
+          evaluation: str('A saved evaluation whose `database` the SQL metrics (datacompy-score, sql-equivalence) use; a PostgreSQL or MySQL connection needs the person to allow it (`testpion rag trust-db`)'),
           question: str('The question'),
           answer: str('The answer to score'),
           contexts: strList('The retrieved contexts (texts)'),
           reference: str('The reference answer'),
           reference_ids: strList('The gold chunk ids'),
-          images: strList('Pictures the retrieved context holds: a file of the workspace, an http(s) URL or a data: URI. Needs allow_images and a vision judge'),
+          images: strList('Pictures of the context: workspace file, http(s) URL or data: URI; needs allow_images and a vision judge'),
           allow_images: judgeProps.allow_images,
           tool_calls: { type: 'array', items: { type: 'object' }, description: 'The tool calls the system made: [{ name, arguments }]' },
-          fields: { type: 'object', description: 'Other fields of a dataset record the metric reads: turns (a conversation: user messages, or { role, content, tool_calls, contexts }), reference_tool_calls, expected_outcome, reference_topics, should_refuse, canaries / injection, source, rubric, baseline_answer, answerable, relevance' },
+          fields: { type: 'object', description: 'Other dataset-record fields the metric reads: turns (user messages, or { role, content, tool_calls, contexts }), reference_tool_calls, expected_outcome, reference_topics, should_refuse, canaries / injection, source, rubric, baseline_answer, answerable, relevance' },
           run_id: str('Take the sample from a finished run'),
           record: str('With run_id: the dataset record id'),
           target: str('A RAG target: ask it `question` and score what it answers'),
@@ -179,7 +179,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       name: 'rag_estimate',
       doc: {"when":"Before rag_run or rag_rescore: the judge calls, tokens, cost range and caps it would hit.","whenNot":"To run anything.","example":{"evaluation":"Clinic RAG","preset":"rag-triad"}},
       description:
-        'What a RAG evaluation will cost BEFORE it runs: judge calls (per metric and in total), tokens, a cost range from the price table, the calls it makes to your RAG system, and any cap it would break (the daily token or budget cap, max_cost_usd, max_calls). Nothing is sent. Run this before rag_run. With `run_id` it estimates re-scoring that run, exactly: every prompt is built for the stored samples, so the calls and the cache hits are real.',
+        'What a RAG evaluation will cost BEFORE it runs: judge calls (per metric, total), tokens, a cost range from the price table, calls to your RAG system, and any cap it would break (daily token or budget cap, max_cost_usd, max_calls). Nothing is sent. Run before rag_run. With `run_id` it estimates re-scoring that run exactly (prompts are built for the stored samples, so calls and cache hits are real).',
       inputSchema: { type: 'object', properties: { evaluation: str('A saved RAG evaluation (list_evaluations)'), run_id: str('Estimate re-scoring this finished run instead'), limit: { type: 'number' }, ...metricProps, ...branchProps, ...judgeProps }, required: [] },
       run: async (a) => {
         const ctx = context();
@@ -201,7 +201,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       doc: {"when":"Measuring a RAG system with a saved evaluation: metrics, gates, why samples failed, a baseline comparison.","whenNot":"For a plain LLM evaluation (run_evaluation), or before rag_estimate has been read when cost matters.","example":{"evaluation":"Clinic RAG","metrics":["faithfulness","recall@5"],"min":["faithfulness=0.8"],"max_cost_usd":1}},
       write: true,
       description:
-        'Run a saved RAG evaluation with chosen metrics and gates: every dataset record goes to the RAG target, is scored by the metrics, and the run is recorded. Returns the run id, the per-metric aggregates (mean, p10, pass rate, n/a, 95% interval), why samples failed (retrieval miss, unfaithful, false refusal …), the gates (`min`: ["faithfulness=0.8"], met or not), the comparison with `baseline` (a run id) and the worst samples. Stops BEFORE the first question when the target cannot be called or a judged metric has no judge. Call rag_estimate first and pass `max_cost_usd`.',
+        'Run a saved RAG evaluation with chosen metrics and gates: every dataset record goes to the RAG target, is scored, and the run is recorded. Returns the run id, per-metric aggregates (mean, p10, pass rate, n/a, 95% interval), why samples failed (retrieval miss, unfaithful, false refusal …), the gates (`min`: ["faithfulness=0.8"]), the `baseline` comparison and the worst samples. Stops BEFORE the first question when the target cannot be called or a judged metric has no judge. Call rag_estimate first; pass `max_cost_usd`.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -252,7 +252,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       doc: {"when":"Scoring a finished run again with another judge or more metrics, without calling the RAG system.","whenNot":"For a new question set (rag_run).","example":{"run_id":"run-abc","judge":"anthropic/claude-sonnet"}},
       write: true,
       description:
-        'Score a finished RAG run again with other metrics or another judge, using the answers and contexts it captured: the RAG system is not called, and verdicts already in the cache cost nothing. A NEW run is recorded. Use it to compare two judges, to add a metric, or to judge a run that collected its answers with the free metrics (two_phase). Same options and result as rag_run; call rag_estimate with `run_id` first for the exact number of judge calls.',
+        'Score a finished RAG run again with other metrics or another judge, using its captured answers and contexts: the RAG system is not called and cached verdicts are free. A NEW run is recorded. Use it to compare judges, add a metric, or judge a two_phase run. Same options and result as rag_run; call rag_estimate with `run_id` first for the exact judge calls.',
       inputSchema: { type: 'object', properties: { run_id: str('The finished run to score again'), min: strList('Gates on the new run'), ...metricProps, ...judgeProps }, required: ['run_id'] },
       run: async (a) => {
         const ctx = context();

@@ -97,7 +97,7 @@ export function toolAnnotations(name: string, write: boolean): ToolAnnotations {
   return {
     title: toolTitle(name),
     readOnlyHint: !write,
-    ...(write ? { destructiveHint: DESTRUCTIVE.has(name), idempotentHint: IDEMPOTENT.has(name) } : {}),
+    ...(write ? { destructiveHint: DESTRUCTIVE.has(name), ...(IDEMPOTENT.has(name) ? { idempotentHint: true } : {}) } : {}),
     openWorldHint: OPEN_WORLD.has(name),
   };
 }

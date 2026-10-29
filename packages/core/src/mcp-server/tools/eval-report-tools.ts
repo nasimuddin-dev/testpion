@@ -26,7 +26,7 @@ export function evalReportTools(d: { store: WorkspaceStore; secrets: SecretStore
         example: { run: 'last' },
       },
       description:
-        'The report card of an evaluation run, the same words the app shows: `headline` ("17 of 20 passed"), cost, average and slowest time, `byCheck` (how many cases passed each check), `failures` (the failed cases, each with the prompt, the reply, the expected answer, the failed checks and an AI reviewer’s reason when it graded), the pass line when the saved evaluation has one, `vsLast` (against the run before: passed more or fewer, cases that got better or worse), `trend` (pass rates of the last runs) and `text` (all of it as a few sentences). A run on the offline demo model says so.',
+        'The report card of an evaluation run, the same words the app shows: `headline` ("17 of 20 passed"), cost, average and slowest time, `byCheck` (cases passed per check), `failures` (failed cases with the prompt, reply, expected answer, failed checks and an AI reviewer’s reason when it graded), the pass line if the evaluation has one, `vsLast` (against the run before: passed more or fewer, cases better or worse), `trend` (pass rates of the last runs) and `text` (all as a few sentences). A run on the offline demo model says so.',
       inputSchema: {
         type: 'object',
         properties: { run: str('Run id, "last" (the newest evaluation run) or an evaluation name (its newest run)'), against: str('Compare with this run instead of the one before it') },
@@ -42,7 +42,7 @@ export function evalReportTools(d: { store: WorkspaceStore; secrets: SecretStore
         example: { run: 'last', case: 'case-7', dry_run: true },
       },
       description:
-        'Why one failed case of an evaluation run failed. When an AI reviewer graded the case, its own reason is returned (`source: "AI reviewer"`) and no model is called. Otherwise TestPion’s AI task `eval-why` explains it with the model the user configured, from the prompt, the reply, the expected answer and what each check said (redacted, fitted to a budget). `dry_run` shows exactly what would be sent and the estimate, and sends nothing. Counted in the workspace’s AI usage, within the user’s caps.',
+        'Why one failed case of an evaluation run failed. When an AI reviewer graded the case, its own reason is returned (`source: "AI reviewer"`) and no model is called. Otherwise TestPion’s AI task `eval-why` explains it with the user’s configured model, from the prompt, reply, expected answer and what each check said (redacted, fitted to a budget). `dry_run` shows what would be sent and the estimate, and sends nothing. Counted in the AI usage, within the user’s caps.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -83,7 +83,7 @@ export function evalReportTools(d: { store: WorkspaceStore; secrets: SecretStore
         example: { run: 'last', case: 'case-7' },
       },
       description:
-        'One case’s answer in a run against the same case in the run before it (or in `against`): both answers, whether they are the same word for word, whether the case got better, got worse or kept its result, and the structured diff (the changed fields of a JSON answer, or a line diff of text).',
+        'One case’s answer in a run against the same case in the run before it (or in `against`): both answers, whether they are identical, whether the case got better, worse or kept its result, and the diff (changed fields of a JSON answer, or a line diff of text).',
       inputSchema: {
         type: 'object',
         properties: { run: str('Run id, "last" or an evaluation name'), case: str('The case: its result id, its key or its name'), against: str('The run to compare with (default: the run before it)') },
@@ -99,7 +99,7 @@ export function evalReportTools(d: { store: WorkspaceStore; secrets: SecretStore
         example: { name: 'Intent classification' },
       },
       description:
-        'The comparison of a saved evaluation’s variants (its prompt versions and models, set in the app’s Compare mode): the latest finished run of each, with passed, cost and average time per variant, the winner of each row, how many cases got worse or better against the first variant, and `conclusion` in one sentence. It never names one variant best overall. Run the variants first with run_evaluation `variants: true`.',
+        'The comparison of a saved evaluation’s variants (its prompt versions and models, set in the app’s Compare mode): the latest finished run of each, with passed, cost and average time per variant, the winner of each row, cases worse or better against the first variant, and a one-sentence `conclusion`. It never names one variant best overall. Run the variants first with run_evaluation `variants: true`.',
       inputSchema: {
         type: 'object',
         properties: { name: str('Saved evaluation name or id'), runs: { type: 'array', items: { type: 'string' }, description: 'The runs to compare, in variant order (default: the latest run of each variant)' } },

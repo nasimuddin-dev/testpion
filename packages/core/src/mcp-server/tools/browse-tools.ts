@@ -29,7 +29,7 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
     },
     {
       name: 'list_requests',
-      description: 'List what a collection holds: its HTTP and GraphQL requests (id, name, method, URL with {{variables}}, folder), then its gRPC calls (kind grpc: target, method) and WebSocket / Socket.IO / MQTT connections (kind websocket: url, mode). run_collection runs all of them.',
+      description: 'List what a collection holds: HTTP and GraphQL requests (id, name, method, URL with {{variables}}, folder), gRPC calls (kind grpc: target, method) and WebSocket / Socket.IO / MQTT connections (kind websocket: url, mode). run_collection runs all of them.',
       inputSchema: { type: 'object', properties: { collection: str('Collection name or id') }, required: ['collection'] },
       run: (a) => {
         const c = findCollection(a.collection);

@@ -39,7 +39,7 @@ export function graphqlTools(d: ModuleToolDeps): Tool[] {
     {
       name: 'graphql_subscribe',
       write: true,
-      description: 'Run a GraphQL subscription over WebSocket (graphql-transport-ws or graphql-ws) and return the events received: up to maxEvents (default 10) or durationSec (default 15, at most 60), whichever comes first. {{variables}} of the environment are resolved.',
+      description: 'Run a GraphQL subscription over WebSocket (graphql-transport-ws or graphql-ws) and return the events received: up to maxEvents (default 10) or durationSec (default 15, max 60), whichever first. Environment {{variables}} resolve.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -18,7 +18,7 @@ export function debuggerReplayTools(d: { session: DebuggerExchange[]; redactor: 
       name: 'debugger_replay',
       write: true,
       description:
-        'Send captured requests again: `times` sends in all (1 to 200), `concurrency` at once (1 to 20), `delay_ms` between sends in a lane, optionally `stop_on_failure`. Several ids are sent in the order given and round again. Returns the status counts, the fastest / middle / slowest time and each send. More than one send to a host that is not on this computer needs `confirm_remote: true`.',
+        'Send captured requests again: `times` sends in all (1 to 200), `concurrency` at once (1 to 20), `delay_ms` between sends in a lane, optionally `stop_on_failure`. Several ids go in the order given, round again. Returns status counts, fastest / middle / slowest time and each send. More than one send to a non-local host needs `confirm_remote: true`.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -59,7 +59,7 @@ export function debuggerReplayTools(d: { session: DebuggerExchange[]; redactor: 
     },
     {
       name: 'debugger_programs',
-      description: 'The programs running now that hold network connections (name, process ids, connection count), busiest first: the names the Application column and a Capture only rule use.',
+      description: 'Running programs that hold network connections (name, process ids, connection count), busiest first: the names the Application column and Capture only rules use.',
       inputSchema: { type: 'object', properties: { text: str('Only programs whose name contains this') } },
       run: async (a) => {
         const text = typeof a.text === 'string' ? a.text.toLowerCase() : '';

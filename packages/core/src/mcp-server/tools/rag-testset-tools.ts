@@ -26,7 +26,7 @@ export function ragTestsetTools({ store, secrets, settings }: { store: Workspace
         example: { paths: ['docs/handbook.md'], count: 10, types: ['single-hop', 'unanswerable'], name: 'handbook', dry_run: true },
       },
       description:
-        'Generate a RAG test set from documents (markdown, text, HTML files or folders of the workspace, public https pages). The documents are chunked deterministically; TestPion’s configured model writes questions with reference answers and `reference_ids` (the chunk ids); every sample is verified (the reference must be supported by its chunks: lexical overlap and a judge’s entailment check; an unanswerable question must not be answerable from the corpus by a keyword retrieval; no duplicates) and returned as ONE proposal whose items are dataset rows with their badges. Passages of the documents are sent to the model (redacted; the AI privacy level must be Full). `dry_run` reads the documents and returns the estimate (model and judge calls, tokens, cost range, the caps it would break) and sends nothing. Show the person the rows and badges; once they agree add the ticked ones with ai_apply_proposal { id } (undo with ai_undo_proposal).',
+        'Generate a RAG test set from documents (markdown, text, HTML files or folders of the workspace, public https pages). Documents are chunked deterministically; TestPion’s configured model writes questions with reference answers and `reference_ids` (chunk ids); every sample is verified (reference supported by its chunks: lexical overlap and a judge’s entailment check; an unanswerable question must not be answerable by keyword retrieval; no duplicates) and returned as ONE proposal of dataset rows with badges. Passages go to the model redacted (the AI privacy level must be Full). `dry_run` sends nothing and returns the estimate (calls, tokens, cost range, caps it would break). Show the person the rows; once they agree add the ticked ones with ai_apply_proposal { id } (undo: ai_undo_proposal).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -35,11 +35,11 @@ export function ragTestsetTools({ store, secrets, settings }: { store: Workspace
           count: { type: 'number', description: 'How many questions (1 to 60, default 10)' },
           types: { type: 'array', items: { type: 'string', enum: [...TESTSET_TYPES] }, description: 'Question types (default: all five)' },
           name: str('The dataset: datasets/<name>.jsonl (default: from the first document)'),
-          seed: str('Which passages are asked about (the same seed and documents ask about the same ones)'),
-          personas: strList('Who asks, e.g. "a nurse on night shift" (at most 8): each question is written as one of them would ask it, in turn'),
-          styles: strList(`How they word it, in turn (at most 8): ${TESTSET_STYLES.join(', ')} or any short description; a style changes the wording, never the expected answer`),
-          dedupe: { type: 'string', enum: [...DEDUPE_MODES], description: 'How repeated questions are found: lexical (shared words, default) or embedding (also by meaning; an embedding model is used, else the words)' },
-          embedder: str('The embedding model of dedupe: embedding, as provider/model (default: the judge’s provider, else the AI settings’)'),
+          seed: str('Which passages are asked about (same seed and documents, same passages)'),
+          personas: strList('Who asks, e.g. "a nurse on night shift" (at most 8); questions are written as each would ask, in turn'),
+          styles: strList(`How they word it, in turn (at most 8): ${TESTSET_STYLES.join(', ')} or a short description; never changes the expected answer`),
+          dedupe: { type: 'string', enum: [...DEDUPE_MODES], description: 'Repeats found by lexical (shared words, default) or embedding (by meaning; else the words)' },
+          embedder: str('The embedding model for dedupe: embedding, as provider/model (default: the judge’s provider, else the AI settings’)'),
           judge: str('The judge that checks references against their chunks, as provider/model (default: the AI settings’ large model)'),
           no_judge_check: { type: 'boolean', description: 'Skip the judge’s check (lexical, corpus and duplicate checks still run)' },
           environment: str('Environment name'),

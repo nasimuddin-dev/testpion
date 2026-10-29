@@ -64,7 +64,7 @@ export function bundleTools({ store }: { store: WorkspaceStore }): Tool[] {
           uses: { type: 'boolean', description: 'Add everything the items use' },
           datasets: { type: 'string', enum: ['auto', 'embed', 'reference'], description: 'auto (default): embed up to 10 MB, bigger by reference' },
           providers: { type: 'boolean', description: 'Include AI providers in a whole-workspace or section export' },
-          package: { type: 'string', enum: ['postman', 'bruno'], description: 'Instead of a bundle: one collection (`items`: [collection:<id>]) as a zip another tool opens - `postman` (the v2.1 collection, environments, the workspace variables as globals, API definitions, data files, .mcp.json) or `bruno` (a Bruno collection folder with the same extras). What the tool cannot hold is listed in `notes`; secret values are never in it' },
+          package: { type: 'string', enum: ['postman', 'bruno'], description: 'Instead of a bundle: one collection (`items`: [collection:<id>]) as a zip another tool opens: `postman` (v2.1 collection, environments, workspace variables as globals, API definitions, data files, .mcp.json) or `bruno` (a collection folder with the same extras). What it cannot hold is listed in `notes`; secret values are never included' },
           title: str('The bundle’s title (its file name)'),
           out: str('Where to write it, relative to the workspace: a new file under exports/ or .local/exports/ (.zip or .json; default .local/exports/<title>.testpion.zip)'),
         },
