@@ -102,3 +102,5 @@ Exit codes: 0 fine, 1 a metric below `--min-kappa`, 2 a configuration error.
 * A kappa from 30 labels is rough: read the interval, not the point.
 * A swap or a repeat run is one verdict per metric (its aggregate). A jury is one verdict too, with a row for each member in the table.
 * A trend of a jury's members over runs is not kept: the report is per run.
+
+For an evaluation of a prompt or chatbot with a check graded by an AI reviewer, **Trust the AI reviewer** on its Checks tab uses the same card: you grade ten answers of a run and see how often the reviewer agreed. See [Evaluations](/ai-testing/evaluations#trust-the-ai-reviewer).

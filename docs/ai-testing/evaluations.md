@@ -57,6 +57,34 @@ testpion eval check "Intent classification" --type llm-judge --criteria "Polite"
 
 `--dry-run` says what would be sent and what it costs; a paid model needs `--yes`. AI agents use `eval_try_check` (`dry_run`, and `confirm: true` for a paid model).
 
+## The wizard
+
+On **Start**, **Answers are correct** opens a wizard with three steps: **What are you testing?** (the prompt with its `{{variables}}`, the model), **Your cases** (the table above, with **Generate with AI…**) and **What is a good answer?** (the picker above). The cost of the run is under every step and **Run** is on from step 2, because a first check is already ticked. **Run N cases** saves the evaluation and runs it. The wizard makes the same saved evaluation as the editor (no other file format), and **Open the full editor** hands the draft to the editor at any step. The walk-through is [Check an AI answer in 5 minutes](/getting-started/check-an-ai-answer).
+
+## Generate test cases with AI
+
+**Generate with AI…** on the **Test cases** tab writes cases from the prompt, an API definition, the saved requests of a collection or folder, your documents (the same engine as [a test set from documents](/ai-testing/rag-testset)) or real calls in History. The estimate and **What will be sent…** come first. Each case is then verified: it fills every variable of the prompt, it is not a repeat of a case already there or of another proposed one, it names an operation or request the source has, and a case based on History looks like a real call. They open in the review, a row per case with its checks; a case that failed a check is unticked. **Add to test cases** adds the ticked ones to the table (**Undo** takes them back); nothing is added before that. With no model set up, **Use the offline demo model** writes a few cases.
+
+```bash
+testpion eval generate-cases "Intent classification" --from prompt --count 10 --dry-run   # what would be sent; nothing is sent
+testpion eval generate-cases "Intent classification" --spec specs/shop.yaml --apply       # --apply adds the ticked cases
+testpion eval generate-cases "Intent classification" --documents docs/ --count 12
+testpion eval generate-cases "Intent classification" --from history --history-limit 30
+```
+
+Without `--apply` the cases are a proposal: `testpion ai apply <id>` adds them (`ai undo` takes them back). AI agents use `eval_generate_cases` (`dry_run`), then `ai_apply_proposal` after the person agrees. A model that answers badly is told what failed and tries again, up to twice.
+
+## Trust the AI reviewer
+
+A check that is **graded by an AI reviewer** is only as good as the reviewer. The **Checks** tab of an evaluation that has one shows **Trust the AI reviewer**: after a run, it lists ten answers of that run (a mix of the ones the reviewer passed and failed, in a fixed order). Grade each one **Good** or **Bad** yourself; the reviewer's verdict stays hidden so it cannot lean on you. After the tenth, the card says how often it agreed (*The AI reviewer agreed with you on 8 of 10 answers (80 %). It failed 2 that you passed (too strict).*), shows Cohen's kappa, the counts of too lenient and too strict, and the answers where you differ. It is the same card as the calibration of a [bot with sources](/ai-testing/rag-calibration). Your verdicts are kept in `labels/` and can be taken back.
+
+```bash
+testpion eval trust last                                   # the ten answers to grade
+testpion eval trust last --grade <resultId> --as pass      # your verdict on one (pass, fail or clear)
+```
+
+AI agents use `eval_trust_reviewer`. An agent must never grade for the person: the agreement is only worth something when the verdicts are theirs.
+
 ## What a run costs, and the spend cap
 
 Beside **Run** a line says what the run will cost before anything is sent: *20 cases · about $0.03 · ~40 s*. It comes from the cases, the prompt and your [price table](/ai-testing/model-pricing); a check an AI reviewer grades doubles the calls. The offline demo model and models on this computer are *free*; a model with no price says *cost unknown* with **Set a price…**.
