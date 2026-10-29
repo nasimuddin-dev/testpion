@@ -118,6 +118,21 @@ const steps = [
      await __t.esc(); await __t.sleep(300);
      return 'title: ' + title + ' | closed: ' + !dlg();`,
   ),
+  step(
+    'coverage-tab-fills-the-gaps',
+    `await __t.requests(); await __t.find('e2e-shop.yaml'); await __t.sleep(800);
+     const covTab = await __t.waitFor(() => [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Coverage'), 5000); if (!covTab) return 'NO TAB Coverage';
+     await __t.real.click(covTab); await __t.sleep(400);
+     const analyse = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Analyse'), 5000); if (!analyse) return 'NO BUTTON Analyse';
+     await __t.real.click(analyse);
+     const fill = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.includes('Fill coverage gaps with AI')), 15000); if (!fill) return 'NO BUTTON Fill coverage gaps ' + short(document.querySelector('main')?.textContent, 200);
+     await __t.real.click(fill);
+     const d = await __t.waitFor(() => dlg(), 5000); if (!d) return 'NO DIALOG';
+     const mode = [...d.querySelectorAll('[role=radio]')].find((x) => x.getAttribute('aria-checked') === 'true')?.textContent.trim();
+     const spec = d.querySelector('select[aria-label="API definition"]')?.value;
+     await __t.esc(); await __t.sleep(300);
+     return 'mode: ' + mode + ' | spec: ' + spec;`,
+  ),
 ];
 
 module.exports = withExpect(
@@ -127,6 +142,7 @@ module.exports = withExpect(
     'generate-and-review': /^items: 1 \| badges: test-file=pass,spec-tests=(pass|warn),spec-stable=(pass|warn) \| invented dropped: true \| invalid dropped: true \| coverage: true$/,
     'write-the-tests': /^toast: Wrote 1 test file \(tests\/e2e-shop\/default-gaps\.yaml\).* \| file: true,true,true,true$/,
     'explorer-menu-has-the-item': /^title: true \| closed: true$/,
+    'coverage-tab-fills-the-gaps': /^mode: From a spec \| spec: specs\/e2e-shop\.yaml$/,
   },
   { settings: { assistantProvider: 'demo', assistantModel: 'demo' }, prepare },
 );

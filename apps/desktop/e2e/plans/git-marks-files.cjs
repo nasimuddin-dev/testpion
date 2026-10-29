@@ -12,6 +12,13 @@ const H = `
 const s = (name, body) => step(name, body, true, { extra: H, short: 400 });
 
 const steps = [
+  s(
+    'seed-package-and-rule',
+    `await window.aps.invoke('packages.save', { name: 'e2elib', code: 'module.exports = { v: 1 };\\n' });
+     await window.aps.invoke('debug.saveRule', { rule: { name: 'E2E mark rule', enabled: true, kind: 'highlight', color: 'red', match: { host: 'marks.example.test' } } });
+     const rules = (await window.aps.invoke('debug.rules')).rules.map((r) => r.name);
+     return 'package + rule: ' + rules.includes('E2E mark rule');`,
+  ),
   s('repo-init', `await window.aps.invoke('git.init', {}); await window.aps.invoke('git.check'); return 'initialized';`),
   [
     'base-commit',
@@ -31,6 +38,9 @@ const steps = [
       doc.variables = [...(doc.variables ?? []), { key: 'team_id', value: 'platform', enabled: true }];
       writeFileSync(ws, JSON.stringify(doc, null, 2) + '\\n');
       appendFileSync(join(home, 'ws', 'mocks', 'weather.mcp-mock.yaml'), '\\n# edited outside\\n');
+      appendFileSync(join(home, 'ws', 'packages', 'e2elib.js'), '// edited outside\\n');
+      const rp = join(home, 'ws', 'debugger', 'rules.json');
+      writeFileSync(rp, readFileSync(rp, 'utf8').replace('E2E mark rule', 'E2E mark rule (edited)'));
       return 'edited';`,
     false,
   ],
@@ -50,6 +60,28 @@ const steps = [
      return 'mark gone: ' + !!gone;`,
   ),
   s(
+    'script-packages-show-the-mark',
+    `await __t.requests(); await __t.expand('HTTP basics (httpbin)'); await __t.expand('Requests & responses');
+     const row = [...document.querySelectorAll('aside [data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith('POST a JSON body')); if (!row) return 'NO ROW';
+     row.click(); await __t.sleep(1200);
+     const sc = [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Scripts')); if (!sc) return 'NO SCRIPTS TAB'; sc.click(); await __t.sleep(900);
+     const btn = [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Packages…'); if (!btn) return 'NO BUTTON';
+     btn.click(); await __t.sleep(1200);
+     const dlg = document.querySelector('[role=dialog]'); if (!dlg) return 'NO DIALOG';
+     const ok = await __t.waitFor(() => [...dlg.querySelectorAll('[data-change-mark]')].length >= 2, 15000);
+     const marks = [...dlg.querySelectorAll('[data-change-mark]')].map((m) => m.getAttribute('data-change-mark')).join(',');
+     dlg.querySelector('button[aria-label=Close]')?.click(); await __t.sleep(400);
+     return 'marks: ' + marks;`,
+  ),
+  s(
+    'debugger-rules-show-the-mark',
+    `await __t.esc(); await __t.view('Debugger'); await __t.sleep(1000);
+     const rt = await __t.waitFor(() => [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Rules')), 6000); if (!rt) return 'NO RULES TAB';
+     rt.click(); await __t.sleep(900);
+     const ok = await __t.waitFor(() => document.querySelector('main [data-change-mark]'), 15000);
+     return 'mark: ' + (document.querySelector('main [data-change-mark]')?.getAttribute('data-change-mark') ?? 'none');`,
+  ),
+  s(
     'mock-file-shows-the-mark',
     `await __t.esc(); const went = await __t.rail('Collections'); await __t.sleep(1500);
      const f = document.querySelector('aside input[placeholder^="Filter"]'); if (!f) return 'NO FILTER | ' + [...document.querySelectorAll('aside input')].map((i) => i.placeholder).join(',') + ' | nav: ' + [...document.querySelectorAll('nav [aria-label]')].map((n) => n.getAttribute('aria-label')).join(',') + ' | went: ' + went + ' | current: ' + document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
@@ -67,11 +99,14 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
+    'seed-package-and-rule': /^package \+ rule: true$/,
     'repo-init': /^initialized$/,
     'base-commit': /^committed$/,
     'outside-edits': /^edited$/,
     'workspace-variables-show-the-mark': /^mark: [AM]$/,
     'discarded-workspace-change-loses-its-mark': /^mark gone: true$/,
+    'script-packages-show-the-mark': /^marks: [AM],[AM]$/,
+    'debugger-rules-show-the-mark': /^mark: [AM]$/,
     'mock-file-shows-the-mark': /^file: mocks\/weather\.mcp-mock\.yaml \| mark: M$/,
   },
   { env: { GIT_AUTHOR_NAME: 'E2E', GIT_AUTHOR_EMAIL: 'e2e@example.com', GIT_COMMITTER_NAME: 'E2E', GIT_COMMITTER_EMAIL: 'e2e@example.com' } },
