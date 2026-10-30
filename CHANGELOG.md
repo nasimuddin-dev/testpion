@@ -30,6 +30,8 @@
 
 ### RAG bots: mark the right documents
 
+- **From a script or an agent:** `testpion rag label document <run> --result <id> --doc <id> --right` (or `--partly`, `--wrong`, `--clear`, and `--add-to-right-documents`), and the MCP tool `rag_label` with `document`. `git_history` with `team: true` lists what your team changed lately.
+
 - **Your verdict on each retrieved document.** In an open sample every retrieved document has *Right*, *Partly* and *Wrong*; the labels are kept with the run, and *Add the documents you marked Right to the right documents of this question* writes them into the saved questions, so the next run measures the retrieval against documents you have read.
 
 ### RAG bots: what was under test

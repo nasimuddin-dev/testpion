@@ -6,6 +6,7 @@
  */
 import { ApsError } from '../../errors.js';
 import { calibrateRun, defaultLabelsName, labelResult } from '../../runner/rag-calibrate.js';
+import { labelDocument } from '../../eval/chunk-labels.js';
 import { makeExample } from '../../runner/rag-calibrate-example.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
@@ -19,21 +20,28 @@ export function ragCalibrateTools({ store }: { store: WorkspaceStore; secrets: S
       doc: { when: 'Recording the verdict a PERSON gave on a judged RAG result (pass or fail on one metric, or on the whole answer), so the judge can be calibrated against it.', whenNot: 'Deciding a verdict yourself: a label is the person’s judgement. To compare the judge with the labels use rag_calibrate.', example: { run_id: 'run_2026-10-20_ab12', result: 'eval:q-17', metric: 'faithfulness', label: 'fail', note: 'the dose is wrong' } },
       write: true,
       description:
-        'Label one result of a finished RAG run: `label` pass or fail for `metric` (a check name or id such as faithfulness, or `overall` for the whole answer). It is stored in labels/<labels>.json (default: the run’s evaluation name) attached to the dataset record, so it also counts for later runs of the same dataset while the system gives the same answer. A newer label for the same record and metric replaces the older one.',
+        'Label a result of a finished RAG run: `label` pass or fail for `metric` (see `metric`). It is stored in labels/<labels>.json attached to the dataset record, so it counts for later runs of the same dataset.',
       inputSchema: {
         type: 'object',
         properties: {
           run_id: str('The finished run'),
           result: str('A result id of the run, or its dataset record id'),
           metric: str('The metric (check name or id) or `overall` (default)'),
-          label: { type: 'string', enum: ['pass', 'fail'], description: 'The person’s verdict' },
-          note: str('Why (optional)'),
+          label: { type: 'string', enum: ['pass', 'fail'], description: 'The verdict' },
+          note: str('Why'),
           labels: str('The label set name (default: the run’s evaluation)'),
           by: str('Who made the verdict'),
+          document: str('Mark a retrieved document: <id>=right|partly|wrong|clear'),
+          add_to_right_documents: { type: 'boolean' },
         },
-        required: ['run_id', 'result', 'label'],
+        required: ['run_id', 'result'],
       },
       run: async (a) => {
+        if (a.document !== undefined) {
+          const m = /^(.+)=(right|partly|wrong|clear)$/.exec(String(a.document));
+          if (!m) throw new ApsError('ValidationError', '`document` is <id>=right|partly|wrong|clear');
+          return labelDocument(store, { run: String(a.run_id ?? ''), result: String(a.result ?? ''), doc: m[1]!, label: m[2] === 'clear' ? null : m[2] === 'right' ? 'relevant' : m[2] === 'wrong' ? 'not' : 'partly', addToRight: a.add_to_right_documents === true });
+        }
         if (a.label !== 'pass' && a.label !== 'fail') throw new ApsError('ValidationError', '`label` is pass or fail');
         const r = await labelResult(store, { run: String(a.run_id ?? ''), result: String(a.result ?? ''), metric: a.metric ? String(a.metric) : 'overall', label: a.label, labels: a.labels ? String(a.labels) : undefined, by: a.by ? String(a.by) : undefined, note: a.note ? String(a.note) : undefined });
         return { saved: true, path: `labels/${r.labels}.json`, label: r.label };

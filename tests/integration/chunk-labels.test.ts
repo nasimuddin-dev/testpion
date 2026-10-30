@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, MemorySecretStore, createEngineContext, ensureBotSample, runRagEvaluation, addRightDocuments, chunkLabels, setChunkLabel, exportChunkLabels, EVALUATIONS_LIBRARY, type SavedEvaluation } from '../../packages/core/src/index.js';
+import { WorkspaceStore, MemorySecretStore, createEngineContext, ensureBotSample, runRagEvaluation, addRightDocuments, labelDocument, chunkLabels, setChunkLabel, exportChunkLabels, EVALUATIONS_LIBRARY, type SavedEvaluation } from '../../packages/core/src/index.js';
 
 /** R-4: your verdict on each retrieved document, and the relevant ones added to the right documents of the question. */
 const dir = mkdtempSync(join(tmpdir(), 'tp-chunk-labels-'));
@@ -40,5 +40,17 @@ describe('chunk labels', () => {
     // clearing every label removes the result's entry
     setChunkLabel(store, { run: out.runId, resultId: hours, doc: 'doc-4', label: null });
     expect(chunkLabels(store, out.runId)[hours]).toBeUndefined();
+  }, 120_000);
+
+  it('labelDocument (the CLI and MCP route) marks, clears and can add the right documents in one go', async () => {
+    const made = ensureBotSample(store);
+    const out = await runRagEvaluation({ store, makeContext: ctx, evaluation: made.evaluation, concurrency: 2 });
+    const cancel = `${made.evaluation.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}:cancel`;
+    const r = await labelDocument(store, { run: out.runId, result: cancel, doc: 'doc-9', label: 'relevant', addToRight: true });
+    expect(r.labels['doc-9']?.label).toBe('relevant');
+    expect(r.added).toMatchObject({ record: 'cancel', added: ['doc-9'] });
+    const cleared = await labelDocument(store, { run: out.runId, result: cancel, doc: 'doc-9', label: null });
+    expect(cleared.labels).toEqual({});
+    await expect(labelDocument(store, { run: out.runId, result: cancel, doc: ' ', label: 'not' })).rejects.toThrow(/Name the document/);
   }, 120_000);
 });

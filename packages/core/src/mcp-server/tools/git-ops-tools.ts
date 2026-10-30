@@ -1,5 +1,6 @@
 import { ApsError } from '../../errors.js';
 import { discardItem, itemBlame, itemHistory, restoreItemVersion, stageItem } from '../../git/item-ops.js';
+import { teamActivity } from '../../git/team-activity.js';
 import { listJournal, undoJournal } from '../../git/journal.js';
 import { stashApply, stashDrop, stashList, stashPush, stashShow } from '../../git/stash.js';
 import { resolveItemTarget } from '../../git/item-target.js';
@@ -30,8 +31,9 @@ export function gitOpsTools({ store, redactor }: { store: WorkspaceStore; redact
       name: 'git_history',
       description:
         'The versions of one item in git, newest first: for each commit that changed it (hash, author, date, subject) what it changed (`changed`: the parts, such as URL or Headers) and the changed `parts` side by side (before, after; values redacted). The item can be any versioned kind: a request, an environment, an MCP server, a provider, a prompt, a test file, an API definition, a dataset. Pick a `rev` from here for git_restore_item.',
-      inputSchema: { type: 'object', properties: { ...target, limit: { type: 'number', description: 'How many versions' } } },
+      inputSchema: { type: 'object', properties: { ...target, limit: { type: 'number', description: 'How many versions' }, team: { type: 'boolean', description: 'What others changed lately, instead of one item' } } },
       run: async (a) => {
+        if (a.team === true) return teamActivity(store.root, { limit: Number(a.limit) || undefined });
         const h = await itemHistory(store.root, to(a), Number(a.limit) || undefined);
         return { ...h, versions: h.versions.map((v) => ({ ...v, parts: redactParts(v.parts) })) };
       },

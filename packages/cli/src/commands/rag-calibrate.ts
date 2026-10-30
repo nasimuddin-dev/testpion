@@ -7,7 +7,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
+import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
 import { EXIT, CliError, bold, dim, green, printJson, respond, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
@@ -61,6 +61,34 @@ export function registerRagCalibrateCommands(rag: Command): void {
         });
         if (o.json) return printJson(r);
         console.log(`${green('Labelled')} ${r.label.record} · ${r.label.metric} · ${r.label.label} ${dim(`→ labels/${r.labels}.json`)}`);
+      }),
+    );
+
+  label
+    .command('document')
+    .description('mark one retrieved document of a result right, partly right or wrong (what the buttons of a sample in the app do); --add-to-right-documents then makes the documents marked right the right documents of the question')
+    .argument('<run>', 'the run the result is from')
+    .requiredOption('--result <id>', 'a result id of the run')
+    .requiredOption('--doc <id>', 'the retrieved document (its id)')
+    .option('--right', 'it answers the question')
+    .option('--partly', 'it helps a little')
+    .option('--wrong', 'it does not help')
+    .option('--clear', 'take the mark away')
+    .option('--add-to-right-documents', 'write the documents marked right into the question’s right documents in the saved test cases')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option(...JSON_OPTION)
+    .action((run: string, o: { result: string; doc: string; right?: boolean; partly?: boolean; wrong?: boolean; clear?: boolean; addToRightDocuments?: boolean; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        needWorkspace(ephemeral);
+        const picked = [o.right && 'relevant', o.partly && 'partly', o.wrong && 'not', o.clear && 'clear'].filter(Boolean) as string[];
+        if (picked.length !== 1) throw new CliError('Say one of --right, --partly, --wrong or --clear', EXIT.CONFIG_ERROR);
+        const label = picked[0] === 'clear' ? null : (picked[0] as 'relevant' | 'partly' | 'not');
+        const r = await wrap(() => labelDocument(store, { run, result: o.result, doc: o.doc, label, addToRight: o.addToRightDocuments })).catch((e) => {
+          throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
+        });
+        if (o.json) return printJson(r);
+        console.log(`${green(label ? 'Marked' : 'Cleared')} ${o.doc} ${label ? dim(`· ${label}`) : ''}`);
+        if (r.added) console.log(r.added.text);
       }),
     );
 

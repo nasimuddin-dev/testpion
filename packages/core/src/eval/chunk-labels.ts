@@ -111,3 +111,16 @@ export async function exportChunkLabels(store: Store, runId: string): Promise<Ar
   }
   return out;
 }
+
+/**
+ * Mark one retrieved document of one result right, partly right or wrong (`label: null` clears it), the same as the buttons of a sample in
+ * the app; with `addToRight` the documents marked relevant also become the right documents of the question. `run` may be a run id or a ref.
+ */
+export async function labelDocument(
+  store: WorkspaceStore,
+  o: { run: string; result: string; doc: string; label: ChunkLabel | null; addToRight?: boolean },
+): Promise<{ run: string; result: string; labels: Record<string, ChunkLabelEntry>; added?: AddRightDocuments }> {
+  const runId = resolveRunRef(store, o.run).runId;
+  const labels = setChunkLabel(store, { run: runId, resultId: o.result, doc: o.doc, label: o.label });
+  return { run: runId, result: o.result, labels, ...(o.addToRight ? { added: await addRightDocuments(store, { run: runId, resultId: o.result }) } : {}) };
+}
