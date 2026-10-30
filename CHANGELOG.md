@@ -19,6 +19,10 @@
 
 - **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
 
+### AI quality: prompt versions
+
+- **Which wording is better?** *Prompt versions* above the prompt: **Save as version…** keeps the prompt (and the agent's instructions) under a name; each version shows the result of the run made with exactly that wording (a run is tied to its version by the hash of the prompt it sent), and the report card says which version a run used. **Make current** asks first, with the numbers, when a version is under the pass line, did worse than the prompt in use, or was never run; the prompt in use is kept as *Before …*. `testpion eval versions | version-save | version-use [--confirm]`, `eval_variants` with `versions: true`.
+
 ### Agents: a golden run
 
 - **Has the agent started using other tools?** Mark a run you trust as the **baseline** (the report card of an agent evaluation, or `testpion eval baseline <run>`). Later runs say, case by case, *same tools in the same order*, *dropped X; added Y*, *same tools in another order* or *same tools, but X was called with other arguments*; the report card shows *Tools against the baseline: 4 of 5 cases the same, 1 changed* and *Show the steps* adds the comparison (`eval trajectory --against`, `eval summary` → `agentBaseline`). One field of the saved evaluation; no model is called.

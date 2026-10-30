@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,6 +45,8 @@ export interface SavedEvaluation {
   mcpServers?: string[];
   /** type `agent`: the most steps (model calls) the agent may take. */
   maxSteps?: number;
+  /** Versions of the prompt and system prompt (A-4): named snapshots, each tied to the runs made with it by the hash of what it sent (`prompt:<hash>` on the cases). The evaluation's own `prompt` is the one in use. */
+  promptVersions?: PromptVersion[];
   /** type `agent`: the run whose tools are the golden trajectory; the report and `eval trajectory` say how a later run's tools differ from it. */
   baselineRun?: string;
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
@@ -60,6 +63,22 @@ export interface SavedEvaluation {
   targetRepeats?: number;
   /** type `rag`: a SQLite file inside the workspace, or a read-only PostgreSQL / MySQL connection, for the SQL metrics (datacompy-score, sql-equivalence). */
   database?: { path?: string; url?: string; connectionEnv?: string; readOnly?: boolean; /** This is a production database: a run asks once before the generated SQL touches it (the production guard). */ production?: boolean };
+}
+
+/** 12 hex characters of an evaluation's prompt and system prompt (whitespace at the ends does not count): what ties a run to a prompt version. */
+export function promptHashOf(d: Pick<SavedEvaluation, 'prompt' | 'system'>): string {
+  return createHash('sha256').update(`${(d.prompt ?? '').trim()}\u0000${(d.system ?? '').trim()}`).digest('hex').slice(0, 12);
+}
+
+/** A named snapshot of an evaluation's prompt and system prompt. */
+export interface PromptVersion {
+  /** The hash of the prompt and system prompt (see `promptHashOf`). */
+  id: string;
+  name: string;
+  prompt: string;
+  system?: string;
+  at: string;
+  note?: string;
 }
 
 /** One variant of an evaluation in compare mode: what differs from the evaluation itself. */
@@ -185,7 +204,9 @@ export async function* evaluationTests(d: SavedEvaluation, o: { store?: Workspac
       ...evaluationTemplate(d, target),
       dataset: { path: file, format: format === 'md' ? 'markdown' : format, limit: d.limit, expectedField: d.expectedField || 'expected' },
     };
-    yield* expandDataset(template, join(dir, 'evaluation'));
+    // every case says which prompt it was sent with, so a run is tied to a prompt version by what it ran (runner/prompt-versions.ts)
+    const tag = `prompt:${promptHashOf(d)}`;
+    for await (const t of expandDataset(template, join(dir, 'evaluation'))) yield d.type === 'rag' ? t : { ...t, tags: [...(t.tags ?? []), tag] };
   } finally {
     removeScratchDir(dir);
   }

@@ -6,6 +6,7 @@
 import { aiRunDeps, runAiTask } from '../../ai/tasks/run.js';
 import { evalCaseDiff, evalReport } from '../../eval/report.js';
 import { evalTrajectory } from '../../eval/trajectory-run.js';
+import { listPromptVersions } from '../../runner/prompt-versions.js';
 import { variantsSummary } from '../../eval/variants.js';
 import { evalWhy } from '../../eval/why.js';
 import { findSavedEvaluation } from '../../runner/saved-evaluations.js';
@@ -103,10 +104,10 @@ export function evalReportTools(d: { store: WorkspaceStore; secrets: SecretStore
         'The comparison of a saved evaluation’s variants (its prompt versions and models, set in the app’s Compare mode): the latest finished run of each, with passed, cost and average time per variant, the winner of each row, cases worse or better against the first variant, and a one-sentence `conclusion`. It never names one variant best overall. Run the variants first with run_evaluation `variants: true`.',
       inputSchema: {
         type: 'object',
-        properties: { name: str('Saved evaluation name or id'), runs: { type: 'array', items: { type: 'string' }, description: 'The runs to compare, in variant order (default: the latest run of each variant)' } },
+        properties: { name: str('Saved evaluation name or id'), runs: { type: 'array', items: { type: 'string' }, description: 'The runs to compare, in variant order (default: the latest run of each variant)' }, versions: { type: 'boolean', description: 'Return the prompt versions with each one’s latest result instead' } },
         required: ['name'],
       },
-      run: (a) => variantsSummary(store, { evaluation: findSavedEvaluation(store, String(a.name ?? '')), runs: Array.isArray(a.runs) ? a.runs.map(String) : undefined }),
+      run: (a) => a.versions === true ? listPromptVersions(store, String(a.name ?? '')) : variantsSummary(store, { evaluation: findSavedEvaluation(store, String(a.name ?? '')), runs: Array.isArray(a.runs) ? a.runs.map(String) : undefined }),
     },
   ];
 }

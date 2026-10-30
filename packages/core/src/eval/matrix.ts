@@ -11,6 +11,12 @@ import type { TestResult, TestStatus } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { round } from '../util/stats.js';
 
+/** The tags a person wrote: an evaluation run also tags each case with the prompt it was sent with (`prompt:<hash>`, runner/prompt-versions.ts), which is not a filter to show. */
+const userTags = (tags: string[] | undefined): string[] | undefined => {
+  const own = tags?.filter((x) => !x.startsWith('prompt:'));
+  return own?.length ? own : undefined;
+};
+
 type EvalCellStatus = TestStatus;
 type EvalChange = 'regressed' | 'improved' | 'unchanged' | 'new' | 'missing';
 
@@ -144,7 +150,7 @@ async function readSource(src: EvalMatrixSource, maxCases: number): Promise<RawC
     let list = byModel.get(model);
     if (!list) byModel.set(model, (list = []));
     // only what the matrix needs: the result itself (output, checks …) is read again when a cell is opened
-    list.push({ r: { id: r.id, name: r.name, status: r.status, checks: [], tags: Array.isArray(r.tags) ? r.tags.map(String) : undefined } as unknown as TestResult, score: resultScore(r) });
+    list.push({ r: { id: r.id, name: r.name, status: r.status, checks: [], tags: Array.isArray(r.tags) ? userTags(r.tags.map(String)) : undefined } as unknown as TestResult, score: resultScore(r) });
   }
   // results without a model beside results with one (an error before the model answered): they join the run's model
   if (byModel.size === 2 && byModel.has('')) {
@@ -162,7 +168,7 @@ async function readSource(src: EvalMatrixSource, maxCases: number): Promise<RawC
       if (cells.has(key)) for (let i = 2; cells.has((key = `${r.id.slice(prefix.length)}#${i}`)); i++);
       // "Intent v2 [42]" of the run "Intent v2" says no more than the case key: no name then
       const named = /^(.*) \[[^\]]*\]$/.exec(r.name ?? '');
-      cells.set(key, { id: r.id, status: statusCode(r.status), score, name: named && named[1] === src.name ? '' : r.name, tags: r.tags });
+      cells.set(key, { id: r.id, status: statusCode(r.status), score, name: named && named[1] === src.name ? '' : r.name, tags: userTags(r.tags) });
     }
     return { meta: { runId: src.runId, runName: src.name, startedAt: src.startedAt, ...(model ? { model } : {}) }, cells };
   });

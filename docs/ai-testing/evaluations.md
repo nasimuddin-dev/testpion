@@ -89,6 +89,18 @@ testpion eval trust last --grade <resultId> --as pass      # your verdict on one
 
 AI agents use `eval_trust_reviewer`. An agent must never grade for the person: the agreement is only worth something when the verdicts are theirs.
 
+## Prompt versions: which wording is better? {#versions}
+
+Open **Prompt versions** above the prompt (or the instructions of an agent). **Save as version…** keeps the wording you have under a name, such as *Shorter prompt* or *Ask for JSON*. Change the prompt, run again, and the list shows the result of the run made with **exactly** that wording beside each version: *14 of 20 passed (70%)*, or *not run yet*. A run is tied to its version by the prompt it sent, not by a label you could forget to set, and the report card says which version a run used.
+
+**Make current** puts a version back as the prompt. It asks first, and says the numbers, when the version:
+
+- is **under the pass line** ("passed 14 of 20 (70%); the pass line is 80%"),
+- did **worse than the prompt in use** ("passed 70%; the prompt in use (*Original*) passed 85%"), or
+- was **never run** ("has not been run: nothing says how it does").
+
+Confirm to go ahead anyway. If the prompt in use was not saved as a version, it is kept as *Before …* first, so nothing is lost. The same rule is there for CI and scripts: `testpion eval versions <evaluation>`, `eval version-save <evaluation> <name>`, and `eval version-use <evaluation> <version> [--confirm]`; for an agent, the MCP tool `eval_variants` with `versions: true`. A bot with sources has no prompt of its own to version.
+
 ## What a run costs, and the spend cap
 
 Beside **Run** a line says what the run will cost before anything is sent: *20 cases · about $0.03 · ~40 s*. It comes from the cases, the prompt and your [price table](/ai-testing/model-pricing); a check an AI reviewer grades doubles the calls. The offline demo model and models on this computer are *free*; a model with no price says *cost unknown* with **Set a price…**.

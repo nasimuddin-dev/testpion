@@ -4,7 +4,7 @@
  * card and the `eval_summary`, `eval_explain_failure`, `eval_case_diff` and `eval_variants` MCP tools, so the words are the same.
  */
 import type { Command } from 'commander';
-import { aiRunDeps, evalCaseDiff, evalReport, evalTrajectory, evalWhy, setEvaluationBaseline, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
+import { aiRunDeps, evalCaseDiff, evalReport, evalTrajectory, evalWhy, listPromptVersions, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
 import { formatUsd } from '@testpion/shared';
 import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { printPreview } from './ai-print.js';
@@ -138,6 +138,55 @@ export function registerEvalReportCommands(ev: Command): void {
         const r = setEvaluationBaseline(store, { run, clear: o.clear, evaluation: o.evaluation });
         if (o.json) return printJson(r);
         console.log(r.baselineRun ? green(`Baseline of "${r.evaluation}": ${r.baselineRun}`) : green(`Baseline of "${r.evaluation}" cleared`));
+      }),
+    );
+
+  ev.command('versions')
+    .description('the versions of a saved evaluation’s prompt: each with the result of the run made with exactly that prompt; the one in use is marked *')
+    .argument('<evaluation>', 'saved evaluation name or id')
+    .option(...WORKSPACE_OPTION)
+    .option('--json', 'print as JSON: versions (id, name, current, run) and text (for scripts and AI agents)')
+    .action((ref: string, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const v = await listPromptVersions(store, ref);
+        if (o.json) return printJson(v);
+        console.log(`${bold(v.evaluation)}${v.passLine ? dim(` · pass line ${v.passLine}%`) : ''}`);
+        console.log(v.text);
+        if (!v.currentSaved) console.log(yellow(`The prompt in use is not saved as a version${v.currentRun ? ` (its last run: ${v.currentRun.passed} of ${v.currentRun.total} passed)` : ''}: \`testpion eval version-save "${v.evaluation}" "<name>"\`.`));
+      }),
+    );
+
+  ev.command('version-save')
+    .description('save the evaluation’s prompt and system prompt now as a named version')
+    .argument('<evaluation>', 'saved evaluation name or id')
+    .argument('<name>', 'the version’s name, for example "Shorter prompt"')
+    .option(...WORKSPACE_OPTION)
+    .option('--note <text>', 'what changed and why')
+    .option('--json', 'print as JSON')
+    .action((ref: string, name: string, o: { workspace?: string; note?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const v = savePromptVersion(store, { evaluation: ref, name, note: o.note });
+        if (o.json) return printJson(v);
+        console.log(green(`Saved version "${v.name}" (${v.id})`));
+      }),
+    );
+
+  ev.command('version-use')
+    .description('make a version the evaluation’s prompt. A version under the pass line, worse than the prompt in use, or never run asks first (--confirm) and says the numbers; the prompt in use is kept as "Before <version>"')
+    .argument('<evaluation>', 'saved evaluation name or id')
+    .argument('<version>', 'the version’s name or id')
+    .option(...WORKSPACE_OPTION)
+    .option('--confirm', 'make it current even when it is under the pass line, worse, or never run')
+    .option('--json', 'print as JSON')
+    .action((ref: string, version: string, o: { workspace?: string; confirm?: boolean; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const r = await usePromptVersion(store, { evaluation: ref, version, confirm: o.confirm });
+        if (o.json) return printJson(r);
+        console.log(green(`"${r.version}" is now the prompt of "${r.evaluation}"${r.kept ? `; the one before is kept as "${r.kept}"` : ''}`));
+        for (const g of r.gated) console.log(yellow(`  confirmed anyway: ${g}`));
       }),
     );
 

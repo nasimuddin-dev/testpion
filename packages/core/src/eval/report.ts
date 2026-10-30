@@ -11,7 +11,7 @@ import type { CheckResult, RunSummary, TestResult } from '../model/types.js';
 import { resolveRunRef } from '../runner/eval-matrix-runs.js';
 import { readRunSummary } from '../runner/run-records.js';
 import { runResults, runReviews } from '../runner/run-results.js';
-import { EVALUATIONS_LIBRARY, type SavedEvaluation } from '../runner/saved-evaluations.js';
+import { EVALUATIONS_LIBRARY, promptHashOf, type SavedEvaluation } from '../runner/saved-evaluations.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { formatEstimateUsd } from './llm-estimate.js';
 import { FAILURE_CLASSES, GOAL_BACKED_METRICS, GOAL_FOUND_METRICS, type FailureClass, type RagFailure } from './rag/failure.js';
@@ -135,6 +135,8 @@ export interface EvalReport {
   flipped?: EvalReportFlip[];
   /** An agent evaluation with a baseline run (A-2): the tools of each case against the golden run's. */
   agentBaseline?: EvalReportAgentBaseline;
+  /** The prompt version this run was made with (A-4), when the evaluation keeps versions: its name, or none when this prompt was never saved as one. */
+  promptVersion?: { hash: string; name?: string; current: boolean };
   /** An agent evaluation: how many cases kept their steps, and the run marked as its baseline (so the app offers "Mark this run as the baseline"). */
   agentCases?: number;
   baselineRun?: string;
@@ -217,6 +219,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   const status = new Map<string, string>();
   const cases = new Map<string, { id: string; name: string }>();
   const trajectories = new Map<string, Trajectory>();
+  let promptHash: string | undefined;
   let failedCount = 0;
   const causeCounts = new Map<FailureClass, number>();
   const goals = { backed: { passed: 0, total: 0 }, found: { passed: 0, total: 0 } };
@@ -225,6 +228,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   for await (const r of runResults(store, ref.runId)) {
     status.set(evalCaseKey(r.id), r.status);
     cases.set(evalCaseKey(r.id), { id: r.id, name: r.name });
+    promptHash ??= r.tags?.find((t) => t.startsWith('prompt:'))?.slice(7);
     const traj = trajectoryOf(r);
     if (traj) trajectories.set(evalCaseKey(r.id), traj);
     if ((r.latencyMs ?? r.durationMs) > slowest) slowest = r.latencyMs ?? r.durationMs;
@@ -286,6 +290,12 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     vsLast = { passedDelta: delta, gotWorse: worse, gotBetter: better, text: same ? 'Same as the last run' : `Against the last run: ${parts.join(', ')}` };
   }
 
+  // the prompt version this run was made with (A-4)
+  let promptVersion: EvalReport['promptVersion'];
+  if (promptHash && saved?.promptVersions?.length) {
+    const v = saved.promptVersions.find((x) => x.id === promptHash);
+    promptVersion = { hash: promptHash, ...(v ? { name: v.name } : {}), current: promptHashOf(saved) === promptHash };
+  }
   // an agent evaluation with a golden run: the tools of each case against it (A-2)
   let agentBaseline: EvalReportAgentBaseline | undefined;
   if (saved?.type === 'agent' && saved.baselineRun && saved.baselineRun !== ref.runId && trajectories.size) {
@@ -346,6 +356,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     failedChecks.length ? `Failed: ${failedChecks.map((c) => `${c.name} ${c.total - c.passed} of ${c.total}`).join(', ')}.` : failedCount ? '' : 'Every check passed.',
     passLine ? `${passLine.text}.` : '',
     vsLast ? `${vsLast.text}.` : '',
+    promptVersion ? (promptVersion.name ? `Prompt version: ${promptVersion.name}${promptVersion.current ? '' : ' (not the one in use now)'}.` : 'Prompt version: this prompt is not saved as a version.') : '',
     agentBaseline ? agentBaseline.text : '',
     flipped?.length ? `Got worse: ${flipped.filter((f) => f.to === 'failed').map((f) => f.name).join(', ') || 'none'}. Got better: ${flipped.filter((f) => f.to === 'passed').map((f) => f.name).join(', ') || 'none'}.` : '',
     offline ? 'Offline demo model: its answers come from rules, not from a real model.' : '',
@@ -374,6 +385,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ...(vsLast ? { vsLast } : {}),
     ...(flipped?.length ? { flipped } : {}),
     ...(agentBaseline ? { agentBaseline } : {}),
+    ...(promptVersion ? { promptVersion } : {}),
     ...(trajectories.size ? { agentCases: trajectories.size, ...(saved?.baselineRun ? { baselineRun: saved.baselineRun } : {}) } : {}),
     trend,
     text: words.join(' '),

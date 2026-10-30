@@ -1,5 +1,5 @@
 /** RPC handlers: the report card of a run, why a case failed, a case against the run before, and compare mode (variants of an evaluation). */
-import { ApsError, evalCaseDiff, evalReport, evalTrajectory, evalWhy, setEvaluationBaseline, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
+import { ApsError, evalCaseDiff, evalReport, evalTrajectory, evalWhy, listPromptVersions, savePromptVersion, setEvaluationBaseline, usePromptVersion, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { estimateDraft, startDraftRun } from './eval-quality.js';
 
@@ -11,6 +11,20 @@ export function evalReportHandlers(be: Backend): Handlers {
     'eval.caseDiff': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalCaseDiff(be.ws, { run, case: kase, against }),
     /** What an agent did in one case, step by step, with its tool checks pinned to the step that decided them (what `testpion eval trajectory` prints). */
     'eval.trajectory': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalTrajectory(be.ws, { run, case: kase, against }),
+    /** The prompt versions of a saved evaluation, each with the result of its latest run (what `testpion eval versions` prints). */
+    'eval.versions': ({ evaluation }: { evaluation: string }) => listPromptVersions(be.ws, evaluation),
+    /** Save the evaluation's prompt and system prompt now as a named version. */
+    'eval.saveVersion': ({ evaluation, name, note }: { evaluation: string; name: string; note?: string }) => {
+      const v = savePromptVersion(be.ws, { evaluation, name, note });
+      be.host.emit('data.changed', { method: 'eval.saveVersion', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
+      return v;
+    },
+    /** Make a version the evaluation's prompt. One under the pass line, worse than the prompt in use, or never run asks first (`confirm`) and says the numbers. */
+    'eval.useVersion': async ({ evaluation, version, confirm }: { evaluation: string; version: string; confirm?: boolean }) => {
+      const r = await usePromptVersion(be.ws, { evaluation, version, confirm });
+      be.host.emit('data.changed', { method: 'eval.useVersion', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
+      return r;
+    },
     /** Mark a run as the baseline of its agent evaluation (the golden trajectory), or clear it: later runs say how their tools differ. */
     'eval.setBaseline': ({ run, clear, evaluation }: { run?: string; clear?: boolean; evaluation?: string }) => {
       const r = setEvaluationBaseline(be.ws, { run, clear, evaluation });

@@ -86,6 +86,7 @@ export * from './eval/report.js';
 export * from './eval/trajectory.js';
 export * from './eval/trajectory-diff.js';
 export * from './eval/trajectory-run.js';
+export * from './runner/prompt-versions.js';
 export * from './eval/variants.js';
 export * from './eval/why.js';
 export * from './model/rag-types.js';

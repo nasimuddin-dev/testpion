@@ -24,6 +24,7 @@ import { AiQualityTabs } from '../components/ai/AiQualityTabs';
 import { RagTabs } from '../components/rag/RagTabs';
 import { rememberEvalHost, type EvalHost } from '../lib/ai-quality';
 import { AgentToolsEditor } from '../components/ai/AgentToolsEditor';
+import { PromptVersionsBar } from '../components/ai/PromptVersionsBar';
 import { AGENT_EXAMPLE_CASES, AGENT_PROMPT } from '../lib/agent-eval';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
@@ -677,15 +678,19 @@ export function EvaluationsView() {
             />
           )}
           {sub === 'prompt' && d.type === 'agent' && (
-            <div className="h-full overflow-auto p-3 flex flex-col gap-3" data-agent-setup>
+            <div className="h-full overflow-auto flex flex-col" data-agent-setup>
+              <PromptVersionsBar evaluation={savedId} dirty={dirty} onUsed={(v) => set({ prompt: v.prompt, system: v.system ?? '' })} />
+              <div className="p-3 flex flex-col gap-3">
               <Field label="Instructions for the agent (optional)" hint="What the agent is, and what it may and may not do. Each case supplies the task.">
                 <Textarea rows={4} value={d.system} onChange={(e) => set({ system: e.target.value })} aria-label="Instructions for the agent" />
               </Field>
               <AgentToolsEditor tools={d.tools ?? []} mcpServers={d.mcpServers ?? []} onChange={(x) => set({ tools: x.tools.length ? x.tools : undefined, mcpServers: x.mcpServers.length ? x.mcpServers : undefined })} />
+              </div>
             </div>
           )}
           {sub === 'prompt' && !ragTarget && d.type !== 'agent' && (
             <div className="h-full flex flex-col">
+              <PromptVersionsBar evaluation={savedId} dirty={dirty} onUsed={(v) => set({ prompt: v.prompt, system: v.system ?? '' })} />
               <div className="flex items-center gap-3 px-3 py-1.5 text-sm border-b border-line">
                 <label className="flex items-center gap-1">
                   <input type="checkbox" checked={d.format === 'json'} onChange={(e) => set({ format: e.target.checked ? 'json' : 'text' })} /> JSON output
