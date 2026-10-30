@@ -478,7 +478,9 @@ const steps = [
   ),
 ];
 
-module.exports = withExpect(steps, {
+module.exports = withExpect(
+  steps,
+  {
   'open-the-flow': /^nodes: 10 \| checks: uses-missing:unset-variable \| marked: true$/,
   'problem-click-selects-the-step': /^selected: true \| node: true \| text: "Uses a missing value" reads \{\{neverSet\}\}/,
   'double-click-adds-a-note': /^saved: true \| markdown: Checkout$/,
@@ -513,4 +515,12 @@ module.exports = withExpect(steps, {
   'run-row-right-click-menu': /^menu: Open,(Rerun failed,)?Copy link,Copy CLI command,Copy run id,Export report…,Run in CI…$/,
   'editor-has-unsaved-edits': /^dirty: true$/,
   'keep-or-take-is-asked': /^asked: Keep mine \/ Take the new version \| taken: true \| my edit dropped: true$/,
-});
+},
+  {
+    // a plan before this one may have left the demo RAG system on port 4020, the default port of a flow's webhook
+    async prepare() {
+      const s = globalThis.__e2eRagServer;
+      if (s) (delete globalThis.__e2eRagServer, await s.close());
+    },
+  },
+);

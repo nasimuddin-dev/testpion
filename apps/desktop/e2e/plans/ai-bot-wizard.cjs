@@ -36,7 +36,8 @@ const TARGET = {
 const steps = [
   step(
     'the-documents-card-opens-the-bot-wizard',
-    `${H} await __t.view('AI Lab'); await __t.sleep(1000);
+    `${H} await window.aps.invoke('lib.save', { kind: 'rag-targets', library: { folders: [], items: [] } });
+     await __t.view('AI Lab'); await __t.sleep(1000);
      await __t.real.click(vis('[data-start-go=documents]')[0]);
      const w = await __t.waitFor(() => bw(), 8000); if (!w) return 'NO WIZARD';
      await __t.sleep(600);

@@ -105,8 +105,8 @@ module.exports = withExpect(
     'the-data-says-what-it-can-support': /^without a dataset: \d+ \| with: \d+ \| more with data: true$/,
     'type-the-goal-and-draft': /^title: Evaluation: Clinic quality check \| badge: (pass|warn) \d of \d metrics can run.* \| ticked: true$/,
     'the-notes-say-what-was-dropped': /^dropped unknown: true \| dropped tool-call-accuracy: true \| gate flag: true \| risk: true \| no secret: true$/,
-    'accept-saves-it': /^saved: Clinic quality check \| in the list: true \| evaluators: recall@k,token-f1 \| dataset records: 2 \| target: rag-clinic$/,
-    'undo-takes-it-away': /^after undo: \[\]$/,
+    'accept-saves-it': /^saved: (?:Learn: [^,|]+,)*Clinic quality check \| in the list: true \| evaluators: recall@k,token-f1 \| dataset records: 2 \| target: rag-clinic$/,
+    'undo-takes-it-away': /^after undo: \[(?:Learn: [^,|\]]+(?:,|(?=\])))*\]$/,
   },
   { settings: { assistantProvider: 'demo', assistantModel: 'demo' }, prepare },
 );

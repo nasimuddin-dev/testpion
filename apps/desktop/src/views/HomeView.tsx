@@ -13,6 +13,8 @@ import { promptText, toastError, useApp } from '../store';
 import { runMenuCommand } from '../menu-commands';
 import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
+import { gitSnapshot } from '../lib/git';
+import type { TeamActivity } from '@testpion/core';
 import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, StatusDot, statusTone } from '../components/ui';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
@@ -204,6 +206,8 @@ export function HomeView() {
   const [monitors, setMonitors] = useState<HomeMonitor[]>([]);
   const [runs, setRuns] = useState<HomeRun[]>([]);
   const [health, setHealth] = useState<Record<string, { sent: number; failing: number }>>({});
+  /** What other people changed in this workspace lately (a workspace in git with commits by others). */
+  const [team, setTeam] = useState<TeamActivity>();
   const [certs, setCerts] = useState<Array<{ host: string; issuer?: string; validTo?: string; daysLeft?: number; lastSeen: string }>>([]);
   const [activity, setActivity] = useState<Activity>();
   // the dashboard's period, remembered
@@ -305,6 +309,9 @@ export function HomeView() {
     // asked for by the explorer and the certificate reminder too as the window opens: one call (lib/shared-call)
     void sharedCall<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
     void sharedCall<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
+    // only a workspace in git has a team's history to show
+    if (gitSnapshot().status?.repository) void call<TeamActivity>('git.teamActivity', { days: 14, limit: 5 }).then((t) => setTeam(t.commits.length ? t : undefined), () => setTeam(undefined));
+    else setTeam(undefined);
     loadActivity();
   };
   // Home stays mounted: coming back to it reloads only when something it shows has changed (a save, a workspace
@@ -550,6 +557,28 @@ export function HomeView() {
               </Card>
             )}
           </div>
+        )}
+
+        {team && (
+          <Card title="Your team's changes" icon={<GitBranch size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('git')}>Git</LinkButton>}>
+            <div data-home-team>
+              {team.commits.map((c) => (
+                <button key={c.hash} className="w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => setView('git')} data-home-team-commit={c.short}>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium shrink-0">{c.author}</span>
+                    <span className="truncate flex-1 text-muted">{c.subject}</span>
+                    <span className="text-xs text-muted shrink-0">{timeAgo(c.date)}</span>
+                  </span>
+                  {c.changes.length > 0 && (
+                    <span className="text-xs text-muted truncate">
+                      {c.changes.slice(0, 3).map((x) => `${x.title}${x.details.length ? `: ${x.details.slice(0, 2).join(', ')}` : ''}`).join(' · ')}
+                      {c.changes.length + c.more > 3 ? ` · and ${c.changes.length + c.more - 3} more` : ''}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </Card>
         )}
 
         {certs.length > 0 && (

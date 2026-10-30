@@ -95,6 +95,11 @@ git config diff.testpion.xfuncname "^== (.*) ==$"
 
 (`.gitattributes` already has `diff=testpion`. Without the config, git ignores that attribute and prints the plain diff. In plain words: git hands the file to the `testpion` command before it prints the difference, so the difference lists items instead of lines.)
 
+## Bring a teammate in, and see what they changed {#team}
+
+- **Invite a teammate…** (Git view ⋯) writes the message to send: what to install, where to click (the workspace switcher ▸ Clone), the address to paste and the first-time guide. A sign-in typed into the address is left out. Who may read the repository is set on the Git host, not in TestPion.
+- **Your team's changes** (a card on Home, when the workspace is in git and others committed in the last 14 days) lists their commits with what each changed in words: *Ana, 2 hours ago, Point search at v2: MCP server Search: URL*. `testpion git activity [--days n] [--limit n] [--json]` says the same.
+
 ## Step 2: Sign in to the remote
 
 There is nothing to set up in TestPion: git signs in the way it does in a terminal.

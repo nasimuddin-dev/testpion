@@ -37,6 +37,10 @@ one line (*1 document · right documents found 0 of 1*, *1 of 2 statements backe
 stage that went wrong, so you look at the retrieval before the answer it fed. A right document that was not retrieved is listed
 with the retrieved document closest to the reference answer.
 
+## Mark the right documents {#right-documents}
+
+In an open sample, each retrieved document has **Right**, **Partly** and **Wrong** buttons: your own reading of whether it answers the question. The labels are kept with the run. When you mark a document Right that the question did not list, **Add the documents you marked Right to the right documents of this question** writes it into the saved questions (`reference_ids`), so the next run measures the retrieval against documents you have read. It works for questions kept as JSONL or JSON; nothing is sent to a model.
+
 ## What was under test? {#under-test}
 
 When a score changes, the first question is *what did we change?* If your bot reports its own details in the response (the version of its document index, how many documents it retrieves, the prompt version), name them in the connect dialog under **Under test**, one line each: `Corpus version: $.meta.corpus`. Every run records them, and the report says what was under test: *Corpus version v13 (was v12), Top k 5*, with a mark when one changed since the last run. In the target file this is `mapping.meta`.

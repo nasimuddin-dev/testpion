@@ -156,7 +156,7 @@ const steps = [
      await window.aps.invoke('tests.write', { path: P, content: "name: Auth defaults\\ndefaults:\\n  auth: { type: bearer, token: '{{token}}' }\\ntests:\\n  - id: one\\n    name: One\\n    url: http://127.0.0.1:4010/health\\n" });
      await __t.view('Tests'); await __t.sleep(600);
      const r = await __t.waitFor(() => [...document.querySelectorAll('[data-tree-row]')].find((b) => b.offsetParent && b.textContent.trim().endsWith('auth-defaults.yaml')), 4000);
-     if (!r) return 'NO ROW'; await __t.real.click(r); await __t.sleep(1000);
+     if (!r) return 'NO ROW'; r.scrollIntoView({ block: 'center' }); await __t.sleep(300); await __t.real.click(r); await __t.sleep(1000);
      await __t.tab('Flow');
      if (!(await __t.waitFor(() => byId('one'), 5000))) return 'NO NODE';
      if (!(await selectId('one'))) return 'NO INSPECTOR';

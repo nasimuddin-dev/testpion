@@ -10,6 +10,7 @@ import {
   gitLog,
   gitPull,
   gitPullFastForward,
+  teamActivity,
   gitPush,
   gitResolve,
   gitStatus,
@@ -152,6 +153,20 @@ export function registerGitCommands(git: Command, program: Command): void {
         respond({ branch, created: !!o.create }, () => console.log(green(`On ${branch}`)));
       }),
     );
+
+  wsOpt(git.command('activity').description('what other people changed in this workspace lately, by meaning: each commit with the items it changed (the app’s Home card “Your team’s changes”)').option('--days <n>', 'how many days (default 14)', (v) => Number(v)).option('--limit <n>', 'how many commits (default 8)', (v) => Number(v))).action((o) =>
+    withWorkspace(o.workspace, async (s) => {
+      const a = await teamActivity(s.root, { days: o.days, limit: o.limit });
+      out(o.json, a, () => {
+        console.log(a.text);
+        for (const c of a.commits) {
+          console.log(`\n${bold(c.author)} ${dim(`${c.short} · ${c.date.slice(0, 10)}`)}  ${c.subject}`);
+          for (const x of c.changes) console.log(`  ${x.change === 'added' ? green('+') : x.change === 'removed' ? red('-') : '~'} ${x.title}${x.details.length ? dim(`: ${x.details.join(', ')}`) : ''}`);
+          if (c.more) console.log(dim(`  and ${c.more} more`));
+        }
+      });
+    }),
+  );
 
   wsOpt(
     git

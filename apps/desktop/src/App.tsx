@@ -293,6 +293,15 @@ export default function App() {
       const what = p.commits[0]?.subject ? `: "${p.commits[0].subject}"` : '';
       s.toast(`Pulled ${plural(p.count, 'commit')} from your team (${who})${what}. TestPion shows the new version.`, 'success', { label: 'Open Git', onClick: () => useApp.getState().setView('git') });
     });
+    // the background fetch found commits (and "pull by itself" is off or could not): say so once per change, with a way to pull
+    let lastBehind = 0;
+    const offBehind = on<{ ahead: number; behind: number }>('git.remoteChanged', (p) => {
+      const was = lastBehind;
+      lastBehind = p.behind;
+      if (p.behind > was && p.behind > 0) {
+        useApp.getState().toast(`Your team pushed ${plural(p.behind - was, 'commit')}.`, 'info', { label: p.ahead ? 'Pull & push' : 'Pull', onClick: () => useApp.getState().openIntent('git', p.ahead ? { sync: true } : { pull: true }) });
+      }
+    });
     // the disk, the history store or the file watcher has a problem (full disk, damaged database, a watch that stopped): said once, with what to do
     const offInternal = on<{ message: string }>('app.internalError', (p) => useApp.getState().toast(`An internal error was logged (${p.message}). Help > Send feedback or report a problem includes it.`, 'error'));
     const offProblem = on<{ message: string; hint?: string }>('workspace.problem', (p) => useApp.getState().toast(`${p.message}${p.hint ? ` ${p.hint}` : ''}`, 'error'));
@@ -326,6 +335,7 @@ export default function App() {
       offUpdate();
       offDisk();
       offPulled();
+      offBehind();
       offProblem();
       offInternal();
       offData();

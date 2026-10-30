@@ -48,8 +48,10 @@ const steps = [
      const retrieved = strip.querySelector('[data-rag-stage=retrieved]')?.textContent.replace(/\\s+/g, ' ').trim();
      const start = strip.getAttribute('data-rag-stages');
      const missed = !!document.querySelector('[data-rag-missed]');
+     const rightBtn = document.querySelector('[data-rag-chunk-labels] [data-chunk-label=relevant]');
+     let marked = 'NO BUTTON'; if (rightBtn) { rightBtn.scrollIntoView({ block: 'center' }); await __t.sleep(300); await __t.real.click(rightBtn); await __t.waitFor(() => document.querySelector('[data-rag-chunk-labels] [data-chunk-label=relevant]')?.getAttribute('aria-pressed') === 'true', 3000); const again = document.querySelector('[data-rag-chunk-labels] [data-chunk-label=relevant]'); marked = again.getAttribute('aria-pressed') + ' / add row: ' + !!document.querySelector('[data-rag-add-right]'); }
      const cl = vis('[role=dialog] button').filter((x) => x.textContent.trim() === 'Close'); for (const b of cl.reverse()) { await __t.real.click(b); await __t.sleep(300); }
-     return 'stages: ' + stages + ' | start here: ' + start + ' | ' + retrieved + ' | missed row: ' + missed;`,
+     return 'stages: ' + stages + ' | start here: ' + start + ' | ' + retrieved + ' | missed row: ' + missed + ' | marked right: ' + marked;`,
   ),
   step(
     'the-bot-and-its-mock-exist',
@@ -71,7 +73,7 @@ module.exports = withExpect(steps, {
   'start-page': /^tabs: Start,Bots,Questions,Metrics,Checks \| cards: connect,questions,check,metrics \| sample: Try the sample \(offline\) \| recent: empty$/,
   'sample-in-one-click': /^clicks: 1 \| rail: RAG bots \| tab: Checks \| name: Sample: clinic bot \| headline: 4 of 6 passed/,
   'the-report-opens-on-the-two-goals-and-the-causes': /^Backed by the sources: 5 of 6 \| Right documents found: 5 of 6 \| chips: claim not backed by the sources1 \| right document not found1 \| failures: 2 → parking \(pressed true\) → 2$/,
-  'a-sample-opens-by-stage': /^stages: question:info,retrieved:bad,used:info,answer:bad \| start here: retrieved \| 2Retrievedstart here1 document · right documents found 0 of 1 \| missed row: true$/,
+  'a-sample-opens-by-stage': /^stages: question:info,retrieved:bad,used:info,answer:bad \| start here: retrieved \| 2Retrievedstart here1 document · right documents found 0 of 1 \| missed row: true \| marked right: true \/ add row: true$/,
   'the-bot-and-its-mock-exist': /^target: mcp \| server: mock$/,
   'start-lists-the-run': /^row: Sample: clinic bot.*4 of 6 passed/,
 });

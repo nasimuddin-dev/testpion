@@ -11,7 +11,7 @@ const step = stepOf(H);
 const steps = [
   step('explorer', `await __t.requests(); await __t.sleep(600); return await walk('aside', ['ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'End', 'Home']);`),
   step('ailab-list', `await __t.view('AI Lab'); await __t.tab('Try a prompt'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'ArrowDown', 'End', 'ArrowUp', 'Home']);`),
-  step('tests-tree', `await __t.view('Tests'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowDown', 'End']);`),
+  step('tests-tree', `await __t.view('Tests'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'ArrowLeft', 'ArrowDown', 'ArrowLeft', 'ArrowDown', 'End']);`),
   step('environments', `await __t.view('Environments'); await __t.sleep(800); return await walk('main', ['ArrowDown', 'End', 'Home']);`),
 ];
 
@@ -20,6 +20,6 @@ module.exports = withExpect(steps, {
   // General (the folder of the loose prompt) comes first: Down reaches it, then its prompt; End is the last prompt of the last folder
   'ailab-list': /ArrowDown→General.*ArrowDown→Haiku.*End→Refuses a prompt injection.*ArrowUp→Summarise a text.*Home→Saved prompts/,
   // the header is a row of the tree too (TreeRowShell): ↓ from it reaches the first folder
-  'tests-tree': /^Tests \| ArrowDown→\w.*ArrowLeft→ai \| ArrowDown→graphql/,
+  'tests-tree': /^Tests \| ArrowDown→agent \| ArrowLeft→agent \| ArrowDown→ai \| ArrowLeft→ai \| ArrowDown→graphql/,
   environments: /Public APIs/,
 });

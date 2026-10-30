@@ -23,6 +23,10 @@ import {
   findRagTarget,
   findSavedEvaluation,
   importBeir,
+  addRightDocuments,
+  chunkLabels,
+  setChunkLabel,
+  type ChunkLabel,
   mapColumns,
   missingDatasetInputs,
   metricCatalogueRows,
@@ -179,8 +183,16 @@ export function ragHandlers(be: Backend): Handlers {
     'rag.matrixCi': ({ runId, keys }: { runId: string; keys: string[] }) => ragMatrixIntervals(be.ws, runId, keys),
     /** One result of a run with the sample it was scored on (the drill-down of a matrix cell). */
     'rag.sample': async ({ runId, resultId }: { runId: string; resultId: string }) => {
-      for await (const r of runResults(be.ws, runId)) if (r.id === resultId) return { result: r, sample: storedSample(r) ?? null };
+      for await (const r of runResults(be.ws, runId)) if (r.id === resultId) return { result: r, sample: storedSample(r) ?? null, chunkLabels: chunkLabels(be.ws, runId)[resultId] ?? {} };
       throw new ApsError('ValidationError', `No result "${resultId}" in run ${runId}`);
+    },
+    /** Your verdict on one retrieved document of a sample: relevant, partly or not (`label: null` clears it). */
+    'rag.chunkLabel': ({ runId, resultId, doc, label }: { runId: string; resultId: string; doc: string; label: ChunkLabel | null }) => setChunkLabel(be.ws, { run: runId, resultId, doc, label: label ?? null }),
+    /** Add the documents marked relevant for a sample to the right documents of its question (the saved test cases). */
+    'rag.addRightDocuments': async ({ runId, resultId }: { runId: string; resultId: string }) => {
+      const r = await addRightDocuments(be.ws, { run: runId, resultId });
+      be.host.emit('data.changed', { method: 'rag.addRightDocuments', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
+      return r;
     },
     /** Two runs, metric by metric, with a paired bootstrap on the shared samples. */
     'rag.compare': ({ runId, baselineId, minDelta }: { runId: string; baselineId: string; minDelta?: number }) => compareMetricRuns(runResults(be.ws, runId), runResults(be.ws, baselineId), { minDelta }),

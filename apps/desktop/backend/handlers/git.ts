@@ -35,6 +35,7 @@ import {
   gitSwitch,
   gitSync,
   gitUnstage,
+  teamActivity,
   scanStagedSecrets,
   commitVerdict,
   fixStagedFiles,
@@ -59,6 +60,7 @@ export function gitHandlers(be: Backend): Handlers {
     return changedBase(...args);
   };
   const mergeDriverChecked = new Set<string>();
+  let teamCache: { key: string; at: number; value: Awaited<ReturnType<typeof teamActivity>> } | undefined;
   const proposalFile = () => join(ws(), '.local', 'git-proposal.json');
 
   /** Register a cloned or connected workspace folder in the workspace list and open it. */
@@ -203,6 +205,15 @@ export function gitHandlers(be: Backend): Handlers {
     /** Commits, newest first: of the workspace or of one file. */
     'git.log': ({ path, collectionId, limit }: { path?: string; collectionId?: string; limit?: number }) =>
       gitLog(ws(), { path: path ?? (collectionId ? be.ws.collectionFileOf(collectionId) : undefined), limit }),
+    /** What other people changed in this workspace lately, by meaning (the Home card, `testpion git activity`). Cached by HEAD for a minute: the diffs are read once. */
+    'git.teamActivity': async ({ days, limit }: { days?: number; limit?: number } = {}) => {
+      const head = (await runGit(ws(), ['rev-parse', 'HEAD']).catch(() => '')).trim();
+      const key = `${ws()}|${head}|${days ?? ''}|${limit ?? ''}`;
+      if (teamCache && teamCache.key === key && Date.now() - teamCache.at < 60_000) return teamCache.value;
+      const value = await teamActivity(ws(), { days, limit });
+      teamCache = { key, at: Date.now(), value };
+      return value;
+    },
     'git.branches': () => gitBranches(ws()),
     'git.switch': ({ branch, create, from }: { branch: string; create?: boolean; from?: string }) => rewritten(() => gitSwitch(ws(), branch, { create, from })),
     'git.deleteBranch': async ({ branch, force }: { branch: string; force?: boolean }) => changed(await gitDeleteBranch(ws(), branch, force)),

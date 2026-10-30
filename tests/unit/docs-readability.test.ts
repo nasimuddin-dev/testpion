@@ -41,6 +41,7 @@ const WITH_IN_SHORT = [
   'security/privacy',
   'performance/load-testing',
   'migrate/index',
+  'cli/reference',
 ];
 
 const read = (page: string) => readFileSync(join(root, `${page}.md`), 'utf8').replace(/\r\n/g, '\n');

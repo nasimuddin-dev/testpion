@@ -1,5 +1,5 @@
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { ArrowDown, ArrowDownUp, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2, Users, Wrench } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, ExternalLink, FolderGit2, GitBranch, GitCommitHorizontal, GitPullRequest, Pencil, Plus, RefreshCw, Sparkles, Trash2, UserPlus, Users, Wrench } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { confirmAction, isPushRejected, promptText, toastError, useApp } from '../store';
@@ -21,6 +21,7 @@ import { GitStash } from '../components/GitStash';
 import { GitFixDialog } from '../components/GitFixDialog';
 import { GitLargeFiles } from '../components/GitLargeFiles';
 import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
+import { GitInviteDialog } from '../components/GitInviteDialog';
 import { toastWithUndo } from '../lib/git-items';
 import { gitSnapshot, refreshGit, useGitFull, useWhenShown } from '../lib/git';
 
@@ -121,6 +122,7 @@ export function GitView() {
   // Fix git setup (release C): the dialog, what is still to fix (read when the view opens and after a fix), and CODEOWNERS
   const [fixOpen, setFixOpen] = useState(false);
   const [codeowners, setCodeowners] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [toFix, setToFix] = useState(0);
   const refreshToFix = useCallback(() => void call<{ steps: Array<{ state: string }> }>('git.fixPlan', {}).then((p) => setToFix(p.steps.filter((x) => x.state === 'todo').length), () => setToFix(0)), []);
 
@@ -201,8 +203,9 @@ export function GitView() {
       }
     });
   // "Pull & push" from a rejected push's toast (anywhere in the app)
-  useIntent('git', (p?: { sync?: boolean; fix?: boolean; codeowners?: boolean; file?: string; line?: number }) => {
+  useIntent('git', (p?: { sync?: boolean; pull?: boolean; fix?: boolean; codeowners?: boolean; file?: string; line?: number }) => {
     if (p?.sync) void sync();
+    if (p?.pull) void pull();
     if (p?.fix) setFixOpen(true);
     if (p?.codeowners) setCodeowners(true);
     // a changed file named elsewhere (an agent's git_status ref, a link): its line diff, open (at `line` when given)
@@ -411,6 +414,7 @@ export function GitView() {
           },
           { label: 'Fix git setup…', icon: <Wrench size={14} />, onSelect: () => setFixOpen(true) },
           { label: 'Create CODEOWNERS…', icon: <Users size={14} />, onSelect: () => setCodeowners(true) },
+          { label: 'Invite a teammate…', icon: <UserPlus size={14} />, onSelect: () => setInviting(true), disabled: !status.remote, reason: 'Connect to a remote first: a teammate clones from it' },
         ]}
       />
       <Split id="git-main" initial={58} min={30} collapsedSecond={!selectedCommit}>
@@ -543,6 +547,7 @@ export function GitView() {
         />
       )}
       {codeowners && <GitCodeownersDialog onClose={() => setCodeowners(false)} onDone={() => void load()} />}
+      {inviting && status.remote && <GitInviteDialog remote={status.remote} onClose={() => setInviting(false)} />}
       {itemDiff && <GitItemDiffDialog file={itemDiff.file} itemId={itemDiff.itemId} onClose={() => setItemDiff(undefined)} />}
     </div>
   );

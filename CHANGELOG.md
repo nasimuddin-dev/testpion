@@ -4,6 +4,10 @@
 
 ### Team work in git
 
+- **Your team's changes** on Home: the commits other people made in the last 14 days, each with what it changed in words (*Ana, 2 hours ago, Point search at v2: MCP server Search: URL*). `testpion git activity`.
+- **A toast when your team pushed** (*Your team pushed 2 commits*, with Pull) when the background fetch finds commits and "pull by itself" does not take them.
+- **Invite a teammate…** (Git view ⋯): the clone address and the steps for someone new, as one message to copy; a sign-in typed into the address is left out.
+
 - **Pull my team's commits by itself** (Settings ▸ Git, off by default). When the background fetch finds new commits and the workspace has no change of yours (not even a new file), nothing unpushed and no merge under way, TestPion pulls them as a plain fast-forward (`git pull --ff-only`: never a merge, a stash or a rewrite), shows the new version and says who changed what (*Pulled 2 commits from your team (Ana): "Tighten the auth check"*, with an **Open Git** button). With changes of yours it does nothing and the Git view offers Pull as before. `testpion git pull --ff-only` is the same pull in a terminal; the setting is `git.autoPull`.
 - **Who last changed it, on hover.** Rest the pointer on a request, environment, flow, MCP server, prompt … in the explorer and a card says who changed it last, when, the commit's message and what it changed. An item with a change of yours not committed yet says so. One shared controller for every list, so a row costs two handlers; the answer is cached by commit (`git.lastChange`).
 
@@ -19,6 +23,10 @@
 ### RAG bots: connect faster
 
 - **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
+
+### RAG bots: mark the right documents
+
+- **Your verdict on each retrieved document.** In an open sample every retrieved document has *Right*, *Partly* and *Wrong*; the labels are kept with the run, and *Add the documents you marked Right to the right documents of this question* writes them into the saved questions, so the next run measures the retrieval against documents you have read.
 
 ### RAG bots: what was under test
 

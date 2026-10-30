@@ -3,9 +3,30 @@ title: "CLI reference"
 description: "Reference for the testpion command-line interface."
 ---
 
-::: v-pre
-
 # CLI reference
+
+::: tip In short
+The `testpion` command does from a terminal what the app does: run tests, send a request, run a collection, check an AI evaluation. Most people need the ten commands below. The full list follows them.
+:::
+
+## The ten commands most people use
+
+| I want to… | Command |
+|---|---|
+| Run my tests | `testpion test` (or `testpion run --suite regression`) |
+| Send one request and read the answer | `testpion send "https://example.com/api"` |
+| Run a whole collection | `testpion run-collection "My API" -e Staging` |
+| See what is failing in my workspace | `testpion problems` |
+| Find a request or test | `testpion search payment` |
+| Run an AI evaluation | `testpion eval run "Support intents"` |
+| Try the AI sample with no key | `testpion eval sample` |
+| Check a RAG bot with no key | `testpion rag sample` |
+| Share work through git | `testpion git sync` |
+| Set up an AI assistant to use TestPion | `testpion agents init` |
+
+Add `--json` to almost any command to get the answer as data for a script, and `--help` to see its options. A command that finds a problem exits with a non-zero number, which is how CI knows to fail. Add `-w <folder>` to say which workspace; without it, the nearest `workspace.json` is used.
+
+::: v-pre
 
 ```text
 testpion test [paths...]      Run test files, directories, globs or a *.suite.yaml

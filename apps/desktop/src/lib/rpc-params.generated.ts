@@ -194,6 +194,7 @@ export interface RpcParamTypes {
   'git.stashShow': RpcCommonParams & { index?: number; hash?: string };
   'git.switch': RpcCommonParams & { branch: string; from?: string };
   'git.target': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string };
+  'git.teamActivity': RpcCommonParams & { days?: number; limit?: number };
   'git.undo': RpcCommonParams & { id?: string };
   'git.unshareSession': RpcCommonParams & { name: string };
   'git.unstage': RpcCommonParams & { paths: string[] };
@@ -264,6 +265,7 @@ export interface RpcParamTypes {
   'packages.delete': RpcCommonParams & { name: string };
   'packages.save': RpcCommonParams & { name: string; code: string };
   'prompt.variables': RpcCommonParams & { template: string };
+  'rag.addRightDocuments': RpcCommonParams & { runId: string; resultId: string };
   'rag.author.context': RpcCommonParams;
   'rag.author.inputs': RpcCommonParams & { target: string; dataset?: string };
   'rag.calibrate': RpcCommonParams & { run: string; labels?: string; metrics?: string[]; tune?: boolean; thresholds?: Record<string, unknown> };
@@ -273,6 +275,7 @@ export interface RpcParamTypes {
   'rag.capture.preview': RpcCommonParams & { from: string; target?: string; history?: string[]; session?: string; run?: string; har?: string; messages?: string; messagesUrl?: string; exchanges?: string[]; name?: string; questionPath?: string; dedupe?: unknown; limit?: number; sample?: number; seed?: unknown; since?: string; until?: string; onlySuccess?: boolean; maskPii?: boolean; asQuestions?: boolean; overwrite?: boolean };
   'rag.capture.sources': RpcCommonParams;
   'rag.check': RpcCommonParams & { target: Record<string, unknown> };
+  'rag.chunkLabel': RpcCommonParams & { runId: string; resultId: string; doc: string; label?: string };
   'rag.columns': RpcCommonParams & { text: string; name?: string; mapping?: Record<string, unknown> };
   'rag.compare': RpcCommonParams & { runId: string; baselineId: string; minDelta?: number };
   'rag.convert': RpcCommonParams & { text: string; name?: string; from?: string; to?: string };
@@ -401,4 +404,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 384;
+export const RPC_METHOD_COUNT = 387;

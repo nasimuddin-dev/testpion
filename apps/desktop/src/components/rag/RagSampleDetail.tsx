@@ -2,7 +2,8 @@ import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { TrySample, Trace } from '@testpion/core';
 import { call } from '../../api';
-import { attempt } from '../../store';
+import { plural } from '@testpion/shared';
+import { attempt, toastError, useApp } from '../../store';
 import { useRpc } from '../../lib/use-rpc';
 import type { CheckResult, TestResult } from '../../types';
 import { CheckList } from '../Results';
@@ -17,7 +18,15 @@ import { RagTryDialog } from './RagTryDialog';
 interface Sample {
   result: TestResult;
   sample: (TrySample & { warnings?: string[] }) | null;
+  /** Your verdict on each retrieved document of this sample (R-4). */
+  chunkLabels?: Record<string, { label: 'relevant' | 'partly' | 'not'; at: string }>;
 }
+
+const CHUNK_STATES: Array<{ label: 'relevant' | 'partly' | 'not'; text: string; title: string }> = [
+  { label: 'relevant', text: 'Right', title: 'This document answers the question' },
+  { label: 'partly', text: 'Partly', title: 'This document helps, but does not answer it alone' },
+  { label: 'not', text: 'Wrong', title: 'This document is not about the question' },
+];
 type Item = { text: string; ok: boolean; evidence?: string; rating?: number };
 
 const itemsOf = (c: CheckResult | undefined): Item[] => ((c?.metadata as { items?: Item[] } | undefined)?.items ?? []).filter((i) => typeof i.text === 'string');
@@ -33,6 +42,9 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
   const [mark, setMark] = useState<string>();
   const [tryCheck, setTryCheck] = useState<CheckResult>();
   const [doc, setDoc] = useState<string>();
+  /** Your verdict on each retrieved document, kept with the run. */
+  const [chunks, setChunks] = useState<NonNullable<Sample['chunkLabels']>>({});
+  useEffect(() => setChunks(data?.chunkLabels ?? {}), [data]);
   const [showTrace, setShowTrace] = useState(false);
   const [trace, setTrace] = useState<Trace | null>();
   const traceId = data?.result.traceId;
@@ -61,6 +73,29 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
   const stageClaims = itemsOf(claimCheck).filter((i) => !(sample?.contexts ?? []).some((c) => c.id === i.text));
   const stages = stagesOf(sample, stageClaims, result.checks);
   const badStage = firstBadStage(stages);
+  const labelChunk = async (id: string, label: 'relevant' | 'partly' | 'not') => {
+    const clear = chunks[id]?.label === label;
+    try {
+      await call('rag.chunkLabel', { runId, resultId, doc: id, label: clear ? undefined : label });
+      setChunks((c) => {
+        const next = { ...c };
+        if (clear) delete next[id];
+        else next[id] = { label, at: new Date().toISOString() };
+        return next;
+      });
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const addRight = async () => {
+    try {
+      const r = await call<{ text: string }>('rag.addRightDocuments', { runId, resultId });
+      useApp.getState().toast(r.text, 'success');
+    } catch (e) {
+      toastError(e);
+    }
+  };
+  const marked = Object.entries(chunks).filter(([id, e]) => e.label === 'relevant' && !gold.has(id)).length;
   const review = async (rating: 'good' | 'bad') => {
     await attempt(async () => {
       await call('runs.review', { runId, resultId, rating });
@@ -212,6 +247,23 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                           <td className="pr-2 whitespace-nowrap">
                             {gold.has(cid) && <Badge tone="ok" title="One of the right documents of this question (its reference_ids)">right document</Badge>} {v && <Badge tone={v.ok ? 'ok' : 'bad'}>{v.rating !== undefined ? `rated ${v.rating}` : v.ok ? 'useful' : 'not useful'}</Badge>}
                           </td>
+                          <td className="pr-2 whitespace-nowrap" data-rag-chunk-labels={cid}>
+                            <span className="inline-flex rounded-md border border-line overflow-hidden" role="group" aria-label={`Is ${cid} right for the question?`}>
+                              {CHUNK_STATES.map((s) => (
+                                <button
+                                  key={s.label}
+                                  type="button"
+                                  title={s.title}
+                                  aria-pressed={chunks[cid]?.label === s.label}
+                                  data-chunk-label={s.label}
+                                  onClick={() => void labelChunk(cid, s.label)}
+                                  className={cx('px-1.5 py-0.5 text-2xs', chunks[cid]?.label === s.label ? (s.label === 'relevant' ? 'bg-ok/20 text-ok' : s.label === 'not' ? 'bg-bad/20 text-bad' : 'bg-warn/20 text-warn') : 'text-muted hover:text-fg')}
+                                >
+                                  {s.text}
+                                </button>
+                              ))}
+                            </span>
+                          </td>
                           <td>
                             {c.text.length > 220 ? `${c.text.slice(0, 219)}…` : c.text}
                             {c.image && <ChunkImage image={c.image} />}
@@ -219,11 +271,20 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                         </tr>
                       );
                     })}
+                    {marked > 0 && (
+                      <tr data-rag-add-right>
+                        <td colSpan={6} className="pt-1.5">
+                          <Button size="sm" onClick={() => void addRight()} title="The documents you marked Right become the right documents of this question in the saved test cases, so the next run measures the retrieval against them">
+                            Add the {plural(marked, 'document')} you marked Right to the right documents of this question
+                          </Button>
+                        </td>
+                      </tr>
+                    )}
                     {missed.map((id) => (
                       <tr key={id} className="border-t border-line/60 text-bad" data-rag-missed={id}>
                         <td className="py-1 pr-2">—</td>
                         <td className="pr-2 mono">{id}</td>
-                        <td colSpan={3}>
+                        <td colSpan={4}>
                           a right document that was not retrieved
                           {(() => {
                             const near = sample.reference ? nearestChunk(sample.reference, sample.contexts ?? []) : undefined;
