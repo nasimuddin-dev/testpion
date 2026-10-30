@@ -936,7 +936,7 @@ async function runAgentTest(test: AgentTest, scope: VariableScope, svc: ExecServ
     },
     partial: { model: `${provider.config.name}/${model}`, input, output: summarize(r.finalText) },
     metadata: {
-      agent: { steps: r.steps, modelCalls: r.modelCalls, stoppedReason: r.stoppedReason, toolCalls: r.toolCalls.map(({ result, ...c }) => ({ ...c, result: result.slice(0, 500) })) },
+      agent: { steps: r.steps, modelCalls: r.modelCalls, stoppedReason: r.stoppedReason, rounds: r.rounds, toolCalls: r.toolCalls.map(({ result, ...c }) => ({ ...c, result: result.slice(0, 500) })) },
     },
   };
 }

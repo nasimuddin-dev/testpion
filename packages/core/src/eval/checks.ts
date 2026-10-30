@@ -323,7 +323,7 @@ registerCheck('tool-called', (cfg, ctx) => {
 registerCheck('tool-not-called', (cfg, ctx) => {
   const names = new Set(Array.isArray(cfg.tool) ? (cfg.tool as string[]) : [String(cfg.tool)]);
   const bad = (ctx.toolCalls ?? []).filter((c) => names.has(c.name));
-  return res(cfg, !bad.length, bad.length ? `unauthorized tool(s) called: ${[...new Set(bad.map((b) => b.name))].join(', ')}` : 'not called', { actual: (ctx.toolCalls ?? []).map((c) => c.name) });
+  return res(cfg, !bad.length, bad.length ? `unauthorized tool(s) called: ${[...new Set(bad.map((b) => b.name))].join(', ')}` : 'not called', { actual: (ctx.toolCalls ?? []).map((c) => c.name), metadata: { tools: [...names] } });
 });
 registerCheck('allowed-tools', (cfg, ctx) => {
   const allowed = new Set((cfg.expected as string[]) ?? []);

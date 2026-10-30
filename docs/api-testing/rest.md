@@ -3,9 +3,13 @@ title: "REST and HTTP testing"
 description: "Build and test HTTP requests: methods, bodies, cookies, streaming, large responses, mTLS and proxies."
 ---
 
-::: v-pre
-
 # REST and HTTP
+
+::: tip In short
+How to send HTTP requests: pick a method, add parameters, headers and a body, and read the answer. New to this? Start with Your first request.
+:::
+
+::: v-pre
 
 Open the HTTP editor from the Collections explorer: click a saved request (a single click opens a preview tab, in italics, that the next click replaces; double-click it, or change something, to keep it), or the explorer's **+** ▸ **HTTP request** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>T</kbd>). The left rail has no entry per protocol: every request editor (HTTP, GraphQL, gRPC, WebSocket, MCP) is reached through **Collections**, **Quick Open** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) or the **+** at the end of the tab bar. See [Finding your way around](/getting-started/finding-your-way).
 

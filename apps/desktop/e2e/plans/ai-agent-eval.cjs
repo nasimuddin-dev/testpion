@@ -75,6 +75,17 @@ const steps = [
      return 'headline: ' + (head ? head.textContent.trim() : 'NONE') + ' | type: ' + d.type + ' | tools: ' + (d.tools ?? []).map((t) => t.name).join(',') + ' | prompt: ' + d.prompt + ' | columns: ' + Object.keys(JSON.parse(String(d.dataset).split('\\n')[0])).join(',') + ' | extra fields: ' + (Object.keys(d).filter((k) => !known.includes(k)).join(',') || 'none') + ' | wizard closed: ' + !wiz();`,
   ),
   step(
+    'the-failed-case-shows-the-steps-the-agent-took',
+    `${H} const open = await __t.waitFor(() => document.querySelector('[data-eval-trajectory-open]'), 8000); if (!open) return 'NO BUTTON Show the steps';
+     await __t.real.click(open);
+     const tl = await __t.waitFor(() => document.querySelector('[data-eval-trajectory] [data-step-timeline]'), 8000); if (!tl) return 'NO TIMELINE';
+     const tools = tl.querySelectorAll('[data-step-kind=tool]');
+     const redAtATool = [...tl.querySelectorAll('[data-step-kind=tool] [data-pin=bad]')].length;
+     const kinds = [...tl.querySelectorAll('[data-step]')].map((s) => s.getAttribute('data-step-kind') ?? 'end').join(',');
+     const text = document.querySelector('[data-eval-trajectory] p')?.textContent.trim();
+     return 'tool steps: ' + (tools.length > 0) + ' | red pin on a call: ' + (redAtATool > 0) + ' | starts with the question: ' + kinds.startsWith('input') + ' | ends with the answer: ' + /answer(,end)?$/.test(kinds) + ' | ' + text;`,
+  ),
+  step(
     'the-full-editor-shows-the-agent-setup',
     `${H} const tb = [...vis('main [role=tab]')].find((t) => t.textContent.trim().startsWith('Tools'));
      if (!tb) return 'NO TOOLS TAB: ' + [...vis('main [role=tab]')].map((t) => t.textContent.trim()).join(',');
@@ -98,6 +109,7 @@ module.exports = withExpect(steps, {
   'step-three-judges-the-tools': /^picks: case-tools\+,tool-not-called-,max-tool-calls-,tool-args-valid-,contains- \| always on and locked: true \| try case 1: passed \| tool checks: passed,passed$/,
   'try-on-the-failing-case-shows-which-check-failed': /checks: passed:Should call: passed.* \|\| failed:Should not call: failed/,
   'run-saves-an-agent-evaluation-and-runs-it': /^headline: 2 of 3 passed \| type: agent \| tools: search_docs,delete_record \| prompt: \{\{input\}\} \| columns: input,should_call,should_not_call \| extra fields: none \| wizard closed: true$/,
+  'the-failed-case-shows-the-steps-the-agent-took': /^tool steps: true \| red pin on a call: true \| starts with the question: true \| ends with the answer: true \| \d+ tool calls? .* in \d+ model calls?\.$/,
   'the-full-editor-shows-the-agent-setup': /^type select: agent \| tool rows: 2 \| instructions box: true$/,
   'the-estimate-reads-the-agent-evaluation': /^cases: 3 \| offline: true \| summary: 3 cases/,
 });

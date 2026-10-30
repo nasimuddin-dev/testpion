@@ -3,9 +3,13 @@ title: "CI/CD integration"
 description: "Run TestPion tests in GitHub Actions, GitLab CI, Azure DevOps and Jenkins."
 ---
 
-::: v-pre
-
 # CI/CD
+
+::: tip In short
+Run the same tests on every change in a CI service such as GitHub Actions or GitLab. The command is `testpion run`. This page lists the options, exit codes and ready-made pipelines.
+:::
+
+::: v-pre
 
 ```bash
 testpion test ./tests                      # nearest workspace.json is used

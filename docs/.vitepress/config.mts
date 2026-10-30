@@ -56,6 +56,7 @@ const docsSidebar = [
   {
     text: 'Getting Started',
     items: [
+      { text: 'Start here: pick your path', link: '/getting-started/start-here' },
       { text: 'Installation', link: '/getting-started/installation' },
       { text: "What's new: how to use it", link: '/getting-started/whats-new' },
       { text: 'Your first request', link: '/getting-started/first-request' },
@@ -85,6 +86,7 @@ const docsSidebar = [
       { text: 'Logs', link: '/getting-started/logs' },
       { text: 'Keep your workspace in git', link: '/getting-started/git' },
       { text: 'Check an AI answer in 5 minutes', link: '/getting-started/check-an-ai-answer' },
+      { text: 'Glossary: every word explained', link: '/getting-started/glossary' },
     ],
   },
   {
@@ -253,7 +255,7 @@ export default defineConfig({
     nav: [
       { text: 'Download', link: '/download' },
       { text: 'Features', link: '/features' },
-      { text: 'Documentation', link: '/getting-started/installation', activeMatch: `^/(${DOC_SECTIONS.join('|')})/` },
+      { text: 'Documentation', link: '/getting-started/start-here', activeMatch: `^/(${DOC_SECTIONS.join('|')})/` },
       { text: 'FAQ', link: '/faq' },
       { text: 'Changelog', link: '/changelog' },
       { text: 'Roadmap', link: '/roadmap' },

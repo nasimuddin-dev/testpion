@@ -5,6 +5,10 @@ description: "Run a collection, some of its folders, or a test file / flow on a 
 
 # Monitors
 
+::: tip In short
+A monitor runs your tests on a schedule and alerts you when something fails. Use it to watch an API all day.
+:::
+
 A monitor runs a collection (or chosen folders and requests), or a test file or flow under `tests/`, on a schedule, every 1 minute to 7 days, like a Postman monitor. Each run is a normal collection run (or test run), with scripts, assertions and reports. The monitor keeps a history of results, so you can see when a check started failing.
 
 ## In the app

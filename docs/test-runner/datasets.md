@@ -3,9 +3,13 @@ title: "Datasets"
 description: "Stream JSON, JSONL, CSV and Markdown datasets, or the rows of a SQLite query, into tests."
 ---
 
-::: v-pre
-
 # Datasets
+
+::: tip In short
+A dataset is a table of inputs. Add it to a test and the test runs once per row, so you can test many cases without copying the test.
+:::
+
+::: v-pre
 
 ```yaml
 dataset:

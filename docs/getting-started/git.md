@@ -3,9 +3,22 @@ title: "Keep your workspace in git"
 description: "Put a TestPion workspace in a git repository: what is committed, the Git view (changes by meaning, commit, branches, pull and push), the secret guard, merging collections request by request, request history, the CLI, AI agents and CI."
 ---
 
+# Keep your workspace in git
+
+::: tip In short
+Put your workspace in git and your team can share requests and tests: everyone pulls the same files, and different requests merge on their own. Secrets never leave your computer.
+:::
+
 ::: v-pre
 
-# Keep your workspace in git
+## The short version for a team
+
+1. One person clicks **Initialize repository** in the Git view, connects the remote, commits and pushes.
+2. Everyone else clones it with **Clone** in the workspace switcher.
+3. Work, commit, and press **Pull & push**. TestPion can pull your team's changes by itself ([Settings ▸ Git](#step-4-branches-pull-and-push)).
+4. Different requests merge by themselves. If two people changed the same request, you choose which version to keep.
+
+The rest of this page explains each step in detail.
 
 A TestPion workspace is a folder of plain JSON and YAML files, so it can live in a git repository: on its own, or in a folder of your code repository (for example `api-tests/`). Your team reviews changes to requests in pull requests, CI runs the tests from the same files, and secrets never get committed.
 

@@ -3,9 +3,13 @@ title: "HTTP Debugger"
 description: "See the HTTP traffic of other programs: a browser, an app under test, a Node server, an AI agent or an MCP server sends through TestPion's local proxy, and every request and response is listed, inspected, resent and saved."
 ---
 
-::: v-pre
-
 # HTTP Debugger
+
+::: tip In short
+See the network traffic of other programs (a browser, a phone app) in TestPion. It runs a local proxy and you point a program at it. Use it to find out what an app really sends.
+:::
+
+::: v-pre
 
 The **HTTP Debugger** (**Debugger** under the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*; right-click a rail item ▸ **Show on the rail** to keep it there) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
 

@@ -5,6 +5,10 @@ description: "Install the TestPion desktop app on Windows, macOS or Linux, or th
 
 # Installation
 
+::: tip In short
+Download the installer for your system, run it and open TestPion. It takes about two minutes. The command-line tool is optional and needs Node.js.
+:::
+
 ## Desktop app
 
 Download the installer for your system from the [download page](/download), then follow the guide:
@@ -35,3 +39,9 @@ Open the `examples/veterinary-workspace` folder from the workspace menu (**Open 
 |---|---|
 | Settings, logs, encrypted secrets | `~/.testpion/` (override with `TESTPION_HOME`) |
 | Workspaces | `~/.testpion/workspaces/<name>/`, or any folder you open (for example inside a git repo) |
+
+## Next
+
+- [Start here](/getting-started/start-here): pick the path that fits you.
+- [Your first request](/getting-started/first-request): send a request in about five minutes.
+- [Check an AI answer](/getting-started/check-an-ai-answer): no key needed for the first try.

@@ -50,6 +50,8 @@ export interface EvalReportFailure {
   failedChecks: Array<{ name: string; type: string; message: string; aiReviewer: boolean; reason?: string }>;
   /** Why a bot with sources failed this case (R-3): the cause its checks point at, from the run's own scores. */
   cause?: FailureClass;
+  /** An agent case: it kept its steps, so its trajectory can be opened (`eval trajectory`). */
+  agent?: boolean;
   /** The AI reviewer's own words about this case, when it graded it: the answer to "why did this fail?" without another model call. */
   reason?: string;
   error?: string;
@@ -167,6 +169,7 @@ export function failureOf(r: TestResult): EvalReportFailure {
     ...(reviewer.length ? { reason: reviewer.map((c) => c.explanation).join(' ') } : {}),
     ...(r.error ? { error: r.error.message } : {}),
     ...(causeOf(r) ? { cause: causeOf(r) } : {}),
+    ...((r.metadata as { agent?: unknown } | undefined)?.agent ? { agent: true } : {}),
   };
 }
 

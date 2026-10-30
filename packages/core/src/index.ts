@@ -83,6 +83,7 @@ export * from './eval/bot-sample.js';
 export * from './eval/llm-estimate.js';
 export * from './eval/try-check.js';
 export * from './eval/report.js';
+export * from './eval/trajectory.js';
 export * from './eval/variants.js';
 export * from './eval/why.js';
 export * from './model/rag-types.js';

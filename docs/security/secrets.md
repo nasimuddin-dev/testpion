@@ -3,9 +3,13 @@ title: "Secrets"
 description: "How secrets are stored and supplied, and how they are redacted."
 ---
 
-::: v-pre
-
 # Secrets
+
+::: tip In short
+Passwords and keys never go into workspace files. TestPion keeps them in your computer's key store and uses them when a request is sent.
+:::
+
+::: v-pre
 
 - **Desktop:** secrets are encrypted with Electron `safeStorage`, which uses Windows DPAPI, the macOS Keychain or Linux Secret Service. The ciphertext is stored in `~/.testpion/secrets.json` and can only be decrypted by your OS account. If no secure backend is available, TestPion refuses to store the secret rather than write plain text.
 - **CLI/CI:** secrets come from the `TESTPION_SECRET_*` environment variables (see [CI/CD](../test-runner/ci-cd.md)).

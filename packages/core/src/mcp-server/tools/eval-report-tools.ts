@@ -5,6 +5,7 @@
  */
 import { aiRunDeps, runAiTask } from '../../ai/tasks/run.js';
 import { evalCaseDiff, evalReport } from '../../eval/report.js';
+import { evalTrajectory } from '../../eval/trajectory.js';
 import { variantsSummary } from '../../eval/variants.js';
 import { evalWhy } from '../../eval/why.js';
 import { findSavedEvaluation } from '../../runner/saved-evaluations.js';
@@ -86,10 +87,10 @@ export function evalReportTools(d: { store: WorkspaceStore; secrets: SecretStore
         'One case’s answer in a run against the same case in the run before it (or in `against`): both answers, whether they are identical, whether the case got better, worse or kept its result, and the diff (changed fields of a JSON answer, or a line diff of text).',
       inputSchema: {
         type: 'object',
-        properties: { run: str('Run id, "last" or an evaluation name'), case: str('The case: its result id, its key or its name'), against: str('The run to compare with (default: the run before it)') },
+        properties: { run: str('Run id, "last" or an evaluation name'), case: str('The case: its result id, its key or its name'), against: str('The run to compare with (default: the run before it)'), steps: { type: 'boolean', description: 'An agent case: return its steps (model and tool calls, tool checks pinned) instead' } },
         required: ['run', 'case'],
       },
-      run: (a) => evalCaseDiff(store, { run: String(a.run ?? ''), case: String(a.case ?? ''), against: a.against ? String(a.against) : undefined }),
+      run: (a) => (a.steps === true ? evalTrajectory(store, { run: String(a.run ?? ''), case: String(a.case ?? '') }) : evalCaseDiff(store, { run: String(a.run ?? ''), case: String(a.case ?? ''), against: a.against ? String(a.against) : undefined })),
     },
     {
       name: 'eval_variants',

@@ -7,6 +7,10 @@ description: "Bring your collections from Postman, Insomnia, Bruno, Hoppscotch, 
 
 # Migrate to TestPion
 
+::: tip In short
+Moving from Postman, Insomnia, Bruno or another tool? Drop your files on the window. TestPion shows what will be created and what came over fully.
+:::
+
 Drop the files (or a folder, a ZIP, a repository link) on the window, or open **Home ▸ Migrate from…**, pick your tool, and follow the steps: the Import dialog **previews** what will be created and the **compatibility report** says what came over fully, with changes, or not at all. Scripts are converted to TestPion's `tp.*`. A second import of the same source **updates** what it made. One page per tool:
 
 - [Postman](/migrate/postman): Collection v2.0 and v2.1 (JSON)

@@ -3,9 +3,13 @@ title: "AI and LLM testing"
 description: "Test LLM APIs across providers with prompt templates, structured output, streaming metrics, token usage and cost estimates."
 ---
 
-::: v-pre
-
 # AI testing
+
+::: tip In short
+Set up an AI provider, then try prompts, compare models and score answers. The fastest start is your own Claude (Anthropic) API key; an offline mock needs no key.
+:::
+
+::: v-pre
 
 ## Your Claude API key
 

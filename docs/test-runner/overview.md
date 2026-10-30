@@ -3,9 +3,13 @@ title: "Test runner"
 description: "Run test suites in parallel with bounded concurrency, retries, timeouts, dependencies, setup/teardown, cancellation and resumable runs."
 ---
 
-::: v-pre
-
 # Test runner
+
+::: tip In short
+A test is a small file that sends a request and checks the answer. The test runner runs many of them together, in the app or from the terminal, and writes a report.
+:::
+
+::: v-pre
 
 Tests are YAML or JSON files under `tests/`, of type `http`, `graphql`, `grpc`, `websocket` (or `socketio`, `mqtt`), `mcp`, `llm`, `rag` or `agent`, and the flow blocks: `delay` (a pause between the steps of a flow), `condition` (an `if:` with true and false branches), `script` (tp.* code, no request), `flow` (another test file run as one step), `log` (a message in the results), `wait` (a request polled until a condition holds), `set` (values into a variable scope) and `assert` (checks only). A file can hold one test, a `tests:` list (with `defaults:`), or a dataset template. You don't have to write them by hand: **Save as test…** saves a request as a test file, the same way from everywhere: the ⋯ at the end of a request editor's breadcrumb line (REST, SOAP, GraphQL, gRPC, WebSocket) and its tab's right-click menu, the right-click menu of a request, a saved gRPC call or a connection in **Collections**, a **History** entry, a row of the **HTTP Debugger**, an MCP tool call (MCP view) and a prompt (AI Playground). On a folder, **Create test file from folder…** writes one file with a test per request (on a collection, **Create test file from collection…**, its gRPC calls and connections included). The toast that follows has **Run now** and **Open test file**. From the terminal: `testpion test from-request "Collection/Folder/Request" [--json]` (a folder or a collection, or an item ref, work too); AI agents: `save_test` with `collection` + `request`, or any `ref`. Suites are `*.suite.yaml` files:
 

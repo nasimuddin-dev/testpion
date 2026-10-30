@@ -5,6 +5,10 @@ description: "Every response and result in TestPion has the same down arrow: sav
 
 # Save and export results
 
+::: tip In short
+Every response and result has a down-arrow button that saves it to a file (JSON, CSV, HAR and more). Use it when you need to share a result.
+:::
+
 Every response and every result in TestPion has the same **down arrow** at the right end of its bar. It saves what the panel shows to a file. **Copy** sits just before it, and **▾** just after it lists the other formats.
 
 <figure class="aps-screenshot">

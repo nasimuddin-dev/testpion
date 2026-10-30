@@ -5,6 +5,10 @@ description: "How TestPion opens things: every request, test, run, monitor, envi
 
 # Finding your way around
 
+::: tip In short
+A tour of where things are: the left bar, Home, the explorer, tabs and the command search (Ctrl/⌘+K). Read it once, then use search to jump anywhere.
+:::
+
 Everything in a workspace has a place it opens: a request in its editor (REST, SOAP, GraphQL, gRPC, WebSocket), a test file or flow in **Tests**, a run in its results, a monitor in **Monitors**, an environment in **Environments**, a history entry in **History** or, with **Open**, back in the editor it was sent from. Wherever the app names one of them (the **Git** view's changes, search results, **Needs attention** on Home, a toast, a run result), it opens the same way.
 
 ## Get started

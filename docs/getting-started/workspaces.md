@@ -5,6 +5,10 @@ description: "Create, switch, rename, duplicate, export and delete TestPion work
 
 # Workspaces
 
+::: tip In short
+A workspace is one folder that holds everything for a project: requests, environments, tests and settings. You can have many and switch between them.
+:::
+
 A workspace is a folder that holds your collections, environments, tests, datasets, providers and MCP servers as plain JSON and YAML files, so it can live in git. Secret values are never in these files: they stay in your OS credential store.
 
 ## The workspace switcher
@@ -78,3 +82,9 @@ Deleted datasets and MCP servers, and API definitions an import replaced (**Repl
 <figure class="aps-screenshot">
   <img src="/images/recently-deleted.jpg" alt="Recently deleted, opened from the Collections sidebar: a deleted MCP server and an API definition an import replaced, each with Restore and Delete for good" width="1440" height="900" loading="lazy">
 </figure>
+
+## Next
+
+- [Keep your workspace in git](/getting-started/git): share it with a team.
+- [Export and import](/getting-started/export-import): move work between computers or tools.
+- [Glossary](/getting-started/glossary): words you may not know.

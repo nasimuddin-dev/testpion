@@ -3,9 +3,13 @@ title: "MCP (Model Context Protocol) testing"
 description: "Inspect, debug and test MCP servers: tools, resources, prompts and protocol traces."
 ---
 
-::: v-pre
-
 # MCP
+
+::: tip In short
+MCP is a standard way to give an AI assistant tools. TestPion connects to an MCP server, shows its tools, lets you try them from a form, and records every message.
+:::
+
+::: v-pre
 
 TestPion is a full MCP client built on the official TypeScript SDK. MCP servers are listed in the **MCP servers** section of the Collections explorer (the one sidebar of the request editors); a server opens in its own tab of the MCP view.
 

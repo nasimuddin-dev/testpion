@@ -3,9 +3,13 @@ title: "Agent testing"
 description: "Test agentic tool-calling workflows with mock tools and MCP tools, with full step-by-step traces."
 ---
 
-::: v-pre
-
 # Agent testing
+
+::: tip In short
+An agent is an AI that uses tools. These tests check that it calls the right tools with the right arguments, and nothing it should not.
+:::
+
+::: v-pre
 
 `type: agent` runs a provider-agnostic tool-calling loop. The tools can be mocks, MCP server tools, or both:
 
@@ -39,5 +43,16 @@ AI quality > Start > **An agent uses tools** opens a three-step wizard that save
 3. **What does a good run look like?** The tools each case lists are always checked. Tick more: never calls a tool, makes few tool calls, gives each tool the arguments it asks for, the final reply contains a phrase. **Try on case** runs the agent on one case and shows how each tool check did.
 
 In the file the two columns are `should_call` and `should_not_call`: each `should_call` tool becomes a `tool-called` check and the `should_not_call` tools one `tool-not-called` check for that case. Compare mode (variants) is for prompt evaluations only.
+
+
+### See what the agent did: the trajectory {#trajectory}
+
+A failed agent case in the report card has **Show the steps**. It lays the case out down one line: the question, each model
+call (what the model said and which tools it asked for), each tool call with its arguments and result (an error in red), and
+the final answer. The checks about tools are pinned to the step that decided them: a **should call** is green at the call that
+met it (or red on the calls whose arguments differ, or at the end as *never called*), a **should not call** is red on the call
+that happened and grey at the end when it never did, an allow-list and a call limit are red on the call that broke them, and
+valid arguments on the call whose arguments did not match the tool's schema. Nothing is sent to a model. From a terminal:
+`testpion eval trajectory <run> <case>` (`--json` for scripts); for an agent, the MCP tool `eval_case_diff` with `steps: true`.
 
 :::

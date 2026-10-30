@@ -3,9 +3,13 @@ title: "Environments and variables"
 description: "Variable scopes and precedence, secret variables, dynamic variables and production safeguards."
 ---
 
-::: v-pre
-
 # Environments and variables
+
+::: tip In short
+An environment is a named set of values, for example test and live. Use variables in your requests, switch the environment, and the same request goes to a different server.
+:::
+
+::: v-pre
 
 ## Precedence
 

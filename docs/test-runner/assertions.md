@@ -3,9 +3,13 @@ title: "Assertions reference"
 description: "All assertion and evaluator types with options."
 ---
 
-::: v-pre
-
 # Assertions
+
+::: tip In short
+An assertion is a rule an answer must follow. This page lists every kind of check and its options. It is a reference: look up the one you need.
+:::
+
+::: v-pre
 
 In a test file the checks go in an `assertions:` list; `checks:` works too.
 

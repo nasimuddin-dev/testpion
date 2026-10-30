@@ -7,6 +7,18 @@
 - **Pull my team's commits by itself** (Settings ▸ Git, off by default). When the background fetch finds new commits and the workspace has no change of yours (not even a new file), nothing unpushed and no merge under way, TestPion pulls them as a plain fast-forward (`git pull --ff-only`: never a merge, a stash or a rewrite), shows the new version and says who changed what (*Pulled 2 commits from your team (Ana): "Tighten the auth check"*, with an **Open Git** button). With changes of yours it does nothing and the Git view offers Pull as before. `testpion git pull --ff-only` is the same pull in a terminal; the setting is `git.autoPull`.
 - **Who last changed it, on hover.** Rest the pointer on a request, environment, flow, MCP server, prompt … in the explorer and a card says who changed it last, when, the commit's message and what it changed. An item with a change of yours not committed yet says so. One shared controller for every list, so a row costs two handlers; the answer is cached by commit (`git.lastChange`).
 
+### Docs for every reader
+
+- **Start here** (docs ▸ Getting started): pick the line that sounds like you (new to testing, tester, building with AI, RAG, team, CI, moving from Postman, using an AI assistant), try the Examples workspace in two minutes, find a task in one table, and learn the words you will meet.
+- **A glossary of every word** in plain language, A to Z, each with a link to learn more.
+- **Your first request** no longer needs a server: it uses the Examples workspace and a free public test site, explains the status code and the checks, and ends with what to read next.
+- **An *In short* box** under the title of 28 key pages (what it is, what you need), a *Next* list at the end of the guides, a plainer home page with a *Choose your path* table, and *Features* with a finder and its long paragraphs as short points.
+- A test keeps the front-door pages plain (short sentences and paragraphs, an *In short* box) so they stay easy.
+
+### Agents: see what the agent did
+
+- **The trajectory of an agent case.** A failed agent case has *Show the steps*: the question, each model call, each tool call with its arguments and result, the final answer, down one line, with the tool checks pinned to the step that decided them (green at the call that met a *should call*, red on a forbidden call or on one that broke the allow-list or the call limit, grey *never called* at the end). `testpion eval trajectory <run> <case>`, the MCP tool `eval_case_diff` with `steps: true` and `eval.trajectory` say the same; a run now keeps what the model said at each step. No model is called.
+
 ### RAG bots: read a result faster
 
 - **The report card opens on the two goals and the causes.** *Backed by the sources: 5 of 6 · Right documents found: 5 of 6*, then *Why the failed cases failed* as chips in plain words (*claim not backed by the sources*, *right document not found*, *ranked too low* …) that narrow the failed cases to that reason. Rule-based from the run's own scores, no model. In `eval summary`, `eval_summary` and `eval.summary` as `goals`, `causes` and `cause` on each failure.

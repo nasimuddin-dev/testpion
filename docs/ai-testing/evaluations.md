@@ -3,9 +3,13 @@ title: "AI evaluation"
 description: "Check LLM output with deterministic, semantic and AI-reviewer checks over streamed test cases, with regression baselines."
 ---
 
-::: v-pre
-
 # Evaluations
+
+::: tip In short
+An evaluation sends many questions to an AI or a chatbot and scores each answer with checks you choose. Save it to run again and compare runs.
+:::
+
+::: v-pre
 
 ## Saved evaluations
 

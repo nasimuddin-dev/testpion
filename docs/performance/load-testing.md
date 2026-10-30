@@ -3,9 +3,13 @@ title: "Load testing"
 description: "Load test HTTP endpoints, whole collections and LLM providers with virtual users, ramp-up, rate limits and safeguards."
 ---
 
-::: v-pre
-
 # Load testing
+
+::: tip In short
+A load test sends many requests at once to see how fast and stable an API stays. Choose how many virtual users and how long, then read latency, errors and throughput.
+:::
+
+::: v-pre
 
 Configure virtual users, duration, ramp-up and ramp-down, a global requests-per-second cap, and think time. The results include throughput, p50/p90/p95/p99 latency, error rate, status code distribution and connection failures, the server time (time to first byte, p50 and p95) and connections (how many requests opened a new one and its average set-up time, or reused one; mostly new connections means the server does not keep them alive), with live charts: requests per second, p95 latency, errors per second and virtual users over time (one crosshair across all four; hover for the values at that second) and a status-code bar with counts and shares.
 

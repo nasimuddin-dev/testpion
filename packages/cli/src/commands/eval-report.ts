@@ -4,7 +4,7 @@
  * card and the `eval_summary`, `eval_explain_failure`, `eval_case_diff` and `eval_variants` MCP tools, so the words are the same.
  */
 import type { Command } from 'commander';
-import { aiRunDeps, evalCaseDiff, evalReport, evalWhy, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
+import { aiRunDeps, evalCaseDiff, evalReport, evalTrajectory, evalWhy, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
 import { formatUsd } from '@testpion/shared';
 import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { printPreview } from './ai-print.js';
@@ -95,6 +95,31 @@ export function registerEvalReportCommands(ev: Command): void {
           if (d.diff.body.format === 'json') for (const c of d.diff.body.changes) console.log(`  ${c.path}: ${JSON.stringify(c.before) ?? '–'} → ${JSON.stringify(c.after) ?? '–'}`);
           else for (const l of d.diff.body.lines ?? []) console.log(l.op === '+' ? green(`+ ${l.text}`) : l.op === '-' ? red(`- ${l.text}`) : dim(`  ${l.text}`));
         }
+      }),
+    );
+
+  ev.command('trajectory')
+    .description('what an agent did in one case, step by step: each model call, each tool call with its arguments and result, the final answer, and the tool checks pinned to the step that decided them (met at the call, broken at the forbidden call, never called)')
+    .argument('<run>', 'the run: its id, "last" or an evaluation name')
+    .argument('<case>', 'the case: its result id, its key or its name')
+    .option(...WORKSPACE_OPTION)
+    .option('--json', 'print as JSON: items (each with its pins), endPins and text (for scripts and AI agents)')
+    .action((run: string, kase: string, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const t = await evalTrajectory(store, { run, case: kase });
+        if (o.json) return printJson(t);
+        console.log(`${bold(t.name)} ${t.status === 'passed' ? green(t.status) : red(t.status)}`);
+        console.log(dim(t.text));
+        const pin = (p: { state: string; text: string; check: string }) => `    ${p.state === 'bad' ? red('✗') : p.state === 'ok' ? green('✓') : dim('·')} ${p.text} ${dim(`(${p.check})`)}`;
+        for (const it of t.items) {
+          const mark = it.kind === 'tool' ? (it.error ? red('  ⚠ ') : '  → ') : it.kind === 'model' ? bold('') : '';
+          console.log(`${mark}${it.kind === 'tool' ? it.title : bold(it.title)}`);
+          if (it.detail && it.kind !== 'tool') console.log(dim(`    ${it.detail.replace(/\s+/g, ' ').slice(0, 200)}`));
+          if (it.kind === 'tool' && it.detail) console.log(dim(`    ← ${it.detail.replace(/\s+/g, ' ').slice(0, 160)}`));
+          for (const p of it.pins) console.log(pin(p));
+        }
+        for (const p of t.endPins) console.log(pin(p));
       }),
     );
 

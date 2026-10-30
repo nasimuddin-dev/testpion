@@ -3,9 +3,13 @@ title: "Integration testing"
 description: "Test whole flows against a running API with TestPion: chained steps, clean-up, suites, running by hand and in CI/CD (GitHub Actions, GitLab, Azure DevOps, Jenkins) with the system under test started first."
 ---
 
-::: v-pre
-
 # Integration testing
+
+::: tip In short
+An integration test follows a real journey through an API: sign in, create, read, change, delete. Here you build it as a flow on a canvas or in a YAML file.
+:::
+
+::: v-pre
 
 An integration test exercises a real, running system through its API: sign in, create a record, read it back, change it, delete it, and check that every step behaves. TestPion runs such flows from YAML test files or from a collection, by hand from the app or the CLI, and in CI where it can also **start the system under test** and wait for it to be healthy. Results come back as console output, JUnit for the CI system, and an HTML report.
 

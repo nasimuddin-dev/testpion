@@ -1,5 +1,5 @@
 /** RPC handlers: the report card of a run, why a case failed, a case against the run before, and compare mode (variants of an evaluation). */
-import { ApsError, evalCaseDiff, evalReport, evalWhy, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
+import { ApsError, evalCaseDiff, evalReport, evalTrajectory, evalWhy, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { estimateDraft, startDraftRun } from './eval-quality.js';
 
@@ -9,6 +9,8 @@ export function evalReportHandlers(be: Backend): Handlers {
     'eval.summary': ({ run, against }: { run: string; against?: string }) => evalReport(be.ws, { run, against }),
     /** One case against the same case in the run before it: both answers and the difference (what `testpion eval diff` prints). */
     'eval.caseDiff': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalCaseDiff(be.ws, { run, case: kase, against }),
+    /** What an agent did in one case, step by step, with its tool checks pinned to the step that decided them (what `testpion eval trajectory` prints). */
+    'eval.trajectory': ({ run, case: kase }: { run: string; case: string }) => evalTrajectory(be.ws, { run, case: kase }),
     /** Why one case failed: the AI reviewer's stored reason, and the context the `eval-why` task is given. */
     'eval.why': ({ run, case: kase }: { run: string; case: string }) => evalWhy(be.ws, { run, case: kase }),
     /**

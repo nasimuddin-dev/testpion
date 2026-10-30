@@ -5,8 +5,8 @@ titleTemplate: API, MCP and AI Testing Tool
 description: TestPion is a free, local-first desktop app and CLI for testing and debugging REST, GraphQL and WebSocket APIs, MCP servers, LLM APIs, RAG pipelines and AI agents on Windows, macOS and Linux.
 
 hero:
-  text: Test and debug APIs, MCP servers and AI systems in one place
-  tagline: REST, GraphQL, WebSocket, MCP, LLMs, RAG and agents — with a test runner, evaluation lab and trace viewer. Local-first, private, and the same engine in your CI.
+  text: Check that your APIs and AI work the way they should
+  tagline: Send a request, see the answer, and let TestPion tell you if it is right. For web APIs, AI chatbots and AI tools. Free, private on your computer, and the same tests run in CI.
   image:
     src: /images/testpion-wordmark.png
     alt: TestPion — Connect every protocol
@@ -18,48 +18,48 @@ hero:
       text: View on GitHub
       link: https://github.com/nasimuddin-dev/testpion
     - theme: alt
-      text: Read the docs
-      link: /getting-started/installation
+      text: Start here
+      link: /getting-started/start-here
 
 features:
-  - title: REST & GraphQL client
-    details: Requests with every common auth type, bodies, cookies, scripts and assertions. GraphQL introspection with schema-aware autocomplete. Large responses stream to disk.
-    link: /api-testing/rest
-    linkText: API testing
-  - title: MCP inspector
-    details: Connect over stdio, Streamable HTTP or SSE. Discover tools, resources and prompts, run tools from generated forms, and trace every JSON-RPC message.
+  - title: Test web APIs
+    details: Send requests, log in, and add checks. Works with REST, GraphQL, gRPC and WebSocket.
+    link: /getting-started/first-request
+    linkText: Your first request
+  - title: Test AI tools (MCP)
+    details: Connect to an MCP server, see its tools, try them from a form, and watch every message.
     link: /mcp/overview
-    linkText: MCP debugging
-  - title: AI quality
-    details: Test prompts on OpenAI-compatible, Azure, Anthropic, Gemini, Amazon Bedrock and Ollama models — or an offline mock. Streaming, time to first token, tokens, cost and side-by-side comparison.
-    link: /ai-testing/overview
-    linkText: AI testing
-  - title: Evaluations
-    details: Stream datasets through deterministic, semantic and LLM-as-judge evaluators, including RAG, agent tool-use and safety checks. Compare runs against baselines.
+    linkText: MCP testing
+  - title: Check AI answers
+    details: Ask AI models the same question, compare the answers, and see time and cost.
+    link: /getting-started/check-an-ai-answer
+    linkText: Check an AI answer
+  - title: Score a chatbot
+    details: Send many questions to a chatbot or a bot that answers from documents, and get a score for each answer.
     link: /ai-testing/evaluations
-    linkText: Evaluation guide
-  - title: Test runner & CI
-    details: YAML test suites with parallel workers, retries, dependencies and resumable runs. Save any request as a test, run it in CI from the run itself. JUnit, JSON, HTML and Markdown reports, and the testpion CLI for any CI system.
+    linkText: Evaluations
+  - title: Run tests anywhere
+    details: Save requests as tests, run them in groups, and run them again in CI. Reports in JUnit, HTML and Markdown.
     link: /test-runner/overview
-    linkText: Test runner
-  - title: Visual flow designer
-    details: Build multi-step API flows on a canvas — requests, conditions, loops, polling, sub-flows — debug them with breakpoints, run them per data row, per environment or under load, and deploy them to a schedule, a webhook, an MCP tool or CI. The file stays plain YAML.
+    linkText: The test runner
+  - title: Build multi-step flows
+    details: "Draw steps on a canvas: log in, create something, check it, clean up. Run it with many data rows."
     link: /test-runner/integration-testing#design-a-flow
     linkText: Design a flow
-  - title: Monitors & certificates
-    details: Run collections or flows on a schedule with alerts, response-time limits, uptime by day and per-request numbers. Every HTTPS response records its certificate, so an expiring one never surprises you.
+  - title: Watch your APIs
+    details: Run tests on a schedule and get an alert when something breaks or a certificate is about to expire.
     link: /test-runner/monitors
     linkText: Monitors
-  - title: Charts that explain
-    details: A Home dashboard with what needs attention, run charts down to DNS, TCP, TLS and server time, each test's history and the flaky ones, load and monitor trends, and usage of MCP tools and AI models.
-    link: /features
-    linkText: All features
-  - title: Built for AI agents
-    details: testpion mcp-server gives agents more than 120 tools, from sending requests and designing flows to what needs attention, with secrets redacted and production guarded. testpion agents init writes AGENTS.md, every CLI command's --json is one envelope, and the docs publish llms.txt.
+  - title: Work with your team
+    details: Keep your work in git, review changes request by request, and pull your team's updates.
+    link: /getting-started/git
+    linkText: Share your work
+  - title: Let AI assistants use it
+    details: Give Claude, Copilot or another assistant tools to send requests and run tests for you.
     link: /ai-testing/mcp-server
-    linkText: MCP server
-  - title: Local-first and private
-    details: No account and no telemetry. Secrets are encrypted with your OS keychain and redacted from logs, traces and reports. Scripts run in a WebAssembly sandbox.
+    linkText: Use from AI agents
+  - title: Private by design
+    details: No account and no tracking. Your secrets stay in your computer's key store and are hidden in logs and reports.
     link: /security/privacy
     linkText: Privacy
 ---
@@ -67,6 +67,20 @@ features:
 <script setup>
 import { data as release } from "./data/release.data";
 </script>
+
+## Choose your path
+
+New here? Pick the line that sounds like you. Each path is short and ends with something that works.
+
+| I want to… | Start with |
+|---|---|
+| Try it without setting anything up | [Start here](/getting-started/start-here) |
+| Test a web API | [Your first request](/getting-started/first-request) |
+| Check that an AI chatbot or prompt gives good answers | [Check an AI answer in 5 minutes](/getting-started/check-an-ai-answer) |
+| Share my tests with a team | [Share your work](/getting-started/git) |
+| Run my tests in CI | [Run tests in CI](/test-runner/ci-cd) |
+| Move from Postman or another tool | [Migrate](/migrate/) |
+| Find a word I do not know | [Glossary](/getting-started/glossary) |
 
 ## See it in action
 

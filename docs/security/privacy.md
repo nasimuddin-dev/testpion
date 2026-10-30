@@ -3,9 +3,13 @@ title: "Privacy and redaction"
 description: "Redaction of logs, traces, reports and exports; the script sandbox; and telemetry."
 ---
 
-::: v-pre
-
 # Privacy
+
+::: tip In short
+TestPion hides secrets in logs, reports and exports, sends nothing anywhere except the servers you call, and collects no usage data.
+:::
+
+::: v-pre
 
 ## Redaction
 

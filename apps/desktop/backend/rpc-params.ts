@@ -164,6 +164,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'eval.trust': { run: 's', metric: 's?', count: 'n?', label: 'o?' },
   'eval.summary': { run: 's', against: 's?' },
   'eval.caseDiff': { run: 's', case: 's', against: 's?' },
+  'eval.trajectory': { run: 's', case: 's' },
   'eval.why': { run: 's', case: 's' },
   'eval.runVariants': { draft: 'o', confirm: 'b?', dryRun: 'b?' },
   'eval.variantsSummary': { draft: 'o', runs: 'sa?' },

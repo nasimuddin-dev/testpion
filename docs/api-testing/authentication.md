@@ -3,9 +3,13 @@ title: "Authentication"
 description: "API key, Basic, Bearer, JWT, OAuth 1.0, OAuth 2.0 (client credentials, password, authorization code with PKCE), AWS Signature v4, Digest, custom headers and mTLS."
 ---
 
-::: v-pre
-
 # Authentication
+
+::: tip In short
+How to log in to an API: API keys, Basic, Bearer tokens, OAuth and more. Pick the type your API asks for, and keep real keys in secret variables.
+:::
+
+::: v-pre
 
 | Type | Notes |
 |---|---|

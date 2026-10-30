@@ -28,6 +28,8 @@ interface AgentRunResult {
   latencyMs: number;
   modelCalls: number;
   stoppedReason: 'final' | 'max-steps';
+  /** One entry per model call: what the model said and how many tools it asked for (the trajectory view's model steps). */
+  rounds: Array<{ step: number; text: string; calls: number }>;
   transcript: ChatMessage[];
 }
 
@@ -54,6 +56,7 @@ export async function runAgent(opts: {
   const toolByName = new Map(opts.tools.map((t) => [t.name, t]));
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   const calls: AgentToolCallRecord[] = [];
+  const rounds: AgentRunResult['rounds'] = [];
   const maxSteps = opts.maxSteps ?? 8;
   let modelCalls = 0;
 
@@ -83,10 +86,11 @@ export async function runAgent(opts: {
     usage.totalTokens += r.usage.totalTokens;
     llmSpan?.setAttributes({ inputTokens: r.usage.inputTokens, outputTokens: r.usage.outputTokens, finishReason: r.finishReason, toolCalls: r.toolCalls.length });
     llmSpan?.end({ output: r.toolCalls.length ? { text: r.text, toolCalls: r.toolCalls } : r.text });
+    rounds.push({ step, text: r.text.slice(0, 600), calls: r.toolCalls.length });
 
     if (!r.toolCalls.length) {
       messages.push({ role: 'assistant', content: r.text });
-      return { finalText: r.text, steps: step, toolCalls: calls, usage, latencyMs: Math.round(performance.now() - t0), modelCalls, stoppedReason: 'final', transcript: messages };
+      return { finalText: r.text, steps: step, toolCalls: calls, usage, latencyMs: Math.round(performance.now() - t0), modelCalls, stoppedReason: 'final', rounds, transcript: messages };
     }
 
     messages.push({ role: 'assistant', content: r.text, toolCalls: r.toolCalls });
@@ -119,5 +123,5 @@ export async function runAgent(opts: {
     }
   }
   const last = [...messages].reverse().find((m) => m.role === 'assistant')?.content ?? '';
-  return { finalText: last, steps: maxSteps, toolCalls: calls, usage, latencyMs: Math.round(performance.now() - t0), modelCalls, stoppedReason: 'max-steps', transcript: messages };
+  return { finalText: last, steps: maxSteps, toolCalls: calls, usage, latencyMs: Math.round(performance.now() - t0), modelCalls, stoppedReason: 'max-steps', rounds, transcript: messages };
 }

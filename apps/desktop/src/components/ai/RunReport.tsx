@@ -1,6 +1,6 @@
-import { Cloud, GitCompareArrows, X } from 'lucide-react';
+import { Cloud, GitCompareArrows, ListTree, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy } from '@testpion/core';
+import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy, Trajectory } from '@testpion/core';
 import { call, on } from '../../api';
 import { formatCost, formatMs } from '../../lib/format';
 import { useRpc } from '../../lib/use-rpc';
@@ -8,6 +8,7 @@ import { LABEL } from '../../lib/vocabulary';
 import { CompareView, type Compared } from '../ResponseHistory';
 import { Badge, Button, cx, LinkButton, Spinner } from '../ui';
 import { FilterChips } from '../FilterChips';
+import { StepTimeline } from '../StepTimeline';
 import { AiAction } from './AiAction';
 
 /** The sentence a run is reduced to: "17 of 20 passed" (the same words the CLI and the MCP tools say). */
@@ -59,6 +60,20 @@ function CaseDiffPanel({ runId, caseKey }: { runId: string; caseKey: string }) {
   );
 }
 
+/** What the agent did in a case, step by step, with its tool checks pinned to the step that decided them (A-1). */
+function TrajectoryPanel({ runId, caseKey }: { runId: string; caseKey: string }) {
+  const t = useRpc<Trajectory>('eval.trajectory', { run: runId, case: caseKey });
+  if (!t) return <Spinner />;
+  return (
+    <div className="rounded-lg border border-line mt-1.5" data-eval-trajectory>
+      <p className="px-3 py-1.5 text-xs border-b border-line">{t.text}</p>
+      <div className="max-h-96 overflow-auto">
+        <StepTimeline items={t.items} endPins={t.endPins} label={`What the agent did in ${caseKey}`} />
+      </div>
+    </div>
+  );
+}
+
 /** "Why did this fail?" for a case an AI reviewer did not grade: the AI task, with what is sent and what it costs shown first. */
 function WhyAi({ runId, f }: { runId: string; f: EvalReportFailure }) {
   return (
@@ -76,7 +91,7 @@ function WhyAi({ runId, f }: { runId: string; f: EvalReportFailure }) {
 }
 
 function FailureRow({ runId, f, hasPrevious }: { runId: string; f: EvalReportFailure; hasPrevious: boolean }) {
-  const [open, setOpen] = useState<'why' | 'diff' | undefined>();
+  const [open, setOpen] = useState<'why' | 'diff' | 'steps' | undefined>();
   const snippet = (s?: string, n = 90) => (s ? s.replace(/\s+/g, ' ').slice(0, n) : '');
   // the case is the end of the prompt (where its values were filled in): the last line says it better than the instructions above
   const lastLine = (s?: string) => (s ? (s.trim().split(/\r?\n/).filter((l) => l.trim()).pop() ?? s) : undefined);
@@ -105,6 +120,11 @@ function FailureRow({ runId, f, hasPrevious }: { runId: string; f: EvalReportFai
           ) : (
             <WhyAi runId={runId} f={f} />
           )}
+          {f.agent && (
+            <Button size="sm" icon={<ListTree size={12} />} onClick={() => setOpen(open === 'steps' ? undefined : 'steps')} title="What the agent did, step by step, and which tool check each step satisfied or broke" data-eval-trajectory-open={f.key}>
+              Show the steps
+            </Button>
+          )}
           <Button
             size="sm"
             icon={<GitCompareArrows size={12} />}
@@ -125,6 +145,7 @@ function FailureRow({ runId, f, hasPrevious }: { runId: string; f: EvalReportFai
         </div>
       )}
       {open === 'diff' && hasPrevious && <CaseDiffPanel runId={runId} caseKey={f.key} />}
+      {open === 'steps' && <TrajectoryPanel runId={runId} caseKey={f.key} />}
     </li>
   );
 }
