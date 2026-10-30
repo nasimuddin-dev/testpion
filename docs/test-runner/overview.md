@@ -11,7 +11,13 @@ A test is a small file that sends a request and checks the answer. The test runn
 
 ::: v-pre
 
-Tests are YAML or JSON files under `tests/`, of type `http`, `graphql`, `grpc`, `websocket` (or `socketio`, `mqtt`), `mcp`, `llm`, `rag` or `agent`, and the flow blocks: `delay` (a pause between the steps of a flow), `condition` (an `if:` with true and false branches), `script` (tp.* code, no request), `flow` (another test file run as one step), `log` (a message in the results), `wait` (a request polled until a condition holds), `set` (values into a variable scope) and `assert` (checks only). A file can hold one test, a `tests:` list (with `defaults:`), or a dataset template. You don't have to write them by hand: **Save as test…** saves a request as a test file, the same way from everywhere: the ⋯ at the end of a request editor's breadcrumb line (REST, SOAP, GraphQL, gRPC, WebSocket) and its tab's right-click menu, the right-click menu of a request, a saved gRPC call or a connection in **Collections**, a **History** entry, a row of the **HTTP Debugger**, an MCP tool call (MCP view) and a prompt (AI Playground). On a folder, **Create test file from folder…** writes one file with a test per request (on a collection, **Create test file from collection…**, its gRPC calls and connections included). The toast that follows has **Run now** and **Open test file**. From the terminal: `testpion test from-request "Collection/Folder/Request" [--json]` (a folder or a collection, or an item ref, work too); AI agents: `save_test` with `collection` + `request`, or any `ref`. Suites are `*.suite.yaml` files:
+- Tests are YAML or JSON files under `tests/`, of type `http`, `graphql`, `grpc`, `websocket` (or `socketio`, `mqtt`), `mcp`, `llm`, `rag` or `agent`, and the flow blocks: `delay` (a pause between the steps of a flow), `condition` (an `if:` with true and false branches), `script` (tp.* code, no request), `flow` (another test file run as one step), `log` (a message in the results), `wait` (a request polled until a condition holds), `set` (values into a variable scope) and `assert` (checks only).
+- A file can hold one test, a `tests:` list (with `defaults:`), or a dataset template.
+- You don't have to write them by hand: **Save as test…** saves a request as a test file, the same way from everywhere: the ⋯ at the end of a request editor's breadcrumb line (REST, SOAP, GraphQL, gRPC, WebSocket) and its tab's right-click menu, the right-click menu of a request, a saved gRPC call or a connection in **Collections**, a **History** entry, a row of the **HTTP Debugger**, an MCP tool call (MCP view) and a prompt (AI Playground).
+- On a folder, **Create test file from folder…** writes one file with a test per request (on a collection, **Create test file from collection…**, its gRPC calls and connections included).
+- The toast that follows has **Run now** and **Open test file**.
+- From the terminal: `testpion test from-request "Collection/Folder/Request" [--json]` (a folder or a collection, or an item ref, work too); AI agents: `save_test` with `collection` + `request`, or any `ref`.
+- Suites are `*.suite.yaml` files:
 
 ```yaml
 name: Regression
@@ -35,7 +41,9 @@ Test files open as tabs in one strip, followed by two fixed tabs:
 - **Flow** shows the active file as a canvas, and is a full visual designer: add blocks (request, GraphQL, gRPC, WebSocket, MCP, LLM, Delay, Condition, For each / Repeat, Script, Sub-flow, Log, Wait until, Set variable, Assert, Finally, Parallel group, Output) from the **Start** node, connect them, run or debug them with breakpoints, see each run in **History**, import and export Arazzo, and **Deploy** the flow to a schedule, a webhook, an MCP tool or CI. **+ ▸ New flow (designer)** starts an empty one. Every change is written to the same YAML. See [Design a flow](/test-runner/integration-testing#design-a-flow).
 - **Runs** shows the run you pick in the **Runs** list on the left, with its results.
 
-Right-click a flow's tab (or open **Run flow ▾** in the designer) for **Run with data…** (once per row of a CSV, JSON, JSONL file, SQLite database or database query; the **Runs** tab shows a live grid of rows with status, time, the failing step and the values) and **Run in several environments…** (the same in the designer: a step × environment grid with the steps and values that differ marked). Every run's results also have a **Timeline** tab: each step's bar, the waits, the **critical path**, and the down arrow to save it as one HTML file to share. From the terminal:
+- Right-click a flow's tab (or open **Run flow ▾** in the designer) for **Run with data…** (once per row of a CSV, JSON, JSONL file, SQLite database or database query; the **Runs** tab shows a live grid of rows with status, time, the failing step and the values) and **Run in several environments…** (the same in the designer: a step × environment grid with the steps and values that differ marked).
+- Every run's results also have a **Timeline** tab: each step's bar, the waits, the **critical path**, and the down arrow to save it as one HTML file to share.
+- From the terminal:
 
 ```bash
 testpion test tests/rest/signup.yaml --data datasets/users.csv -e Staging   # once per row, exit 1 when a row failed
@@ -58,9 +66,14 @@ Requests use `{{baseUrl}}` and the auth variables an import uses (`{{accessToken
 
 **Generate tests ▸ Integration flows** (in a definition's Preview, or **Export ▸ Integration flows** on a collection) writes one flow per resource the API creates, under `tests/<api>/flows/`: create it, read it back (`equals $.id`), update it, see it listed, delete it and see it gone (404), each step depending on the one before, the created id flowing between them through `extract` and `{{variables}}`. A login operation (`POST /auth/token`, `/login` …) becomes the first step and saves `{{accessToken}}`; names get a `{{$randomInt}}` so the flow runs again. `tests/<api>-integration.suite.yaml` runs them all. A collection goes through the OpenAPI document made from it, so its saved examples say what a created record looks like.
 
-The result names the environment variables the flows read (`baseUrl`, `clientId`, `clientSecret` or `username`, `password`; a parent id for nested paths). Set them, review the bodies, then `testpion run --suite <api>-integration -e <environment>`. Terminal: `testpion integration-suite specs/clinic.yaml` or `testpion integration-suite "Clinic API"`; agents: `generate_flows`. See [integration testing](/test-runner/integration-testing) for what a flow is made of.
+- The result names the environment variables the flows read (`baseUrl`, `clientId`, `clientSecret` or `username`, `password`; a parent id for nested paths).
+- Set them, review the bodies, then `testpion run --suite <api>-integration -e <environment>`.
+- Terminal: `testpion integration-suite specs/clinic.yaml` or `testpion integration-suite "Clinic API"`; agents: `generate_flows`.
+- See [integration testing](/test-runner/integration-testing) for what a flow is made of.
 
-An AsyncAPI document (kept in `specs/asyncapi/` by its import) gets realtime tests instead: per channel, its example message sent through the broker or server and read back, checked against the document with the [`asyncapi` check](/api-testing/websocket#check-messages-against-an-asyncapi-document). The suite runs with the servers environment the import made (such as *Clinic events servers*). `testpion tests-from-spec specs/asyncapi/clinic-events.yaml`.
+- An AsyncAPI document (kept in `specs/asyncapi/` by its import) gets realtime tests instead: per channel, its example message sent through the broker or server and read back, checked against the document with the [`asyncapi` check](/api-testing/websocket#check-messages-against-an-asyncapi-document).
+- The suite runs with the servers environment the import made (such as *Clinic events servers*).
+- `testpion tests-from-spec specs/asyncapi/clinic-events.yaml`.
 
 ## Execution model
 
@@ -88,7 +101,9 @@ An AsyncAPI document (kept in `specs/asyncapi/` by its import) gets realtime tes
 
 ## Reports
 
-Every run writes `junit.xml`, `report.json`, `report.html` and `report.md`, containing totals, duration, errors, latency percentiles, AI metrics, tokens, cost estimates, and per-test AI details (prompt, model, input, output, evaluator, score, explanation). The HTML report also has a pass/fail bar, a response-time histogram, the slowest tests and the checks that failed most and, for AI evaluations, the scores of each evaluator (plain SVG and HTML, so it works as a CI artifact). See [assertions](./assertions.md), [datasets](./datasets.md) and [CI/CD](./ci-cd.md).
+- Every run writes `junit.xml`, `report.json`, `report.html` and `report.md`, containing totals, duration, errors, latency percentiles, AI metrics, tokens, cost estimates, and per-test AI details (prompt, model, input, output, evaluator, score, explanation).
+- The HTML report also has a pass/fail bar, a response-time histogram, the slowest tests and the checks that failed most and, for AI evaluations, the scores of each evaluator (plain SVG and HTML, so it works as a CI artifact).
+- See [assertions](./assertions.md), [datasets](./datasets.md) and [CI/CD](./ci-cd.md).
 
 **Save a run's reports.** The down arrow at the right end of a run's results bar (in **Tests**, the collection runner and **Evaluations**) saves the **HTML report** with a click; its **▾** has **JSON results**, **JUnit XML (CI)**, **Markdown summary**, **Results (CSV)** (one row per test: status, type, file, time, attempts, checks, error) and **All reports (ZIP)**. It replaces the old **Export ▾**. A run in the **Runs** list has **Export report…** in its right-click menu, and the palette has **Export Results** for the latest run: both save the HTML report through the **Save as** dialog. Secrets are masked in every report as each result is recorded. See [Save and export results](/getting-started/save-and-export-results).
 
@@ -96,7 +111,10 @@ Every run writes `junit.xml`, `report.json`, `report.html` and `report.md`, cont
   <img src="/images/output-run-results.jpg" alt="A test run's results with the ▾ menu open: HTML report, JSON results, JUnit XML (CI), Markdown summary, Results (CSV) and All reports (ZIP)" width="1440" height="900" loading="lazy">
 </figure>
 
-In the editor, the preview of a test file shows each test's latest result and when it ran (click it to open that run). Select a result and open **History** to see the same test in the latest runs: whether it passed, its time per run (with the median) and the checks that failed, flagged as *flaky?* when the result keeps flipping, with **Why is this flaky?** ([the pattern and a fix, proven by running the test 5 times](/ai-testing/ai-features#why-is-this-flaky)); click a run to open it. `testpion history test "<name>"` and the `test_history` MCP tool give the same. With no run open, the Runs tab also lists the **flaky tests** of the workspace: those whose result changed two or more times over the latest 30 runs, or that passed only after a retry, each with its latest results as a strip (also `testpion history flaky`, which exits 1 when there are any, and the `flaky_tests` MCP tool).
+- In the editor, the preview of a test file shows each test's latest result and when it ran (click it to open that run).
+- Select a result and open **History** to see the same test in the latest runs: whether it passed, its time per run (with the median) and the checks that failed, flagged as *flaky?* when the result keeps flipping, with **Why is this flaky?** ([the pattern and a fix, proven by running the test 5 times](/ai-testing/ai-features#why-is-this-flaky)); click a run to open it.
+- `testpion history test "<name>"` and the `test_history` MCP tool give the same.
+- With no run open, the Runs tab also lists the **flaky tests** of the workspace: those whose result changed two or more times over the latest 30 runs, or that passed only after a retry, each with its latest results as a strip (also `testpion history flaky`, which exits 1 when there are any, and the `flaky_tests` MCP tool).
 
 In the app, a finished run has a **Charts** tab next to its results: how many tests fell in each response-time range (passed and failed), results per test type, the five slowest tests (click one to find it in the results), flaky tests (passed only after a retry), where the time of HTTP and GraphQL requests went (DNS lookup, TCP connect and TLS handshake on new connections, waiting for the server, download; also in the `run_breakdown` MCP tool), the checks that failed most and, for AI evaluations, how the scores of each evaluator spread from 0 to 1 with their mean.
 

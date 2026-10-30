@@ -7,7 +7,10 @@ description: "What TestPion's Postman, Insomnia, Bruno, Hoppscotch, Thunder Clie
 
 # Import fidelity
 
-An import never drops something silently. Before anything is written, the Import dialog **previews** what will be created and shows the **compatibility report**: for every item, whether it came over **fully**, **with changes**, or **not at all, and why** (unsupported auth, a template tag left as text, a script API TestPion lacks, a value you still have to enter). After the import the same report is shown with an **Undo import** button, and it is kept (the last 30 imports of a workspace): `testpion import-report <id>`, MCP `get_import_report`. How to import: [Collections](/api-testing/collections#import).
+- An import never drops something silently.
+- Before anything is written, the Import dialog **previews** what will be created and shows the **compatibility report**: for every item, whether it came over **fully**, **with changes**, or **not at all, and why** (unsupported auth, a template tag left as text, a script API TestPion lacks, a value you still have to enter).
+- After the import the same report is shown with an **Undo import** button, and it is kept (the last 30 imports of a workspace): `testpion import-report <id>`, MCP `get_import_report`.
+- How to import: [Collections](/api-testing/collections#import).
 
 <figure class="aps-screenshot">
   <img src="/images/import-notes.jpg" alt="After importing a Postman collection with an unsupported auth scheme: Imported postman, then Check after import naming the request, set to No auth with a disabled X-Imported-Auth header" width="1440" height="900" loading="lazy">
@@ -23,7 +26,11 @@ An import never drops something silently. Before anything is written, the Import
 
 ### Reading the report
 
-Items are collections, folders, requests and environments. **Fully** items came over as they were; **with changes** had something converted or marked (an auth scheme, a script line, a template tag); **not imported** counts what was left out. Findings are grouped by what they are (*Auth schemes TestPion does not have*, *Template tags left as text*, *Script APIs without an equivalent*, *Values to enter* …) and each names the item by its path and field, with the original text where there is one. **Download** writes the report as JSON or Markdown. The `notes` list of the older result (CLI `--json`, MCP) stays, one line per finding, for scripts that read it.
+- Items are collections, folders, requests and environments.
+- **Fully** items came over as they were; **with changes** had something converted or marked (an auth scheme, a script line, a template tag); **not imported** counts what was left out.
+- Findings are grouped by what they are (*Auth schemes TestPion does not have*, *Template tags left as text*, *Script APIs without an equivalent*, *Values to enter* …) and each names the item by its path and field, with the original text where there is one.
+- **Download** writes the report as JSON or Markdown.
+- The `notes` list of the older result (CLI `--json`, MCP) stays, one line per finding, for scripts that read it.
 
 ## What each importer maps
 
@@ -46,11 +53,18 @@ Folder and collection **headers** and **settings** are real fields now: the *Hea
 
 ## Auth
 
-A scheme TestPion has (basic, bearer, API key, digest, OAuth 1, OAuth 2, AWS Signature, JWT HS256/384/512, **NTLM, Hawk, Akamai EdgeGrid**) comes over as that auth. NTLM (v2) runs its three-message handshake on one connection, Hawk and EdgeGrid sign the request when it is sent. A scheme it doesn't have (ASAP, WSSE, netrc, a JWT signed with RS256 …) is **never inherited from the folder**: the request gets **No auth**, a disabled header such as `X-Imported-Auth-ASAP: needs manual setup`, and a finding. Set the auth up by hand before you run it.
+- A scheme TestPion has (basic, bearer, API key, digest, OAuth 1, OAuth 2, AWS Signature, JWT HS256/384/512, **NTLM, Hawk, Akamai EdgeGrid**) comes over as that auth.
+- NTLM (v2) runs its three-message handshake on one connection, Hawk and EdgeGrid sign the request when it is sent.
+- A scheme it doesn't have (ASAP, WSSE, netrc, a JWT signed with RS256 …) is **never inherited from the folder**: the request gets **No auth**, a disabled header such as `X-Imported-Auth-ASAP: needs manual setup`, and a finding.
+- Set the auth up by hand before you run it.
 
 ## Scripts
 
-Scripts are always converted to TestPion's `tp.*` (a runtime alias keeps `pm.*` working, so a line the converter could not rewrite still runs; *Keep pm.** is for collections you also use in Postman). The converter reads the script's syntax tree, not its text: strings, comments, regular expressions and template literals are left alone, formatting survives, and a variable of your own named `pm` (a parameter, a destructuring) is not touched while the rest of the script is converted. A script that does not parse is kept as written and reported with its line. Converting twice changes nothing. What has no equivalent gets a `// TODO(import)` line and a finding.
+- Scripts are always converted to TestPion's `tp.*` (a runtime alias keeps `pm.*` working, so a line the converter could not rewrite still runs; *Keep pm.** is for collections you also use in Postman).
+- The converter reads the script's syntax tree, not its text: strings, comments, regular expressions and template literals are left alone, formatting survives, and a variable of your own named `pm` (a parameter, a destructuring) is not touched while the rest of the script is converted.
+- A script that does not parse is kept as written and reported with its line.
+- Converting twice changes nothing.
+- What has no equivalent gets a `// TODO(import)` line and a finding.
 
 | Source | Becomes |
 |---|---|
@@ -91,9 +105,14 @@ Every mapping is a row of the converter's tables (`packages/core/src/scripts/con
 
 ## Bruno scripts and .env
 
-Bruno's `bru.*` calls are written with TestPion's API: `bru.getEnvVar` / `setEnvVar` → `tp.environment.get` / `set`, `bru.getVar` → `tp.variables.get`, `bru.setVar` → `tp.collectionVariables.set` (it lasts for the run, like Bruno's), `bru.runner.setNextRequest` → `tp.execution.setNextRequest`, `bru.getProcessEnv` → `tp.variables.get`. `req`, `res`, `test` and `expect` are written with `tp.*` as well (the sandbox still runs a leftover Bruno call through a small shim). A call TestPion lacks would fail when run: it gets a `// TODO(import)` line above it and a note. **Export ▸ Bruno collection folder** writes the scripts back with `bru.*`.
+- Bruno's `bru.*` calls are written with TestPion's API: `bru.getEnvVar` / `setEnvVar` → `tp.environment.get` / `set`, `bru.getVar` → `tp.variables.get`, `bru.setVar` → `tp.collectionVariables.set` (it lasts for the run, like Bruno's), `bru.runner.setNextRequest` → `tp.execution.setNextRequest`, `bru.getProcessEnv` → `tp.variables.get`.
+- `req`, `res`, `test` and `expect` are written with `tp.*` as well (the sandbox still runs a leftover Bruno call through a small shim).
+- A call TestPion lacks would fail when run: it gets a `// TODO(import)` line above it and a note.
+- **Export ▸ Bruno collection folder** writes the scripts back with `bru.*`.
 
-The collection's `.env` file (only `.env`; `.env.example` and the like are not read) becomes secret variables of a *Bruno .env* environment and of each imported environment: `{{process.env.API_KEY}}` is `{{API_KEY}}`, and the values go to the secret store, never into workspace files. A name used but not set is listed as *values needed*. `testpion import` has no secret store, so it lists the names under *Secret values were not saved*: set them in the app, or as `TESTPION_SECRET_*` variables for the CLI ([Secrets](/security/secrets)).
+- The collection's `.env` file (only `.env`; `.env.example` and the like are not read) becomes secret variables of a *Bruno .env* environment and of each imported environment: `{{process.env.API_KEY}}` is `{{API_KEY}}`, and the values go to the secret store, never into workspace files.
+- A name used but not set is listed as *values needed*.
+- `testpion import` has no secret store, so it lists the names under *Secret values were not saved*: set them in the app, or as `TESTPION_SECRET_*` variables for the CLI ([Secrets](/security/secrets)).
 
 ## What to check by hand
 
@@ -108,7 +127,9 @@ For a collection you cannot export as a file, give the Import dialog (or `--post
 
 ## Importing again updates
 
-Import the same source again (a Postman collection after a colleague changed it, a Bruno folder after a `git pull`) and TestPion **updates the collection it made** instead of adding a copy. It remembers, per computer, what each item was in the source (the tool's own id of the request or folder where there is one: a Postman item id, an Insomnia `_id`, a Thunder or Yaak id; else its path of names) and a fingerprint of the item as imported and as saved. The preview then shows each item as:
+- Import the same source again (a Postman collection after a colleague changed it, a Bruno folder after a `git pull`) and TestPion **updates the collection it made** instead of adding a copy.
+- It remembers, per computer, what each item was in the source (the tool's own id of the request or folder where there is one: a Postman item id, an Insomnia `_id`, a Thunder or Yaak id; else its path of names) and a fingerprint of the item as imported and as saved.
+- The preview then shows each item as:
 
 - **Replace**: the source changed it and nobody edited it here (the item keeps its id, so favourites, history and links stay; a folder keeps its other items),
 - **New**: the source has it and the collection does not,
@@ -116,19 +137,33 @@ Import the same source again (a Postman collection after a colleague changed it,
 
 For an item whose **scripts** differ, the preview also shows the lines: *Show the lines that differ* under the item opens a line diff of its pre-request and test script (what you have now, against what the source has), so Replace or Leave it is chosen on the lines and not on the whole item.
 
-Items that left the source are kept and listed. Pick another action per item in the dialog, or *Add a copy* to import it again as a second collection. An environment of the same name only gets the variables it lacks, its values are kept. The update is one undo step (the collection goes back as it was). From the command line it is the default: the preview prints the update (`testpion import <source> --preview`), `--update-decisions file.json` overrides single items by the keys the preview prints, `--new-copy` adds a copy.
+- Items that left the source are kept and listed.
+- Pick another action per item in the dialog, or *Add a copy* to import it again as a second collection.
+- An environment of the same name only gets the variables it lacks, its values are kept.
+- The update is one undo step (the collection goes back as it was).
+- From the command line it is the default: the preview prints the update (`testpion import <source> --preview`), `--update-decisions file.json` overrides single items by the keys the preview prints, `--new-copy` adds a copy.
 
 ## Simple tests as assertions
 
-A test that only checks a status, a response time, a header, a body text or a field of the JSON (`pm.test("ok", () => pm.response.to.have.status(200))`, `tp.expect(json.items).to.have.lengthOf(3)`, `to.be.a("number")`, `to.be.above(0)`, `to.have.property("id")`, `to.be.json`, `jsonSchema`, about fifteen shapes) can be an **assertion**, shown in the request's *Tests* tab and readable without running the script. The report says how many can be (*N simple tests can be lifted into assertions*); tick **Lift N simple tests into assertions** in the preview (`--lift-tests`, MCP `lift_tests`) and they move, one assertion each, keeping the test's name; the rest of the script stays. Only tests that are exactly one of these shapes move, nothing is guessed.
+- A test that only checks a status, a response time, a header, a body text or a field of the JSON (`pm.test("ok", () => pm.response.to.have.status(200))`, `tp.expect(json.items).to.have.lengthOf(3)`, `to.be.a("number")`, `to.be.above(0)`, `to.have.property("id")`, `to.be.json`, `jsonSchema`, about fifteen shapes) can be an **assertion**, shown in the request's *Tests* tab and readable without running the script.
+- The report says how many can be (*N simple tests can be lifted into assertions*); tick **Lift N simple tests into assertions** in the preview (`--lift-tests`, MCP `lift_tests`) and they move, one assertion each, keeping the test's name; the rest of the script stays.
+- Only tests that are exactly one of these shapes move, nothing is guessed.
 
 ## Links to repositories
 
-A link to a **public** GitHub or GitLab repository or folder (`https://github.com/owner/repo/tree/main/api/clinic`, `https://gitlab.com/group/project`) imports as the folder's files: a Bruno or OpenCollection collection, a Postman Git collection, a Yaak sync folder, a folder of exports. Only the two services are asked (github.com's API and raw files, gitlab.com's API), over https, with no token, no cookie and no credential, and a redirect to any other host is refused. At most 500 files that look like import files, 5 MB each and 25 MB together are read; over a limit the message says so and to link a narrower folder. Nothing in the repository is executed, symbolic links and submodules are skipped, and a path that leaves the folder is refused. A private repository answers "not found": clone it and import the folder.
+- A link to a **public** GitHub or GitLab repository or folder (`https://github.com/owner/repo/tree/main/api/clinic`, `https://gitlab.com/group/project`) imports as the folder's files: a Bruno or OpenCollection collection, a Postman Git collection, a Yaak sync folder, a folder of exports.
+- Only the two services are asked (github.com's API and raw files, gitlab.com's API), over https, with no token, no cookie and no credential, and a redirect to any other host is refused.
+- At most 500 files that look like import files, 5 MB each and 25 MB together are read; over a limit the message says so and to link a narrower folder.
+- Nothing in the repository is executed, symbolic links and submodules are skipped, and a path that leaves the folder is refused.
+- A private repository answers "not found": clone it and import the folder.
 
 ## Fix what the import left with AI
 
-The scripts that still carry a `// TODO(import)` line (a call with no `tp.*` equivalent) can be rewritten as a reviewed proposal: **Fix what the import left…** in the import report, `testpion ai run import-leftovers --item collection:<id>`, MCP `ai_run_task`. TestPion finds the marked scripts itself; the model rewrites each with `tp.*` only, one item per script with a diff. Every rewrite is checked statically (no `pm.*`, `bru.*` …, no member that does not exist), run in the sandbox against the request's saved example response (never against the real API) and refused when it throws; a script that keeps its TODO is a warning, not a pass. Nothing changes until you accept, and Undo puts the script back. Without a model set up the marked lines stay and the report lists them.
+- The scripts that still carry a `// TODO(import)` line (a call with no `tp.*` equivalent) can be rewritten as a reviewed proposal: **Fix what the import left…** in the import report, `testpion ai run import-leftovers --item collection:<id>`, MCP `ai_run_task`.
+- TestPion finds the marked scripts itself; the model rewrites each with `tp.*` only, one item per script with a diff.
+- Every rewrite is checked statically (no `pm.*`, `bru.*` …, no member that does not exist), run in the sandbox against the request's saved example response (never against the real API) and refused when it throws; a script that keeps its TODO is a warning, not a pass.
+- Nothing changes until you accept, and Undo puts the script back.
+- Without a model set up the marked lines stay and the report lists them.
 
 ## Going back out
 

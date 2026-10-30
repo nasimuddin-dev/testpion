@@ -13,6 +13,7 @@
 - **A glossary of every word** in plain language, A to Z, each with a link to learn more.
 - **Your first request** no longer needs a server: it uses the Examples workspace and a free public test site, explains the status code and the checks, and ends with what to read next.
 - **An *In short* box** under the title of 28 key pages (what it is, what you need), a *Next* list at the end of the guides, a plainer home page with a *Choose your path* table, and *Features* with a finder and its long paragraphs as short points.
+- The ten densest pages (HTTP Debugger, AI features, Integration testing, Finding your way, Privacy, Import fidelity, Export and import, the test runner, RAG, the MCP server) have their long paragraphs as short points, one sentence each: 190 very long lines became 129.
 - A test keeps the front-door pages plain (short sentences and paragraphs, an *In short* box) so they stay easy.
 
 ### RAG bots: connect faster

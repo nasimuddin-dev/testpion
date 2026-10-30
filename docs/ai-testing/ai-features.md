@@ -33,7 +33,11 @@ Three rules hold everywhere:
 | Anywhere | <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd>, **Ask AI assistant** (<kbd>Ctrl</kbd>+<kbd>K</kbd>) | A free question about what is on screen ([the assistant](/ai-testing/overview#talking-to-the-assistant)). |
 | Git, Home | **Write message**, **What to fix first** | A commit message from the changes; the items of *Needs attention* in order. |
 
-Every AI button is the same control: ✦ and its label, and beside it the **eye** — **What will be sent…**. Pointing at the button, or putting the keyboard focus on it, shows the model, whether it stays on this computer and the token estimate beside it (a screen reader is told when it appears). An AI item of a **menu** (Suggest checks with AI…, Write, Fix or Explain a script with AI, What to do about a problem) has no button to point at, so the assistant opens on **Ready to send**: the same estimate, **What will be sent…**, and **Send**. Nothing is sent before Send. **Ask…** shows the estimate under its box and waits for **Ask**, also when it was opened with a question from the search box or the palette.
+- Every AI button is the same control: ✦ and its label, and beside it the **eye** — **What will be sent…**.
+- Pointing at the button, or putting the keyboard focus on it, shows the model, whether it stays on this computer and the token estimate beside it (a screen reader is told when it appears).
+- An AI item of a **menu** (Suggest checks with AI…, Write, Fix or Explain a script with AI, What to do about a problem) has no button to point at, so the assistant opens on **Ready to send**: the same estimate, **What will be sent…**, and **Send**.
+- Nothing is sent before Send.
+- **Ask…** shows the estimate under its box and waits for **Ask**, also when it was opened with a question from the search box or the palette.
 
 ## Set up a model
 
@@ -179,7 +183,10 @@ Before a proposal is shown, its items are checked:
 | **A variable** | A variable of the run's environment the failing steps could not resolve | It must be one the steps missed; a value that looks like a secret is refused (*set it yourself*: TestPion never takes a credential from a model). |
 | **None** | Nothing: the test is right | When the API regressed: a **bug report** to copy (**Copy** on the item: the request, what was expected, the status, when it last passed and what changed — credentials masked), verified by the change since the last pass. Otherwise *what to do* (renew the token, start the server). |
 
-The model names a failing check by its result and its place in the test (`checkIndex`, as the evidence numbers them), so a check fix cannot miss its check. **For a stale expected value TestPion works out the update itself** (the value the failing response has now, or a stable form when the server makes the value up — an id, a time, a token; never for a 5xx, 401 or 403, and not when the check failed on the last passing run too): it stands in when the model's fix cannot be made (marked *TestPion: the value the API answers now*), and when the model proposed something else whose verification is not a clean pass it is offered beside it under **Safer:** (*TestPion: type $.id = "string"*; a click puts it in and checks it again). A fix that fails its verification, or cannot be made at all (*the text to change is not in "Health"*), goes back to the model with the reason and the checks it may name (up to twice), then stays unticked with the reason. What TestPion changed in the model's answer is listed under the summary (*notes*).
+- The model names a failing check by its result and its place in the test (`checkIndex`, as the evidence numbers them), so a check fix cannot miss its check.
+- **For a stale expected value TestPion works out the update itself** (the value the failing response has now, or a stable form when the server makes the value up — an id, a time, a token; never for a 5xx, 401 or 403, and not when the check failed on the last passing run too): it stands in when the model's fix cannot be made (marked *TestPion: the value the API answers now*), and when the model proposed something else whose verification is not a clean pass it is offered beside it under **Safer:** (*TestPion: type $.id = "string"*; a click puts it in and checks it again).
+- A fix that fails its verification, or cannot be made at all (*the text to change is not in "Health"*), goes back to the model with the reason and the checks it may name (up to twice), then stays unticked with the reason.
+- What TestPion changed in the model's answer is listed under the summary (*notes*).
 
 <figure class="aps-screenshot">
   <img src="/images/ai-triage-review.jpg" alt="The review of Explain and fix failures for the Veterinary API run: the cause The new patient's id is pinned, marked Test is stale, 1 failure, 80% sure, with its explanation and evidence (the id in the failing and the last passing response, the failed check with a link to the run, what changed since the last passing run); below it the proposed check change to the id the server gave this time, flagged: it would have failed on the last passing run, it follows an API change; Safer: TestPion: type $.id = string; the diff of the request's checks; Apply selected fixes" width="1440" height="900" loading="lazy">
@@ -271,13 +278,19 @@ $ testpion run-collection "Veterinary API" -e Development --folder "Get access t
 PASSED  2 passed, 0 failed, 0 errors, 0 skipped · 174 ms
 ```
 
-The suggested `--rerun-failed` runs the failed requests and, first, the earlier requests they need: here *List patients* uses the token *Get access token*'s script sets, so *Get access token* runs too, marked `[setup]`. A setup request's result is reported (its failure too) but does not count toward the rerun's totals. **Rerun the affected tests** and **Rerun failed** in the app do the same.
+- The suggested `--rerun-failed` runs the failed requests and, first, the earlier requests they need: here *List patients* uses the token *Get access token*'s script sets, so *Get access token* runs too, marked `[setup]`.
+- A setup request's result is reported (its failure too) but does not count toward the rerun's totals.
+- **Rerun the affected tests** and **Rerun failed** in the app do the same.
 
 `testpion ai triage --run <id|last>` (`last`, the default: the newest finished run with failures; a stopped run or one still going is passed by) takes `--privacy full|metadata|names`, `--hint`, `--provider` / `--model`, `--no-ai`, `--dry-run`, `--apply [--items i1,i3]` and `--json` (`{ runId, run, failures, groups, omitted, findings, ai, model, summary, proposal, usage, repairs, problems }`; `fallback` says why there is no AI answer; plus `applied` and `rerun` after `--apply`). Without a model it exits 0 with the grouping. The same task runs as `testpion ai run triage-run --item run:<id>` (that one needs a model). Agents: `ai_triage_run`, then `ai_apply_proposal`.
 
 ## Why is this flaky?
 
-A test is **flaky** when it passes and fails without a change (the Problems panel, `testpion problems` and `flaky_tests` list them: a result that flipped at least twice, or passed only after a retry). **Why is this flaky?** — on the flaky test in the Problems panel (its ⋯ or right-click), or in a result's **History** tab when it flipped — reads the test's results across runs and gathers the signals without a model: how often it passed, how often the result flipped, retries, the environments it failed in, its time when it passes and when it fails, the statuses and checks of its failures, the hours they happened, and a failing and a passing response. TestPion also computes the **signature** — how the failing responses differ from passing ones, e.g. *$.status: "done" when it passes, "running" when it fails* (the fields the failing checks assert first, then state fields such as status, phase or ready; ids, times, tokens and counters are left out unless a check asserts them) — and the pattern it points to (an intermediate state → *timing*; 429 → *rate limit*; 409 → *data collision*; changed dates → *time-dependent*; 5xx, timeouts, failures much slower than passes or failures in one environment only → *external dependency*). The model names the **pattern** — *timing*, *ordering*, *shared state*, *time-dependent* (a date, an expiry), *external dependency*, *rate limit*, *data collision* — with evidence and a confidence, and proposes a fix that makes the test stable **without hiding a failure**:
+- A test is **flaky** when it passes and fails without a change (the Problems panel, `testpion problems` and `flaky_tests` list them: a result that flipped at least twice, or passed only after a retry).
+- **Why is this flaky?** — on the flaky test in the Problems panel (its ⋯ or right-click), or in a result's **History** tab when it flipped — reads the test's results across runs and gathers the signals without a model: how often it passed, how often the result flipped, retries, the environments it failed in, its time when it passes and when it fails, the statuses and checks of its failures, the hours they happened, and a failing and a passing response.
+- TestPion also computes the **signature** — how the failing responses differ from passing ones, e.g.
+- *$.status: "done" when it passes, "running" when it fails* (the fields the failing checks assert first, then state fields such as status, phase or ready; ids, times, tokens and counters are left out unless a check asserts them) — and the pattern it points to (an intermediate state → *timing*; 429 → *rate limit*; 409 → *data collision*; changed dates → *time-dependent*; 5xx, timeouts, failures much slower than passes or failures in one environment only → *external dependency*).
+- The model names the **pattern** — *timing*, *ordering*, *shared state*, *time-dependent* (a date, an expiry), *external dependency*, *rate limit*, *data collision* — with evidence and a confidence, and proposes a fix that makes the test stable **without hiding a failure**:
 
 - a wait for an eventual result (`until:` on the step), or a timeout for a slow call;
 - a stable check (a type, a format, a generous time limit) instead of a value that changes, verified on the failing **and** the passing response;
@@ -342,14 +355,21 @@ The step now waits for the job:
 - is a response ever checked against the document (an `openapi` or `json-schema` check)
 - which documented parameters no request ever sends
 
-Then the tests. TestPion builds the deterministic ones from the document itself: the documented example with its status, the OpenAPI contract and a shallow JSON Schema (positive); a required field left out, a wrong type, a body that is not JSON, an unknown id → 404 (negative); a value exactly at and just beyond `maxLength`, `minimum` … (boundary); no credentials on a secured operation (security). Only what the gaps need is built (untick **Only what the gaps need** for everything). A configured model adds more ideas — "quantity 0 is refused", "an empty name" — as *what to change in the valid example and the status to expect*; it never writes a request or a check:
+- Then the tests.
+- TestPion builds the deterministic ones from the document itself: the documented example with its status, the OpenAPI contract and a shallow JSON Schema (positive); a required field left out, a wrong type, a body that is not JSON, an unknown id → 404 (negative); a value exactly at and just beyond `maxLength`, `minimum` … (boundary); no credentials on a secured operation (security).
+- Only what the gaps need is built (untick **Only what the gaps need** for everything).
+- A configured model adds more ideas — "quantity 0 is refused", "an empty name" — as *what to change in the valid example and the status to expect*; it never writes a request or a check:
 
 - an operation the document does not have is dropped and listed in the review's notes
 - an undocumented status becomes its class (`4xx`); a refused case cannot expect a 2xx
 - a request that should be accepted must satisfy the schema and the required parameters; one that should be refused must break something (else it is flagged: it needs a rule the document does not state)
 - DELETE operations are left out unless you ask
 
-Every test is validated against the document before the review (the *spec-tests* badge), and the proposal says the coverage before → after (operations called, documented statuses asserted, open gaps), computed from the same gap report with the new tests added. Each file also runs **twice on a mock built from the document** (the *spec-stable* badge, offline): the mock answers 401 without credentials, the documented 4xx for a body that breaks the schema, 404 for an id that does not exist and the example otherwise. A test that gives another result on the second run is called unstable, and one that cannot pass on the mock needs a rule the document does not state; both are named in the badge as warnings, never hidden. **Fill coverage gaps with AI** in *API coverage* and *Generate tests from this spec…* in the API definition's *Generate tests* menu open the same dialog. Files go to `tests/<api>/<tag>-gaps.yaml` (a free name, never over a file), each test tagged `spec-gap` and its category.
+- Every test is validated against the document before the review (the *spec-tests* badge), and the proposal says the coverage before → after (operations called, documented statuses asserted, open gaps), computed from the same gap report with the new tests added.
+- Each file also runs **twice on a mock built from the document** (the *spec-stable* badge, offline): the mock answers 401 without credentials, the documented 4xx for a body that breaks the schema, 404 for an id that does not exist and the example otherwise.
+- A test that gives another result on the second run is called unstable, and one that cannot pass on the mock needs a rule the document does not state; both are named in the badge as warnings, never hidden.
+- **Fill coverage gaps with AI** in *API coverage* and *Generate tests from this spec…* in the API definition's *Generate tests* menu open the same dialog.
+- Files go to `tests/<api>/<tag>-gaps.yaml` (a free name, never over a file), each test tagged `spec-gap` and its category.
 
 ```bash
 testpion generate gaps --spec specs/veterinary-api.yaml                    # the gap report, no AI
@@ -373,7 +393,10 @@ A collection from Postman, curl, a HAR, Insomnia or Bruno arrives with generic n
 | Tracking, static and preflight requests, duplicates → dropped | TestPion; the model's further drops are unticked | listed in the change |
 | A flow wiring the requests (optional) | the model | linted, variables checked |
 
-The verifier proves the safety claim for every change: the result is a valid collection, and **every request that remains sends exactly what it sent before** once the collection's variables are resolved — the only differences allowed are the substitutions themselves. Apply is one step per accepted change set and **Undo** puts the collection back. Scripts the tidy writes are `tp.*`, never `pm.*`. A HAR import keeps each recorded small JSON or text response as a saved example, which is what lets a chain be confirmed.
+- The verifier proves the safety claim for every change: the result is a valid collection, and **every request that remains sends exactly what it sent before** once the collection's variables are resolved — the only differences allowed are the substitutions themselves.
+- Apply is one step per accepted change set and **Undo** puts the collection back.
+- Scripts the tidy writes are `tp.*`, never `pm.*`.
+- A HAR import keeps each recorded small JSON or text response as a saved example, which is what lets a chain be confirmed.
 
 ```bash
 testpion tidy "HAR import" --ai --source har --dry-run     # what would be sent
@@ -395,9 +418,13 @@ MCP: `tidy_import`. Without a model set up both features return TestPion's own p
 | **Mass assignment** (API3) | a create or update body with privileged fields added (`role: admin`, `isAdmin: true`, `balance` …) | none of them comes back in the response |
 | **Admin functions** (API5) | an admin path or delete called by the lower-privilege user | 401 or 403 |
 
-You name the variables that hold the two users' credentials (`owner=tokenA,other=tokenB`; names only, never the credentials). Safe by design: only GET, HEAD and OPTIONS requests are probed unless you include write (`--include-write`) or delete probes; the privileged field *names* come from a catalogue (the model picks names, never values); every step is paced (`pace: 250ms`, `--rate`) and at most 40 probes are written; a production environment is refused unless `--allow-production`. A hand-edited file that adds a request, a destructive verb or a literal token fails its verification.
+- You name the variables that hold the two users' credentials (`owner=tokenA,other=tokenB`; names only, never the credentials).
+- Safe by design: only GET, HEAD and OPTIONS requests are probed unless you include write (`--include-write`) or delete probes; the privileged field *names* come from a catalogue (the model picks names, never values); every step is paced (`pace: 250ms`, `--rate`) and at most 40 probes are written; a production environment is refused unless `--allow-production`.
+- A hand-edited file that adds a request, a destructive verb or a literal token fails its verification.
 
-Running it (`testpion security run`, **Run now** after accepting, MCP `security_tests_run`) goes one step at a time and gives each step a verdict: **finding** (the API accepted what it must refuse), **pass**, or **inconclusive** (the owner's setup request failed, so nothing was proven). Findings come first, with the checks that failed. **Authorised testing only**: run it against an environment you own, never production.
+- Running it (`testpion security run`, **Run now** after accepting, MCP `security_tests_run`) goes one step at a time and gives each step a verdict: **finding** (the API accepted what it must refuse), **pass**, or **inconclusive** (the owner's setup request failed, so nothing was proven).
+- Findings come first, with the checks that failed.
+- **Authorised testing only**: run it against an environment you own, never production.
 
 ```bash
 testpion security generate --collection "Veterinary API" --identities owner=tokenA,other=tokenB -e staging
@@ -414,7 +441,10 @@ With a model, each finding is explained — who is right (the document is outdat
 - **A spec patch** TestPion makes from what was observed (add the property with its observed type, allow null, drop a required entry, add an enum value, document a status). The model does not write it. YAML keeps its comments and order; JSON is re-written.
 - **A contract check** (`type: openapi`) pinned to the saved request, shown to fail on the response that drifted.
 
-Every patch is **verified against the same traffic**: the drift must be gone, no other drift may appear, and the document must lint no worse. A field the API answers with two types is never "blessed" (it is a bug to fix). Applying runs the patch on the file as it is now, so patches compose and **Undo** restores the file. Without a model the additions (a field, a status, an enum value) are offered ticked and the rest is listed.
+- Every patch is **verified against the same traffic**: the drift must be gone, no other drift may appear, and the document must lint no worse.
+- A field the API answers with two types is never "blessed" (it is a bug to fix).
+- Applying runs the patch on the file as it is now, so patches compose and **Undo** restores the file.
+- Without a model the additions (a field, a status, an enum value) are offered ticked and the rest is listed.
 
 ```bash
 testpion openapi-drift --spec specs/veterinary-api.yaml --limit 200            # the report, no AI
@@ -452,7 +482,9 @@ MCP: `write_script`.
 3. TestPion **runs** it itself, read-only, over the stores it already keeps (the same query engine as the filter chips, `testpion search --query-json` and the MCP tools).
 4. The answer shows **how the question was understood**: the query in plain words, the model's assumptions (*"slow" taken as 1 s or more*) and the query as editable filters. Edit them and **Search** again — no model is called.
 
-No model set up, a cap that refused the call, a network error or a query that stays invalid: the same box searches the words as typed and says why, so it never dead-ends. **What will be sent…** (`--dry-run`) shows the exact messages; the call is counted in the usage ledger like every AI task. See [Ask: search in your own words](/getting-started/finding-your-way#ask) for the fields.
+- No model set up, a cap that refused the call, a network error or a query that stays invalid: the same box searches the words as typed and says why, so it never dead-ends.
+- **What will be sent…** (`--dry-run`) shows the exact messages; the call is counted in the usage ledger like every AI task.
+- See [Ask: search in your own words](/getting-started/finding-your-way#ask) for the fields.
 
 ```bash
 testpion search --ask "failed payment calls last week over 2 s"          # how it was understood, then the hits
@@ -513,7 +545,9 @@ What will be sent — Explain an error
 
 ### For AI agents (MCP)
 
-Agents are models themselves, so the deterministic tools come first. For clients that want TestPion's configured model: `ai_list_tasks`, `ai_run_task` (an answer and a proposal with an id; `dryRun: true` shows what would be sent), `ai_proposals`, `ai_apply_proposal` (a separate call that asks the user to confirm; `dryRun: true` lists what would be applied), `ai_undo_proposal`, `ai_usage`, `flow_generate` (an integration flow from a collection or folder, proposed; `noAi: true` for the draft without a model), `ai_triage_run` (a failed run's causes and verified fixes; `noAi: true` for the grouping alone), `ai_analyze_flaky` and `ai_attempt_fix` (it asks the user to confirm). See [Use from AI agents](/ai-testing/mcp-server#tools).
+- Agents are models themselves, so the deterministic tools come first.
+- For clients that want TestPion's configured model: `ai_list_tasks`, `ai_run_task` (an answer and a proposal with an id; `dryRun: true` shows what would be sent), `ai_proposals`, `ai_apply_proposal` (a separate call that asks the user to confirm; `dryRun: true` lists what would be applied), `ai_undo_proposal`, `ai_usage`, `flow_generate` (an integration flow from a collection or folder, proposed; `noAi: true` for the draft without a model), `ai_triage_run` (a failed run's causes and verified fixes; `noAi: true` for the grouping alone), `ai_analyze_flaky` and `ai_attempt_fix` (it asks the user to confirm).
+- See [Use from AI agents](/ai-testing/mcp-server#tools).
 
 ### In CI
 

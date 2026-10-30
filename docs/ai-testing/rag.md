@@ -39,7 +39,10 @@ with the retrieved document closest to the reference answer.
 
 ## Connect a RAG system {#connect}
 
-After you probe the bot, TestPion tells you what its answer looks like: *Looks like LlamaIndex query endpoint · reads "The clinic opens at 8am." and 3 documents* with **Use this mapping**. It knows the answers of OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Nothing is sent to a model: the mapping is tried on your response. `testpion rag probe` prints the same under *Looks like*.
+- After you probe the bot, TestPion tells you what its answer looks like: *Looks like LlamaIndex query endpoint · reads "The clinic opens at 8am." and 3 documents* with **Use this mapping**.
+- It knows the answers of OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources.
+- Nothing is sent to a model: the mapping is tried on your response.
+- `testpion rag probe` prints the same under *Looks like*.
 
 A **RAG target** is one request to the system under test and a map of where its answer and retrieved documents are in the
 response. It works over the protocols TestPion already speaks:

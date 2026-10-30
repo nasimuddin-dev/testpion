@@ -288,7 +288,9 @@ Every tool has a **title** and **annotations** (`readOnlyHint`, `destructiveHint
 
 ## Your flows as tools
 
-A test file or suite can be a tool of its own, the way Postman deploys a flow as an MCP server: add an `expose:` block and the server registers a tool under that name. Its `inputs` are variables the flow reads as `{{name}}`; each becomes an argument of the tool, with its description and default (an input without a default is required). In the app, a file's menu in the Tests view has **Expose as MCP tool…** (a dialog that writes the block; *Stop exposing* removes it), and Settings ▸ AI agents (MCP) lists the exposed flows.
+- A test file or suite can be a tool of its own, the way Postman deploys a flow as an MCP server: add an `expose:` block and the server registers a tool under that name.
+- Its `inputs` are variables the flow reads as `{{name}}`; each becomes an argument of the tool, with its description and default (an input without a default is required).
+- In the app, a file's menu in the Tests view has **Expose as MCP tool…** (a dialog that writes the block; *Stop exposing* removes it), and Settings ▸ AI agents (MCP) lists the exposed flows.
 
 ```yaml
 name: Order round trip
@@ -329,7 +331,10 @@ An agent then calls `order_flow` with `{ "customerId": "42", "environment": "Sta
 }
 ```
 
-A step that failed or errored lists its `error` or `failedChecks`, and the result is marked `isError` so the agent treats it as a failure. Values the flow extracted come back in `extracted` (a sensitive name such as `token` is masked). `list_flows` lists the exposed flows and `testpion flows --json` prints them in a terminal; a flow added or changed while an agent is connected appears after it reconnects, since the tools are read when the server starts. `--read-only` hides them with the other tools that send requests.
+- A step that failed or errored lists its `error` or `failedChecks`, and the result is marked `isError` so the agent treats it as a failure.
+- Values the flow extracted come back in `extracted` (a sensitive name such as `token` is masked).
+- `list_flows` lists the exposed flows and `testpion flows --json` prints them in a terminal; a flow added or changed while an agent is connected appears after it reconnects, since the tools are read when the server starts.
+- `--read-only` hides them with the other tools that send requests.
 
 ## Resources
 
@@ -370,7 +375,10 @@ Coding agents (Claude Code, Codex, Cursor, Copilot) read `AGENTS.md` first when 
 - the MCP server command and client config, how to add a request, a test and a flow, the secrets rules (never commit or write a secret: secret values live in the app's secret store or `TESTPION_SECRET_<NAME>`) and the production rules (`--allow-production`);
 - the check types and the test file format.
 
-Tick **Also CLAUDE.md** (a one-line pointer: `See @AGENTS.md …`) and **Also a Cursor rule** (`.cursor/rules/testpion.mdc`) for those agents; `--targets agents,claude,cursor` on the command line. Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is TestPion's: what you wrote around it stays, and writing it again refreshes only that part (the result says per file: created, updated, unchanged or skipped and why). A file with broken markers is left alone unless `--force` (the tool: `force` with `confirm: true`); `--dry-run` (the tool: `dryRun`) reports what would be written and writes nothing. No variable value and no path of your machine is written, so the files can be committed with the workspace.
+- Tick **Also CLAUDE.md** (a one-line pointer: `See @AGENTS.md …`) and **Also a Cursor rule** (`.cursor/rules/testpion.mdc`) for those agents; `--targets agents,claude,cursor` on the command line.
+- Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is TestPion's: what you wrote around it stays, and writing it again refreshes only that part (the result says per file: created, updated, unchanged or skipped and why).
+- A file with broken markers is left alone unless `--force` (the tool: `force` with `confirm: true`); `--dry-run` (the tool: `dryRun`) reports what would be written and writes nothing.
+- No variable value and no path of your machine is written, so the files can be committed with the workspace.
 
 ## What agents can and can't see
 

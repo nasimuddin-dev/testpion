@@ -11,7 +11,9 @@ See the network traffic of other programs (a browser, a phone app) in TestPion. 
 
 ::: v-pre
 
-The **HTTP Debugger** (**Debugger** under the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*; right-click a rail item ▸ **Show on the rail** to keep it there) shows the traffic of *other* programs. TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing. A row opens whole: the request and response side by side, and a timing breakdown.
+- The **HTTP Debugger** (**Debugger** under the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Debugger*; right-click a rail item ▸ **Show on the rail** to keep it there) shows the traffic of *other* programs.
+- TestPion runs a local proxy; a program pointed at it sends every request through, and each exchange is listed as it happens with the program that sent it, the status, the size and the timing.
+- A row opens whole: the request and response side by side, and a timing breakdown.
 
 ## The workbench
 
@@ -79,11 +81,21 @@ Plain HTTP is captured whole. HTTPS shows as a **tunnel** by host, with bytes in
 
 Close and reopen your browser after the root is installed: a browser reads the trust store when it starts. **HTTPS ▸ Stop decrypting HTTPS** turns it off.
 
-Programs that trust the root are captured like plain HTTP, with a lock on the row; a program that does not trust it is listed as a tunnel that failed, with the reason, and its **Error** tab says what to do. **Keep this host encrypted** (right-click the row, or the button above the details) stops decrypting that host for programs that pin their certificate (OneDrive, banking, many apps); it appears while decryption is on or when the row failed on the certificate, and **HTTPS ▸ Keep hosts encrypted…** edits the list. **HTTPS ▸ Root certificate…** shows the fingerprint, trusts the root for the current user in one click (Windows, macOS, Chrome on Linux; Firefox imports it in its own settings), removes it, exports it for a phone or another computer, or regenerates it. TestPion trusts a root by its fingerprint, so an older root of the same name does not count and is replaced when you install. A root is valid for **one year** and has a path length of 0 (it can sign host certificates, nothing else); TestPion tells you 30 days before it ends and makes a new one when it does, which you then trust again (on a phone, install it again). A root made by an earlier version is valid for ten years: it keeps working so nothing you trusted breaks, and the dialog suggests **Regenerate certificate**, after which you remove the old root from the stores that had it and trust the new one. Node reads `NODE_EXTRA_CA_CERTS`, Python `REQUESTS_CA_BUNDLE`, curl `--cacert`. Remove the root from the trust store when you are done.
+- Programs that trust the root are captured like plain HTTP, with a lock on the row; a program that does not trust it is listed as a tunnel that failed, with the reason, and its **Error** tab says what to do.
+- **Keep this host encrypted** (right-click the row, or the button above the details) stops decrypting that host for programs that pin their certificate (OneDrive, banking, many apps); it appears while decryption is on or when the row failed on the certificate, and **HTTPS ▸ Keep hosts encrypted…** edits the list.
+- **HTTPS ▸ Root certificate…** shows the fingerprint, trusts the root for the current user in one click (Windows, macOS, Chrome on Linux; Firefox imports it in its own settings), removes it, exports it for a phone or another computer, or regenerates it.
+- TestPion trusts a root by its fingerprint, so an older root of the same name does not count and is replaced when you install.
+- A root is valid for **one year** and has a path length of 0 (it can sign host certificates, nothing else); TestPion tells you 30 days before it ends and makes a new one when it does, which you then trust again (on a phone, install it again).
+- A root made by an earlier version is valid for ten years: it keeps working so nothing you trusted breaks, and the dialog suggests **Regenerate certificate**, after which you remove the old root from the stores that had it and trust the new one.
+- Node reads `NODE_EXTRA_CA_CERTS`, Python `REQUESTS_CA_BUNDLE`, curl `--cacert`.
+- Remove the root from the trust store when you are done.
 
 ### HTTP/2 and gRPC
 
-Programs that speak HTTP/2 inside a decrypted tunnel are read as HTTP/2: each request is a stream, marked **h2** on its row. **gRPC** calls are captured whole even without TLS (grpc-js and most gRPC clients send plaintext gRPC through a proxy as HTTP/2 inside a CONNECT, and the Debugger reads it): the row says **gRPC**, a failed call shows its gRPC status (NOT_FOUND, UNAVAILABLE …), and the **gRPC** tab lists the messages sent and received as JSON, with the status and message from the trailers. Messages are decoded with the `.proto` files (or reflection) of the workspace's gRPC requests when one describes the method, else field by field. The **Connections** tab groups requests by the connection they came on: an HTTP/2 connection with its streams, an HTTP/1.1 connection with its requests.
+- Programs that speak HTTP/2 inside a decrypted tunnel are read as HTTP/2: each request is a stream, marked **h2** on its row.
+- **gRPC** calls are captured whole even without TLS (grpc-js and most gRPC clients send plaintext gRPC through a proxy as HTTP/2 inside a CONNECT, and the Debugger reads it): the row says **gRPC**, a failed call shows its gRPC status (NOT_FOUND, UNAVAILABLE …), and the **gRPC** tab lists the messages sent and received as JSON, with the status and message from the trailers.
+- Messages are decoded with the `.proto` files (or reflection) of the workspace's gRPC requests when one describes the method, else field by field.
+- The **Connections** tab groups requests by the connection they came on: an HTTP/2 connection with its streams, an HTTP/1.1 connection with its requests.
 
 A tunnel that carries plain HTTP/1.1 is read too. A program whose server speaks first (SMTP, a database) gets an opaque tunnel.
 
@@ -107,7 +119,12 @@ The panes' tabs are the inspectors: **Header**, **Content**, **JSON** (as a tree
 
 **Right-click a row** (or select it and press <kbd>Shift</kbd>+<kbd>F10</kbd> or the Menu key) for the same and more, in groups: **Copy** (URL, as cURL, request or response headers), **Save content** (the request or response body to a file), **Bookmark**, **Open as request**, **Resend**, **See inside HTTPS…** or **Keep this host encrypted** (on a tunnel row), **Compare with…**, **Create flow from selection…**, **Save to collection…**, **Create RAG dataset from selection…** (with several rows selected the lines say *Create flow from 3 selected…* and so on), **Save as test…**; then the rules made from the row's values: **Capture only**, **Filter out** and **Highlight** with *Application = node.exe*, *URL starts with …*, *Domain = …*, *Method = POST*, *IP address = …* (under **Filter out** the lines read *Domain != …*, *URL does not start with …*, because that is what the click does to the list), or a new rule to fill in; then **Change this traffic** (**Auto-reply** ▸ *Reply with this response from now on*, **Modify headers…**, **Redirect connections…**), the **HTTP/2 connection tree** and **Delete** (the selected rows). To clear the whole session use **Clear** at the right of the filter bar, **Session ▸ Clear the session** or <kbd>Ctrl</kbd>+<kbd>E</kbd>: they are one action.
 
-One click on **Capture only** or **Filter out** does two things: it adds a rule and applies it at once to the rows already captured, as a **chip** beside the filters (*Domain = x* for Capture only, *Domain != x* for Filter out). Click a chip to show those rows again: the chip goes, **the rule stays** in the Rules list (the chip says so), so new traffic is still filtered; remove the rule there. Several **Capture only** chips together keep a row that matches any of them, as the rules do; each **Filter out** chip hides what it matches. Chips are not saved in filter presets (the rules are). The rule is named from what it matches: *Filter out Domain = x*. Every rule is one you make: TestPion has no built-in list of programs to hide.
+- One click on **Capture only** or **Filter out** does two things: it adds a rule and applies it at once to the rows already captured, as a **chip** beside the filters (*Domain = x* for Capture only, *Domain != x* for Filter out).
+- Click a chip to show those rows again: the chip goes, **the rule stays** in the Rules list (the chip says so), so new traffic is still filtered; remove the rule there.
+- Several **Capture only** chips together keep a row that matches any of them, as the rules do; each **Filter out** chip hides what it matches.
+- Chips are not saved in filter presets (the rules are).
+- The rule is named from what it matches: *Filter out Domain = x*.
+- Every rule is one you make: TestPion has no built-in list of programs to hide.
 
 **Statistics** show the session: requests over time, the status mix, by host, content type and program, the largest and the slowest exchanges.
 
@@ -119,7 +136,15 @@ A long capture stays quick: the session keeps the last 5,000 exchanges, the list
 
 ### Sessions
 
-The **Session** menu keeps captures: **Save session…** (also a button at the right of the filter bar) writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu (**Open** *name*) in a tab of its own beside the **Live capture** tab, which keeps capturing meanwhile: the grid, filters, Create flow and Save to collection work on the session on screen, and **Add to the live capture** in its bar copies its exchanges in. Session tabs work like the other tabs of the app (a preview tab first, kept per workspace); the Live capture tab can't be closed. **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves the session on screen anywhere, through the **Save as** dialog. The same session is behind the **down arrow** at the right end of the grid's bar: HAR with a click, JSON (the exchanges) or CSV (one row per exchange: time, method, URL, status, duration, size, type) from its **▾** ([Save and export results](/getting-started/save-and-export-results)). Either way the file is sanitized, with the **Redacted** mark: secrets are masked as the HAR is built, so there is no **Include secrets…**. While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute. **Clear the session** (<kbd>Ctrl</kbd>+<kbd>E</kbd>; **Clear** in the filter bar) forgets it. Every **Save session…**, **Save to collection…** and **Create flow from selection…** also adds a **capture session** to History (*Kind ▸ Capture sessions*): how many exchanges, the hosts, through the proxy or the reverse proxy, and what they became; **Open** there opens it again (`testpion history list --kind capture --json`, MCP `history_list`). A session keeps about 5,000 exchanges (the oldest go in small blocks) and 200 MB of bodies: past that, the oldest exchanges lose their bodies first (their headers, sizes and timing stay, and the panes say so).
+- The **Session** menu keeps captures: **Save session…** (also a button at the right of the filter bar) writes the session as a HAR file in the workspace's `debugger/` folder (which `.gitignore` keeps out of git); a saved session opens from the same menu (**Open** *name*) in a tab of its own beside the **Live capture** tab, which keeps capturing meanwhile: the grid, filters, Create flow and Save to collection work on the session on screen, and **Add to the live capture** in its bar copies its exchanges in.
+- Session tabs work like the other tabs of the app (a preview tab first, kept per workspace); the Live capture tab can't be closed.
+- **Import a HAR file…** opens a file from any tool (a browser's DevTools, Fiddler, Charles), and **Import a Fiddler session (.saz)…** opens Fiddler's own archives; **Export as HAR…** saves the session on screen anywhere, through the **Save as** dialog.
+- The same session is behind the **down arrow** at the right end of the grid's bar: HAR with a click, JSON (the exchanges) or CSV (one row per exchange: time, method, URL, status, duration, size, type) from its **▾** ([Save and export results](/getting-started/save-and-export-results)).
+- Either way the file is sanitized, with the **Redacted** mark: secrets are masked as the HAR is built, so there is no **Include secrets…**.
+- While capturing, **AutoSave** writes the live session to `debugger/autosave.har` every minute, so a crash loses at most a minute.
+- **Clear the session** (<kbd>Ctrl</kbd>+<kbd>E</kbd>; **Clear** in the filter bar) forgets it.
+- Every **Save session…**, **Save to collection…** and **Create flow from selection…** also adds a **capture session** to History (*Kind ▸ Capture sessions*): how many exchanges, the hosts, through the proxy or the reverse proxy, and what they became; **Open** there opens it again (`testpion history list --kind capture --json`, MCP `history_list`).
+- A session keeps about 5,000 exchanges (the oldest go in small blocks) and 200 MB of bodies: past that, the oldest exchanges lose their bodies first (their headers, sizes and timing stay, and the panes say so).
 
 **Machine safety.** While the system proxy is TestPion's, the setting it replaced is kept in a private file; if TestPion is killed or crashes, the next start puts the old setting back (when it still points at TestPion and nothing is listening there), and quitting restores it before anything else. The AutoSave is not in the workspace (it can hold what every program on the computer sent): it lives in the app's data folder, tokens in it are masked by their shape (Authorization, Cookie, JWTs, `access_token`), and **Session ▸ Open ▸ autosave** still opens it. A saved session keeps your own masking choice.
 
@@ -150,7 +175,9 @@ The tabs at the bottom of Request details and Response details add a view when t
 | **SignalR**, **Socket.IO** | text bodies in those framings | One row per message: kind, hub method or event name, data. |
 | **Syntax** | CSS, JavaScript, SQL, shell | The text with colours. |
 
-Binary protocols are decoded on the computer that captured, and what is read out is masked like any body (a `token` inside a MessagePack map shows as `[REDACTED]`). Decoders are bounded: input over 1 MB is not decoded, nesting past 32 levels or 20,000 values stops the read with a note. A body larger than the capture keeps, or one let go to save memory, says so in the tab instead of showing nothing.
+- Binary protocols are decoded on the computer that captured, and what is read out is masked like any body (a `token` inside a MessagePack map shows as `[REDACTED]`).
+- Decoders are bounded: input over 1 MB is not decoded, nesting past 32 levels or 20,000 values stops the read with a note.
+- A body larger than the capture keeps, or one let go to save memory, says so in the tab instead of showing nothing.
 
 An image goes into a saved session (the HAR keeps it as base64); MessagePack and Protobuf bodies do not, because a mask reads text and a secret inside bytes would go unseen. The TLS details are saved with the session.
 
@@ -173,7 +200,9 @@ When the program you capture talks to a language model, the **AI call** tab read
 - **A prompt-cache hint**: how much of the input came from the cache, how much was written to it, or, for a long prompt that cached nothing, a pointer to mark the stable start (`cache_control` on Anthropic).
 - **MCP**: JSON-RPC bodies of an MCP server over HTTP list each `initialize` (the server's name and version), `tools/list` (the tool names), `tools/call`, `resources/read` and `prompts/get` with the arguments and the result or error, whether the reply came as JSON or as an event stream.
 
-API keys and tokens never show: anything shaped like `sk-…`, `AIza…`, a bearer credential, a JWT or a cloud key is replaced, and an argument named like a secret (`api_key`, `token`, `password`…) shows as `***`, in a prompt, a tool argument or a tool result. The reader is tolerant: a field that is missing is left out, and a body that is not what its address says gives a note, not an error. Providers change their formats; the readers are small adapters in `packages/shared/src/ai-calls.ts`.
+- API keys and tokens never show: anything shaped like `sk-…`, `AIza…`, a bearer credential, a JWT or a cloud key is replaced, and an argument named like a secret (`api_key`, `token`, `password`…) shows as `***`, in a prompt, a tool argument or a tool result.
+- The reader is tolerant: a field that is missing is left out, and a body that is not what its address says gives a note, not an error.
+- Providers change their formats; the readers are small adapters in `packages/shared/src/ai-calls.ts`.
 
 ## Rules
 
@@ -190,9 +219,15 @@ The **Rules** tab is what the proxy does to matching traffic, in the order liste
 - **frame** changes the frames of a WebSocket connection (see below);
 - **breakpoint** pauses the request (before the server) or the response (before the program) in a dialog where you change the method, URL, status, headers or body, then **Continue**, or **Abort**. A held exchange goes on by itself after two minutes.
 
-Hosts and URLs match by glob (`*.example.com`, `*/orders/*`) or by a /regular expression/; methods and the program's name narrow it. The first matching reply, redirect or breakpoint wins; header edits add up. **Presets** add the usual ones in one click (a header, CORS, no caching, a slow network, offline, a canned 200, a redirect to localhost, a breakpoint), filled in for the selected exchange's host; a row's **Rule** menu does the same from the traffic, including **Reply with this response from now on**. **What would happen to a URL** tells which rules act on it. The bar above the traffic says how many rules are active and when an exchange is held at a breakpoint.
+- Hosts and URLs match by glob (`*.example.com`, `*/orders/*`) or by a /regular expression/; methods and the program's name narrow it.
+- The first matching reply, redirect or breakpoint wins; header edits add up.
+- **Presets** add the usual ones in one click (a header, CORS, no caching, a slow network, offline, a canned 200, a redirect to localhost, a breakpoint), filled in for the selected exchange's host; a row's **Rule** menu does the same from the traffic, including **Reply with this response from now on**.
+- **What would happen to a URL** tells which rules act on it.
+- The bar above the traffic says how many rules are active and when an exchange is held at a breakpoint.
 
-Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as one; the profiles are saved in the workspace's `debugger/rules.json`, committed with it, so a team shares them. The **Presets** menu next to the filters saves and recalls filter presets (the text, host, method, status and Bookmarked; not the chips). **Compare** on an exchange, then a click on another, shows the two side by side: status, headers, body.
+- Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as one; the profiles are saved in the workspace's `debugger/rules.json`, committed with it, so a team shares them.
+- The **Presets** menu next to the filters saves and recalls filter presets (the text, host, method, status and Bookmarked; not the chips).
+- **Compare** on an exchange, then a click on another, shows the two side by side: status, headers, body.
 
 ### Network speed
 
@@ -200,7 +235,11 @@ Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as
 
 ### WebSocket frame rules
 
-A **frame** rule (Matches picks the connection by host and URL) drops, changes, pauses or holds back the frames of a WebSocket, sent by the program, received from the server, or both, optionally only when the text has a word or matches a /pattern/. *Pause for editing* shows each frame in the breakpoint panel: change its text and continue, or abort to drop it. The Frames list marks the frames a rule dropped, changed or paused. Only whole text frames are changed (a message split into fragments, a binary frame and ping/pong pass as they are), and the server is asked not to compress the frames while a frame rule is on. Terminal: `testpion debugger rule --add '{"kind":"frame","match":{"host":"chat.test"},"frame":{"direction":"received","action":"replace","find":"secret","replace":"***"}}'`.
+- A **frame** rule (Matches picks the connection by host and URL) drops, changes, pauses or holds back the frames of a WebSocket, sent by the program, received from the server, or both, optionally only when the text has a word or matches a /pattern/.
+- *Pause for editing* shows each frame in the breakpoint panel: change its text and continue, or abort to drop it.
+- The Frames list marks the frames a rule dropped, changed or paused.
+- Only whole text frames are changed (a message split into fragments, a binary frame and ping/pong pass as they are), and the server is asked not to compress the frames while a frame rule is on.
+- Terminal: `testpion debugger rule --add '{"kind":"frame","match":{"host":"chat.test"},"frame":{"direction":"received","action":"replace","find":"secret","replace":"***"}}'`.
 
 ### Connections: gateway, certificates
 
@@ -210,9 +249,15 @@ A **frame** rule (Matches picks the connection by host and URL) drops, changes, 
 - **Extra certificate authorities.** A corporate network often re-signs HTTPS with its own root. A server whose certificate chains to one of the PEM files you add is trusted, besides the usual authorities.
 - **Client certificates.** For servers that ask who you are (mutual TLS): the servers it is for (`mtls.corp.example`, `*.corp.example`), the certificate file and the key file.
 
-The proxy password and a key's passphrase are kept in the secret store (never in a settings file, and masked in logs); a key stays in the file you keep it in, only its path is saved. The settings are saved for this computer and apply to the running proxy at once. A device on the network that uses the proxy cannot reach this computer's own addresses through the gateway. HTTP/2 without TLS cannot go through a gateway. A setting that cannot work (a certificate file that is gone) stops capturing from starting and says which.
+- The proxy password and a key's passphrase are kept in the secret store (never in a settings file, and masked in logs); a key stays in the file you keep it in, only its path is saved.
+- The settings are saved for this computer and apply to the running proxy at once.
+- A device on the network that uses the proxy cannot reach this computer's own addresses through the gateway.
+- HTTP/2 without TLS cannot go through a gateway.
+- A setting that cannot work (a certificate file that is gone) stops capturing from starting and says which.
 
-Terminal: `testpion debugger capture --upstream http://proxy:3128 --upstream-user ann --no-upstream-for ".corp.example, <local>" --ca-file corp-root.pem --client-cert "mtls.corp.example=client.pem:client.key"` (the password comes from `TESTPION_UPSTREAM_PASSWORD`, the key passphrase from `TESTPION_CLIENT_KEY_PASSPHRASE`; `--upstream-system` follows the environment). `testpion debugger gateway --upstream … --url https://example.com/` tests a gateway. Agents: `debugger_capture` `action: start` with `upstream`, `no_upstream_for`, `upstream_user`, `upstream_password_secret` (the *name* of a secret), `ca_files` and `client_certs`; it asks the user first, since the traffic then leaves through that gateway.
+- Terminal: `testpion debugger capture --upstream http://proxy:3128 --upstream-user ann --no-upstream-for ".corp.example, <local>" --ca-file corp-root.pem --client-cert "mtls.corp.example=client.pem:client.key"` (the password comes from `TESTPION_UPSTREAM_PASSWORD`, the key passphrase from `TESTPION_CLIENT_KEY_PASSPHRASE`; `--upstream-system` follows the environment).
+- `testpion debugger gateway --upstream … --url https://example.com/` tests a gateway.
+- Agents: `debugger_capture` `action: start` with `upstream`, `no_upstream_for`, `upstream_user`, `upstream_password_secret` (the *name* of a secret), `ca_files` and `client_certs`; it asks the user first, since the traffic then leaves through that gateway.
 
 ### Start a program through the proxy
 
@@ -253,7 +298,9 @@ From the terminal and for agents: `testpion debugger script test <script.js> <se
 
 ## Record a flow
 
-Select rows and pick **Create flow from selection…** (right-click, or the toolbar's **Flow** menu), or **Flow ▸ Record a flow…** to record what you do next until **Stop recording**: the exchanges become a test flow, with the tokens and ids that pass from one response into a later request extracted and passed as `{{variables}}`, static assets and analytics left out, and secrets turned into variables to set in an environment. The dialog shows the steps and the links it found before anything is written; **Create** opens the flow in the designer. See [Record a flow](/test-runner/integration-testing#record-a-flow).
+- Select rows and pick **Create flow from selection…** (right-click, or the toolbar's **Flow** menu), or **Flow ▸ Record a flow…** to record what you do next until **Stop recording**: the exchanges become a test flow, with the tokens and ids that pass from one response into a later request extracted and passed as `{{variables}}`, static assets and analytics left out, and secrets turned into variables to set in an environment.
+- The dialog shows the steps and the links it found before anything is written; **Create** opens the flow in the designer.
+- See [Record a flow](/test-runner/integration-testing#record-a-flow).
 
 ## Save to a collection
 
@@ -261,9 +308,14 @@ Select rows and pick **Create flow from selection…** (right-click, or the tool
 
 ## Capture traffic for one API
 
-A client that can't use a proxy (a front end with a configurable base URL, a mobile build, a test suite) can point at a local address instead: **Capture ▸ Capture traffic for one API…** forwards to the API you give and lists what passes, and **Save** keeps it as a collection with the responses as examples. The status bar's **Tools ▸ Capture traffic for one API…**, the command palette (*Capture traffic for one API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog in the Debugger. No certificate is needed, because the client talks plain HTTP to TestPion.
+- A client that can't use a proxy (a front end with a configurable base URL, a mobile build, a test suite) can point at a local address instead: **Capture ▸ Capture traffic for one API…** forwards to the API you give and lists what passes, and **Save** keeps it as a collection with the responses as examples.
+- The status bar's **Tools ▸ Capture traffic for one API…**, the command palette (*Capture traffic for one API…*) and the **Capture traffic into a collection** button in the Collections view's header open the same dialog in the Debugger.
+- No certificate is needed, because the client talks plain HTTP to TestPion.
 
-What the reverse proxy forwards is in the Debugger's grid too, next to the proxy's traffic: each row has a **reverse** badge and *Reverse proxy* in the **Application** column (pick it in the Application filter to see only those). Everything works on them as on any row: select, filter, **Create flow from selection…**, **Save to collection…**, **Export as HAR…**, Save session and AutoSave, and History's capture sessions (they say *reverse proxy*). **Show in Debugger** in the dialog goes there; the dialog's **Clear** starts its own list again (the rows stay in the Debugger, whose **Clear** removes them). See [Record traffic](/api-testing/recording) for the details and the `testpion record` command.
+- What the reverse proxy forwards is in the Debugger's grid too, next to the proxy's traffic: each row has a **reverse** badge and *Reverse proxy* in the **Application** column (pick it in the Application filter to see only those).
+- Everything works on them as on any row: select, filter, **Create flow from selection…**, **Save to collection…**, **Export as HAR…**, Save session and AutoSave, and History's capture sessions (they say *reverse proxy*).
+- **Show in Debugger** in the dialog goes there; the dialog's **Clear** starts its own list again (the rows stay in the Debugger, whose **Clear** removes them).
+- See [Record traffic](/api-testing/recording) for the details and the `testpion record` command.
 
 <figure class="aps-screenshot">
   <img src="/images/debugger-sessions.jpg" alt="The HTTP Debugger with two session tabs, Live capture and the saved session clinic-morning; the live capture holds five requests through the reverse proxy, each marked reverse, one selected with its request and response" width="1440" height="900" loading="lazy">
@@ -309,7 +361,9 @@ testpion debugger show session.har <id> --view tls         # version, cipher, ce
 
 Views: `list`, `image`, `xml`, `form`, `graphql`, `ai`, `msgpack`, `protobuf`, `signalr`, `socketio`, `syntax`, `caching`, `tls`. A view that cannot be produced says why (`ok: false` and `error` with `--json`; exit code 2 without).
 
-AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS, `system_proxy` for the whole computer, which asks the user), `debugger_certificate` (info, install, remove; install and remove ask the user), `debugger_no_decrypt` (the hosts kept as tunnels), `debugger_exchanges` (the list, with filters; `deep` searches bodies; `hide_tunnels` leaves the tunnels out; `include` adds `params`, `cookies`, `summary`, `caching`, `tls` or `graphql` to each exchange, and the advice for a failure), `debugger_exchange` (one, with bodies; `view` reads a body as the window shows it: `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `caching`, `tls`, with `side` request or response), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture only and a `where` condition on a column with a `style`, and `remap`, `fault` and `frame`; `reply` takes a `file` or `folder`, `redirect` a `rewrite`, `modify` `requestReplace` / `responseReplace` / `setStatus`; `action: speed` sets the Network speed: an agent can take an API offline, slow it down, make it fail 20% of the time, redirect it or narrow the capture while it tests), `debugger_stats`. An agent can start the proxy, run a program against it and read what it did. `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
+- AI agents have the same through the workspace's MCP server: `debugger_capture` (start / stop / status / clear; `decrypt` for HTTPS, `system_proxy` for the whole computer, which asks the user), `debugger_certificate` (info, install, remove; install and remove ask the user), `debugger_no_decrypt` (the hosts kept as tunnels), `debugger_exchanges` (the list, with filters; `deep` searches bodies; `hide_tunnels` leaves the tunnels out; `include` adds `params`, `cookies`, `summary`, `caching`, `tls` or `graphql` to each exchange, and the advice for a failure), `debugger_exchange` (one, with bodies; `view` reads a body as the window shows it: `image`, `xml`, `form`, `graphql`, `msgpack`, `protobuf`, `signalr`, `socketio`, `caching`, `tls`, with `side` request or response), `debugger_session` (save the session as HAR, or open a HAR file), `debugger_rules` (list with each rule's hits, presets, add, enable, remove; kinds include `only` for Capture only and a `where` condition on a column with a `style`, and `remap`, `fault` and `frame`; `reply` takes a `file` or `folder`, `redirect` a `rewrite`, `modify` `requestReplace` / `responseReplace` / `setStatus`; `action: speed` sets the Network speed: an agent can take an API offline, slow it down, make it fail 20% of the time, redirect it or narrow the capture while it tests), `debugger_stats`.
+- An agent can start the proxy, run a program against it and read what it did.
+- `flow_from_exchanges` turns captured exchanges (or a HAR file) into a flow file; `testpion flow from-har <file.har>` does it from the terminal.
 
 ## Coming next
 

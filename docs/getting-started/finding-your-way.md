@@ -13,7 +13,9 @@ Everything in a workspace has a place it opens: a request in its editor (REST, S
 
 ## Get started
 
-A new workspace's Home starts with **Get started**: the first loop, from a request to CI — **Send a request**, **Save it in a collection**, **Save it as a test**, **Run the tests**, **Run them in CI**. Each step is ticked from what the workspace holds (History, a saved request, a test file, a run, a pipeline file that runs `testpion`), not from clicks, and its button opens what the step builds on: the request you sent, the request you saved, the test file. Below it, walk-throughs for the other loops: **Debug a failing test** and **Capture traffic into requests** (in the Examples workspace) and **Collaborate through git**, each with its guide.
+- A new workspace's Home starts with **Get started**: the first loop, from a request to CI — **Send a request**, **Save it in a collection**, **Save it as a test**, **Run the tests**, **Run them in CI**.
+- Each step is ticked from what the workspace holds (History, a saved request, a test file, a run, a pipeline file that runs `testpion`), not from clicks, and its button opens what the step builds on: the request you sent, the request you saved, the test file.
+- Below it, walk-throughs for the other loops: **Debug a failing test** and **Capture traffic into requests** (in the Examples workspace) and **Collaborate through git**, each with its guide.
 
 **A guided tour** of the same loop opens by itself the first time Home shows Get started in a workspace (never again there), and **Get started ▸ Take the tour** starts it at any time, at the first step not done yet. Each step points at the control that does it — **Send**, **Save (Ctrl+S)**, the request's **⋯ ▸ Save as test…**, **Run all tests**, **Run in CI…** — going to its view; **Show me** does what the Get started button does. **Next** / **Back** (or <kbd>→</kbd> / <kbd>←</kbd>) move through it; <kbd>Esc</kbd> or **Skip tour** ends it. Going to another view pauses it; it shows again on its step's view.
 
@@ -45,9 +47,14 @@ Type a question instead of a name and TestPion searches **History, runs, test re
 - **Search** (the box in the top bar): the same **Ask: “…”** row after the hits.
 - The sparkle button beside the filters of **History**, **Runs** (the Tests view's Runs tab) and **Traces**: the question stays inside that view's data.
 
-The model only **translates** the question into a search query; it sees your words, the current time and the field names, never your requests, runs or traces. TestPion checks the query (known fields and operators, bounded values) and runs it itself, so the same query always gives the same answer. The dialog shows how it was understood before you trust it: the query in plain words (*Looking in History where failed is yes and url contains "payment" and time within the last 7 days and duration over 2 s; newest first, at most 25.*), what the model had to guess (*"last week" taken as the last 7 days*), and the query as **editable filters**: change a field, an operator or a value, remove a filter, add one, pick the sources, the order and the limit, and **Search** runs the edited query again with no model. A hit opens like any other item.
+- The model only **translates** the question into a search query; it sees your words, the current time and the field names, never your requests, runs or traces.
+- TestPion checks the query (known fields and operators, bounded values) and runs it itself, so the same query always gives the same answer.
+- The dialog shows how it was understood before you trust it: the query in plain words (*Looking in History where failed is yes and url contains "payment" and time within the last 7 days and duration over 2 s; newest first, at most 25.*), what the model had to guess (*"last week" taken as the last 7 days*), and the query as **editable filters**: change a field, an operator or a value, remove a filter, add one, pick the sources, the order and the limit, and **Search** runs the edited query again with no model.
+- A hit opens like any other item.
 
-Without a model (or when it fails, a cap refuses the call, or its query is not valid) the box still answers: it searches the words as typed, says why (*No AI model is set up … Searched for the words as typed instead*) and offers **Set up AI**. **Search the words only** skips the model on purpose. Every call is counted in the [AI usage](/ai-testing/ai-features#cost-estimates-caps-and-usage).
+- Without a model (or when it fails, a cap refuses the call, or its query is not valid) the box still answers: it searches the words as typed, says why (*No AI model is set up … Searched for the words as typed instead*) and offers **Set up AI**.
+- **Search the words only** skips the model on purpose.
+- Every call is counted in the [AI usage](/ai-testing/ai-features#cost-estimates-caps-and-usage).
 
 | Field | Means | Operators |
 |---|---|---|
@@ -65,11 +72,18 @@ Without a model (or when it fails, a cap refuses the call, or its query is not v
 | `flaky`, `attempts` | a flaky test; the attempts a result took (test results) | is yes / no; =, <, ≤, >, ≥ |
 | `failures` | how many tests of a run failed (runs) | =, <, ≤, >, ≥ |
 
-All conditions must hold. A field that only some sources have limits the search to them. The newest 5,000 History entries, 1,000 runs, the results of the newest 100 runs and 2,000 traces are searched (the files of 300 traces for *error* and *span*); a search that stopped at one of these says so. It only reads: nothing is written. From a terminal and from agents: [`testpion search --ask`](/cli/reference#search) and the MCP tool `search_ask`.
+- All conditions must hold.
+- A field that only some sources have limits the search to them.
+- The newest 5,000 History entries, 1,000 runs, the results of the newest 100 runs and 2,000 traces are searched (the files of 300 traces for *error* and *span*); a search that stopped at one of these says so.
+- It only reads: nothing is written.
+- From a terminal and from agents: [`testpion search --ask`](/cli/reference#search) and the MCP tool `search_ask`.
 
 ## The Info panel
 
-The right edge of the window holds **Info** and the **Assistant** in one panel: a tab on the edge that slides over the content on hover or click, or, pinned, docked beside it (the pin and its width are kept). **Info** is about the item on screen — a request, a test file, a monitor — and is the same for each: the variables it uses with their values and where each comes from in the active environment (a variable that is set nowhere is marked), the file that holds it and its git state (a click shows the change), the latest runs that included it, and for a request **Copy as cURL**. Asking the assistant (<kbd>Ctrl</kbd>+<kbd>J</kbd>, or an AI button such as **Ask AI** or **Explain with AI**) shows it in the same panel; the eye beside every AI button, **What will be sent…**, shows what would be sent first, and generated checks, tests and flows open in a review before anything is added ([AI features](/ai-testing/ai-features)). Agents get the same with `item_info`.
+- The right edge of the window holds **Info** and the **Assistant** in one panel: a tab on the edge that slides over the content on hover or click, or, pinned, docked beside it (the pin and its width are kept).
+- **Info** is about the item on screen — a request, a test file, a monitor — and is the same for each: the variables it uses with their values and where each comes from in the active environment (a variable that is set nowhere is marked), the file that holds it and its git state (a click shows the change), the latest runs that included it, and for a request **Copy as cURL**.
+- Asking the assistant (<kbd>Ctrl</kbd>+<kbd>J</kbd>, or an AI button such as **Ask AI** or **Explain with AI**) shows it in the same panel; the eye beside every AI button, **What will be sent…**, shows what would be sent first, and generated checks, tests and flows open in a review before anything is added ([AI features](/ai-testing/ai-features)).
+- Agents get the same with `item_info`.
 
 <figure class="aps-screenshot">
   <img src="/images/info-panel.jpg" alt="The Info panel beside the Get access token request: the variables it uses with their values from the Development environment, the collection file that holds it, the runs that included it and Copy as cURL" width="1440" height="900" loading="lazy">
@@ -81,14 +95,20 @@ An item can be gone by the time you open it: deleted, renamed, moved to another 
 
 ## History: send it again
 
-In **History**, select an entry and choose **Open** (or double-click it): it opens in the editor of its kind with what was sent. Its right-click menu (and the ⋯ above its details) also has **Open request** (the saved request it was sent from), **Open trace**, **Save as test…** and **Delete…**. A GraphQL query comes back with its variables, an MCP tool call with its server, tool and arguments (the **Tools** tab picks the tool once the server is connected), a prompt in the AI Playground with its model and system prompt, an HTTP or gRPC request as it was.
+- In **History**, select an entry and choose **Open** (or double-click it): it opens in the editor of its kind with what was sent.
+- Its right-click menu (and the ⋯ above its details) also has **Open request** (the saved request it was sent from), **Open trace**, **Save as test…** and **Delete…**.
+- A GraphQL query comes back with its variables, an MCP tool call with its server, tool and arguments (the **Tools** tab picks the tool once the server is connected), a prompt in the AI Playground with its model and system prompt, an HTTP or gRPC request as it was.
 
 **Capture sessions** are in History too (the **Kind** filter ▸ **Capture sessions**): each **Save to collection…**, **Create flow…** and **Save session…** in the HTTP Debugger adds one, saying what was captured (how many exchanges, through the proxy or the reverse proxy, the hosts, from when to when) and what it became. **Open** opens that: the collection, the flow in the designer, or the saved session in the Debugger. From a terminal: `testpion history list --kind capture --json` (each row has `capture.ref`); agents: `history_list` with `kind: capture`.
 
 
 ## Console, Traces and History
 
-They name each other. A Console line (expand it) links to the saved request it was sent from, its History entry, its trace and, for a run's request, the run at that result; **Open as request** opens what was sent in its editor. A trace's header names its request and History entry (or its run). History's menu opens the request and the trace. The Console's down arrow saves its lines (as text or JSON Lines), always with secrets masked.
+- They name each other.
+- A Console line (expand it) links to the saved request it was sent from, its History entry, its trace and, for a run's request, the run at that result; **Open as request** opens what was sent in its editor.
+- A trace's header names its request and History entry (or its run).
+- History's menu opens the request and the trace.
+- The Console's down arrow saves its lines (as text or JSON Lines), always with secrets masked.
 
 ## The Git view
 
@@ -130,11 +150,16 @@ The `resolve_ref` MCP tool says whether a ref still exists, its name, and the `t
 
 ## Save what you see {#save-what-you-see}
 
-Every response and result keeps its **down arrow** in the same place: the right end of its bar, after the view's own tools, with **Copy** before it and **▾** (the other formats) after it. That holds for a response's tabs, gRPC, GraphQL, message logs, MCP tool results, run results, timelines, grids, load results, the evaluation matrix, and the bottom panel's Console, Logs, Terminal and Problems. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the one nearest to where you last clicked; the palette's **Download Output…** and **File ▸ Download Output…** open its formats. A **Redacted** mark beside it means secrets are masked in the file. See [Save and export results](/getting-started/save-and-export-results).
+- Every response and result keeps its **down arrow** in the same place: the right end of its bar, after the view's own tools, with **Copy** before it and **▾** (the other formats) after it.
+- That holds for a response's tabs, gRPC, GraphQL, message logs, MCP tool results, run results, timelines, grids, load results, the evaluation matrix, and the bottom panel's Console, Logs, Terminal and Problems. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> saves the one nearest to where you last clicked; the palette's **Download Output…** and **File ▸ Download Output…** open its formats.
+- A **Redacted** mark beside it means secrets are masked in the file.
+- See [Save and export results](/getting-started/save-and-export-results).
 
 ## Menus and shortcuts {#menus}
 
-Every row of every tree and list — a collection, a folder, a request, a gRPC call, an MCP server, an API definition, a dataset, a saved prompt, a load test, an evaluation, a monitor, a test file, a run, a History entry, a trace, an environment — has one menu, built the same way everywhere. Its right-click menu is its ⋯ menu, and the keyboard opens it too: <kbd>Shift</kbd>+<kbd>F10</kbd> or the menu key on the focused row. Section headers (MCP servers, API definitions, Datasets, Tests, the lists of the other views) and folders have one as well, and a right-click on the blank part of a list opens the menu of the section it belongs to.
+- Every row of every tree and list — a collection, a folder, a request, a gRPC call, an MCP server, an API definition, a dataset, a saved prompt, a load test, an evaluation, a monitor, a test file, a run, a History entry, a trace, an environment — has one menu, built the same way everywhere.
+- Its right-click menu is its ⋯ menu, and the keyboard opens it too: <kbd>Shift</kbd>+<kbd>F10</kbd> or the menu key on the focused row.
+- Section headers (MCP servers, API definitions, Datasets, Tests, the lists of the other views) and folders have one as well, and a right-click on the blank part of a list opens the menu of the section it belongs to.
 
 Every list keeps its items in folders: items that have none are in **General** (a folder every list has; it cannot be renamed or deleted, and an item in it has no folder in its file).
 
@@ -150,7 +175,9 @@ The items come in groups, always in this order, with a line between groups:
 8. **edit** — Rename, Duplicate, Move to…, Add to / Remove from favorites
 9. **danger** — Delete… (always last; where what is deleted can be brought back it goes at once, with **Undo**, and a folder of more than 200 test files still asks first)
 
-An item a kind doesn't have is not shown; one that applies but can't run right now is shown greyed out, and its tooltip says why. The keys run the same items: <kbd>F2</kbd> Rename, <kbd>Delete</kbd> Delete…, <kbd>*</kbd> Expand all, <kbd>Enter</kbd> Open; typing a name's first letters jumps to the next row that starts with them. Which folders and sections are open is kept per workspace, across restarts.
+- An item a kind doesn't have is not shown; one that applies but can't run right now is shown greyed out, and its tooltip says why.
+- The keys run the same items: <kbd>F2</kbd> Rename, <kbd>Delete</kbd> Delete…, <kbd>*</kbd> Expand all, <kbd>Enter</kbd> Open; typing a name's first letters jumps to the next row that starts with them.
+- Which folders and sections are open is kept per workspace, across restarts.
 
 The menus of every kind, as the app builds them ("New …" stands for the kind's own new items; an item shows only where the row can do it):
 
@@ -198,7 +225,10 @@ For AI agents and scripts, `testpion kinds --json` and the MCP tool `list_kinds`
 
 ## Deleting and Undo {#deleting-and-undo}
 
-Deleting something you can get back happens at once, without a question: the message at the bottom right says what went, with **Undo** for 8 seconds (<kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field does the same). This covers requests and folders in a collection, collections, environments (with their secret values), datasets, gRPC calls and connections, saved prompts, load tests and evaluations, monitors, MCP servers, examples and the folders of every list (their items move to the top level). The item comes back with its id, in its place. Collections, environments, datasets and MCP servers also stay in the workspace's trash for 30 days, with API definitions an import replaced: **Recently deleted** (the icon beside the Collections sidebar's Filter box, and the Environments list's ⋯ menu), `testpion trash list` / `trash restore` for all of them ([Recently deleted](/getting-started/workspaces#recently-deleted)).
+- Deleting something you can get back happens at once, without a question: the message at the bottom right says what went, with **Undo** for 8 seconds (<kbd>Ctrl</kbd>+<kbd>Z</kbd> outside a text field does the same).
+- This covers requests and folders in a collection, collections, environments (with their secret values), datasets, gRPC calls and connections, saved prompts, load tests and evaluations, monitors, MCP servers, examples and the folders of every list (their items move to the top level).
+- The item comes back with its id, in its place.
+- Collections, environments, datasets and MCP servers also stay in the workspace's trash for 30 days, with API definitions an import replaced: **Recently deleted** (the icon beside the Collections sidebar's Filter box, and the Environments list's ⋯ menu), `testpion trash list` / `trash restore` for all of them ([Recently deleted](/getting-started/workspaces#recently-deleted)).
 
 <figure class="aps-screenshot">
   <img src="/images/undo-toast.jpg" alt="A request deleted from the Collections explorer: the message Deleted the request Log out (expires the cookie) with its Undo button, at the bottom right" width="1440" height="900" loading="lazy">
@@ -227,7 +257,10 @@ The rail, the density and your [keys](/getting-started/keyboard-shortcuts#change
 
 **Settings** (<kbd>Ctrl</kbd>+<kbd>,</kbd>, the gear in the top bar) has a tab per subject: Appearance, Keyboard, Requests, Git, Proxy, Certificates, Privacy & security, Model pricing, Load testing, Storage, AI assistant, AI agents (MCP) and About. **Save settings** (<kbd>Ctrl</kbd>+<kbd>S</kbd>) writes what you changed on any tab and is enabled only once something changed; leaving the view with unsaved changes asks first, like closing an edited request tab. Keyboard, Storage and AI agents save on their own. Every number field says its default and what it does: the default timeout (30000 ms unless changed; 0 waits forever) and the maximum virtual users of a load test (200 unless changed; a guard against a typo overloading this computer or the API).
 
-Under each tab's name one line says what it applies to (**all workspaces on this computer**, or this workspace). The **Search settings** box at the top finds a setting by its name or a word people use for it (*timeout*, *dark*, *corporate*, *key*): a click goes to its tab. **About** has **Export settings** (a JSON file of the settings of your choice, the same one `testpion settings get --json` prints, with no secret, no variables and no price table), **Import settings…** (every value is checked as `testpion settings set` checks it, and a setting this version does not know is skipped and named) and **Reset settings…** (every setting back to its default; workspaces and secrets are not touched). A request that changes data (POST, PUT, PATCH, DELETE) and still has a variable with no value (a name in double braces) asks once before it is sent, with the names; **Settings ▸ Requests** turns that question off.
+- Under each tab's name one line says what it applies to (**all workspaces on this computer**, or this workspace).
+- The **Search settings** box at the top finds a setting by its name or a word people use for it (*timeout*, *dark*, *corporate*, *key*): a click goes to its tab.
+- **About** has **Export settings** (a JSON file of the settings of your choice, the same one `testpion settings get --json` prints, with no secret, no variables and no price table), **Import settings…** (every value is checked as `testpion settings set` checks it, and a setting this version does not know is skipped and named) and **Reset settings…** (every setting back to its default; workspaces and secrets are not touched).
+- A request that changes data (POST, PUT, PATCH, DELETE) and still has a variable with no value (a name in double braces) asks once before it is sent, with the names; **Settings ▸ Requests** turns that question off.
 
 ## Choose what the rail shows {#choose-what-the-rail-shows}
 
@@ -245,13 +278,23 @@ The rail shows seven views; **More…** under them lists the rest. Every view st
 
 ## From a result to its source, and again
 
-A run's results name where they came from: the test file at the step, or (a collection run, a monitor) the saved request. A monitor's **Requests** chart and the Collection runner's request list open the request on a click. **Rerun last run** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>, or the command palette) runs the latest run again as it ran — the same files or collection, the same environment — and opens it. For AI agents, every `run_tests` result has a `ref` (`{ kind: "test", path, step }`), and `run_tests` with `paths: [ref.path]` and `step: ref.step` runs that one result again.
+- A run's results name where they came from: the test file at the step, or (a collection run, a monitor) the saved request.
+- A monitor's **Requests** chart and the Collection runner's request list open the request on a click.
+- **Rerun last run** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>, or the command palette) runs the latest run again as it ran — the same files or collection, the same environment — and opens it.
+- For AI agents, every `run_tests` result has a `ref` (`{ kind: "test", path, step }`), and `run_tests` with `paths: [ref.path]` and `step: ref.step` runs that one result again.
 
-A run's ⋯ also has **Run in CI…** (the pipeline dialog preselected with the run's files or collection and environment) and **Copy CLI command**; the palette has both for the last run. See [CI/CD](/test-runner/ci-cd). A failed run's ⋯ (and its right-click in **Runs**) has **Explain and fix failures with AI…**: the failures grouped by cause, each explained with evidence and a verified fix, then **Rerun the affected tests** ([Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage)). A collection run from the terminal (`testpion run-collection` on a collection of the workspace) is recorded with what it ran, so these work on it too.
+- A run's ⋯ also has **Run in CI…** (the pipeline dialog preselected with the run's files or collection and environment) and **Copy CLI command**; the palette has both for the last run.
+- See [CI/CD](/test-runner/ci-cd).
+- A failed run's ⋯ (and its right-click in **Runs**) has **Explain and fix failures with AI…**: the failures grouped by cause, each explained with evidence and a verified fix, then **Rerun the affected tests** ([Explain and fix failures](/ai-testing/ai-features#explain-and-fix-failures-triage)).
+- A collection run from the terminal (`testpion run-collection` on a collection of the workspace) is recorded with what it ran, so these work on it too.
 
 ## Problems
 
-Everything that is failing in the workspace is one list, **Problems**: environment and collection files that can't be read (first), failing monitors, the latest run (failures and errors told apart: an error is a network, TLS, timeout or script problem; a failure a check that did not hold), requests whose latest response failed, certificates about to expire and flaky tests. The status bar counts them (red when something fails); a click opens the **Problems** tab of the bottom panel, grouped, each row with its time and a button to open it; its ⋯ (or right-click) also has **Run again** for a failed run, **Explain and fix failures with AI…** for a failed run or a failing monitor's run, **Why is this flaky?** for a flaky test, and **Ask AI** ([AI features](/ai-testing/ai-features#explain-and-fix-failures-triage)). <kbd>F8</kbd> opens the next problem and <kbd>Shift</kbd>+<kbd>F8</kbd> the previous one. Home's **Needs attention** is the same list. The status bar is the tool hub: the Problems count, **Terminal** beside Console and Logs, the environment (a click switches it) and **Tools** — Cookies…, Find & replace in a collection…, Capture traffic for one API… (the HTTP Debugger's capture mode) and Certificates. From a terminal: `testpion problems [--json]` (also `testpion attention`); agents: `what_needs_attention`.
+- Everything that is failing in the workspace is one list, **Problems**: environment and collection files that can't be read (first), failing monitors, the latest run (failures and errors told apart: an error is a network, TLS, timeout or script problem; a failure a check that did not hold), requests whose latest response failed, certificates about to expire and flaky tests.
+- The status bar counts them (red when something fails); a click opens the **Problems** tab of the bottom panel, grouped, each row with its time and a button to open it; its ⋯ (or right-click) also has **Run again** for a failed run, **Explain and fix failures with AI…** for a failed run or a failing monitor's run, **Why is this flaky?** for a flaky test, and **Ask AI** ([AI features](/ai-testing/ai-features#explain-and-fix-failures-triage)). <kbd>F8</kbd> opens the next problem and <kbd>Shift</kbd>+<kbd>F8</kbd> the previous one.
+- Home's **Needs attention** is the same list.
+- The status bar is the tool hub: the Problems count, **Terminal** beside Console and Logs, the environment (a click switches it) and **Tools** — Cookies…, Find & replace in a collection…, Capture traffic for one API… (the HTTP Debugger's capture mode) and Certificates.
+- From a terminal: `testpion problems [--json]` (also `testpion attention`); agents: `what_needs_attention`.
 
 <figure class="aps-screenshot">
   <img src="/images/problems.jpg" alt="The Problems tab of the bottom panel: one failure, the latest run of an evaluation with 3 failed cases, and the status bar count" width="1440" height="900" loading="lazy">
@@ -259,4 +302,7 @@ Everything that is failing in the workspace is one list, **Problems**: environme
 
 ## The environment, the same way everywhere
 
-The environment picker is one control: the top bar's pill, the status bar's segment (a click opens the same menu) and the environment field of the Collection runner, a monitor and Load (each starts on the active environment). Production is marked in red everywhere, and an environment whose file can't be read is listed, disabled, with why. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> opens Quick Open on environments and variables. Every run shows the environment it ran against as a badge (its colour dot and name, **PRODUCTION** in red): the Collection runner's results, a monitor, Load and Evaluations. For AI agents and scripts, `run_tests`, `run_collection`, `run_monitor`, `load_test` and `run_evaluation` report `environment` (`null` when none was used), as do `testpion monitor run --json` and `testpion load --json`.
+- The environment picker is one control: the top bar's pill, the status bar's segment (a click opens the same menu) and the environment field of the Collection runner, a monitor and Load (each starts on the active environment).
+- Production is marked in red everywhere, and an environment whose file can't be read is listed, disabled, with why. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> opens Quick Open on environments and variables.
+- Every run shows the environment it ran against as a badge (its colour dot and name, **PRODUCTION** in red): the Collection runner's results, a monitor, Load and Evaluations.
+- For AI agents and scripts, `run_tests`, `run_collection`, `run_monitor`, `load_test` and `run_evaluation` report `environment` (`null` when none was used), as do `testpion monitor run --json` and `testpion load --json`.

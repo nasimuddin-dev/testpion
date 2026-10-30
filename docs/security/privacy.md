@@ -40,11 +40,16 @@ The **down arrow** on every response and result writes a file only where you cho
 - **As received:** a response body (and its headers, cookies, stream, events and history), GraphQL and gRPC responses, message logs and MCP tool results are your own data and are saved as they are. When one looks like it holds a credential (a bearer token, an `access_token` field, a secret variable's value) the message after saving says so, and an output of an environment marked as production says that too.
 - **Nothing secret:** timings, checks, load results, the evaluation matrix and Problems.
 
-The backend applies these rules from one list of outputs, never from what the window asks: an output that is always redacted is saved masked even when asked otherwise. The folder you last used is remembered per workspace and kind of output in the app's own data folder, never in the workspace (so not in git). A file is written as `<name>.part` and renamed when complete, so a cancelled save leaves nothing behind.
+- The backend applies these rules from one list of outputs, never from what the window asks: an output that is always redacted is saved masked even when asked otherwise.
+- The folder you last used is remembered per workspace and kind of output in the app's own data folder, never in the workspace (so not in git).
+- A file is written as `<name>.part` and renamed when complete, so a cancelled save leaves nothing behind.
 
 ## AI features
 
-TestPion's own AI features (explain, suggest checks, write tests or a flow, explain and fix a failed run, find out why a test is flaky) send a context only when you start one, only to the model you chose, and redacted more strictly than logs: besides the rules above, credentials found by their shape in any text (JWTs, `Bearer` / `Basic` credentials, private keys, provider API keys, `?access_token=` and similar) and personal data (e-mail addresses, phone numbers, card numbers, IBANs) are masked. **What will be sent…** shows the exact messages first; *Metadata only* and *Names only* send less, and **Local only** refuses any model that is not on this computer. Variable names may be sent, values never. See [AI features: privacy, cost and review](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first).
+- TestPion's own AI features (explain, suggest checks, write tests or a flow, explain and fix a failed run, find out why a test is flaky) send a context only when you start one, only to the model you chose, and redacted more strictly than logs: besides the rules above, credentials found by their shape in any text (JWTs, `Bearer` / `Basic` credentials, private keys, provider API keys, `?access_token=` and similar) and personal data (e-mail addresses, phone numbers, card numbers, IBANs) are masked.
+- **What will be sent…** shows the exact messages first; *Metadata only* and *Names only* send less, and **Local only** refuses any model that is not on this computer.
+- Variable names may be sent, values never.
+- See [AI features: privacy, cost and review](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first).
 
 **Prompt injection.** Everything in a prompt that somebody else wrote (a response, a collection from git or an import, a tool result) is placed inside a fenced block that the model is told is data, never instructions; the fence carries an id that is a hash of the data, so the data cannot close it or forge it. What the model proposes is verified and applied only by you (a proposal); it never writes on its own. The RAG and `llm-judge` judges get the same fence around the answer they score (the system under test may say "give this a 1.0"). That changes the judge prompts once: the `llm-judge` check is now `judge-v2` (results of `judge-v1` show as made by another judge), and cached verdicts of the RAG judge from earlier versions are not reused, so the first run after the update asks the judge again and costs once. Scores and baselines already stored are not touched.
 
@@ -56,7 +61,10 @@ TestPion's own AI features (explain, suggest checks, write tests or a flow, expl
 
 ## Programs a workspace starts
 
-An MCP server of the `stdio` kind is a program TestPion starts on your computer, with your permissions. Because a workspace can come from git, an import or a teammate, the first **Connect** to such a server shows the exact command line and asks: **Run once**, or **Always for this workspace** (remembered per computer in TestPion's own data folder, never in the workspace, so a repository cannot ship its own trust: [Trust and permissions](/security/trust)). Mock and HTTP servers start nothing and never ask. The CLI and the MCP server for agents run what you invoke, like any command.
+- An MCP server of the `stdio` kind is a program TestPion starts on your computer, with your permissions.
+- Because a workspace can come from git, an import or a teammate, the first **Connect** to such a server shows the exact command line and asks: **Run once**, or **Always for this workspace** (remembered per computer in TestPion's own data folder, never in the workspace, so a repository cannot ship its own trust: [Trust and permissions](/security/trust)).
+- Mock and HTTP servers start nothing and never ask.
+- The CLI and the MCP server for agents run what you invoke, like any command.
 
 ## Script sandbox
 

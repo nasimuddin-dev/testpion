@@ -11,13 +11,18 @@ An integration test follows a real journey through an API: sign in, create, read
 
 ::: v-pre
 
-An integration test exercises a real, running system through its API: sign in, create a record, read it back, change it, delete it, and check that every step behaves. TestPion runs such flows from YAML test files or from a collection, by hand from the app or the CLI, and in CI where it can also **start the system under test** and wait for it to be healthy. Results come back as console output, JUnit for the CI system, and an HTML report.
+- An integration test exercises a real, running system through its API: sign in, create a record, read it back, change it, delete it, and check that every step behaves.
+- TestPion runs such flows from YAML test files or from a collection, by hand from the app or the CLI, and in CI where it can also **start the system under test** and wait for it to be healthy.
+- Results come back as console output, JUnit for the CI system, and an HTML report.
 
 The examples workspace has a complete one: `tests/rest/patient-lifecycle.yaml` in the *Veterinary API (example)* workspace, against the demo API (`node examples/servers/demo-servers.mjs`).
 
 ## Generate a flow
 
-TestPion writes a first flow for every resource of an API: in a definition's **Preview**, **Generate tests ▸ Integration flows**; on a collection, **Export ▸ Integration flows**; from the terminal, `testpion integration-suite specs/clinic.yaml` (or a collection name); for agents, `generate_flows`. Each flow is the file described below (create, read back, update, listed, delete, gone), the login first. Review the generated bodies and set the variables it names, then run the suite. See [the test runner](/test-runner/overview#an-integration-suite-from-an-api-definition-or-a-collection).
+- TestPion writes a first flow for every resource of an API: in a definition's **Preview**, **Generate tests ▸ Integration flows**; on a collection, **Export ▸ Integration flows**; from the terminal, `testpion integration-suite specs/clinic.yaml` (or a collection name); for agents, `generate_flows`.
+- Each flow is the file described below (create, read back, update, listed, delete, gone), the login first.
+- Review the generated bodies and set the variables it names, then run the suite.
+- See [the test runner](/test-runner/overview#an-integration-suite-from-an-api-definition-or-a-collection).
 
 ## Let AI write the flow
 
@@ -155,7 +160,11 @@ In the app: **Tests ▸ Runs ▸ Run suite**, or open the file and **Run**. A fa
 
 ## See a flow
 
-Open the file in **Tests** and pick the **Flow** tab: one node per step with its type, method and URL and the names it extracts, an arrow for every `dependsOn`, laid out left to right from the **Start** node (a step sits one column after the last step it waits for; steps that depend on nothing share the first column). Drag the background to pan, the wheel zooms, **Fit** shows the whole flow. After a run the nodes carry the latest result (passed, failed, error, skipped) with the step's duration; click a node to select it (<kbd>Enter</kbd> or **Open in editor** shows the step in the YAML), click its result to open it in the run. Problems (a dependency nobody defines, two steps that wait for each other, a variable nothing sets) are listed in a strip under the canvas. The Flow tab of a test file is the [flow designer](#design-a-flow); a suite's Flow tab is a read-only diagram.
+- Open the file in **Tests** and pick the **Flow** tab: one node per step with its type, method and URL and the names it extracts, an arrow for every `dependsOn`, laid out left to right from the **Start** node (a step sits one column after the last step it waits for; steps that depend on nothing share the first column).
+- Drag the background to pan, the wheel zooms, **Fit** shows the whole flow.
+- After a run the nodes carry the latest result (passed, failed, error, skipped) with the step's duration; click a node to select it (<kbd>Enter</kbd> or **Open in editor** shows the step in the YAML), click its result to open it in the run.
+- Problems (a dependency nobody defines, two steps that wait for each other, a variable nothing sets) are listed in a strip under the canvas.
+- The Flow tab of a test file is the [flow designer](#design-a-flow); a suite's Flow tab is a read-only diagram.
 
 The same from the command line and for agents:
 
@@ -169,7 +178,9 @@ The `flow_graph` MCP tool answers the same JSON (with the DOT) for a file, so an
 
 ## Design a flow
 
-The **Flow** tab of a test file is also where you build one, on a canvas (a suite stays a read-only diagram: it names other files). The YAML file stays the only source of truth: every change on the canvas is written to the file at once, keeping its comments, key order and line endings, and the **Editor** tab shows the same text. The CLI, CI, monitors and agents run it unchanged.
+- The **Flow** tab of a test file is also where you build one, on a canvas (a suite stays a read-only diagram: it names other files).
+- The YAML file stays the only source of truth: every change on the canvas is written to the file at once, keeping its comments, key order and line endings, and the **Editor** tab shows the same text.
+- The CLI, CI, monitors and agents run it unchanged.
 
 <figure class="aps-screenshot">
   <img src="/images/flow-designer.jpg" alt="The flow designer: a webhook-started flow from a token to a patient's removal, three checks side by side in a frame, a sticky note, every step passed, and the inspector of the selected step" width="1440" height="900" loading="lazy">
@@ -328,9 +339,14 @@ One flow file, four ways to push it further: once per row of a data file, in sev
 
 ### Once per data row
 
-Right-click a flow's tab in **Tests** ▸ **Run with data…** (or the table icon next to **Run**), pick the rows and **Run per row**: a CSV, JSON or JSONL file from `datasets/` or picked from disk, a SQLite database, or a PostgreSQL / MySQL URL (`{{variables}}` from the environment work, for the password) with a `SELECT`. Each row is one run of the whole flow: its columns are variables (`{{email}}`), the whole row is `{{$row.email}}` and `{{$index}}` is its number from 0. **Rows at once** runs several rows side by side (each with its own variables and cookies); **Stop at the first failing row** cancels the rest.
+- Right-click a flow's tab in **Tests** ▸ **Run with data…** (or the table icon next to **Run**), pick the rows and **Run per row**: a CSV, JSON or JSONL file from `datasets/` or picked from disk, a SQLite database, or a PostgreSQL / MySQL URL (`{{variables}}` from the environment work, for the password) with a `SELECT`.
+- Each row is one run of the whole flow: its columns are variables (`{{email}}`), the whole row is `{{$row.email}}` and `{{$index}}` is its number from 0.
+- **Rows at once** runs several rows side by side (each with its own variables and cookies); **Stop at the first failing row** cancels the rest.
 
-The **Runs** tab then shows the grid: one line per row with its status, time, the step it failed at and its values, live while it runs, **Failed** to see only the failures. Click a row for its steps and a step for its full result (request, response, checks, trace). The grid holds only the rows on screen, so 100,000 rows scroll like 100; full step results are kept for failing rows (the first 1,000) and the first 100 passing ones, every row's status and time always. **Cancel** stops the rows running and starts no more.
+- The **Runs** tab then shows the grid: one line per row with its status, time, the step it failed at and its values, live while it runs, **Failed** to see only the failures.
+- Click a row for its steps and a step for its full result (request, response, checks, trace).
+- The grid holds only the rows on screen, so 100,000 rows scroll like 100; full step results are kept for failing rows (the first 1,000) and the first 100 passing ones, every row's status and time always.
+- **Cancel** stops the rows running and starts no more.
 
 <figure class="aps-screenshot">
   <img src="/images/flow-scale.jpg" alt="A data run of a flow over eight patients from a CSV: seven rows passed, the row without a species failed at its register step, and its steps and failing check opened" width="1440" height="900" loading="lazy">
@@ -369,11 +385,16 @@ testpion test tests/checkout.yaml -e dev -e staging --json
 
 ### As a load-test scenario
 
-In the **Load** view pick **Test file (a flow)** as the target (`testpion load --test-file checkout.yaml`): every virtual user runs the whole flow again and again (dependencies, extracts, checks and blocks included, with its own variables and cookies), with the load view's users, duration, ramp up / down, rate and think time, safeguards (every host of the flow is checked) and pass/fail rules. The results are per step (requests, errors, p50 / p95 / p99) and per run of the flow (how many, how many failed, how long one took); the run joins the load history like any other. See [Load testing](/performance/load-testing#a-flow-as-the-scenario).
+- In the **Load** view pick **Test file (a flow)** as the target (`testpion load --test-file checkout.yaml`): every virtual user runs the whole flow again and again (dependencies, extracts, checks and blocks included, with its own variables and cookies), with the load view's users, duration, ramp up / down, rate and think time, safeguards (every host of the flow is checked) and pass/fail rules.
+- The results are per step (requests, errors, p50 / p95 / p99) and per run of the flow (how many, how many failed, how long one took); the run joins the load history like any other.
+- See [Load testing](/performance/load-testing#a-flow-as-the-scenario).
 
 ### Run timeline and critical path
 
-Every run has a **Timeline** tab next to **Charts**: one bar per step from its start to its end, the wait before it (dashed, from the step that held it up), lanes **L1**, **L2** … for steps that ran at the same time, and the **critical path** outlined: the chain of steps, each held up by the one before, that decided when the run ended. Hover a bar for its numbers, click it to open its result. The header gives the total, the critical path's running and waiting time, how many steps ran at once and the slowest step. The **down arrow** at the right end of its bar saves the same picture as one self-contained HTML file (no scripts, nothing from the network; light and dark) to attach to a ticket or a pull request, or the timeline's data as JSON ([Save and export results](/getting-started/save-and-export-results)).
+- Every run has a **Timeline** tab next to **Charts**: one bar per step from its start to its end, the wait before it (dashed, from the step that held it up), lanes **L1**, **L2** … for steps that ran at the same time, and the **critical path** outlined: the chain of steps, each held up by the one before, that decided when the run ended.
+- Hover a bar for its numbers, click it to open its result.
+- The header gives the total, the critical path's running and waiting time, how many steps ran at once and the slowest step.
+- The **down arrow** at the right end of its bar saves the same picture as one self-contained HTML file (no scripts, nothing from the network; light and dark) to attach to a ticket or a pull request, or the timeline's data as JSON ([Save and export results](/getting-started/save-and-export-results)).
 
 ```bash
 testpion flow report rest/checkout.yaml                          # the latest run as text, critical path marked
@@ -415,7 +436,10 @@ testpion flow export arazzo/adoptpet.yaml --arazzo -o adopt-pet.arazzo.yaml -w m
 testpion flow export checkout.yaml --spec specs/shop.openapi.yaml --json       # { file, document, notes, sources }
 ```
 
-Each HTTP step is matched by method and path against the OpenAPI document (`--spec`, else the sources an import noted at the top of the file, else the workspace spec that describes most of the flow's requests) and becomes an `operationId` (or an `operationPath` when the operation has none); a request no document describes keeps its request under `x-testpion-request`. `extract` becomes `outputs`, `{{variables}}` become `$steps.<step>.outputs.<name>` or `$inputs.<name>` (and the inputs are listed in the workflow's `inputs`; a dynamic value such as `{{$randomFirstName}}` or `{{$timestamp}}` is never an input: it stays `{{$randomFirstName}}`, resolved by TestPion when the step runs, and is listed in the notes), status, body and header checks become `successCriteria`, `retries` a retry action, and `dependsOn` the step order. Other checks, `if`, `forEach`, scripts and non-HTTP steps go under `x-testpion-*` keys and into the notes. An imported Arazzo document exports back to an equivalent one.
+- Each HTTP step is matched by method and path against the OpenAPI document (`--spec`, else the sources an import noted at the top of the file, else the workspace spec that describes most of the flow's requests) and becomes an `operationId` (or an `operationPath` when the operation has none); a request no document describes keeps its request under `x-testpion-request`.
+- `extract` becomes `outputs`, `{{variables}}` become `$steps.<step>.outputs.<name>` or `$inputs.<name>` (and the inputs are listed in the workflow's `inputs`; a dynamic value such as `{{$randomFirstName}}` or `{{$timestamp}}` is never an input: it stays `{{$randomFirstName}}`, resolved by TestPion when the step runs, and is listed in the notes), status, body and header checks become `successCriteria`, `retries` a retry action, and `dependsOn` the step order.
+- Other checks, `if`, `forEach`, scripts and non-HTTP steps go under `x-testpion-*` keys and into the notes.
+- An imported Arazzo document exports back to an equivalent one.
 
 Agents use the MCP tools `import_arazzo` (`text`, `file` or `url`; `fetch_sources`; `dry_run` returns the files without writing them) and `export_arazzo` (`file`, `spec`, `workflow_id`).
 
@@ -539,7 +563,9 @@ Exit codes: `0` all passed, `1` a test failed, `2` a configuration problem, `3` 
 
 ### Explain the failures in the job
 
-Add `--triage` to the run line (`testpion test`, `run` or `run-collection`, in a workspace): after a run with failures, TestPion groups them by likely cause — the same failed check, status and endpoint — and, with an AI model set up for the job, explains each cause with its evidence and a fix it verified against the failing and the last passing response. The job log gets a *Triage* section, `triage.md` and `triage.json` are written beside the reports, and the JUnit (`<system-out>`), HTML and Markdown reports get a *Triage (AI)* section when a model answered. Nothing is changed in your tests (a fix is a proposal to apply on your computer: `testpion ai apply <id>`, or the app's review), and **the exit code stays the run's**: a failed test still fails the build, and a triage that cannot be made is only a warning.
+- Add `--triage` to the run line (`testpion test`, `run` or `run-collection`, in a workspace): after a run with failures, TestPion groups them by likely cause — the same failed check, status and endpoint — and, with an AI model set up for the job, explains each cause with its evidence and a fix it verified against the failing and the last passing response.
+- The job log gets a *Triage* section, `triage.md` and `triage.json` are written beside the reports, and the JUnit (`<system-out>`), HTML and Markdown reports get a *Triage (AI)* section when a model answered.
+- Nothing is changed in your tests (a fix is a proposal to apply on your computer: `testpion ai apply <id>`, or the app's review), and **the exit code stays the run's**: a failed test still fails the build, and a triage that cannot be made is only a warning.
 
 ```yaml
 - run: npx testpion@0.51.0 run -w . --suite integration -e Staging -r console junit html -o test-results --triage
