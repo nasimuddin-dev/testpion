@@ -2,6 +2,7 @@
 import {
   ApsError,
   capRunOptions,
+  ensureBotSample,
   ensureDemoModel,
   ensureSample,
   estimateEvaluation,
@@ -73,6 +74,18 @@ export function evalQualityHandlers(be: Backend): Handlers {
       if (run === false) return { evaluation: made.evaluation.id, name: made.evaluation.name, offline: true, created: made.created };
       const r = await startDraftRun(be, made.evaluation, {});
       return { ...r, evaluation: made.evaluation.id, name: made.evaluation.name, offline: true, created: made.created };
+    },
+    /**
+     * The bot sample (R-2): the offline demo model as the reviewer, the mock bot (its file and MCP server entry), the bot as a saved
+     * target and the evaluation "Sample: clinic bot" are made (or put back as written) and the evaluation starts at once. Answers
+     * `{ runId, evaluation, name, target, offline: true }`; nothing leaves the computer.
+     */
+    'rag.trySample': async ({ run }: { run?: boolean } = {}) => {
+      const made = ensureBotSample(be.ws);
+      be.host.emit('data.changed', { method: 'sample' });
+      if (run === false) return { evaluation: made.evaluation.id, name: made.evaluation.name, target: made.target.id, offline: true, created: made.created };
+      const r = await startDraftRun(be, made.evaluation, {});
+      return { ...r, evaluation: made.evaluation.id, name: made.evaluation.name, target: made.target.id, offline: true, created: made.created };
     },
     /** The offline demo model (AU-8): added when the workspace has none, its rules put back as written. No key, no network. */
     'ai.demoModel': () => {

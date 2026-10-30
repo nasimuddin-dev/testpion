@@ -1,7 +1,7 @@
 import { BookOpenCheck, Database, FlaskConical, Layers, Ruler } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { call, on } from '../../api';
-import { toastError, useApp } from '../../store';
+import { attempt, toastError, useApp } from '../../store';
 import { timeAgo } from '../../lib/format';
 import { useLibrary } from '../../lib/library';
 import { Button, Empty, SectionTitle } from '../../components/ui';
@@ -39,13 +39,22 @@ export function RagStart({ onTab, onConnect }: { onTab(t: Exclude<RagTab, 'check
   const byName = useMemo(() => new Map(bots.map((i) => [i.name, i])), [bots]);
   const recent = useMemo(() => runs.filter((r) => byName.has(r.name)).slice(0, 6), [runs, byName]);
   const checks = (payload: Record<string, unknown> = {}) => useApp.getState().openIntent('evaluations', { host: 'rag', ...payload });
+  /** Try the sample (R-2): an offline bot with four documents, six questions and the offline demo model as the reviewer; the report opens when the run starts. */
+  const trySample = () =>
+    attempt(async () => {
+      const r = await call<{ runId: string; evaluation: string }>('rag.trySample');
+      checks({ savedId: r.evaluation, runId: r.runId });
+    });
   const connected = targets.lib.items.length;
   return (
     <div className="h-full overflow-auto" data-rag-start>
       <div className="max-w-5xl mx-auto p-5 flex flex-col gap-5">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold mr-auto">Is your bot's answer backed by the right documents?</h2>
-          <Button icon={<FlaskConical size={14} />} onClick={() => checks()} title="The evaluations of your bots and their runs" data-rag-start-checks>
+          <Button icon={<FlaskConical size={14} />} onClick={() => void trySample()} title="An offline bot with four clinic documents, six questions and the offline demo model as the reviewer: no key, no network, a result in a few seconds" data-rag-start-sample>
+            Try the sample (offline)
+          </Button>
+          <Button onClick={() => checks()} title="The evaluations of your bots and their runs" data-rag-start-checks>
             Open Checks
           </Button>
         </div>
@@ -103,8 +112,8 @@ export function RagStart({ onTab, onConnect }: { onTab(t: Exclude<RagTab, 'check
           <SectionTitle>Recent</SectionTitle>
           {recent.length === 0 ? (
             <div className="h-48 border border-dashed border-line rounded-xl overflow-hidden" data-rag-start-recent="empty">
-              <Empty title="No runs yet" actions={[{ label: 'Check the answers', icon: <BookOpenCheck size={13} />, onClick: () => checks({ wizard: true, kind: 'bot' }) }]}>
-                The runs of your bot evaluations appear here with how many questions passed.
+              <Empty title="No runs yet" actions={[{ label: 'Try the sample (offline)', icon: <FlaskConical size={13} />, onClick: () => void trySample() }]}>
+                The runs of your bot evaluations appear here with how many questions passed. The sample needs no key and no server.
               </Empty>
             </div>
           ) : (

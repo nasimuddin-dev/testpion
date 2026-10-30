@@ -10,6 +10,9 @@ import { generateEvalCases, type GenerateCasesOptions } from '../../runner/eval-
 import { trustReviewer } from '../../runner/trust-reviewer.js';
 import { findCollection } from '../../storage/env-edit.js';
 import { ensureSample, SAMPLE_NAME } from '../../eval/sample.js';
+import { ensureBotSample, BOT_SAMPLE_NAME } from '../../eval/rag/sample.js';
+import { runRagEvaluation } from '../../runner/rag-evaluation.js';
+import { createEngineContext } from '../../engine.js';
 import { estimateEvaluation, formatEstimateUsd, spendPlan } from '../../eval/llm-estimate.js';
 import { tryEvalCheck } from '../../eval/try-check.js';
 import { evaluationTests, findSavedEvaluation } from '../../runner/saved-evaluations.js';
@@ -34,8 +37,31 @@ export function evalQualityTools(d: { store: WorkspaceStore; secrets: SecretStor
       write: true,
       description:
         `Make the sample evaluation "${SAMPLE_NAME}" (10 support messages to sort into cancellation, refill, booking or other, checked with "the reply contains the expected answer") on the offline demo model, and run it. The demo model answers by rules, so the result says nothing about a real model (every answer says so). Returns the evaluation, the run (totals, per-case results) and a headline. An edited sample is put back as written: copy it to make your own. \`run: false\` only makes it.`,
-      inputSchema: { type: 'object', properties: { run: { type: 'boolean', description: 'false: make the sample, do not run it (default true)' } } },
+      inputSchema: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['prompt', 'bot'], description: `prompt (default): "${SAMPLE_NAME}", ten support messages on the offline demo model; bot: "${BOT_SAMPLE_NAME}", a bot with sources (an offline mock with four clinic documents, six questions, the offline demo model as the reviewer; two questions fail on purpose)` },
+          run: { type: 'boolean', description: 'false: make the sample, do not run it (default true)' },
+        },
+      },
       run: async (a) => {
+        if (a.kind === 'bot') {
+          const bot = ensureBotSample(store);
+          if (a.run === false) return { evaluation: bot.evaluation.name, id: bot.evaluation.id, target: bot.target.name, created: bot.created, providerAdded: bot.providerAdded, questions: 6, bot: 'Offline mock bot', reviewer: 'Offline demo model' };
+          const out = await runRagEvaluation({ store, makeContext: () => createEngineContext({ store, secrets: d.secrets, settings: d.settings, aiSurface: 'mcp' }), evaluation: bot.evaluation, concurrency: 2 });
+          return {
+            runId: out.runId,
+            ref: { kind: 'run' as const, runId: out.runId },
+            evaluation: bot.evaluation.name,
+            target: bot.target.name,
+            model: 'Offline mock bot and the offline demo model as the reviewer (rules, not a real model)',
+            headline: `${out.summary.passed} of ${out.summary.total} passed`,
+            total: out.summary.total,
+            passed: out.summary.passed,
+            failed: out.summary.failed,
+            errors: out.summary.errors,
+          };
+        }
         const made = ensureSample(store);
         if (a.run === false) return { evaluation: made.evaluation.name, id: made.evaluation.id, created: made.created, providerAdded: made.providerAdded, cases: 10, model: 'Offline demo model' };
         const { summary, ...run } = await recordedRun(undefined, { name: made.evaluation.name, tests: evaluationTests(made.evaluation, { store }), concurrency: 4, retries: 0 });

@@ -157,6 +157,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'eval.estimate': { draft: 'o', limit: 'n?' },
   'eval.tryCheck': { draft: 'o', check: 'o', caseNumber: 'n?', dryRun: 'b?' },
   'ai.sample': { run: 'b?' },
+  'rag.trySample': { run: 'b?' },
   'ai.demoModel': {},
   'eval.generateCases': { source: 's', draft: 'o', count: 'n?', evaluation: 's?', spec: 'wp?', collection: 's?', folder: 's?', paths: 'wpa?', urls: 'sa?', historyLimit: 'n?', hint: 's?', provider: 's?', dryRun: 'b?', privacy: 's?' },
   'eval.casesOfProposal': { id: 's', items: 'sa?' },

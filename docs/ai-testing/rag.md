@@ -11,6 +11,18 @@ TestPion tests a RAG system that runs somewhere else: you connect its endpoint, 
 what comes back (the answer and the documents it retrieved) is scored. Everything is under **Evaluations** (the type
 *RAG*) and **Bots with sources** (its own rail item: Start, Bots, Questions, Metrics, Checks; where you connect the bot). The full list of metrics is [RAG metrics](./rag-metrics.md).
 
+## Try the sample first {#sample}
+
+**Bots with sources ▸ Start ▸ Try the sample (offline)** makes everything a first run needs and runs it, with no key, no
+network and no server: an offline bot (an MCP mock with four clinic documents, `mocks/clinic-bot.mcp-mock.yaml`, served
+inside TestPion), the bot as a saved target (*Clinic bot (offline)*), six questions with their reference answers and right
+documents, and the evaluation *Sample: clinic bot* with the standard five measures; the offline demo model is the AI
+reviewer. Two questions fail on purpose, each for a different reason, so the report has something to show: the parking
+answer states something no document says (not backed by the sources), and the rabies-booster question retrieves the wrong
+document (the right document is not found). The result is *4 of 6 passed*. The same thing from the command line is
+`testpion rag sample` (`--no-run` only makes it, `--json` for scripts), and for an agent the MCP tool `eval_sample` with
+`kind: "bot"`. An edited sample is put back as written: make your own with Duplicate.
+
 ## Connect a RAG system {#connect}
 
 A **RAG target** is one request to the system under test and a map of where its answer and retrieved documents are in the

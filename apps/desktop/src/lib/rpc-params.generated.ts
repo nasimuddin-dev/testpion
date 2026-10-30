@@ -300,6 +300,7 @@ export interface RpcParamTypes {
   'rag.testset.generate': RpcCommonParams & { paths?: string[]; urls?: string[]; count?: number; types?: string[]; name?: string; seed?: unknown; judge?: unknown; noJudge?: boolean; personas?: string[]; styles?: string[]; dedupe?: string; embedder?: string };
   'rag.testset.sources': RpcCommonParams;
   'rag.trend': RpcCommonParams & { evaluation?: string; runIds?: string[]; metrics?: string[]; runs?: number; since?: string; minDelta?: number };
+  'rag.trySample': RpcCommonParams & { run?: boolean };
   'ref.info': RpcCommonParams & { ref: unknown };
   'ref.resolve': RpcCommonParams & { ref: unknown };
   'report.workspace': RpcCommonParams & { days?: number; tzOffsetMin?: number };
@@ -392,4 +393,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 375;
+export const RPC_METHOD_COUNT = 376;

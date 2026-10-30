@@ -665,6 +665,7 @@ RAG systems under test (the Bots with sources rail item ▸ Bots; the guide is [
 
 | Command | What it does |
 |---|---|
+| `rag sample` | The first result in one command: makes an offline bot (an MCP mock with four clinic documents), six questions and the evaluation *Sample: clinic bot* with the offline demo model as the reviewer, and runs it (4 of 6 pass; two fail on purpose). `--no-run` only makes it. No key, no network, no server. |
 | `rag targets` | The RAG targets of the workspace (protocol, the mapping in a line, what stops one from being called). |
 | `rag probe [target] [question]` | One real question to a target (a saved one, or `--file target.yaml`): the answer, the retrieved contexts with id, score and source, usage and latency, the warnings of the mapping, and with `--raw` the response the mapping reads. `-e` picks the environment; `--allow-production` as for any request that is not a read. |
 | `rag connect <preset\|file> --name <name>` | Save a target without the app, from a preset (`openai-compatible`, `openai-compatible-stream`, `langserve`, `llamaindex`, `haystack`, `dify`, `flowise`, `generic-json`) or from a request file. `--var key=value` puts a value into the request (`{{ragUrl}}`), `--answer`, `--contexts`, `--text`, `--id`, `--score` set the mapping, `--concurrency`, `--rpm`, `--retries` the limits, `--read-only`. |

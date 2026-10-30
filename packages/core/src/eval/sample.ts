@@ -33,6 +33,26 @@ const DEMO_RULES = [
   { match: 'Customer:', response: '{"intent":"other"}' },
 ];
 
+/** A judge verdict as the offline demo model writes it: one item per claim, `verdict` true when the claim holds. */
+const verdict = (items: Array<[text: string, verdict: boolean, reason?: string]>) =>
+  JSON.stringify({ reasoning: 'decided by rule (offline demo)', items: items.map(([text, v, reason]) => ({ text, verdict: v, reason: reason ?? '', rating: 1 })) });
+const PARKING = 'Parking is free for patients';
+const EMERGENCY = 'Emergency care is available around the clock at the main clinic';
+/**
+ * How the offline demo model answers as the AI reviewer of the bot sample (eval/rag/sample.ts): the claims of each answer, whether
+ * the retrieved documents back them, and whether they address the question. The parking answer is the seeded defect: its first
+ * claim is backed by no document. Any other reviewer prompt gets a passing verdict, so every judged metric runs offline.
+ */
+const DEMO_JUDGE_RULES = [
+  { match: 'Evaluation task: CLAIMS[\\s\\S]*free for patients', response: verdict([[PARKING, true], [EMERGENCY, true]]) },
+  { match: 'Evaluation task: CLAIMS[\\s\\S]*could not find', response: verdict([]) },
+  { match: 'Evaluation task: CLAIMS', response: verdict([['The answer states what the retrieved document says', true]]) },
+  { match: 'Evaluation task: FAITHFULNESS[\\s\\S]*Parking is free', response: verdict([[PARKING, false, 'no retrieved document mentions parking'], [EMERGENCY, true, '[doc-4] "around the clock"']]) },
+  { match: 'Evaluation task: FAITHFULNESS', response: verdict([['The answer states what the retrieved document says', true, 'stated by the retrieved document']]) },
+  { match: 'Evaluation task: ANSWER RELEVANCE[\\s\\S]*Parking is free', response: verdict([[PARKING, true, 'answers the question'], [EMERGENCY, false, 'the question did not ask about emergency care']]) },
+  { match: 'Evaluation task', response: verdict([['The answer addresses the question', true, 'decided by rule']]) },
+];
+
 const CASES: Array<[string, string]> = [
   ['Cancel my appointment', 'cancellation'],
   ['I need to cancel my Friday visit', 'cancellation'],
@@ -83,7 +103,7 @@ export function ensureDemoModel(store: WorkspaceStore): { provider: ProviderConf
   const providers = store.getProviders();
   let demo = providers.find((p) => p.id === OFFLINE_DEMO_ID);
   const added = !demo;
-  const config: ProviderConfig = { ...(demo ?? { id: preset.id, name: preset.name, kind: preset.kind, baseUrl: preset.baseUrl, defaultModel: preset.defaultModel }), kind: 'mock', headers: [{ key: 'x-mock-rules', value: JSON.stringify(DEMO_RULES) }] };
+  const config: ProviderConfig = { ...(demo ?? { id: preset.id, name: preset.name, kind: preset.kind, baseUrl: preset.baseUrl, defaultModel: preset.defaultModel }), kind: 'mock', headers: [{ key: 'x-mock-rules', value: JSON.stringify([...DEMO_RULES, ...DEMO_JUDGE_RULES]) }] };
   if (!demo || demo.headers?.find((h) => h.key.toLowerCase() === 'x-mock-rules')?.value !== config.headers![0]!.value) {
     store.saveProviders(demo ? providers.map((p) => (p === demo ? config : p)) : [...providers, config]);
     demo = config;

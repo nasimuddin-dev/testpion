@@ -1,5 +1,5 @@
 /**
- * `testpion rag metrics|presets|metric|run|rescore|compare|connect|cache`: the metric side of RAG testing. The catalogue
+ * `testpion rag sample|metrics|presets|metric|run|rescore|compare|connect|cache`: the first result in one command (an offline bot), the metric side of RAG testing. The catalogue
  * (one table: kind, inputs, direction, calls), "try on one sample", running an evaluation with chosen metrics and gates
  * (`--min`), re-scoring a finished run with another judge or more metrics (no call to the RAG system), comparing two runs
  * metric by metric, connecting a target from a preset, and emptying the judge cache. Exit 1 when a gate fails or a metric
@@ -10,6 +10,8 @@ import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import {
   ApsError,
+  BOT_SAMPLE_NAME,
+  ensureBotSample,
   METRIC_GROUPS,
   METRIC_PRESETS,
   buildMetricMatrix,
@@ -232,6 +234,27 @@ export function registerRagEvalCommands(rag: Command): void {
         }
       }),
     );
+
+  rag
+    .command('sample')
+    .description('make the sample bot evaluation (an offline bot with four clinic documents, six questions, the offline demo model as the AI reviewer; no key, no network, no server) and run it: the first result in one command')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option('--no-run', 'only make the sample, do not run it')
+    .option('-o, --out <dir>', 'output directory for results and reports')
+    .option('-q, --quiet', 'only print the summary')
+    .option('--json', 'print as JSON (for scripts and AI agents)')
+    .action(async (o: { workspace?: string; run?: boolean; out?: string; quiet?: boolean; json?: boolean }) => {
+      const made = await withWorkspace(o.workspace, async (store, ephemeral) => {
+        needWorkspace(ephemeral);
+        return ensureBotSample(store);
+      });
+      if (o.run === false) {
+        if (o.json) return printJson({ evaluation: made.evaluation.name, id: made.evaluation.id, target: made.target.name, created: made.created, providerAdded: made.providerAdded, questions: 6, bot: 'Offline mock bot', reviewer: 'Offline demo model' });
+        return console.log(`${bold(made.evaluation.name)} ${dim(made.created ? 'made' : 'reset')}: 6 questions, the offline bot "${made.target.name}", the offline demo model as the reviewer. Run it with: testpion rag run "${BOT_SAMPLE_NAME}"`);
+      }
+      if (!o.quiet && !o.json) console.log(dim('Offline: the bot is a mock with four documents and the AI reviewer is the offline demo model, so use this to try things out, not to judge a real bot.'));
+      process.exitCode = await runCommand(BOT_SAMPLE_NAME, { workspace: o.workspace, metrics: [], judges: [], when: [], unless: [], min: [], maxRegression: '0.05', out: o.out, quiet: o.quiet, json: o.json });
+    });
 
   rag
     .command('run')
