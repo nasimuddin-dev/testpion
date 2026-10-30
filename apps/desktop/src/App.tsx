@@ -97,7 +97,7 @@ const ViewHost = memo(function ViewHost({ id, docId, shown }: { id: ViewId; docI
 });
 
 /** Views that show a code editor: the editor (Monaco) is warmed in idle time once one of them opened, not before. */
-const EDITOR_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections', 'tests', 'ai', 'evaluations', 'load', 'monitors'];
+const EDITOR_VIEWS: ViewId[] = ['rest', 'graphql', 'grpc', 'websocket', 'mcp', 'apidef', 'dataset', 'collections', 'tests', 'ai', 'evaluations', 'rag', 'load', 'monitors'];
 const VIEWS: Record<ViewId, LazyView> = {
   home: view(() => import('./views/HomeView'), 'HomeView'),
   rest: view(() => import('./views/RestView'), 'RestView'),
@@ -109,6 +109,7 @@ const VIEWS: Record<ViewId, LazyView> = {
   mcp: view(() => import('./views/McpView'), 'McpView'),
   ai: view(() => import('./views/AiLabView'), 'AiLabView'),
   evaluations: view(() => import('./views/EvaluationsView'), 'EvaluationsView'),
+  rag: view(() => import('./views/RagView'), 'RagView'),
   tests: view(() => import('./views/TestsView'), 'TestsView'),
   load: view(() => import('./views/LoadView'), 'LoadView'),
   traces: view(() => import('./views/TracesView'), 'TracesView'),
@@ -128,7 +129,7 @@ const MAX_CACHED_VIEWS = 4;
 
 // The rail's screens are fetched and parsed in idle time once the app is up, one per idle slot, so a first visit to
 // History, Traces, the Debugger … shows at once instead of waiting for its chunk. (Startup itself loads none of them.)
-const RAIL_VIEWS: ViewId[] = ['history', 'traces', 'debugger', 'tests', 'environments', 'git', 'monitors', 'load', 'ai', 'evaluations', 'settings'];
+const RAIL_VIEWS: ViewId[] = ['history', 'traces', 'debugger', 'tests', 'environments', 'git', 'monitors', 'load', 'ai', 'evaluations', 'rag', 'settings'];
 function prefetchRailViews() {
   const idle = (fn: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 200));
   const next = (i: number) => {
@@ -440,7 +441,8 @@ export default function App() {
       { id: 'compare', label: 'Compare models', hint: 'AI quality: Compare', run: () => s.openIntent('ai', { tab: 'compare' }) },
       { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: 'AI quality: Models and keys', run: () => s.openIntent('ai', { tab: 'usage' }) },
       { id: 'mcp-usage', label: 'MCP tool usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
-      { id: 'eval', label: 'New evaluation', hint: 'AI quality: Checks', run: () => s.setView('evaluations') },
+      { id: 'eval', label: 'New evaluation', hint: 'AI quality: Checks', run: () => s.openIntent('evaluations', { host: 'ai' }) },
+      { id: 'rag-connect', label: 'Connect a bot with sources (RAG)', hint: 'Bots with sources: Bots', run: () => s.openIntent('rag', { tab: 'bots', connect: true }) },
       { id: 'ai-start', label: 'Check an AI answer', hint: 'AI quality: Start', run: () => s.openIntent('ai', { tab: 'start' }) },
       { id: 'shortcuts', label: 'Keyboard shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
       { id: 'keyboard-settings', label: 'Keyboard shortcuts: Change the keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },

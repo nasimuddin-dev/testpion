@@ -16,6 +16,7 @@ export const VIEW_DOCS: Record<ViewId, string> = {
   dataset: 'test-runner/datasets',
   ai: 'ai-testing/overview',
   evaluations: 'ai-testing/evaluations',
+  rag: 'ai-testing/rag',
   tests: 'test-runner/overview',
   load: 'performance/load-testing',
   traces: 'test-runner/traces',

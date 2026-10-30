@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Bots with sources: its own place
+
+- **Bots with sources is its own rail item** (shown on a new install, next to AI quality), with the work in order as tabs: *Start* (the three steps as cards and your latest bot runs), *Bots* (connect one, any protocol), *Questions* (datasets: write, generate from documents, take from real calls), *Metrics* (your own measures) and *Checks* (the bot evaluations and their runs, under the same strip). AI quality keeps Start, Checks, Try a prompt, Compare and Models and keys for prompts, chatbots and agents; its Checks lists prompt and agent evaluations only, the bots' Checks lists bot evaluations only. Links, saved rails, `openIntent('ai', { tab: 'rag' })` and a bot's ref keep working and land in the new place. A new palette command, *Connect a bot with sources (RAG)*.
+- Plain words on that side: a *RAG target* is a *bot*, *Connect a RAG system* is *Connect a bot*, *Data* is *Questions*. The CLI, MCP tools and file formats are unchanged.
+
 ## 0.55.3 — 2026-10-29
 
 A patch release that makes the finishing steps of a run reliable on Windows and re-checks what 0.55.2 shipped.

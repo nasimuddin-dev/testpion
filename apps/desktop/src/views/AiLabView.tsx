@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSticky } from '../lib/sticky';
 import { AiUsage } from '../components/AiUsage';
 import { call } from '../api';
+import { useApp } from '../store';
 import { useIntent } from '../hooks';
 import type { ProviderConfig } from '../types';
 import { Segmented } from '../components/ui';
@@ -9,12 +10,15 @@ import { AiQualityTabs } from '../components/ai/AiQualityTabs';
 import { Playground } from './ai/Playground';
 import { Compare } from './ai/Compare';
 import { Providers } from './ai/Providers';
-import { Rag } from './ai/Rag';
 import { Start } from './ai/Start';
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
-  const [tab, setTab] = useSticky<'start' | 'playground' | 'compare' | 'rag' | 'providers'>('ai:tab', 'start');
+  const [tab, setTab] = useSticky<'start' | 'playground' | 'compare' | 'providers'>('ai:tab', 'start');
+  // the place saved by an older version: Bots with sources is its own rail item now (R-1)
+  useEffect(() => {
+    if ((tab as string) === 'rag') setTab('start');
+  }, [tab, setTab]);
   // Models and keys holds the providers and, beside them, what the AI calls used
   const [models, setModels] = useSticky<'providers' | 'usage'>('ai:models', 'providers');
   const [providers, setProviders] = useState<ProviderConfig[]>();
@@ -24,16 +28,12 @@ export function AiLabView() {
   }, [load]);
   /** A provider to show (a link such as an error's "Add the key"): selected, its key field focused. */
   const [focusProvider, setFocusProvider] = useState<{ id: string; at: number }>();
-  /** A RAG target to open (a link to it). */
-  const [ragTarget, setRagTarget] = useState<{ id: string; at: number }>();
   useIntent('ai', (p) => {
+    // links from before R-1: the bots live under their own rail item
+    if (p?.tab === 'rag' || p?.ragTargetId) return useApp.getState().openIntent('rag', { tab: 'bots', ...(p.ragTargetId ? { ragTargetId: p.ragTargetId } : {}) });
     if (p?.savedId || p?.prompt) setTab('playground');
     if (p?.tab === 'usage') (setTab('providers'), setModels('usage'));
     else if (p?.tab) (setTab(p.tab), p.tab === 'providers' && setModels('providers'));
-    if (p?.ragTargetId) {
-      setTab('rag');
-      setRagTarget({ id: p.ragTargetId, at: Date.now() });
-    }
     if (p?.providerId) {
       setTab('providers');
       setFocusProvider({ id: p.providerId, at: Date.now() });
@@ -49,7 +49,6 @@ export function AiLabView() {
         {tab === 'start' && <Start providers={providers} onTab={setTab} />}
         {tab === 'playground' && <Playground providers={providers ?? []} onSetUp={() => setTab('providers')} />}
         {tab === 'compare' && <Compare providers={providers ?? []} onSetUp={() => setTab('providers')} />}
-        {tab === 'rag' && <Rag openTarget={ragTarget} />}
         {tab === 'providers' && (
           <div className="h-full flex flex-col" data-models-and-keys>
             <div className="px-3 py-1.5 border-b border-line">

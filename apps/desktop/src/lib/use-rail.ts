@@ -3,7 +3,7 @@ import { COLLECTIONS_NAV, NAV } from '../components/nav';
 import { isRequestView, useApp, type ViewId } from '../store';
 import { railChange, railModel, railOrder, type RailId, type RailModel } from './rail';
 import { saveUiPrefs } from './ui-prefs';
-import { AI_QUALITY, isAiView, lastAiView } from './ai-quality';
+import { AI_QUALITY, isAiView, lastAiView, navIdOf } from './ai-quality';
 
 /** Every rail item in the default order (lib/rail.ts). */
 export const RAIL_DEFAULTS = railOrder(NAV);
@@ -35,8 +35,9 @@ export function resetRail(all = false): Promise<void> {
 }
 
 /** The rail item a view belongs to: the request editors are Collections'. */
-export function railIdOf(view: ViewId): RailId {
-  return isRequestView(view) ? 'collections' : isAiView(view) ? AI_QUALITY : view;
+export function railIdOf(view: ViewId, evalHost?: 'ai' | 'rag'): RailId {
+  if (view === 'evaluations' && evalHost) return evalHost === 'rag' ? 'rag' : AI_QUALITY;
+  return isRequestView(view) ? 'collections' : isAiView(view) ? navIdOf(view) : view;
 }
 
 /** Go to a rail item: Collections opens the request editor used last with its explorer. */
@@ -45,6 +46,11 @@ export function goToRail(id: RailId): void {
   if (id === 'collections') {
     st.setView(st.lastRequestView);
     st.toggleExplorer(true);
-  } else if (id === AI_QUALITY) st.setView(lastAiView());
+  } else if (id === AI_QUALITY) {
+    // the Checks tab used last may show a bot evaluation now (R-1): AI quality's Checks shows a prompt one
+    const v = lastAiView();
+    if (v === 'evaluations') st.openIntent('evaluations', { host: 'ai' });
+    else st.setView(v);
+  }
   else st.setView(id as ViewId);
 }

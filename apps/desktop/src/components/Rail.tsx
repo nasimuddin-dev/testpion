@@ -74,6 +74,7 @@ function RailButton({
  */
 export function Sidebar() {
   const view = useApp((s) => s.view);
+  const evalHost = useApp((s) => s.evalHost);
   const explorerOpen = useApp((s) => s.explorerOpen);
   const rail = useRail();
   const bindings = useBindings();
@@ -81,7 +82,7 @@ export function Sidebar() {
   // the team pushed commits this branch does not have yet (the backend fetches in the background): a count on Git
   const behind = useGitBehind();
   const counts: Partial<Record<RailId, { n: number; title: string }>> = behind > 0 ? { git: { n: behind, title: `${plural(behind, 'new commit')} on the remote to pull` } } : {};
-  const here = railIdOf(view);
+  const here = railIdOf(view, evalHost);
   const inRequests = isRequestView(view);
   // a view opened from More… (or a link, Ctrl+K) shows on the rail while it is open: you always see where you are
   const transient = view !== 'settings' && rail.more.includes(here) ? here : undefined;

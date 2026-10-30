@@ -47,10 +47,10 @@ const pick = (name, label) => `
 const steps = [
   step(
     'rag-tab-in-ai-lab',
-    `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!t) return 'NO TAB RAG';
-     await __t.real.click(t); await __t.sleep(800);
-     return 'empty: ' + /No RAG systems yet/.test(document.querySelector('main')?.innerText ?? '');`,
+    `await __t.view('Bots with sources'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
+     await __t.real.click(t); await __t.sleep(600);
+     return 'empty: ' + /No bots yet/.test(document.querySelector('main')?.innerText ?? '');`,
   ),
   step(
     'connect-dialog',

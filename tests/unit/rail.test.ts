@@ -3,12 +3,12 @@ import { RAIL_DEFAULT_SHOWN, railChange, railModel, railOrder, railShortcut, rai
 
 // The rail's model: 7 views shown by default (AI quality too), More… for the rest, the person's order and choice (per computer);
 // Ctrl/Cmd+Alt+1…9 count the shown views only.
-const DEFAULTS = ['home', 'collections', 'debugger', 'tests', 'monitors', 'load', 'aiquality', 'environments', 'history', 'traces', 'git'];
+const DEFAULTS = ['home', 'collections', 'debugger', 'tests', 'monitors', 'load', 'aiquality', 'rag', 'environments', 'history', 'traces', 'git'];
 
 describe('rail model', () => {
   it('shows the default five, in the default order, the rest under More…', () => {
     const m = railModel(DEFAULTS);
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'environments', 'history']);
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'rag', 'environments', 'history']);
     expect(m.visible).toEqual(DEFAULTS.filter((id) => RAIL_DEFAULT_SHOWN.includes(id)));
     expect(m.more).toEqual(['debugger', 'monitors', 'load', 'traces', 'git']);
     expect(m.all).toEqual(DEFAULTS);
@@ -17,22 +17,22 @@ describe('rail model', () => {
   it('the shortcuts follow the shown views', () => {
     const m = railModel(DEFAULTS);
     expect(railTarget(m.visible, 3)).toBe('tests');
-    expect(railTarget(m.visible, 7)).toBeUndefined();
+    expect(railTarget(m.visible, 8)).toBeUndefined();
     expect(railTarget(m.visible, 4)).toBe('aiquality');
-    expect(railShortcut(m.visible, 'history', 'Ctrl')).toBe('Ctrl+Alt+6');
+    expect(railShortcut(m.visible, 'history', 'Ctrl')).toBe('Ctrl+Alt+7');
     expect(railShortcut(m.visible, 'debugger', 'Ctrl')).toBeUndefined();
   });
 
   it('hides, shows (at the end of the shown ones) and moves items', () => {
     let m = railModel(DEFAULTS);
     m = railModel(DEFAULTS, railChange(m, 'history', 'hide'));
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'environments']);
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'rag', 'environments']);
     expect(m.more).toContain('history');
     m = railModel(DEFAULTS, railChange(m, 'git', 'show'));
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'environments', 'git']);
-    expect(railTarget(m.visible, 6)).toBe('git');
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'rag', 'environments', 'git']);
+    expect(railTarget(m.visible, 7)).toBe('git');
     m = railModel(DEFAULTS, railChange(m, 'git', 'up'));
-    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'git', 'environments']);
+    expect(m.visible).toEqual(['home', 'collections', 'tests', 'aiquality', 'rag', 'git', 'environments']);
     m = railModel(DEFAULTS, railChange(m, 'home', 'up')); // already first: nothing changes
     expect(m.visible[0]).toBe('home');
     m = railModel(DEFAULTS, railChange(m, 'environments', 'down')); // already last

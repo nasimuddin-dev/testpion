@@ -28,6 +28,7 @@ export type ViewId =
   | 'dataset'
   | 'ai'
   | 'evaluations'
+  | 'rag'
   | 'tests'
   | 'load'
   | 'traces'
@@ -223,6 +224,8 @@ interface AppState {
   shortcutsOpen?: boolean;
   /** The "Run in CI" dialog, with what to run preselected. */
   ci?: CiRequest;
+  /** What the evaluations view shows (R-1): the Checks of AI quality, or of Bots with sources; the rail highlights that item. */
+  evalHost?: 'ai' | 'rag';
   /** The "Compare OpenAPI versions" dialog. */
   openapiDiff?: boolean;
   /** The Export bundle dialog (lib/transfer.ts): what to export. */

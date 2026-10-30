@@ -25,10 +25,10 @@ const FILE = [
 const steps = [
   step(
     'the-metrics-side-lists-nothing-yet',
-    `await __t.view('AI Lab'); await __t.sleep(600);
-     const t = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!t) return 'NO TAB RAG';
+    `await __t.view('Bots with sources'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
-     const m = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!m) return 'NO SWITCH Metrics';
+     const m = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Metrics'); if (!m) return 'NO TAB Metrics';
      await __t.real.click(m);
      const list = await __t.waitFor(() => document.querySelector('[data-rag-metrics-list]'), 5000); if (!list) return 'NO LIST';
      return 'rows: ' + list.querySelectorAll('[data-rag-metric-row]').length + ' | new button: ' + !!document.querySelector('[data-rag-metric-new]');`,
@@ -101,10 +101,10 @@ const steps = [
   // the dag kind: a Decision tree panel above the YAML; every change is written back into the file
   step(
     'a-decision-tree-metric-has-a-tree-editor',
-    `await __t.view('AI Lab'); await __t.sleep(600);
-     const rag = vis('main [role=tab]').find((x) => x.textContent.trim().startsWith('Bots with sources')); if (!rag) return 'NO TAB RAG';
+    `await __t.view('Bots with sources'); await __t.sleep(600);
+     const rag = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!rag) return 'NO TAB Bots';
      await __t.real.click(rag); await __t.sleep(600);
-     const sw = vis('main button, main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!sw) return 'NO SWITCH Metrics';
+     const sw = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Metrics'); if (!sw) return 'NO TAB Metrics';
      await __t.real.click(sw);
      await __t.waitFor(() => document.querySelector('[data-rag-metric-new]'), 5000);
      await __t.real.click('[data-rag-metric-new]');

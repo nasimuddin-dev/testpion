@@ -787,7 +787,7 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     "grpc": "grpc",
     "load-tests": "load",
     "monitors": "monitors",
-    "rag-targets": "ai",
+    "rag-targets": "rag",
     "websocket": "websocket",
   },
   "PROTOCOL_VIEW": {
@@ -1737,39 +1737,39 @@ exports[`kind equivalence (REG-1 snapshots; unchanged by the registry adapters) 
     {
       "payload": {
         "ragTargetId": "rt-1",
-        "tab": "rag",
+        "tab": "bots",
       },
-      "view": "ai",
+      "view": "rag",
     },
     {
       "payload": {
         "newDoc": true,
         "ragTargetId": "rt-1",
-        "tab": "rag",
+        "tab": "bots",
       },
-      "view": "ai",
+      "view": "rag",
     },
     {
       "payload": {
         "ragTargetId": "rt-1",
-        "tab": "rag",
+        "tab": "bots",
       },
-      "view": "ai",
+      "view": "rag",
     },
     {
       "payload": {
         "ragTargetId": "rt-1",
-        "tab": "rag",
+        "tab": "bots",
       },
-      "view": "ai",
+      "view": "rag",
     },
     {
       "payload": {
         "newDoc": true,
         "ragTargetId": "rt-1",
-        "tab": "rag",
+        "tab": "bots",
       },
-      "view": "ai",
+      "view": "rag",
     },
   ],
   [

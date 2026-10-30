@@ -1,4 +1,4 @@
-// The rail shows 6 views by default (AI quality included, so a new person sees it) and More… for the rest; right-click an item to hide, keep or move it (saved per
+// The rail shows 7 views by default (AI quality and Bots with sources included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
 // computer in the app's settings); Ctrl+Alt+1…9, the tooltips, the shortcuts list and the palette follow the shown views.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -39,8 +39,8 @@ const steps = [
      await __t.view('Git');
      const r = await pick('Git', 'Keep on the rail'); if (r !== 'ok') return r;
      await __t.view('Home');
-     window.dispatchEvent(new KeyboardEvent('keydown', { key: '6', ctrlKey: true, altKey: true, bubbles: true })); await __t.sleep(800);
-     return railLabels() + ' || Ctrl+Alt+6: ' + localStorage.getItem('aps.view');`,
+     window.dispatchEvent(new KeyboardEvent('keydown', { key: '7', ctrlKey: true, altKey: true, bubbles: true })); await __t.sleep(800);
+     return railLabels() + ' || Ctrl+Alt+7: ' + localStorage.getItem('aps.view');`,
   ),
   step('move-git-up', `${H} await __t.view('Home'); const r = await pick('Git', 'Move up'); if (r !== 'ok') return r; return railLabels() + ' || ' + (await saved());`),
   step(
@@ -61,6 +61,25 @@ const steps = [
      const names = tabs().map((t) => t.textContent.trim().replace(/\d+$/, '')).join(' | ');
      const cur = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      return 'item: ' + cur + ' | old items on the rail: ' + (!!item('AI Lab') || !!item('Evaluations')) + ' | tabs: ' + names;`,
+  ),
+  step(
+    'bots-with-sources-is-its-own-item',
+    `${H} await __t.view('Home');
+     await __t.real.click(item('Bots with sources')); await __t.sleep(1200);
+     const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="Bots with sources"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
+     const names = [...document.querySelectorAll('[role=tablist][aria-label="Bots with sources"] [role=tab]')].filter((t) => t.offsetParent).map((t) => t.textContent.trim()).join(' | ');
+     const cur = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
+     await __t.real.click(tb('Checks')); await __t.sleep(1500);
+     const curA = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
+     const selA = tb('Checks')?.getAttribute('aria-selected');
+     const typeA = document.querySelector('[data-eval-type]')?.getAttribute('data-eval-type') ?? (/bot/i.test(document.querySelector('input[aria-label="Evaluation name"]')?.value ?? '') ? 'bot' : 'other');
+     // AI quality's Checks shows a prompt evaluation again, under its own strip
+     await __t.real.click(item('AI quality')); await __t.sleep(1000);
+     const ai = (t) => [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
+     await __t.real.click(ai('Checks')); await __t.sleep(1500);
+     const curB = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
+     const typeB = document.querySelector('[data-eval-type]')?.getAttribute('data-eval-type') ?? 'llm';
+     return 'item: ' + cur + ' | tabs: ' + names + ' | checks: ' + curA + ' ' + selA + ' ' + typeA + ' | back to AI quality checks: ' + curB + ' ' + typeB;`,
   ),
   step(
     'checks-and-the-others-stay-under-the-one-item',
@@ -88,14 +107,15 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'default-rail': /^Home \| Collections \| Tests \| AI quality \| Environments \| History \| More views \| Settings$/,
+  'default-rail': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| History \| More views \| Settings$/,
   'more-reaches-hidden': /^debugger shown: true \| on the rail while open: Debugger \| gone after: true$/,
   'shortcut-follows-shown': /^3: tests \| 9 \(no 9th\): tests$/,
-  'hide-history': /^Home \| Collections \| Tests \| AI quality \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","environments"\]\}$/,
-  'keep-git': /^Home \| Collections \| Tests \| AI quality \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+6: git$/,
-  'move-git-up': /^Home \| Collections \| Tests \| AI quality \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","git","environments"\]\}$/,
-  'palette-hint': /^Go to Git hint: Ctrl\+Alt\+5$/,
-  'ai-quality-is-one-item-with-six-tabs': /^item: AI quality \| old items on the rail: false \| tabs: Start \| Checks \| Try a prompt \| Compare \| Bots with sources \| Models and keys\d* ?$/,
+  'hide-history': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","rag","environments"\]\}$/,
+  'keep-git': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
+  'move-git-up': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","rag","git","environments"\]\}$/,
+  'palette-hint': /^Go to Git hint: Ctrl\+Alt\+6$/,
+  'ai-quality-is-one-item-with-six-tabs': /^item: AI quality \| old items on the rail: false \| tabs: Start \| Checks \| Try a prompt \| Compare \| Models and keys\d* ?$/,
+  'bots-with-sources-is-its-own-item': /^item: Bots with sources \| tabs: Start \| Bots \| Questions \| Metrics \| Checks \| checks: Bots with sources true bot \| back to AI quality checks: AI quality llm$/,
   'checks-and-the-others-stay-under-the-one-item': /^checks: true AI quality true \| try a prompt: AI quality true \| back from Home to the tab used last: true$/,
-  reset: /^Home \| Collections \| Tests \| AI quality \| Environments \| History \| More views \| Settings \|\| null$/,
+  reset: /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| History \| More views \| Settings \|\| null$/,
 });

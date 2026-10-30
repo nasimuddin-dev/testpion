@@ -21,6 +21,8 @@ import { TrustReviewer } from '../components/ai/TrustReviewer';
 import { Wizard, type WizardDraft } from './ai/Wizard';
 import { BotWizard, type BotDraft } from './ai/BotWizard';
 import { AiQualityTabs } from '../components/ai/AiQualityTabs';
+import { RagTabs } from '../components/rag/RagTabs';
+import { rememberEvalHost, type EvalHost } from '../lib/ai-quality';
 import { AgentToolsEditor } from '../components/ai/AgentToolsEditor';
 import { AGENT_EXAMPLE_CASES, AGENT_PROMPT } from '../lib/agent-eval';
 import { GoodAnswerPicker } from '../components/ai/GoodAnswerPicker';
@@ -94,6 +96,9 @@ interface Draft {
   gates?: Record<string, number>;
 }
 
+/** A new bot evaluation as the wizard starts it: also what the Checks tab of Bots with sources opens when no bot evaluation is open. */
+const BOT_DEFAULTS = (): BotDraft => ({ ...(drafts.defaults as BotDraft), type: 'rag', name: 'New bot evaluation', provider: '', model: '', system: '', prompt: '', format: 'text', dataset: RAG_STARTER_DATASET, datasetFormat: 'jsonl', expectedField: 'reference', evaluators: RAG_STARTER_EVALUATORS });
+
 const drafts = persisted<Draft>('eval', {
   name: 'Intent classification',
   type: 'llm',
@@ -131,6 +136,14 @@ export function EvaluationsView() {
   const tabs = useLibraryTabs<Draft>('eval', drafts, { canBeEmpty: true });
   const d = tabs.d;
   const setD = tabs.setD;
+  // R-1: Checks belongs to AI quality or to Bots with sources; an open evaluation says which, an empty view remembers the last
+  const [stickyHost, setStickyHost] = useSticky<EvalHost>('eval:host', 'ai');
+  const host: EvalHost = tabs.empty ? stickyHost : d.type === 'rag' ? 'rag' : 'ai';
+  useEffect(() => {
+    rememberEvalHost(host);
+    useApp.getState().set({ evalHost: host });
+  }, [host]);
+  const draftOf = (id: string): Draft => drafts.forDoc(id === 'main' ? undefined : id).load();
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   // (a callout about a missing model waits until the providers are known)
   const [providersKnown, setProvidersKnown] = useState(false);
@@ -240,7 +253,17 @@ export function EvaluationsView() {
   };
   // the Collections explorer / search open a saved evaluation
   useIntent('evaluations', (p) => {
-    if (p?.new) tabs.newTab(drafts.defaults);
+    // the Checks tab of one rail item shows that item's evaluations: an open one of the kind, else a new one
+    if (p?.host === 'rag' || p?.host === 'ai') {
+      setStickyHost(p.host);
+      const wantRag = p.host === 'rag';
+      if (!p.wizard && !p.savedId && !p.sample && !p.new && (tabs.empty || (d.type === 'rag') !== wantRag)) {
+        const open = tabs.tabs.find((t) => (draftOf(t.id).type === 'rag') === wantRag);
+        if (open) tabs.select(open.id);
+        else tabs.newTab(wantRag ? (BOT_DEFAULTS() as Draft) : drafts.defaults);
+      }
+    }
+    if (p?.new) tabs.newTab(p.host === 'rag' ? (BOT_DEFAULTS() as Draft) : drafts.defaults);
     if (p?.wizard) setWizard(p.kind === 'agent' ? 'agent' : p.kind === 'bot' ? 'bot' : 'llm');
     // Model comparison (AI Lab) hands over its prompt, its input and its models: one case, one variant per model
     if (p?.compare) openCompare(p.compare as CompareHandOver);
@@ -250,11 +273,12 @@ export function EvaluationsView() {
         if (p.runId) (setRunId(p.runId), setPane('runs'));
       });
   });
+  const hostItems = useMemo(() => saved.lib.items.filter((i) => (i.data.type === 'rag') === (host === 'rag')), [saved.lib.items, host]);
   const evalRuns = useMemo(() => {
-    const names = new Set(saved.lib.items.map((i) => i.name));
+    const names = new Set(hostItems.map((i) => i.name));
     // the runs of compare mode are named "<evaluation> · <variant>"
     return runs.filter((r) => names.has(r.name) || r.name === d.name || r.name.startsWith(`${d.name} · `));
-  }, [runs, saved.lib.items, d.name]);
+  }, [runs, hostItems, d.name]);
   // the answers to grade in "Trust the AI reviewer" come from the latest finished run of THIS evaluation
   const trustRun = useMemo(() => runs.find((r) => r.name === d.name && r.total > 0)?.id, [runs, d.name]);
   // the format the text really has: JSON whose text is one object per line is read as JSONL (the editor checks it as such too)
@@ -266,14 +290,14 @@ export function EvaluationsView() {
   // the saved list's rows (a dataset is counted when the library changes, not on every keystroke)
   const savedItems = useMemo(
     () =>
-      saved.lib.items.map((i) => ({
+      hostItems.map((i) => ({
         id: i.id,
         name: i.name,
         folder: i.folder,
         subtitle: `${i.data.model || i.data.provider || 'model'} · ${countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl')} cases`,
         icon: <FlaskConical size={12} className="text-muted" />,
       })),
-    [saved.lib.items],
+    [hostItems],
   );
 
   /** What stops a run, with its one-click remedy (AU-8): Run is never disabled without one. */
@@ -342,8 +366,8 @@ export function EvaluationsView() {
   };
 
   return (
-    <div className="h-full flex flex-col">
-    <AiQualityTabs active="checks" models={providers.length} />
+    <div className="h-full flex flex-col" data-eval-type={tabs.empty ? 'none' : d.type === 'rag' ? 'bot' : d.type}>
+    {host === 'rag' ? <RagTabs active="checks" /> : <AiQualityTabs active="checks" models={providers.length} />}
     <div className="flex-1 min-h-0">
     <Split id="eval-sidebar" sidebar initial={18} min={12}>
       <SidebarShell
@@ -357,7 +381,7 @@ export function EvaluationsView() {
               <FolderList
                 id="eval-saved"
                 kind="evaluation"
-                title="Saved evaluations"
+                title={host === 'rag' ? 'Saved bot evaluations' : 'Saved evaluations'}
                 itemNoun="evaluation"
                 addLabel="Save current evaluation"
                 folders={saved.lib.folders}
@@ -434,7 +458,7 @@ export function EvaluationsView() {
     {tryCheck && <RagTryDialog check={tryCheck} target={d.target} question={String(preview[0]?.question ?? preview[0]?.query ?? preview[0]?.input ?? preview[0]?.user_input ?? '') || undefined} judge={d.judge} evaluation={savedId} onClose={() => setTryCheck(undefined)} />}
     {wizard === 'bot' && (
       <BotWizard
-        initial={{ ...(drafts.defaults as BotDraft), type: 'rag', name: 'New bot evaluation', provider: '', model: '', system: '', prompt: '', format: 'text', dataset: RAG_STARTER_DATASET, datasetFormat: 'jsonl', expectedField: 'reference', evaluators: RAG_STARTER_EVALUATORS }}
+        initial={BOT_DEFAULTS()}
         providers={providers}
         names={saved.lib.items.map((i) => i.name)}
         onClose={() => setWizard(false)}

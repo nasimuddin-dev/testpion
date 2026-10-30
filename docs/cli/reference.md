@@ -661,7 +661,7 @@ testpion ai attempt-fix ai-mvckdy5ve28aa50ec9 --times 5   # apply it, run the te
 
 ## `rag` {#rag}
 
-RAG systems under test (AI quality ▸ Bots with sources; the guide is [RAG testing](/ai-testing/rag), the metrics are [RAG metrics](/ai-testing/rag-metrics)). All take `--json`.
+RAG systems under test (the Bots with sources rail item ▸ Bots; the guide is [RAG testing](/ai-testing/rag), the metrics are [RAG metrics](/ai-testing/rag-metrics)). All take `--json`.
 
 | Command | What it does |
 |---|---|

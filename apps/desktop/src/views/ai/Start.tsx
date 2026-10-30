@@ -9,7 +9,7 @@ import { LABEL } from '../../lib/vocabulary';
 import { Button, Empty, LinkButton, SectionTitle } from '../../components/ui';
 import { RunMiniBar, type RunRow } from '../../components/RunsOverview';
 
-type Tab = 'playground' | 'compare' | 'rag' | 'providers' | 'start';
+type Tab = 'playground' | 'compare' | 'providers' | 'start';
 
 function StartCard({ id, icon, title, children, action, reason, time }: { id: string; icon: ReactNode; title: string; children: ReactNode; action: ReactNode; reason?: string; time?: string }) {
   return (
@@ -86,7 +86,7 @@ export function Start({ providers, onTab }: { providers?: ProviderConfig[]; onTa
             icon={<FileText size={16} />}
             title="Answers come from my documents"
             action={
-              <Button size="sm" onClick={() => open({ wizard: true, kind: 'bot' })} data-start-go="documents">
+              <Button size="sm" onClick={() => open({ wizard: true, kind: 'bot', host: 'rag' })} data-start-go="documents">
                 Start
               </Button>
             }

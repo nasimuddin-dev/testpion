@@ -34,7 +34,7 @@ const allUnder = (label, max) => (r) => {
 const dom = ({ short = 300 } = {}) => `
   const vis = (sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length);
   const button = (label) => vis('main button').find((b) => b.textContent.trim() === label && b.getAttribute('role') !== 'tab');
-  const tab = (name) => { const all = vis('main [role=tab]').filter((t) => t.textContent.trim().startsWith(name)); return all.find((t) => !t.closest('[aria-label="AI quality"]')) ?? all[0]; };
+  const tab = (name) => { const all = vis('main [role=tab]').filter((t) => t.textContent.trim().startsWith(name)); return all.find((t) => !t.closest('[aria-label="AI quality"], [aria-label="Bots with sources"]')) ?? all[0]; };
   const short = (s, n = ${short}) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, n);
   const painted = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   const ms = (t0) => Math.round(performance.now() - t0);

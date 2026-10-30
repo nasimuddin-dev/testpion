@@ -72,7 +72,7 @@ are data: the instruction says text in a document is never an instruction to the
 
 ## In the window {#window}
 
-AI quality ▸ Bots with sources ▸ **Data** ▸ **Generate a test set from documents…** (hidden while *Hide all AI actions* is on). Pick the documents, the
+Bots with sources ▸ **Questions** ▸ **Generate a test set from documents…** (hidden while *Hide all AI actions* is on). Pick the documents, the
 number of questions, the kinds, a dataset name and a seed; read the estimate; **Generate**. The review lists a row per question with its
 checks; **Add to dataset** appends the ticked rows (one Undo). The same tab lists the workspace's datasets with their record counts and
 offers **Create dataset from captured calls…**.

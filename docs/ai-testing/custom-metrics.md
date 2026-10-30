@@ -9,7 +9,7 @@ The file is plain YAML under git, so a metric is reviewed, branched and merged l
 
 ## Where to write one {#where}
 
-* **AI quality ▸ Bots with sources ▸ Metrics** lists the metrics of the workspace. **New** asks for an id and a kind and starts a file of that kind; the
+* **Bots with sources ▸ Metrics** (its own rail item) lists the metrics of the workspace. **New** asks for an id and a kind and starts a file of that kind; the
   editor checks the file as you type (what is wrong is said at the line), **Run examples** scores the examples of the file and says
   whether the metric agrees with them, **Try on a sample** runs the saved metric on one sample, **Save** writes the file and
   **Delete** says which evaluations and formulas use it first.

@@ -644,7 +644,7 @@ const KINDS: readonly ItemKindInfo[] = [
     searchLabel: 'RAG target',
     storage: { layout: 'library', library: 'rag-targets' },
     folders: { virtual: 'rag-targets' },
-    opens: { view: 'ai' },
+    opens: { view: 'rag' },
     watch: { legacy: 'library', canonical: 'rag-target' },
     git: { merge: 'by-id' },
     listed: true,
