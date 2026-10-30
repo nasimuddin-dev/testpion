@@ -101,6 +101,14 @@ Not planned (and why): a hosted annotation service or multi-user queues (the clo
 | R-2 | Built: *Try the sample (offline)* makes an MCP mock bot (`mocks/clinic-bot.mcp-mock.yaml`, served in-process), the target *Clinic bot (offline)*, six questions and *Sample: clinic bot*; the offline demo model is the reviewer; 4 of 6 pass by design (an unsupported claim; the wrong document retrieved). `testpion rag sample`, `eval_sample { kind: "bot" }`, RPC `rag.trySample`. |
 | R-8 | Built: `PLAIN_METRIC` names in the picker (the id stays beside them), *Connect a bot*, *right document* in the drill-down, *Try again with another AI reviewer*. The `AI_JARGON` guard is unchanged (the docs still use the engine's words). |
 | R-10 | Already true: `RunReport` is the one report card, used by the bot run too; the causes strip is R-3. |
+| R-3 | Built (2026-10-31): `EvalReport.goals` and `causes` (plain words from `eval/rag/failure.ts`, `FAILURE_CLASSES[].plain`), `cause` on each failure, chips (`FilterChips`) that narrow the failed list. |
+| R-4 | Partly built: the sample opens by stage (`lib/rag-stages.ts`: Question, Retrieved, Used, Answer, *start here*, the nearest retrieved document for a missed right one). Not built: per-chunk three-state labels feeding the calibration of retrieval judges. |
+| R-5 | Built: `retrievedDiff` on `eval case diff` (documents dropped and added, the right documents found before and now, the cause now). |
+| R-6 | Built: `mapping.meta` (names to JSONPaths), `sample.meta`, `EvalReport.underTest` with a change mark, the *Under test* field of the connect dialog. |
+| R-7 | Covered by A-6 (the review queue, shared) and the existing *Trust the AI reviewer*; no separate retrieval-judge queue. |
+| R-9 | Built: `eval/rag/shapes.ts` (`detectRagShape`: every preset's mapping and eight more shapes tried on the probe's response), `rag probe` returns `shapes`, the connect dialog's *Use this mapping* row. |
+| R-11, R-12 | Not built (a bot whose request accepts a document list; an embedding provider setting). |
+| R-13 | Built: `docs/getting-started/check-a-rag-bot.md`, the *What was under test* and *Read a result* sections of `docs/ai-testing/rag.md`. |
 
 ## 5. Release grouping (AI items ≤ half of a release; Fiddler work continues alongside)
 

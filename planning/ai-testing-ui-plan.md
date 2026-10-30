@@ -85,7 +85,13 @@ own); more check types (the picker has 45; the gap is seeing results, not scorin
 | A-3 | Built: `EvalReport.flipped` (worse first, at most 50) with a sentence; the report card lists *Changed since the last run* with *What changed* (the existing case comparison). |
 | A-7 | Built: `components/DiffText.tsx` is the one diff view (Git's moved there); Try a prompt keeps the previous answer per tab and shows what changed; Compare shows the other answers as what differs from the first. |
 | A-8 | Built: `EvalReport.cost` ({ usd, lastUsd, monthUsd, monthRuns }) and the sentence; the report card shows this run, the run before, this month. |
-| A-10 | Pending: the uniform-* plans run against the 0.56 build before the release. |
+| A-10 | Pending: the uniform-* plans run against the next release build before the release. |
+| A-1 | Built (2026-10-31): `eval/trajectory.ts` (`trajectoryOf`, pure), `eval.trajectory`, `testpion eval trajectory`, MCP `eval_case_diff` with `steps: true`; shared `StepTimeline`; the report card's *Show the steps*. A run keeps what the model said at each step (`rounds`). |
+| A-2 | Built: `SavedEvaluation.baselineRun`, `eval/trajectory-diff.ts`, `eval baseline`, `agentBaseline` on the report, `vsBaseline` on a trajectory. |
+| A-4, A-5 | Built: `SavedEvaluation.promptVersions`, `runner/prompt-versions.ts` (a run is tied to a version by the tag `prompt:<hash>` on its cases), `eval versions | version-save | version-use`, the *Prompt versions* bar; the gate asks first (pass line, worse than in use, never run). Not built: "Save to an evaluation…" from Try a prompt. MCP: `eval_variants` with `versions: true` (a new tool would break the 330 KB verbose cap). |
+| A-6 | Built: `eval/review-queue.ts`, *Review answers* (keyboard G / B / J / K, the checks' verdict hidden until graded), `eval review | review-add`; grades are the run's reviews; good answers become the `expected` of JSONL/JSON test cases. |
+| A-9 | Built: compare mode for agents (tool calls per case, same tools as A). |
+| A-11 | Built: `docs/getting-started/check-an-agent.md` (plain, 5 minutes) and the agents page sections; the CI page not touched. |
 
 ## 5. Release grouping (AI items ≤ half of a release)
 
