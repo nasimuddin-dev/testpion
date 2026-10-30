@@ -19,6 +19,10 @@
 
 - **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
 
+### Agents: compare two models
+
+- **Compare mode for agents.** *Compare* on an agent evaluation adds a variant (another model or other instructions); the table adds *Tool calls per case* and *Same tools as A*, and the sentence says *B used other tools in 1 of 2 cases.* A cheaper model that passes the same cases but calls other tools is a change you want to know about.
+
 ### RAG bots: what changed, by question
 
 - **A case against the run before shows the documents.** *Since last run* on a failed case of a bot with sources lists the retrieved documents that were dropped (red) or added (green), how many of the right documents each run found (*1 of 1 → 0 of 1*) and why it fails now (*right document not found*). `testpion eval diff` and the `eval_case_diff` tool carry it as `retrieved`.

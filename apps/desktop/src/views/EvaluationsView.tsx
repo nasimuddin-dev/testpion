@@ -759,13 +759,13 @@ export function EvaluationsView() {
               options={[
                 { value: 'runs', label: runId ? 'Run' : 'Runs', icon: <History size={12} /> },
                 { value: 'matrix', label: 'Matrix', icon: <Grid3x3 size={12} />, title: 'Runs side by side, case by case, against a baseline' },
-                ...(d.type === 'llm' ? [{ value: 'compare' as const, label: 'Compare', icon: <GitCompareArrows size={12} />, title: 'The evaluation and its variants (another model or prompt version) on the same cases' }] : []),
+                ...(d.type !== 'rag' ? [{ value: 'compare' as const, label: 'Compare', icon: <GitCompareArrows size={12} />, title: 'The evaluation and its variants (another model or prompt version) on the same cases' }] : []),
                 ...(d.type === 'rag' ? [{ value: 'metrics' as const, label: 'Metrics', icon: <BarChart3 size={12} />, title: 'The samples of a run against every metric, with each metric’s mean, interval and distribution' }] : []),
               ]}
             />
           </div>
         )}
-        {pane === 'compare' && d.type === 'llm' ? (
+        {pane === 'compare' && d.type !== 'rag' ? (
           <div className="flex-1 min-h-0">
             <VariantsPanel draft={d} onVariants={(variants) => set({ variants: variants.length ? variants : undefined })} providers={providers} environment={env} runs={evalRuns} onClose={() => setPane('runs')} />
           </div>

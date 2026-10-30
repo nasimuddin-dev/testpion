@@ -10,7 +10,10 @@ import { evalMatrixPage, resolveRunRef } from '../runner/eval-matrix-runs.js';
 import { readRunSummary } from '../runner/run-records.js';
 import type { EvalVariant, SavedEvaluation } from '../runner/saved-evaluations.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { evalMs } from './report.js';
+import { runResults } from '../runner/run-results.js';
+import { evalCaseKey, evalMs } from './report.js';
+import { trajectoryOf, type Trajectory } from './trajectory.js';
+import { diffTrajectory } from './trajectory-diff.js';
 import { formatEstimateUsd } from './llm-estimate.js';
 
 type Store = Pick<WorkspaceStore, 'root' | 'runDir' | 'meta'>;
@@ -68,10 +71,12 @@ export interface EvalVariantColumn {
   passRate: number;
   costUsd: number;
   avgMs?: number;
+  /** An agent evaluation (A-9): the tool calls it made per case, and how many cases used the same tools as the first variant. */
+  agent?: { avgToolCalls: number; avgModelCalls: number; sameToolsAsFirst?: number; cases: number };
 }
 
 export interface EvalVariantRow {
-  metric: 'passed' | 'cost' | 'time';
+  metric: 'passed' | 'cost' | 'time' | 'tools' | 'same-tools';
   label: string;
   /** The value in each variant, as words, in column order. */
   values: string[];
@@ -180,6 +185,32 @@ export async function variantsSummary(store: Store, o: { evaluation: SavedEvalua
       winner: tBest?.letter,
       winnerText: tBest?.avgMs ? `${tBest.letter} (${ratio(worstMs, tBest.avgMs)}x faster)` : 'tie',
     });
+    // an agent evaluation (A-9): the tools each variant used, per case, and whether they are the first variant's
+    if (o.evaluation.type === 'agent' && columns.every((c) => c.runId)) {
+      const per: Array<Map<string, Trajectory>> = [];
+      for (const c of columns) {
+        const m = new Map<string, Trajectory>();
+        for await (const r of runResults(store, c.runId!)) {
+          const t = trajectoryOf(r);
+          if (t) m.set(evalCaseKey(r.id), t);
+        }
+        per.push(m);
+      }
+      columns.forEach((c, i) => {
+        const trajs = [...per[i]!.values()];
+        if (!trajs.length) return;
+        const calls = (t: Trajectory) => t.items.filter((x) => x.kind === 'tool').length;
+        const same = i === 0 ? undefined : [...per[i]!].filter(([k, t]) => per[0]!.has(k) && diffTrajectory(per[0]!.get(k)!, t).kind === 'same').length;
+        c.agent = { avgToolCalls: Math.round((trajs.reduce((n, t) => n + calls(t), 0) / trajs.length) * 10) / 10, avgModelCalls: Math.round((trajs.reduce((n, t) => n + t.modelCalls, 0) / trajs.length) * 10) / 10, ...(same !== undefined ? { sameToolsAsFirst: same } : {}), cases: trajs.length };
+      });
+      if (columns.every((c) => c.agent)) {
+        const calls = columns.map((c) => c.agent!.avgToolCalls);
+        const fewest = Math.min(...calls);
+        const win = calls.filter((x) => x === fewest).length === 1 && new Set(calls).size > 1 ? columns[calls.indexOf(fewest)] : undefined;
+        rows.push({ metric: 'tools', label: 'Tool calls per case', values: columns.map((c) => String(c.agent!.avgToolCalls)), winner: win?.letter, winnerText: win ? `${win.letter} (fewest)` : 'tie' });
+        if (columns.length > 1) rows.push({ metric: 'same-tools', label: `Same tools as ${columns[0]!.letter}`, values: columns.map((c) => (c.agent!.sameToolsAsFirst === undefined ? '–' : `${c.agent!.sameToolsAsFirst} of ${c.agent!.cases}`)), winnerText: '–' });
+      }
+    }
     // the cases that moved against the first variant
     if (columns.length > 1 && columns.every((c) => c.runId)) {
       try {
@@ -190,6 +221,8 @@ export async function variantsSummary(store: Store, o: { evaluation: SavedEvalua
       }
     }
     conclusion = conclusionOf(columns, cases);
+    const other = columns.slice(1).filter((c) => c.agent?.sameToolsAsFirst !== undefined && c.agent.sameToolsAsFirst < c.agent.cases);
+    if (other.length) conclusion += ` ${andJoin(other.map((c) => `${c.letter} used other tools in ${c.agent!.cases - c.agent!.sameToolsAsFirst!} of ${plural(c.agent!.cases, 'case')}`))}.`;
   }
   return { evaluation: o.evaluation.name, ready, waiting, columns, rows, ...(cases ? { cases } : {}), conclusion, runs: columns.map((c) => c.runId).filter((x): x is string => !!x) };
 }

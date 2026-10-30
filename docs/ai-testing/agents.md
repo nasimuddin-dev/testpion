@@ -54,6 +54,10 @@ met it (or red on the calls whose arguments differ, or at the end as *never call
 that happened and grey at the end when it never did, an allow-list and a call limit are red on the call that broke them, and
 valid arguments on the call whose arguments did not match the tool's schema. Nothing is sent to a model.
 
+### Compare two models or two instructions on the same tasks {#compare}
+
+Open **Compare** on an agent evaluation and add a variant: another model, or other instructions. Run them all, and the table shows each variant's passed cases, cost and time, and for an agent also **Tool calls per case** and **Same tools as A** (in how many cases the variant used the same tools as the first one). The sentence under it says it plainly: *B used other tools in 1 of 2 cases.* A cheaper model that passes the same cases but calls other tools is a change you want to know about. `testpion eval run <name> --variants` and `testpion eval variants <name>` do the same from a terminal.
+
 ### A golden run: has the agent started using other tools? {#baseline}
 
 Mark a run you trust with **Mark this run as the baseline** (on the report card of an agent evaluation) or `testpion eval baseline <run>`. Later runs then say, case by case, how their tools differ from it: *same tools in the same order*, *dropped search_docs; added delete_record*, *same tools in another order*, or *same tools, but search_docs was called with other arguments*. The report card shows *Tools against the baseline: 4 of 5 cases the same, 1 changed*, and **Show the steps** of a case adds the comparison. The baseline is one field of the saved evaluation (`baselineRun`); **Clear the baseline** or `testpion eval baseline --clear --evaluation <name>` removes it. `testpion eval trajectory <run> <case> --against <run>` compares with any other run. From a terminal:

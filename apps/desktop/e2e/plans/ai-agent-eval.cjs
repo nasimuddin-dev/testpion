@@ -95,6 +95,14 @@ const steps = [
      return 'before: ' + before + ' | after: ' + (now ? 'this' : 'NOT SET') + ' | saved: ' + /^run-/.test(item?.data.baselineRun ?? '') + ' | clear offered: ' + !!document.querySelector('[data-eval-baseline-clear]');`,
   ),
   step(
+    'compare-mode-is-offered-for-an-agent',
+    `${H} const opt = vis('main [role=radio]').find((b) => b.textContent.trim() === 'Compare'); if (!opt) return 'NO COMPARE: ' + vis('main [role=radio]').map((b) => b.textContent.trim()).join(',');
+     await __t.real.click(opt);
+     const panel = await __t.waitFor(() => vis('main').some((m) => /Add a variant|variant/i.test(m.innerText)), 6000);
+     await __t.real.click(vis('main [role=radio]').find((b) => /^Run/.test(b.textContent.trim())));
+     return 'compare offered: true | panel: ' + !!panel;`,
+  ),
+  step(
     'the-full-editor-shows-the-agent-setup',
     `${H} const tb = [...vis('main [role=tab]')].find((t) => t.textContent.trim().startsWith('Tools'));
      if (!tb) return 'NO TOOLS TAB: ' + [...vis('main [role=tab]')].map((t) => t.textContent.trim()).join(',');
@@ -120,6 +128,7 @@ module.exports = withExpect(steps, {
   'run-saves-an-agent-evaluation-and-runs-it': /^headline: 2 of 3 passed \| type: agent \| tools: search_docs,delete_record \| prompt: \{\{input\}\} \| columns: input,should_call,should_not_call \| extra fields: none \| wizard closed: true$/,
   'the-failed-case-shows-the-steps-the-agent-took': /^tool steps: true \| red pin on a call: true \| starts with the question: true \| ends with the answer: true \| \d+ tool calls? .* in \d+ model calls?\.$/,
   'a-run-can-be-marked-as-the-baseline': /^before: none \| after: this \| saved: true \| clear offered: true$/,
+  'compare-mode-is-offered-for-an-agent': /^compare offered: true \| panel: true$/,
   'the-full-editor-shows-the-agent-setup': /^type select: agent \| tool rows: 2 \| instructions box: true$/,
   'the-estimate-reads-the-agent-evaluation': /^cases: 3 \| offline: true \| summary: 3 cases/,
 });
