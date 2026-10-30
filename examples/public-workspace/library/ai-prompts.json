@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "folders": ["Offline demo model"],
+  "folders": ["Offline demo model", "Learn by example"],
   "items": [
     {
       "id": "ai-intent",
@@ -74,6 +74,150 @@
         "schema": "",
         "expected": "",
         "evaluators": [{ "type": "length", "max": 300 }]
+      }
+    },
+    {
+      "id": "learn-extract-json",
+      "name": "Learn: extract fields as JSON",
+      "folder": "Learn by example",
+      "data": {
+        "provider": "demo-learn",
+        "model": "demo",
+        "system": "You extract order details. Reply with JSON only.",
+        "prompt": "Extract the order as JSON {orderId, items, total, currency}.\nOrder text: {{text}}",
+        "input": {
+          "text": "Order A-1042 was placed on Monday: 2 items, 59.90 EUR, paid by card."
+        },
+        "temperature": 0,
+        "format": "json",
+        "schema": "",
+        "expected": "",
+        "evaluators": [
+          {
+            "type": "json-schema",
+            "schema": {
+              "type": "object",
+              "required": [
+                "orderId",
+                "items",
+                "total",
+                "currency"
+              ],
+              "properties": {
+                "items": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "type": "equals",
+            "path": "$.orderId",
+            "expected": "A-1042"
+          }
+        ]
+      }
+    },
+    {
+      "id": "learn-translate",
+      "name": "Learn: translate, checked by words",
+      "folder": "Learn by example",
+      "data": {
+        "provider": "demo-learn",
+        "model": "demo",
+        "system": "",
+        "prompt": "Translate to French: {{text}}",
+        "input": {
+          "text": "Hello, your order has shipped."
+        },
+        "temperature": 0,
+        "format": "text",
+        "schema": "",
+        "expected": "Bonjour, votre commande a été expédiée.",
+        "evaluators": [
+          {
+            "type": "contains",
+            "expected": "commande"
+          },
+          {
+            "type": "regex",
+            "pattern": "^Bonjour"
+          },
+          {
+            "type": "length",
+            "max": 80
+          }
+        ]
+      }
+    },
+    {
+      "id": "learn-polite",
+      "name": "Learn: rewrite politely, judged by an AI reviewer",
+      "folder": "Learn by example",
+      "data": {
+        "provider": "demo-learn",
+        "model": "demo",
+        "system": "",
+        "prompt": "Rewrite this politely: {{text}}",
+        "input": {
+          "text": "send me the report by friday"
+        },
+        "temperature": 0,
+        "format": "text",
+        "schema": "",
+        "expected": "",
+        "evaluators": [
+          {
+            "type": "llm-judge",
+            "criteria": "The rewrite is polite, keeps the request and the deadline, and is one or two sentences.",
+            "judge": {
+              "provider": "demo-learn",
+              "name": "demo"
+            },
+            "threshold": 0.7
+          },
+          {
+            "type": "contains",
+            "expected": [
+              "please",
+              "could you"
+            ],
+            "any": true,
+            "ignoreCase": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "learn-sentiment",
+      "name": "Learn: few-shot classification",
+      "folder": "Learn by example",
+      "data": {
+        "provider": "demo-learn",
+        "model": "demo",
+        "system": "You classify product reviews. Answer with one word: positive or negative.\nReview: Love it, works exactly as described. -> positive\nReview: Stopped working after two days. -> negative",
+        "prompt": "Review: {{review}}",
+        "input": {
+          "review": "The charger broke after a week and they refused a refund."
+        },
+        "temperature": 0,
+        "format": "text",
+        "schema": "",
+        "expected": "negative",
+        "evaluators": [
+          {
+            "type": "regex",
+            "pattern": "^negative$",
+            "flags": "i"
+          },
+          {
+            "type": "tokens",
+            "max": 50
+          }
+        ]
       }
     }
   ]

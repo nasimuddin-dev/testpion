@@ -1,0 +1,22 @@
+# Learn by example · an evaluation over a dataset: one test per record of datasets/support-replies.jsonl. Each record's
+# fields fill the prompt ({{message}}) and the checks ({{expected}}). `similarity` compares the answer with the reference by
+# words (method: embedding needs an embedding model); `llm-judge` asks an AI reviewer. Run it from Tests, or
+# `testpion run -w examples/public-workspace tests/ai/support-replies.yaml`.
+name: Support replies
+type: llm
+tags: [ai, evaluation, offline, learn]
+model: { provider: demo-learn, name: demo, temperature: 0 }
+system: You answer customer messages for an online shop, in one or two short sentences.
+prompt: |
+  Write a short reply to this customer message:
+  {{message}}
+dataset:
+  path: ../../datasets/support-replies.jsonl
+evaluators:
+  - { type: similarity, expected: '{{expected}}', threshold: 0.5 }
+  - type: llm-judge
+    criteria: The reply answers the customer's question, is polite, and does not promise anything the shop cannot do.
+    judge: { provider: demo-learn, name: demo }
+    threshold: 0.7
+  - { type: length, max: 300 }
+  - { type: not-refusal }

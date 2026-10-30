@@ -1,0 +1,9 @@
+# Learn by example · a measure of your own, kind `formula`: a number computed from other measures of the same evaluation
+# (write their ids with underscores). `coalesce(x, 1)` uses 1 when a measure did not run. Use it as custom/answer-quality
+# next to faithfulness and answer-relevance.
+id: answer-quality
+name: Answer quality
+description: Half backed by the sources, half answers the question.
+kind: formula
+expression: 0.5 * coalesce(faithfulness, 1) + 0.5 * coalesce(answer_relevance, 1)
+threshold: 0.75

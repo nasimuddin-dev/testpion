@@ -74,6 +74,27 @@
         "-y",
         "@modelcontextprotocol/server-everything"
       ]
+    },
+    {
+      "id": "todo-mock",
+      "name": "Tasks (offline mock)",
+      "folder": "Mocks",
+      "transport": "mock",
+      "mockFile": "mocks/todo.mcp-mock.yaml"
+    },
+    {
+      "id": "payments-mock",
+      "name": "Payments (offline mock)",
+      "folder": "Mocks",
+      "transport": "mock",
+      "mockFile": "mocks/payments.mcp-mock.yaml"
+    },
+    {
+      "id": "handbook-bot",
+      "name": "Handbook bot (offline mock)",
+      "folder": "Mocks",
+      "transport": "mock",
+      "mockFile": "mocks/handbook-bot.mcp-mock.yaml"
     }
   ]
 }

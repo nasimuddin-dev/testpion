@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Learn by example
+
+- **The Examples workspace teaches MCP, AI quality and RAG bots by example.** New, commented files that run offline and give the same result every time: two MCP mocks (a task list with a resource and a prompt; payments with answers computed by a script) and their tests; one prompt test per kind of check; an evaluation over a dataset; safety probes; an agent with the tools of a mock, as tests and as a table (`should_call` / `should_not_call`); a bot with sources (an offline handbook bot, its saved target, eight questions, an end-to-end check with the offline demo model as the reviewer: 6 of 8 pass, two defects seeded on purpose); the same measures on an answer you already have; and one measure of your own of each kind under `metrics/`. A second offline model, *Offline demo model (examples)*, answers exactly these prompts. Suite **Learn by example**; `testpion run --suite learn`. Existing copies of the Examples workspace get the new files on update. Docs: Examples workspace ▸ Learn by example.
+- Found while writing them, fixed: a rag test without a target now hands its `reference_ids` and `reference_contexts` to the retrieval measures (they said "needs the gold chunk ids"); a record whose `reference_ids` is an empty list (a question no document answers) passes the id measures as "nothing to find" instead of failing as a missing column; *negative-rejection* and the failure analysis recognise "I could not find that in the documents" and the like as declining.
+- Trying a sample no longer drops the rules the Examples workspace gave the offline demo model (the injection refusal, the pet-shop tool call): the sample's rules go first and the workspace's own are kept after them, with its other headers.
+
 ## 0.55.4 — 2026-10-29
 
 ### RAG bots: its own place

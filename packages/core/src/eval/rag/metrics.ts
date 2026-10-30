@@ -14,7 +14,7 @@
 import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { registerCheck, type CheckDoc, type CheckContext } from '../checks.js';
 import { idRetrieval, normalizeAnswer, round3, rouge, tokenOverlap, type RougeType } from './measures.js';
-import { goldIds, needsReference, num, referenceOf, result } from './metric-util.js';
+import { goldIds, needsReference, noGoldNeeded, num, referenceOf, result } from './metric-util.js';
 import './metrics-ir.js';
 import './metrics-judged.js';
 import './metric-defs.js';
@@ -101,6 +101,7 @@ function idMetric(which: 'precision' | 'recall') {
     const gold = goldIds(cfg, ctx);
     if (!gold)
       return result(cfg, false, `${cfg.type} needs the gold chunk ids: add a "reference_ids" column to the dataset (a list of ids).`, { explanation: 'No reference ids.' });
+    if (!gold.length) return noGoldNeeded(cfg);
     if (!ctx.contexts?.length)
       return result(cfg, false, `${cfg.type}: nothing was retrieved. Map the contexts (and their ids) in the RAG target if the system returns them.`, {
         score: 0,

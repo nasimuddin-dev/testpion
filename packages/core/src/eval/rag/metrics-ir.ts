@@ -7,7 +7,7 @@ import type { CheckConfig, CheckResult } from '../../model/types.js';
 import { registerCheck, type CheckContext } from '../checks.js';
 import { averagePrecisionAt, hitRateAt, mrrAt, ndcgAt, ndcgGraded, precisionAt, rankedAveragePrecision, recallAt, rPrecision, similarityRatio } from './ir.js';
 import { round3 } from './measures.js';
-import { goldIds, needsReference, num, referenceOf, result, short } from './metric-util.js';
+import { goldIds, needsReference, noGoldNeeded, num, referenceOf, result, short } from './metric-util.js';
 
 type IrFn = (retrieved: string[], gold: string[], k: number) => number;
 const IR: Array<[string, IrFn, number, string]> = [
@@ -25,6 +25,7 @@ for (const [type, fn, defaultThreshold] of IR) {
     const grades = type === 'ndcg@k' ? ctx.record?.relevance : undefined;
     const gold = goldIds(cfg, ctx) ?? (grades ? [] : undefined);
     if (!gold) return result(cfg, false, `${type} needs the gold chunk ids: add a "reference_ids" column to the dataset (a list of ids).`, { explanation: 'No reference ids.' });
+    if (!gold.length && !grades) return noGoldNeeded(cfg);
     const k = Math.max(1, Math.floor(num(cfg.k, 10)));
     const ids = (ctx.contexts ?? []).map((d) => d.id);
     const t = num(cfg.threshold, defaultThreshold);
@@ -43,6 +44,7 @@ for (const [type, fn, defaultThreshold] of IR) {
 registerCheck('r-precision', (cfg, ctx) => {
   const gold = goldIds(cfg, ctx);
   if (!gold) return result(cfg, false, 'r-precision needs the gold chunk ids: add a "reference_ids" column to the dataset (a list of ids).', { explanation: 'No reference ids.' });
+  if (!gold.length) return noGoldNeeded(cfg);
   const ids = (ctx.contexts ?? []).map((d) => d.id);
   const t = num(cfg.threshold, 0.5);
   const score = round3(rPrecision(ids, gold));

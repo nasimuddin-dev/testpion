@@ -50,7 +50,9 @@ const steps = [
     `await __t.view('RAG bots'); await __t.sleep(600);
      const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
-     return 'empty: ' + /No bots yet/.test(document.querySelector('main')?.innerText ?? '');`,
+     // the Examples workspace ships one bot (Handbook bot (offline), Learn by example); the one this plan connects is not there yet
+     const text = document.querySelector('main')?.innerText ?? '';
+     return 'shipped bot listed: ' + /Handbook bot/.test(text) + ' | ours yet: ' + /Clinic bot/.test(text);`,
   ),
   step(
     'connect-dialog',
@@ -99,8 +101,9 @@ const steps = [
      const gone = await __t.waitFor(() => !document.querySelector('[data-rag-connect]'), 5000);
      await __t.sleep(800);
      const lib = await window.aps.invoke('lib.get', { kind: 'rag-targets' });
-     const t = lib.items[0];
-     return 'dialog closed: ' + !!gone + ' | saved: ' + lib.items.length + ' ' + t?.name + ' ' + t?.data.protocol + ' | mapping: ' + JSON.stringify(t?.data.mapping) + ' | listed: ' + /Clinic bot/.test(document.querySelector('main')?.innerText ?? '');`,
+     const ours = lib.items.filter((i) => i.name === 'Clinic bot');
+     const t = ours[0];
+     return 'dialog closed: ' + !!gone + ' | saved: ' + ours.length + ' ' + t?.name + ' ' + t?.data.protocol + ' | mapping: ' + JSON.stringify(t?.data.mapping) + ' | listed: ' + /Clinic bot/.test(document.querySelector('main')?.innerText ?? '');`,
   ),
   step(
     'the-target-opens-again-with-its-mapping',
@@ -193,7 +196,7 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
-    'rag-tab-in-ai-lab': /^empty: true$/,
+    'rag-tab-in-ai-lab': /^shipped bot listed: true \| ours yet: false$/,
     'connect-dialog': /^name: Clinic bot \| protocol: HTTP \| save disabled: true$/,
     probe: /^keys: .*"answer".*"sources"/,
     'click-the-answer': /^answer path: \$\.answer$/,

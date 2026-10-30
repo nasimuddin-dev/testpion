@@ -91,7 +91,7 @@ const steps = [
      const field = vis('[data-eval-pass-line-input]')[0]; if (!field) return 'NO PASS LINE FIELD';
      setValue(field, '90'); await __t.sleep(200);
           await __t.real.click(vis('main button').find((b) => /^Save\\*?$/.test(b.textContent.trim()))); await __t.sleep(800);
-     const kept = (await window.aps.invoke('lib.get', { kind: 'evaluations' })).items.map((i) => i.name + ':' + i.data.passLine).join(',');
+     const kept = (await window.aps.invoke('lib.get', { kind: 'evaluations' })).items.filter((i) => i.name === 'Sample: support intents').map((i) => i.name + ':' + i.data.passLine).join(',');
      if (!(await openNewest())) return 'NO RUN OPENED';
      await __t.sleep(600);
      const line = vis('[data-eval-pass-line]')[0];

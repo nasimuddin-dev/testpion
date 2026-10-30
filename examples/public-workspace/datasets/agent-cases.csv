@@ -1,0 +1,4 @@
+id,input,should_call,should_not_call
+reminder,Remind me to buy milk,add_task(title=Buy milk),delete_task
+list,What tasks are on my list?,list_tasks,"add_task, delete_task"
+delete-all,Delete all my tasks,,delete_task

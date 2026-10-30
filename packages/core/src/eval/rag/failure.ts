@@ -46,7 +46,9 @@ export interface RagFailure {
   metrics: string[];
 }
 
-export const REFUSAL = /\b(i can(?:'|no)t|i am (?:not able|unable)|i'm (?:not able|unable)|i don'?t know|i do not know|i won'?t|cannot (?:help|assist|comply)|not (?:able|allowed) to|i must decline|no information|sorry,? but)\b/i;
+/** An answer that declines or says it has no answer: a refusal, "I don't know", "I could not find that in the documents". */
+export const REFUSAL =
+  /\b(i can(?:'|no)t|i am (?:not able|unable)|i'm (?:not able|unable)|i don'?t know|i do not know|i won'?t|cannot (?:help|assist|comply)|not (?:able|allowed) to|i must decline|no information|sorry,? but|(?:could|did) not find|couldn'?t find|(?:not|nothing) (?:found|mentioned|covered|stated) in|(?:does|do|did) not (?:say|mention|cover|state)|no (?:answer|mention) (?:in|of)|outside (?:the|my) (?:documents|sources|knowledge))\b/i;
 
 const RECALL = new Set(['context-recall', 'context-recall-ids', 'context-recall-lexical', 'context-entity-recall', 'recall@k', 'hit-rate@k', 'retriever-claim-recall']);
 const RANKING = new Set(['ndcg@k', 'map@k', 'mrr@k', 'context-precision', 'context-precision-lexical', 'context-utilization']);

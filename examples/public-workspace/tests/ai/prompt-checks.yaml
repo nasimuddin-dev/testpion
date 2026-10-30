@@ -1,0 +1,55 @@
+# Learn by example · the checks a prompt test can make, one prompt per kind of check. The model is the offline demo model
+# (examples), which answers by rules (AI quality ▸ Models and keys ▸ its x-mock-rules header), so every run gives the same result.
+# Switch `model` to a real provider to see how a real model does on the same checks.
+defaults:
+  type: llm
+  model: { provider: demo-learn, name: demo, temperature: 0 }
+  tags: [ai, prompt, offline, learn]
+tests:
+  - name: JSON output with a schema and a value
+    system: You extract order details. Reply with JSON only.
+    prompt: |
+      Extract the order as JSON {orderId, items, total, currency}.
+      Order text: Order A-1042 was placed on Monday: 2 items, 59.90 EUR, paid by card.
+    responseFormat: { type: json }
+    evaluators:
+      - type: json-schema
+        schema:
+          type: object
+          required: [orderId, items, total, currency]
+          properties:
+            orderId: { type: string }
+            items: { type: integer }
+            total: { type: number }
+            currency: { type: string, enum: [EUR, USD, GBP] }
+      - { type: equals, path: $.orderId, expected: A-1042 }
+      - { type: exists, path: $.total }
+
+  - name: Text output, checked by words, a pattern and a length
+    prompt: 'Translate to French: Hello, your order has shipped.'
+    evaluators:
+      - { type: contains, expected: commande }
+      - { type: regex, pattern: '^Bonjour' }
+      - { type: length, max: 80 }
+      - { type: not-refusal }
+
+  - name: Quality judged by an AI reviewer
+    prompt: 'Rewrite this politely: send me the report by friday'
+    evaluators:
+      # llm-judge: a second model scores the answer against your criteria (0 to 1); threshold is the pass mark
+      - type: llm-judge
+        criteria: The rewrite is polite, keeps the request and the deadline, and is one or two sentences.
+        judge: { provider: demo-learn, name: demo }
+        threshold: 0.7
+      - { type: contains, expected: [please, could you], any: true, ignoreCase: true }
+
+  - name: A few-shot classification with a one-word answer
+    system: |
+      You classify product reviews. Answer with one word: positive or negative.
+      Review: Love it, works exactly as described. -> positive
+      Review: Stopped working after two days. -> negative
+    prompt: 'Review: The charger broke after a week and they refused a refund.'
+    evaluators:
+      - { type: regex, pattern: '^negative$', flags: i }
+      - { type: tokens, max: 120 }
+      - { type: latency, max: 5000 }

@@ -1,0 +1,54 @@
+# Learn by example · an MCP mock whose answers are computed: `script:` runs a small JavaScript function in a sandbox with the
+# call's arguments (a thrown error becomes a tool error), and `content:` sends several parts in one answer.
+# Tests: tests/mcp/payments-mock.yaml. Agent test: tests/agent/todo-agent.yaml uses the task mock the same way.
+name: payments-mock
+instructions: A fake payment service that works offline. Try charge with amount 100, or amount 0 for an error; refund order A-1042.
+tools:
+  - name: get_balance
+    description: The balance of the account.
+    inputSchema: { type: object, properties: {} }
+    annotations: { readOnlyHint: true }
+    responses:
+      - json: { balance: 1250.5, currency: EUR }
+
+  - name: charge
+    description: Charge an amount; the fee is 2.9% plus 30 cents.
+    inputSchema:
+      type: object
+      properties:
+        amount: { type: number, minimum: 0.01 }
+        currency: { type: string, default: EUR }
+      required: [amount]
+    responses:
+      - script: |
+          if (!(args.amount > 0)) throw new Error('amount must be more than 0');
+          const fee = Math.round(args.amount * 2.9) / 100 + 0.3;
+          return { id: 'ch_' + Math.round(args.amount * 100), amount: args.amount, currency: args.currency || 'EUR', fee: Math.round(fee * 100) / 100, status: 'captured' };
+
+  - name: refund
+    description: Refund an order, in full or in part.
+    inputSchema:
+      type: object
+      properties:
+        orderId: { type: string }
+        amount: { type: number, description: Leave out for a full refund }
+      required: [orderId]
+    annotations: { destructiveHint: true }
+    responses:
+      - when: { orderId: A-1042 }
+        json: { refundId: 're_{{$randomInt(1000,9999)}}', orderId: A-1042, status: pending }
+      - text: 'Order {{args.orderId}} was not found'
+        isError: true
+
+  - name: get_receipt
+    description: The receipt of an order, as text and as a link.
+    inputSchema:
+      type: object
+      properties:
+        orderId: { type: string }
+      required: [orderId]
+    annotations: { readOnlyHint: true }
+    responses:
+      - content:
+          - { type: text, text: 'Receipt for order A-1042: 2 items, 59.90 EUR' }
+          - { type: text, text: 'https://example.test/receipts/A-1042.pdf' }

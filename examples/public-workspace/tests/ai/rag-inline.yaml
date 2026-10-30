@@ -1,0 +1,51 @@
+# Learn by example · checks on a bot's answer when you already have the answer and the retrieved documents (from a log, a
+# capture, or a run of the bot): no model is called. Each test gives the question, the documents (`contexts`, with ids and
+# scores), the answer, the reference answer (`expected`) and the right documents (`reference_ids`), then measures them.
+# The measures without a model: did it find the right documents, does the answer match the reference, does it cite.
+defaults:
+  type: rag
+  tags: [ai, rag, offline, learn]
+tests:
+  - name: The right document was found and the answer matches
+    question: How many days of annual leave do I get?
+    contexts:
+      - { id: hb-2, text: 'Annual leave is 25 days a year, plus public holidays. Unused days up to 5 carry over to March.', score: 0.95 }
+      - { id: hb-4, text: 'The office is open from 7am to 8pm on weekdays.', score: 0.4 }
+    answer: Annual leave is 25 days a year, plus public holidays [hb-2].
+    expected: Annual leave is 25 days a year plus public holidays.
+    reference_ids: [hb-2]
+    evaluators:
+      # retrieval: the right documents are among the retrieved ones (ids), and near the top
+      - { type: context-recall-ids, threshold: 1 }
+      - { type: 'precision@1', threshold: 1 }
+      # the answer against the reference, by shared words
+      - { type: token-f1, threshold: 0.6 }
+      # the answer names a retrieved document, as [id]
+      - { type: citation, required: true }
+      - { type: answer-length, max: 200 }
+
+  - name: The wrong document was found
+    question: How long is parental leave?
+    contexts:
+      - { id: hb-2, text: 'Annual leave is 25 days a year, plus public holidays.', score: 0.35 }
+    answer: I could not find that in the handbook.
+    expected: Parental leave is 16 weeks at full pay for every new parent.
+    reference_ids: [hb-6]
+    # this test fails on purpose: it shows what a retrieval miss looks like in a report
+    evaluators:
+      - { type: context-recall-ids, threshold: 1 }
+      - { type: token-f1, threshold: 0.5 }
+
+  - name: A number in the answer, checked exactly
+    question: How long do I have to claim an expense?
+    contexts:
+      - { id: hb-3, text: 'Expenses are claimed in the Expenses app within 30 days, with a receipt for anything over 20 euros.', score: 0.9 }
+    answer: Within 30 days, with a receipt for anything over 20 euros [hb-3].
+    expected: Expenses are claimed within 30 days.
+    reference_ids: [hb-3]
+    evaluators:
+      - { type: answer-regex, pattern: '\b30 days\b' }
+      - { type: contains, expected: receipt }
+      - { type: context-recall-ids, threshold: 1 }
+      # a measure of your own, from metrics/cites-a-source.yaml
+      - { type: custom/cites-a-source }

@@ -20,7 +20,12 @@ export const referenceOf = (cfg: CheckConfig, ctx: CheckContext): string | undef
 /** The gold ids: `expected` of the check as a list, else the record's reference_ids. */
 export const goldIds = (cfg: CheckConfig, ctx: CheckContext): string[] | undefined => {
   const g = Array.isArray(cfg.expected) ? cfg.expected.map(String) : ctx.referenceIds;
-  return g?.length ? g : undefined;
+  // an explicit empty list is an answer ("no document is right for this question"); only a missing column is undefined
+  return Array.isArray(g) ? g.map(String).filter(Boolean) : undefined;
 };
+
+/** The id measures on a record that names no right document: there is nothing to find, so nothing can be missed. */
+export const noGoldNeeded = (cfg: CheckConfig): CheckResult =>
+  result(cfg, true, `${cfg.type}: the record names no right document (reference_ids is empty), so there is nothing to find`, { source: 'deterministic', score: 1, expected: [], metadata: { gold: 0, notApplicable: true } });
 
 export const short = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);

@@ -1,0 +1,17 @@
+# Learn by example · a measure of your own, kind `checklist`: several yes/no criteria an AI reviewer decides in one go; the
+# score is the share met (weights optional). Use it as custom/reply-checklist.
+id: reply-checklist
+name: Reply checklist
+description: A support reply answers the question, is polite, and is short.
+kind: checklist
+inputs: [question, answer]
+items:
+  - { text: The reply answers the question that was asked, weight: 2 }
+  - The reply is polite and does not blame the customer
+  - The reply is at most three sentences
+judge: { provider: demo-learn, model: demo }
+threshold: 0.75
+examples:
+  - name: A good reply
+    sample: { question: When do I get my refund?, answer: Refunds take 5 to 7 business days to reach your card. Sorry for the wait! }
+    expect: pass

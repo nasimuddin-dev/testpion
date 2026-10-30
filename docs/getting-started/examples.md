@@ -33,9 +33,50 @@ The workspace is copied into your data folder once. You can change it freely: ap
 | MCP mock (offline) | MCP view ▸ **Weather (offline mock)**, from `mocks/weather.mcp-mock.yaml` | none |
 | AI prompts: JSON output, summaries, a prompt injection | AI quality ▸ Try a prompt ▸ **Saved prompts** | the offline demo model |
 | Evaluation over a dataset, safety, RAG, an agent that calls MCP tools | Tests ▸ `ai/`, `agent/` | the offline demo model (+ Petstore MCP for the agent) |
-| Test suites | Tests ▸ **All examples** (everything) and **Offline** (no internet needed) | |
+| **Learn by example**: MCP mocks with computed answers, every kind of prompt check, a dataset evaluation, safety probes, agents with tools, a bot with sources and measures of your own | see [Learn by example](#learn-by-example) below | the offline demo model (examples); nothing leaves the computer |
+| Test suites | Tests ▸ **All examples** (everything), **Offline** (no internet needed) and **Learn by example** | |
 | Monitor (paused) | Monitors ▸ **Public APIs health** | httpbin.org |
 | Traces | Traces view: every request, MCP call, model call and test run adds one | |
+
+## Learn by example
+
+::: v-pre
+
+A set of small, commented files to read, run and change: every one works offline and gives the same result every time. Open a file in **Tests**, read the comment at the top, run it, then change a value and run again. The suite **Learn by example** runs the ones that pass; two files fail on purpose and are marked so.
+
+**MCP** (MCP view ▸ **Mocks**, tests in Tests ▸ `mcp/`)
+
+| File | What it shows |
+|---|---|
+| `mocks/todo.mcp-mock.yaml` · `tests/mcp/todo-mock.yaml` | A mock with four tools, a resource and a prompt. How a mock picks its answer (`when` on the arguments, `{{args.x}}`, `isError`). Tests for a tool and the shape of its answer (`json-schema`), arguments that change the answer, a value carried from one call to the next (`extract`, `dependsOn`), an error on purpose, a resource by URI, a prompt filled with arguments, and a ping. |
+| `mocks/payments.mcp-mock.yaml` · `tests/mcp/payments-mock.yaml` | Answers computed by a `script` (a fee from the amount; a thrown error is a tool error), a dynamic value (`{{$randomInt(…)}}`), an answer in several `content` parts, and checks on numbers and ids (`equals`, `regex`). |
+
+**AI quality** (AI quality ▸ Try a prompt ▸ **Learn by example**, Checks ▸ **Learn: …**, tests in Tests ▸ `ai/`, `agent/`)
+
+| File | What it shows |
+|---|---|
+| `tests/ai/prompt-checks.yaml` | One prompt per kind of check: JSON with a schema and a value, text checked by words, a pattern and a length, quality judged by an AI reviewer (`llm-judge`), a few-shot classification with `tokens` and `latency` budgets. |
+| `tests/ai/support-replies.yaml` · `datasets/support-replies.jsonl` | An evaluation over a dataset: one test per record, `{{message}}` in the prompt and `{{expected}}` in the checks; `similarity` against the reference, an AI reviewer, a length limit. |
+| `tests/ai/safety-probes.yaml` | Attacks that must be refused without leaking a canary (`refusal`, `no-leak`), and ordinary questions that must still be answered (`not-refusal`). |
+| `tests/agent/todo-agent.yaml` | An agent with the tools of the task mock: which tools were called and with what (`tool-called`, `tool-not-called`, `tool-sequence`, `allowed-tools`, `max-tool-calls`, `tool-args-valid`), and a destructive tool that needs a confirmation first. |
+| `tests/agent/agent-cases.yaml` · `datasets/agent-cases.csv` | The same agent from a table: `input`, `should_call` (with arguments: `add_task(title=Buy milk)`) and `should_not_call` columns become the checks. |
+| Saved prompts **Learn: …** | The same four prompts as saved prompts, to run in **Try a prompt** and compare models. |
+| Saved evaluations **Learn: review sentiment (prompt)**, **Learn: task agent (agent)** | A prompt evaluation and an agent evaluation ready to run from **Checks**, with their report cards. |
+
+**RAG bots** (RAG bots ▸ Bots, Questions, Metrics, Checks)
+
+| File | What it shows |
+|---|---|
+| `mocks/handbook-bot.mcp-mock.yaml` | A bot that answers from six handbook documents, offline: one MCP tool that returns an answer and the documents it retrieved. Two answers are wrong on purpose: one states something no document says, one retrieves the wrong document. |
+| Bot **Handbook bot (offline)** (`library/rag-targets.json`) | The bot as a saved target: the request and where the answer and the sources are in the response (the mapping). |
+| `datasets/handbook-questions.jsonl` | Eight questions with the reference answer, the right documents (`reference_ids`) and whether the handbook can answer at all (`answerable`). |
+| Evaluation **Learn: handbook bot (bot)** · `tests/ai/handbook-bot.yaml` | The bot checked end to end: the right documents found, the answer against the reference, each statement backed by the sources and the answer on the question (the offline demo model as the reviewer), a question with no answer declined, a measure of your own. 6 of 8 pass; the report card shows the two defects. |
+| `tests/ai/rag-inline.yaml` | The same measures when you already have the answer and the documents (a log, a capture): no model is called. One test fails on purpose to show a retrieval miss. |
+| `metrics/*.yaml` | A measure of each kind: `cites-a-source` (a rule), `plain-language` (a criterion an AI reviewer decides), `reply-checklist` (a checklist), `answer-quality` (a formula over other measures), `short-and-grounded` (a script). Each has examples; **Metrics** checks them. |
+
+The AI reviewer and the model of these files is **Offline demo model (examples)**, a second offline model whose rules answer exactly these prompts (AI quality ▸ Models and keys). Point `model:` or `judge:` at a real provider to see how a real model does.
+
+:::
 
 ## The offline demo model
 
@@ -50,6 +91,8 @@ The same workspace is in the repository at `examples/public-workspace`, so the C
 ```bash
 testpion run -w examples/public-workspace --suite all      # everything (needs internet)
 testpion run -w examples/public-workspace --suite offline  # no internet needed
+testpion run -w examples/public-workspace --suite learn    # Learn by example (offline)
+testpion eval run "Learn: handbook bot (bot)" -w examples/public-workspace   # the bot with sources, with its report
 testpion run-collection "HTTP basics (httpbin)" -w examples/public-workspace -e "Public APIs"
 testpion grpc grpcb.in:9000 hello.HelloService/SayHello -d '{"greeting":"hi"}'
 testpion run-collection "Public REST APIs (playground)" -w examples/public-workspace -e "Public APIs"

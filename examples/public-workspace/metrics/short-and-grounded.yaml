@@ -1,0 +1,30 @@
+# Learn by example · a measure of your own, kind `script`: JavaScript over the sample (question, answer, reference, contexts,
+# referenceIds, toolCalls, latencyMs, record) that returns { score, reason }. No model. Use it as custom/short-and-grounded.
+id: short-and-grounded
+name: Short and grounded
+description: The answer is under 200 characters and shares at least three words with a retrieved document.
+kind: script
+inputs: [answer, contexts]
+script: |
+  const answer = String(sample.answer || '');
+  const words = (s) => new Set(String(s).toLowerCase().match(/[a-z0-9]+/g) || []);
+  const a = words(answer);
+  const texts = (sample.contexts || []).map((c) => (typeof c === 'string' ? c : c.text || ''));
+  const shared = Math.max(0, ...texts.map((t) => [...words(t)].filter((w) => w.length > 3 && a.has(w)).length));
+  const short = answer.length <= 200;
+  const grounded = shared >= 3;
+  return { score: short && grounded ? 1 : short || grounded ? 0.5 : 0, reason: (short ? 'short' : answer.length + ' characters') + '; ' + shared + ' words shared with a document' };
+threshold: 1
+examples:
+  - name: Short and from the document
+    sample:
+      question: When does the office open?
+      answer: The office is open from 7am to 8pm on weekdays.
+      contexts: [{ id: hb-4, text: 'The office is open from 7am to 8pm on weekdays. A badge is needed after 6pm.' }]
+    expect: pass
+  - name: Not from the document
+    sample:
+      question: When does the office open?
+      answer: Around nine, I think.
+      contexts: [{ id: hb-4, text: 'The office is open from 7am to 8pm on weekdays. A badge is needed after 6pm.' }]
+    expect: fail

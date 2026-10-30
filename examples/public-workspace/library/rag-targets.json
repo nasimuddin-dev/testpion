@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "folders": ["Learn by example"],
+  "items": [
+    {
+      "id": "rag-handbook-bot",
+      "name": "Handbook bot (offline)",
+      "folder": "Learn by example",
+      "data": {
+        "protocol": "mcp",
+        "step": { "type": "mcp", "server": "handbook-bot", "tool": "ask", "arguments": { "question": "{{question}}" } },
+        "mapping": { "answer": "$.answer", "contexts": "$.sources[*]", "context": { "text": "$.text", "id": "$.id", "score": "$.score" } },
+        "description": "Learn by example: an offline HR handbook bot (mocks/handbook-bot.mcp-mock.yaml). Its MCP tool `ask` answers with the documents it retrieved; the mapping says where the answer and the sources are in the response. Two answers are wrong on purpose."
+      }
+    }
+  ]
+}

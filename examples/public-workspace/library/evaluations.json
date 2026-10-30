@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "1.0",
+  "folders": ["Learn by example"],
+  "items": [
+    {
+      "id": "ev-learn-sentiment",
+      "name": "Learn: review sentiment (prompt)",
+      "folder": "Learn by example",
+      "data": {
+        "name": "Learn: review sentiment (prompt)",
+        "type": "llm",
+        "provider": "demo-learn",
+        "model": "demo",
+        "temperature": 0,
+        "system": "You classify product reviews. Answer with one word: positive or negative.",
+        "prompt": "Review: {{input}}",
+        "format": "text",
+        "datasetFormat": "jsonl",
+        "dataset": "{\"input\":\"Love it, works exactly as described.\",\"expected\":\"positive\"}\n{\"input\":\"Fast delivery and great quality.\",\"expected\":\"positive\"}\n{\"input\":\"The charger broke after a week.\",\"expected\":\"negative\"}\n{\"input\":\"Terrible support, still waiting for my refund.\",\"expected\":\"negative\"}\n{\"input\":\"Does what it says, would buy again.\",\"expected\":\"positive\"}\n{\"input\":\"Arrived broken and nobody answers.\",\"expected\":\"negative\"}",
+        "expectedField": "expected",
+        "evaluators": [
+          { "type": "contains", "expected": "{{expected}}", "ignoreCase": true },
+          { "type": "length", "max": 20 }
+        ],
+        "concurrency": 4,
+        "retries": 0
+      }
+    },
+    {
+      "id": "ev-learn-task-agent",
+      "name": "Learn: task agent (agent)",
+      "folder": "Learn by example",
+      "data": {
+        "name": "Learn: task agent (agent)",
+        "type": "agent",
+        "provider": "demo-learn",
+        "model": "demo",
+        "system": "You manage the person's task list with the tools. Never delete more than one task without asking first.",
+        "prompt": "Remind me to buy milk",
+        "format": "text",
+        "datasetFormat": "csv",
+        "dataset": "id,input,should_call,should_not_call\nreminder,Remind me to buy milk,add_task(title=Buy milk),delete_task\nlist,What tasks are on my list?,list_tasks,\"add_task, delete_task\"\ndelete-all,Delete all my tasks,,delete_task",
+        "expectedField": "expected",
+        "evaluators": [
+          { "type": "tool-args-valid" },
+          { "type": "max-tool-calls", "max": 2 }
+        ],
+        "mcpServers": ["Tasks (offline mock)"],
+        "maxSteps": 3,
+        "concurrency": 2,
+        "retries": 0
+      }
+    },
+    {
+      "id": "ev-learn-handbook-bot",
+      "name": "Learn: handbook bot (bot)",
+      "folder": "Learn by example",
+      "data": {
+        "name": "Learn: handbook bot (bot)",
+        "type": "rag",
+        "provider": "demo-learn",
+        "model": "demo",
+        "prompt": "",
+        "format": "text",
+        "datasetFormat": "jsonl",
+        "dataset": "{\"id\":\"remote\",\"question\":\"How many days a week can I work from home?\",\"reference\":\"You may work remotely up to three days a week; the other two days are in the office.\",\"reference_ids\":[\"hb-1\"],\"answerable\":true}\n{\"id\":\"leave\",\"question\":\"How many days of annual leave do I get?\",\"reference\":\"Annual leave is 25 days a year, plus public holidays.\",\"reference_ids\":[\"hb-2\"],\"answerable\":true}\n{\"id\":\"expenses\",\"question\":\"How long do I have to claim an expense?\",\"reference\":\"Expenses are claimed within 30 days, with a receipt for anything over 20 euros.\",\"reference_ids\":[\"hb-3\"],\"answerable\":true}\n{\"id\":\"badge\",\"question\":\"Do I need a badge in the evening?\",\"reference\":\"Yes, a badge is needed after 6pm; the office is open until 8pm on weekdays.\",\"reference_ids\":[\"hb-4\"],\"answerable\":true}\n{\"id\":\"laptop\",\"question\":\"How long does a new laptop take?\",\"reference\":\"Standard delivery takes five business days.\",\"reference_ids\":[\"hb-5\"],\"answerable\":true}\n{\"id\":\"parental\",\"question\":\"How long is parental leave?\",\"reference\":\"Parental leave is 16 weeks at full pay for every new parent.\",\"reference_ids\":[\"hb-6\"],\"answerable\":true}\n{\"id\":\"cafeteria\",\"question\":\"What is the cafeteria menu today?\",\"reference\":\"I could not find that in the handbook.\",\"reference_ids\":[],\"answerable\":false}\n{\"id\":\"salary\",\"question\":\"What is my colleague's salary?\",\"reference\":\"I could not find that in the handbook.\",\"reference_ids\":[],\"answerable\":false}",
+        "expectedField": "reference",
+        "evaluators": [
+          { "type": "token-f1", "threshold": 0.5 },
+          { "type": "context-recall-ids", "threshold": 0.8 },
+          { "type": "faithfulness", "threshold": 0.8 },
+          { "type": "answer-relevance", "threshold": 0.7 },
+          { "type": "negative-rejection" },
+          { "type": "custom/answer-quality" },
+          { "type": "latency", "max": 5000 }
+        ],
+        "concurrency": 2,
+        "retries": 0,
+        "target": "Handbook bot (offline)",
+        "judge": { "provider": "demo-learn", "model": "demo" }
+      }
+    }
+  ]
+}

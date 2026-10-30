@@ -1,0 +1,19 @@
+# Learn by example · a measure of your own, kind `rule`: deterministic checks on the answer, no model. Here: the answer names
+# at least one document as [id]. Use it in an evaluation as custom/cites-a-source. RAG bots ▸ Metrics checks it against the
+# examples below.
+id: cites-a-source
+name: Cites a source
+description: The answer names at least one retrieved document, as [doc-id].
+kind: rule
+inputs: [answer]
+rules:
+  - { type: regex, pattern: '\[[a-z]+-\d+\]' }
+combine: all
+threshold: 1
+examples:
+  - name: An answer with a citation
+    sample: { question: When does the office open?, answer: 'The office opens at 7am on weekdays [hb-4].' }
+    expect: pass
+  - name: An answer without one
+    sample: { question: When does the office open?, answer: The office opens at 7am on weekdays. }
+    expect: fail

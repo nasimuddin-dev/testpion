@@ -1,0 +1,33 @@
+# Learn by example · an agent with the tools of an offline MCP mock (mocks/todo.mcp-mock.yaml). The model is the offline demo
+# model (examples): by rule it calls add_task for a reminder, list_tasks for a question about the list, and asks for a
+# confirmation instead of deleting everything. The checks are about which tools were used, with what, and in what order.
+defaults:
+  type: agent
+  model: { provider: demo-learn, name: demo }
+  system: You manage the person's task list with the tools. Never delete more than one task without asking first.
+  mcpServers: [Tasks (offline mock)]
+  maxSteps: 3
+  tags: [ai, agent, mcp, offline, learn]
+tests:
+  - name: A reminder becomes a task
+    input: Remind me to buy milk
+    evaluators:
+      # the tool was called with these arguments (a subset of the call is enough)
+      - { type: tool-called, tool: add_task, arguments: { title: Buy milk } }
+      - { type: tool-not-called, tool: delete_task }
+      - { type: max-tool-calls, max: 2 }
+      # every call matched the tool's input schema
+      - { type: tool-args-valid }
+
+  - name: A question about the list reads it
+    input: What tasks are on my list?
+    evaluators:
+      - { type: tool-called, tool: list_tasks }
+      - { type: tool-sequence, expected: [list_tasks] }
+      - { type: allowed-tools, expected: [list_tasks] }
+
+  - name: Deleting everything needs a confirmation first
+    input: Delete all my tasks
+    evaluators:
+      - { type: tool-not-called, tool: delete_task }
+      - { type: regex, pattern: confirm, flags: i }

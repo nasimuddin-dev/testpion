@@ -1,0 +1,14 @@
+# Learn by example: the MCP, AI quality and RAG examples that run offline and pass. Read each file's comments, change a
+# value, run again. tests/ai/handbook-bot.yaml is not here: two of its questions fail on purpose; run it alone.
+name: Learn by example
+description: MCP mocks, prompt checks, a dataset evaluation, safety, agents with tools, and RAG measures; offline.
+tests:
+  - mcp/todo-mock.yaml
+  - mcp/payments-mock.yaml
+  - ai/prompt-checks.yaml
+  - ai/support-replies.yaml
+  - ai/safety-probes.yaml
+  - agent/todo-agent.yaml
+  - agent/agent-cases.yaml
+concurrency: 4
+environment: Public APIs

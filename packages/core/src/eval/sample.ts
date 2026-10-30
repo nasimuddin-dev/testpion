@@ -27,6 +27,9 @@ const DEMO_CASES = {
 /** How the offline demo model answers a customer message of the sample: by the words in it. */
 const DEMO_RULES = [
   { match: '"existingCount"', response: JSON.stringify(DEMO_CASES) },
+  // the agent sample of the Checks wizard ("Find the opening hours with search_docs"): call the tool the case names, whatever
+  // text rule a workspace gave the model for those words
+  { match: '\\bsearch_docs\\b', toolCall: { name: 'search_docs', arguments: { q: 'opening hours' } } },
   { match: 'Customer:[^\\n]*\\bcancel', response: '{"intent":"cancellation"}' },
   { match: 'Customer:[^\\n]*\\brefill', response: '{"intent":"refill"}' },
   { match: 'Customer:[^\\n]*\\b(book|schedule)', response: '{"intent":"booking"}' },
@@ -94,17 +97,35 @@ export interface SampleResult {
   providerAdded: boolean;
 }
 
+/** The rules a provider's `x-mock-rules` header holds (an unreadable header counts as none). */
+function rulesOf(p: ProviderConfig | undefined): Array<{ match?: string }> {
+  try {
+    const raw = p?.headers?.find((h) => h.key.toLowerCase() === 'x-mock-rules')?.value;
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * The offline demo model of the workspace (id `demo`): added when it is not there, and its rules put back as written (the
- * sample's answers and the test cases it writes). No key, no network. `ai.demoModel`, the sample and the case generator use it.
+ * sample's answers, the reviewer verdicts of the bot sample and the test cases it writes). Rules the workspace already gave the
+ * model (the Examples workspace's own answers: the injection refusal, the pet-shop tool call, the haiku) are kept after them,
+ * and its other headers (the mock latency) stay. No key, no network. `ai.demoModel`, the sample and the case generator use it.
  */
 export function ensureDemoModel(store: WorkspaceStore): { provider: ProviderConfig; added: boolean } {
   const preset = PROVIDER_PRESETS.find((p) => p.id === OFFLINE_DEMO_ID && p.kind === 'mock')!;
   const providers = store.getProviders();
   let demo = providers.find((p) => p.id === OFFLINE_DEMO_ID);
   const added = !demo;
-  const config: ProviderConfig = { ...(demo ?? { id: preset.id, name: preset.name, kind: preset.kind, baseUrl: preset.baseUrl, defaultModel: preset.defaultModel }), kind: 'mock', headers: [{ key: 'x-mock-rules', value: JSON.stringify([...DEMO_RULES, ...DEMO_JUDGE_RULES]) }] };
-  if (!demo || demo.headers?.find((h) => h.key.toLowerCase() === 'x-mock-rules')?.value !== config.headers![0]!.value) {
+  const ours = [...DEMO_RULES, ...DEMO_JUDGE_RULES];
+  const ourMatches = new Set(ours.map((r) => r.match));
+  const theirs = rulesOf(demo).filter((r) => !ourMatches.has(r.match ?? ''));
+  const rules = JSON.stringify([...ours, ...theirs]);
+  const otherHeaders = (demo?.headers ?? []).filter((h) => h.key.toLowerCase() !== 'x-mock-rules');
+  const config: ProviderConfig = { ...(demo ?? { id: preset.id, name: preset.name, kind: preset.kind, baseUrl: preset.baseUrl, defaultModel: preset.defaultModel }), kind: 'mock', headers: [{ key: 'x-mock-rules', value: rules }, ...otherHeaders] };
+  if (!demo || demo.headers?.find((h) => h.key.toLowerCase() === 'x-mock-rules')?.value !== rules) {
     store.saveProviders(demo ? providers.map((p) => (p === demo ? config : p)) : [...providers, config]);
     demo = config;
   }

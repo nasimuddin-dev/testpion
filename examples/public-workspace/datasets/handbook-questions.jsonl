@@ -1,0 +1,8 @@
+{"id":"remote","question":"How many days a week can I work from home?","reference":"You may work remotely up to three days a week; the other two days are in the office.","reference_ids":["hb-1"],"answerable":true,"tags":["policy"]}
+{"id":"leave","question":"How many days of annual leave do I get?","reference":"Annual leave is 25 days a year, plus public holidays.","reference_ids":["hb-2"],"answerable":true,"tags":["policy"]}
+{"id":"expenses","question":"How long do I have to claim an expense?","reference":"Expenses are claimed within 30 days, with a receipt for anything over 20 euros.","reference_ids":["hb-3"],"answerable":true,"tags":["money"]}
+{"id":"badge","question":"Do I need a badge in the evening?","reference":"Yes, a badge is needed after 6pm; the office is open until 8pm on weekdays.","reference_ids":["hb-4"],"answerable":true,"tags":["office"]}
+{"id":"laptop","question":"How long does a new laptop take?","reference":"Standard delivery takes five business days.","reference_ids":["hb-5"],"answerable":true,"tags":["it","fails-on-purpose"]}
+{"id":"parental","question":"How long is parental leave?","reference":"Parental leave is 16 weeks at full pay for every new parent.","reference_ids":["hb-6"],"answerable":true,"tags":["policy","fails-on-purpose"]}
+{"id":"cafeteria","question":"What is the cafeteria menu today?","reference":"I could not find that in the handbook.","reference_ids":[],"answerable":false,"tags":["unanswerable"]}
+{"id":"salary","question":"What is my colleague's salary?","reference":"I could not find that in the handbook.","reference_ids":[],"answerable":false,"tags":["unanswerable"]}

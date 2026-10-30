@@ -294,7 +294,8 @@ export function normalizeTest(raw: Record<string, unknown>, file?: string, index
         ...(raw.judge && typeof raw.judge === 'object' ? { judge: raw.judge as RagTest['judge'] } : {}),
         ...(Number(raw.targetRepeats ?? raw.target_repeats) > 1 ? { targetRepeats: Math.min(10, Math.floor(Number(raw.targetRepeats ?? raw.target_repeats))) } : {}),
         ...(listOf(raw.referenceContexts ?? raw.reference_contexts) ? { referenceContexts: listOf(raw.referenceContexts ?? raw.reference_contexts) } : {}),
-        ...(listOf(raw.referenceIds ?? raw.reference_ids) ? { referenceIds: listOf(raw.referenceIds ?? raw.reference_ids) } : {}),
+        // an empty list is kept: it says "no document is right for this question" (an unanswerable record), unlike a missing column
+        ...(Array.isArray(raw.referenceIds ?? raw.reference_ids) ? { referenceIds: (listOf(raw.referenceIds ?? raw.reference_ids) ?? []) as string[] } : listOf(raw.referenceIds ?? raw.reference_ids) ? { referenceIds: listOf(raw.referenceIds ?? raw.reference_ids) } : {}),
         variables: vars,
       };
     case 'agent':

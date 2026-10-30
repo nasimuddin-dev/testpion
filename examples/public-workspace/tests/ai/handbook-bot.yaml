@@ -1,0 +1,26 @@
+# Learn by example · a bot with sources, checked end to end: every question of datasets/handbook-questions.jsonl is sent to
+# the bot (`target`: the MCP tool of mocks/handbook-bot.mcp-mock.yaml, with where its answer and documents are in the
+# response), and an AI reviewer (`judge`: the offline demo model (examples)) decides whether each statement of the answer is
+# backed by the retrieved documents and whether the answer addresses the question.
+#
+# Two of the eight questions FAIL ON PURPOSE (see the mock): "laptop" states something no document says, "parental leave"
+# retrieves the wrong document. Run this file alone and open the report to see how each kind of defect shows up.
+# The same bot and questions as a saved evaluation: RAG bots ▸ Checks ▸ "Learn: handbook bot".
+name: Handbook bot
+type: rag
+tags: [ai, rag, offline, learn, fails-on-purpose]
+target:
+  protocol: mcp
+  step: { type: mcp, server: handbook-bot, tool: ask, arguments: { question: '{{question}}' } }
+  mapping: { answer: $.answer, contexts: '$.sources[*]', context: { text: $.text, id: $.id, score: $.score } }
+judge: { provider: demo-learn, model: demo }
+dataset:
+  path: ../../datasets/handbook-questions.jsonl
+evaluators:
+  - { type: token-f1, threshold: 0.5 }
+  - { type: context-recall-ids, threshold: 0.8 }
+  - { type: faithfulness, threshold: 0.8 }
+  - { type: answer-relevance, threshold: 0.7 }
+  # a question the handbook cannot answer must get "I could not find…", not a guess (uses the dataset's `answerable` column)
+  - { type: negative-rejection }
+  - { type: latency, max: 5000 }

@@ -1,0 +1,50 @@
+# Learn by example · MCP tests of computed answers (mocks/payments.mcp-mock.yaml): a tool whose result is calculated from the
+# arguments, a check on a number, an error the tool raises, a regex on an id, and an answer in several parts.
+defaults:
+  type: mcp
+  server: { name: Payments (offline mock) }
+  tags: [mcp, offline, learn]
+tests:
+  - name: The balance is a number in a currency
+    tool: { name: get_balance }
+    assertions:
+      - { type: exists, path: $.balance }
+      - { type: equals, path: $.currency, expected: EUR }
+
+  - name: A charge is computed from the amount
+    tool: { name: charge }
+    arguments: { amount: 100, currency: EUR }
+    assertions:
+      - { type: status, expected: success }
+      - { type: equals, path: $.status, expected: captured }
+      # 2.9% of 100 plus 30 cents
+      - { type: equals, path: $.fee, expected: 3.2 }
+      - { type: regex, path: $.id, pattern: '^ch_\d+$' }
+
+  - name: A charge of nothing is refused by the tool
+    tool: { name: charge }
+    arguments: { amount: 0 }
+    assertions:
+      - { type: status, expected: error }
+      - { type: contains, expected: more than 0 }
+
+  - name: A refund of a known order is pending
+    tool: { name: refund }
+    arguments: { orderId: A-1042, amount: 20 }
+    assertions:
+      - { type: equals, path: $.status, expected: pending }
+      - { type: regex, path: $.refundId, pattern: '^re_\d{4}$' }
+
+  - name: A refund of an unknown order is an error
+    tool: { name: refund }
+    arguments: { orderId: nope }
+    assertions:
+      - { type: status, expected: error }
+      - { type: contains, expected: was not found }
+
+  - name: A receipt comes in several parts
+    tool: { name: get_receipt }
+    arguments: { orderId: A-1042 }
+    assertions:
+      - { type: status, expected: success }
+      - { type: contains, expected: 59.90 EUR }

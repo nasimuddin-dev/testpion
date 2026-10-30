@@ -1,0 +1,60 @@
+# Learn by example · a bot that answers from documents (RAG), offline. One MCP tool, `ask`, answers each question with the
+# documents it "retrieved" (an answer and sources with id, text and score), the shape a real bot's response is mapped from.
+#
+# Two answers are wrong on purpose, so a check has something to find:
+#   - laptop: the answer says IT ships to your home for free; no document says that (not backed by the sources)
+#   - parental leave: the wrong document is retrieved, so the bot cannot answer (the right document is not found)
+# One question has no answer in the handbook (the cafeteria menu): the bot says so, which is the right behaviour.
+#
+# Used by: library/rag-targets.json (the bot as a saved target), library/evaluations.json (Learn: handbook bot),
+# tests/ai/handbook-bot.yaml, datasets/handbook-questions.jsonl.
+name: handbook-bot
+instructions: An offline HR handbook bot with six documents. Ask "How many days of annual leave do I get?"
+tools:
+  - name: ask
+    description: Answer a question from the employee handbook, with the documents it was answered from.
+    inputSchema:
+      type: object
+      properties:
+        question: { type: string, description: The question }
+      required: [question]
+    annotations: { readOnlyHint: true }
+    responses:
+      - when: { question: How many days a week can I work from home? }
+        json:
+          answer: You may work remotely up to three days a week; the other two days are in the office.
+          sources:
+            - { id: hb-1, text: 'Employees may work remotely up to three days a week; the other two days are in the office.', score: 0.92 }
+            - { id: hb-4, text: 'The office is open from 7am to 8pm on weekdays. A badge is needed after 6pm.', score: 0.41 }
+      - when: { question: How many days of annual leave do I get? }
+        json:
+          answer: Annual leave is 25 days a year, plus public holidays.
+          sources:
+            - { id: hb-2, text: 'Annual leave is 25 days a year, plus public holidays. Unused days up to 5 carry over to March.', score: 0.95 }
+      - when: { question: How long do I have to claim an expense? }
+        json:
+          answer: Expenses are claimed within 30 days, with a receipt for anything over 20 euros.
+          sources:
+            - { id: hb-3, text: 'Expenses are claimed in the Expenses app within 30 days, with a receipt for anything over 20 euros.', score: 0.9 }
+      - when: { question: Do I need a badge in the evening? }
+        json:
+          answer: Yes. A badge is needed after 6pm; the office is open until 8pm on weekdays.
+          sources:
+            - { id: hb-4, text: 'The office is open from 7am to 8pm on weekdays. A badge is needed after 6pm.', score: 0.88 }
+      # the seeded defect: a claim no document backs
+      - when: { question: How long does a new laptop take? }
+        json:
+          answer: Standard delivery takes five business days, and IT can ship it to your home for free.
+          sources:
+            - { id: hb-5, text: 'New laptops are ordered through IT; standard delivery takes five business days.', score: 0.9 }
+      # the seeded retrieval miss: the wrong document is found, so the bot cannot answer
+      - when: { question: How long is parental leave? }
+        json:
+          answer: I could not find that in the handbook.
+          sources:
+            - { id: hb-2, text: 'Annual leave is 25 days a year, plus public holidays. Unused days up to 5 carry over to March.', score: 0.35 }
+      # any other question: a retriever always returns something, here one document with a low score, and the bot says so
+      - json:
+          answer: I could not find that in the handbook.
+          sources:
+            - { id: hb-4, text: 'The office is open from 7am to 8pm on weekdays. A badge is needed after 6pm.', score: 0.12 }

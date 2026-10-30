@@ -1,0 +1,4 @@
+{"id":"password","message":"I forgot my password and can't sign in.","expected":"You can reset your password from the sign-in page: click Forgot password and follow the email."}
+{"id":"refund","message":"I returned the shoes last week. When do I get my refund?","expected":"Refunds take 5 to 7 business days to reach your card."}
+{"id":"hours","message":"What are your opening hours?","expected":"We are open from 9am to 5pm on weekdays."}
+{"id":"other","message":"Do you plan to open a shop in Lisbon?","expected":"Thanks for reaching out. Our team will get back to you within one business day."}

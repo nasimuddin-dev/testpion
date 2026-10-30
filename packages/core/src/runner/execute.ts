@@ -848,7 +848,8 @@ async function runRag(test: RagTest, scope: VariableScope, svc: ExecServices, sp
     }
   }
   return {
-    ctx: { testType: 'rag', body: answer, text: answer ?? '', contexts, question, expected: test.expected, tokens, latencyMs, costUsd, record: pickRecord(test.variables), toolCalls: pickRecord(test.variables)?.toolCalls },
+    // the right documents and contexts the test names (or its dataset record), so the retrieval measures can read them here as they do behind a target
+    ctx: { testType: 'rag', body: answer, text: answer ?? '', contexts, question, expected: test.expected, referenceIds: test.referenceIds, referenceContexts: test.referenceContexts, tokens, latencyMs, costUsd, record: pickRecord(test.variables), toolCalls: pickRecord(test.variables)?.toolCalls },
     partial: { model: modelName, input: question, output: summarize(answer ?? '') },
     metadata: {
       rag: {

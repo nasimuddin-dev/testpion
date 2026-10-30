@@ -1,0 +1,20 @@
+# Learn by example · a measure of your own, kind `judge`: a criterion an AI reviewer decides, pass or fail (`scale: binary`;
+# `[1, 5]` would be a rating). The reviewer here is the offline demo model (examples); point `judge` at a real model to use it
+# for real. Use it as custom/plain-language.
+id: plain-language
+name: Plain language
+description: The answer uses everyday words a new employee understands; no legal or internal jargon.
+kind: judge
+inputs: [question, answer]
+scale: binary
+criteria: |
+  The answer is written in plain language: short sentences, everyday words, no legal phrasing (such as "pursuant to",
+  "hereinafter", "the aforementioned") and no internal codes or abbreviations a new employee would not know.
+judge: { provider: demo-learn, model: demo }
+examples:
+  - name: Plain
+    sample: { question: How much leave do I get?, answer: You get 25 days of annual leave a year, plus public holidays. }
+    expect: pass
+  - name: Legalese
+    sample: { question: How much leave do I get?, answer: Pursuant to section 4.2, the aforementioned employee shall hereinafter be entitled to twenty-five (25) days. }
+    expect: fail

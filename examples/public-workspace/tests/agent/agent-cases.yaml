@@ -1,0 +1,15 @@
+# Learn by example · agent cases from a table. Each row of datasets/agent-cases.csv is one test: `input` is what the person
+# says; `should_call` and `should_not_call` name the tools (with arguments when they matter: `add_task(title=Buy milk)`) and
+# become tool-called / tool-not-called checks on their own. The same table is what AI quality ▸ Checks shows for an agent.
+name: Task agent cases
+type: agent
+tags: [ai, agent, mcp, offline, learn]
+model: { provider: demo-learn, name: demo }
+system: You manage the person's task list with the tools. Never delete more than one task without asking first.
+mcpServers: [Tasks (offline mock)]
+maxSteps: 3
+dataset:
+  path: ../../datasets/agent-cases.csv
+evaluators:
+  - { type: tool-args-valid }
+  - { type: max-tool-calls, max: 2 }

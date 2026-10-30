@@ -1,0 +1,76 @@
+# Learn by example · every kind of MCP test against the offline task mock (mocks/todo.mcp-mock.yaml): a tool call and its
+# checks, a value carried from one call to the next, an error on purpose, a resource, a prompt and a ping.
+# What a check sees: for a tool the structured content (else the parsed text), for a resource the parsed text, for a prompt
+# { messages, description }. `status: success` is the default for an MCP test; say `error` when the tool must fail.
+defaults:
+  type: mcp
+  server: { name: Tasks (offline mock) }
+  tags: [mcp, offline, learn]
+tests:
+  - name: A tool answers, and the answer has the right shape
+    tool: { name: list_tasks }
+    arguments: {}
+    assertions:
+      - { type: status, expected: success }
+      - { type: equals, path: $.count, expected: 3 }
+      - { type: exists, path: '$.tasks[0].id' }
+      - type: json-schema
+        schema:
+          type: object
+          required: [tasks, count]
+          properties:
+            tasks: { type: array, items: { type: object, required: [id, title, done] } }
+      - { type: latency, max: 2000 }
+
+  - name: Arguments change the answer
+    tool: { name: list_tasks }
+    arguments: { done: false }
+    assertions:
+      - { type: equals, path: $.count, expected: 2 }
+      - { type: not-contains, expected: Call the vet }
+
+  - name: Add a task and keep its id for the next test
+    id: add
+    tool: { name: add_task }
+    arguments: { title: Water the plants, due: tomorrow }
+    # extract: a value from the answer becomes {{taskId}} for the tests after this one
+    extract: { taskId: $.id }
+    assertions:
+      - { type: equals, path: $.title, expected: Water the plants }
+      - { type: equals, path: $.done, expected: false }
+
+  - name: Complete the task that was just added
+    dependsOn: [add]
+    tool: { name: complete_task }
+    arguments: { id: '{{taskId}}' }
+    assertions:
+      - { type: equals, path: $.done, expected: true }
+
+  - name: An unknown task is a tool error
+    tool: { name: complete_task }
+    arguments: { id: task-9 }
+    assertions:
+      - { type: status, expected: error }
+      - { type: contains, expected: No task called task-9 }
+
+  - name: A destructive tool works when asked plainly
+    tool: { name: delete_task }
+    arguments: { id: task-3 }
+    assertions:
+      - { type: contains, expected: Deleted }
+
+  - name: A resource is read by its URI
+    resource: todo://lists
+    assertions:
+      - { type: equals, path: '$[0].name', expected: Home }
+      - { type: equals, path: '$[1].tasks', expected: 0 }
+
+  - name: A prompt is filled with its arguments
+    prompt: { name: daily_plan, arguments: { date: Monday } }
+    assertions:
+      - { type: contains, expected: Monday }
+      - { type: exists, path: '$.messages[0]' }
+
+  - name: The server answers a ping
+    assertions:
+      - { type: equals, path: $.ok, expected: true }

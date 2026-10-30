@@ -14,5 +14,12 @@ tests:
   - ai/safety.yaml
   - ai/rag.yaml
   - agent/petstore-agent.yaml
+  - mcp/todo-mock.yaml
+  - mcp/payments-mock.yaml
+  - ai/prompt-checks.yaml
+  - ai/support-replies.yaml
+  - ai/safety-probes.yaml
+  - agent/todo-agent.yaml
+  - agent/agent-cases.yaml
 concurrency: 4
 environment: Public APIs

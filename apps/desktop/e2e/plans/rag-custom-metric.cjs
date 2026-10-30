@@ -31,7 +31,9 @@ const steps = [
      const m = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Metrics'); if (!m) return 'NO TAB Metrics';
      await __t.real.click(m);
      const list = await __t.waitFor(() => document.querySelector('[data-rag-metrics-list]'), 5000); if (!list) return 'NO LIST';
-     return 'rows: ' + list.querySelectorAll('[data-rag-metric-row]').length + ' | new button: ' + !!document.querySelector('[data-rag-metric-new]');`,
+     // the Examples workspace ships the Learn by example measures (metrics/*.yaml); none of them is the one this plan writes
+     const ids = [...list.querySelectorAll('[data-rag-metric-row]')].map((r) => r.textContent);
+     return 'rows: ' + ids.length + ' | ours yet: ' + ids.some((t) => /no-guarantee/.test(t)) + ' | new button: ' + !!document.querySelector('[data-rag-metric-new]');`,
   ),
   step(
     'new-metric-with-a-live-check',
@@ -96,7 +98,7 @@ const steps = [
      const ok = [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Save a copy'); if (!ok) return 'NO BUTTON';
      await __t.real.click(ok); await __t.sleep(1200);
      const l = await window.aps.invoke('rag.customMetrics');
-     return 'metrics: ' + l.metrics.map((m) => m.id).sort().join(',');`,
+     return 'metrics: ' + l.metrics.map((m) => m.id).filter((id) => id.startsWith('no-guarantee')).sort().join(',');`,
   ),
   // the dag kind: a Decision tree panel above the YAML; every change is written back into the file
   step(
@@ -144,7 +146,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'the-metrics-side-lists-nothing-yet': /^rows: 0 \| new button: true$/,
+  'the-metrics-side-lists-nothing-yet': /^rows: \d+ \| ours yet: false \| new button: true$/,
   'new-metric-with-a-live-check': /^problems: 0 \| save enabled: true$/,
   'closing-an-edited-metric-asks-first': /^asked: true \| editor still open: true \| cost line: Runs on this computer: free$/,
   'the-examples-agree': /^agree: agrees with 2\/2 examples \| rows: 2$/,

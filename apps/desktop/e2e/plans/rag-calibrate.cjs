@@ -59,7 +59,9 @@ const steps = [
     'run-it',
     `await __t.real.click(${runButton});
      const d = await __t.waitFor(() => document.querySelector('[data-rag-estimate-run]'), 10000); if (!d) return 'NO DIALOG';
-     await __t.real.click(d); await __t.sleep(300);
+     // the dialog is still settling when it appears; a click that lands then is lost, so click once it is still
+     await __t.sleep(400); await __t.real.click(d); await __t.sleep(600);
+     if (document.querySelector('[data-rag-estimate-run]')) { await __t.real.click(document.querySelector('[data-rag-estimate-run]')); await __t.sleep(300); }
      let runs = [];
      for (let i = 0; i < 120 && !(runs.length === 1 && runs[0].total > 0); i++) {
        await __t.sleep(500);

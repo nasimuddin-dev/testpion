@@ -19,7 +19,10 @@ const steps = [
   ),
   step(
     'cards-without-an-evaluation-say-why',
-    `const worse = vis('[data-start-go=worse]')[0];
+    `// the Examples workspace ships the Learn by example evaluations; this step is about a workspace that has none yet
+     await window.aps.invoke('lib.save', { kind: 'evaluations', library: { folders: [], items: [] } }); await __t.sleep(400);
+     await __t.view('AI Lab'); await __t.sleep(1000);
+     const worse = vis('[data-start-go=worse]')[0];
      return 'run in CI disabled: ' + !!worse?.disabled + ' | why: ' + (worse?.getAttribute('title') ?? 'NO REASON');`,
   ),
   step(

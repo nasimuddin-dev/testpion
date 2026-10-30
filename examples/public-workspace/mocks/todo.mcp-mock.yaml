@@ -1,0 +1,77 @@
+# Learn by example · an MCP mock with state-free tools, a resource and a prompt. It runs inside TestPion: no server, no network.
+# Open it in the MCP view (Tasks (offline mock)), call a tool by hand, then read tests/mcp/todo-mock.yaml to see the same calls as tests.
+#
+# How a mock answers: the first response whose `when` keys all equal the call's arguments wins; with no match, the first response
+# without `when`. `{{args.x}}` fills in an argument. `json:` is sent as text and as structured content; `isError: true` is a tool error.
+name: todo-mock
+instructions: A fake task list that works offline. Try list_tasks, then complete_task with id task-1 (or task-9 for an error).
+tools:
+  - name: list_tasks
+    description: The tasks on the list. Pass done=false for the open ones only.
+    inputSchema:
+      type: object
+      properties:
+        done: { type: boolean, description: Only tasks with this state }
+    annotations: { readOnlyHint: true }
+    responses:
+      - when: { done: false }
+        json: { tasks: [{ id: task-1, title: Buy milk, done: false }, { id: task-3, title: Renew passport, done: false }], count: 2 }
+      - json: { tasks: [{ id: task-1, title: Buy milk, done: false }, { id: task-2, title: Call the vet, done: true }, { id: task-3, title: Renew passport, done: false }], count: 3 }
+
+  - name: add_task
+    description: Add a task to the list.
+    inputSchema:
+      type: object
+      properties:
+        title: { type: string, description: What to do }
+        due: { type: string, description: A date, optional }
+      required: [title]
+    responses:
+      # the new task echoes the title it was given; the id is fixed so a test can chain it into complete_task
+      - json: { id: task-4, title: '{{args.title}}', done: false }
+
+  - name: complete_task
+    description: Mark a task as done.
+    inputSchema:
+      type: object
+      properties:
+        id: { type: string }
+      required: [id]
+    annotations: { idempotentHint: true }
+    responses:
+      - when: { id: task-1 }
+        json: { id: task-1, title: Buy milk, done: true }
+      - when: { id: task-4 }
+        json: { id: task-4, done: true }
+      - text: 'No task called {{args.id}}'
+        isError: true
+
+  - name: delete_task
+    description: Remove a task for good.
+    inputSchema:
+      type: object
+      properties:
+        id: { type: string }
+      required: [id]
+    # a destructive tool: an agent test can check it is never called without a confirmation
+    annotations: { destructiveHint: true }
+    responses:
+      - when: { id: task-3 }
+        text: Deleted task-3
+      - text: 'No task called {{args.id}}'
+        isError: true
+
+resources:
+  - uri: todo://lists
+    name: Task lists
+    description: The lists a person has.
+    mimeType: application/json
+    text: '[{"id":"home","name":"Home","tasks":3},{"id":"work","name":"Work","tasks":0}]'
+
+prompts:
+  - name: daily_plan
+    description: A plan for the day from the open tasks.
+    arguments: [{ name: date, required: true }]
+    messages:
+      - role: user
+        text: 'List my open tasks and suggest an order to do them on {{date}}.'
