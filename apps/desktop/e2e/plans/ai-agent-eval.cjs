@@ -86,6 +86,15 @@ const steps = [
      return 'tool steps: ' + (tools.length > 0) + ' | red pin on a call: ' + (redAtATool > 0) + ' | starts with the question: ' + kinds.startsWith('input') + ' | ends with the answer: ' + /answer(,end)?$/.test(kinds) + ' | ' + text;`,
   ),
   step(
+    'a-run-can-be-marked-as-the-baseline',
+    `${H} const before = document.querySelector('[data-eval-baseline]')?.getAttribute('data-eval-baseline');
+     const btn = document.querySelector('[data-eval-baseline-set]'); if (!btn) return 'NO BUTTON: ' + before;
+     await __t.real.click(btn);
+     const now = await __t.waitFor(() => document.querySelector('[data-eval-baseline=this]'), 8000);
+     const item = (await window.aps.invoke('lib.get', { kind: 'evaluations' })).items.find((i) => i.name === 'Agent tools');
+     return 'before: ' + before + ' | after: ' + (now ? 'this' : 'NOT SET') + ' | saved: ' + /^run-/.test(item?.data.baselineRun ?? '') + ' | clear offered: ' + !!document.querySelector('[data-eval-baseline-clear]');`,
+  ),
+  step(
     'the-full-editor-shows-the-agent-setup',
     `${H} const tb = [...vis('main [role=tab]')].find((t) => t.textContent.trim().startsWith('Tools'));
      if (!tb) return 'NO TOOLS TAB: ' + [...vis('main [role=tab]')].map((t) => t.textContent.trim()).join(',');
@@ -110,6 +119,7 @@ module.exports = withExpect(steps, {
   'try-on-the-failing-case-shows-which-check-failed': /checks: passed:Should call: passed.* \|\| failed:Should not call: failed/,
   'run-saves-an-agent-evaluation-and-runs-it': /^headline: 2 of 3 passed \| type: agent \| tools: search_docs,delete_record \| prompt: \{\{input\}\} \| columns: input,should_call,should_not_call \| extra fields: none \| wizard closed: true$/,
   'the-failed-case-shows-the-steps-the-agent-took': /^tool steps: true \| red pin on a call: true \| starts with the question: true \| ends with the answer: true \| \d+ tool calls? .* in \d+ model calls?\.$/,
+  'a-run-can-be-marked-as-the-baseline': /^before: none \| after: this \| saved: true \| clear offered: true$/,
   'the-full-editor-shows-the-agent-setup': /^type select: agent \| tool rows: 2 \| instructions box: true$/,
   'the-estimate-reads-the-agent-evaluation': /^cases: 3 \| offline: true \| summary: 3 cases/,
 });

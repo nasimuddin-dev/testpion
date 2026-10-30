@@ -1,10 +1,11 @@
-import { Cloud, GitCompareArrows, ListTree, X } from 'lucide-react';
+import { Cloud, GitCompareArrows, ListTree, Pin, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy, Trajectory } from '@testpion/core';
+import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy, TrajectoryWithBaseline } from '@testpion/core';
 import { call, on } from '../../api';
 import { formatCost, formatMs } from '../../lib/format';
 import { useRpc } from '../../lib/use-rpc';
 import { LABEL } from '../../lib/vocabulary';
+import { toastError, useApp } from '../../store';
 import { CompareView, type Compared } from '../ResponseHistory';
 import { Badge, Button, cx, LinkButton, Spinner } from '../ui';
 import { FilterChips } from '../FilterChips';
@@ -62,11 +63,16 @@ function CaseDiffPanel({ runId, caseKey }: { runId: string; caseKey: string }) {
 
 /** What the agent did in a case, step by step, with its tool checks pinned to the step that decided them (A-1). */
 function TrajectoryPanel({ runId, caseKey }: { runId: string; caseKey: string }) {
-  const t = useRpc<Trajectory>('eval.trajectory', { run: runId, case: caseKey });
+  const t = useRpc<TrajectoryWithBaseline>('eval.trajectory', { run: runId, case: caseKey });
   if (!t) return <Spinner />;
   return (
     <div className="rounded-lg border border-line mt-1.5" data-eval-trajectory>
       <p className="px-3 py-1.5 text-xs border-b border-line">{t.text}</p>
+      {t.vsBaseline && (
+        <p className={cx('px-3 py-1.5 text-xs border-b border-line', t.vsBaseline.kind === 'same' ? 'text-ok' : 'text-warn')} data-eval-vs-baseline={t.vsBaseline.kind}>
+          Against the baseline: {t.vsBaseline.text}
+        </p>
+      )}
       <div className="max-h-96 overflow-auto">
         <StepTimeline items={t.items} endPins={t.endPins} label={`What the agent did in ${caseKey}`} />
       </div>
@@ -252,6 +258,46 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
           </Button>
         )}
       </div>
+      {r && !compact && r.agentCases ? (
+        <div className="px-3 pb-1.5 flex flex-wrap items-center gap-2 text-xs" data-eval-baseline={r.baselineRun === runId ? 'this' : r.baselineRun ? 'other' : 'none'}>
+          <Pin size={12} className="text-muted" />
+          {r.baselineRun === runId ? (
+            <span className="text-muted">This run is the baseline: later runs are compared with the tools it used.</span>
+          ) : (
+            <>
+              {r.agentBaseline ? (
+                <span className={r.agentBaseline.changed ? 'text-warn' : 'text-ok'} data-eval-baseline-text>
+                  {r.agentBaseline.text}
+                </span>
+              ) : (
+                <span className="text-muted">No baseline yet: mark a run you trust, and later runs show where the agent's tools changed.</span>
+              )}
+              <Button
+                size="sm"
+                title="The tools this run used become the reference: later runs say how theirs differ"
+                data-eval-baseline-set
+                onClick={() => void call('eval.setBaseline', { run: runId }).then(() => useApp.getState().toast('This run is the baseline of the evaluation', 'success'), toastError)}
+              >
+                {r.baselineRun ? 'Use this run as the baseline' : 'Mark this run as the baseline'}
+              </Button>
+            </>
+          )}
+          {r.baselineRun && (
+            <LinkButton onClick={() => void call('eval.setBaseline', { run: runId, clear: true, evaluation: r.run.name }).then(() => useApp.getState().toast('Baseline cleared', 'info'), toastError)} data-eval-baseline-clear>
+              Clear the baseline
+            </LinkButton>
+          )}
+        </div>
+      ) : null}
+      {r && !compact && r.agentBaseline && r.agentBaseline.cases.length > 0 && (
+        <ul className="px-3 pb-1.5 text-xs text-muted" data-eval-baseline-cases>
+          {r.agentBaseline.cases.slice(0, 5).map((c) => (
+            <li key={c.resultId} data-eval-baseline-case={c.key}>
+              <span className="mono text-fg">{c.key}</span> {c.text}
+            </li>
+          ))}
+        </ul>
+      )}
       {r && !compact && r.passLine && (
         <div className="px-3 pb-1.5 flex items-center gap-2 text-xs" data-eval-pass-line={r.passLine.met ? 'met' : 'not-met'}>
           <div className="relative h-1.5 w-44 rounded-full bg-hover overflow-hidden" role="img" aria-label={`${Math.round(r.passRate * 100)}% passed, pass line ${r.passLine.percent}%`}>

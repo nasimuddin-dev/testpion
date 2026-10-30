@@ -5,7 +5,7 @@
  */
 import { aiRunDeps, runAiTask } from '../../ai/tasks/run.js';
 import { evalCaseDiff, evalReport } from '../../eval/report.js';
-import { evalTrajectory } from '../../eval/trajectory.js';
+import { evalTrajectory } from '../../eval/trajectory-run.js';
 import { variantsSummary } from '../../eval/variants.js';
 import { evalWhy } from '../../eval/why.js';
 import { findSavedEvaluation } from '../../runner/saved-evaluations.js';

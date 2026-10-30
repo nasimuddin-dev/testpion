@@ -52,7 +52,11 @@ call (what the model said and which tools it asked for), each tool call with its
 the final answer. The checks about tools are pinned to the step that decided them: a **should call** is green at the call that
 met it (or red on the calls whose arguments differ, or at the end as *never called*), a **should not call** is red on the call
 that happened and grey at the end when it never did, an allow-list and a call limit are red on the call that broke them, and
-valid arguments on the call whose arguments did not match the tool's schema. Nothing is sent to a model. From a terminal:
+valid arguments on the call whose arguments did not match the tool's schema. Nothing is sent to a model.
+
+### A golden run: has the agent started using other tools? {#baseline}
+
+Mark a run you trust with **Mark this run as the baseline** (on the report card of an agent evaluation) or `testpion eval baseline <run>`. Later runs then say, case by case, how their tools differ from it: *same tools in the same order*, *dropped search_docs; added delete_record*, *same tools in another order*, or *same tools, but search_docs was called with other arguments*. The report card shows *Tools against the baseline: 4 of 5 cases the same, 1 changed*, and **Show the steps** of a case adds the comparison. The baseline is one field of the saved evaluation (`baselineRun`); **Clear the baseline** or `testpion eval baseline --clear --evaluation <name>` removes it. `testpion eval trajectory <run> <case> --against <run>` compares with any other run. From a terminal:
 `testpion eval trajectory <run> <case>` (`--json` for scripts); for an agent, the MCP tool `eval_case_diff` with `steps: true`.
 
 :::

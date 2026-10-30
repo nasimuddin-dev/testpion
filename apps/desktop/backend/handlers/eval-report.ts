@@ -1,5 +1,5 @@
 /** RPC handlers: the report card of a run, why a case failed, a case against the run before, and compare mode (variants of an evaluation). */
-import { ApsError, evalCaseDiff, evalReport, evalTrajectory, evalWhy, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
+import { ApsError, evalCaseDiff, evalReport, evalTrajectory, evalWhy, setEvaluationBaseline, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { estimateDraft, startDraftRun } from './eval-quality.js';
 
@@ -10,7 +10,13 @@ export function evalReportHandlers(be: Backend): Handlers {
     /** One case against the same case in the run before it: both answers and the difference (what `testpion eval diff` prints). */
     'eval.caseDiff': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalCaseDiff(be.ws, { run, case: kase, against }),
     /** What an agent did in one case, step by step, with its tool checks pinned to the step that decided them (what `testpion eval trajectory` prints). */
-    'eval.trajectory': ({ run, case: kase }: { run: string; case: string }) => evalTrajectory(be.ws, { run, case: kase }),
+    'eval.trajectory': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalTrajectory(be.ws, { run, case: kase, against }),
+    /** Mark a run as the baseline of its agent evaluation (the golden trajectory), or clear it: later runs say how their tools differ. */
+    'eval.setBaseline': ({ run, clear, evaluation }: { run?: string; clear?: boolean; evaluation?: string }) => {
+      const r = setEvaluationBaseline(be.ws, { run, clear, evaluation });
+      be.host.emit('data.changed', { method: 'eval.setBaseline', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
+      return r;
+    },
     /** Why one case failed: the AI reviewer's stored reason, and the context the `eval-why` task is given. */
     'eval.why': ({ run, case: kase }: { run: string; case: string }) => evalWhy(be.ws, { run, case: kase }),
     /**

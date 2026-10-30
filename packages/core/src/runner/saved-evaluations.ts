@@ -44,6 +44,8 @@ export interface SavedEvaluation {
   mcpServers?: string[];
   /** type `agent`: the most steps (model calls) the agent may take. */
   maxSteps?: number;
+  /** type `agent`: the run whose tools are the golden trajectory; the report and `eval trajectory` say how a later run's tools differ from it. */
+  baselineRun?: string;
   /** type `rag`: the RAG target (id or name) the questions are sent to; without one the contexts written in the dataset are scored. */
   target?: string;
   /** type `rag` with a target: the judge of the judged metrics (unset: the AI settings' large model; never a silent mock) and the run's limits. */

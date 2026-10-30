@@ -69,6 +69,13 @@ const steps = [
      const tree = await __t.waitFor(() => ${key('answer')}, 15000); if (!tree) return 'NO RESPONSE TREE: ' + short(document.querySelector('[data-rag-connect]')?.innerText, 200);
      return 'keys: ' + [...document.querySelectorAll('[data-rag-response] .syn-key')].map((b) => b.textContent.trim()).slice(0, 8).join(' ');`,
   ),
+  step(
+    'the-response-shape-is-recognised',
+    `const rows = await __t.waitFor(() => document.querySelector('[data-rag-shapes]'), 5000); if (!rows) return 'NO SHAPES';
+     const ids = [...rows.querySelectorAll('[data-rag-shape]')].map((r) => r.getAttribute('data-rag-shape')).join(',');
+     const first = rows.querySelector('[data-rag-use-shape]'); await __t.real.click(first); await __t.sleep(600);
+     return 'shapes: ' + ids + ' | answer: ' + ${slot('answer')} + ' | contexts: ' + ${slot('contexts')} + ' | text: ' + ${slot('context.text')};`,
+  ),
   step('click-the-answer', `${pick('answer', 'This is: The answer')} return 'answer path: ' + ${slot('answer')};`),
   step('click-the-contexts', `${pick('sources', 'This is: The list of retrieved contexts')} return 'contexts path: ' + ${slot('contexts')};`),
   step(
@@ -199,6 +206,7 @@ module.exports = withExpect(
     'rag-tab-in-ai-lab': /^shipped bot listed: true \| ours yet: false$/,
     'connect-dialog': /^name: Clinic bot \| protocol: HTTP \| save disabled: true$/,
     probe: /^keys: .*"answer".*"sources"/,
+    'the-response-shape-is-recognised': /^shapes: generic-json[a-z,-]* \| answer: \$\.answer \| contexts: \$\.sources\[\*\] \| text: \$\.text$/,
     'click-the-answer': /^answer path: \$\.answer$/,
     'click-the-contexts': /^contexts path: \$\.sources\[\*\]$/,
     'click-inside-a-document': /^text: \$\.text \| id: \$\.id \| score: \$\.score$/,

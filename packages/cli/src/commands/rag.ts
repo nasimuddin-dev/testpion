@@ -77,7 +77,7 @@ export function registerRagCommands(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option('-e, --environment <name>', 'environment to use ({{variables}} of the request)')
     .option('--raw', 'also print the response the mapping reads')
-    .option('--json', 'print { question, status, latencyMs, sample, response } as JSON')
+    .option('--json', 'print { question, status, latencyMs, sample, shapes, response } as JSON')
     .action(async (name: string | undefined, question: string, o: { file?: string; workspace?: string; environment?: string; raw?: boolean; json?: boolean }) => {
       if (!name && !o.file) throw new CliError('Name a target, or pass --file <target.yaml>. `testpion rag targets` lists them.', EXIT.CONFIG_ERROR);
       await withWorkspace(o.workspace, async (store, ephemeral) => {
@@ -100,6 +100,7 @@ export function registerRagCommands(program: Command): void {
             p.sample.contexts.forEach((d, i) => console.log(`  ${i + 1}. ${green(d.id)}${d.score !== undefined ? dim(` · score ${d.score}`) : ''}${d.source ? dim(` · ${d.source}`) : ''}  ${shortText(d.text)}`));
           } else console.log(`${bold('Contexts')}  ${dim('none read')}`);
           if (p.sample.usage) console.log(`${bold('Usage')}     ${JSON.stringify(p.sample.usage)}`);
+          for (const s of p.shapes.slice(0, 2)) console.log(`${bold('Looks like')} ${s.name} ${dim(`(${s.id}): reads "${shortText(s.reads.answer)}"${s.reads.documents ? ` and ${s.reads.documents} document${s.reads.documents === 1 ? '' : 's'}` : ''}; mapping ${JSON.stringify(s.mapping)}`)}`);
           for (const w of p.sample.warnings) console.log(yellow(`warning: ${w}`));
           if (o.raw) console.log(`\n${dim(typeof p.response.doc === 'string' ? p.response.doc : JSON.stringify(p.response.doc, null, 2))}`);
         } finally {

@@ -16,6 +16,8 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { formatEstimateUsd } from './llm-estimate.js';
 import { FAILURE_CLASSES, GOAL_BACKED_METRICS, GOAL_FOUND_METRICS, type FailureClass, type RagFailure } from './rag/failure.js';
 import { canonicalMetricId } from './rag/metric-registry.js';
+import { trajectoryOf, type Trajectory } from './trajectory.js';
+import { diffTrajectory, type TrajectoryChangeKind } from './trajectory-diff.js';
 
 type Store = Pick<WorkspaceStore, 'root' | 'runDir' | 'meta'> & Partial<Pick<WorkspaceStore, 'getLibrary'>>;
 
@@ -63,6 +65,17 @@ export interface EvalReportCause {
   /** In the words of the report card: "right document not found". */
   plain: string;
   count: number;
+}
+
+/** An agent evaluation with a baseline (A-2): how the tools of each case differ from the golden run's. */
+export interface EvalReportAgentBaseline {
+  run: string;
+  /** Cases whose tools (and arguments) are the same as the baseline's. */
+  same: number;
+  changed: number;
+  /** The cases that changed, at most 50. */
+  cases: Array<{ key: string; name: string; resultId: string; kind: TrajectoryChangeKind; text: string }>;
+  text: string;
 }
 
 export interface EvalReportFlip {
@@ -120,6 +133,11 @@ export interface EvalReport {
   vsLast?: { passedDelta: number; gotWorse: number; gotBetter: number; text: string };
   /** The cases whose verdict changed since that run (A-3), the ones that got worse first; at most 50. */
   flipped?: EvalReportFlip[];
+  /** An agent evaluation with a baseline run (A-2): the tools of each case against the golden run's. */
+  agentBaseline?: EvalReportAgentBaseline;
+  /** An agent evaluation: how many cases kept their steps, and the run marked as its baseline (so the app offers "Mark this run as the baseline"). */
+  agentCases?: number;
+  baselineRun?: string;
   /** Pass rates of the last runs of this name, oldest first, this one last. */
   trend: EvalReportTrendPoint[];
   /** The whole report as words: what the CLI prints and the MCP tool returns beside the numbers. */
@@ -198,6 +216,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   const failures: EvalReportFailure[] = [];
   const status = new Map<string, string>();
   const cases = new Map<string, { id: string; name: string }>();
+  const trajectories = new Map<string, Trajectory>();
   let failedCount = 0;
   const causeCounts = new Map<FailureClass, number>();
   const goals = { backed: { passed: 0, total: 0 }, found: { passed: 0, total: 0 } };
@@ -206,6 +225,8 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   for await (const r of runResults(store, ref.runId)) {
     status.set(evalCaseKey(r.id), r.status);
     cases.set(evalCaseKey(r.id), { id: r.id, name: r.name });
+    const traj = trajectoryOf(r);
+    if (traj) trajectories.set(evalCaseKey(r.id), traj);
     if ((r.latencyMs ?? r.durationMs) > slowest) slowest = r.latencyMs ?? r.durationMs;
     if ((r.metadata?.reproducibility as { provider?: string } | undefined)?.provider === 'mock') offline = true;
     for (const c of r.checks ?? []) {
@@ -265,6 +286,28 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     vsLast = { passedDelta: delta, gotWorse: worse, gotBetter: better, text: same ? 'Same as the last run' : `Against the last run: ${parts.join(', ')}` };
   }
 
+  // an agent evaluation with a golden run: the tools of each case against it (A-2)
+  let agentBaseline: EvalReportAgentBaseline | undefined;
+  if (saved?.type === 'agent' && saved.baselineRun && saved.baselineRun !== ref.runId && trajectories.size) {
+    try {
+      const rows: EvalReportAgentBaseline['cases'] = [];
+      let sameCount = 0;
+      for await (const r of runResults(store, saved.baselineRun)) {
+        const key = evalCaseKey(r.id);
+        const now = trajectories.get(key);
+        const was = trajectoryOf(r);
+        if (!now || !was) continue;
+        const d = diffTrajectory(was, now);
+        if (d.kind === 'same') sameCount++;
+        else if (rows.length < MAX_FLIPPED) rows.push({ key, name: cases.get(key)!.name, resultId: cases.get(key)!.id, kind: d.kind, text: d.text });
+      }
+      const changed = (rows.length >= MAX_FLIPPED ? trajectories.size - sameCount : rows.length);
+      agentBaseline = { run: saved.baselineRun, same: sameCount, changed, cases: rows, text: changed ? `Tools against the baseline: ${sameCount} of ${sameCount + changed} cases the same, ${changed} changed.` : `Tools against the baseline: all ${sameCount} cases the same.` };
+    } catch {
+      // the baseline run was deleted: the report simply has no such line
+    }
+  }
+
   // the trend: this run and the ones before it of the same name
   const trend: EvalReportTrendPoint[] = store.meta
     .listRuns({ query: summary.name, limit: 200 })
@@ -303,6 +346,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     failedChecks.length ? `Failed: ${failedChecks.map((c) => `${c.name} ${c.total - c.passed} of ${c.total}`).join(', ')}.` : failedCount ? '' : 'Every check passed.',
     passLine ? `${passLine.text}.` : '',
     vsLast ? `${vsLast.text}.` : '',
+    agentBaseline ? agentBaseline.text : '',
     flipped?.length ? `Got worse: ${flipped.filter((f) => f.to === 'failed').map((f) => f.name).join(', ') || 'none'}. Got better: ${flipped.filter((f) => f.to === 'passed').map((f) => f.name).join(', ') || 'none'}.` : '',
     offline ? 'Offline demo model: its answers come from rules, not from a real model.' : '',
   ].filter(Boolean);
@@ -329,6 +373,8 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ...(previous ? { previous } : {}),
     ...(vsLast ? { vsLast } : {}),
     ...(flipped?.length ? { flipped } : {}),
+    ...(agentBaseline ? { agentBaseline } : {}),
+    ...(trajectories.size ? { agentCases: trajectories.size, ...(saved?.baselineRun ? { baselineRun: saved.baselineRun } : {}) } : {}),
     trend,
     text: words.join(' '),
   };

@@ -4,11 +4,7 @@
  * satisfied "should call", red where a forbidden call happened, "never called" at the end when nothing did. Pure over one stored
  * result (`metadata.agent`, its checks), so the app, `testpion eval trajectory` and the MCP tool `eval_trajectory` read the same story.
  */
-import { ApsError } from '../errors.js';
 import type { CheckResult, TestResult } from '../model/types.js';
-import { resolveRunRef } from '../runner/eval-matrix-runs.js';
-import type { WorkspaceStore } from '../storage/workspace.js';
-import { findEvalResult } from './report.js';
 
 export interface TrajectoryPin {
   /** The check, as the run names it. */
@@ -177,13 +173,4 @@ export function trajectoryOf(r: TestResult): Trajectory | undefined {
     endPins,
     text,
   };
-}
-
-/** The trajectory of one case of a run: the run (its id, "last" or an evaluation name) and the case (its result id, key or name). */
-export async function evalTrajectory(store: WorkspaceStore, o: { run: string; case: string }): Promise<Trajectory> {
-  const ref = resolveRunRef(store, o.run);
-  const r = await findEvalResult(store, ref.runId, o.case);
-  const t = trajectoryOf(r);
-  if (!t) throw new ApsError('ValidationError', `Case ${o.case} is not an agent case: only an agent keeps the steps it took`, { suggestions: ['Take a case of an agent evaluation (testpion eval summary <run> --json lists the failed cases).'] });
-  return t;
 }

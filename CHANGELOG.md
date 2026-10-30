@@ -15,6 +15,14 @@
 - **An *In short* box** under the title of 28 key pages (what it is, what you need), a *Next* list at the end of the guides, a plainer home page with a *Choose your path* table, and *Features* with a finder and its long paragraphs as short points.
 - A test keeps the front-door pages plain (short sentences and paragraphs, an *In short* box) so they stay easy.
 
+### RAG bots: connect faster
+
+- **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
+
+### Agents: a golden run
+
+- **Has the agent started using other tools?** Mark a run you trust as the **baseline** (the report card of an agent evaluation, or `testpion eval baseline <run>`). Later runs say, case by case, *same tools in the same order*, *dropped X; added Y*, *same tools in another order* or *same tools, but X was called with other arguments*; the report card shows *Tools against the baseline: 4 of 5 cases the same, 1 changed* and *Show the steps* adds the comparison (`eval trajectory --against`, `eval summary` → `agentBaseline`). One field of the saved evaluation; no model is called.
+
 ### Agents: see what the agent did
 
 - **The trajectory of an agent case.** A failed agent case has *Show the steps*: the question, each model call, each tool call with its arguments and result, the final answer, down one line, with the tool checks pinned to the step that decided them (green at the call that met a *should call*, red on a forbidden call or on one that broke the allow-list or the call limit, grey *never called* at the end). `testpion eval trajectory <run> <case>`, the MCP tool `eval_case_diff` with `steps: true` and `eval.trajectory` say the same; a run now keeps what the model said at each step. No model is called.

@@ -7,6 +7,7 @@ import type { RagSample, RagTarget } from '@testpion/shared';
 import type { EngineContext } from '../engine.js';
 import { callTarget } from '../eval/rag/run-target.js';
 import type { RagResponse } from '../eval/rag/mapping.js';
+import { detectRagShape, type DetectedShape } from '../eval/rag/shapes.js';
 import { Tracer } from '../trace/tracer.js';
 import { assertProductionStep } from '../net/production-guard.js';
 import { normalizeTest } from './loader.js';
@@ -20,6 +21,8 @@ export interface RagProbe {
   latencyMs: number;
   /** The sample the target's mapping reads from it (empty answer and contexts while there is no mapping yet). */
   sample: RagSample;
+  /** The common shapes this response looks like, with the mapping that reads each (R-9): deterministic, no model, the best first. */
+  shapes: DetectedShape[];
 }
 
 const MAX_TEXT = 200_000;
@@ -52,6 +55,7 @@ export async function probeRagTarget(ctx: EngineContext, target: RagTarget, ques
       status: call.ctx.status,
       latencyMs: call.latencyMs,
       sample: call.sample,
+      shapes: detectRagShape(call.response),
     };
   } finally {
     clearTimeout(timeout);

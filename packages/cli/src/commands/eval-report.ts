@@ -4,7 +4,7 @@
  * card and the `eval_summary`, `eval_explain_failure`, `eval_case_diff` and `eval_variants` MCP tools, so the words are the same.
  */
 import type { Command } from 'commander';
-import { aiRunDeps, evalCaseDiff, evalReport, evalTrajectory, evalWhy, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
+import { aiRunDeps, evalCaseDiff, evalReport, evalTrajectory, evalWhy, setEvaluationBaseline, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
 import { formatUsd } from '@testpion/shared';
 import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { printPreview } from './ai-print.js';
@@ -103,14 +103,16 @@ export function registerEvalReportCommands(ev: Command): void {
     .argument('<run>', 'the run: its id, "last" or an evaluation name')
     .argument('<case>', 'the case: its result id, its key or its name')
     .option(...WORKSPACE_OPTION)
-    .option('--json', 'print as JSON: items (each with its pins), endPins and text (for scripts and AI agents)')
-    .action((run: string, kase: string, o: { workspace?: string; json?: boolean }) =>
+    .option('--against <run>', 'compare the tools with this run instead of the evaluation’s baseline')
+    .option('--json', 'print as JSON: items (each with its pins), endPins, vsBaseline and text (for scripts and AI agents)')
+    .action((run: string, kase: string, o: { workspace?: string; against?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw noWorkspace();
-        const t = await evalTrajectory(store, { run, case: kase });
+        const t = await evalTrajectory(store, { run, case: kase, against: o.against });
         if (o.json) return printJson(t);
         console.log(`${bold(t.name)} ${t.status === 'passed' ? green(t.status) : red(t.status)}`);
         console.log(dim(t.text));
+        if (t.vsBaseline) console.log(t.vsBaseline.kind === 'same' ? green(`Against the baseline (${t.vsBaseline.baselineRun}): ${t.vsBaseline.text}`) : yellow(`Against the baseline (${t.vsBaseline.baselineRun}): ${t.vsBaseline.text}`));
         const pin = (p: { state: string; text: string; check: string }) => `    ${p.state === 'bad' ? red('✗') : p.state === 'ok' ? green('✓') : dim('·')} ${p.text} ${dim(`(${p.check})`)}`;
         for (const it of t.items) {
           const mark = it.kind === 'tool' ? (it.error ? red('  ⚠ ') : '  → ') : it.kind === 'model' ? bold('') : '';
@@ -120,6 +122,22 @@ export function registerEvalReportCommands(ev: Command): void {
           for (const p of it.pins) console.log(pin(p));
         }
         for (const p of t.endPins) console.log(pin(p));
+      }),
+    );
+
+  ev.command('baseline')
+    .description('mark a run as the golden run of its agent evaluation (the tools it used are the reference), or clear it: later runs and `eval trajectory` say how their tools differ')
+    .argument('[run]', 'the run: its id, "last" or an evaluation name (its newest run)')
+    .option(...WORKSPACE_OPTION)
+    .option('--clear', 'remove the baseline of the evaluation (name it with --evaluation)')
+    .option('--evaluation <name>', 'the saved evaluation (default: the run’s own)')
+    .option('--json', 'print as JSON')
+    .action((run: string | undefined, o: { workspace?: string; clear?: boolean; evaluation?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const r = setEvaluationBaseline(store, { run, clear: o.clear, evaluation: o.evaluation });
+        if (o.json) return printJson(r);
+        console.log(r.baselineRun ? green(`Baseline of "${r.evaluation}": ${r.baselineRun}`) : green(`Baseline of "${r.evaluation}" cleared`));
       }),
     );
 

@@ -1,6 +1,6 @@
 import { Eye, Play, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { RAG_MAP_SLOTS, RAG_PROTOCOLS, RAG_TARGET_PRESETS, assignSlot, emptyMapping, findRagTargetPreset, ragStepTemplate, type RagLimits, type RagMapSlot, type RagMapping, type RagProtocol, type RagTarget } from '@testpion/shared';
+import { plural, RAG_MAP_SLOTS, RAG_PROTOCOLS, RAG_TARGET_PRESETS, assignSlot, emptyMapping, findRagTargetPreset, ragStepTemplate, type RagLimits, type RagMapSlot, type RagMapping, type RagProtocol, type RagTarget } from '@testpion/shared';
 import type { AiTaskResult, RagProbe, RagSample } from '@testpion/core';
 import { asError, call } from '../../api';
 import { toastError, useApp } from '../../store';
@@ -317,6 +317,24 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                   />
                 )}
               </div>
+              {probe?.shapes?.length ? (
+                <div className="rounded-md border border-line px-2.5 py-1.5 text-xs flex flex-col gap-1" data-rag-shapes>
+                  {probe.shapes.map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-2" data-rag-shape={s.id}>
+                      <span className="min-w-0 flex-1" title={s.why}>
+                        <span className="font-medium">{s.name}</span>
+                        <span className="text-muted">
+                          {' '}
+                          · reads “{s.reads.answer.length > 50 ? `${s.reads.answer.slice(0, 49)}…` : s.reads.answer}”{s.reads.documents ? ` and ${plural(s.reads.documents, 'document')}` : ', no documents'}
+                        </span>
+                      </span>
+                      <Button size="sm" variant={i === 0 ? 'primary' : undefined} onClick={() => (setMapping(JSON.parse(JSON.stringify(s.mapping)) as RagMapping), setSuggestNotes([]))} data-rag-use-shape={s.id}>
+                        Use this mapping
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {suggestNotes.map((n) => (
                 <div key={n} className="text-xs text-warn" data-rag-suggest-note>
                   {n}
