@@ -288,6 +288,17 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
         )}
       </div>
       {reviewing && <ReviewQueue runId={runId} onClose={() => setReviewing(false)} />}
+      {r && !compact && r.underTest && r.underTest.length > 0 && (
+        <div className="px-3 pb-1.5 flex flex-wrap items-center gap-1.5 text-xs" data-eval-under-test>
+          <span className="text-muted">Under test</span>
+          {r.underTest.map((u) => (
+            <Badge key={u.name} tone={u.changed ? 'warn' : 'default'} title={u.changed ? `Changed since the last run (was ${u.previous?.join(' / ')})` : undefined} data-under-test={u.name}>
+              {u.name} {u.values.join(' / ')}
+              {u.changed ? ` (was ${u.previous?.join(' / ')})` : ''}
+            </Badge>
+          ))}
+        </div>
+      )}
       {r && !compact && r.agentCases ? (
         <div className="px-3 pb-1.5 flex flex-wrap items-center gap-2 text-xs" data-eval-baseline={r.baselineRun === runId ? 'this' : r.baselineRun ? 'other' : 'none'}>
           <Pin size={12} className="text-muted" />

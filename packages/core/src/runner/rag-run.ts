@@ -103,6 +103,7 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
             contexts: sample.contexts.slice(0, KEEP_DOCS).map((d) => scrubDocImage({ ...d, text: d.text.slice(0, KEEP_CHARS) })),
             ...(sample.usage ? { usage: sample.usage } : {}),
             ...(toolCalls?.length ? { toolCalls: toolCalls.slice(0, 100) } : {}),
+            ...(sample.meta ? { meta: sample.meta } : {}),
           },
           ...(turns ? { conversation: { turns: calls.length, latenciesMs: calls.map((c) => c.latencyMs), ...(calls.at(-1)?.sample.conversationId ? { conversationId: calls.at(-1)!.sample.conversationId } : {}) } } : {}),
           ...(calls.some((c) => c.sample.warnings.length) ? { warnings: calls.flatMap((c) => c.sample.warnings).slice(0, 10) } : {}),

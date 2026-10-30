@@ -67,6 +67,16 @@ export interface EvalReportCause {
   count: number;
 }
 
+/** What was under test in a run of a bot with sources (R-6): a value the bot reported about itself (corpus version, top k …), and what it was in the run before. */
+export interface EvalReportUnderTest {
+  name: string;
+  /** The distinct values across the run's samples (at most 5). */
+  values: string[];
+  /** The values in the run before, when it recorded this name. */
+  previous?: string[];
+  changed: boolean;
+}
+
 /** An agent evaluation with a baseline (A-2): how the tools of each case differ from the golden run's. */
 export interface EvalReportAgentBaseline {
   run: string;
@@ -135,6 +145,8 @@ export interface EvalReport {
   flipped?: EvalReportFlip[];
   /** An agent evaluation with a baseline run (A-2): the tools of each case against the golden run's. */
   agentBaseline?: EvalReportAgentBaseline;
+  /** What was under test (R-6): the bot's own values, and whether any changed since the run before. */
+  underTest?: EvalReportUnderTest[];
   /** The prompt version this run was made with (A-4), when the evaluation keeps versions: its name, or none when this prompt was never saved as one. */
   promptVersion?: { hash: string; name?: string; current: boolean };
   /** An agent evaluation: how many cases kept their steps, and the run marked as its baseline (so the app offers "Mark this run as the baseline"). */
@@ -170,6 +182,12 @@ function savedEvaluationNamed(store: Store, name: string): (SavedEvaluation & { 
   } catch {
     return undefined;
   }
+}
+
+/** The values a result's bot reported about itself (the mapping's `meta`), added to the run's. */
+function addMeta(into: Map<string, Set<string>>, r: TestResult): void {
+  const m = (r.metadata?.rag as { sample?: { meta?: Record<string, string> } } | undefined)?.sample?.meta;
+  for (const [k, v] of Object.entries(m ?? {})) (into.get(k) ?? into.set(k, new Set()).get(k)!).add(v);
 }
 
 /** A failed result as the report lists it. */
@@ -220,6 +238,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   const cases = new Map<string, { id: string; name: string }>();
   const trajectories = new Map<string, Trajectory>();
   let promptHash: string | undefined;
+  const meta = new Map<string, Set<string>>();
   let failedCount = 0;
   const causeCounts = new Map<FailureClass, number>();
   const goals = { backed: { passed: 0, total: 0 }, found: { passed: 0, total: 0 } };
@@ -229,6 +248,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     status.set(evalCaseKey(r.id), r.status);
     cases.set(evalCaseKey(r.id), { id: r.id, name: r.name });
     promptHash ??= r.tags?.find((t) => t.startsWith('prompt:'))?.slice(7);
+    addMeta(meta, r);
     const traj = trajectoryOf(r);
     if (traj) trajectories.set(evalCaseKey(r.id), traj);
     if ((r.latencyMs ?? r.durationMs) > slowest) slowest = r.latencyMs ?? r.durationMs;
@@ -296,6 +316,17 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     const v = saved.promptVersions.find((x) => x.id === promptHash);
     promptVersion = { hash: promptHash, ...(v ? { name: v.name } : {}), current: promptHashOf(saved) === promptHash };
   }
+  // what was under test (R-6), against the run before
+  let underTest: EvalReportUnderTest[] | undefined;
+  if (meta.size) {
+    const was = new Map<string, Set<string>>();
+    if (before) for await (const r of runResults(store, before.runId)) addMeta(was, r);
+    underTest = [...meta].map(([name, set]) => {
+      const values = [...set].slice(0, 5);
+      const prev = was.get(name) ? [...was.get(name)!].slice(0, 5) : undefined;
+      return { name, values, ...(prev ? { previous: prev } : {}), changed: !!prev && (prev.length !== values.length || prev.some((x) => !values.includes(x))) };
+    });
+  }
   // an agent evaluation with a golden run: the tools of each case against it (A-2)
   let agentBaseline: EvalReportAgentBaseline | undefined;
   if (saved?.type === 'agent' && saved.baselineRun && saved.baselineRun !== ref.runId && trajectories.size) {
@@ -356,6 +387,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     failedChecks.length ? `Failed: ${failedChecks.map((c) => `${c.name} ${c.total - c.passed} of ${c.total}`).join(', ')}.` : failedCount ? '' : 'Every check passed.',
     passLine ? `${passLine.text}.` : '',
     vsLast ? `${vsLast.text}.` : '',
+    underTest ? `Under test: ${underTest.map((u) => `${u.name} ${u.values.join(' / ')}${u.changed ? ` (was ${u.previous!.join(' / ')})` : ''}`).join(', ')}.` : '',
     promptVersion ? (promptVersion.name ? `Prompt version: ${promptVersion.name}${promptVersion.current ? '' : ' (not the one in use now)'}.` : 'Prompt version: this prompt is not saved as a version.') : '',
     agentBaseline ? agentBaseline.text : '',
     flipped?.length ? `Got worse: ${flipped.filter((f) => f.to === 'failed').map((f) => f.name).join(', ') || 'none'}. Got better: ${flipped.filter((f) => f.to === 'passed').map((f) => f.name).join(', ') || 'none'}.` : '',
@@ -386,6 +418,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ...(flipped?.length ? { flipped } : {}),
     ...(agentBaseline ? { agentBaseline } : {}),
     ...(promptVersion ? { promptVersion } : {}),
+    ...(underTest ? { underTest } : {}),
     ...(trajectories.size ? { agentCases: trajectories.size, ...(saved?.baselineRun ? { baselineRun: saved.baselineRun } : {}) } : {}),
     trend,
     text: words.join(' '),

@@ -35,6 +35,8 @@ export interface RagMapping {
   toolCall?: { name?: string; arguments?: string };
   /** Where the id of a server-side conversation is (carried to the next turn as {{conversationId}}). */
   conversationId?: string;
+  /** What is under test (R-6): a name for each value the bot reports about itself ("Corpus version": `$.meta.corpus`, "Top k": `$.meta.top_k`). The run records them, and the report says when one changed since the last run. */
+  meta?: Record<string, string>;
 }
 
 /**
@@ -138,6 +140,8 @@ export interface RagSample {
   toolCalls?: RagToolCallRef[];
   /** The server-side conversation id the response carries. */
   conversationId?: string;
+  /** What is under test: the values the response reports about the bot (corpus version, top k …), by name. */
+  meta?: Record<string, string>;
   /** What the mapping could not find (a path that matched nothing): shown with the sample. */
   warnings: string[];
 }

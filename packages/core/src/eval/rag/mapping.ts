@@ -127,7 +127,7 @@ export function mappingProblems(m: RagMapping | undefined): string[] {
   if (!m || typeof m !== 'object') return ['The target has no mapping.'];
   const out: string[] = [];
   if (typeof m.answer !== 'string' || !m.answer.trim()) out.push('The mapping has no answer path: click the answer in the sample response and choose "The answer".');
-  for (const [k, v] of Object.entries({ contexts: m.contexts, latencyMs: m.latencyMs, toolCalls: m.toolCalls, conversationId: m.conversationId, 'usage.input': m.usage?.input, 'usage.output': m.usage?.output, 'usage.total': m.usage?.total }))
+  for (const [k, v] of Object.entries({ contexts: m.contexts, latencyMs: m.latencyMs, toolCalls: m.toolCalls, conversationId: m.conversationId, 'usage.input': m.usage?.input, 'usage.output': m.usage?.output, 'usage.total': m.usage?.total, ...Object.fromEntries(Object.entries(m.meta ?? {}).map(([k, p]) => [`meta ${k}`, p]))}))
     if (v !== undefined && (typeof v !== 'string' || !v.trim().startsWith('$'))) out.push(`${k} must be a JSONPath starting with $ (got ${JSON.stringify(v)}).`);
   return out;
 }
@@ -170,5 +170,10 @@ export function applyMapping(r: RagResponse, m: RagMapping): RagSample {
   const latencyMs = num(m.latencyMs);
   const toolCalls = toolCallsOf(r, m, warnings);
   const conversationId = m.conversationId ? textOf(firstOf(select(r, m.conversationId))) : undefined;
-  return { answer, contexts, ...(usage ? { usage } : {}), ...(latencyMs !== undefined ? { latencyMs } : {}), ...(toolCalls ? { toolCalls } : {}), ...(conversationId ? { conversationId } : {}), warnings };
+  const meta: Record<string, string> = {};
+  for (const [name, path] of Object.entries(m.meta ?? {})) {
+    const v = typeof path === 'string' && path.trim() ? textOf(firstOf(select(r, path))) : undefined;
+    if (v !== undefined && v !== '') meta[name] = v.length > 120 ? `${v.slice(0, 119)}…` : v;
+  }
+  return { answer, contexts, ...(Object.keys(meta).length ? { meta } : {}), ...(usage ? { usage } : {}), ...(latencyMs !== undefined ? { latencyMs } : {}), ...(toolCalls ? { toolCalls } : {}), ...(conversationId ? { conversationId } : {}), warnings };
 }

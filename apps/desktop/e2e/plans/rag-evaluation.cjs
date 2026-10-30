@@ -76,6 +76,16 @@ const steps = [
      const first = rows.querySelector('[data-rag-use-shape]'); await __t.real.click(first); await __t.sleep(600);
      return 'shapes: ' + ids + ' | answer: ' + ${slot('answer')} + ' | contexts: ' + ${slot('contexts')} + ' | text: ' + ${slot('context.text')};`,
   ),
+  step(
+    'under-test-lines-are-kept-and-cleared',
+    `const d = document.querySelector('[data-rag-meta]'); if (!d) return 'NO FIELD';
+     await __t.real.click(d.querySelector('summary')); await __t.sleep(300);
+     const box = d.querySelector('textarea'); await __t.real.click(box);
+     await __t.real.type('Corpus version: $.meta.corpus'); await __t.sleep(400);
+     const kept = box.value;
+     await __t.real.key('a', { ctrl: true }); await __t.real.key('Backspace'); await __t.sleep(300);
+     return 'kept: ' + kept + ' | cleared: ' + (box.value === '');`,
+  ),
   step('click-the-answer', `${pick('answer', 'This is: The answer')} return 'answer path: ' + ${slot('answer')};`),
   step('click-the-contexts', `${pick('sources', 'This is: The list of retrieved contexts')} return 'contexts path: ' + ${slot('contexts')};`),
   step(
@@ -207,6 +217,7 @@ module.exports = withExpect(
     'connect-dialog': /^name: Clinic bot \| protocol: HTTP \| save disabled: true$/,
     probe: /^keys: .*"answer".*"sources"/,
     'the-response-shape-is-recognised': /^shapes: generic-json[a-z,-]* \| answer: \$\.answer \| contexts: \$\.sources\[\*\] \| text: \$\.text$/,
+    'under-test-lines-are-kept-and-cleared': /^kept: Corpus version: \$\.meta\.corpus \| cleared: true$/,
     'click-the-answer': /^answer path: \$\.answer$/,
     'click-the-contexts': /^contexts path: \$\.sources\[\*\]$/,
     'click-inside-a-document': /^text: \$\.text \| id: \$\.id \| score: \$\.score$/,

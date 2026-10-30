@@ -340,6 +340,24 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                   {n}
                 </div>
               ))}
+              <details className="text-xs" open={!!mapping.meta && Object.keys(mapping.meta).length > 0} data-rag-meta>
+                <summary className="cursor-pointer text-muted select-none py-0.5">Under test (optional): what the bot says about itself</summary>
+                <p className="text-muted my-1">One line each, a name and where its value is in the response, for example Corpus version: $.meta.corpus. A run records them, and its report says when one changed since the last run.</p>
+                <textarea
+                  className="field mono text-xs min-h-14 w-full"
+                  aria-label="Under test"
+                  placeholder={'Corpus version: $.meta.corpus\nTop k: $.meta.top_k'}
+                  value={Object.entries(mapping.meta ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n')}
+                  onChange={(e) => {
+                    const meta: Record<string, string> = {};
+                    for (const line of e.target.value.split('\n')) {
+                      const m = /^(.*?):\s*(\$.*)$/.exec(line.trim());
+                      if (m && m[1]!.trim()) meta[m[1]!.trim()] = m[2]!.trim();
+                    }
+                    setMapping({ ...mapping, meta: Object.keys(meta).length ? meta : undefined });
+                  }}
+                />
+              </details>
               <div className="grid grid-cols-[9rem_1fr] gap-x-2 gap-y-1 items-center" data-rag-mapping>
                 {FIELD_SLOTS.map((s) => (
                   <label key={s.slot} className="contents">
