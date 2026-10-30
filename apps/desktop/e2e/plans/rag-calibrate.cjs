@@ -69,7 +69,7 @@ const steps = [
   ),
   step(
     'the-matrix-and-the-sample-detail',
-    `const seg = vis('main [role=radio], main button').find((b) => b.textContent.trim() === 'Metrics'); if (!seg) return 'NO METRICS SWITCH';
+    `const seg = vis('main [role=radio]').find((b) => b.textContent.trim() === 'Metrics') ?? vis('main button').find((b) => b.textContent.trim() === 'Metrics' && b.getAttribute('role') !== 'tab'); if (!seg) return 'NO METRICS SWITCH';
      await __t.real.click(seg);
      const m = await __t.waitFor(() => document.querySelector('[data-rag-matrix-table] [data-rag-col]') && document.querySelector('[data-rag-matrix]'), 10000); if (!m) return 'NO MATRIX';
      const cell = document.querySelector('[data-rag-cell$="|faithfulness"]'); if (!cell) return 'NO CELL';
