@@ -1,4 +1,4 @@
-import { CopyPlus, FileCheck2, KeyRound, Play, Save, Sparkles, Square, Bookmark, History } from 'lucide-react';
+import { CopyPlus, FileCheck2, GitBranch, KeyRound, Play, Save, Sparkles, Square, Bookmark, History } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSticky } from '../../lib/sticky';
 import { useLibrary } from '../../lib/library';
@@ -7,6 +7,7 @@ import { SidebarShell } from '../../components/SidebarShell';
 import { EnvironmentsPane, HistoryPane } from '../../components/SidebarPanes';
 import { asError, call, on, type NormalizedError } from '../../api';
 import { promptText, toastError, useApp, attempt } from '../../store';
+import { SavePromptVersionDialog } from '../../components/SavePromptVersionDialog';
 import { useIntent, useSendShortcut } from '../../hooks';
 import type { ProviderConfig } from '../../types';
 import { formatCost, formatMs, uid, undatedModel } from '../../lib/format';
@@ -165,6 +166,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     });
   };
   // an answer worth keeping becomes an evaluation case: the inputs, and the answer as what is expected
+  const [savingVersion, setSavingVersion] = useState(false);
   const addToDataset = async (r: ChatResult) => {
     let last = 'playground-cases';
     try {
@@ -324,6 +326,10 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                         <LinkButton icon={<CopyPlus size={12} />} title="Keep this answer as an evaluation case: the inputs and the answer as expected" onClick={() => void addToDataset(r)}>
                           Add to dataset
                         </LinkButton>
+                        <LinkButton icon={<GitBranch size={12} />} title="Keep this prompt as a version of a saved evaluation, to run and compare it with the others" onClick={() => setSavingVersion(true)} data-save-as-version>
+                          Save as a prompt version…
+                        </LinkButton>
+                        {savingVersion && <SavePromptVersionDialog prompt={d.prompt} system={d.system} onClose={() => setSavingVersion(false)} />}
                         <span>
                           {providers.find((p) => p.id === r.provider)?.name ?? r.provider} · {r.model} · {r.finishReason}
                         </span>

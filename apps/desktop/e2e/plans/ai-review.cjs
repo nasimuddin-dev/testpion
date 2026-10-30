@@ -41,6 +41,24 @@ const steps = [
      const toast = await __t.waitFor(() => [...document.querySelectorAll('[role=status], li, div')].find((x) => x.children.length <= 2 && /Added case \\d+ to datasets\\//.test(x.textContent) && x.textContent.length < 200), 8000);
      return short(toast?.textContent, 160);`,
   ),
+  // the wording being tried becomes a version of a saved evaluation; the evaluation keeps the prompt it has
+  step(
+    'save-as-a-prompt-version',
+    `const before = await window.aps.invoke('lib.get', { kind: 'evaluations' });
+     const target = before.items.find((i) => i.data.type !== 'rag'); if (!target) return 'NO EVALUATION';
+     const promptBefore = target.data.prompt;
+     const open = await __t.waitFor(() => vis('[data-save-as-version]')[0], 5000); if (!open) return 'NO LINK';
+     await __t.real.click(open);
+     const name = await __t.waitFor(() => vis('[data-version-name]')[0], 5000); if (!name) return 'NO DIALOG';
+     const off = vis('[data-version-save]')[0]?.disabled;
+     await __t.real.click(name); await __t.real.type('Tried in the playground');
+     await __t.sleep(300);
+     await __t.real.click(vis('[data-version-save]')[0]);
+     const toast = await __t.waitFor(() => [...document.querySelectorAll('[data-sonner-toast]')].map((t) => t.textContent).find((t) => /Saved "Tried in the playground" as a version of/.test(t)), 8000);
+     const v = await window.aps.invoke('eval.versions', { evaluation: target.id });
+     const after = (await window.aps.invoke('lib.get', { kind: 'evaluations' })).items.find((i) => i.id === target.id);
+     return 'disabled until named: ' + off + ' | toast: ' + !!toast + ' | listed: ' + v.versions.some((x) => x.name === 'Tried in the playground') + ' | evaluation prompt unchanged: ' + (after.data.prompt === promptBefore);`,
+  ),
   step(
     'comparison-marks',
     `tab('Compare')?.click(); await __t.sleep(600);
@@ -56,5 +74,6 @@ module.exports = withExpect(steps, {
   'rate-good': /before= after=To review 0 pressed=true rowIcon=true/,
   note: /Review: Answer cites the hours document/,
   'add-to-dataset': /Added case \d+ to datasets\/playground-cases\.jsonl/,
+  'save-as-a-prompt-version': /^disabled until named: true \| toast: true \| listed: true \| evaluation prompt unchanged: true$/,
   'comparison-marks': /hint=OpenAI needs an API key \| addKey=true \| OpenAI · gpt-4o-mini/,
 });

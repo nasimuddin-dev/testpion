@@ -3,6 +3,7 @@
  * answer changed since the run before, and the comparison of an evaluation's variants. The same functions as the app's report
  * card and the `eval_summary`, `eval_explain_failure`, `eval_case_diff` and `eval_variants` MCP tools, so the words are the same.
  */
+import { readFileSync } from 'node:fs';
 import type { Command } from 'commander';
 import { aiRunDeps, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
 import { formatUsd } from '@testpion/shared';
@@ -201,16 +202,19 @@ export function registerEvalReportCommands(ev: Command): void {
     );
 
   ev.command('version-save')
-    .description('save the evaluation’s prompt and system prompt now as a named version')
+    .description('save the evaluation’s prompt and system prompt now as a named version, or a draft (--prompt, --system) beside the others without changing the evaluation')
     .argument('<evaluation>', 'saved evaluation name or id')
     .argument('<name>', 'the version’s name, for example "Shorter prompt"')
     .option(...WORKSPACE_OPTION)
     .option('--note <text>', 'what changed and why')
+    .option('--prompt <text|@file>', 'a draft prompt to keep as the version (the evaluation keeps the one it has)')
+    .option('--system <text|@file>', 'the draft’s system prompt')
     .option('--json', 'print as JSON')
-    .action((ref: string, name: string, o: { workspace?: string; note?: string; json?: boolean }) =>
+    .action((ref: string, name: string, o: { workspace?: string; note?: string; prompt?: string; system?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw noWorkspace();
-        const v = savePromptVersion(store, { evaluation: ref, name, note: o.note });
+        const text = (v?: string) => (v?.startsWith('@') ? readFileSync(v.slice(1), 'utf8') : v);
+        const v = savePromptVersion(store, { evaluation: ref, name, note: o.note, prompt: text(o.prompt), system: text(o.system) });
         if (o.json) return printJson(v);
         console.log(green(`Saved version "${v.name}" (${v.id})`));
       }),

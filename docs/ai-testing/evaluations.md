@@ -99,6 +99,8 @@ Open **Prompt versions** above the prompt (or the instructions of an agent). **S
 - did **worse than the prompt in use** ("passed 70%; the prompt in use (*Original*) passed 85%"), or
 - was **never run** ("has not been run: nothing says how it does").
 
+**Try a wording first.** In **Try a prompt**, after an answer, click **Save as a prompt version…**, pick the evaluation and name it. The wording is kept beside the other versions and the evaluation keeps the prompt it has. Run it from the evaluation, compare, and make it current only if it did better. On the command line, `eval version-save <evaluation> <name> --prompt @new.txt` does the same.
+
 Confirm to go ahead anyway. If the prompt in use was not saved as a version, it is kept as *Before …* first, so nothing is lost. The same rule is there for CI and scripts: `testpion eval versions <evaluation>`, `eval version-save <evaluation> <name>`, and `eval version-use <evaluation> <version> [--confirm]`; for an agent, the MCP tool `eval_variants` with `versions: true`. A bot with sources has no prompt of its own to version.
 
 ## Review answers: read them yourself {#review}

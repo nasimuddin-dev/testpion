@@ -107,3 +107,19 @@ describe('prompt versions of a saved evaluation', () => {
     expect((await cli(['eval', 'version-use', SAMPLE_NAME, 'Nope', '-w', ws])).status).not.toBe(0);
   }, 120_000);
 });
+
+describe('a draft prompt kept as a version', () => {
+  it('is saved beside the others without changing the evaluation, and is refused when empty or already saved', async () => {
+    const before = await versions();
+    const ok = await cli(['eval', 'version-save', SAMPLE_NAME, 'Draft from Try a prompt', '--prompt', 'Reply in one short sentence about {{topic}}.', '--system', 'You are terse.', '-w', ws, '--json']);
+    expect(ok.status).toBe(0);
+    const v = cliData<{ id: string; name: string; prompt: string; system: string }>(ok.out);
+    expect(v).toMatchObject({ name: 'Draft from Try a prompt', prompt: 'Reply in one short sentence about {{topic}}.', system: 'You are terse.' });
+    const after = await versions();
+    // the evaluation still uses the prompt it had: no version of the list became current
+    expect(after.currentHash).toBe(before.currentHash);
+    expect(after.versions.find((x: { id: string }) => x.id === v.id)).toMatchObject({ current: false });
+    expect((await cli(['eval', 'version-save', SAMPLE_NAME, 'Same again', '--prompt', 'Reply in one short sentence about {{topic}}.', '--system', 'You are terse.', '-w', ws])).status).not.toBe(0);
+    expect((await cli(['eval', 'version-save', SAMPLE_NAME, 'Empty', '--prompt', '   ', '-w', ws])).status).not.toBe(0);
+  }, 60_000);
+});

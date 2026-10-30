@@ -92,18 +92,25 @@ function writeEvaluation(store: WorkspaceStore, id: string, change: (d: SavedEva
   store.saveLibrary(EVALUATIONS_LIBRARY, { folders: lib.folders, items: lib.items.map((i) => (i.id === id ? { ...i, data: change(i.data), updatedAt: new Date().toISOString() } : i)) });
 }
 
-/** Save the evaluation's prompt and system prompt now as a named version. A prompt that is already a version is not saved twice. */
-export function savePromptVersion(store: WorkspaceStore, o: { evaluation: string; name: string; note?: string }): PromptVersion {
+/**
+ * Save a prompt and system prompt as a named version: by default the ones the evaluation has now; with `prompt` (and `system`) a draft
+ * written elsewhere, for example in Try a prompt, which is kept beside the others WITHOUT changing the evaluation (run it, compare it,
+ * then make it current). A prompt that is already a version is not saved twice.
+ */
+export function savePromptVersion(store: WorkspaceStore, o: { evaluation: string; name: string; note?: string; prompt?: string; system?: string }): PromptVersion {
   const saved = findSavedEvaluation(store, o.evaluation);
   if (saved.type === 'rag') throw new ApsError('ValidationError', 'A bot with sources has no prompt of its own to version: the bot answers', { suggestions: [] });
   const name = o.name.trim();
   if (!name) throw new ApsError('ValidationError', 'Give the version a name, for example "Shorter prompt"');
-  const id = promptHashOf(saved);
+  const draft = o.prompt !== undefined;
+  if (draft && !o.prompt!.trim()) throw new ApsError('ValidationError', 'The prompt is empty: write it first');
+  const text = draft ? { prompt: o.prompt!, system: o.system } : saved;
+  const id = promptHashOf(text);
   const have = saved.promptVersions ?? [];
   const same = have.find((v) => v.id === id);
-  if (same) throw new ApsError('ValidationError', `This prompt is already saved as "${same.name}"`, { suggestions: ['Change the prompt first, or use that version.'] });
+  if (same) throw new ApsError('ValidationError', `This prompt is already saved as "${same.name}"`, { suggestions: [draft ? 'Change the prompt first.' : 'Change the prompt first, or use that version.'] });
   if (have.some((v) => v.name.toLowerCase() === name.toLowerCase())) throw new ApsError('ValidationError', `There is already a version called "${name}"`, { suggestions: ['Choose another name.'] });
-  const version: PromptVersion = { id, name, prompt: saved.prompt, ...(saved.system ? { system: saved.system } : {}), at: new Date().toISOString(), ...(o.note?.trim() ? { note: o.note.trim() } : {}) };
+  const version: PromptVersion = { id, name, prompt: text.prompt, ...(text.system ? { system: text.system } : {}), at: new Date().toISOString(), ...(o.note?.trim() ? { note: o.note.trim() } : {}) };
   writeEvaluation(store, saved.id, (d) => ({ ...d, promptVersions: [...(d.promptVersions ?? []), version] }));
   return version;
 }

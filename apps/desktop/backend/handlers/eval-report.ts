@@ -21,9 +21,9 @@ export function evalReportHandlers(be: Backend): Handlers {
     },
     /** The prompt versions of a saved evaluation, each with the result of its latest run (what `testpion eval versions` prints). */
     'eval.versions': ({ evaluation }: { evaluation: string }) => listPromptVersions(be.ws, evaluation),
-    /** Save the evaluation's prompt and system prompt now as a named version. */
-    'eval.saveVersion': ({ evaluation, name, note }: { evaluation: string; name: string; note?: string }) => {
-      const v = savePromptVersion(be.ws, { evaluation, name, note });
+    /** Save the evaluation's prompt and system prompt now as a named version; with `prompt` (and `system`), a draft kept beside the others without changing the evaluation. */
+    'eval.saveVersion': ({ evaluation, name, note, prompt, system }: { evaluation: string; name: string; note?: string; prompt?: string; system?: string }) => {
+      const v = savePromptVersion(be.ws, { evaluation, name, note, prompt, system });
       be.host.emit('data.changed', { method: 'eval.saveVersion', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
       return v;
     },

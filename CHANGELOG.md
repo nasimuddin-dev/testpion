@@ -24,6 +24,10 @@
 
 - **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
 
+### AI quality: try a wording, keep it as a version
+
+- **Save as a prompt version…** in Try a prompt: the wording you just tried becomes a version of a saved evaluation, beside its other versions. The evaluation keeps the prompt it has until you make the version current. `testpion eval version-save <evaluation> <name> --prompt <text|@file> [--system …]` does the same from a script.
+
 ### RAG bots: mark the right documents
 
 - **Your verdict on each retrieved document.** In an open sample every retrieved document has *Right*, *Partly* and *Wrong*; the labels are kept with the run, and *Add the documents you marked Right to the right documents of this question* writes them into the saved questions, so the next run measures the retrieval against documents you have read.

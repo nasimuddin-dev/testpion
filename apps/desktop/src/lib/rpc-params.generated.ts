@@ -145,7 +145,7 @@ export interface RpcParamTypes {
   'eval.run': RpcCommonParams & { template: Record<string, unknown>; name?: string; datasetText?: string; datasetPath?: string; datasetFormat?: string; limit?: number };
   'eval.runDraft': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean };
   'eval.runVariants': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean; dryRun?: boolean };
-  'eval.saveVersion': RpcCommonParams & { evaluation: string; name: string; note?: string };
+  'eval.saveVersion': RpcCommonParams & { evaluation: string; name: string; note?: string; prompt?: string; system?: string };
   'eval.setBaseline': RpcCommonParams & { run?: string; clear?: boolean; evaluation?: string };
   'eval.summary': RpcCommonParams & { run: string; against?: string };
   'eval.trajectory': RpcCommonParams & { run: string; case: string; against?: string };
