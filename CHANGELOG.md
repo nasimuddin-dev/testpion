@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.55.4 — 2026-10-29
 
 ### RAG bots: its own place
 
