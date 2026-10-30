@@ -70,6 +70,15 @@ const steps = [
      return 'same answer: ' + p.getAttribute('data-same') + ' | change: ' + p.getAttribute('data-change') + ' | text: ' + short(p.querySelector('p')?.textContent, 120) + ' | sides: ' + (/The last run/.test(p.textContent) && /This run/.test(p.textContent));`,
   ),
   step(
+    'changed-since-last-run',
+    `const rows = vis('[data-eval-flipped] [data-eval-flip]');
+     const first = rows[0]?.getAttribute('data-eval-flip');
+     const open = rows[0]?.querySelector('[data-eval-flip-open]'); if (!open) return 'NO BUTTON';
+     await __t.real.click(open);
+     const p = await __t.waitFor(() => rows[0].querySelector('[data-eval-case-diff]'), 10000);
+     return 'flipped: ' + rows.length + ' | first: ' + first + ' | change: ' + p?.getAttribute('data-change');`,
+  ),
+  step(
     'show-all-failures',
     `const before = vis('[data-eval-failure]').length;
      const t = vis('[data-eval-failures-toggle]')[0];
@@ -105,6 +114,7 @@ module.exports = withExpect(steps, {
   'the-report-card': /^headline: 8 of 10 passed \| vs last: Against the last run: −2 passed, 0 got better, 2 got worse \| trend: true \| by check: By check.*\d+\/\d+ \| failures: 2 \(1,3\) \| first: 1.*/,
   'failed-cases-name-what-was-expected': /^expected shown: true \| got shown: true \| why button: true \| since last run button: Since last run enabled: true$/,
   'since-last-run': /^same answer: true \| change: got worse \| text: The answer is the same as in the last run, but the case got worse.* \| sides: true$/,
+  'changed-since-last-run': /^flipped: 2 \| first: worse \| change: got worse$/,
   'show-all-failures': /^failures shown: 2 \| toggle for more: false$/,
   'the-pass-line': /^pass line: not-met \| text: Pass line 90%: not met \| kept: Sample: support intents:90$/,
   'the-sentence-tops-the-runs-overview': /^overview headline: \d+ of \d+ passed \| no failure list in the overview: true$/,

@@ -15,7 +15,7 @@ calibration with Cohen's kappa (`RagCalibration`), trends (`RagTrend`), gates, C
 
 Where it still hurts (seen in the code and in the 10-28 stalls list, item 9 "RAG is a second app"):
 
-1. **It lives as one tab of AI quality ("Bots with sources") with a three-way sidebar** (targets / metrics / data) and an
+1. **It lives as one tab of AI quality ("RAG bots") with a three-way sidebar** (targets / metrics / data) and an
    intro paragraph. Questions, systems, metrics, runs, calibration and trends are reached from four different places
    (the tab, Checks, the run's result tabs, the drill-down). A newcomer cannot see the RAG workflow as one line.
 2. **No RAG sample.** The prompt side has "Try the sample (offline)"; RAG has a starter dataset and a mock judge in the
@@ -76,7 +76,7 @@ control, CLI `--json` + MCP tool + llms.txt line, an e2e plan, performance budge
 
 | Id | Change for the user | Implementation notes | Size | Job |
 |---|---|---|---|---|
-| R-1 | **RAG testing is its own rail item** ("Bots with sources"), separate from AI quality, with the workflow as tabs in order: *Start · Bots · Questions · Checks · Results · Trust the judge · Trends*. AI quality keeps Start / Checks / Try a prompt / Compare / Models and keys. Old view ids and intents keep working as aliases. | `lib/rail.ts`, `components/nav.tsx`, `AiQualityTabs` loses `rag`; new `views/rag/RagView.tsx` hosting the existing panels; `EvaluationsView` filters `type === 'rag'` into the Checks tab here. Rail default shows it. | M | all |
+| R-1 | **RAG testing is its own rail item** ("RAG bots"), separate from AI quality, with the workflow as tabs in order: *Start · Bots · Questions · Checks · Results · Trust the judge · Trends*. AI quality keeps Start / Checks / Try a prompt / Compare / Models and keys. Old view ids and intents keep working as aliases. | `lib/rail.ts`, `components/nav.tsx`, `AiQualityTabs` loses `rag`; new `views/rag/RagView.tsx` hosting the existing panels; `EvaluationsView` filters `type === 'rag'` into the Checks tab here. Rail default shows it. | M | all |
 | R-2 | **Start page for RAG** with three cards (Connect a bot · Build questions · Run the standard check), the latest RAG runs with their headline, and **Try the sample (offline)**: the starter dataset, the offline demo bot (a mock target in the examples workspace) and the mock judge give a report in ≤ 3 clicks. | reuse `Start.tsx`'s `StartCard`; `RAG_STARTER_DATASET` + `RAG_STARTER_EVALUATORS`; RPC `rag.sample` (CLI `testpion rag sample`, MCP `rag_sample`). | M | J1 |
 | R-3 | **Results open on causes.** The report card headline for RAG is the two goals ("Backed by the sources: 17 of 20 · Right documents found: 15 of 20"), then a strip of failure causes as chips ("4 right document not retrieved · 3 ranked below the cut · 2 unsupported claim · 1 off-topic") that filter the matrix; failures first. | `RunReport` (shared) gets a `causes` strip; `eval/rag/failure.ts` already classifies; `rag.summary` returns counts; CLI `rag report --causes`. | M | J2 |
 | R-4 | **One-sample view by stage**: query → retrieved (rank, score, right/wrong) → used (claims linked) → answer, with the **missed right documents** and the nearest retrieved chunk to each; per chunk a three-state label (relevant / partly / not) a person can set. Labels go to `labels/*.json` with provenance and feed the calibration of retrieval judges. | `RagSampleDetail` lanes; `RagLabelControl` extended to chunks; `labels.ts` schema gets `chunk`; `rag calibrate` reads chunk labels for context-precision / recall judges. | M | J2, J4 |
@@ -92,6 +92,15 @@ control, CLI `--json` + MCP tool + llms.txt line, an e2e plan, performance budge
 
 Not planned (and why): a hosted annotation service or multi-user queues (the cloud stage, B-42); replacing the matrix
 (it is fast and tested); new metrics (134 are enough; the gap is reaching them).
+
+## 4a. Status (2026-10-30)
+
+| Id | State |
+|---|---|
+| R-1 | Built: view id `rag`, rail item *RAG bots* (shown by default), tabs Start · Bots · Questions · Metrics · Checks; AI quality's Checks lists prompt and agent evaluations, the bots' Checks lists bot evaluations (`openIntent('evaluations', { host })`); old links land in the new place. Results, Trust the judge and Trends stay inside an evaluation's run (a tab outside would need an evaluation picker first). |
+| R-2 | Built: *Try the sample (offline)* makes an MCP mock bot (`mocks/clinic-bot.mcp-mock.yaml`, served in-process), the target *Clinic bot (offline)*, six questions and *Sample: clinic bot*; the offline demo model is the reviewer; 4 of 6 pass by design (an unsupported claim; the wrong document retrieved). `testpion rag sample`, `eval_sample { kind: "bot" }`, RPC `rag.trySample`. |
+| R-8 | Built: `PLAIN_METRIC` names in the picker (the id stays beside them), *Connect a bot*, *right document* in the drill-down, *Try again with another AI reviewer*. The `AI_JARGON` guard is unchanged (the docs still use the engine's words). |
+| R-10 | Already true: `RunReport` is the one report card, used by the bot run too; the causes strip is R-3. |
 
 ## 5. Release grouping (AI items ≤ half of a release; Fiddler work continues alongside)
 
@@ -117,7 +126,7 @@ Not planned (and why): a hosted annotation service or multi-user queues (the clo
 ## 7. Open questions for the owner
 
 1. R-1 reverses the 10-28 decision "one AI quality rail item". The reason to split now: the RAG workflow has seven stages
-   and its own vocabulary, and the owner asked for the separation. Confirm the rail label: "Bots with sources" (plain)
+   and its own vocabulary, and the owner asked for the separation. Confirm the rail label: "RAG bots" (plain)
    or "RAG testing" (what practitioners search for)?
 2. R-6: should the configuration stamp be mandatory for CI gates (a gate fails if the stamp is missing), or informational?
 3. R-7: a second reviewer is a name typed in; is that enough until the cloud version brings accounts?
@@ -126,7 +135,7 @@ Not planned (and why): a hosted annotation service or multi-user queues (the clo
 
 | # | Question | Decision | Why, from the app as it is |
 |---|---|---|---|
-| 1 | Rail label | **"Bots with sources"** in the rail and the tabs; "RAG" is the tooltip's second word, a Quick Open / search alias and the docs' section name ("Bots with sources (RAG testing)"). | The vocabulary rule (`lib/vocabulary.ts`, `AI_JARGON`, unit-tested) forbids jargon in labels, and every other label was renamed in 0.55 to plain words; the alias keeps the term people search for reachable. |
+| 1 | Rail label | **"RAG bots"** in the rail and the tabs; "RAG" is the tooltip's second word, a Quick Open / search alias and the docs' section name ("RAG bots (RAG testing)"). | The vocabulary rule (`lib/vocabulary.ts`, `AI_JARGON`, unit-tested) forbids jargon in labels, and every other label was renamed in 0.55 to plain words; the alias keeps the term people search for reachable. |
 | 2 | Configuration stamp (R-6) | **Informational.** A run without a stamp still runs and still gates; the trend marks "unknown configuration" in grey. | Today's gates are thresholds on numbers (`gates`, `--min`, monitors); making the stamp mandatory would fail every existing monitor and CI step on the day it ships. |
 | 3 | Second reviewer (R-7) | **A name typed once** (Settings ▸ AI quality ▸ "Your name for reviews", default the OS user name), stored on each label's provenance. | Labels already carry provenance (`labels/*.json`, 0.54); there are no accounts until the cloud stage (B-42), and the app must not invent a second identity system before it. |
 

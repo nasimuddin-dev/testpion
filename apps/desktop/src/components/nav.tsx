@@ -19,7 +19,7 @@ export const NAV: Array<{ id: ViewId | 'aiquality'; label: string; icon: ReactNo
   { id: 'monitors', label: 'Monitors', icon: <AlarmClock size={18} />, group: 'Testing', hint: 'Scheduled runs' },
   { id: 'load', label: 'Load', icon: <Gauge size={18} />, group: 'Testing', hint: 'Load tests' },
   { id: 'aiquality', label: 'AI quality', icon: <Sparkles size={18} />, group: 'AI', hint: 'Check prompts, chatbots and agents; compare models; set up models and keys' },
-  { id: 'rag', label: 'Bots with sources', icon: <BookOpenCheck size={18} />, group: 'AI', hint: 'Bots that answer from your documents (RAG testing): connect one, build questions, check that the answers are backed by the right documents' },
+  { id: 'rag', label: 'RAG bots', icon: <BookOpenCheck size={18} />, group: 'AI', hint: 'RAG bots: bots that answer from your documents. Connect one, build questions, check that the answers are backed by the right documents' },
   { id: 'environments', label: 'Environments', icon: <KeyRound size={18} />, group: 'Workspace', hint: 'Environments and variables' },
   { id: 'history', label: 'History', icon: <History size={18} />, group: 'Workspace', hint: 'What you sent, with the response (send it again)' },
   { id: 'traces', label: 'Traces', icon: <Activity size={18} />, group: 'Workspace', hint: 'Timing waterfall of each send and run step' },

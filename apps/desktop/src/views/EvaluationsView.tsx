@@ -96,7 +96,7 @@ interface Draft {
   gates?: Record<string, number>;
 }
 
-/** A new bot evaluation as the wizard starts it: also what the Checks tab of Bots with sources opens when no bot evaluation is open. */
+/** A new bot evaluation as the wizard starts it: also what the Checks tab of RAG bots opens when no bot evaluation is open. */
 const BOT_DEFAULTS = (): BotDraft => ({ ...(drafts.defaults as BotDraft), type: 'rag', name: 'New bot evaluation', provider: '', model: '', system: '', prompt: '', format: 'text', dataset: RAG_STARTER_DATASET, datasetFormat: 'jsonl', expectedField: 'reference', evaluators: RAG_STARTER_EVALUATORS });
 
 const drafts = persisted<Draft>('eval', {
@@ -136,7 +136,7 @@ export function EvaluationsView() {
   const tabs = useLibraryTabs<Draft>('eval', drafts, { canBeEmpty: true });
   const d = tabs.d;
   const setD = tabs.setD;
-  // R-1: Checks belongs to AI quality or to Bots with sources; an open evaluation says which, an empty view remembers the last
+  // R-1: Checks belongs to AI quality or to RAG bots; an open evaluation says which, an empty view remembers the last
   const [stickyHost, setStickyHost] = useSticky<EvalHost>('eval:host', 'ai');
   const host: EvalHost = tabs.empty ? stickyHost : d.type === 'rag' ? 'rag' : 'ai';
   useEffect(() => {

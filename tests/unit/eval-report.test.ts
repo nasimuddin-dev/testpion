@@ -77,6 +77,15 @@ describe('the report card (AU-14)', () => {
     expect(r.text).toContain('Offline demo model');
   });
 
+  it('says what the evaluation costs over time: this run, the run before, this month (A-8)', async () => {
+    const r = await evalReport(store, { run: 'last' });
+    expect(r.cost.usd).toBe(r.costUsd);
+    expect(r.cost.monthRuns).toBeGreaterThanOrEqual(1);
+    expect(r.cost.monthUsd).toBeGreaterThanOrEqual(r.cost.usd);
+    // the offline demo model costs nothing: no cost sentence, and no "this month" without a price
+    expect(r.text).not.toContain('this month');
+  });
+
   it('lists the failed cases with the reply and what was expected, and compares with the run before', async () => {
     // two cases now expect the wrong answer
     const lines = sampleWith({}).dataset.split('\n');
@@ -92,6 +101,11 @@ describe('the report card (AU-14)', () => {
     expect(r.passLine).toMatchObject({ percent: 80, met: true });
     expect(r.vsLast).toMatchObject({ passedDelta: -2, gotWorse: 2, gotBetter: 0 });
     expect(r.vsLast!.text).toBe('Against the last run: −2 passed, 0 got better, 2 got worse');
+    // the cases that flipped, the ones that got worse first (A-3)
+    expect(r.flipped).toHaveLength(2);
+    expect(r.flipped![0]).toMatchObject({ from: 'passed', to: 'failed' });
+    expect(r.flipped!.map((f) => f.key)).toEqual(r.failures.map((f) => f.key));
+    expect(r.text).toContain('Got worse: ');
     expect(r.previous?.passed).toBe(10);
     expect(r.trend.map((t) => t.passed)).toEqual([10, 8]);
     expect(r.text).toContain('Failed: ');

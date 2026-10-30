@@ -1,4 +1,4 @@
-// The rail shows 7 views by default (AI quality and Bots with sources included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
+// The rail shows 7 views by default (AI quality and RAG bots included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
 // computer in the app's settings); Ctrl+Alt+1…9, the tooltips, the shortcuts list and the palette follow the shown views.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -65,9 +65,9 @@ const steps = [
   step(
     'bots-with-sources-is-its-own-item',
     `${H} await __t.view('Home');
-     await __t.real.click(item('Bots with sources')); await __t.sleep(1200);
-     const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="Bots with sources"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
-     const names = [...document.querySelectorAll('[role=tablist][aria-label="Bots with sources"] [role=tab]')].filter((t) => t.offsetParent).map((t) => t.textContent.trim()).join(' | ');
+     await __t.real.click(item('RAG bots')); await __t.sleep(1200);
+     const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="RAG bots"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
+     const names = [...document.querySelectorAll('[role=tablist][aria-label="RAG bots"] [role=tab]')].filter((t) => t.offsetParent).map((t) => t.textContent.trim()).join(' | ');
      const cur = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      await __t.real.click(tb('Checks')); await __t.sleep(1500);
      const curA = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
@@ -107,15 +107,15 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'default-rail': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| History \| More views \| Settings$/,
+  'default-rail': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| History \| More views \| Settings$/,
   'more-reaches-hidden': /^debugger shown: true \| on the rail while open: Debugger \| gone after: true$/,
   'shortcut-follows-shown': /^3: tests \| 9 \(no 9th\): tests$/,
-  'hide-history': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","rag","environments"\]\}$/,
-  'keep-git': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
-  'move-git-up': /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","rag","git","environments"\]\}$/,
+  'hide-history': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","rag","environments"\]\}$/,
+  'keep-git': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
+  'move-git-up': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","rag","git","environments"\]\}$/,
   'palette-hint': /^Go to Git hint: Ctrl\+Alt\+6$/,
   'ai-quality-is-one-item-with-six-tabs': /^item: AI quality \| old items on the rail: false \| tabs: Start \| Checks \| Try a prompt \| Compare \| Models and keys\d* ?$/,
-  'bots-with-sources-is-its-own-item': /^item: Bots with sources \| tabs: Start \| Bots \| Questions \| Metrics \| Checks \| checks: Bots with sources true bot \| back to AI quality checks: AI quality llm$/,
+  'bots-with-sources-is-its-own-item': /^item: RAG bots \| tabs: Start \| Bots \| Questions \| Metrics \| Checks \| checks: RAG bots true bot \| back to AI quality checks: AI quality llm$/,
   'checks-and-the-others-stay-under-the-one-item': /^checks: true AI quality true \| try a prompt: AI quality true \| back from Home to the tab used last: true$/,
-  reset: /^Home \| Collections \| Tests \| AI quality \| Bots with sources \| Environments \| History \| More views \| Settings \|\| null$/,
+  reset: /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| History \| More views \| Settings \|\| null$/,
 });

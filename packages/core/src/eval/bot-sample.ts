@@ -1,15 +1,15 @@
-import type { LibraryItem } from '../../model/types.js';
-import { EVALUATIONS_LIBRARY, type SavedEvaluation } from '../../runner/saved-evaluations.js';
-import type { WorkspaceStore } from '../../storage/workspace.js';
-import { writeOwned } from '../../storage/fsutil.js';
-import { shortId } from '../../util/ids.js';
-import { ensureDemoModel } from '../sample.js';
-import { findRagTarget, saveRagTarget } from './targets.js';
+import type { LibraryItem } from '../model/types.js';
+import { EVALUATIONS_LIBRARY, type SavedEvaluation } from '../runner/saved-evaluations.js';
+import type { WorkspaceStore } from '../storage/workspace.js';
+import { writeOwned } from '../storage/fsutil.js';
+import { shortId } from '../util/ids.js';
+import { ensureDemoModel } from './sample.js';
+import { findRagTarget, saveRagTarget } from './rag/targets.js';
 import type { RagTarget } from '@testpion/shared';
 
 /**
- * The bot sample (R-2): a bot with sources that works offline, six questions, and the offline demo model as the AI reviewer,
- * so the first result of Bots with sources needs no key, no network and no server. One call makes the whole thing:
+ * The bot sample (R-2; outside eval/rag because it writes the evaluations library, which is the runner's): a bot with sources that works offline, six questions, and the offline demo model as the AI reviewer,
+ * so the first result of RAG bots needs no key, no network and no server. One call makes the whole thing:
  * `rag.trySample` (the app; `rag.sample` is one sample of a run), `testpion rag sample`, the `eval_sample { kind: "bot" }` tool.
  *
  * The bot is an MCP mock (`mocks/clinic-bot.mcp-mock.yaml`, served in-process) with four clinic documents: it answers each of

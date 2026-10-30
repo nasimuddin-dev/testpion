@@ -173,7 +173,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                 </div>
               )}
               <div>
-                <div className="text-xs text-muted">Retrieved contexts ({sample.contexts?.length ?? 0}){gold.size ? ` · gold: ${[...gold].join(', ')}` : ''}</div>
+                <div className="text-xs text-muted">Retrieved documents ({sample.contexts?.length ?? 0}){gold.size ? ` · right documents: ${[...gold].join(', ')}` : ''}</div>
                 <table className="w-full text-xs mt-1" data-rag-lane>
                   <tbody>
                     {(sample.contexts ?? []).map((c, i) => {
@@ -185,7 +185,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                           <td className="pr-2 mono whitespace-nowrap">{cid}</td>
                           <td className="pr-2 text-muted tabular-nums">{c.score ?? ''}</td>
                           <td className="pr-2 whitespace-nowrap">
-                            {gold.has(cid) && <Badge tone="ok">gold</Badge>} {v && <Badge tone={v.ok ? 'ok' : 'bad'}>{v.rating !== undefined ? `rated ${v.rating}` : v.ok ? 'useful' : 'not useful'}</Badge>}
+                            {gold.has(cid) && <Badge tone="ok" title="One of the right documents of this question (its reference_ids)">right document</Badge>} {v && <Badge tone={v.ok ? 'ok' : 'bad'}>{v.rating !== undefined ? `rated ${v.rating}` : v.ok ? 'useful' : 'not useful'}</Badge>}
                           </td>
                           <td>
                             {c.text.length > 220 ? `${c.text.slice(0, 219)}…` : c.text}
@@ -198,7 +198,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                       <tr key={id} className="border-t border-line/60 text-bad" data-rag-missed={id}>
                         <td className="py-1 pr-2">—</td>
                         <td className="pr-2 mono">{id}</td>
-                        <td colSpan={3}>gold chunk that was not retrieved</td>
+                        <td colSpan={3}>a right document that was not retrieved</td>
                       </tr>
                     ))}
                     {!sample.contexts?.length && missed.length === 0 && (
@@ -222,7 +222,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                   {c.score !== undefined && <RagLabelControl runId={runId} resultId={resultId} metric={c.name || c.type} />}
                   {((c.name || c.type) === focus || c.source === 'ai-judge') && (
                     <Button size="sm" className="ml-auto" onClick={() => setTryCheck(c)} data-rag-tryagain>
-                      Try again with another judge
+                      Try again with another AI reviewer
                     </Button>
                   )}
                 </>

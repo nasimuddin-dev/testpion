@@ -3,7 +3,7 @@
 // the RAG triad preset in one click, the inputs a dataset lacks said in amber, the estimate under the list), Try on one
 // sample (ask the target, the exact prompt before anything is sent, then the score), the estimate dialog before a run, the
 // samples × metrics matrix (columns grouped by type, the aggregates, an edited pass mark deciding pass and fail again, why
-// a sample failed, the drill-down with the contexts lane and "Try again with another judge"), the dataset column mapper, the
+// a sample failed, the drill-down with the retrieved-documents lane and "Try again with another AI reviewer"), the dataset column mapper, the
 // Connect dialog's presets, limits and AI Suggest mapping. Offline: the mock provider and a local server only; no key is used.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs');
@@ -42,7 +42,7 @@ const runButton = `vis('main button').find((b) => /^Run \\d+ cases/.test(b.textC
 const steps = [
   step(
     'a-rag-evaluation-with-the-metrics-tab',
-    `await __t.view('Evaluations'); await __t.sleep(800);
+    `await __t.view('Bot checks'); await __t.sleep(800);
      ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
@@ -144,7 +144,7 @@ const steps = [
   ),
   step(
     'the-metrics-matrix',
-    `const seg = vis('main [role=radio], main button').find((b) => b.textContent.trim() === 'Metrics'); if (!seg) return 'NO METRICS SWITCH';
+    `const seg = vis('main [role=radio]').find((b) => b.textContent.trim() === 'Metrics') ?? vis('main button').find((b) => b.textContent.trim() === 'Metrics' && b.getAttribute('role') !== 'tab'); if (!seg) return 'NO METRICS SWITCH';
      await __t.real.click(seg);
      const m = await __t.waitFor(() => document.querySelector('[data-rag-matrix-table] [data-rag-col]') && document.querySelector('[data-rag-matrix]'), 10000);
      if (!m) { const rs = vis('main button').filter((b) => /Clinic metrics/.test(b.textContent)); return 'NO MATRIX: runs listed ' + rs.length + ' | ' + short(document.querySelector('main')?.innerText, 160); }
@@ -170,7 +170,7 @@ const steps = [
      await __t.real.click(cell);
      const d = await __t.waitFor(() => document.querySelector('[data-rag-detail]'), 8000); if (!d) return 'NO DETAIL';
      await __t.sleep(500);
-     return 'question: ' + short(d.querySelector('[data-rag-detail-question]')?.textContent, 50) + ' | answer: ' + short(d.querySelector('[data-rag-detail-answer]')?.textContent, 40) + ' | chunks: ' + d.querySelectorAll('[data-rag-chunk]').length + ' | gold marked: ' + /gold/.test(d.querySelector('[data-rag-lane]')?.textContent ?? '') + ' | cards: ' + !!d.querySelector('[data-rag-cards]') + ' | try again: ' + !!d.querySelector('[data-rag-tryagain]');`,
+     return 'question: ' + short(d.querySelector('[data-rag-detail-question]')?.textContent, 50) + ' | answer: ' + short(d.querySelector('[data-rag-detail-answer]')?.textContent, 40) + ' | chunks: ' + d.querySelectorAll('[data-rag-chunk]').length + ' | gold marked: ' + /right document/.test(d.querySelector('[data-rag-lane]')?.textContent ?? '') + ' | cards: ' + !!d.querySelector('[data-rag-cards]') + ' | try again: ' + !!d.querySelector('[data-rag-tryagain]');`,
   ),
   step(
     'try-again-with-another-judge',

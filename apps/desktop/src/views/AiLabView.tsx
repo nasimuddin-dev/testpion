@@ -15,7 +15,7 @@ import { Start } from './ai/Start';
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
   const [tab, setTab] = useSticky<'start' | 'playground' | 'compare' | 'providers'>('ai:tab', 'start');
-  // the place saved by an older version: Bots with sources is its own rail item now (R-1)
+  // the place saved by an older version: RAG bots is its own rail item now (R-1)
   useEffect(() => {
     if ((tab as string) === 'rag') setTab('start');
   }, [tab, setTab]);

@@ -442,7 +442,7 @@ export default function App() {
       { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: 'AI quality: Models and keys', run: () => s.openIntent('ai', { tab: 'usage' }) },
       { id: 'mcp-usage', label: 'MCP tool usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
       { id: 'eval', label: 'New evaluation', hint: 'AI quality: Checks', run: () => s.openIntent('evaluations', { host: 'ai' }) },
-      { id: 'rag-connect', label: 'Connect a bot with sources (RAG)', hint: 'Bots with sources: Bots', run: () => s.openIntent('rag', { tab: 'bots', connect: true }) },
+      { id: 'rag-connect', label: 'Connect a RAG bot', hint: 'RAG bots: Bots', run: () => s.openIntent('rag', { tab: 'bots', connect: true }) },
       { id: 'ai-start', label: 'Check an AI answer', hint: 'AI quality: Start', run: () => s.openIntent('ai', { tab: 'start' }) },
       { id: 'shortcuts', label: 'Keyboard shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
       { id: 'keyboard-settings', label: 'Keyboard shortcuts: Change the keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },

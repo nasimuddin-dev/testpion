@@ -13,7 +13,7 @@ import { ProbeSets } from '../../components/rag/ProbeSets';
 import { Badge, Button, Empty } from '../../components/ui';
 
 /**
- * The Bots, Questions and Metrics tabs of Bots with sources (R-1): the bots under test (a request of any protocol and the
+ * The Bots, Questions and Metrics tabs of RAG bots (R-1): the bots under test (a request of any protocol and the
  * mapping of its response), the datasets of questions, and your own metrics. Connect a bot, open or change one, and go to
  * Checks to run questions through it. Evaluations of type rag pick a bot here.
  */

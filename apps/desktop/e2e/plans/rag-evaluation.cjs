@@ -47,8 +47,8 @@ const pick = (name, label) => `
 const steps = [
   step(
     'rag-tab-in-ai-lab',
-    `await __t.view('Bots with sources'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
+    `await __t.view('RAG bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
      return 'empty: ' + /No bots yet/.test(document.querySelector('main')?.innerText ?? '');`,
   ),
@@ -130,7 +130,7 @@ const steps = [
     `await __t.real.click(tab('Metrics')); await __t.sleep(800);
      const t = document.querySelector('main')?.innerText ?? '';
      const chosen = vis('[data-rag-metric]').filter((r) => r.querySelector('[data-rag-metric-check]')?.checked).map((r) => r.getAttribute('data-rag-metric'));
-     return 'metrics: ' + ['Token F1', 'Context recall (ids)', 'Faithfulness', 'Answer relevance'].filter((m) => t.includes(m)).join(', ') + ' | chosen: ' + chosen.join(',') + ' | judge note: ' + !!document.querySelector('[data-rag-judge-note]');`,
+     return 'metrics: ' + ['Words shared with the reference', 'All right documents found', 'Backed by the sources', 'Answers the question'].filter((m) => t.includes(m)).join(', ') + ' | chosen: ' + chosen.join(',') + ' | judge note: ' + !!document.querySelector('[data-rag-judge-note]');`,
   ),
   step(
     'run-it',
@@ -204,7 +204,7 @@ module.exports = withExpect(
     'save-the-target': /^dialog closed: true \| saved: 1 Clinic bot http \| mapping: \{"answer":"\$\.answer","context":\{"id":"\$\.id","score":"\$\.score","text":"\$\.text"\},"contexts":"\$\.sources\[\*\]"\} \| listed: true$/,
     'the-target-opens-again-with-its-mapping': /^name: Clinic bot \| answer: \$\.answer \| contexts: \$\.sources\[\*\] \| request: true$/,
     'a-rag-evaluation': /^target: Clinic bot \| judge fields: true \| prompt tab: false \| import button: true \| run: Run 2 cases$/,
-    'metrics-of-the-evaluation': /^metrics: Token F1, Context recall \(ids\), Faithfulness, Answer relevance \| chosen: [a-z0-9,-]+ \| judge note: true$/,
+    'metrics-of-the-evaluation': /^metrics: Words shared with the reference, All right documents found, Backed by the sources, Answers the question \| chosen: [a-z0-9,-]+ \| judge note: true$/,
     'run-it': /^estimate: true \| runs: 1 \| passed: 2\/2 \| judged: 4 \| token-f1:0\.778 context-recall-ids:1 faithfulness:1 answer-relevance:1 latency:n\/a$/,
     'again-costs-nothing': /^runs: 2 \| judge calls before: 4 after: 4 \| cached: 4\/4$/,
     'the-matrix-shows-the-runs': /^cases: 2 \| matrix: true$/,

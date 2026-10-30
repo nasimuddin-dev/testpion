@@ -11,8 +11,10 @@ import { useIntent, useSendShortcut } from '../../hooks';
 import type { ProviderConfig } from '../../types';
 import { formatCost, formatMs, uid, undatedModel } from '../../lib/format';
 import { JsonTree } from '../../components/JsonView';
+import { DiffText } from '../../components/DiffText';
+import { unifiedDiff } from '@testpion/shared';
 import { CheckList, ErrorPanel } from '../../components/Results';
-import { Button, Empty, LinkButton, Metric, Split, Tabs } from '../../components/ui';
+import { Button, Empty, LinkButton, Metric, Split, Tabs, Toggle } from '../../components/ui';
 import { ChatResult, SavedPrompt, drafts, type Draft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, NoProviders } from './common';
 import { useLibraryTabs } from '../../lib/library-tabs';
 import { LibraryTabStrip, NoOpenItems } from '../../components/LibraryTabStrip';
@@ -39,6 +41,9 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
   const [results, setResults] = useSticky<Record<string, PlayResult | undefined>>('ai:playground:results', {});
   const result = results[tabs.active.id];
   const setResultOf = (tab: string, r: PlayResult | undefined) => setResults((m) => ({ ...m, [tab]: r }));
+  // the answer before this one, per tab (A-7): the Output tab can show what changed since it
+  const [previous, setPrevious] = useSticky<Record<string, string | undefined>>('ai:playground:previous', {});
+  const [diffOn, setDiffOn] = useSticky<boolean>('ai:playground:diff', false);
   const [resTab, setResTab] = useSticky<'output' | 'json' | 'evaluation' | 'prompt'>('ai:playground:resTab', 'output');
   const env = useApp((s) => s.environment);
   const idRef = useRef<string | undefined>(undefined);
@@ -118,6 +123,8 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
     tabs.keep(tab); // a run has a result to come back to: its tab stays (a preview tab is replaced by the next click)
     setRunning({ id, tab });
     setStream('');
+    const was = results[tab];
+    if (was && 'text' in was && typeof was.text === 'string' && was.text) setPrevious((m) => ({ ...m, [tab]: was.text }));
     setResultOf(tab, undefined);
     setResTab('output');
     useApp.getState().setActivity(id, `Running ${d.model || 'model'}`);
@@ -326,7 +333,15 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                   }
                 />
                 <div className="flex-1 min-h-0 overflow-auto">
-                  {resTab === 'output' && <pre className="p-3 whitespace-pre-wrap text-sm leading-relaxed">{r ? r.text : stream}{runningHere && <span className="inline-block w-2 h-4 bg-accent align-middle ml-0.5 animate-pulse" />}</pre>}
+                  {resTab === 'output' && r && previous[tabs.active.id] !== undefined && !runningHere && (
+                    <div className="px-3 pt-2">
+                      <Toggle checked={diffOn} onChange={setDiffOn} label="Show what changed since the previous answer" title="The lines added and removed against the answer this tab got before this one" data-play-diff />
+                    </div>
+                  )}
+                  {resTab === 'output' && r && diffOn && previous[tabs.active.id] !== undefined && !runningHere ? (
+                    <DiffText text={unifiedDiff(previous[tabs.active.id], r.text, 'answer')} same="The answer is the same as the previous one." />
+                  ) : null}
+                  {resTab === 'output' && !(r && diffOn && previous[tabs.active.id] !== undefined && !runningHere) && <pre className="p-3 whitespace-pre-wrap text-sm leading-relaxed">{r ? r.text : stream}{runningHere && <span className="inline-block w-2 h-4 bg-accent align-middle ml-0.5 animate-pulse" />}</pre>}
                   {resTab === 'json' && r && <JsonTree data={r.json} />}
                   {resTab === 'evaluation' && r && (
                     <>

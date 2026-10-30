@@ -208,5 +208,27 @@ export const AI_JARGON = [
   'Judge provider', 'Judge model', 'Judge options', 'Prompt / LLM', 'expected field', 'Temp.', 'Evaluators', 'Faithfulness (judge)', 'Answer relevance (judge)', 'Groundedness (faithfulness)',
   'Context recall by id', 'Context precision by id', 'Matches snapshot', 'Similarity ≥', 'Token F1 ≥', 'ROUGE-L ≥', 'Calibrate judge',
 ] as const;
+/**
+ * Plain names of the common measures of a bot with sources (R-8), shown first in the metric picker; the metric id stays beside
+ * them, and the CLI, MCP tools and files keep the ids. A measure not listed here shows the catalogue's own name.
+ */
+export const PLAIN_METRIC: Record<string, string> = {
+  faithfulness: 'Backed by the sources',
+  'answer-relevance': 'Answers the question',
+  'context-recall-ids': 'All right documents found',
+  'context-precision-ids': 'Right documents ranked first',
+  'context-recall': 'Right documents found (AI reviewer)',
+  'context-precision': 'Right documents first (AI reviewer)',
+  'context-relevance': 'Retrieved documents fit the question',
+  hallucination: 'Statements no document backs',
+  'answer-correctness': 'Matches the reference answer',
+  'answer-similarity': 'Close to the reference answer',
+  'token-f1': 'Words shared with the reference',
+  'recall@k': 'Right documents in the top k',
+  'ndcg@k': 'Right documents ranked high',
+  mrr: 'How soon a right document appears',
+  latency: 'Answered in time',
+};
+
 /** Kept out of what the AI screens show, but still the idea's name in the docs. */
 export const AI_JARGON_SCREEN_ONLY = ['LLM-as-judge'] as const;

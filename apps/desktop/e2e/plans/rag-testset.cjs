@@ -38,10 +38,10 @@ function prepare(ws) {
 const steps = [
   step(
     'the-data-tab-offers-generation',
-    `await __t.view('Bots with sources'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
+    `await __t.view('RAG bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
-     const d = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Questions'); if (!d) return 'NO TAB Questions';
+     const d = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Questions'); if (!d) return 'NO TAB Questions';
      await __t.real.click(d);
      const list = await __t.waitFor(() => document.querySelector('[data-rag-datasets-list]'), 5000); if (!list) return 'NO LIST';
      const act = await __t.waitFor(() => document.querySelector('[data-rag-data-actions] [data-ai-action]'), 5000);

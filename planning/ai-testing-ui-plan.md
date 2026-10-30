@@ -78,6 +78,15 @@ Sizes: S ≤ 1 day, M ≤ 3 days, L ≤ 1–2 weeks. Every item: shared componen
 Not planned: a hosted prompt registry or team review (cloud stage, B-42); automatic prompt optimisation (a product of its
 own); more check types (the picker has 45; the gap is seeing results, not scoring them).
 
+## 4a. Status (2026-10-30)
+
+| Id | State |
+|---|---|
+| A-3 | Built: `EvalReport.flipped` (worse first, at most 50) with a sentence; the report card lists *Changed since the last run* with *What changed* (the existing case comparison). |
+| A-7 | Built: `components/DiffText.tsx` is the one diff view (Git's moved there); Try a prompt keeps the previous answer per tab and shows what changed; Compare shows the other answers as what differs from the first. |
+| A-8 | Built: `EvalReport.cost` ({ usd, lastUsd, monthUsd, monthRuns }) and the sentence; the report card shows this run, the run before, this month. |
+| A-10 | Pending: the uniform-* plans run against the 0.56 build before the release. |
+
 ## 5. Release grouping (AI items ≤ half of a release)
 
 | Release | Items | Why |

@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, FlaskConical, Plus, X } from 'lucide-react';
+import { PLAIN_METRIC } from '../../lib/vocabulary';
 import { useMemo, useState, type ReactNode } from 'react';
 import { normalizeMetricName } from '@testpion/shared';
 import { useRpc } from '../../lib/use-rpc';
@@ -214,8 +215,10 @@ export function MetricPicker({
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-medium text-sm">{r.name}</span>
-                          <span className="mono text-xs text-muted">{r.id}</span>
+                          <span className="font-medium text-sm">{PLAIN_METRIC[r.id] ?? r.name}</span>
+                          <span className="mono text-xs text-muted" title={PLAIN_METRIC[r.id] ? r.name : undefined}>
+                            {r.id}
+                          </span>
                           <Badge tone={kind.tone} title={kind.title}>
                             {kind.label}
                           </Badge>

@@ -1,6 +1,6 @@
 import { Cloud, GitCompareArrows, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalWhy } from '@testpion/core';
+import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy } from '@testpion/core';
 import { call, on } from '../../api';
 import { formatCost, formatMs } from '../../lib/format';
 import { useRpc } from '../../lib/use-rpc';
@@ -128,6 +128,26 @@ function FailureRow({ runId, f, hasPrevious }: { runId: string; f: EvalReportFai
   );
 }
 
+/** One case whose verdict changed since the last run (A-3): what it was, what it is, and the answers side by side on a click. */
+function FlipRow({ runId, f }: { runId: string; f: EvalReportFlip }) {
+  const [open, setOpen] = useState(false);
+  const worse = f.to === 'failed';
+  return (
+    <li className="px-3 py-1.5 border-b border-line/60 text-sm" data-eval-flip={worse ? 'worse' : 'better'}>
+      <div className="flex items-center gap-2">
+        <Badge tone={worse ? 'bad' : 'ok'}>{worse ? 'got worse' : 'got better'}</Badge>
+        <span className="truncate min-w-0 flex-1" title={f.key}>
+          {f.name}
+        </span>
+        <Button size="sm" icon={<GitCompareArrows size={12} />} onClick={() => setOpen(!open)} title="This answer against the same case in the run before" data-eval-flip-open={f.key}>
+          {open ? 'Hide' : 'What changed'}
+        </Button>
+      </div>
+      {open && <CaseDiffPanel runId={runId} caseKey={f.key} />}
+    </li>
+  );
+}
+
 /**
  * The report card of a run, one component (AU-14): the sentence "17 of 20 passed" with cost and time, how it compares with the
  * last run and the trend, the pass line, how many cases passed each check, and the failed cases first, each with "Why did this
@@ -163,7 +183,7 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
         )}
         {r && (
           <span className="text-xs text-muted">
-            {r.costUsd ? `Cost ${formatCost(r.costUsd)} · ` : ''}
+            {r.costUsd ? `Cost ${formatCost(r.costUsd)}${r.cost?.lastUsd !== undefined ? ` (last run ${formatCost(r.cost.lastUsd)})` : ''}${r.cost && r.cost.monthRuns > 1 ? `, this month ${formatCost(r.cost.monthUsd)} over ${r.cost.monthRuns} runs` : ''} · ` : ''}
             {r.avgMs !== undefined ? `Average ${formatMs(r.avgMs)} · ` : ''}
             {r.slowestMs !== undefined && r.slowestMs > (r.avgMs ?? 0) * 1.5 ? `Slowest ${formatMs(r.slowestMs)} · ` : ''}
             {formatMs(r.durationMs)} in all
@@ -209,6 +229,16 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
               {c.aiReviewer ? ' · AI reviewer' : ''}
             </Badge>
           ))}
+        </div>
+      )}
+      {r && !compact && r.flipped && r.flipped.length > 0 && (
+        <div className="border-t border-line" data-eval-flipped>
+          <div className="px-3 py-1 text-xs text-muted">Changed since the last run, the ones that got worse first</div>
+          <ul className="max-h-60 overflow-auto">
+            {r.flipped.map((f) => (
+              <FlipRow key={f.resultId} runId={runId} f={f} />
+            ))}
+          </ul>
         </div>
       )}
       {r && !compact && r.failures.length > 0 && (

@@ -47,7 +47,7 @@ When a check is **graded by an AI reviewer**, a second model reads each reply an
 
 - Put the evaluation in CI so a change that makes answers worse stops the build: [Evaluations](/ai-testing/evaluations#the-result-and-run-in-ci).
 - Prefer a text file? [Your first AI test file](/getting-started/first-ai-test) saves a prompt from the Playground as a YAML test.
-- A bot that answers from your documents: [Bots with sources](/ai-testing/rag).
+- A bot that answers from your documents: [RAG bots](/ai-testing/rag).
 - Privacy, cost and review of TestPion's own AI: [AI features](/ai-testing/ai-features).
 
 :::

@@ -1,18 +1,18 @@
 import { useApp } from '../../store';
 import { Tabs } from '../ui';
 
-/** The tabs of the Bots with sources rail item (R-1), in the order of the work. */
+/** The tabs of the RAG bots rail item (R-1), in the order of the work. */
 export type RagTab = 'start' | 'bots' | 'questions' | 'metrics' | 'checks';
 
 /**
- * The tab strip of Bots with sources: Start, Bots, Questions, Metrics, Checks. One component for the two views that host
+ * The tab strip of RAG bots: Start, Bots, Questions, Metrics, Checks. One component for the two views that host
  * it (`rag` for the first four, `evaluations` for Checks when it shows an evaluation of type rag), so the strip is the same
  * wherever the person is in the work.
  */
 export function RagTabs({ active }: { active: RagTab }) {
   return (
     <Tabs
-      label="Bots with sources"
+      label="RAG bots"
       value={active}
       onChange={(t) => (t === 'checks' ? useApp.getState().openIntent('evaluations', { host: 'rag' }) : useApp.getState().openIntent('rag', { tab: t }))}
       tabs={[

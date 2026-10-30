@@ -2,10 +2,17 @@
 
 ## Unreleased
 
-### Bots with sources: its own place
+### RAG bots: its own place
 
-- **Bots with sources is its own rail item** (shown on a new install, next to AI quality), with the work in order as tabs: *Start* (the three steps as cards and your latest bot runs), *Bots* (connect one, any protocol), *Questions* (datasets: write, generate from documents, take from real calls), *Metrics* (your own measures) and *Checks* (the bot evaluations and their runs, under the same strip). AI quality keeps Start, Checks, Try a prompt, Compare and Models and keys for prompts, chatbots and agents; its Checks lists prompt and agent evaluations only, the bots' Checks lists bot evaluations only. Links, saved rails, `openIntent('ai', { tab: 'rag' })` and a bot's ref keep working and land in the new place. A new palette command, *Connect a bot with sources (RAG)*.
+- **RAG bots is its own rail item** (shown on a new install, next to AI quality), with the work in order as tabs: *Start* (the three steps as cards and your latest bot runs), *Bots* (connect one, any protocol), *Questions* (datasets: write, generate from documents, take from real calls), *Metrics* (your own measures) and *Checks* (the bot evaluations and their runs, under the same strip). AI quality keeps Start, Checks, Try a prompt, Compare and Models and keys for prompts, chatbots and agents; its Checks lists prompt and agent evaluations only, the bots' Checks lists bot evaluations only. Links, saved rails, `openIntent('ai', { tab: 'rag' })` and a bot's ref keep working and land in the new place. A new palette command, *Connect a bot with sources (RAG)*.
 - Plain words on that side: a *RAG target* is a *bot*, *Connect a RAG system* is *Connect a bot*, *Data* is *Questions*. The CLI, MCP tools and file formats are unchanged.
+- **Try the sample (offline)** on the Start tab of RAG bots: one click makes an offline bot (an MCP mock with four clinic documents, served inside TestPion), six questions with their right documents, and the evaluation *Sample: clinic bot* with the offline demo model as the AI reviewer, runs it and opens the report: *4 of 6 passed*, with two failures on purpose (an answer no document backs; a question whose right document was not found). No key, no network, no server. The same from the command line: `testpion rag sample`; for an agent: `eval_sample { kind: "bot" }`.
+
+### AI quality
+
+- **What changed, in the answer.** *Try a prompt* keeps the answer a tab got before and can show the next one as the lines added and removed against it (*Show what changed since the previous answer*); *Compare* can show the other models' answers as what differs from the first (*Differences from the first*). The one diff view the app has, the same as Git's.
+- **The cases that changed since the last run.** The report card lists them, the ones that got worse first, each with *What changed*: the two answers side by side. `eval.summary`, `testpion eval summary` and `eval_summary` carry the list (`flipped`) and a sentence (*Got worse: … Got better: …*).
+- **What an evaluation costs over time.** The report card says this run's cost with the run before it and this month's total over its runs (`eval.summary`, `testpion eval summary` and the `eval_summary` tool carry the same `cost` numbers and sentence).
 
 ## 0.55.3 — 2026-10-29
 
@@ -56,9 +63,9 @@ A fix for 0.55.0. Nothing new to learn; update to get it.
 
 ### AI quality: agents, bots with sources, one place
 
-- **One rail item, AI quality**, replaces AI Lab and Evaluations, with the tabs *Start*, *Checks*, *Try a prompt*, *Compare*, *Bots with sources* and *Models and keys*. Links and saved layouts that name the old items still work.
+- **One rail item, AI quality**, replaces AI Lab and Evaluations, with the tabs *Start*, *Checks*, *Try a prompt*, *Compare*, *RAG bots* and *Models and keys*. Links and saved layouts that name the old items still work.
 - **Agent checks in the wizard**: choose *An agent with tools*, write mock tools (or tick MCP servers) and per case what the agent **should call** and **should not call**. It saves the same evaluation file (`type: agent`).
-- **Bots with sources wizard**: connect a bot, add questions (generate them from your documents or real calls), pick two goals (answers backed by the sources; the right documents found) and run the standard set of five checks, with **More checks…** for the full catalogue.
+- **RAG bots wizard**: connect a bot, add questions (generate them from your documents or real calls), pick two goals (answers backed by the sources; the right documents found) and run the standard set of five checks, with **More checks…** for the full catalogue.
 
 ### Git: change marks for the last five kinds
 

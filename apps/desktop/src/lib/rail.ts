@@ -12,7 +12,7 @@ export interface RailPrefs {
   shown?: RailId[];
 }
 
-/** Shown on a new install: the views most people use every day, AI quality (AU-1, AU-21: a new person should see it) and Bots with sources (R-1: its own place); the others wait under More…. */
+/** Shown on a new install: the views most people use every day, AI quality (AU-1, AU-21: a new person should see it) and RAG bots (R-1: its own place); the others wait under More…. */
 export const RAIL_DEFAULT_SHOWN: readonly RailId[] = ['home', 'collections', 'tests', 'aiquality', 'rag', 'environments', 'history'];
 
 /** AI Lab and Evaluations became one rail item, AI quality (AU-21): a saved rail keeps the place and the choice of the first of them. */

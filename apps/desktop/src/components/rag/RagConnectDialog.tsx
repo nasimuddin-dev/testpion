@@ -176,7 +176,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
       return {
         label: `This is: ${s.label}`,
         disabled: s.slot === 'contexts' ? !list : s.item || s.slot === 'answer' || s.slot === 'answer.pieces' ? !scalar && s.slot !== 'context.text' : !scalar,
-        title: s.slot === 'contexts' ? 'Click a list (an array) of retrieved documents' : undefined,
+        title: s.slot === 'contexts' ? 'Click the list (an array) of retrieved documents' : undefined,
         onSelect: () => {
           const r = assignSlot(mapping, s.slot, row.path);
           if ('problem' in r) useApp.getState().toast(r.problem, 'error');
@@ -199,7 +199,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
       const { problems: p } = await call<{ problems: string[] }>('rag.check', { target });
       if (p.length) return void setError(p[0]);
       const savedId = await targets.put({ id, name: name.trim(), folder: existing?.folder, data: target });
-      useApp.getState().toast(`Saved the RAG target "${name.trim()}"`, 'success');
+      useApp.getState().toast(`Saved the bot "${name.trim()}"`, 'success');
       onSaved?.(savedId, name.trim());
       onClose();
     } catch (e) {
@@ -217,7 +217,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
   return (
     <>
       <Modal
-        title={existing ? `RAG target · ${existing.name}` : 'Connect a RAG system'}
+        title={existing ? `Bot · ${existing.name}` : 'Connect a bot'}
         onClose={onClose}
         onSubmit={() => void save()}
         width={1040}
@@ -326,7 +326,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
                 {FIELD_SLOTS.map((s) => (
                   <label key={s.slot} className="contents">
                     <span className="text-xs text-muted truncate" title={s.label}>
-                      {s.label.replace('The list of retrieved contexts', 'Contexts (list)').replace('The answer', 'Answer')}
+                      {s.label.replace('The list of retrieved contexts', 'Retrieved documents (list)').replace('The answer', 'Answer')}
                     </span>
                     <Input className="mono h-7 min-h-7 text-xs" value={slotValue(mapping, s.slot)} placeholder={s.item ? 'relative to one context, e.g. $.text' : '$.…'} onChange={(e) => setMapping(setSlotText(mapping, s.slot, e.target.value))} aria-label={s.label} data-rag-slot={s.slot} />
                   </label>
@@ -337,7 +337,7 @@ export function RagConnectDialog({ id, onClose, onSaved }: { id?: string; onClos
               <div className="text-xs text-muted">Sample response {probe && <Badge>{probe.response.kind === 'sse' ? 'event stream' : probe.response.kind}{probe.status !== undefined ? ` · ${probe.status}` : ''} · {probe.latencyMs} ms</Badge>}</div>
               <div className="h-52 border border-line rounded-md overflow-hidden" data-rag-response>
                 {probe ? (
-                  <JsonTree data={probe.response.doc} pickItems={pick} hint="Click a key, then choose what it is: the answer, the list of contexts, a context's text or id …" />
+                  <JsonTree data={probe.response.doc} pickItems={pick} hint="Click a key, then choose what it is: the answer, the list of retrieved documents, a document's text or id …" />
                 ) : (
                   <div className="h-full grid place-items-center text-muted text-xs p-4 text-center">Probe the system with a question, then click the answer and the retrieved documents in its response.</div>
                 )}

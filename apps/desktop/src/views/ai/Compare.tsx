@@ -6,7 +6,9 @@ import { useApp } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { formatCost, formatMs, uid } from '../../lib/format';
 import { CheckList } from '../../components/Results';
-import { Button, Empty, IconButton, Split } from '../../components/ui';
+import { Button, Empty, IconButton, Split, Toggle } from '../../components/ui';
+import { DiffText } from '../../components/DiffText';
+import { unifiedDiff } from '@testpion/shared';
 import { OutputHeader } from '../../components/output/OutputFrame';
 import { compareOutputSpec } from '../../components/output/ai-specs';
 import { ChatResult, useCompareDraft, ModelPicker, Params, responseFormat, parseExpected, PromptEditor, ModelError, AddKeyHint, NoProviders } from './common';
@@ -15,6 +17,8 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
   const [d, set] = useCompareDraft();
   const [running, setRunning] = useState(false);
   const [results, setResults] = useSticky<Array<ChatResult & { error?: NormalizedError }>>('ai:compare:results', []);
+  // the other answers as what differs from the first (A-7)
+  const [diffOn, setDiffOn] = useSticky<boolean>('ai:compare:diff', false);
   const env = useApp((s) => s.environment);
   const rows = d.compare.length ? d.compare : providers.slice(0, 2).map((p) => ({ provider: p.id, name: p.defaultModel ?? '' }));
   const providerName = (id: string) => providers.find((p) => p.id === id || p.name === id)?.name ?? id;
@@ -159,10 +163,25 @@ export function Compare({ providers, onSetUp }: { providers: ProviderConfig[]; o
                   );
                 })}
                 <tr className="align-top">
-                  <td className="px-3 py-2 text-muted">Output</td>
+                  <td className="px-3 py-2 text-muted">
+                    Output
+                    {results.length > 1 && !results[0]!.error && (
+                      <div className="mt-1">
+                        <Toggle checked={diffOn} onChange={setDiffOn} label="Differences from the first" title="The other answers as the lines added and removed against the first model's answer" data-compare-diff />
+                      </div>
+                    )}
+                  </td>
                   {results.map((r, i) => (
                     <td key={i} className="px-3 py-2">
-                      {r.error ? <span className="text-muted">—</span> : <pre className="whitespace-pre-wrap text-xs mono max-h-80 overflow-auto">{r.text}</pre>}
+                      {r.error ? (
+                        <span className="text-muted">—</span>
+                      ) : diffOn && i > 0 && !results[0]!.error ? (
+                        <div className="max-h-80 overflow-auto">
+                          <DiffText text={unifiedDiff(results[0]!.text, r.text, 'answer')} same="The same answer as the first." />
+                        </div>
+                      ) : (
+                        <pre className="whitespace-pre-wrap text-xs mono max-h-80 overflow-auto">{r.text}</pre>
+                      )}
                     </td>
                   ))}
                 </tr>

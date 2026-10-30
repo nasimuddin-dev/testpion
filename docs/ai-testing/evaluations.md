@@ -106,6 +106,8 @@ Above a run, one chip says how many passed (*17 of 20 passed*) with the cost and
 
 Above the cases of a run, one report says how it went. First the sentence (*17 of 20 passed*) with the cost, the average and slowest time, and how it compares with the last run of the same evaluation (*Against the last run: +2 passed, 3 got better, 1 got worse*), with a small line of the pass rate of the last runs. A **pass line** (set under **Options** as **Pass line (%)**, for example 80) adds *Pass line 80%: met* with a bar. **By check** says how many cases passed each check, and marks the checks an AI reviewer grades. **Failed first** lists the failed cases, each with the prompt, the answer you expected and the reply, and two buttons: **Why did this fail?** and **Since last run**. A run on the offline demo model says **Offline demo**.
 
+The cost line also says what the run before cost and what this evaluation has cost this month over its runs. Under the sentence, **Changed since the last run** lists the cases whose verdict flipped, the ones that got worse first; **What changed** on one of them shows its two replies side by side. The same numbers and words come back from `testpion eval summary` and the `eval_summary` tool (`cost`, `flipped`).
+
 ```bash
 testpion eval summary last              # the same words in a terminal (a run id, "last" or an evaluation name)
 testpion eval summary last --json       # headline, byCheck, failures, passLine, vsLast, trend, text

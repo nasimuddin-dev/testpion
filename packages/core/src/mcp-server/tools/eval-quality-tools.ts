@@ -10,7 +10,7 @@ import { generateEvalCases, type GenerateCasesOptions } from '../../runner/eval-
 import { trustReviewer } from '../../runner/trust-reviewer.js';
 import { findCollection } from '../../storage/env-edit.js';
 import { ensureSample, SAMPLE_NAME } from '../../eval/sample.js';
-import { ensureBotSample, BOT_SAMPLE_NAME } from '../../eval/rag/sample.js';
+import { ensureBotSample, BOT_SAMPLE_NAME } from '../../eval/bot-sample.js';
 import { runRagEvaluation } from '../../runner/rag-evaluation.js';
 import { createEngineContext } from '../../engine.js';
 import { estimateEvaluation, formatEstimateUsd, spendPlan } from '../../eval/llm-estimate.js';

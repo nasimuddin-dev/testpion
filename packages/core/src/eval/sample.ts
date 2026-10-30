@@ -39,7 +39,7 @@ const verdict = (items: Array<[text: string, verdict: boolean, reason?: string]>
 const PARKING = 'Parking is free for patients';
 const EMERGENCY = 'Emergency care is available around the clock at the main clinic';
 /**
- * How the offline demo model answers as the AI reviewer of the bot sample (eval/rag/sample.ts): the claims of each answer, whether
+ * How the offline demo model answers as the AI reviewer of the bot sample (eval/bot-sample.ts): the claims of each answer, whether
  * the retrieved documents back them, and whether they address the question. The parking answer is the seeded defect: its first
  * claim is backed by no document. Any other reviewer prompt gets a passing verdict, so every judged metric runs offline.
  */

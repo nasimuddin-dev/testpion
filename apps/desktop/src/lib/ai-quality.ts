@@ -1,5 +1,5 @@
 /**
- * AI quality (AU-21) is one rail item over two views: `ai` (Start, Try a prompt, Compare, Bots with sources, Models and keys)
+ * AI quality (AU-21) is one rail item over two views: `ai` (Start, Try a prompt, Compare, RAG bots, Models and keys)
  * and `evaluations` (Checks). The old view ids stay as aliases of its tabs; the rail item opens the one used last.
  */
 export type AiView = 'ai' | 'evaluations';
@@ -11,10 +11,10 @@ export const lastAiView = (): AiView => last;
 
 /** The rail item both views belong to. */
 export const AI_QUALITY = 'aiquality';
-/** The rail item Bots with sources (R-1): bots, questions, metrics, and the evaluations of type rag under Checks. */
+/** The rail item RAG bots (R-1): bots, questions, metrics, and the evaluations of type rag under Checks. */
 export const BOTS_WITH_SOURCES = 'rag';
 
-/** What the evaluations view shows right now: the Checks of AI quality, or the Checks of Bots with sources (an evaluation of type rag). */
+/** What the evaluations view shows right now: the Checks of AI quality, or the Checks of RAG bots (an evaluation of type rag). */
 export type EvalHost = 'ai' | 'rag';
 let host: EvalHost = 'ai';
 export const rememberEvalHost = (h: EvalHost): void => void (host = h);

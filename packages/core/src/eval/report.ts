@@ -19,6 +19,7 @@ type Store = Pick<WorkspaceStore, 'root' | 'runDir' | 'meta'> & Partial<Pick<Wor
 
 /** How many failures one report lists (the rest are counted): the matrix and `run_results` hold every case. */
 const MAX_FAILURES = 100;
+const MAX_FLIPPED = 50;
 /** The runs of the trend: this one and the ones before it. */
 const TREND_RUNS = 12;
 
@@ -50,6 +51,15 @@ export interface EvalReportFailure {
   error?: string;
 }
 
+export interface EvalReportFlip {
+  resultId: string;
+  /** The case: its id without the evaluation's name. */
+  key: string;
+  name: string;
+  from: 'passed' | 'failed';
+  to: 'passed' | 'failed';
+}
+
 export interface EvalReportTrendPoint {
   runId: string;
   startedAt: string;
@@ -71,6 +81,8 @@ export interface EvalReport {
   /** "17 of 20 passed". */
   headline: string;
   costUsd: number;
+  /** What this evaluation costs over time (A-8): this run, the run before, and this calendar month's runs of this name. */
+  cost: { usd: number; lastUsd?: number; monthUsd: number; monthRuns: number };
   /** Mean and slowest time of a case, ms. */
   avgMs?: number;
   slowestMs?: number;
@@ -88,6 +100,8 @@ export interface EvalReport {
   previous?: { runId: string; startedAt: string; passed: number; total: number };
   /** Against that run, case by case. */
   vsLast?: { passedDelta: number; gotWorse: number; gotBetter: number; text: string };
+  /** The cases whose verdict changed since that run (A-3), the ones that got worse first; at most 50. */
+  flipped?: EvalReportFlip[];
   /** Pass rates of the last runs of this name, oldest first, this one last. */
   trend: EvalReportTrendPoint[];
   /** The whole report as words: what the CLI prints and the MCP tool returns beside the numbers. */
@@ -157,11 +171,13 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   const byCheck = new Map<string, EvalReportCheck>();
   const failures: EvalReportFailure[] = [];
   const status = new Map<string, string>();
+  const cases = new Map<string, { id: string; name: string }>();
   let failedCount = 0;
   let slowest = 0;
   let offline = false;
   for await (const r of runResults(store, ref.runId)) {
     status.set(evalCaseKey(r.id), r.status);
+    cases.set(evalCaseKey(r.id), { id: r.id, name: r.name });
     if ((r.latencyMs ?? r.durationMs) > slowest) slowest = r.latencyMs ?? r.durationMs;
     if ((r.metadata?.reproducibility as { provider?: string } | undefined)?.provider === 'mock') offline = true;
     for (const c of r.checks ?? []) {
@@ -186,19 +202,27 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   // the run before (or the one asked for), case by case
   let previous: EvalReport['previous'];
   let vsLast: EvalReport['vsLast'];
+  let flipped: EvalReportFlip[] | undefined;
   const before = o.against ? (() => { const a = resolveRunRef(store, o.against!); const s = readRunSummary(store, a.runId); return s ? { runId: a.runId, summary: s } : undefined; })() : previousRunOf(store, { runId: ref.runId, name: summary.name, startedAt: summary.startedAt });
   if (before) {
     previous = { runId: before.runId, startedAt: before.summary.startedAt, passed: before.summary.passed, total: before.summary.total - before.summary.skipped };
     let worse = 0;
     let better = 0;
+    const flips: EvalReportFlip[] = [];
     for await (const r of runResults(store, before.runId)) {
-      const now = status.get(evalCaseKey(r.id));
+      const key = evalCaseKey(r.id);
+      const now = status.get(key);
       if (now === undefined) continue;
       const was = r.status === 'passed';
       const is = now === 'passed';
+      if (was === is) continue;
       if (was && !is) worse++;
-      else if (!was && is) better++;
+      else better++;
+      const c = cases.get(key)!;
+      flips.push({ resultId: c.id, key, name: c.name, from: was ? 'passed' : 'failed', to: is ? 'passed' : 'failed' });
     }
+    // the ones that got worse first, each side in the order they ran
+    flipped = [...flips.filter((f) => f.to === 'failed'), ...flips.filter((f) => f.to === 'passed')].slice(0, MAX_FLIPPED);
     const delta = summary.passed - before.summary.passed;
     const same = delta === 0 && worse === 0 && better === 0;
     const parts = [delta === 0 ? 'the same number passed' : `${delta > 0 ? '+' : '−'}${Math.abs(delta)} passed`];
@@ -214,15 +238,31 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     .reverse()
     .map((m) => ({ runId: m.id, startedAt: m.startedAt, passed: m.passed, total: m.total - m.skipped, passRate: m.passed / (m.total - m.skipped) }));
 
+  // this month's spend on this evaluation: the summaries of its runs started this calendar month (the newest 60)
+  const month = summary.startedAt.slice(0, 7);
+  let monthUsd = 0;
+  let monthRuns = 0;
+  for (const m of store.meta.listRuns({ query: summary.name, limit: 200 }).items.filter((x) => x.name === summary.name && x.startedAt.slice(0, 7) === month).slice(0, 60)) {
+    const s = m.id === ref.runId ? summary : readRunSummary(store, m.id);
+    if (!s) continue;
+    monthRuns++;
+    monthUsd += s.costUsd ?? 0;
+  }
+  const cost: EvalReport['cost'] = { usd: summary.costUsd ?? 0, ...(before ? { lastUsd: before.summary.costUsd ?? 0 } : {}), monthUsd, monthRuns };
+  const costWords = summary.costUsd
+    ? `Cost ${formatEstimateUsd(summary.costUsd)}${before ? ` (last run ${formatEstimateUsd(before.summary.costUsd ?? 0)})` : ''}${monthRuns > 1 ? `; this month ${formatEstimateUsd(monthUsd)} over ${monthRuns} runs` : ''}`
+    : '';
+
   const checks = [...byCheck.values()];
   const failedChecks = checks.filter((c) => c.passed < c.total);
   const timing = summary.latency.count ? `average ${evalMs(summary.latency.mean)}, slowest ${evalMs(slowest || summary.latency.max)}` : `${evalMs(summary.durationMs)} in all`;
   const words = [
     `${headline} (${percent(passRate)}).`,
-    summary.costUsd ? `Cost ${formatEstimateUsd(summary.costUsd)}, ${timing}.` : `${timing[0]!.toUpperCase()}${timing.slice(1)}.`,
+    costWords ? `${costWords}, ${timing}.` : `${timing[0]!.toUpperCase()}${timing.slice(1)}.`,
     failedChecks.length ? `Failed: ${failedChecks.map((c) => `${c.name} ${c.total - c.passed} of ${c.total}`).join(', ')}.` : failedCount ? '' : 'Every check passed.',
     passLine ? `${passLine.text}.` : '',
     vsLast ? `${vsLast.text}.` : '',
+    flipped?.length ? `Got worse: ${flipped.filter((f) => f.to === 'failed').map((f) => f.name).join(', ') || 'none'}. Got better: ${flipped.filter((f) => f.to === 'passed').map((f) => f.name).join(', ') || 'none'}.` : '',
     offline ? 'Offline demo model: its answers come from rules, not from a real model.' : '',
   ].filter(Boolean);
   return {
@@ -235,6 +275,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     passRate: Math.round(passRate * 10_000) / 10_000,
     headline,
     costUsd: summary.costUsd,
+    cost,
     ...(summary.latency.count ? { avgMs: Math.round(summary.latency.mean), slowestMs: Math.round(slowest || summary.latency.max) } : {}),
     durationMs: summary.durationMs,
     offline,
@@ -244,6 +285,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ...(passLine ? { passLine } : {}),
     ...(previous ? { previous } : {}),
     ...(vsLast ? { vsLast } : {}),
+    ...(flipped?.length ? { flipped } : {}),
     trend,
     text: words.join(' '),
   };

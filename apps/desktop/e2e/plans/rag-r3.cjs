@@ -43,8 +43,8 @@ const view = (label) => `{ const seg = vis('main [role=radio], main button').fin
 const steps = [
   step(
     'probe-sets-in-ai-lab',
-    `await __t.view('Bots with sources'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
+    `await __t.view('RAG bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
      const box = await __t.waitFor(() => document.querySelector('[data-rag-probes] [data-rag-probe-set]') && document.querySelector('[data-rag-probes]'), 8000); if (!box) return 'NO PROBES';
      const sets = box.querySelectorAll('[data-rag-probe-set]').length;
@@ -57,7 +57,7 @@ const steps = [
   ),
   step(
     'a-rag-evaluation-with-the-metrics-tab',
-    `await __t.view('Evaluations'); await __t.sleep(800);
+    `await __t.view('Bot checks'); await __t.sleep(800);
      ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
      await __t.sleep(500);
      ${setSelect(`document.querySelector('[data-rag-target]')`, 'Clinic bot')}
@@ -146,8 +146,8 @@ const steps = [
   ),
   step(
     'the-connect-dialog-maps-tools-a-session-and-a-picture',
-    `await __t.view('Bots with sources'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="Bots with sources"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (t) { await __t.real.click(t); await __t.sleep(400); }
+    `await __t.view('RAG bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (t) { await __t.real.click(t); await __t.sleep(400); }
      await __t.real.click('[data-rag-connect-open]');
      const d = await __t.waitFor(() => document.querySelector('[data-rag-connect]'), 5000); if (!d) return 'NO DIALOG';
      const slots = ['toolCalls', 'toolCall.name', 'toolCall.arguments', 'conversationId', 'context.image'].map((s) => s + ':' + !!document.querySelector('[data-rag-slot="' + s + '"]')).join(',');
@@ -161,7 +161,7 @@ const steps = [
   ),
   step(
     'a-run-for-the-views',
-    `await __t.view('Evaluations'); await __t.sleep(800);
+    `await __t.view('Bot checks'); await __t.sleep(800);
      const clear = vis('[data-rag-picker] button').find((b) => b.textContent.trim() === 'Clear'); if (clear) { await __t.real.click(clear); await __t.sleep(400); }
      await __t.real.click('[data-rag-preset="rag-triad"]'); await __t.sleep(800);
      const dsTab = tab('Test cases'); await __t.real.click(dsTab); await __t.sleep(500);

@@ -27,7 +27,7 @@ The options added in 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 
 - **Fiddler files, comparing, sharing.** Export a `.saz`, import Fiddler rules, compare two captures, and share a masked `.tpbundle`. **Keep the whole session** goes beyond 5,000 requests.
 
 ### AI quality {#whats-new-ai-quality}
-- **One rail item.** *Start*, *Checks*, *Try a prompt*, *Compare*, *Bots with sources* and *Models and keys* are tabs of **AI quality**.
+- **One rail item.** *Start*, *Checks*, *Try a prompt*, *Compare*, *RAG bots* and *Models and keys* are tabs of **AI quality**.
 - **Check an answer in minutes.** The wizard takes you from a few cases to a result; a sample runs without a key; the price shows beside **Run** and a spend cap stops a run at $1.00.
 - **Cases without typing.** *Generate with AI…* writes cases from a prompt, an API definition, a collection, your documents or real calls, and you accept them.
 - **A report card and a reason.** Each run starts with a sentence (*17 of 20 passed*); a failed case says why, and shows its answer next to the one from the run before. **Compare** runs other models or prompts on the same cases.

@@ -22,7 +22,7 @@ function StartCard({ id, icon, title, children, action }: { id: string; icon: Re
 }
 
 /**
- * The first page of Bots with sources (R-1): the three steps as cards (connect a bot, build the questions, check the
+ * The first page of RAG bots (R-1): the three steps as cards (connect a bot, build the questions, check the
  * answers), a fourth for your own measures, and the latest runs of your bot evaluations with how many passed. Every card
  * goes to the place that does the job; nothing here holds logic.
  */

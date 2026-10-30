@@ -26,8 +26,16 @@ window.__t = (() => {
     waitFor,
     esc,
     // AI Lab and Evaluations are tabs of the one rail item AI quality (AU-21): 'Evaluations' opens its Checks tab, 'AI Lab' the other tabs (Start unless one was open)
+    // 'Bot checks' (R-1): the Checks tab of the RAG bots rail item, which lists bot evaluations (AI quality's Checks lists the others)
     view: async (label) => {
       await esc();
+      if (label === 'Bot checks') {
+        await window.__t.rail('RAG bots');
+        await sleep(1000);
+        const checks = [...document.querySelectorAll('[role=tablist][aria-label="RAG bots"] [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Checks');
+        if (checks && checks.getAttribute('aria-selected') !== 'true') { checks.click(); await sleep(1200); }
+        return !!document.querySelector('nav [aria-label="RAG bots"][aria-current="page"]');
+      }
       const legacy = label === 'AI Lab' || label === 'Evaluations';
       await window.__t.rail(legacy ? 'AI quality' : label);
       await sleep(1200);

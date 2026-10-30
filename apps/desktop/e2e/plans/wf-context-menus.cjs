@@ -49,5 +49,5 @@ module.exports = withExpect(steps, {
   'history-row': /^Open \| Open trace \| Copy link \| Save as test… \| Delete…$/,
   'traces-row': /^Open( \| Open run)? \| Copy link$/,
   'rail-shortcut': /^view: tests$/,
-  'shortcuts-list': /^Go to a view in the rail's order: 1 Home, 2 Collections, 3 Tests, 4 AI quality, 5 Environments, 6 History \| terminal listed: true$/,
+  'shortcuts-list': /^Go to a view in the rail's order: 1 Home, 2 Collections, 3 Tests, 4 AI quality, 5 RAG bots, 6 Environments, 7 History \| terminal listed: true$/,
 });

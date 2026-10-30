@@ -79,7 +79,7 @@ export * from './eval/snapshot.js';
 export * from './eval/security.js';
 export * from './eval/text.js';
 export * from './eval/sample.js';
-export * from './eval/rag/sample.js';
+export * from './eval/bot-sample.js';
 export * from './eval/llm-estimate.js';
 export * from './eval/try-check.js';
 export * from './eval/report.js';
