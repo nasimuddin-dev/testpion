@@ -140,6 +140,8 @@ export interface RpcParamTypes {
   'eval.generateCases': RpcCommonParams & { source: string; draft: Record<string, unknown>; count?: number; evaluation?: string; spec?: string; collection?: string; folder?: string; paths?: string[]; urls?: string[]; historyLimit?: number; hint?: string; provider?: string; dryRun?: boolean; privacy?: string };
   'eval.matrix': RpcCommonParams & { runs: string[]; baseline?: string; threshold?: number; filter?: string; tag?: string; search?: string; sort?: string; column?: number; dir?: string; offset?: number; limit?: number };
   'eval.matrixResult': RpcCommonParams & { runId: string; resultId: string };
+  'eval.reviewQueue': RpcCommonParams & { run: string; count?: number };
+  'eval.reviewToDataset': RpcCommonParams & { run: string; resultIds?: string[] };
   'eval.run': RpcCommonParams & { template: Record<string, unknown>; name?: string; datasetText?: string; datasetPath?: string; datasetFormat?: string; limit?: number };
   'eval.runDraft': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean };
   'eval.runVariants': RpcCommonParams & { draft: Record<string, unknown>; confirm?: boolean; dryRun?: boolean };
@@ -399,4 +401,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 382;
+export const RPC_METHOD_COUNT = 384;

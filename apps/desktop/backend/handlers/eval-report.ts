@@ -1,5 +1,5 @@
 /** RPC handlers: the report card of a run, why a case failed, a case against the run before, and compare mode (variants of an evaluation). */
-import { ApsError, evalCaseDiff, evalReport, evalTrajectory, evalWhy, listPromptVersions, savePromptVersion, setEvaluationBaseline, usePromptVersion, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
+import { ApsError, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { estimateDraft, startDraftRun } from './eval-quality.js';
 
@@ -11,6 +11,14 @@ export function evalReportHandlers(be: Backend): Handlers {
     'eval.caseDiff': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalCaseDiff(be.ws, { run, case: kase, against }),
     /** What an agent did in one case, step by step, with its tool checks pinned to the step that decided them (what `testpion eval trajectory` prints). */
     'eval.trajectory': ({ run, case: kase, against }: { run: string; case: string; against?: string }) => evalTrajectory(be.ws, { run, case: kase, against }),
+    /** The review queue of a run: answers to grade good or bad, the checks' verdict withheld until graded (grades go through `runs.review`). */
+    'eval.reviewQueue': ({ run, count }: { run: string; count?: number }) => evalReviewQueue(be.ws, { run, count }),
+    /** Add the answers graded good to the evaluation's test cases as their expected answers. */
+    'eval.reviewToDataset': async ({ run, resultIds }: { run: string; resultIds?: string[] }) => {
+      const r = await reviewToDataset(be.ws, { run, resultIds });
+      be.host.emit('data.changed', { method: 'eval.reviewToDataset', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
+      return r;
+    },
     /** The prompt versions of a saved evaluation, each with the result of its latest run (what `testpion eval versions` prints). */
     'eval.versions': ({ evaluation }: { evaluation: string }) => listPromptVersions(be.ws, evaluation),
     /** Save the evaluation's prompt and system prompt now as a named version. */

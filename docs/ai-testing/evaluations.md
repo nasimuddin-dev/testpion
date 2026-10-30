@@ -101,6 +101,12 @@ Open **Prompt versions** above the prompt (or the instructions of an agent). **S
 
 Confirm to go ahead anyway. If the prompt in use was not saved as a version, it is kept as *Before …* first, so nothing is lost. The same rule is there for CI and scripts: `testpion eval versions <evaluation>`, `eval version-save <evaluation> <name>`, and `eval version-use <evaluation> <version> [--confirm]`; for an agent, the MCP tool `eval_variants` with `versions: true`. A bot with sources has no prompt of its own to version.
 
+## Review answers: read them yourself {#review}
+
+Checks tell you what they decided; they cannot tell you if the answers are *good*. **Review answers** on the report card puts ten of the run's answers in front of you, one at a time: the failed ones first, then others spread across the run. Press <kbd>G</kbd> for good or <kbd>B</kbd> for bad, <kbd>J</kbd> for the next answer and <kbd>K</kbd> to go back, and write a note if you like. What the checks decided stays **hidden until you have graded that answer**, so your reading is your own; then it shows whether the checks agreed. At the end: *The checks agreed with you on 8 of 10.*
+
+Your grades are the run's reviews, the same as the good and bad buttons on a result. **Add the good answers to the test cases** writes each answer you graded good as the expected answer of its test case (a case that already has an expected answer keeps it), so the next run checks against answers you have read. It works for prompt and agent evaluations whose test cases are JSONL or JSON. In a terminal: `testpion eval review <run>` (`--export` prints the graded answers as JSON lines) and `testpion eval review-add <run>`; grade with `testpion history review <run> <result> --good|--bad`.
+
 ## What a run costs, and the spend cap
 
 Beside **Run** a line says what the run will cost before anything is sent: *20 cases · about $0.03 · ~40 s*. It comes from the cases, the prompt and your [price table](/ai-testing/model-pricing); a check an AI reviewer grades doubles the calls. The offline demo model and models on this computer are *free*; a model with no price says *cost unknown* with **Set a price…**.

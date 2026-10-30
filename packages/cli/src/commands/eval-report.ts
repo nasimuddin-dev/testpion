@@ -4,7 +4,7 @@
  * card and the `eval_summary`, `eval_explain_failure`, `eval_case_diff` and `eval_variants` MCP tools, so the words are the same.
  */
 import type { Command } from 'commander';
-import { aiRunDeps, evalCaseDiff, evalReport, evalTrajectory, evalWhy, listPromptVersions, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
+import { aiRunDeps, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
 import { formatUsd } from '@testpion/shared';
 import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { printPreview } from './ai-print.js';
@@ -138,6 +138,48 @@ export function registerEvalReportCommands(ev: Command): void {
         const r = setEvaluationBaseline(store, { run, clear: o.clear, evaluation: o.evaluation });
         if (o.json) return printJson(r);
         console.log(r.baselineRun ? green(`Baseline of "${r.evaluation}": ${r.baselineRun}`) : green(`Baseline of "${r.evaluation}" cleared`));
+      }),
+    );
+
+  ev.command('review')
+    .description('the answers of a run to read and grade good or bad, the failed ones first; what the checks decided stays hidden until a case is graded (grade with `testpion history review <run> <result> --good|--bad`)')
+    .argument('<run>', 'the run: its id, "last" or an evaluation name')
+    .option(...WORKSPACE_OPTION)
+    .option('--count <n>', 'how many answers (default 10, at most 50)', (v) => Number(v))
+    .option('--export', 'print the graded answers as JSON lines (input, answer, rating, note) instead')
+    .option('--json', 'print as JSON: cases (each with its grade), graded, agreement and text (for scripts and AI agents)')
+    .action((run: string, o: { workspace?: string; count?: number; export?: boolean; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const q = await evalReviewQueue(store, { run, count: o.count });
+        if (o.export) {
+          for (const c of q.cases.filter((x) => x.rating)) console.log(JSON.stringify({ case: c.key, input: c.input, answer: c.answer, rating: c.rating, ...(c.note ? { note: c.note } : {}) }));
+          return;
+        }
+        if (o.json) return printJson(q);
+        console.log(`${bold(q.evaluation ?? q.run)} ${dim(`(${q.run})`)}`);
+        console.log(q.text);
+        q.cases.forEach((c, i) => {
+          console.log(`\n${bold(`${i + 1}. ${c.key}`)} ${c.rating ? (c.rating === 'good' ? green('good') : red('bad')) : dim('not graded')}`);
+          if (c.input) console.log(dim(`  asked: ${c.input.replace(/\s+/g, ' ').slice(0, 200)}`));
+          console.log(`  answered: ${(c.answer ?? '(empty)').replace(/\s+/g, ' ').slice(0, 300)}`);
+          if (c.verdict) console.log(dim(`  the checks: ${c.verdict.status}${c.verdict.failedChecks.length ? ` (${c.verdict.failedChecks.join(', ')})` : ''}`));
+        });
+        console.log(dim('\nGrade one with: testpion history review <run id> <result id> --good|--bad -w <workspace>'));
+      }),
+    );
+
+  ev.command('review-add')
+    .description('add the answers graded good to the evaluation’s test cases as their expected answers (a record that already has one keeps it)')
+    .argument('<run>', 'the run: its id, "last" or an evaluation name')
+    .option(...WORKSPACE_OPTION)
+    .option('--json', 'print as JSON')
+    .action((run: string, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const r = await reviewToDataset(store, { run });
+        if (o.json) return printJson(r);
+        console.log(green(r.text));
       }),
     );
 

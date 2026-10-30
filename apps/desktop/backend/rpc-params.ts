@@ -167,6 +167,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'eval.trajectory': { run: 's', case: 's', against: 's?' },
   'eval.setBaseline': { run: 's?', clear: 'b?', evaluation: 's?' },
   'eval.versions': { evaluation: 's' },
+  'eval.reviewQueue': { run: 's', count: 'n?' },
+  'eval.reviewToDataset': { run: 's', resultIds: 'sa?' },
   'eval.saveVersion': { evaluation: 's', name: 's', note: 's?' },
   'eval.useVersion': { evaluation: 's', version: 's', confirm: 'b?' },
   'eval.why': { run: 's', case: 's' },

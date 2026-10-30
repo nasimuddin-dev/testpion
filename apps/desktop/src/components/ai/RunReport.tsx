@@ -1,4 +1,4 @@
-import { Cloud, GitCompareArrows, ListTree, Pin, X } from 'lucide-react';
+import { ClipboardCheck, Cloud, GitCompareArrows, ListTree, Pin, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy, TrajectoryWithBaseline } from '@testpion/core';
 import { call, on } from '../../api';
@@ -10,6 +10,7 @@ import { CompareView, type Compared } from '../ResponseHistory';
 import { Badge, Button, cx, LinkButton, Spinner } from '../ui';
 import { FilterChips } from '../FilterChips';
 import { StepTimeline } from '../StepTimeline';
+import { ReviewQueue } from './ReviewQueue';
 import { AiAction } from './AiAction';
 
 /** The sentence a run is reduced to: "17 of 20 passed" (the same words the CLI and the MCP tools say). */
@@ -190,6 +191,7 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
   });
   const [capped, setCapped] = useState<string>();
   const [all, setAll] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   /** The causes of failure the list is narrowed to (R-3); none: every failed case. */
   const [causeFilter, setCauseFilter] = useState<string[]>([]);
   useEffect(() => {
@@ -252,12 +254,18 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
             {capped}
           </span>
         )}
+        {r && !compact && r.total > 0 && (
+          <Button size="sm" icon={<ClipboardCheck size={12} />} onClick={() => setReviewing(true)} title="Read ten of the answers and grade each good or bad; the failed ones come first. What the checks decided stays hidden until you have graded." data-eval-review-open>
+            Review answers
+          </Button>
+        )}
         {onCi && (
           <Button size="sm" className="ml-auto" icon={<Cloud size={12} />} onClick={onCi} disabled={!!ciReason} reason={ciReason} title="A pipeline that runs this evaluation on every push and fails when a case got worse" data-eval-ci>
             {LABEL.runInCi}
           </Button>
         )}
       </div>
+      {reviewing && <ReviewQueue runId={runId} onClose={() => setReviewing(false)} />}
       {r && !compact && r.agentCases ? (
         <div className="px-3 pb-1.5 flex flex-wrap items-center gap-2 text-xs" data-eval-baseline={r.baselineRun === runId ? 'this' : r.baselineRun ? 'other' : 'none'}>
           <Pin size={12} className="text-muted" />
