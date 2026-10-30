@@ -91,6 +91,7 @@ export function registerEvalReportCommands(ev: Command): void {
         if (o.json) return printJson(d);
         console.log(`${bold(`Case ${d.key}`)} ${dim(d.name)}`);
         console.log(d.text);
+        if (d.retrieved) console.log(dim(`Retrieved documents: ${d.retrieved.text}${d.retrieved.causeNow ? ` Now: ${d.retrieved.causeNow}.` : ''}`));
         if (d.diff && !d.same) {
           if (d.diff.body.format === 'json') for (const c of d.diff.body.changes) console.log(`  ${c.path}: ${JSON.stringify(c.before) ?? '–'} → ${JSON.stringify(c.after) ?? '–'}`);
           else for (const l of d.diff.body.lines ?? []) console.log(l.op === '+' ? green(`+ ${l.text}`) : l.op === '-' ? red(`- ${l.text}`) : dim(`  ${l.text}`));

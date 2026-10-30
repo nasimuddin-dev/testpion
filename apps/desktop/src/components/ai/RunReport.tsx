@@ -53,6 +53,28 @@ function CaseDiffPanel({ runId, caseKey }: { runId: string; caseKey: string }) {
   return (
     <div className="rounded-lg border border-line mt-1.5" data-eval-case-diff data-same={d.same ? 'true' : 'false'} data-change={d.change ?? ''}>
       <p className="px-3 py-1.5 text-xs border-b border-line">{d.text}</p>
+      {d.retrieved && (
+        <div className="px-3 py-1.5 text-xs border-b border-line flex flex-wrap items-center gap-1.5" data-eval-retrieved>
+          <span className="text-muted">Retrieved documents</span>
+          {d.retrieved.dropped.map((id) => (
+            <Badge key={`-${id}`} tone="bad" title="Retrieved in the earlier run, not now">
+              − {id}
+            </Badge>
+          ))}
+          {d.retrieved.added.map((id) => (
+            <Badge key={`+${id}`} tone="ok" title="Retrieved now, not in the earlier run">
+              + {id}
+            </Badge>
+          ))}
+          {!d.retrieved.added.length && !d.retrieved.dropped.length && <span className="text-muted">the same ones</span>}
+          {d.retrieved.right && (
+            <span className={d.retrieved.right.foundNow < d.retrieved.right.foundBefore ? 'text-bad' : 'text-muted'}>
+              · right documents found {d.retrieved.right.foundBefore} of {d.retrieved.right.ids.length} → {d.retrieved.right.foundNow} of {d.retrieved.right.ids.length}
+            </span>
+          )}
+          {d.retrieved.causeNow && <span className="text-muted">· now: {d.retrieved.causeNow}</span>}
+        </div>
+      )}
       {c && (
         <div className="max-h-72 overflow-auto">
           <CompareView c={c} labels={['The last run', 'This run']} />

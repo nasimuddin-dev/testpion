@@ -19,6 +19,11 @@
 
 - **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
 
+### RAG bots: what changed, by question
+
+- **A case against the run before shows the documents.** *Since last run* on a failed case of a bot with sources lists the retrieved documents that were dropped (red) or added (green), how many of the right documents each run found (*1 of 1 → 0 of 1*) and why it fails now (*right document not found*). `testpion eval diff` and the `eval_case_diff` tool carry it as `retrieved`.
+- Two short guides in plain language: *Test a RAG bot in 5 minutes* and *Check an AI agent in 5 minutes*, linked from Start here.
+
 ### AI quality: review answers
 
 - **Read the answers yourself.** *Review answers* on the report card: ten answers one at a time, the failed ones first and the rest spread across the run; <kbd>G</kbd> good, <kbd>B</kbd> bad, <kbd>J</kbd> / <kbd>K</kbd> next and back, a note if you like. What the checks decided stays hidden until the answer is graded, then it shows whether it agrees; at the end *The checks agreed with you on 8 of 10*. The grades are the run's reviews. *Add the good answers to the test cases* writes them as the expected answers (a case that has one keeps it). `testpion eval review [--export]` and `eval review-add`.

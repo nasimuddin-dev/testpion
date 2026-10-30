@@ -86,6 +86,8 @@ const docsSidebar = [
       { text: 'Logs', link: '/getting-started/logs' },
       { text: 'Keep your workspace in git', link: '/getting-started/git' },
       { text: 'Check an AI answer in 5 minutes', link: '/getting-started/check-an-ai-answer' },
+      { text: 'Test a RAG bot in 5 minutes', link: '/getting-started/check-a-rag-bot' },
+      { text: 'Check an AI agent in 5 minutes', link: '/getting-started/check-an-agent' },
       { text: 'Glossary: every word explained', link: '/getting-started/glossary' },
     ],
   },

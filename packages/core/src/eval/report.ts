@@ -424,8 +424,46 @@ export interface EvalCaseDiff {
   change?: 'got worse' | 'got better' | 'same result';
   /** The answers as a structured diff (the one the response view uses). */
   diff?: ResponseDiff;
+  /** A bot with sources (R-5): the documents it retrieved in each run, and how the right ones fared. */
+  retrieved?: EvalCaseRetrieved;
   /** One sentence. */
   text: string;
+}
+
+/** What a bot with sources retrieved for one case in two runs (R-5). */
+export interface EvalCaseRetrieved {
+  before: string[];
+  now: string[];
+  /** Retrieved now and not before, and the other way round. */
+  added: string[];
+  dropped: string[];
+  /** The right documents of the question (its reference ids) and how many of them each run found. */
+  right?: { ids: string[]; foundBefore: number; foundNow: number };
+  /** Why each run failed this case, when it did (the cause read from the run's own scores). */
+  causeBefore?: string;
+  causeNow?: string;
+  /** One sentence: "Dropped hb-2; added hb-3. Right documents found: 1 of 1 → 0 of 1." */
+  text: string;
+}
+
+const ragOf = (r: TestResult) => r.metadata?.rag as { documentIds?: string[]; referenceIds?: string[]; failure?: RagFailure } | undefined;
+
+/** How the documents a bot retrieved for one case differ between two runs, or undefined when neither run is a bot's. */
+export function retrievedDiff(was: TestResult, now: TestResult): EvalCaseRetrieved | undefined {
+  const a = ragOf(was);
+  const b = ragOf(now);
+  if (!a?.documentIds && !b?.documentIds) return undefined;
+  const before = a?.documentIds ?? [];
+  const after = b?.documentIds ?? [];
+  const added = after.filter((id) => !before.includes(id));
+  const dropped = before.filter((id) => !after.includes(id));
+  const ids = [...new Set([...(b?.referenceIds ?? []), ...(a?.referenceIds ?? [])])];
+  const right = ids.length ? { ids, foundBefore: ids.filter((i) => before.includes(i)).length, foundNow: ids.filter((i) => after.includes(i)).length } : undefined;
+  const cause = (r: ReturnType<typeof ragOf>) => (r?.failure ? FAILURE_CLASSES.find((c) => c.id === r.failure!.class)?.plain : undefined);
+  const parts = [dropped.length ? `Dropped ${dropped.join(', ')}` : '', added.length ? `${dropped.length ? 'added' : 'Added'} ${added.join(', ')}` : ''].filter(Boolean).join('; ');
+  const found = right ? `Right documents found: ${right.foundBefore} of ${right.ids.length} → ${right.foundNow} of ${right.ids.length}.` : '';
+  const text = [parts ? `${parts}.` : 'The same documents were retrieved.', found].filter(Boolean).join(' ');
+  return { before, now: after, added, dropped, ...(right ? { right } : {}), ...(cause(a) ? { causeBefore: cause(a) } : {}), ...(cause(b) ? { causeNow: cause(b) } : {}), text };
 }
 
 /** The answer of one case against the same case in the run before it (or in `against`): which cases flipped and how the text changed. */
@@ -449,5 +487,6 @@ export async function evalCaseDiff(store: Store, o: { run: string; case: string;
   const change = was.status === now.status ? 'same result' : was.status === 'passed' ? 'got worse' : now.status === 'passed' ? 'got better' : 'same result';
   const diff = diffResponses({ status: was.status, durationMs: was.latencyMs ?? was.durationMs, body: answerBefore }, { status: now.status, durationMs: now.latencyMs ?? now.durationMs, body: answerNow });
   const text = same ? `The answer is the same as in the last run${change === 'same result' ? '' : `, but the case ${change}: a check changed`}.` : `The answer changed since the last run${change === 'same result' ? '' : ` and the case ${change}`}: ${diff.body.format === 'json' ? `${diff.body.changes.length} field${diff.body.changes.length === 1 ? '' : 's'} differ` : 'the text differs'}.`;
-  return { ...base, against, before: { status: was.status, answer: answerBefore }, same, change, diff, text };
+  const retrieved = retrievedDiff(was, now);
+  return { ...base, against, before: { status: was.status, answer: answerBefore }, same, change, diff, ...(retrieved ? { retrieved } : {}), text };
 }

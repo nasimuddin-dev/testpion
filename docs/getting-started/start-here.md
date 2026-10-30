@@ -16,7 +16,8 @@ TestPion checks that software does what it should. You send a request to an API,
 | **New to testing** | Try it without setting anything up | [Try the Examples workspace](#try-it-in-two-minutes) |
 | **A tester or developer** | Test a web API (REST, GraphQL, gRPC, WebSocket) | [Your first request](/getting-started/first-request) |
 | **Building with AI** | Check that a chatbot or prompt gives good answers | [Check an AI answer in 5 minutes](/getting-started/check-an-ai-answer) |
-| **Building a bot that answers from documents (RAG)** | Find out if it uses the right documents | [Test a RAG bot](/ai-testing/rag#sample) |
+| **Building a bot that answers from documents (RAG)** | Find out if it uses the right documents | [Test a RAG bot in 5 minutes](/getting-started/check-a-rag-bot) |
+| **Building an AI agent that uses tools** | Check which tools it calls | [Check an AI agent in 5 minutes](/getting-started/check-an-agent) |
 | **Working in a team** | Share requests and tests with colleagues | [Share your work with your team](/getting-started/git) |
 | **Setting up CI** | Run the same tests on every change | [Run tests in CI](/test-runner/ci-cd) |
 | **Using Postman or another tool** | Move my work here | [Migrate from another tool](/migrate/) |
@@ -54,7 +55,7 @@ Open the **Tests** tab on the same request and add a check, for example *status 
 | Check if an AI answer is good | [Check an AI answer](/getting-started/check-an-ai-answer) |
 | Compare two AI models on the same question | [Prompts](/ai-testing/prompts) |
 | Make sure a chatbot refuses harmful requests | [Safety](/ai-testing/safety) |
-| Test an AI agent that uses tools | [Agents](/ai-testing/agents) |
+| Test an AI agent that uses tools | [Check an AI agent in 5 minutes](/getting-started/check-an-agent) |
 | Know how much an AI test costs | [Model pricing](/ai-testing/model-pricing) |
 | Keep my work in git and share it | [Keep your workspace in git](/getting-started/git) |
 | Keep secrets (passwords, keys) safe | [Secrets](/security/secrets) |
