@@ -37,6 +37,7 @@ export const SETTING_SPECS: Record<string, Spec> = {
   'proxy.username': { kind: 'text', doc: 'The proxy user name (the password is in the secret store).' },
   'tls.systemCa': { kind: 'boolean', doc: 'Also trust the certificates of the operating system.' },
   'git.autoFetchMinutes': { kind: 'number', doc: 'How often the app fetches in the background, in minutes (0: never).' },
+  'git.autoPull': { kind: 'boolean', doc: "Pull your team's new commits by itself when this workspace has no changes of yours (a plain fast-forward; never a merge)." },
   'ai.localOnly': { kind: 'boolean', doc: 'AI only with models on this computer.' },
   'ai.privacy': { kind: { oneOf: ['full', 'metadata', 'names'] }, doc: 'What an AI action starts with: full (redacted), metadata or names only.' },
   'ai.maskPersonalData': { kind: 'boolean', doc: 'Mask e-mail addresses, phone numbers and card numbers before AI calls.' },

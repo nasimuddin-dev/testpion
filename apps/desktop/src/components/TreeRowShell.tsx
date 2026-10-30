@@ -1,7 +1,8 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
-import { baseKind, can, type ItemRef } from '@testpion/shared';
+import { baseKind, can, gitKindOfRef, type ItemRef } from '@testpion/shared';
 import { buildNodeMenu, type NodeKind, type NodeMenuCtx } from '../lib/node-menu';
 import { setDragRefs } from '../lib/drag-ref';
+import { whoEnter, whoLeave } from '../lib/git-who';
 import { LABEL } from '../lib/vocabulary';
 import { InlineRename, keepFocusAfterDelete, neighbourRowId, NodeMenu, withRefDefaults } from './TreeParts';
 import { GitMark, type GitTarget } from './GitMark';
@@ -133,9 +134,12 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
       onOpen();
     } else onKeyDown?.(e);
   };
+  /** The row is an item of a versioned kind (not a folder or a section header): hovering it says who last changed it. */
+  const itemRef = git && 'kind' in git && !('folder' in git) && (gitKindOfRef(git as ItemRef) ? can(gitKindOfRef(git as ItemRef)!, 'versioned') : false) ? (git as ItemRef) : undefined;
   /** The tooltip: the full name, only when the row's name is cut (a title that repeats what is visible is noise). */
   const tooltip = (e: MouseEvent<HTMLButtonElement>) => {
     const b = e.currentTarget;
+    if (itemRef) whoEnter(itemRef, b);
     const name = b.querySelector<HTMLElement>('.truncate');
     if (name && name.scrollWidth > name.clientWidth + 1) b.title = label;
     else b.removeAttribute('title');
@@ -188,6 +192,7 @@ export function TreeRowShell({ kind, ctx, nodeId, label, children, onClick, onOp
           onDoubleClick={onOpen}
           onKeyDown={keys}
           onMouseEnter={tooltip}
+          onMouseLeave={itemRef ? whoLeave : undefined}
           role="treeitem"
           aria-level={(depth ?? 0) + 1}
           aria-selected={!!active}

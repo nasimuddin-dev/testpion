@@ -23,6 +23,35 @@ const steps = [
      return 'clicks: ' + clicks + ' | rail: ' + item + ' | tab: ' + strip + ' | name: ' + name + ' | headline: ' + (head ? head.textContent.trim() : 'NONE');`,
   ),
   step(
+    'the-report-opens-on-the-two-goals-and-the-causes',
+    `const goals = await __t.waitFor(() => document.querySelector('[data-eval-goals]'), 15000); if (!goals) return 'NO GOALS';
+     const backed = document.querySelector('[data-eval-goal=backed]')?.textContent.trim();
+     const found = document.querySelector('[data-eval-goal=found]')?.textContent.trim();
+     const chips = [...document.querySelectorAll('[data-eval-causes] [data-chip]')].map((c) => c.textContent.trim().replace(/\\s+/g, ' ')).sort().join(' | ');
+     const before = document.querySelectorAll('[data-eval-failure]').length;
+     const chip = document.querySelector('[data-eval-causes] [data-chip=unfaithful]'); if (!chip) return 'NO CHIP unfaithful: ' + chips;
+     await __t.real.click(chip); await __t.sleep(400);
+     const only = [...document.querySelectorAll('[data-eval-failure]')].map((r) => r.getAttribute('data-eval-failure')).join(',');
+     const pressed = chip.getAttribute('aria-pressed');
+     await __t.real.click(chip); await __t.sleep(300);
+     return backed + ' | ' + found + ' | chips: ' + chips + ' | failures: ' + before + ' → ' + only + ' (pressed ' + pressed + ') → ' + document.querySelectorAll('[data-eval-failure]').length;`,
+  ),
+  step(
+    'a-sample-opens-by-stage',
+    `const seg = vis('main [role=radio]').find((b) => b.textContent.trim() === 'Metrics'); if (!seg) return 'NO METRICS SWITCH';
+     await __t.real.click(seg);
+     const cell = await __t.waitFor(() => document.querySelector('[data-rag-cell*="booster|context-recall-ids"]'), 10000); if (!cell) return 'NO CELL';
+     cell.scrollIntoView({ block: 'center' }); await __t.sleep(300);
+     await __t.real.click(cell);
+     const strip = await __t.waitFor(() => document.querySelector('[data-rag-stages]'), 8000); if (!strip) return 'NO STAGES';
+     const stages = [...strip.querySelectorAll('[data-rag-stage]')].map((s) => s.getAttribute('data-rag-stage') + ':' + s.getAttribute('data-state')).join(',');
+     const retrieved = strip.querySelector('[data-rag-stage=retrieved]')?.textContent.replace(/\\s+/g, ' ').trim();
+     const start = strip.getAttribute('data-rag-stages');
+     const missed = !!document.querySelector('[data-rag-missed]');
+     const cl = vis('[role=dialog] button').filter((x) => x.textContent.trim() === 'Close'); for (const b of cl.reverse()) { await __t.real.click(b); await __t.sleep(300); }
+     return 'stages: ' + stages + ' | start here: ' + start + ' | ' + retrieved + ' | missed row: ' + missed;`,
+  ),
+  step(
     'the-bot-and-its-mock-exist',
     `const targets = await window.aps.invoke('rag.targets');
      const servers = (await window.aps.invoke('mcp.servers').catch(() => ({ servers: [] })));
@@ -41,6 +70,8 @@ const steps = [
 module.exports = withExpect(steps, {
   'start-page': /^tabs: Start,Bots,Questions,Metrics,Checks \| cards: connect,questions,check,metrics \| sample: Try the sample \(offline\) \| recent: empty$/,
   'sample-in-one-click': /^clicks: 1 \| rail: RAG bots \| tab: Checks \| name: Sample: clinic bot \| headline: 4 of 6 passed/,
+  'the-report-opens-on-the-two-goals-and-the-causes': /^Backed by the sources: 5 of 6 \| Right documents found: 5 of 6 \| chips: claim not backed by the sources1 \| right document not found1 \| failures: 2 → parking \(pressed true\) → 2$/,
+  'a-sample-opens-by-stage': /^stages: question:info,retrieved:bad,used:info,answer:bad \| start here: retrieved \| 2Retrievedstart here1 document · right documents found 0 of 1 \| missed row: true$/,
   'the-bot-and-its-mock-exist': /^target: mcp \| server: mock$/,
   'start-lists-the-run': /^row: Sample: clinic bot.*4 of 6 passed/,
 });

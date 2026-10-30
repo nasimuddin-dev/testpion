@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, MemorySecretStore, createEngineContext, ensureBotSample, runRagEvaluation, runResults, BOT_SAMPLE_NAME, BOT_SAMPLE_TARGET, findRagTarget, type TestResult } from '../../packages/core/src/index.js';
+import { WorkspaceStore, MemorySecretStore, createEngineContext, ensureBotSample, evalReport, runRagEvaluation, runResults, BOT_SAMPLE_NAME, BOT_SAMPLE_TARGET, findRagTarget, type TestResult } from '../../packages/core/src/index.js';
 
 /**
  * The bot sample (R-2): one call makes an offline bot (an MCP mock with four clinic documents), the bot as a target, six
@@ -55,5 +55,15 @@ describe('the bot sample', () => {
     expect(check(byName('hours'), 'context-recall-ids')?.passed, 'hours: found').toBe(true);
     expect(out.summary.passed).toBe(4);
     expect(out.summary.failed).toBe(2);
+
+    // R-3: the report card opens on the two goals and on why the failed cases failed, in the words of the card
+    const report = await evalReport(store, { run: out.runId });
+    expect(report.goals).toEqual({ backed: { passed: 5, total: 6 }, found: { passed: 5, total: 6 } });
+    expect(report.causes?.map((c) => `${c.count} ${c.plain}`).sort()).toEqual(['1 claim not backed by the sources', '1 right document not found']);
+    expect(report.failures.map((f) => [f.key, f.cause]).sort()).toEqual([
+      ['booster', 'retrieval-miss'],
+      ['parking', 'unfaithful'],
+    ]);
+    expect(report.text).toMatch(/Backed by the sources: 5 of 6\. Right documents found: 5 of 6\. Why they failed: 1 \w[^.]*, 1 \w[^.]*\./);
   }, 60_000);
 });

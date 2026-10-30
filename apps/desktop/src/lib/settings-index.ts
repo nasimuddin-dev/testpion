@@ -54,6 +54,7 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { tab: 'requests', label: 'Log level', words: 'debug trace logging' },
   { tab: 'requests', label: 'Ask before sending a request that changes data with a variable that has no value', words: 'confirm unresolved variable post put patch delete warn' },
   { tab: 'git', label: 'Fetch in the background every (minutes)', words: 'auto fetch remote' },
+  { tab: 'git', label: "Pull my team's commits by itself", words: 'auto pull fast-forward team remote' },
   { tab: 'proxy', label: 'Proxy URL', words: 'http proxy corporate' },
   { tab: 'proxy', label: 'Bypass the proxy for', words: 'no_proxy hosts' },
   { tab: 'proxy', label: 'User name (optional)', words: 'proxy login' },

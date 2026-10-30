@@ -14,6 +14,8 @@ import { runResults, runReviews } from '../runner/run-results.js';
 import { EVALUATIONS_LIBRARY, type SavedEvaluation } from '../runner/saved-evaluations.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { formatEstimateUsd } from './llm-estimate.js';
+import { FAILURE_CLASSES, GOAL_BACKED_METRICS, GOAL_FOUND_METRICS, type FailureClass, type RagFailure } from './rag/failure.js';
+import { canonicalMetricId } from './rag/metric-registry.js';
 
 type Store = Pick<WorkspaceStore, 'root' | 'runDir' | 'meta'> & Partial<Pick<WorkspaceStore, 'getLibrary'>>;
 
@@ -46,9 +48,19 @@ export interface EvalReportFailure {
   /** The answer that was expected, when a check holds one. */
   expected?: string;
   failedChecks: Array<{ name: string; type: string; message: string; aiReviewer: boolean; reason?: string }>;
+  /** Why a bot with sources failed this case (R-3): the cause its checks point at, from the run's own scores. */
+  cause?: FailureClass;
   /** The AI reviewer's own words about this case, when it graded it: the answer to "why did this fail?" without another model call. */
   reason?: string;
   error?: string;
+}
+
+/** One cause of failure of a bot with sources and how many cases it explains (R-3). */
+export interface EvalReportCause {
+  id: FailureClass;
+  /** In the words of the report card: "right document not found". */
+  plain: string;
+  count: number;
 }
 
 export interface EvalReportFlip {
@@ -91,6 +103,10 @@ export interface EvalReport {
   offline: boolean;
   /** Per check: how many cases passed it. */
   byCheck: EvalReportCheck[];
+  /** A bot with sources (R-3): its two goals, cases passed of the cases that measured them. */
+  goals?: { backed?: { passed: number; total: number }; found?: { passed: number; total: number } };
+  /** A bot with sources (R-3): why the failed cases failed, the most common cause first. */
+  causes?: EvalReportCause[];
   /** The cases that failed, in the order they ran (at most 100). */
   failures: EvalReportFailure[];
   failuresShown: number;
@@ -150,7 +166,14 @@ export function failureOf(r: TestResult): EvalReportFailure {
     failedChecks: failed.map((c) => ({ name: c.name || c.type, type: c.type, message: c.message, aiReviewer: isReviewer(c), ...(c.explanation ? { reason: c.explanation } : {}) })),
     ...(reviewer.length ? { reason: reviewer.map((c) => c.explanation).join(' ') } : {}),
     ...(r.error ? { error: r.error.message } : {}),
+    ...(causeOf(r) ? { cause: causeOf(r) } : {}),
   };
+}
+
+/** The cause the run stored with a failed result of a bot with sources (metadata.rag.failure). */
+function causeOf(r: TestResult): FailureClass | undefined {
+  const f = (r.metadata?.rag as { failure?: RagFailure } | undefined)?.failure;
+  return f && FAILURE_CLASSES.some((c) => c.id === f.class) ? f.class : undefined;
 }
 
 /** The finished run of the same name just before this one, with its summary. */
@@ -173,6 +196,8 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   const status = new Map<string, string>();
   const cases = new Map<string, { id: string; name: string }>();
   let failedCount = 0;
+  const causeCounts = new Map<FailureClass, number>();
+  const goals = { backed: { passed: 0, total: 0 }, found: { passed: 0, total: 0 } };
   let slowest = 0;
   let offline = false;
   for await (const r of runResults(store, ref.runId)) {
@@ -187,7 +212,14 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
       if (c.passed) e.passed++;
       byCheck.set(k, e);
     }
+    // the two goals of a bot with sources: a case counts when a check of that goal ran, and is met when every such check passed
+    const backed = (r.checks ?? []).filter((c) => GOAL_BACKED_METRICS.has(canonicalMetricId(c.type)));
+    const found = (r.checks ?? []).filter((c) => GOAL_FOUND_METRICS.has(canonicalMetricId(c.type)));
+    if (backed.length) (goals.backed.total++, backed.every((c) => c.passed) && goals.backed.passed++);
+    if (found.length) (goals.found.total++, found.every((c) => c.passed) && goals.found.passed++);
     if (r.status === 'failed' || r.status === 'error') {
+      const cause = causeOf(r);
+      if (cause) causeCounts.set(cause, (causeCounts.get(cause) ?? 0) + 1);
       failedCount++;
       if (failures.length < MAX_FAILURES) failures.push(failureOf(r));
     }
@@ -253,11 +285,17 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ? `Cost ${formatEstimateUsd(summary.costUsd)}${before ? ` (last run ${formatEstimateUsd(before.summary.costUsd ?? 0)})` : ''}${monthRuns > 1 ? `; this month ${formatEstimateUsd(monthUsd)} over ${monthRuns} runs` : ''}`
     : '';
 
+  const goalsOut: EvalReport['goals'] = goals.backed.total || goals.found.total ? { ...(goals.backed.total ? { backed: goals.backed } : {}), ...(goals.found.total ? { found: goals.found } : {}) } : undefined;
+  const causes: EvalReportCause[] = [...causeCounts]
+    .sort((a, b) => b[1] - a[1] || FAILURE_CLASSES.findIndex((c) => c.id === a[0]) - FAILURE_CLASSES.findIndex((c) => c.id === b[0]))
+    .map(([id, count]) => ({ id, plain: FAILURE_CLASSES.find((c) => c.id === id)!.plain, count }));
   const checks = [...byCheck.values()];
   const failedChecks = checks.filter((c) => c.passed < c.total);
   const timing = summary.latency.count ? `average ${evalMs(summary.latency.mean)}, slowest ${evalMs(slowest || summary.latency.max)}` : `${evalMs(summary.durationMs)} in all`;
   const words = [
     `${headline} (${percent(passRate)}).`,
+    goalsOut ? [goalsOut.backed ? `Backed by the sources: ${goalsOut.backed.passed} of ${goalsOut.backed.total}.` : '', goalsOut.found ? `Right documents found: ${goalsOut.found.passed} of ${goalsOut.found.total}.` : ''].filter(Boolean).join(' ') : '',
+    causes.length ? `Why they failed: ${causes.map((c) => `${c.count} ${c.plain}`).join(', ')}.` : '',
     costWords ? `${costWords}, ${timing}.` : `${timing[0]!.toUpperCase()}${timing.slice(1)}.`,
     failedChecks.length ? `Failed: ${failedChecks.map((c) => `${c.name} ${c.total - c.passed} of ${c.total}`).join(', ')}.` : failedCount ? '' : 'Every check passed.',
     passLine ? `${passLine.text}.` : '',
@@ -280,6 +318,8 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     durationMs: summary.durationMs,
     offline,
     byCheck: checks,
+    ...(goalsOut ? { goals: goalsOut } : {}),
+    ...(causes.length ? { causes } : {}),
     failures,
     failuresShown: failures.length,
     ...(passLine ? { passLine } : {}),

@@ -175,6 +175,7 @@ export interface RpcParamTypes {
   'git.large': RpcCommonParams;
   'git.largeCheck': RpcCommonParams;
   'git.largeTrack': RpcCommonParams & { file: string; mode: string; source?: string; dryRun?: boolean };
+  'git.lastChange': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string };
   'git.openFolder': RpcCommonParams & { path: string };
   'git.renameBranch': RpcCommonParams & { from: string; to: string };
   'git.resolve': RpcCommonParams & { path: string; side?: string; resolutions?: Record<string, unknown> };
@@ -393,4 +394,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 376;
+export const RPC_METHOD_COUNT = 377;

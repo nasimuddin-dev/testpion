@@ -160,6 +160,18 @@ export function SettingsView() {
               <Input type="number" min={0} max={1440} aria-label="Background fetch minutes" value={s.git?.autoFetchMinutes ?? 5} onChange={(e) => set({ git: { ...s.git, autoFetchMinutes: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} />
             </Field>
           )}
+          {tab === 'git' && (
+            <Field
+              label="Pull my team's commits by itself"
+              hint={
+                (s.git?.autoFetchMinutes ?? 5) === 0
+                  ? 'Turn the background fetch on first (above): a pull by itself needs it to find your team’s commits.'
+                  : 'When the background fetch finds new commits and this workspace has no changes of yours, TestPion pulls them and reloads what changed, and says who changed what. It only ever fast-forwards: with changes of yours, or commits you have not pushed, it does nothing and the Git view offers Pull as before.'
+              }
+            >
+              <Toggle checked={!!s.git?.autoPull} onChange={(autoPull) => set({ git: { ...s.git, autoPull } })} label="Pull when my workspace has no changes of mine" data-git-auto-pull="" />
+            </Field>
+          )}
           {tab === 'proxy' && <ProxySettings value={s.proxy ?? { mode: 'env' }} onChange={(proxy) => set({ proxy })} />}
           {tab === 'certificates' && <CertificateSettings value={s.tls ?? {}} onChange={(tls) => set({ tls })} />}
           {tab === 'privacy' && (

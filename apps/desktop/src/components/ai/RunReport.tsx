@@ -7,6 +7,7 @@ import { useRpc } from '../../lib/use-rpc';
 import { LABEL } from '../../lib/vocabulary';
 import { CompareView, type Compared } from '../ResponseHistory';
 import { Badge, Button, cx, LinkButton, Spinner } from '../ui';
+import { FilterChips } from '../FilterChips';
 import { AiAction } from './AiAction';
 
 /** The sentence a run is reduced to: "17 of 20 passed" (the same words the CLI and the MCP tools say). */
@@ -162,13 +163,17 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
   });
   const [capped, setCapped] = useState<string>();
   const [all, setAll] = useState(false);
+  /** The causes of failure the list is narrowed to (R-3); none: every failed case. */
+  const [causeFilter, setCauseFilter] = useState<string[]>([]);
   useEffect(() => {
     setCapped(undefined);
     setAll(false);
+    setCauseFilter([]);
     return on<{ runId: string; message: string }>('eval.capped', (e) => e.runId === runId && setCapped(e.message));
   }, [runId]);
   const bad = !!r && r.failed + r.errors > 0;
-  const shown = r && !all ? r.failures.slice(0, 5) : (r?.failures ?? []);
+  const failures = r ? (causeFilter.length ? r.failures.filter((f) => f.cause && causeFilter.includes(f.cause)) : r.failures) : [];
+  const shown = r && !all ? failures.slice(0, 5) : failures;
   return (
     <div className="border-b border-line" data-run-report data-eval-headline={r ? (bad ? 'failed' : 'passed') : 'running'}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5">
@@ -179,6 +184,21 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
         ) : (
           <span className="text-sm text-muted" data-eval-headline-text>
             Running …
+          </span>
+        )}
+        {r?.goals && (
+          <span className="text-xs" data-eval-goals>
+            {r.goals.backed && (
+              <span className={r.goals.backed.passed === r.goals.backed.total ? 'text-ok' : 'text-bad'} data-eval-goal="backed" title="Cases whose answer is backed by the documents the bot retrieved">
+                Backed by the sources: {r.goals.backed.passed} of {r.goals.backed.total}
+              </span>
+            )}
+            {r.goals.backed && r.goals.found && <span className="text-muted"> · </span>}
+            {r.goals.found && (
+              <span className={r.goals.found.passed === r.goals.found.total ? 'text-ok' : 'text-bad'} data-eval-goal="found" title="Cases where the bot retrieved the documents the question needs">
+                Right documents found: {r.goals.found.passed} of {r.goals.found.total}
+              </span>
+            )}
           </span>
         )}
         {r && (
@@ -241,13 +261,24 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
           </ul>
         </div>
       )}
+      {r && !compact && r.causes && r.causes.length > 0 && (
+        <div className="border-t border-line pt-1.5" data-eval-causes>
+          <div className="px-3 pb-1 text-xs text-muted">Why the failed cases failed</div>
+          <FilterChips
+            label="Cause of failure"
+            value={causeFilter}
+            onChange={setCauseFilter}
+            options={r.causes.map((c) => ({ value: c.id, label: c.plain, count: c.count, title: `Show only the cases that failed because: ${c.plain}` }))}
+          />
+        </div>
+      )}
       {r && !compact && r.failures.length > 0 && (
         <div className="border-t border-line" data-eval-failures>
           <div className="px-3 py-1 text-xs text-muted flex items-center gap-2">
-            Failed first
-            {r.failures.length > 5 && (
+            {causeFilter.length ? `Failed for this reason (${failures.length})` : 'Failed first'}
+            {failures.length > 5 && (
               <LinkButton onClick={() => setAll(!all)} data-eval-failures-toggle>
-                {all ? 'Show fewer' : `Show all ${r.failures.length}`}
+                {all ? 'Show fewer' : `Show all ${failures.length}`}
               </LinkButton>
             )}
           </div>

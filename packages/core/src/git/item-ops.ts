@@ -141,6 +141,25 @@ export async function itemHistory(ws: string, a: ItemAddress, limit = 30): Promi
   return { file: a.file, ...(a.itemId ? { itemId: a.itemId } : {}), title: nameOf(a, latest), versions: out };
 }
 
+/** Who last changed an item, in one line: the newest commit that changed it and what it changed (a hover in a list, `testpion git history --limit 1`). */
+export interface ItemLastChange {
+  hash: string;
+  short: string;
+  author: string;
+  date: string;
+  subject: string;
+  /** What that commit changed in the item, in words ("URL", "Headers", "created"). */
+  changed: string[];
+}
+
+/** The newest version of an item in git, or undefined when it has none yet (a new item, a file not committed). Walks one version only. */
+export async function itemLastChange(ws: string, a: ItemAddress): Promise<ItemLastChange | undefined> {
+  // two versions: the older one is what the newest is compared with (a lone version would read as "created")
+  const v = (await itemHistory(ws, a, 2)).versions[0];
+  if (!v) return undefined;
+  return { hash: v.commit.hash, short: v.commit.short, author: v.commit.author, date: v.commit.date, subject: v.commit.subject, changed: v.changed };
+}
+
 interface BlameLine {
   /** The field (part) of the item: "URL", "Headers", "Name" …; for a whole file the same parts a Compare shows. */
   field: string;

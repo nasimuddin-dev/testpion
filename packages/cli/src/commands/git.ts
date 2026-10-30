@@ -9,6 +9,7 @@ import {
   gitDiff,
   gitLog,
   gitPull,
+  gitPullFastForward,
   gitPush,
   gitResolve,
   gitStatus,
@@ -152,8 +153,28 @@ export function registerGitCommands(git: Command, program: Command): void {
       }),
     );
 
-  wsOpt(git.command('pull').description('bring in the remote’s commits; exit 1 when it stopped on conflicts').option('--rebase', 'rebase instead of merge')).action((o) =>
+  wsOpt(
+    git
+      .command('pull')
+      .description('bring in the remote’s commits; exit 1 when it stopped on conflicts')
+      .option('--rebase', 'rebase instead of merge')
+      .option('--ff-only', 'only a plain fast-forward (what the app does by itself with Settings ▸ Git ▸ pull when I have no changes): never merges, exit 1 when it cannot'),
+  ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
+      if (o.ffOnly) {
+        let ff;
+        try {
+          ff = await gitPullFastForward(s.root);
+        } catch (e) {
+          const msg = `Not a plain fast-forward (you have changes or commits the remote lacks, or the remote needs a sign-in): ${(e as Error).message.split('\n')[0]}`;
+          if (!o.json) throw new CliError(msg, EXIT.TEST_FAILURE);
+          printJson({ conflicted: false, pulled: 0, ffOnly: true, error: msg });
+          process.exitCode = EXIT.TEST_FAILURE;
+          return;
+        }
+        out(o.json, { conflicted: false, ffOnly: true, ...ff }, () => console.log(ff.pulled ? green(`Pulled ${ff.pulled} commit(s):\n${ff.commits.map((c) => `  ${c.short} ${c.author}: ${c.subject}`).join('\n')}`) : green('Up to date with the remote.')));
+        return;
+      }
       const r = await gitPull(s.root, { rebase: !!o.rebase });
       out(o.json, r, () => console.log(r.conflicted ? red('Conflicts: settle them in TestPion (Git view) or with  testpion git resolve <file> --ours|--theirs, then commit.') : green('Pulled: up to date with the remote.')));
       if (r.conflicted) process.exitCode = EXIT.TEST_FAILURE;

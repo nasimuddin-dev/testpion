@@ -245,6 +245,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'git.allowSecret': { finding: 'o', reason: 's' },
   'git.disallowSecret': { hash: 's' },
   'git.itemBlame': { ref: 'x?', itemId: 's?', file: 'wp?', limit: 'n?' },
+  'git.lastChange': { ref: 'x?', itemId: 's?', file: 'wp?' },
   'git.itemDiscard': { ref: 'x?', itemId: 's?', file: 'wp?', dryRun: 'b?' },
   'git.itemRestore': { rev: 's', ref: 'x?', itemId: 's?', file: 'wp?', dryRun: 'b?' },
   'git.itemStage': { ref: 'x?', itemId: 's?', file: 'wp?', unstage: 'b?', dryRun: 'b?' },

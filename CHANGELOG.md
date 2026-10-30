@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Team work in git
+
+- **Pull my team's commits by itself** (Settings ▸ Git, off by default). When the background fetch finds new commits and the workspace has no change of yours (not even a new file), nothing unpushed and no merge under way, TestPion pulls them as a plain fast-forward (`git pull --ff-only`: never a merge, a stash or a rewrite), shows the new version and says who changed what (*Pulled 2 commits from your team (Ana): "Tighten the auth check"*, with an **Open Git** button). With changes of yours it does nothing and the Git view offers Pull as before. `testpion git pull --ff-only` is the same pull in a terminal; the setting is `git.autoPull`.
+- **Who last changed it, on hover.** Rest the pointer on a request, environment, flow, MCP server, prompt … in the explorer and a card says who changed it last, when, the commit's message and what it changed. An item with a change of yours not committed yet says so. One shared controller for every list, so a row costs two handlers; the answer is cached by commit (`git.lastChange`).
+
+### RAG bots: read a result faster
+
+- **The report card opens on the two goals and the causes.** *Backed by the sources: 5 of 6 · Right documents found: 5 of 6*, then *Why the failed cases failed* as chips in plain words (*claim not backed by the sources*, *right document not found*, *ranked too low* …) that narrow the failed cases to that reason. Rule-based from the run's own scores, no model. In `eval summary`, `eval_summary` and `eval.summary` as `goals`, `causes` and `cause` on each failure.
+- **A sample opens by stage.** Question, Retrieved, Used, Answer, one line each, with *start here* on the first stage that went wrong; a right document that was not retrieved is listed with the retrieved document closest to the reference answer.
+
 ### Learn by example
 
 - **The Examples workspace teaches MCP, AI quality and RAG bots by example.** New, commented files that run offline and give the same result every time: two MCP mocks (a task list with a resource and a prompt; payments with answers computed by a script) and their tests; one prompt test per kind of check; an evaluation over a dataset; safety probes; an agent with the tools of a mock, as tests and as a table (`should_call` / `should_not_call`); a bot with sources (an offline handbook bot, its saved target, eight questions, an end-to-end check with the offline demo model as the reviewer: 6 of 8 pass, two defects seeded on purpose); the same measures on an answer you already have; and one measure of your own of each kind under `metrics/`. A second offline model, *Offline demo model (examples)*, answers exactly these prompts. Suite **Learn by example**; `testpion run --suite learn`. Existing copies of the Examples workspace get the new files on update. Docs: Examples workspace ▸ Learn by example.

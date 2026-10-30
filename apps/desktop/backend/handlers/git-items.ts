@@ -4,7 +4,10 @@ import {
   discardItem,
   itemBlame,
   itemHistory,
+  itemLastChange,
   resolveItemTarget,
+  runGit,
+  type ItemLastChange,
   restoreItemVersion,
   stageItem,
   stashApply,
@@ -21,6 +24,8 @@ import { restoreConflict, savedConflict, gitHelpers } from './git-undoable.js';
 export function gitItemHandlers(be: Backend): Handlers {
   const { ws, rewritten, changed } = gitHelpers(be);
   const target = (p: ItemTargetInput) => resolveItemTarget(be.ws, p);
+  /** The newest change of an item by HEAD (a hover asks for rows one after the other: a row is walked once per commit). */
+  const lastChanges = new Map<string, ItemLastChange | null>();
 
   return {
     /** Where an item lives in git: its file and item id (a ref in, the address out), for the menus and dialogs. */
@@ -30,6 +35,19 @@ export function gitItemHandlers(be: Backend): Handlers {
     },
     /** The commits that changed one item, each with what it changed (parts side by side). */
     'git.itemVersions': (p: ItemTargetInput & { limit?: number }) => itemHistory(ws(), target(p), p.limit),
+    /** Who last changed an item and when, in one line (null: no commit has it yet). Asked on hover, so it is cached by HEAD. */
+    'git.lastChange': async (p: ItemTargetInput) => {
+      const a = target(p);
+      const head = (await runGit(ws(), ['rev-parse', 'HEAD']).catch(() => '')).trim();
+      if (!head) return null;
+      const key = `${ws()}|${head}|${a.file}|${a.itemId ?? ''}`;
+      const have = lastChanges.get(key);
+      if (have !== undefined) return have;
+      const r = (await itemLastChange(ws(), a).catch(() => undefined)) ?? null;
+      if (lastChanges.size > 800) lastChanges.clear();
+      lastChanges.set(key, r);
+      return r;
+    },
     /** Who last changed each field of an item. */
     'git.itemBlame': (p: ItemTargetInput & { limit?: number }) => itemBlame(ws(), target(p), p.limit),
     /** Put an older version of one item back (`dryRun`: only what would change). Undo with git.undo. */

@@ -483,6 +483,35 @@ export async function gitFetch(ws: string, opts: { quiet?: boolean } = {}): Prom
   await runGit(ws, ['fetch', '--prune'], opts.quiet ? { timeoutMs: 60_000, env: { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_ASKPASS: '', SSH_ASKPASS: '' } } : { timeoutMs: 300_000 });
 }
 
+/** What a fast-forward pull brought in: how many commits, and who wrote them (newest first). */
+export interface GitFastForward {
+  pulled: number;
+  commits: Array<{ short: string; author: string; subject: string; date: string }>;
+}
+
+/**
+ * Pull only when it is a plain fast-forward (nothing of yours to merge): the safe pull a background "pull when I have no local
+ * changes" can do without asking. It never merges, never stashes and never rewrites your commits; when the branch cannot be
+ * fast-forwarded (you have commits the remote lacks, or the histories diverged) it throws and nothing changes.
+ */
+export async function gitPullFastForward(ws: string): Promise<GitFastForward> {
+  const before = (await runGit(ws, ['rev-parse', 'HEAD'])).trim();
+  await runGit(ws, ['pull', '--ff-only', '--no-rebase'], { timeoutMs: 300_000, env: { GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_ASKPASS: '', SSH_ASKPASS: '' } });
+  const after = (await runGit(ws, ['rev-parse', 'HEAD'])).trim();
+  if (before === after) return { pulled: 0, commits: [] };
+  const out = await runGit(ws, ['log', '--max-count=50', '--format=%h%x1f%an%x1f%s%x1f%aI%x1e', `${before}..${after}`, '--', '.']).catch(() => '');
+  const commits = out
+    .split('')
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .map((r) => {
+      const [short, author, subject, date] = r.split('');
+      return { short: short!, author: author!, subject: subject ?? '', date: date ?? '' };
+    });
+  const count = Number((await runGit(ws, ['rev-list', '--count', `${before}..${after}`]).catch(() => String(commits.length))).trim()) || commits.length;
+  return { pulled: count, commits };
+}
+
 /** What a pull did: stopped on conflicts or not, and whether uncommitted changes had to be set aside for it. */
 interface GitPullResult {
   conflicted: boolean;

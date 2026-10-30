@@ -1,12 +1,13 @@
 /**
  * Background fetch for the open workspace: while it is in git with a remote, the backend fetches quietly every
  * `git.autoFetchMinutes` (default 5; 0 = off) and tells the views when the remote has new commits
- * (`git.remoteChanged` with ahead / behind), so the Git view can offer Pull & push before a push is refused. It lives in
+ * (`git.remoteChanged` with ahead / behind), so the Git view can offer Pull & push before a push is refused; with `git.autoPull` it also
+ * pulls a plain fast-forward by itself when the workspace has no change of the person's (`git.autoPulled`). It lives in
  * the backend, not the window, so a cloud host runs the same timer. It never runs while a pull, push or sync runs, never
  * asks for a sign-in (a remote that needs one just fails, quietly logged), and never changes the working folder.
  */
 import { join } from 'node:path';
-import { atomicWrite, gitFetch, gitRemoteUrl, gitStatus, readJson, realPathOf, repoRoot } from '@testpion/core';
+import { atomicWrite, gitFetch, gitPullFastForward, gitRemoteUrl, gitStatus, readJson, realPathOf, repoRoot } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 export const DEFAULT_AUTO_FETCH_MINUTES = 5;
@@ -84,6 +85,39 @@ export class GitAutoFetch {
     atomicWrite(this.file(), JSON.stringify({ workspaces: on ? [...cur, k] : cur.filter((x) => x !== k) }, null, 2));
   }
 
+  autoPullOn(): boolean {
+    return this.be.settings.git?.autoPull === true;
+  }
+
+  /**
+   * Pull by itself when the person asked for it (Settings ▸ Git) and it is safe: the remote has commits, the workspace has no
+   * change of the person's (not even a new file), nothing of theirs is unpushed, no merge is under way, and nothing else runs.
+   * It is `git pull --ff-only`: it never merges, stashes or rewrites. Tells the views what came in (`git.autoPulled`: who and what).
+   */
+  private async autoPull(ws: string, st: Awaited<ReturnType<typeof gitStatus>>): Promise<boolean> {
+    if (!this.autoPullOn() || this.running || st.behind <= 0 || st.ahead > 0 || st.files.length || st.conflicted || !st.upstream) return false;
+    if (this.be.store?.root !== ws) return false;
+    this.running++;
+    try {
+      const r = await gitPullFastForward(ws);
+      if (!r.pulled) return false;
+      // the files were written for the app: reload them and tell the views, as after a pull the person asked for
+      this.be.adoptDiskState();
+      this.be.ws.reloadWorkspaceFile();
+      this.be.host.emit('data.changed', { method: 'git' });
+      this.be.host.emit('git.changed', {});
+      this.be.host.emit('git.autoPulled', { count: r.pulled, branch: st.branch, commits: r.commits.slice(0, 5), authors: [...new Set(r.commits.map((c) => c.author))] });
+      this.be.logger.info(`Pulled ${r.pulled} commit(s) from ${st.upstream} by itself`);
+      return true;
+    } catch (e) {
+      // it could not fast-forward (the histories diverged meanwhile) or the sign-in is needed: nothing changed, the strip offers Pull
+      this.be.logger.debug(`Pull by itself skipped: ${(e as Error).message}`);
+      return false;
+    } finally {
+      this.running--;
+    }
+  }
+
   /**
    * Fetch quietly now (also when the Git view opens). Skipped while the user's own git operation runs, when no
    * workspace is open, or when it is not in git with a remote.
@@ -96,7 +130,10 @@ export class GitAutoFetch {
     const work = (async () => {
       if (!(await repoRoot(ws)) || !(await gitRemoteUrl(ws))) return { fetched: false, skipped: 'no remote' };
       await gitFetch(ws, { quiet: true });
-      const st = await gitStatus(ws);
+      let st = await gitStatus(ws);
+      // "pull my team's commits by itself": only a plain fast-forward of a workspace with nothing of the person's in it
+      const pulled = await this.autoPull(ws, st);
+      if (pulled) st = await gitStatus(ws);
       // the workspace was switched meanwhile: nothing to tell
       if (this.be.store?.root !== ws) return { fetched: true, ahead: st.ahead, behind: st.behind };
       const before = this.known.get(ws);

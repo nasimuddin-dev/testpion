@@ -12,7 +12,7 @@ import { call, modKey, on } from './api';
 import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
 import { openRef } from './lib/open-ref';
 import { LABEL } from './lib/vocabulary';
-import { POSTMAN_WORDS } from '@testpion/shared';
+import { plural, POSTMAN_WORDS } from '@testpion/shared';
 import { toastError, useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
@@ -35,6 +35,7 @@ import { runMenuCommand, type MenuCommand } from './menu-commands';
 import { setResponseLayout } from './components/ResponseSplit';
 import { loadMonaco } from './components/CodeEditor';
 import { Spinner, TooltipProvider } from './components/ui';
+import { GitWhoTip } from './components/GitWhoTip';
 import { McpClientRequests } from './components/McpClientRequests';
 import { focusTerminal, newTerminal, useShellCapable } from './lib/terminal';
 import { railShortcut } from './lib/rail';
@@ -284,6 +285,14 @@ export default function App() {
       if (p.kinds.includes('environments') || p.kinds.includes('workspace')) s.set({ envsVersion: (s.envsVersion ?? 0) + 1 });
       s.toast(`${p.message}: TestPion shows the new version.`);
     });
+    // "pull my team's commits by itself" (Settings ▸ Git) pulled a fast-forward: who changed what, one click to the Git view
+    const offPulled = on<{ count: number; branch?: string; authors: string[]; commits: Array<{ author: string; subject: string }> }>('git.autoPulled', (p) => {
+      const s = useApp.getState();
+      void s.refreshWorkspace();
+      const who = p.authors.length === 1 ? p.authors[0] : `${p.authors.length} people`;
+      const what = p.commits[0]?.subject ? `: "${p.commits[0].subject}"` : '';
+      s.toast(`Pulled ${plural(p.count, 'commit')} from your team (${who})${what}. TestPion shows the new version.`, 'success', { label: 'Open Git', onClick: () => useApp.getState().setView('git') });
+    });
     // the disk, the history store or the file watcher has a problem (full disk, damaged database, a watch that stopped): said once, with what to do
     const offInternal = on<{ message: string }>('app.internalError', (p) => useApp.getState().toast(`An internal error was logged (${p.message}). Help > Send feedback or report a problem includes it.`, 'error'));
     const offProblem = on<{ message: string; hint?: string }>('workspace.problem', (p) => useApp.getState().toast(`${p.message}${p.hint ? ` ${p.hint}` : ''}`, 'error'));
@@ -316,6 +325,7 @@ export default function App() {
       off();
       offUpdate();
       offDisk();
+      offPulled();
       offProblem();
       offInternal();
       offData();
@@ -695,6 +705,7 @@ export default function App() {
       {guard('dialog', <DialogHost />)}
       {guard('variable popover', <VarPopoverHost />)}
       {guard('progress', <ProgressHost />)}
+      {guard('git who', <GitWhoTip />)}
       {cookiesOpen && guard('cookies', <CookiesModal onClose={() => useApp.getState().set({ cookiesOpen: false })} />, close({ cookiesOpen: false }))}
       <ProductionFrame />
     </div>

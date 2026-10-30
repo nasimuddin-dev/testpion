@@ -22,20 +22,21 @@ export type FailureClass =
   | 'operational'
   | 'other';
 
-export const FAILURE_CLASSES: ReadonlyArray<{ id: FailureClass; label: string; meaning: string }> = [
-  { id: 'system-error', label: 'System error', meaning: 'The RAG system did not answer (an error, a timeout, a refused request).' },
-  { id: 'format', label: 'Format', meaning: 'It answered but the mapping found no answer in the response: the answer is empty or in a shape the target does not read.' },
-  { id: 'judge-error', label: 'Judge error', meaning: 'A judge could not score the sample (no verdict in the expected format); fix the judge, not the system.' },
-  { id: 'retrieval-miss', label: 'Retrieval miss', meaning: 'The retriever did not bring what the question needs (the gold chunks or the reference facts are not in the contexts, or nothing was retrieved).' },
-  { id: 'false-refusal', label: 'False refusal', meaning: 'The retrieval was good but the answer refuses or says it does not know.' },
-  { id: 'ranking', label: 'Ranking', meaning: 'The right chunks were retrieved but ranked low.' },
-  { id: 'noise', label: 'Noise', meaning: 'The right chunks were retrieved among many irrelevant ones.' },
-  { id: 'unfaithful', label: 'Unfaithful', meaning: 'The retrieval was fine but the answer makes claims the documents do not support.' },
-  { id: 'off-topic', label: 'Off topic', meaning: 'The answer does not address the question.' },
-  { id: 'incomplete', label: 'Incomplete or wrong', meaning: 'Retrieval and grounding were fine but the answer differs from the reference.' },
-  { id: 'citation', label: 'Citation', meaning: 'The answer cites documents that were not retrieved.' },
-  { id: 'operational', label: 'Operational', meaning: 'Only a latency, token or cost limit failed.' },
-  { id: 'other', label: 'Other', meaning: 'A check failed that no rule explains.' },
+/** `plain`: the cause in the words of the report card ("3 right document not found"), the same in the app, the CLI and the MCP tools. */
+export const FAILURE_CLASSES: ReadonlyArray<{ id: FailureClass; label: string; plain: string; meaning: string }> = [
+  { id: 'system-error', label: 'System error', plain: 'the bot did not answer', meaning: 'The RAG system did not answer (an error, a timeout, a refused request).' },
+  { id: 'format', label: 'Format', plain: 'answer not found in the response', meaning: 'It answered but the mapping found no answer in the response: the answer is empty or in a shape the target does not read.' },
+  { id: 'judge-error', label: 'Judge error', plain: 'the reviewer could not decide', meaning: 'A judge could not score the sample (no verdict in the expected format); fix the judge, not the system.' },
+  { id: 'retrieval-miss', label: 'Retrieval miss', plain: 'right document not found', meaning: 'The retriever did not bring what the question needs (the gold chunks or the reference facts are not in the contexts, or nothing was retrieved).' },
+  { id: 'false-refusal', label: 'False refusal', plain: 'refused though the documents had the answer', meaning: 'The retrieval was good but the answer refuses or says it does not know.' },
+  { id: 'ranking', label: 'Ranking', plain: 'right document ranked too low', meaning: 'The right chunks were retrieved but ranked low.' },
+  { id: 'noise', label: 'Noise', plain: 'too many wrong documents', meaning: 'The right chunks were retrieved among many irrelevant ones.' },
+  { id: 'unfaithful', label: 'Unfaithful', plain: 'claim not backed by the sources', meaning: 'The retrieval was fine but the answer makes claims the documents do not support.' },
+  { id: 'off-topic', label: 'Off topic', plain: 'does not answer the question', meaning: 'The answer does not address the question.' },
+  { id: 'incomplete', label: 'Incomplete or wrong', plain: 'differs from the reference answer', meaning: 'Retrieval and grounding were fine but the answer differs from the reference.' },
+  { id: 'citation', label: 'Citation', plain: 'cites a document that was not retrieved', meaning: 'The answer cites documents that were not retrieved.' },
+  { id: 'operational', label: 'Operational', plain: 'over a time or cost limit', meaning: 'Only a latency, token or cost limit failed.' },
+  { id: 'other', label: 'Other', plain: 'another check failed', meaning: 'A check failed that no rule explains.' },
 ];
 
 export interface RagFailure {
@@ -49,6 +50,10 @@ export interface RagFailure {
 /** An answer that declines or says it has no answer: a refusal, "I don't know", "I could not find that in the documents". */
 export const REFUSAL =
   /\b(i can(?:'|no)t|i am (?:not able|unable)|i'm (?:not able|unable)|i don'?t know|i do not know|i won'?t|cannot (?:help|assist|comply)|not (?:able|allowed) to|i must decline|no information|sorry,? but|(?:could|did) not find|couldn'?t find|(?:not|nothing) (?:found|mentioned|covered|stated) in|(?:does|do|did) not (?:say|mention|cover|state)|no (?:answer|mention) (?:in|of)|outside (?:the|my) (?:documents|sources|knowledge))\b/i;
+
+/** The two goals of a bot with sources: its answers are backed by what it retrieved, and it found the right documents. */
+export const GOAL_BACKED_METRICS: ReadonlySet<string> = new Set(['faithfulness', 'response-groundedness', 'claim-faithfulness', 'claim-hallucination', 'hallucination']);
+export const GOAL_FOUND_METRICS: ReadonlySet<string> = new Set(['context-recall', 'context-recall-ids', 'context-recall-lexical', 'recall@k', 'hit-rate@k', 'retriever-claim-recall']);
 
 const RECALL = new Set(['context-recall', 'context-recall-ids', 'context-recall-lexical', 'context-entity-recall', 'recall@k', 'hit-rate@k', 'retriever-claim-recall']);
 const RANKING = new Set(['ndcg@k', 'map@k', 'mrr@k', 'context-precision', 'context-precision-lexical', 'context-utilization']);

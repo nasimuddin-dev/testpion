@@ -23,6 +23,20 @@ document (the right document is not found). The result is *4 of 6 passed*. The s
 `testpion rag sample` (`--no-run` only makes it, `--json` for scripts), and for an agent the MCP tool `eval_sample` with
 `kind: "bot"`. An edited sample is put back as written: make your own with Duplicate.
 
+## Read a result: the two goals, the causes, one sample by stage {#read}
+
+A run of a bot with sources opens on its **two goals**: *Backed by the sources: 5 of 6* (every statement of the answer is in
+the documents the bot retrieved) and *Right documents found: 5 of 6* (the documents the question needs were retrieved). Under
+them, **Why the failed cases failed** lists the causes in plain words with how many cases each explains (*1 claim not backed by
+the sources · 1 right document not found*); a cause is a chip that narrows the failed cases below to that reason. The causes come
+from the run's own scores by fixed rules, the same every time, with no model. The same sentences are in `testpion eval summary`
+and the MCP tool `eval_summary` (`goals`, `causes`, and `cause` on each failure).
+
+Open a case (a cell of the matrix) and it is laid out in four stages: **1 Question, 2 Retrieved, 3 Used, 4 Answer**, each with
+one line (*1 document · right documents found 0 of 1*, *1 of 2 statements backed by the documents*) and **start here** on the first
+stage that went wrong, so you look at the retrieval before the answer it fed. A right document that was not retrieved is listed
+with the retrieved document closest to the reference answer.
+
 ## Connect a RAG system {#connect}
 
 A **RAG target** is one request to the system under test and a map of where its answer and retrieved documents are in the

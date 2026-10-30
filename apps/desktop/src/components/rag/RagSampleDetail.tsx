@@ -9,6 +9,7 @@ import { CheckList } from '../Results';
 import { AiAction } from '../ai/AiAction';
 import { TraceView } from '../TraceView';
 import { Badge, Button, cx, Modal, Spinner } from '../ui';
+import { firstBadStage, nearestChunk, stagesOf } from '../../lib/rag-stages';
 import { RagLabelControl } from './RagLabelControl';
 import { ChunkImage } from './ChunkImage';
 import { RagTryDialog } from './RagTryDialog';
@@ -55,6 +56,11 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
   const failure = (result.metadata?.rag as { failure?: { class: string; reason: string } } | undefined)?.failure;
   // the claims the focused metric judged, each with the document its evidence names
   const claims = itemsOf(focused).filter((i) => !(sample?.contexts ?? []).some((c) => c.id === i.text));
+  // the sample by stage (R-4): the claims of the measure in focus, else of the first one that judges claims against the documents
+  const claimCheck = focused ?? result.checks.find((c) => /faithful|grounded|hallucination/i.test(c.type));
+  const stageClaims = itemsOf(claimCheck).filter((i) => !(sample?.contexts ?? []).some((c) => c.id === i.text));
+  const stages = stagesOf(sample, stageClaims, result.checks);
+  const badStage = firstBadStage(stages);
   const review = async (rating: 'good' | 'bad') => {
     await attempt(async () => {
       await call('runs.review', { runId, resultId, rating });
@@ -110,6 +116,25 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
       >
         <div className="grid gap-3 text-sm" data-rag-detail>
           {failure && <div className="text-xs text-muted">Why it scored low: {failure.reason}</div>}
+          <ol className="grid grid-cols-4 gap-2" aria-label="The sample by stage" data-rag-stages={badStage ?? 'ok'}>
+            {stages.map((s, i) => (
+              <li
+                key={s.id}
+                data-rag-stage={s.id}
+                data-state={s.state}
+                className={cx('rounded-lg border px-2.5 py-1.5 text-xs min-w-0', s.state === 'bad' ? 'border-bad/40 bg-bad/5' : s.state === 'ok' ? 'border-ok/30 bg-ok/5' : 'border-line')}
+              >
+                <div className="flex items-center gap-1.5 font-medium">
+                  <span className="text-muted tabular-nums">{i + 1}</span>
+                  {s.title}
+                  {badStage === s.id && <Badge tone="bad" title="The first stage that went wrong: look here first">start here</Badge>}
+                </div>
+                <div className="text-muted truncate" title={s.summary}>
+                  {s.summary}
+                </div>
+              </li>
+            ))}
+          </ol>
           {sample ? (
             <>
               <div>
@@ -198,7 +223,22 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
                       <tr key={id} className="border-t border-line/60 text-bad" data-rag-missed={id}>
                         <td className="py-1 pr-2">—</td>
                         <td className="pr-2 mono">{id}</td>
-                        <td colSpan={3}>a right document that was not retrieved</td>
+                        <td colSpan={3}>
+                          a right document that was not retrieved
+                          {(() => {
+                            const near = sample.reference ? nearestChunk(sample.reference, sample.contexts ?? []) : undefined;
+                            return near ? (
+                              <span className="text-muted" data-rag-missed-nearest={near.id}>
+                                {' '}
+                                · closest retrieved document to the reference answer:{' '}
+                                <button className="mono text-accent hover:underline" onClick={() => setDoc(near.id)}>
+                                  {near.id}
+                                </button>{' '}
+                                (rank {near.rank})
+                              </span>
+                            ) : null;
+                          })()}
+                        </td>
                       </tr>
                     ))}
                     {!sample.contexts?.length && missed.length === 0 && (
