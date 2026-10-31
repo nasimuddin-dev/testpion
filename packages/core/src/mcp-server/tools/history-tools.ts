@@ -7,6 +7,7 @@ import type { WorkspaceStore } from '../../storage/workspace.js';
 import type { Redactor } from '../../util/redact.js';
 import { ApsError } from '../../errors.js';
 import { HISTORY_KINDS, historyKindOf } from '../../model/history-kinds.js';
+import type { SecretReader } from '../../vars/variables.js';
 import { str, type Tool, limitArg, offsetArg } from '../tool.js';
 
 /** The most rows a page of a list that pages itself holds, plus the one more it is asked for (tool-contract.ts). */
@@ -19,12 +20,13 @@ const PAGE_MAX = 501;
  */
 interface HistoryToolsDeps {
   store: WorkspaceStore;
+  secrets: SecretReader;
   redactor: Redactor;
   findCollection(ref: unknown): Collection;
   findRequest(c: Collection, ref: unknown): { node: CollectionNode; folder: string };
 }
 
-export function historyTools({ store, redactor, findCollection, findRequest }: HistoryToolsDeps): Tool[] {
+export function historyTools({ store, secrets, redactor, findCollection, findRequest }: HistoryToolsDeps): Tool[] {
   return [
     {
       name: 'request_history',
@@ -132,7 +134,7 @@ export function historyTools({ store, redactor, findCollection, findRequest }: H
       description:
         'What needs attention in this workspace, most severe first: failing monitors, TLS certificates that expire within 30 days, the latest run if it failed, saved requests whose latest response failed, and flaky tests. Each item has a message and a ref, an ItemRef {kind, …ids}: monitor (monitorId, runId), certificate (host), run (runId), request (collectionId + requestId), test-case (testId); resolve_ref names it and gives the link that opens it in the app. Start here to find out what to fix.',
       inputSchema: { type: 'object', properties: { certDays: { type: 'number', description: 'Warn about certificates that expire within this many days (default 30)' } } },
-      run: (a) => workspaceAttention(store, { certDays: Number(a.certDays) || 30 }),
+      run: (a) => workspaceAttention(store, { certDays: Number(a.certDays) || 30, secrets }),
     },
     {
       name: 'workspace_activity',

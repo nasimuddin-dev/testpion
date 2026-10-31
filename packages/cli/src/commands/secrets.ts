@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
-import { environmentSecretRefs, externalSecrets, prefetchEnvironmentSecrets, secretRefCommand, type Environment } from '@testpion/core';
-import { EXIT, green, red, dim, bold, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
+import { environmentSecretRefs, externalSecrets, missingSecrets, prefetchEnvironmentSecrets, secretRefCommand, type Environment } from '@testpion/core';
+import { cliSecrets, EXIT, green, red, dim, bold, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** `testpion secrets <environment>`: the environment's secret manager references, and whether each one can be read here. */
 export function registerSecretsCommands(program: Command): void {
@@ -9,10 +9,22 @@ export function registerSecretsCommands(program: Command): void {
     .description(
       "check an environment's secret manager references (op://, vault://, aws-sm://, azure-kv://, gcp-sm://): each is read with its tool, the value never printed; exit 1 when one cannot be read",
     )
-    .argument('<environment>', 'environment name or id')
+    .argument('[environment]', 'environment name or id')
+    .option('--missing', 'instead: list the secret variables (of every environment and the globals) that have no value here, with the environment variable that gives each one to the CLI and CI; exit 1 when one is missing')
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
-    .action(async (environment: string, o: { workspace?: string; json?: boolean }) => {
+    .action(async (environment: string | undefined, o: { workspace?: string; json?: boolean; missing?: boolean }) => {
+      if (o.missing) {
+        const r = await withWorkspace(o.workspace, (store) => missingSecrets(store, cliSecrets()));
+        if (o.json) printJson(r);
+        else {
+          console.log(r.count ? red(r.text) : green(r.text));
+          for (const i of r.items) console.log(`  ${(i.environment ?? 'globals').padEnd(16)} ${i.key.padEnd(24)} ${dim(i.envVar)}`);
+        }
+        if (r.count) process.exitCode = EXIT.TEST_FAILURE;
+        return;
+      }
+      if (!environment) throw new CliError('Name an environment, or pass --missing', EXIT.CONFIG_ERROR);
       const { env, root, failed } = await withWorkspace(o.workspace, async (store) => {
         const found: Environment | undefined = store.getEnvironment(environment);
         return { env: found, root: store.root, failed: found ? (await prefetchEnvironmentSecrets(store, environment, { trustAll: true })).failed : [] };

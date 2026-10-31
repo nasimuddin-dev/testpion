@@ -106,7 +106,7 @@ export function KeyValueEditor({
                         className="cell-input mono"
                         type={masked ? 'password' : 'text'}
                         aria-label={r.key ? `Value of ${r.key}` : valuePlaceholder}
-                        placeholder={r.secret && secretStatus?.[r.key] ? '•••••• stored in OS keychain (type to replace)' : r.kind === 'file' ? 'File path' : ''}
+                        placeholder={r.secret && secretStatus?.[r.key] ? '•••••• stored in OS keychain (type to replace)' : r.secret && secretStatus?.[r.key] === false && r.key ? 'No value on this computer: type it here' : r.kind === 'file' ? 'File path' : ''}
                         value={r.value}
                         onChange={(e) => update(i, { value: e.target.value })}
                       />

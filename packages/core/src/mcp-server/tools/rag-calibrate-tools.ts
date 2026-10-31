@@ -7,7 +7,7 @@
 import { ApsError } from '../../errors.js';
 import { calibrateRun, defaultLabelsName, labelResult } from '../../runner/rag-calibrate.js';
 import { labelDocument } from '../../eval/chunk-labels.js';
-import { embeddingMap } from '../../eval/rag/embedding-map.js';
+import { embeddingMap } from '../../eval/embedding-map.js';
 import { createEngineContext } from '../../engine.js';
 import { makeExample } from '../../runner/rag-calibrate-example.js';
 import type { AppSettings } from '../../model/types.js';

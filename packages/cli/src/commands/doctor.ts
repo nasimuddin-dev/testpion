@@ -1,8 +1,8 @@
 /** `testpion doctor`: is this machine (and the workspace) ready to run TestPion? */
 import { accessSync, constants, existsSync } from 'node:fs';
 import { Command } from 'commander';
-import { WorkspaceManager, workspaceStorage, ENGINE_VERSION, collectDiagnostics, diagnosticsSummary } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
+import { missingSecrets, WorkspaceManager, workspaceStorage, ENGINE_VERSION, collectDiagnostics, diagnosticsSummary } from '@testpion/core';
+import { cliSecrets, EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 interface Check {
   name: string;
@@ -86,6 +86,8 @@ export function registerDoctorCommand(program: Command): void {
             const envs = store.listEnvironments();
             add('Environments', 'ok', envs.length ? envs.map((e) => e.name + (e.isProduction ? ' (production)' : '')).join(', ') : 'none');
             add('History index', store.meta.backend === 'sqlite' ? 'ok' : 'warn', store.meta.backend === 'sqlite' ? 'SQLite' : 'JSON lines (slower; needs Node.js 22.5+ for SQLite)');
+            const miss = missingSecrets(store, cliSecrets());
+            add('Secret values', miss.count ? 'warn' : 'ok', miss.count ? `${miss.text} Give them to the CLI as environment variables: ${miss.items.slice(0, 6).map((i) => i.envVar).join(', ')}${miss.count > 6 ? ' …' : ''}` : 'every secret variable has a value here');
             const u = workspaceStorage(store);
             add(
               'Kept data',

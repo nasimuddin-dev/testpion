@@ -11,12 +11,14 @@ import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
 import { flakyTests } from '../runner/test-history.js';
 import { collectionRequests } from '../runner/collection-run.js';
 import { ragTrendFindings } from '../runner/rag-trend.js';
+import { missingSecrets } from './missing-secrets.js';
+import type { SecretReader } from '../vars/variables.js';
 
 export interface AttentionItem {
   kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file';
   severity: 'high' | 'medium' | 'low';
   /** What the list groups it under. */
-  group: 'Workspace files' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Flaky tests' | 'RAG metrics';
+  group: 'Workspace files' | 'Secrets' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Flaky tests' | 'RAG metrics';
   /** A check that did not hold (failure), something that could not run or be read (error), or a warning. */
   type: 'failure' | 'error' | 'warning';
   /** When it happened (ISO), when known. */
@@ -30,8 +32,29 @@ export interface AttentionItem {
   ref: ItemRef & { monitorId?: string; host?: string; testId?: string; collectionId?: string; requestId?: string; runId?: string };
 }
 
-export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number } = {}): Promise<AttentionItem[]> {
+/** The Problems-list items for secret variables whose value is not on this computer (a clone, a new machine, CI): their values are never in the files. */
+export function secretsAttention(store: WorkspaceStore, secrets: SecretReader): AttentionItem[] {
   const out: AttentionItem[] = [];
+  const miss = missingSecrets(store, secrets);
+  const envs = store.listEnvironments();
+  for (const name of new Set(miss.items.map((i) => i.environment ?? ''))) {
+    const keys = miss.items.filter((i) => (i.environment ?? '') === name).map((i) => i.key);
+    const env = name ? envs.find((e) => e.name === name) : undefined;
+    out.push({
+      kind: 'file',
+      severity: 'medium',
+      group: 'Secrets',
+      type: 'warning',
+      message: `${name ? `Environment "${name}" has` : 'The globals have'} ${keys.length === 1 ? 'a secret' : `${keys.length} secrets`} with no value on this computer: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ' …' : ''}`,
+      ref: env ? { kind: 'environment', environmentId: env.id } : { kind: 'environment', scope: 'globals' },
+    });
+  }
+  return out;
+}
+
+export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number; secrets?: SecretReader } = {}): Promise<AttentionItem[]> {
+  const out: AttentionItem[] = [];
+  if (opts.secrets) out.push(...secretsAttention(store, opts.secrets));
   // files that can't be read: nothing in them works until they are fixed
   for (const e of store.listEnvironments())
     if (e.problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Environment "${e.name}" can't be read: ${e.problem}`, ref: { kind: 'environment', environmentId: e.id } });

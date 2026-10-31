@@ -1,5 +1,6 @@
 import { collectionMarkdown } from '../../report/collection-docs.js';
 import { collectionSavedItems } from '../../runner/collection-realtime.js';
+import { secretKeys } from '../../storage/secrets.js';
 import { collectionTiming } from '../../storage/collection-timing.js';
 import { str } from '../tool.js';
 import type { Tool } from '../tool.js';
@@ -7,7 +8,7 @@ import type { ModuleToolDeps } from './deps.js';
 
 /** Browsing a workspace: collections, requests, environments, health and timing. */
 export function browseTools(d: ModuleToolDeps): Tool[] {
-  const { store, redactor, collections, findCollection, findRequest, flatten } = d;
+  const { store, secrets, redactor, collections, findCollection, findRequest, flatten } = d;
   return [
     {
       name: 'list_collections',
@@ -107,7 +108,7 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
       name: 'list_environments',
       description: 'List environments and their variable names (values are not returned).',
       inputSchema: { type: 'object', properties: {} },
-      run: () => store.listEnvironments().map((e) => ({ name: e.name, production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)) })),
+      run: () => store.listEnvironments().map((e) => ({ name: e.name, production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret${secrets.get(secretKeys.envVar(e.id, v.key)) ? '' : ', no value here'})` : v.key)) })),
     },
     {
       name: 'collection_docs',

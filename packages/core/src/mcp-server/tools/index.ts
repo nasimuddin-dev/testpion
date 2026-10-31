@@ -49,7 +49,7 @@ import { authTools } from './auth-tools.js';
 export function moduleTools(d: ModuleToolDeps): Tool[] {
   const { store, secrets, settings, redactor, findCollection, findRequest, checkEnvironment } = d;
   const tools: Tool[] = [
-    ...historyTools({ store, redactor, findCollection, findRequest }),
+    ...historyTools({ store, secrets, redactor, findCollection, findRequest }),
     ...refTools({ store }),
     ...kindTools({ store }),
     ...itemTools({ store }),

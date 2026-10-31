@@ -343,7 +343,7 @@ export function registerDataCommands(program: Command): void {
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .action(async (o: { workspace?: string; certDays: string; json?: boolean; markdown?: boolean }) => {
       return withWorkspace(o.workspace, async (store) => {
-        const items = await workspaceAttention(store, { certDays: Number(o.certDays) || 30 });
+        const items = await workspaceAttention(store, { certDays: Number(o.certDays) || 30, secrets: cliSecrets() });
         if (o.json) printJson(items);
         else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n') : '✅ Nothing needs attention.');
         else if (!items.length) console.log(green('Nothing needs attention.'));

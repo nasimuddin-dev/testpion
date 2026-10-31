@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { EmbeddingMap } from '@testpion/core';
 import { call } from '../../api';
 import { plural } from '../../lib/format';
-import { Button, Callout, Field, Input, Modal, Spinner } from '../ui';
+import { Button, Callout, cx, Field, Input, Modal, Spinner } from '../ui';
 
 const W = 640;
 const H = 380;
@@ -66,7 +66,7 @@ export function RagEmbeddingMap({ runId, onClose }: { runId: string; onClose(): 
                 const name = p.kind === 'question' ? p.id.slice(2) : p.label;
                 return (
                   <g key={p.id} opacity={hover && hover !== p.id ? 0.4 : 1} onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover(undefined)} data-embedding-point={p.kind} data-embedding-far-point={far ? '' : undefined}>
-                    <circle cx={at(p.x, W)} cy={at(-p.y, H)} r={p.kind === 'question' ? 6 : 5} className={KINDS.find((k) => k.kind === p.kind)!.cls} stroke={far ? 'var(--bad, #e5484d)' : 'var(--bg)'} strokeWidth={far ? 2.5 : 1.5} />
+                    <circle cx={at(p.x, W)} cy={at(-p.y, H)} r={p.kind === 'question' ? 6 : 5} className={cx(KINDS.find((k) => k.kind === p.kind)!.cls, far ? 'stroke-bad' : 'stroke-bg')} strokeWidth={far ? 2.5 : 1.5} />
                     <text x={at(p.x, W) + (p.x > 0.6 ? -9 : 9)} y={at(-p.y, H) + 3} textAnchor={p.x > 0.6 ? 'end' : 'start'} className="fill-muted" fontSize="10">
                       {name.length > 16 ? `${name.slice(0, 15)}…` : name}
                     </text>

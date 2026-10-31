@@ -19,3 +19,18 @@ Passwords and keys never go into workspace files. TestPion keeps them in your co
 - **Current values** set by scripts (`tp.environment.set` …) stay on this machine. Sensitive ones are encrypted the same way.
 
 :::
+
+## After a clone: secrets to fill in
+
+::: v-pre
+
+A secret variable is named in the environment file, but its value stays on the computer where it was typed. After you clone a workspace, or on a new computer, every secret variable is empty.
+
+- **Home ▸ Needs attention** lists each environment with secrets that have no value here (*Environment "Staging" has 2 secrets with no value on this computer: apiKey, token*). Click it to open the environment. The empty field says *No value on this computer: type it here*.
+- The same list is in the Problems tab, in `testpion problems`, and in the MCP tool `what_needs_attention`.
+- On the command line, `testpion secrets --missing` lists them with the environment variable that gives each one to the CLI and CI (`TESTPION_SECRET_...`). It exits with 1 when one is missing. `testpion doctor` warns about them too.
+- The MCP tool `list_environments` marks a secret with no value as `(secret, no value here)`.
+
+Only names are ever listed, never values.
+
+:::

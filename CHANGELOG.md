@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Team work: secrets to fill in
+
+- After a clone every secret variable is empty, because its value stays on the computer where it was typed. **Needs attention** (Home and the Problems tab) now lists each environment with secrets that have no value here, and a click opens it; the empty field says where to type. `testpion secrets --missing` lists them with the `TESTPION_SECRET_*` variable that gives each one to the CLI and CI, `testpion doctor` warns, and the MCP tool `list_environments` marks them. Only names are listed, never values.
+
 ### Docs: when something does not work
 
 - A new page, [When something does not work](/getting-started/troubleshooting): find the fix by what you see (a failed request, a variable that stays as it is, no traffic captured, an AI model that is not set up, git that will not push, an installer warning). Start here links to it.

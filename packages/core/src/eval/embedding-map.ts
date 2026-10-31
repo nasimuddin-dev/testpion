@@ -6,16 +6,16 @@
  *  - **far questions**: a question whose meaning is far from every document seen (the documents may not cover it).
  * It calls the embedding model once per 64 texts and reads the run's stored samples: the bot is not asked again.
  */
-import { ApsError } from '../../errors.js';
-import type { ProviderRegistry } from '../../ai/index.js';
-import { evalCaseKey } from '../report.js';
-import { resolveRunRef } from '../../runner/eval-matrix-runs.js';
-import { readRunSummary } from '../../runner/run-records.js';
-import { runResults } from '../../runner/run-results.js';
-import { storedSample } from '../../runner/rag-rescore.js';
-import { findSavedEvaluation } from '../../runner/saved-evaluations.js';
-import type { WorkspaceStore } from '../../storage/workspace.js';
-import { cosine } from '../text.js';
+import { ApsError } from '../errors.js';
+import type { ProviderRegistry } from '../ai/index.js';
+import { evalCaseKey } from './report.js';
+import { resolveRunRef } from '../runner/eval-matrix-runs.js';
+import { readRunSummary } from '../runner/run-records.js';
+import { runResults } from '../runner/run-results.js';
+import { storedSample } from '../runner/rag-rescore.js';
+import { findSavedEvaluation } from '../runner/saved-evaluations.js';
+import type { WorkspaceStore } from '../storage/workspace.js';
+import { cosine } from './text.js';
 
 export type MapKind = 'question' | 'right' | 'retrieved';
 
