@@ -9,6 +9,7 @@ import { shortId } from '../../util/ids.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { McpSession } from '../../protocols/mcp/client.js';
+import { lintMcpTools } from '../../protocols/mcp/tool-lint.js';
 import { str, type Tool } from '../tool.js';
 
 /**
@@ -370,7 +371,8 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
         const s = await d.mcpSession(String(a.server));
         try {
           const disc = await s.discover();
-          return { serverInfo: disc.serverInfo, instructions: disc.instructions, tools: disc.tools, resources: disc.resources.slice(0, 200), prompts: disc.prompts };
+          const lint = lintMcpTools(disc.tools, { instructions: disc.instructions });
+          return { serverInfo: disc.serverInfo, instructions: disc.instructions, tools: disc.tools, resources: disc.resources.slice(0, 200), prompts: disc.prompts, lint: { ...lint, findings: lint.findings.slice(0, 40) } };
         } finally {
           await s.close();
         }

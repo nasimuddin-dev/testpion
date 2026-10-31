@@ -10,6 +10,10 @@
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
+### MCP: are your tools easy for an agent to use?
+
+- `testpion mcp --lint` connects to an MCP server and checks its tool list the way an agent meets it: descriptions that say when to use a tool, parameters that say what they are, destructive tools that say so, names a client accepts, and a list that does not fill the context. The MCP tool `mcp_server_tools` returns the same as `lint`.
+
 ### AI quality: are the test cases any good?
 
 - Under the toolbar of **Test cases**, TestPion now says what is off about the cases: a repeated input, cases without the expected answer, a prompt variable a case does not fill, one answer that most cases expect (a model that always says it passes), a very long input. `testpion eval lint <evaluation>` prints it for scripts and `list_evaluations` carries it as `notes`.

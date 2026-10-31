@@ -30,4 +30,17 @@ assertions:
 
 `status: error` matches only a tool-level error (`isError: true`). A connection or protocol failure counts as a test **error**, never as the expected error.
 
+## Are the tools easy for an agent to use? {#lint}
+
+An AI agent picks a tool by its description and fills its arguments from the schema. `testpion mcp --lint -- node server.js` (or `--url`, or `--server <name>`) connects and checks the tool list in words:
+
+- a tool with **no description**, a very short one, or one that only repeats its name;
+- two tools with **the same description**, which an agent cannot tell apart;
+- **parameters without descriptions**, and no list of which are required;
+- a tool that **sounds destructive** (*delete*, *reset* …) but has no `destructiveHint`, so a client cannot ask first;
+- **names** a client rejects, a schema that is not an object, a `required` that names nothing;
+- **too many tools**, or a list so big that it fills the agent's context (about 4 characters a token).
+
+Errors make the command exit with 1; warnings and tips are advice. `--json` prints the findings. The MCP tool `mcp_server_tools` returns the same as `lint`.
+
 :::

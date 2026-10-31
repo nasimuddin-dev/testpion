@@ -6,6 +6,7 @@ import { Command, Option } from 'commander';
 import { createInterface } from 'node:readline';
 import { addGatewayOptions, gatewayFromFlags, type GatewayFlags } from './debug-enterprise.js';
 import {
+  lintMcpTools,
   DebuggerSession,
   SessionSpool,
   describeNetworkSpeed,
@@ -349,6 +350,7 @@ ${cyan(r.url)}`);
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .option('-e, --environment <name>', 'environment for {{variables}} in the server settings')
     .option('--call <tool>', 'call this tool instead of listing')
+    .option('--lint', 'instead of listing, check how easy the tools are for an AI agent to use: descriptions, parameters, names, destructive hints, the size of the list (exit 1 when there is an error)')
     .option('--args <json>', 'arguments of the tool as JSON', '{}')
     .option('--json', 'print as JSON (for scripts and AI agents)')
     .argument('[command...]', 'stdio command, e.g. -- node server.js')
@@ -376,6 +378,17 @@ ${cyan(r.url)}`);
             return;
           }
           const d = await s.discover();
+          if (o.lint) {
+            const l = lintMcpTools(d.tools, { instructions: d.instructions });
+            if (o.json) printJson({ serverInfo: d.serverInfo, ...l });
+            else {
+              console.log(bold(`${d.serverInfo?.name ?? 'server'} ${d.serverInfo?.version ?? ''}`));
+              console.log(l.errors ? red(l.text) : l.warnings ? yellow(l.text) : green(l.text));
+              for (const f of l.findings) console.log(`  ${f.level === 'error' ? red('error') : f.level === 'warn' ? yellow('warn ') : dim('tip  ')} ${f.tool ? `${bold(f.tool)} ` : ''}${f.text}`);
+            }
+            if (l.errors) process.exitCode = EXIT.TEST_FAILURE;
+            return;
+          }
           if (o.json) return printJson({ serverInfo: d.serverInfo, instructions: d.instructions, capabilities: d.capabilities, tools: d.tools, resources: d.resources, resourceTemplates: d.resourceTemplates, prompts: d.prompts });
           console.log(bold(`${d.serverInfo?.name ?? 'server'} ${d.serverInfo?.version ?? ''}`), dim(JSON.stringify(d.capabilities)));
           if (d.instructions) console.log(dim(d.instructions));
