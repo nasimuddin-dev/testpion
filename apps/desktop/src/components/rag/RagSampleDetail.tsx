@@ -4,6 +4,7 @@ import type { TrySample, Trace } from '@testpion/core';
 import { call } from '../../api';
 import { plural } from '@testpion/shared';
 import { attempt, toastError, useApp } from '../../store';
+import { RagAblation } from './RagAblation';
 import { useRpc } from '../../lib/use-rpc';
 import type { CheckResult, TestResult } from '../../types';
 import { CheckList } from '../Results';
@@ -234,6 +235,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
               )}
               <div>
                 <div className="text-xs text-muted">Retrieved documents ({sample.contexts?.length ?? 0}){gold.size ? ` · right documents: ${[...gold].join(', ')}` : ''}</div>
+                {(sample.contexts?.length ?? 0) > 0 && <RagAblation runId={runId} resultId={resultId} />}
                 <table className="w-full text-xs mt-1" data-rag-lane>
                   <tbody>
                     {(sample.contexts ?? []).map((c, i) => {

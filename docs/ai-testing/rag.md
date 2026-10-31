@@ -51,6 +51,15 @@ On a finished run, **Map by meaning…** (the metrics view) places the questions
 
 It asks an embedding model, not your bot. The text of the run's questions and retrieved documents is sent to that model, so choose one on your computer (such as Ollama) when they are private. Choose one as `provider/model`, or leave it empty to use the provider of the AI reviewer. On the command line, use `testpion rag map <run> [--embedder provider/model] [--json]`.
 
+## Which document mattered? {#ablation}
+
+In an open sample, **Which document mattered?** asks your bot again, once with every document it retrieved and once without each one. A document whose absence changes the answer is **load-bearing**. One that changes nothing is dead weight.
+
+- It needs a bot whose request takes the documents as input: put `"documents": "{{documents}}"` (a list of `{ id, text }`) or `"documents": "{{document_texts}}"` (a list of texts) in its body, and make the bot answer from them. The button says so when the bot does not.
+- It says the number of calls first. For 3 documents it is 4 calls to your bot. Only the question and the documents of that sample are sent.
+- No AI reviewer is used: answers are compared by their words.
+- From a terminal: `testpion rag ablate <run> --result <id>`.
+
 ## What was under test? {#under-test}
 
 When a score changes, the first question is *what did we change?* If your bot reports its own details in the response (the version of its document index, how many documents it retrieves, the prompt version), name them in the connect dialog under **Under test**, one line each: `Corpus version: $.meta.corpus`. Every run records them, and the report says what was under test: *Corpus version v13 (was v12), Top k 5*, with a mark when one changed since the last run. In the target file this is `mapping.meta`.

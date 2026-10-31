@@ -100,6 +100,8 @@ export interface RagTarget {
   /** The request, as a step of a test file (type http | websocket | grpc | mcp and its fields). */
   step: Record<string, unknown>;
   mapping: RagMapping;
+  /** Set by a run, not written by a person: the id of the saved bot the run called, kept with each result so a later question about the sample (which document mattered?) knows which bot to ask. */
+  ref?: string;
   description?: string;
   /** The endpoint only answers questions and changes nothing: a production environment may call it without asking. */
   readOnly?: boolean;

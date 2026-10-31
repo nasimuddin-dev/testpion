@@ -7,6 +7,7 @@
  *   node examples/servers/rag-server.mjs --mcp      # the same system as an MCP server on stdio (tool: ask)
  *
  *   HTTP JSON    POST http://127.0.0.1:4020/query    {"question": "..."} → {answer, sources:[{id,text,score,metadata:{source}}], usage}
+ *                with "documents": [{id,text}] (or strings) the system answers from THOSE documents instead of retrieving (what "which document mattered?" needs)
  *   SSE          POST http://127.0.0.1:4020/stream   events {type:"sources"}, {type:"delta"} …, then [DONE]
  *   WebSocket    ws://127.0.0.1:4020/ws              send {"question": "..."} → {type:"sources"}, {type:"delta"} …, {type:"done"}
  *   gRPC         127.0.0.1:4021                      rag.v1.Rag/Ask (examples/servers/rag.proto)
@@ -30,10 +31,10 @@ export const CORPUS = [
 const STOP = new Set('a an the and or of to in on at by for with is are was were be do does did can what when how who where which i my you your it its this that'.split(' '));
 const words = (s) => (s.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => !STOP.has(w));
 
-/** The documents that share words with the question, best first, with a 0..1 score. */
-export function retrieve(question) {
+/** The documents that share words with the question, best first, with a 0..1 score. With `from`, the documents given instead of the corpus. */
+export function retrieve(question, from = CORPUS) {
   const q = new Set(words(question));
-  return CORPUS.map((d) => {
+  return from.map((d) => {
     const dw = new Set(words(d.text));
     const hit = [...q].filter((w) => dw.has(w)).length;
     return { ...d, score: q.size ? Math.round((hit / q.size) * 100) / 100 : 0 };
@@ -52,8 +53,9 @@ export function answerFor(question, sources) {
 
 const tokens = (s) => Math.ceil(s.length / 4);
 
-export function ask(question) {
-  const sources = retrieve(question);
+export function ask(question, documents) {
+  const given = Array.isArray(documents) ? documents.map((d, i) => (typeof d === 'string' ? { id: `given-${i + 1}`, source: 'given', text: d } : { id: String(d.id ?? `given-${i + 1}`), source: String(d.source ?? 'given'), text: String(d.text ?? '') })) : undefined;
+  const sources = retrieve(question, given);
   const answer = answerFor(question, sources);
   return { answer, sources, usage: { prompt_tokens: tokens(question) + sources.reduce((n, d) => n + tokens(d.text), 0), completion_tokens: tokens(answer) } };
 }
@@ -73,7 +75,7 @@ export async function startRagServer({ port = 4020, grpcPort = 4021, host = '127
     try {
       const body = req.method === 'POST' ? JSON.parse((await readBody(req)) || '{}') : {};
       if (req.method === 'POST' && req.url === '/query') {
-        const r = ask(String(body.question ?? ''));
+        const r = ask(String(body.question ?? ''), body.documents);
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(asHttp(r)));
       }

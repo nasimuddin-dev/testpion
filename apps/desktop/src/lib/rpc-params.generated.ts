@@ -268,6 +268,8 @@ export interface RpcParamTypes {
   'packages.delete': RpcCommonParams & { name: string };
   'packages.save': RpcCommonParams & { name: string; code: string };
   'prompt.variables': RpcCommonParams & { template: string };
+  'rag.ablate': RpcCommonParams & { runId: string; resultId: string; max?: number };
+  'rag.ablationInfo': RpcCommonParams & { runId: string; resultId: string };
   'rag.addRightDocuments': RpcCommonParams & { runId: string; resultId: string };
   'rag.author.context': RpcCommonParams;
   'rag.author.inputs': RpcCommonParams & { target: string; dataset?: string };
@@ -408,4 +410,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 391;
+export const RPC_METHOD_COUNT = 393;

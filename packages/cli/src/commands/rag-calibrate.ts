@@ -7,7 +7,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, embeddingMap, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
+import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, ablateSample, ablationInfo, defaultLabelsName, embeddingMap, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, respond, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
@@ -113,6 +113,35 @@ export function registerRagCalibrateCommands(rag: Command): void {
           console.log(m.text);
           for (const l of m.lookAlikes) console.log(`  ${yellow('look-alike')} ${l.doc} ~ ${l.like} ${dim(`${Math.round(l.similarity * 100)}% · retrieved for ${l.cases.join(', ')}`)}`);
           for (const f of m.farQuestions) console.log(`  ${yellow('far')} ${f.case} ${dim(`nearest document ${Math.round(f.nearest * 100)}%`)}`);
+        } finally {
+          await ctx.dispose();
+        }
+      }),
+    );
+
+  rag
+    .command('ablate')
+    .description('which document mattered? ask the bot again for one sample of a run without each retrieved document in turn, and name the ones whose absence changes the answer (the bot’s request must take the documents: "documents": "{{documents}}"; n + 1 calls to the bot, no judge)')
+    .argument('<run>', 'the run the sample is from')
+    .requiredOption('--result <id>', 'a result id of the run (a sample)')
+    .option('--max-documents <n>', 'ask about at most this many documents (default 8)')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option(...JSON_OPTION)
+    .action((run: string, o: { result: string; maxDocuments?: string; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        needWorkspace(ephemeral);
+        const max = o.maxDocuments ? Number(o.maxDocuments) : undefined;
+        const info = await ablationInfo(store, { run, resultId: o.result, max });
+        if (!info.possible) throw new CliError(info.reason ?? 'This sample cannot be ablated', EXIT.CONFIG_ERROR);
+        if (!o.json) console.log(dim(`${info.calls} calls to the bot (${info.documents} documents and the full one)${info.skipped ? `, ${info.skipped} more documents left out` : ''}.`));
+        const ctx = cliContext(store);
+        try {
+          const a = await wrap(() => ablateSample(store, ctx, { run, resultId: o.result, max })).catch((e) => {
+            throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
+          });
+          if (o.json) return printJson(a);
+          console.log(bold(a.text));
+          for (const d of a.documents) console.log(`  ${d.loadBearing ? yellow('load-bearing') : dim('no change   ')} ${d.id} ${dim(`${Math.round(d.alike * 100)}% alike without it`)}`);
         } finally {
           await ctx.dispose();
         }

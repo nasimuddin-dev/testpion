@@ -10,6 +10,10 @@
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
+### RAG bots: which document mattered?
+
+- **Which document mattered?** in an open sample asks your bot again without each retrieved document in turn and names the ones whose absence changes the answer. It works for a bot whose request takes `"documents": "{{documents}}"`, says the number of calls first, and uses no AI reviewer. `testpion rag ablate <run> --result <id>` does the same.
+
 ### OpenAPI: two more notes, for agents and developers
 
 - The OpenAPI lint now also notes a **parameter without a description** and an operation that **documents no failure** (no 4xx, 5xx or default response). Both are information, so they do not fail a build. An AI agent that uses your API as a tool, and a new developer, guess without them.

@@ -95,6 +95,8 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
           ...(test.referenceIds?.length ? { referenceIds: test.referenceIds } : {}),
           ...(test.referenceContexts?.length ? { referenceContexts: test.referenceContexts } : {}),
           protocol: test.target!.protocol,
+          // the saved bot it called (its id), so a later question about this sample (which document mattered?) knows which bot to ask
+          ...(test.target!.ref ? { targetId: test.target!.ref } : {}),
           ...(record ? { record: storableRecord({ ...record, ...(turns ? { turns: compactTurns(turns) } : {}) }) } : {}),
           documentIds: sample.contexts.map((d) => d.id),
           scores: sample.contexts.map((d) => d.score ?? null),

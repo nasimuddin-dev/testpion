@@ -23,7 +23,7 @@ import {
   findRagTarget,
   findSavedEvaluation,
   importBeir,
-  addRightDocuments, embeddingMap,
+  addRightDocuments, ablateSample, ablationInfo, embeddingMap,
   chunkLabels,
   setChunkLabel,
   type ChunkLabel,
@@ -193,6 +193,17 @@ export function ragHandlers(be: Backend): Handlers {
       const r = await addRightDocuments(be.ws, { run: runId, resultId });
       be.host.emit('data.changed', { method: 'rag.addRightDocuments', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
       return r;
+    },
+    /** What asking the bot again without each retrieved document of a sample would cost (calls), and whether the bot's request takes documents. */
+    'rag.ablationInfo': ({ runId, resultId }: { runId: string; resultId: string }) => ablationInfo(be.ws, { run: runId, resultId }),
+    /** Which document mattered: the bot asked again without each retrieved document in turn (n + 1 calls to the bot). */
+    'rag.ablate': async ({ runId, resultId, max }: { runId: string; resultId: string; max?: number }) => {
+      const ctx = be.context({});
+      try {
+        return await ablateSample(be.ws, ctx, { run: runId, resultId, max });
+      } finally {
+        await ctx.dispose();
+      }
     },
     /** The questions and documents of a run placed by meaning, with the look-alikes and the far questions (calls the embedding model, not the bot). */
     'rag.embeddingMap': async ({ runId, embedder, lookAlike, far }: { runId: string; embedder?: string; lookAlike?: number; far?: number }) => {

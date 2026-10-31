@@ -30,7 +30,7 @@ async function prepare(ws) {
   mkdirSync(join(ws, 'library'), { recursive: true });
   writeFileSync(
     join(ws, 'library', 'rag-targets.json'),
-    JSON.stringify({ schemaVersion: '1.0', folders: [], items: [{ id: 'rag-clinic', name: 'Clinic bot', data: { protocol: 'http', step: { type: 'http', method: 'POST', url: `${HTTP}/query`, headers: { 'Content-Type': 'application/json' }, json: { question: '{{question}}' } }, mapping: { answer: '$.answer', contexts: '$.sources[*]', context: { text: '$.text', id: '$.id', score: '$.score' } } } }] }, null, 2),
+    JSON.stringify({ schemaVersion: '1.0', folders: [], items: [{ id: 'rag-clinic', name: 'Clinic bot', data: { protocol: 'http', step: { type: 'http', method: 'POST', url: `${HTTP}/query`, headers: { 'Content-Type': 'application/json' }, json: { question: '{{question}}', documents: '{{documents}}' } }, mapping: { answer: '$.answer', contexts: '$.sources[*]', context: { text: '$.text', id: '$.id', score: '$.score' } } } }] }, null, 2),
   );
   // started once per runner (the retry of a plan finds it up); one already up on the port is another runner's
   await ensureRagServer('__e2eRagServer', 4020, 4021);
@@ -172,6 +172,20 @@ const steps = [
      await __t.sleep(500);
      return 'question: ' + short(d.querySelector('[data-rag-detail-question]')?.textContent, 50) + ' | answer: ' + short(d.querySelector('[data-rag-detail-answer]')?.textContent, 40) + ' | chunks: ' + d.querySelectorAll('[data-rag-chunk]').length + ' | gold marked: ' + /right document/.test(d.querySelector('[data-rag-lane]')?.textContent ?? '') + ' | cards: ' + !!d.querySelector('[data-rag-cards]') + ' | try again: ' + !!d.querySelector('[data-rag-tryagain]');`,
   ),
+  // which document mattered: the bot is asked again without each retrieved document (its request takes {{documents}}; a plain run leaves it unset)
+  step(
+    'which-document-mattered',
+    `const btn = await __t.waitFor(() => document.querySelector('[data-rag-ablate]'), 6000); if (!btn) return 'NO BUTTON';
+     const enabled = !btn.disabled; if (!enabled) return 'DISABLED: ' + (btn.getAttribute('title') ?? '') + ' | ' + (btn.closest('[data-rag-ablation]')?.innerText ?? '');
+     await __t.real.click(btn);
+     const dlg = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog], [role=alertdialog]')].find((d) => /Ask the bot again/.test(d.textContent)), 6000); if (!dlg) return 'NO CONFIRM';
+     const said = dlg.textContent.replace(/\\s+/g, ' ');
+     const go = [...dlg.querySelectorAll('button')].find((b) => /^Ask \\d+ times/.test(b.textContent.trim())); if (!go) return 'NO GO BUTTON';
+     await __t.real.click(go);
+     const res = await __t.waitFor(() => document.querySelector('[data-rag-ablation-result]'), 20000); if (!res) return 'NO RESULT';
+     const docs = [...res.querySelectorAll('[data-rag-ablation-doc]')];
+     return 'enabled: ' + enabled + ' | calls said first: ' + /asks your bot \\d+ times/.test(said) + ' | load-bearing: ' + docs.filter((d) => d.getAttribute('data-load-bearing') === 'true').map((d) => d.getAttribute('data-rag-ablation-doc')).join(',') + ' | sentence: ' + /^Without doc-\\d/.test(res.querySelector('p')?.textContent ?? '');`,
+  ),
   step(
     'try-again-with-another-judge',
     `await __t.real.click(document.querySelector('[data-rag-tryagain]'));
@@ -254,6 +268,7 @@ module.exports = withExpect(
     'the-metrics-matrix': /^columns: .*faithfulness.* \| groups: .* \| rows: 2 \| means: /,
     'an-edited-pass-mark-decides-again': /^pass rates changed: true \| faithfulness cells at 1\.1: fail,fail$/,
     'a-cell-opens-the-sample': /^question: .* \| answer: .* \| chunks: [1-3] \| gold marked: true \| cards: true \| try again: true$/,
+    'which-document-mattered': /^enabled: true \| calls said first: true \| load-bearing: doc-\d.* \| sentence: true$/,
     'try-again-with-another-judge': /^stored answer prefilled: true \| judge choice: true \| detail closed: true$/,
     'the-column-mapper': /^guessed: question=prompt ids=doc_ids \| preview has reference: true \| applied: true true true$/,
     'connect-from-a-preset-with-limits': /^limits: 2\/120 \| request has \/invoke: true \| answer: \$\.output\.answer \| contexts: \$\.output\.context\[\*\] \| named: LangServe.*$/,

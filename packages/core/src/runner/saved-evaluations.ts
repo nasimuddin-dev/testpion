@@ -199,8 +199,8 @@ export async function* evaluationTests(d: SavedEvaluation, o: { store?: Workspac
   let target: RagTarget | undefined;
   if (d.type === 'rag' && d.target) {
     if (!o.store) throw new ApsError('ConfigurationError', `The evaluation "${d.name}" calls the RAG target "${d.target}": open it from a workspace`);
-    const { id: _id, name: _name, ...t } = findRagTarget(o.store, d.target);
-    target = t;
+    const { id, name: _name, ...t } = findRagTarget(o.store, d.target);
+    target = { ...t, ref: id };
   }
   const dir = mkdtempSync(join(tmpdir(), 'testpion-eval-'));
   try {
