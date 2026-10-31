@@ -429,6 +429,23 @@ export function HomeView() {
           </section>
         )}
 
+        {team && (
+          <Card title="Your team's changes" icon={<GitBranch size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('git')}>Git</LinkButton>}>
+            <div data-home-team>
+              {team.commits.map((c) => (
+                <button key={c.hash} className="w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => setView('git')} data-home-team-commit={c.short}>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium shrink-0">{c.author}</span>
+                    <span className="truncate flex-1 text-muted">{c.subject}</span>
+                    <span className="text-xs text-muted shrink-0">{timeAgo(c.date)}</span>
+                  </span>
+                  {c.changes.length > 0 && (
+                    <span className="text-xs text-muted truncate">
+                      {c.changes.slice(0, 3).map((x) => `${x.title}${x.details.length ? `: ${x.details.slice(0, 2).join(', ')}` : ''}`).join(' · ')}
+                      {c.changes.length + c.more > 3 ? ` · and ${c.changes.length + c.more - 3} more` : ''}
+                    </span>
+                  )}
+
         <div className="grid lg:grid-cols-3 gap-4">
           {/* WF-10: the items opened lately in this workspace (any kind), newest first; requests sent show until there are some */}
           <Card title="Pick up where you left off" icon={<History size={15} />} action={<LinkButton className="text-xs" onClick={() => setView('history')}>All history</LinkButton>}>
@@ -559,22 +576,6 @@ export function HomeView() {
           </div>
         )}
 
-        {team && (
-          <Card title="Your team's changes" icon={<GitBranch size={15} />} action={<LinkButton className="text-xs" icon={<ArrowRight size={12} />} onClick={() => setView('git')}>Git</LinkButton>}>
-            <div data-home-team>
-              {team.commits.map((c) => (
-                <button key={c.hash} className="w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => setView('git')} data-home-team-commit={c.short}>
-                  <span className="flex items-center gap-2">
-                    <span className="font-medium shrink-0">{c.author}</span>
-                    <span className="truncate flex-1 text-muted">{c.subject}</span>
-                    <span className="text-xs text-muted shrink-0">{timeAgo(c.date)}</span>
-                  </span>
-                  {c.changes.length > 0 && (
-                    <span className="text-xs text-muted truncate">
-                      {c.changes.slice(0, 3).map((x) => `${x.title}${x.details.length ? `: ${x.details.slice(0, 2).join(', ')}` : ''}`).join(' · ')}
-                      {c.changes.length + c.more > 3 ? ` · and ${c.changes.length + c.more - 3} more` : ''}
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
