@@ -163,7 +163,7 @@ export function openApiTools(d: { store: WorkspaceStore; readSpecRef(ref: string
     {
       name: 'openapi_lint',
       description:
-        "Lint an OpenAPI 3 / Swagger 2 document: errors that break tools and clients ($refs to nothing, path parameters not declared or not required, duplicate parameters or operationIds, undefined security schemes, operations without responses, paths that differ only in parameter names) and warnings / notes that make an API hard to use (examples that don't match their schema, no operationId, no success response, a success response without a schema, a body on GET, plain http servers, missing tags or summaries, unused components). Each problem has its rule, line and column. `spec` is an http(s) link, a path inside the workspace (e.g. specs/pets.yaml) or the document text; left out, every document in the workspace's specs/ folder is linted.",
+        "Lint an OpenAPI 3 / Swagger 2 document: errors that break tools and clients ($refs to nothing, path parameters not declared or not required, duplicate parameters or operationIds, undefined security schemes, operations without responses, paths that differ only in parameter names) and warnings / notes that make an API hard to use (examples that don't match their schema, no operationId, no success response, a success response without a schema, a body on GET, plain http servers, missing tags, summaries, parameter descriptions or error responses, unused components). Problems carry rule, line, column. `spec` is an http(s) link, a workspace path (specs/pets.yaml) or the text; left out, every document in specs/ is linted.",
       inputSchema: {
         type: 'object',
         properties: {

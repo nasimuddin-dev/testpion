@@ -18,7 +18,7 @@ const good = [
   '      operationId: listPets',
   '      summary: List',
   '      tags: [pets]',
-  '      responses: { "204": { description: none } }',
+  '      responses: { "204": { description: none }, default: { description: error } }',
   '',
 ].join('\n');
 const bad = good.replace('  /pets:', '  /pets/{id}:');

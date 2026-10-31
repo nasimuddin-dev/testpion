@@ -192,10 +192,10 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     narrow: 'Give `tag` or `operation_id` to read part of it.',
   },
   openapi_lint: {
-    when: 'Use it to find errors and usability problems in an OpenAPI or Swagger document before generating tests from it.',
-    whenNot: 'To compare two versions, use `openapi_diff`; to read it, `openapi_outline`.',
+    when: 'Find errors and usability problems in an OpenAPI or Swagger document before testing it.',
+    whenNot: 'To compare versions: `openapi_diff`; to read it: `openapi_outline`.',
     example: { spec: 'specs/veterinary-api.yaml', severity: 'error' },
-    narrow: 'Raise `severity` to `error`, or `disable` noisy rules.',
+    narrow: '`severity`, or `disable` noisy rules.',
   },
   ci_config: {
     when: 'Use it to get a CI pipeline file (GitHub, GitLab, Azure, Jenkins) that runs this workspace’s tests on every push.',
