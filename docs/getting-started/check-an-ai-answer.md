@@ -43,8 +43,13 @@ From a terminal: `testpion eval generate-cases "My evaluation" --from prompt --c
 
 When a check is **graded by an AI reviewer**, a second model reads each reply and grades it by a rule you write. The Checks tab then has **Trust the AI reviewer**: after a run, grade ten answers yourself (good or bad; the reviewer's verdict stays hidden), and the card says how often it agreed: "The AI reviewer agreed with you on 8 of 10 answers (80 %). It failed 2 that you passed (too strict)", with the answers where you differ. Below about 70 % agreement, reword the rule or use a stronger model before relying on its grades. From a terminal: `testpion eval trust last`; agents: `eval_trust_reviewer`.
 
+## 5. Watch it every night (optional)
+
+A hosted model can change without a word. Open **Monitors**, press **New monitor**, choose **An evaluation**, and pick yours. Tick **Fail on a drop in pass rate** and it also fails when the pass rate falls against the run before. Your alert webhook then tells you.
+
 ## Next
 
+- See the cases that are repeated, have no expected answer or are all alike: [Are the test cases any good?](/ai-testing/evaluations#health).
 - Put the evaluation in CI so a change that makes answers worse stops the build: [Evaluations](/ai-testing/evaluations#the-result-and-run-in-ci).
 - Prefer a text file? [Your first AI test file](/getting-started/first-ai-test) saves a prompt from the Playground as a YAML test.
 - A bot that answers from your documents: [RAG bots](/ai-testing/rag).
