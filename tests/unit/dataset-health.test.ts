@@ -47,6 +47,11 @@ describe('datasetHealth', () => {
     expect(datasetHealth({ ...base, dataset: jsonl(Array.from({ length: 9 }, (_, i) => ({ input: `m${i}`, expected: 'same' }))) }).notes).toEqual([]);
   });
 
+  it('reads the question of a bot with sources as its input, not the id', () => {
+    const h = datasetHealth({ dataset: jsonl([{ id: 'a', question: 'What time do you open?' }, { id: 'b', question: 'what time do you open?' }]), datasetFormat: 'jsonl' });
+    expect(h.notes).toMatchObject([{ kind: 'duplicates', cases: [2] }]);
+  });
+
   it('notices very long inputs and reads CSV too', () => {
     const long = datasetHealth({ ...base, evaluators: [], dataset: jsonl([{ input: 'x'.repeat(9000) }, { input: 'short' }]) });
     expect(long.notes).toMatchObject([{ kind: 'long', cases: [1] }]);

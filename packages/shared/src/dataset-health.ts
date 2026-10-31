@@ -46,8 +46,8 @@ const SKEW_SHARE = 0.8;
 
 const filled = (v: unknown) => v !== undefined && v !== null && cellText(v).trim() !== '';
 
-/** The input of a case: the field named `input`, else the first field. */
-const inputOf = (r: CaseRow) => (r.input !== undefined ? cellText(r.input) : cellText(Object.values(r)[0]));
+/** The input of a case: the field named `input` (a bot with sources: `question`), else the first field. */
+const inputOf = (r: CaseRow) => cellText(r.input ?? r.question ?? Object.values(r)[0]);
 
 /** Reads at most `limit` cases (default 5000): a longer dataset is checked on its first cases, which is said. */
 export function datasetHealth(i: DatasetHealthInput, limit = 5000): DatasetHealth {
