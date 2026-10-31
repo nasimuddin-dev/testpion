@@ -88,6 +88,7 @@ export * from './eval/trajectory-diff.js';
 export * from './eval/trajectory-run.js';
 export * from './eval/review-queue.js';
 export * from './eval/chunk-labels.js';
+export * from './eval/rag/embedding-map.js';
 export * from './runner/prompt-versions.js';
 export * from './eval/variants.js';
 export * from './eval/why.js';

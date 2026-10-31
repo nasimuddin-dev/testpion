@@ -7,8 +7,8 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
-import { EXIT, CliError, bold, dim, green, printJson, respond, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
+import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, defaultLabelsName, embeddingMap, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
+import { EXIT, CliError, bold, cliContext, dim, green, printJson, respond, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
   if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
@@ -89,6 +89,33 @@ export function registerRagCalibrateCommands(rag: Command): void {
         if (o.json) return printJson(r);
         console.log(`${green(label ? 'Marked' : 'Cleared')} ${o.doc} ${label ? dim(`· ${label}`) : ''}`);
         if (r.added) console.log(r.added.text);
+      }),
+    );
+
+  rag
+    .command('map')
+    .description('place a finished run’s questions and documents by meaning (embeddings projected to two dimensions) and list the look-alikes (a retrieved document that reads like a right one it is not) and the far questions (no document near them)')
+    .argument('<run>', 'the run to map')
+    .option('--embedder <provider/model>', 'the embedding model (default: the provider of the evaluation’s AI reviewer)')
+    .option('--look-alike <n>', 'similarity from which a wrong document counts as a look-alike (0 to 1)', '0.85')
+    .option('--far <n>', 'similarity under which a question counts as far from every document (0 to 1)', '0.3')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option(...JSON_OPTION)
+    .action((run: string, o: { embedder?: string; lookAlike: string; far: string; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        needWorkspace(ephemeral);
+        const ctx = cliContext(store);
+        try {
+          const m = await wrap(() => embeddingMap(store, { run, embedder: o.embedder, providers: ctx.services.providers, lookAlikeAt: Number(o.lookAlike), farBelow: Number(o.far) })).catch((e) => {
+            throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
+          });
+          if (o.json) return printJson(m);
+          console.log(m.text);
+          for (const l of m.lookAlikes) console.log(`  ${yellow('look-alike')} ${l.doc} ~ ${l.like} ${dim(`${Math.round(l.similarity * 100)}% · retrieved for ${l.cases.join(', ')}`)}`);
+          for (const f of m.farQuestions) console.log(`  ${yellow('far')} ${f.case} ${dim(`nearest document ${Math.round(f.nearest * 100)}%`)}`);
+        } finally {
+          await ctx.dispose();
+        }
       }),
     );
 

@@ -23,7 +23,7 @@ import {
   findRagTarget,
   findSavedEvaluation,
   importBeir,
-  addRightDocuments,
+  addRightDocuments, embeddingMap,
   chunkLabels,
   setChunkLabel,
   type ChunkLabel,
@@ -193,6 +193,15 @@ export function ragHandlers(be: Backend): Handlers {
       const r = await addRightDocuments(be.ws, { run: runId, resultId });
       be.host.emit('data.changed', { method: 'rag.addRightDocuments', kinds: ['evaluations'], paths: ['library/evaluations.json'] });
       return r;
+    },
+    /** The questions and documents of a run placed by meaning, with the look-alikes and the far questions (calls the embedding model, not the bot). */
+    'rag.embeddingMap': async ({ runId, embedder, lookAlike, far }: { runId: string; embedder?: string; lookAlike?: number; far?: number }) => {
+      const ctx = be.context({});
+      try {
+        return await embeddingMap(be.ws, { run: runId, embedder, providers: ctx.services.providers, lookAlikeAt: lookAlike, farBelow: far });
+      } finally {
+        await ctx.dispose();
+      }
     },
     /** Two runs, metric by metric, with a paired bootstrap on the shared samples. */
     'rag.compare': ({ runId, baselineId, minDelta }: { runId: string; baselineId: string; minDelta?: number }) => compareMetricRuns(runResults(be.ws, runId), runResults(be.ws, baselineId), { minDelta }),

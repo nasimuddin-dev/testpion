@@ -286,6 +286,7 @@ export interface RpcParamTypes {
   'rag.customMetric.save': RpcCommonParams & { id: string; text: string; overwrite?: boolean };
   'rag.customMetric.usedBy': RpcCommonParams & { id: string };
   'rag.customMetrics': RpcCommonParams;
+  'rag.embeddingMap': RpcCommonParams & { runId: string; embedder?: string; lookAlike?: number; far?: number };
   'rag.estimate': RpcCommonParams & { draft: Record<string, unknown>; probe?: boolean };
   'rag.estimateRescore': RpcCommonParams & { runId: string; evaluators: unknown[]; evaluation?: string; judge?: Record<string, unknown> };
   'rag.image': RpcCommonParams & { ref: string };
@@ -404,4 +405,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 387;
+export const RPC_METHOD_COUNT = 388;

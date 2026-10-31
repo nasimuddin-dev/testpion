@@ -41,6 +41,16 @@ with the retrieved document closest to the reference answer.
 
 In an open sample, each retrieved document has **Right**, **Partly** and **Wrong** buttons: your own reading of whether it answers the question. The labels are kept with the run. When you mark a document Right that the question did not list, **Add the documents you marked Right to the right documents of this question** writes it into the saved questions (`reference_ids`), so the next run measures the retrieval against documents you have read. It works for questions kept as JSONL or JSON; nothing is sent to a model.
 
+## Map by meaning {#map}
+
+On a finished run, **Map by meaning…** (the metrics view) places the questions and the documents on a plane by what they mean. Things close together mean alike.
+
+- Bright dots are questions, green dots are right documents, grey dots are other retrieved documents.
+- **Look-alikes** are retrieved documents that read almost like a right one they are not. The bot may take the wrong one.
+- **Far questions** are questions that no document seen is near. The documents may not cover them.
+
+It asks an embedding model, not your bot. Choose one as `provider/model`, or leave it empty to use the provider of the AI reviewer. On the command line, use `testpion rag map <run> [--embedder provider/model] [--json]`.
+
 ## What was under test? {#under-test}
 
 When a score changes, the first question is *what did we change?* If your bot reports its own details in the response (the version of its document index, how many documents it retrieves, the prompt version), name them in the connect dialog under **Under test**, one line each: `Corpus version: $.meta.corpus`. Every run records them, and the report says what was under test: *Corpus version v13 (was v12), Top k 5*, with a mark when one changed since the last run. In the target file this is `mapping.meta`.

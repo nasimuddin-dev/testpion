@@ -7,13 +7,15 @@
 import { ApsError } from '../../errors.js';
 import { calibrateRun, defaultLabelsName, labelResult } from '../../runner/rag-calibrate.js';
 import { labelDocument } from '../../eval/chunk-labels.js';
+import { embeddingMap } from '../../eval/rag/embedding-map.js';
+import { createEngineContext } from '../../engine.js';
 import { makeExample } from '../../runner/rag-calibrate-example.js';
 import type { AppSettings } from '../../model/types.js';
 import type { SecretStore } from '../../storage/secrets.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { str, type Tool } from '../tool.js';
 
-export function ragCalibrateTools({ store }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings; checkEnvironment(name: unknown): string | undefined }): Tool[] {
+export function ragCalibrateTools({ store, secrets, settings }: { store: WorkspaceStore; secrets: SecretStore; settings: AppSettings; checkEnvironment(name: unknown): string | undefined }): Tool[] {
   return [
     {
       name: 'rag_label',
@@ -51,7 +53,7 @@ export function ragCalibrateTools({ store }: { store: WorkspaceStore; secrets: S
       name: 'rag_calibrate',
       doc: { when: 'Finding out whether a judge can be trusted on a metric: how well its pass/fail verdicts in a run agree with the labels people made, per metric and per judge model, and where it disagrees.', whenNot: 'Scoring answers (rag_run) or making labels (rag_label).', example: { run_id: 'run_2026-10-20_ab12', metrics: ['faithfulness'], tune: true } },
       description:
-        'Calibrate the judges of a finished RAG run against labels (labels/<labels>.json, and good/bad reviews of results as `overall` labels). Per metric: n, Cohen’s kappa, accuracy, TPR, TNR, precision, the confusion matrix, a seeded bootstrap 95% interval of kappa and accuracy, the numbers per judge model, the disagreements with the sample, and a verdict (kappa 0.6 or more is good, 0.4 to 0.6 fair, under that poor). With `tune` it also finds the pass mark that agrees most (it does not change anything; the person applies it with `testpion rag calibrate --tune --apply` or in the app). No model is called.',
+        'Calibrate the judges of a finished RAG run against labels (labels/<labels>.json, and good/bad reviews of results as `overall` labels). Per metric: n, Cohen’s kappa, accuracy, TPR, TNR, precision, the confusion matrix, a bootstrap 95% interval, per-judge numbers, the disagreements, and a verdict (kappa 0.6 or more is good, 0.4 to 0.6 fair, under that poor). With `tune` it also finds the pass mark that agrees most (nothing changes; the person applies it). No model is called (except with `map`).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -59,12 +61,22 @@ export function ragCalibrateTools({ store }: { store: WorkspaceStore; secrets: S
           labels: str('The label set (default: the run’s evaluation)'),
           metrics: { type: 'array', items: { type: 'string' }, description: 'Only these metrics' },
           tune: { type: 'boolean', description: 'Also find the best pass mark per metric' },
+          map: str('Instead: look-alike documents and far questions, embedded by provider/model (or judge)'),
           reviews: { type: 'boolean', description: 'Count good/bad reviews of results as `overall` labels (default true)' },
         },
         required: ['run_id'],
       },
       run: async (a) => {
         const run = String(a.run_id ?? '');
+        if (a.map !== undefined) {
+          const ctx = createEngineContext({ store, secrets, settings, aiSurface: 'mcp' });
+          try {
+            const m = await embeddingMap(store, { run, embedder: a.map === 'judge' ? undefined : String(a.map), providers: ctx.services.providers });
+            return { ...m, points: m.points.length };
+          } finally {
+            await ctx.dispose();
+          }
+        }
         return calibrateRun(store, { run, labels: a.labels ? String(a.labels) : defaultLabelsName(store, run), metrics: Array.isArray(a.metrics) ? a.metrics.map(String) : undefined, tune: a.tune === true, reviews: a.reviews !== false });
       },
     },

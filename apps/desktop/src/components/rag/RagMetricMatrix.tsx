@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, RefreshCw, Scale } from 'lucide-react';
+import { ChevronDown, ChevronRight, RefreshCw, Map as MapIcon, Scale } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MatrixCell, MatrixRow, MetricColumn, MetricMatrix } from '@testpion/core';
 import { outputFileName, type RagJudgeSetup } from '@testpion/shared';
@@ -11,6 +11,7 @@ import type { OutputSpec } from '../output/output-core';
 import { RagByTag, RagCharts, RagCompare, RagPivot, RagRescoreDialog, type RunChoice } from './RagResultViews';
 import { RagSampleDetail } from './RagSampleDetail';
 import { RagCalibration } from './RagCalibration';
+import { RagEmbeddingMap } from './RagEmbeddingMap';
 import { RagTrend } from './RagTrend';
 import { RunReport } from '../ai/RunReport';
 
@@ -161,6 +162,7 @@ export function RagMetricMatrix({
   const [view, setView] = useState<'samples' | 'tags' | 'charts' | 'compare' | 'pivot' | 'trend'>('samples');
   const [rescoring, setRescoring] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
+  const [mapping, setMapping] = useState(false);
   const [query, setQuery] = useState('');
   const [failure, setFailure] = useState('');
   const [sort, setSort] = useState('');
@@ -299,6 +301,9 @@ export function RagMetricMatrix({
         <Button size="sm" icon={<Scale size={12} />} onClick={() => setCalibrating(true)} title="How well the judges agree with the Pass / Fail labels you gave in the sample detail: kappa, accuracy, the disagreements, and the pass mark that agrees most" data-rag-calibrate-open>
           Calibrate the AI reviewer…
         </Button>
+        <Button size="sm" icon={<MapIcon size={12} />} onClick={() => setMapping(true)} title="Place the questions and documents of this run by meaning: look-alike documents and questions no document covers" data-rag-map-open>
+          Map by meaning…
+        </Button>
         <OutputActions spec={spec} />
       </div>
       {view === 'tags' && (
@@ -310,6 +315,7 @@ export function RagMetricMatrix({
       {view === 'compare' && <RagCompare runId={runId} runs={runs} />}
       {view === 'pivot' && <RagPivot runs={runs} />}
       {view === 'trend' && (evaluation ?? evaluationName) && <RagTrend evaluation={(evaluation ?? evaluationName)!} />}
+      {mapping && <RagEmbeddingMap runId={runId} onClose={() => setMapping(false)} />}
       {calibrating && (
         <RagCalibration
           runId={runId}
