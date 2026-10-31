@@ -49,7 +49,7 @@ On a finished run, **Map by meaning…** (the metrics view) places the questions
 - **Look-alikes** are retrieved documents that read almost like a right one they are not. The bot may take the wrong one.
 - **Far questions** are questions that no document seen is near. The documents may not cover them.
 
-It asks an embedding model, not your bot. Choose one as `provider/model`, or leave it empty to use the provider of the AI reviewer. On the command line, use `testpion rag map <run> [--embedder provider/model] [--json]`.
+It asks an embedding model, not your bot. The text of the run's questions and retrieved documents is sent to that model, so choose one on your computer (such as Ollama) when they are private. Choose one as `provider/model`, or leave it empty to use the provider of the AI reviewer. On the command line, use `testpion rag map <run> [--embedder provider/model] [--json]`.
 
 ## What was under test? {#under-test}
 

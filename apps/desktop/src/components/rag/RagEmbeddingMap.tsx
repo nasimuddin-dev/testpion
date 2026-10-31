@@ -40,7 +40,7 @@ export function RagEmbeddingMap({ runId, onClose }: { runId: string; onClose(): 
   return (
     <Modal title="Map by meaning" onClose={onClose} onSubmit={() => void draw()} width={720} footer={<Button onClick={onClose}>Close</Button>}>
       <div className="grid gap-3 text-sm" data-rag-embedding-map>
-        <p className="text-muted">Places the questions and the documents by what they mean: things close together mean alike. A red ring marks a question no document is near. It asks an embedding model, not your bot.</p>
+        <p className="text-muted">Places the questions and the documents by what they mean: things close together mean alike. A red ring marks a question no document is near. It asks an embedding model, not your bot. Drawing it sends the text of this run's questions and retrieved documents to that model: choose a model on this computer (such as Ollama) when they are private.</p>
         <div className="flex items-end gap-2">
           <div className="flex-1">
             <Field label="Embedding model" hint="provider/model; empty: the provider of the AI reviewer">
