@@ -15,7 +15,7 @@ const steps = [
   step('tabs', `await __t.view('Environments'); await __t.sleep(1000); return tabs().map((t) => t.textContent.trim()).join(' / ');`),
   step(
     'collection-variables',
-    `if (!(await tab('Collection variables'))) return 'NO TAB';
+    `if (!(await tab('Collection Variables'))) return 'NO TAB';
      const list = [...document.querySelectorAll('main [aria-label="Collections"] button')].map((b) => b.textContent.trim());
      const chaining = [...document.querySelectorAll('main [aria-label="Collections"] button')].find((b) => b.textContent.includes('JSONPlaceholder'));
      chaining.click(); await __t.sleep(600);
@@ -32,10 +32,10 @@ const steps = [
      const c = (await window.aps.invoke('col.list')).find((x) => x.id === 'jsonplaceholder');
      return 'saved userId: ' + c.variables.find((v) => v.key === 'userId')?.value;`,
   ),
-  step('workspace-hint', `await tab('Workspace variables'); const h = document.querySelector('[data-scope-hint]'); return h ? h.textContent.trim().slice(0, 60) + ' | empty: ' + /None yet/.test(h.textContent) : 'NO HINT';`),
+  step('workspace-hint', `await tab('Workspace Variables'); const h = document.querySelector('[data-scope-hint]'); return h ? h.textContent.trim().slice(0, 60) + ' | empty: ' + /None yet/.test(h.textContent) : 'NO HINT';`),
   step(
     'empty-globals-point-to-collections',
-    `const clicked = await tab('Global variables'); const h = [...document.querySelectorAll('[data-scope-hint]')].find((x) => x.offsetParent);
+    `const clicked = await tab('Global Variables'); const h = [...document.querySelectorAll('[data-scope-hint]')].find((x) => x.offsetParent);
      if (!h) return 'NO HINT | clicked: ' + clicked + ' | active: ' + tabs().find((t) => t.getAttribute('aria-selected') === 'true')?.textContent.trim() + ' | hints: ' + document.querySelectorAll('[data-scope-hint]').length;
      const link = [...h.querySelectorAll('button')].find((b) => /collection variables/.test(b.textContent));
      const text = h.textContent.replace(/\\s+/g, ' ').trim();
@@ -45,9 +45,9 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  tabs: /^Environments\d+ \/ Collection variables\d+ \/ Workspace variables\d+ \/ Global variables$/,
+  tabs: /^Environments\d+ \/ Collection Variables\d+ \/ Workspace Variables\d+ \/ Global Variables$/,
   'collection-variables': /^collections with counts: \d+ \| heading: Scripts & chaining \(JSONPlaceholder\) \| userId row: true$/,
   'edit-and-save': /^saved userId: 7$/,
   'workspace-hint': /^Workspace variables are shared by every collection .* \| empty: false$/,
-  'empty-globals-point-to-collections': /collections keep their variables in the collection: see the \d+ collection variables\. \| now on: Collection variables\d+$/,
+  'empty-globals-point-to-collections': /collections keep their variables in the collection: see the \d+ collection variables\. \| now on: Collection Variables\d+$/,
 });

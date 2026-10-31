@@ -356,12 +356,12 @@ It runs with your permissions. Allow it only if you know where this workspace co
             onChange={setTab}
             tabs={[
               // a mock server designs its tools (the toolset); calling them with the inspector is a second tab once connected
-              ...(form.transport === 'mock' ? [{ id: 'tools' as const, label: 'Tools', badge: undefined }, ...(disc ? [{ id: 'calls' as const, label: 'Call tools', badge: disc.tools.length }] : [])] : [{ id: 'tools' as const, label: 'Tools', badge: disc?.tools.length }]),
+              ...(form.transport === 'mock' ? [{ id: 'tools' as const, label: 'Tools', badge: undefined }, ...(disc ? [{ id: 'calls' as const, label: 'Call Tools', badge: disc.tools.length }] : [])] : [{ id: 'tools' as const, label: 'Tools', badge: disc?.tools.length }]),
               { id: 'resources', label: 'Resources', badge: disc ? disc.resources.length + disc.resourceTemplates.length : undefined },
               { id: 'prompts', label: 'Prompts', badge: disc?.prompts.length },
               ...(draft ? [] : [{ id: 'usage' as const, label: 'Usage' }]),
-              { id: 'trace', label: 'Protocol trace', badge: draft ? undefined : events[current.id]?.length },
-              { id: 'info', label: 'Server info' },
+              { id: 'trace', label: 'Protocol Trace', badge: draft ? undefined : events[current.id]?.length },
+              { id: 'info', label: 'Server Info' },
               { id: 'settings', label: 'Settings' },
             ]}
           />

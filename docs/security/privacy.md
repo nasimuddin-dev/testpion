@@ -57,7 +57,7 @@ The **down arrow** on every response and result writes a file only where you cho
 
 ## OS environment variables
 
-`{{$env.NAME}}` reads an environment variable of the computer. In the app it works only for the names you list in **Settings ▸ Privacy & security ▸ OS environment variables requests may read** (none by default): otherwise a collection shared with you through git, or one you import, could read `{{$env.AWS_SECRET_ACCESS_KEY}}` and send it to any URL the moment you run it. A request that reads a variable not on the list says so, with a link to the setting. The same list governs the **MCP server** that agents use (`testpion mcp-server`, the app's `--mcp-server`): it reads no variable unless you list it, and tells the agent when a `{{$env.NAME}}` was left unresolved for that reason. The CLI run commands (`testpion run`, `run-collection`) read all of them, as CI pipelines expect (the pipeline decides what is in the environment; see [CI/CD](/test-runner/ci-cd)). Changing this list, the proxy, the certificates or the redaction fields through an agent (`set_settings`) or an imported settings file shows you the old and the new value first.
+`{{$env.NAME}}` reads an environment variable of the computer. In the app it works only for the names you list in **Settings ▸ Privacy & Security ▸ OS environment variables requests may read** (none by default): otherwise a collection shared with you through git, or one you import, could read `{{$env.AWS_SECRET_ACCESS_KEY}}` and send it to any URL the moment you run it. A request that reads a variable not on the list says so, with a link to the setting. The same list governs the **MCP server** that agents use (`testpion mcp-server`, the app's `--mcp-server`): it reads no variable unless you list it, and tells the agent when a `{{$env.NAME}}` was left unresolved for that reason. The CLI run commands (`testpion run`, `run-collection`) read all of them, as CI pipelines expect (the pipeline decides what is in the environment; see [CI/CD](/test-runner/ci-cd)). Changing this list, the proxy, the certificates or the redaction fields through an agent (`set_settings`) or an imported settings file shows you the old and the new value first.
 
 ## Programs a workspace starts
 
@@ -82,12 +82,12 @@ Turn it on with environment variables (`TESTPION_BLOCK_PRIVATE_NETWORKS=1`, `TES
 
 ## What leaves your computer {#without-asking}
 
-There is no telemetry and no account. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call. Besides your requests, TestPion makes these calls (Settings ▸ Privacy & security lists them):
+There is no telemetry and no account. Request bodies, API keys, prompts and responses are sent only to the endpoints and providers you call. Besides your requests, TestPion makes these calls (Settings ▸ Privacy & Security lists them):
 
 | What | Where to | What it carries | When | How to turn it off |
 |---|---|---|---|---|
 | Check for updates | `api.github.com` and `github.com` (the TestPion releases) | The question "what is the newest release?" and the TestPion version in the user agent; no workspace data | A few seconds after the app starts and every 6 hours while it runs; on by default | Settings ▸ About ▸ Check for updates when the app starts |
-| AI actions | The AI provider you set up, or a model on this computer | The context of the action you started, secrets and personal data masked (see "What will be sent") | Only when you use an AI action | Settings ▸ AI assistant ▸ Hide all AI actions, or Local only |
+| AI actions | The AI provider you set up, or a model on this computer | The context of the action you started, secrets and personal data masked (see "What will be sent") | Only when you use an AI action | Settings ▸ AI Assistant ▸ Hide all AI actions, or Local only |
 | Send feedback | Nowhere by itself: it builds a report and a link to a pre-filled GitHub issue that you open | What you typed and the diagnostics you ticked | Only when you open the link | Do not use it |
 | Background git fetch | The open workspace's own git remote | What a fetch carries; nothing from the workspace | Every few minutes, only for workspaces you have pushed or synced from on this computer (never a repository you only cloned) | Settings ▸ Git ▸ Fetch in the background |
 | Monitors | The URLs and webhooks you set | The requests of the monitor and its webhook message | On the schedule you set | Pause or delete the monitor |

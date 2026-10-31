@@ -7,6 +7,7 @@ import { JsonSchemaForm } from './JsonSchemaForm';
 import { Badge, Button, Modal, Textarea } from './ui';
 import type { ClientRequest } from './McpClientRequests';
 import { useAiEnabled } from '../lib/use-ai-enabled';
+import { inSettings } from '../lib/ui-names';
 
 /** One request of an MCP server (see McpClientRequests): its form or its sampling reply, and the answer sent back. */
 export function McpClientRequestDialog({ current, onDone }: { current: ClientRequest; onDone: (id: string) => void }) {
@@ -85,7 +86,7 @@ export function McpClientRequestDialog({ current, onDone }: { current: ClientReq
               icon={<Sparkles size={13} />}
               loading={drafting}
               onClick={() => void draft()}
-              title="Draft the reply with the AI assistant's model (Settings ▸ AI assistant); you can edit it before sending"
+              title={`Draft the reply with the AI assistant's model (${inSettings('assistant')}); you can edit it before sending`}
             >
               Draft with AI
             </Button>

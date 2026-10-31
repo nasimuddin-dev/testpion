@@ -8,7 +8,7 @@ import { RagStart } from './rag/RagStart';
 /**
  * RAG bots (R-1): its own rail item for bots that answer from documents (RAG testing), with the work in order as
  * tabs: Start, Bots, Questions, Metrics, then Checks (the evaluations of type rag, shown by the evaluations view under the
- * same strip). Links that used to open AI quality's "RAG bots" tab land here.
+ * same strip). Links that used to open AI quality's "RAG Bots" tab land here.
  */
 export function RagView() {
   // kept while the app runs, so switching views does not lose the place

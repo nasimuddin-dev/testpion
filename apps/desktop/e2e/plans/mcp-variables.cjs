@@ -32,7 +32,7 @@ const steps = [
   step(
     'copy-collection-variables',
     `await __t.view('Environments'); await __t.sleep(900);
-     [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Collection variables'))?.click(); await __t.sleep(800);
+     [...document.querySelectorAll('main [role=tab]')].find((t) => t.offsetParent && t.textContent.trim().startsWith('Collection Variables'))?.click(); await __t.sleep(800);
      [...document.querySelectorAll('main [aria-label="Collections"] button')].find((b) => b.textContent.includes('JSONPlaceholder'))?.click(); await __t.sleep(600);
      [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Copy to environment')?.click();
      const dlg = await __t.waitFor(() => document.querySelector('[role=alertdialog], [role=dialog]'), 2000); if (!dlg) return 'NO DIALOG';

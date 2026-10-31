@@ -438,7 +438,7 @@ export function ResultDetail({ r, runId, onReviewed, initialTab = 'checks' }: { 
         onChange={setTab}
         tabs={[
           { id: 'checks', label: 'Checks', badge: r.checks.length },
-          { id: 'io', label: 'Input / output' },
+          { id: 'io', label: 'Input / Output' },
           ...(r.variables ? [{ id: 'variables' as const, label: 'Variables', badge: Object.keys(r.variables).length, title: 'The variables of the run after this step' }] : []),
           { id: 'trace', label: 'Trace' },
           ...(runId ? [{ id: 'history' as const, label: 'History' }] : []),

@@ -357,7 +357,7 @@ describe('colour contrast of the theme tokens (P1)', () => {
 describe('docs say what the app says (P1)', () => {
   const DOCS = join(__dirname, '../../docs');
   const mdFiles = (dir: string): string[] => readdirSync(dir).flatMap((f) => (/^(node_modules|\.vitepress|public)$/.test(f) ? [] : statSync(join(dir, f)).isDirectory() ? mdFiles(join(dir, f)) : f.endsWith('.md') ? [join(dir, f)] : []));
-  const TABS = ['Appearance', 'Keyboard', 'Requests', 'Git', 'Proxy', 'Certificates', 'Privacy & security', 'Model pricing', 'Load testing', 'Storage', 'AI assistant', 'AI agents (MCP)', 'About'];
+  const TABS = ['Appearance', 'Keyboard', 'Requests', 'Git', 'Proxy', 'Certificates', 'Privacy & Security', 'Model Pricing', 'Load Testing', 'Storage', 'AI Assistant', 'AI Agents (MCP)', 'About'];
 
   it('every "Settings ▸ tab" names a tab Settings has', () => {
     const bad: string[] = [];

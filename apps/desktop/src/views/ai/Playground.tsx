@@ -297,7 +297,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                       r?.priceVersion ? (
                         `prices ${r.priceVersion}`
                       ) : r ? (
-                        // no price for this model yet: one click to a price row filled in for it (Settings ▸ Model pricing)
+                        // no price for this model yet: one click to a price row filled in for it (Settings ▸ Model Pricing)
                         <LinkButton
                           icon={null}
                           onClick={() => useApp.getState().openIntent('settings', { tab: 'pricing', addPrice: { provider: d.provider, model: undatedModel(r.model || d.model) } })}
@@ -317,7 +317,7 @@ export function Playground({ providers, onSetUp }: { providers: ProviderConfig[]
                     { id: 'output', label: 'Output' },
                     ...(r?.isJson ? [{ id: 'json' as const, label: 'JSON' }] : []),
                     { id: 'evaluation', label: 'Evaluation', badge: r?.checks.length },
-                    { id: 'prompt', label: 'Rendered prompt' },
+                    { id: 'prompt', label: 'Rendered Prompt' },
                   ]}
                   right={
                     <OutputActions spec={spec}>

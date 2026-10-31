@@ -156,7 +156,7 @@ export function ToolsPanel({ serverId, tools, focus }: { serverId: string; tools
               onChange={setSub}
               tabs={[
                 { id: 'form', label: 'Arguments' },
-                { id: 'schema', label: 'Input schema' },
+                { id: 'schema', label: 'Input Schema' },
                 { id: 'tests', label: 'Checks', badge: assertions.length },
               ]}
             />

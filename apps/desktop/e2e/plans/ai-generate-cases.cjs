@@ -22,7 +22,7 @@ const steps = [
      const row = await __t.waitFor(() => vis('aside *, [data-sidebar] *, main *').find((e) => e.children.length === 0 && e.textContent.trim() === 'Sample: support intents'), 6000);
      if (!row) return 'NO ROW';
      await __t.real.click(row); await __t.sleep(1000);
-     await __t.real.click(tab('Test cases')); await __t.sleep(600);
+     await __t.real.click(tab('Test Cases')); await __t.sleep(600);
      return 'cases: ' + count() + ' | generate button: ' + vis('[data-cases-generate]')[0]?.textContent.trim();`,
   ),
   step(

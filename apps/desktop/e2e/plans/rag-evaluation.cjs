@@ -47,8 +47,8 @@ const pick = (name, label) => `
 const steps = [
   step(
     'rag-tab-in-ai-lab',
-    `await __t.view('RAG bots'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
+    `await __t.view('RAG Bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG Bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
      // the Examples workspace ships one bot (Handbook bot (offline), Learn by example); the one this plan connects is not there yet
      const text = document.querySelector('main')?.innerText ?? '';

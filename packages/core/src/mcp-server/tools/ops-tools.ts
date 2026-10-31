@@ -69,7 +69,7 @@ export function opsTools(d: ModuleToolDeps): Tool[] {
     },
     {
       name: 'trust_status',
-      description: "What the user allowed this workspace on this computer: the programs it may start, the hosts its scripts may send to, whether its scripts may read secrets. Read-only: an agent cannot allow anything; the user does that in the app (Settings ▸ Privacy & security) or with `testpion trust`.",
+      description: "What the user allowed this workspace on this computer: the programs it may start, the hosts its scripts may send to, whether its scripts may read secrets. Read-only: an agent cannot allow anything; the user does that in the app (Settings ▸ Privacy & Security) or with `testpion trust`.",
       inputSchema: { type: 'object', properties: {} },
       run: () => trustSummary(store),
     },

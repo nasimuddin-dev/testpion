@@ -496,7 +496,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
 }));
 
-// Settings ▸ AI assistant ▸ Hide all AI actions: the menus and the controls read it here (lib/ai-visible.ts)
+// Settings ▸ AI Assistant ▸ Hide all AI actions: the menus and the controls read it here (lib/ai-visible.ts)
 setAiHiddenSource(() => useApp.getState().settings?.ai?.hidden === true);
 
 /**

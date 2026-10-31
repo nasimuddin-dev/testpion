@@ -27,7 +27,7 @@ The options added in 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 
 - **Fiddler files, comparing, sharing.** Export a `.saz`, import Fiddler rules, compare two captures, and share a masked `.tpbundle`. **Keep the whole session** goes beyond 5,000 requests.
 
 ### AI quality {#whats-new-ai-quality}
-- **One rail item.** *Start*, *Checks*, *Try a prompt*, *Compare*, *RAG bots* and *Models and keys* are tabs of **AI quality**.
+- **One rail item.** *Start*, *Checks*, *Try a prompt*, *Compare*, *RAG bots* and *Models and keys* are tabs of **AI Quality**.
 - **Check an answer in minutes.** The wizard takes you from a few cases to a result; a sample runs without a key; the price shows beside **Run** and a spend cap stops a run at $1.00.
 - **Cases without typing.** *Generate with AI…* writes cases from a prompt, an API definition, a collection, your documents or real calls, and you accept them.
 - **A report card and a reason.** Each run starts with a sentence (*17 of 20 passed*); a failed case says why, and shows its answer next to the one from the run before. **Compare** runs other models or prompts on the same cases.
@@ -68,7 +68,7 @@ The options added in 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 
 - **Contract drift**: compare History, a HAR file or a run with an OpenAPI document; the AI says who is right and proposes a verified spec fix ([Contract drift](/ai-testing/ai-features#contract-drift-explained)).
 - **Script with AI**: write, fix or explain a script with the real `tp.*` API, run once in the sandbox before it is offered ([Script helper](/ai-testing/ai-features#script-helper)).
 - **Ask: search in your own words** ("failed payment calls last week over 2 s") in History, runs, test results and traces. The model only translates the question into a search; you see how it was understood ([Ask](/ai-testing/ai-features#ask-search-in-your-own-words)).
-- **The cost comes before every send**, and **Hide all AI actions** (Settings ▸ AI assistant) removes every AI button from the window.
+- **The cost comes before every send**, and **Hide all AI actions** (Settings ▸ AI Assistant) removes every AI button from the window.
 
 ### RAG testing {#whats-new-rag}
 - **Test a RAG system that runs somewhere else**: connect it over HTTP, a stream, WebSocket, gRPC or MCP, click its answer and retrieved documents once, and run a dataset against it ([RAG testing](/ai-testing/rag)).
@@ -268,8 +268,8 @@ Terminal: `testpion ai run analyze-flaky --item test:jobs/report.yaml`, then `te
 
 ### Behaviour changes in 0.48 {#behaviour-changes-in-0-48}
 - **Suggest assertions, Generate tests and Describe a request open a review** instead of adding their result at once: each item was checked first (against the response, or in the sandbox); tick what you want, then **Add to the checks**, **Add to the Post-response script** or **Open as a new request**. Generated tests are added after your own script.
-- **AI features need a model you set up**: your Claude key or a provider of the workspace in **Settings ▸ AI assistant** (a local Ollama or LM Studio works offline). **Local only** there refuses cloud models.
-- **AI calls can be capped**: tokens per call, tokens per day and cost per day (**Settings ▸ AI assistant ▸ Limits**); a call over a cap is refused before anything is sent. The CLI, MCP agents and CI are counted and capped too.
+- **AI features need a model you set up**: your Claude key or a provider of the workspace in **Settings ▸ AI Assistant** (a local Ollama or LM Studio works offline). **Local only** there refuses cloud models.
+- **AI calls can be capped**: tokens per call, tokens per day and cost per day (**Settings ▸ AI Assistant ▸ Limits**); a call over a cap is refused before anything is sent. The CLI, MCP agents and CI are counted and capped too.
 - **More is masked before anything reaches a model**: credentials found by their shape (JWTs, Bearer tokens, private keys, provider API keys, `?access_token=`) and personal data (e-mail addresses, phone numbers, card numbers, IBANs; **Mask personal data** turns that off).
 
 
@@ -295,7 +295,7 @@ Terminal: `testpion ai run suggest-assertions --item request:<collection>:<reque
 Terminal: `testpion ai run explain-error --context @error.json --dry-run`. Agents: `ai_run_task` with `dryRun: true`. ([What is sent](/ai-testing/ai-features#what-is-sent-and-how-to-see-it-first))
 
 ### Keep AI on this computer, and cap what it costs {#ai-local-only-and-caps}
-1. **Settings ▸ AI assistant**: choose a provider of the workspace such as **Ollama (local)** or **LM Studio (local)**, then turn on **Local only** — a cloud model is refused before anything is sent.
+1. **Settings ▸ AI Assistant**: choose a provider of the workspace such as **Ollama (local)** or **LM Studio (local)**, then turn on **Local only** — a cloud model is refused before anything is sent.
 2. Under **Models per task**, pick a cheaper model for *Small tasks* and the best one for *Large tasks*.
 3. Under **Limits**, set tokens per call, tokens per day or cost per day. **AI Lab ▸ Usage ▸ AI features** shows today's calls, tokens and cost, and what is left.
 
@@ -521,7 +521,7 @@ In CI: `testpion eval compare <run> --baseline <run>` exits 1 on regressions bey
 
 ## AGENTS.md from the live workspace
 
-1. **Settings ▸ AI agents (MCP) ▸ Write AGENTS.md** (tick **Also CLAUDE.md** and **Also a Cursor rule** for those agents), or `testpion agents init --targets agents,claude,cursor`.
+1. **Settings ▸ AI Agents (MCP) ▸ Write AGENTS.md** (tick **Also CLAUDE.md** and **Also a Cursor rule** for those agents), or `testpion agents init --targets agents,claude,cursor`.
 2. AGENTS.md describes this workspace for coding agents: its collections, environments (names only), tests and flows, the commands with their exit codes, the MCP server, how to add a request, test or flow, and the secrets and production rules.
 3. Write it again after the workspace changes: only the part between the `testpion` markers is replaced, your own text stays; the result says which files were created, updated, unchanged or skipped.
 
@@ -532,7 +532,7 @@ Agents: `agents_init`. [AGENTS.md](/ai-testing/mcp-server#agents-md)
 1. Press <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> (or the **Terminal** tab next to Console and Logs): Windows PowerShell opens in the workspace folder (macOS and Linux: your login shell). The drop-down next to **+** offers PowerShell 7, Command Prompt and Git Bash when they are installed.
 2. Type `testpion --version`: the app's own command line is on the `PATH`, nothing to install, and `TESTPION_WORKSPACE` names the workspace.
 3. Selecting copies, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> or right-click pastes, links open; up to 8 terminals, each kept with its output while the panel shows something else.
-4. **Run in terminal** (the terminal icon next to **Copy** in Settings ▸ AI agents (MCP) and an MCP toolset's Serve box) types a command there for you to check and run. Command palette: **Terminal: New**, **Terminal: Focus**.
+4. **Run in terminal** (the terminal icon next to **Copy** in Settings ▸ AI Agents (MCP) and an MCP toolset's Serve box) types a command there for you to check and run. Command palette: **Terminal: New**, **Terminal: Focus**.
 
 [Terminal](/getting-started/terminal)
 

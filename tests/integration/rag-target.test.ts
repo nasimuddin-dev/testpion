@@ -239,7 +239,7 @@ describe('a RAG evaluation', () => {
       try {
         assertEvaluationRunnable(store, ctx.services.ragJudge!, evaluation({ judge: undefined }));
       } catch (e) {
-        expect((e as { suggestions?: string[] }).suggestions?.join('\n')).toMatch(/Settings ▸ AI assistant/);
+        expect((e as { suggestions?: string[] }).suggestions?.join('\n')).toMatch(/Settings ▸ AI Assistant/);
         expect((e as { suggestions?: string[] }).suggestions?.join('\n')).toMatch(/--judge/);
       }
       // free metrics alone need none

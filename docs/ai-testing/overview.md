@@ -16,7 +16,7 @@ Set up an AI provider, then try prompts, compare models and score answers. The f
 The quickest way to start is your own Anthropic API key. Anthropic bills your account for what you use.
 
 1. Create a key in the [Anthropic Console](https://console.anthropic.com/) (**API keys → Create key**).
-2. In TestPion, open **Settings ▸ AI assistant** and turn on **the AI assistant**.
+2. In TestPion, open **Settings ▸ AI Assistant** and turn on **the AI assistant**.
 3. Choose **Claude (Anthropic), with your API key**, paste the key and choose **Save key**. TestPion checks it with Anthropic, then stores it in the OS secret store (Windows Credential Manager / DPAPI, the macOS Keychain, or the Linux secret service). It is never written to the settings file or to a workspace.
 4. Choose the **model**: Claude Opus 5.5 (most capable, the default), Claude Sonnet 5.5 (faster and cheaper) or Claude Haiku 4.5 (fastest and cheapest), then **Save settings**.
 
@@ -24,7 +24,7 @@ The key then powers the AI assistant: explaining errors and responses, where a r
 
 For the CLI and CI, set the key as the `TESTPION_SECRET_APP_ANTHROPIC_APIKEY` environment variable: `claude-app` is then available there too.
 
-Rather keep everything on this computer? Choose **A provider of this workspace** with **Ollama (local)** or **LM Studio (local)**, and turn on **Local only**. Below the provider, **Settings ▸ AI assistant** also sets a model for small and for large tasks, what is sent by default and the cost limits. How the AI features handle privacy, cost and review — **What will be sent…**, proposals you accept or discard, the usage view — is in [AI features: privacy, cost and review](./ai-features.md).
+Rather keep everything on this computer? Choose **A provider of this workspace** with **Ollama (local)** or **LM Studio (local)**, and turn on **Local only**. Below the provider, **Settings ▸ AI Assistant** also sets a model for small and for large tasks, what is sent by default and the cost limits. How the AI features handle privacy, cost and review — **What will be sent…**, proposals you accept or discard, the usage view — is in [AI features: privacy, cost and review](./ai-features.md).
 
 ### Talking to the assistant
 
@@ -38,7 +38,7 @@ Open it with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>J</kbd> (press it again to clos
 
 ## AI quality: one place, six tabs {#ai-quality}
 
-AI quality is one item on the rail. Its tabs, left to right: **Start** (what do you want to check? cards by task, the sample, your latest runs), **Checks** (your evaluations: test cases, what a good answer is, the runs), **Try a prompt** (one prompt to one model), **Compare** (the same input on several models) and **Models and keys** (providers, keys, prices, and **Usage**). Bots that answer from documents (RAG) have their own rail item, **RAG bots**, with the tabs Start, Bots, Questions, Metrics and Checks (see [RAG testing](./rag.md)). Try a prompt can show an answer as what changed since the previous one, and Compare the other answers as what differs from the first (the one diff view, the same as Git's). The older names still work: Evaluations is the Checks tab, AI Lab the other four, and a rail you arranged before keeps AI quality where AI Lab was. From the command line and for agents nothing changed (`testpion eval ...`, `testpion rag ...`, the MCP tools).
+AI quality is one item on the rail. Its tabs, left to right: **Start** (what do you want to check? cards by task, the sample, your latest runs), **Checks** (your evaluations: test cases, what a good answer is, the runs), **Try a prompt** (one prompt to one model), **Compare** (the same input on several models) and **Models and keys** (providers, keys, prices, and **Usage**). Bots that answer from documents (RAG) have their own rail item, **RAG Bots**, with the tabs Start, Bots, Questions, Metrics and Checks (see [RAG testing](./rag.md)). Try a prompt can show an answer as what changed since the previous one, and Compare the other answers as what differs from the first (the one diff view, the same as Git's). The older names still work: Evaluations is the Checks tab, AI Lab the other four, and a rail you arranged before keeps AI quality where AI Lab was. From the command line and for agents nothing changed (`testpion eval ...`, `testpion rag ...`, the MCP tools).
 
 ## Saved prompts
 
@@ -60,7 +60,7 @@ Providers support per-provider rate limits (requests per second or minute, token
 
 ### API keys
 
-A provider's key is kept in the operating system's secret store, never in the workspace: **AI quality ▸ Models and keys ▸ the provider ▸ API key**. The list marks the cloud providers that still **need an API key**. In the CLI and in CI the key comes from an environment variable: `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` for a provider whose key is `{{$secret.provider.openai.apiKey}}`, or the variable a `{{$env.NAME}}` key names.
+A provider's key is kept in the operating system's secret store, never in the workspace: **AI Quality ▸ Models and Keys ▸ the provider ▸ API key**. The list marks the cloud providers that still **need an API key**. In the CLI and in CI the key comes from an environment variable: `TESTPION_SECRET_PROVIDER_OPENAI_APIKEY` for a provider whose key is `{{$secret.provider.openai.apiKey}}`, or the variable a `{{$env.NAME}}` key names.
 
 When the key has no value, nothing is sent: the run stops with **No API key for OpenAI**, says where to add it, and the app shows **Add the key**, which opens that provider with its key field ready. Errors from a provider say what to do by status: a key that was not accepted (401), no access to the model (403), no credit left or rate-limited (429), an unknown model or base URL (404), or a problem on the provider's side (5xx).
 
@@ -76,10 +76,10 @@ Each row of the comparison marks the **fastest** (latency, time to first token) 
 
 ## Usage
 
-The the **Usage** view of AI quality ▸ Models and keys starts with **AI features**: what TestPion's own AI features used (calls, tokens and cost today and over 30 days, per task, model and surface, and what is left of your [limits](./ai-features.md#cost-estimates-caps-and-usage)). Below it, **AI quality prompts** adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the prompts, `testpion ai usage` the AI features; agents use the `llm_usage` and `ai_usage` MCP tools.
+The the **Usage** view of AI Quality ▸ Models and Keys starts with **AI features**: what TestPion's own AI features used (calls, tokens and cost today and over 30 days, per task, model and surface, and what is left of your [limits](./ai-features.md#cost-estimates-caps-and-usage)). Below it, **AI quality prompts** adds up the prompts you ran: prompts, input and output tokens and estimated cost (from the price table) per model, with a bar per model and the median time and time to first token. `testpion history llm` prints the prompts, `testpion ai usage` the AI features; agents use the `llm_usage` and `ai_usage` MCP tools.
 
 <figure class="aps-screenshot">
-  <img src="/images/ai-usage.jpg" alt="The AI quality ▸ Models and keys ▸ Usage: the AI features section (no AI feature used yet in this workspace), then the AI quality prompts: prompts run, input and output tokens, estimated cost, tokens per model and a table with median time and time to first token" width="1440" height="900" loading="lazy">
+  <img src="/images/ai-usage.jpg" alt="The AI Quality ▸ Models and Keys ▸ Usage: the AI features section (no AI feature used yet in this workspace), then the AI quality prompts: prompts run, input and output tokens, estimated cost, tokens per model and a table with median time and time to first token" width="1440" height="900" loading="lazy">
 </figure>
 
 Next: [AI features: privacy, cost and review](./ai-features.md), [prompts](./prompts.md), [evaluations](./evaluations.md), [RAG](./rag.md), [agents](./agents.md), [safety](./safety.md).

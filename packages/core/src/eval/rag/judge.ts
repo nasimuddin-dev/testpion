@@ -115,7 +115,7 @@ function judgeSetupError(why: string, extra: string[] = []): ApsError {
     details: { setup: { assistant: true } },
     suggestions: [
       'In the evaluation: choose the judge (a provider of this workspace and its model).',
-      'In the app: Settings ▸ AI assistant ▸ Large tasks, or save your Claude key there.',
+      'In the app: Settings ▸ AI Assistant ▸ Large tasks, or save your Claude key there.',
       'CLI and CI: --judge <provider>/<model>, or set TESTPION_AI_PROVIDER and TESTPION_AI_MODEL.',
       'A model on this computer works (Ollama, LM Studio); for an offline test, name the mock provider as the judge.',
       ...extra,
@@ -197,7 +197,7 @@ export async function judgeCall(host: RagJudgeHost, metric: JudgedMetric, input:
   const req = judgeRequest(metric, input, o.judge);
   const prepared = host.tasks.prepare(deps, req);
   const { preview } = prepared;
-  if (preview.privacy !== 'full') throw new ApsError('ConfigurationError', `Judged RAG metrics need the AI privacy level "Full (redacted)", not "${preview.privacy}"`, { why: 'A judge reads the question, the answer and the documents themselves; at a lower level they are not sent.', suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted).', 'Or use the metrics that need no model (token-f1, rouge, context-precision-ids …).'] });
+  if (preview.privacy !== 'full') throw new ApsError('ConfigurationError', `Judged RAG metrics need the AI privacy level "Full (redacted)", not "${preview.privacy}"`, { why: 'A judge reads the question, the answer and the documents themselves; at a lower level they are not sent.', suggestions: ['Settings ▸ AI Assistant ▸ Privacy ▸ Full (redacted).', 'Or use the metrics that need no model (token-f1, rouge, context-precision-ids …).'] });
   // a section that had to be shortened or sampled would be judged on part of the sample: refused, never silent
   const cut = preview.context.sections.filter((s) => s.notes.length);
   if (cut.length) throw new ApsError('ValidationError', `The sample is too long for the judge (${cut.map((s) => `${s.name}: ${s.notes.join(', ')}`).join('; ')})`, { suggestions: ['Retrieve fewer or shorter documents, or score this sample with the metrics that need no model.'] });

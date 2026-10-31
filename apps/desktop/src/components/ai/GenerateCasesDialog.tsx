@@ -12,6 +12,7 @@ import { AiPreviewDialog } from './AiPreviewDialog';
 import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiRunFooter, AiTitle, discardProposal, useAiEstimate, useAiRun } from './ai-run';
 import { AiEstimateLine } from './AiEstimateLine';
 import { ProposalReview } from './ProposalReview';
+import { inSettings } from '../../lib/ui-names';
 
 /** The part of an evaluation the cases are written for: its prompt, checks and the cases it has. */
 export interface CasesDraftLike {
@@ -231,7 +232,7 @@ export function GenerateCasesDialog({ draft, evaluation, providers, onAdd, onClo
               <Input type="number" min={1} max={30} value={count} onChange={(e) => setCount(e.target.value)} aria-label="Number of cases" data-gen-cases-count />
             </Field>
             {hasModelChoice && (
-              <Field label="Written by" hint="Empty: the model set in Settings ▸ AI assistant">
+              <Field label="Written by" hint={`Empty: the model set in ${inSettings('assistant')}`}>
                 <Select value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="Model that writes the cases" data-gen-cases-provider>
                   <option value="">The AI assistant’s model</option>
                   <NamedOptions items={providers} />

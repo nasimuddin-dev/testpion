@@ -1,5 +1,5 @@
 /**
- * Settings ▸ AI assistant ▸ "Hide all AI actions" (B-15): ONE switch that every AI entry point of the window honours.
+ * Settings ▸ AI Assistant ▸ "Hide all AI actions" (B-15): ONE switch that every AI entry point of the window honours.
  * Three layers, so no entry point can forget it:
  *
  *  - the node menus: `buildNodeMenu` leaves out every item that comes from the one AI table (packages/shared/src/ai-actions.ts);

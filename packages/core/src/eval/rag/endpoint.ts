@@ -23,7 +23,7 @@ export function outbound(host: RagJudgeHost, s: string): string {
 
 function assertMayLeave(host: RagJudgeHost, what: string): void {
   const privacy = aiPrivacyOf(host.deps.settings);
-  if (privacy !== 'full') throw new ApsError('ConfigurationError', `${what} reads the answer and the documents, and the AI privacy level is "${privacy}"`, { suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted).'] });
+  if (privacy !== 'full') throw new ApsError('ConfigurationError', `${what} reads the answer and the documents, and the AI privacy level is "${privacy}"`, { suggestions: ['Settings ▸ AI Assistant ▸ Privacy ▸ Full (redacted).'] });
 }
 
 function ledger(host: RagJudgeHost, task: string, provider: string, model: string, ms: number, outcome: 'ok' | 'error', inputTokens = 0, outputTokens = 0): void {
@@ -68,7 +68,7 @@ export function classifierOf(raw: unknown): ClassifierConfig | string {
 export async function classify(host: RagJudgeHost, c: ClassifierConfig, premise: string, hypothesis: string, signal?: AbortSignal): Promise<number> {
   assertMayLeave(host, 'The classifier');
   if (aiLocalOnly(host.deps.settings, host.deps.env) && !staysOnThisComputer({ kind: 'openai-compatible', baseUrl: c.url } as never))
-    throw new ApsError('ConfigurationError', `Local only is on: the classifier at ${c.url} is not on this computer`, { suggestions: ['Serve the classifier locally (127.0.0.1), or turn Local only off in Settings ▸ AI assistant.'] });
+    throw new ApsError('ConfigurationError', `Local only is on: the classifier at ${c.url} is not on this computer`, { suggestions: ['Serve the classifier locally (127.0.0.1), or turn Local only off in Settings ▸ AI Assistant.'] });
   await assertUrlAllowed(c.url);
   const t0 = Date.now();
   try {

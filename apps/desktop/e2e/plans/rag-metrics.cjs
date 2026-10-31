@@ -202,7 +202,7 @@ const steps = [
   ),
   step(
     'the-column-mapper',
-    `const dsTab = tab('Test cases'); await __t.real.click(dsTab); await __t.sleep(500);
+    `const dsTab = tab('Test Cases'); await __t.real.click(dsTab); await __t.sleep(500);
      const ed = ${EDITOR_IN('main')}; if (!ed) return 'NO EDITOR';
      ed.getModel().setValue('{"prompt":"What time does the clinic open?","gold":"The clinic opens at 8am.","doc_ids":["doc-1"],"topic":"hours"}\\n{"prompt":"Can appointments be cancelled?","gold":"Up to 24 hours before.","doc_ids":["doc-3"],"topic":"policy"}'); await __t.sleep(500);
      await __t.real.click('[data-rag-map-columns]');

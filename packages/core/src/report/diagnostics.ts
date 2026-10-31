@@ -7,7 +7,7 @@ import { maskReportText } from './feedback.js';
 import { writeZip, type ZipEntry } from '../transfer/zip.js';
 
 /**
- * What a person sends when something is wrong (Settings ▸ Privacy & security ▸ Save diagnostics, `testpion diagnostics --json`): versions,
+ * What a person sends when something is wrong (Settings ▸ Privacy & Security ▸ Save diagnostics, `testpion diagnostics --json`): versions,
  * settings without secrets, the end of the application log, the shape of the workspace, the slowest calls. Every text goes through
  * `maskReportText` (home folders, tokens, passwords) and the settings through the redactor, so the file can be attached to a public issue.
  */

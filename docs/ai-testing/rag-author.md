@@ -39,7 +39,7 @@ proposal with `ai_apply_proposal` after you agree.
 * **The metric catalogue**: id, kind, what each reads, judge calls, default pass mark; the metrics your data cannot run are listed by
   name with what they miss, so the model can say what to add.
 
-The privacy level and *Local only* of Settings ▸ AI assistant apply, and the call is counted in the usage ledger and limited by the
+The privacy level and *Local only* of Settings ▸ AI Assistant apply, and the call is counted in the usage ledger and limited by the
 daily caps.
 
 ## What you get {#plan}

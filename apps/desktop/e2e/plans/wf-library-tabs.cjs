@@ -113,7 +113,7 @@ const steps = [
     `${H}
      const pstrip = () => [...document.querySelectorAll('[role=tablist][aria-label="Open prompts"] [role=tab]')];
      const pnames = () => pstrip().map((t) => t.textContent.trim() + (t.hasAttribute('data-preview') ? '(preview)' : '')).join(', ');
-     await __t.view('AI Lab'); await __t.sleep(800); await __t.tab('Try a prompt'); await __t.sleep(800);
+     await __t.view('AI Lab'); await __t.sleep(800); await __t.tab('Try a Prompt'); await __t.sleep(800);
      const a = await __t.waitFor(() => item('Classify intent (JSON)'), 4000); if (!a) return 'NO SAVED PROMPT';
      a.click(); await __t.sleep(600);
      item('Summarise a text').click(); await __t.sleep(600);
@@ -122,7 +122,7 @@ const steps = [
      const inPlayground = editorText();
      await __t.tab('Compare'); await __t.sleep(1000);
      const inCompare = editorText();
-     await __t.tab('Try a prompt'); await __t.sleep(500);
+     await __t.tab('Try a Prompt'); await __t.sleep(500);
      return first + ' | compare has its own prompt: ' + (!!inCompare && !inCompare.includes('Summarise') && /summari[sz]e/i.test(inPlayground));`,
   ),
   // environments: tabs with their own unsaved edits

@@ -213,7 +213,7 @@ export class Backend {
   secrets: SecretStore;
   logger: Logger;
   logBuffer: LogRecord[] = [];
-  /** The slowest calls of this session, slowest first (no I/O; Settings ▸ Privacy & security ▸ Save diagnostics). */
+  /** The slowest calls of this session, slowest first (no I/O; Settings ▸ Privacy & Security ▸ Save diagnostics). */
   slowRpcs: Array<{ method: string; ms: number; at: string }> = [];
   /** Problems the app reported to the window (full disk, damaged database …), for the diagnostics. */
   problems: string[] = [];
@@ -592,7 +592,7 @@ export class Backend {
     }
   }
 
-  /** The Claude API key saved in Settings ▸ AI assistant (from the secret store), if any. */
+  /** The Claude API key saved in Settings ▸ AI Assistant (from the secret store), if any. */
   appClaudeKey(): string | undefined {
     return this.secrets.get(APP_CLAUDE_SECRET) || undefined;
   }
@@ -713,7 +713,7 @@ export class Backend {
   /** A reply to an MCP server's sampling request, drafted with the assistant's model. */
   async sampleWithAssistant(params: { systemPrompt?: string; maxTokens?: number; messages: Array<{ role: 'user' | 'assistant'; content: { type: string; text?: string } }> }, environment?: string) {
     const providerRef = this.settings.assistantProvider;
-    if (!providerRef) throw new ApsError('ConfigurationError', 'The AI assistant is off', { suggestions: ['Open Settings ▸ AI assistant to choose a model, or write the reply yourself.'] });
+    if (!providerRef) throw new ApsError('ConfigurationError', 'The AI assistant is off', { suggestions: ['Open Settings ▸ AI Assistant to choose a model, or write the reply yourself.'] });
     const ctx = this.context({ environment });
     const { provider, model } = ctx.services.providers.resolveModel({ provider: providerRef, name: this.settings.assistantModel });
     const r = await provider.chat({
@@ -743,10 +743,10 @@ export class Backend {
    * analysis) goes through it, so the app's Claude provider without its key is said the same way everywhere.
    */
   async withAiDeps<T>(p: { environment?: string; requestId?: string; provider?: string; dryRun?: boolean }, fn: (deps: AiRunDeps) => Promise<T>): Promise<T> {
-    // the app's Claude provider without its key: say so (the window offers Settings ▸ AI assistant)
+    // the app's Claude provider without its key: say so (the window offers Settings ▸ AI Assistant)
     const uses = [this.settings.assistantProvider, this.settings.ai?.small?.provider, this.settings.ai?.large?.provider];
     if (!p.provider && uses.includes(APP_CLAUDE_ID) && !this.appClaudeKey())
-      throw new ApsError('ConfigurationError', 'No Claude API key is saved', { details: { setup: { assistant: true } }, suggestions: ['Open Settings ▸ AI assistant and save your Anthropic API key.'] });
+      throw new ApsError('ConfigurationError', 'No Claude API key is saved', { details: { setup: { assistant: true } }, suggestions: ['Open Settings ▸ AI Assistant and save your Anthropic API key.'] });
     const ctx = this.context({ environment: p.environment });
     const id = p.requestId ?? shortId('as-');
     const ctrl = linkedController();

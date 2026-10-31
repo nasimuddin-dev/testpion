@@ -3,7 +3,7 @@ import { ApsError } from '../errors.js';
 import { netFetch } from '../net/proxy.js';
 
 /**
- * The app's own Claude provider: the user's Anthropic API key, saved once in Settings ▸ AI assistant and
+ * The app's own Claude provider: the user's Anthropic API key, saved once in Settings ▸ AI Assistant and
  * kept in the OS secret store (never in settings or workspace files). It powers the AI assistant, and
  * shows up in AI Lab and evaluations as "Claude (your API key)" in every workspace.
  */

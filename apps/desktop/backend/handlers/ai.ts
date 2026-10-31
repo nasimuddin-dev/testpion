@@ -23,10 +23,10 @@ export function aiHandlers(be: Backend): Handlers {
   return {
     'ai.providers': () => [
       ...be.ws.getProviders().map((p) => ({ ...p, hasKey: !!be.secrets.get(secretKeys.provider(p.id)) || !!(p.apiKey && !p.apiKey.includes('$secret')), needsKey: providerNeedsKey(p) })),
-      // the app's own Claude provider (Settings ▸ AI assistant), in every workspace; not editable here
+      // the app's own Claude provider (Settings ▸ AI Assistant), in every workspace; not editable here
       ...(be.appClaudeKey() && !be.ws.getProviders().some((p) => p.id === APP_CLAUDE_ID) ? [{ ...appClaudeProvider(be.claudeModel()), hasKey: true, builtIn: true }] : []),
     ],
-    /** Settings ▸ AI assistant: is a Claude key saved, and where. */
+    /** Settings ▸ AI Assistant: is a Claude key saved, and where. */
     'ai.appKeyStatus': () => ({ hasKey: !!be.appClaudeKey(), keyStorage: be.host.cipher ? `the ${be.host.cipher.backend ?? 'OS'} secret store` : 'memory (this session only)', models: CLAUDE_MODELS }),
     /** Check the key with Anthropic, then keep it in the secret store (null removes it). */
     'ai.setAppKey': async ({ key }: { key: string | null }) => {

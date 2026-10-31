@@ -43,8 +43,8 @@ const view = (label) => `{ const seg = vis('main [role=radio], main button').fin
 const steps = [
   step(
     'probe-sets-in-ai-lab',
-    `await __t.view('RAG bots'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
+    `await __t.view('RAG Bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG Bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (!t) return 'NO TAB Bots';
      await __t.real.click(t); await __t.sleep(600);
      const box = await __t.waitFor(() => document.querySelector('[data-rag-probes] [data-rag-probe-set]') && document.querySelector('[data-rag-probes]'), 8000); if (!box) return 'NO PROBES';
      const sets = box.querySelectorAll('[data-rag-probe-set]').length;
@@ -146,8 +146,8 @@ const steps = [
   ),
   step(
     'the-connect-dialog-maps-tools-a-session-and-a-picture',
-    `await __t.view('RAG bots'); await __t.sleep(600);
-     const t = vis('[role=tablist][aria-label="RAG bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (t) { await __t.real.click(t); await __t.sleep(400); }
+    `await __t.view('RAG Bots'); await __t.sleep(600);
+     const t = vis('[role=tablist][aria-label="RAG Bots"] [role=tab]').find((x) => x.textContent.trim() === 'Bots'); if (t) { await __t.real.click(t); await __t.sleep(400); }
      await __t.real.click('[data-rag-connect-open]');
      const d = await __t.waitFor(() => document.querySelector('[data-rag-connect]'), 5000); if (!d) return 'NO DIALOG';
      const slots = ['toolCalls', 'toolCall.name', 'toolCall.arguments', 'conversationId', 'context.image'].map((s) => s + ':' + !!document.querySelector('[data-rag-slot="' + s + '"]')).join(',');
@@ -164,7 +164,7 @@ const steps = [
     `await __t.view('Bot checks'); await __t.sleep(800);
      const clear = vis('[data-rag-picker] button').find((b) => b.textContent.trim() === 'Clear'); if (clear) { await __t.real.click(clear); await __t.sleep(400); }
      await __t.real.click('[data-rag-preset="rag-triad"]'); await __t.sleep(800);
-     const dsTab = tab('Test cases'); await __t.real.click(dsTab); await __t.sleep(500);
+     const dsTab = tab('Test Cases'); await __t.real.click(dsTab); await __t.sleep(500);
      const ed = ${EDITOR_IN('main')}; if (!ed) return 'NO EDITOR';
      ed.getModel().setValue('{"id":"hours","question":"What time does the clinic open?","reference":"The clinic opens at 8am on weekdays.","reference_ids":["doc-1"],"tags":["hours"]}\\n{"id":"cancel","question":"Can appointments be cancelled?","reference":"Up to 24 hours before.","reference_ids":["doc-3"],"tags":["policy"]}\\n{"id":"parking","question":"Is there parking at the clinic?","reference":"I do not know.","reference_ids":["doc-1"],"tags":["policy"]}'); await __t.sleep(500);
      await __t.real.click(${runButton});

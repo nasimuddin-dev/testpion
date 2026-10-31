@@ -19,7 +19,7 @@ OpenAI and any OpenAI-compatible server (vLLM, LM Studio, OpenRouter and others)
 
 ## What does TestPion's own AI send, and can it stay on my computer?
 
-Only what the AI action you click needs, redacted (secrets, tokens, keys and personal data masked), to the model you set up — and **What will be sent…** shows it first. With Ollama or LM Studio and **Settings ▸ AI assistant ▸ Local only**, nothing leaves your computer. Generated tests and flows are proposals you review; nothing is saved until you accept. See [AI features](/ai-testing/ai-features).
+Only what the AI action you click needs, redacted (secrets, tokens, keys and personal data masked), to the model you set up — and **What will be sent…** shows it first. With Ollama or LM Studio and **Settings ▸ AI Assistant ▸ Local only**, nothing leaves your computer. Generated tests and flows are proposals you review; nothing is saved until you accept. See [AI features](/ai-testing/ai-features).
 
 ## Do I need an internet connection?
 

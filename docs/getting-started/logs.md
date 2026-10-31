@@ -13,7 +13,7 @@ Open it from the bottom panel (**Logs** next to **Console**, **Terminal** and **
 
 - The newest 500 lines are shown, oldest first, each with its time, its level and its message. Errors are red and warnings amber.
 - The **level** list above the lines keeps only one level: **Errors**, **Warnings**, **Info**, **Debug** or **Trace**.
-- **Secrets are always redacted.** Passwords, tokens, keys and the fields named in [Settings ▸ Privacy & security](/security/privacy) are replaced before a line is written, at every level.
+- **Secrets are always redacted.** Passwords, tokens, keys and the fields named in [Settings ▸ Privacy & Security](/security/privacy) are replaced before a line is written, at every level.
 
 ## Save it
 

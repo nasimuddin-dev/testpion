@@ -178,7 +178,9 @@ describe('vocabulary', () => {
 
   it('what a screen says is in sentence case: a label, a title, a placeholder, an option, a button (UI audit H1)', () => {
     // names of products, formats and the app's own named places keep their capitals; everything else after the first word is lower case
-    const PHRASES = ['TestPion HTTP Debugger Root', 'Claude Code', 'Claude Desktop', 'VS Code', 'GitHub Actions', 'Azure Pipelines', 'Azure DevOps', 'JSON Schema', 'JSON Lines', 'AWS Signature', 'Basic Auth', 'AI Lab', 'HTTP Debugger', 'REST Client', 'Socket.IO', 'Quick Open', 'Collections explorer'];
+    // the names of the app's navigation (the rail, the views and their tabs) are in Title Case
+    const NAV_NAMES = ['AI Quality', 'RAG Bots', 'Try a Prompt', 'Models and Keys', 'Outgoing Requests', 'Incoming Requests', 'Input Schema', 'Input / Output', 'Privacy & Security', 'Model Pricing', 'Load Testing', 'AI Assistant', 'AI Agents', 'Prompt Template', 'Structured Output', 'Rendered Prompt', 'Compare Versions', 'Collection Variables', 'Workspace Variables', 'Global Variables', 'Test Cases', 'Call Tools', 'Protocol Trace', 'Server Info', 'Message Headers', 'Handshake Headers'];
+    const PHRASES = [...NAV_NAMES, 'TestPion HTTP Debugger Root', 'Claude Code', 'Claude Desktop', 'VS Code', 'GitHub Actions', 'Azure Pipelines', 'Azure DevOps', 'JSON Schema', 'JSON Lines', 'AWS Signature', 'Basic Auth', 'AI Lab', 'HTTP Debugger', 'REST Client', 'Socket.IO', 'Quick Open', 'Collections explorer'];
     const PROPER = new Set(
       'TestPion Postman Insomnia Bruno Hoppscotch GraphQL OpenAPI AsyncAPI WebSocket Kafka Claude Cursor Windsurf Codex Copilot GitHub GitLab Bitbucket Azure Jenkins Windows Linux Firefox Chrome Fiddler Markdown Python Node Docker OpenSSL JetBrains Ragas DeepEval PowerShell Git Ollama OpenAI Anthropic Gemini Authorization You'.split(' '),
     );

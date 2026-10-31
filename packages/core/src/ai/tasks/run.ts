@@ -257,7 +257,7 @@ export function prepareAiTask(deps: AiRunDeps, req: AiTaskRequest, extraContext:
   if (req.images?.length) {
     // pictures cannot be redacted: they leave only when the evaluation allowed it, at the level that sends the content, to a model that can see
     if (!req.allowImages) throw new ApsError('ConfigurationError', `${req.images.length} image(s) would be sent to the judge, but this evaluation does not allow images`, { why: 'An image cannot be redacted, so images are sent only when the evaluation says so (allowImages).', suggestions: ['Turn on "Send images to the judge" in the evaluation (CLI: --allow-images).', 'Or use the metrics that read text only.'] });
-    if (privacy !== 'full') throw new ApsError('ConfigurationError', `Images are not sent at the AI privacy level "${privacy}"`, { suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted), or use a local vision model.'] });
+    if (privacy !== 'full') throw new ApsError('ConfigurationError', `Images are not sent at the AI privacy level "${privacy}"`, { suggestions: ['Settings ▸ AI Assistant ▸ Privacy ▸ Full (redacted), or use a local vision model.'] });
     if (!visionCapable(provider.config, model)) throw new ApsError('ConfigurationError', `The judge ${provider.config.name}/${model} cannot see images`, { why: 'A text-only model would score a prompt that silently lost its pictures.', suggestions: ['Choose a vision-capable judge for this evaluation (a local one such as an Ollama vision model works), or list the model in the provider’s visionModels.'] });
     const last = messages[messages.length - 1]!;
     messages[messages.length - 1] = { ...last, images: req.images };
@@ -316,8 +316,8 @@ function checkCallCost(preview: AiPreview, cap: number | undefined): void {
   const usd = (n: number) => `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
   if (most === undefined)
     throw new ApsError('ConfigurationError', `This model has no price, so the cost cap of ${usd(cap)} cannot be kept`, {
-      why: 'The cost of a call comes from the price table (Settings ▸ Model pricing). Nothing was sent.',
-      suggestions: ['Add a price for this model in Settings ▸ Model pricing, or run without a cap.'],
+      why: 'The cost of a call comes from the price table (Settings ▸ Model Pricing). Nothing was sent.',
+      suggestions: ['Add a price for this model in Settings ▸ Model Pricing, or run without a cap.'],
       details: { aiLimit: { cap: 'maxCostUsd', limit: cap }, setup: { assistant: true } },
     });
   if (most > cap)
@@ -333,9 +333,9 @@ function checkCallCost(preview: AiPreview, cap: number | undefined): void {
  * request (the RAG judge builds it first to read the cache): it is used as it is, not built again.
  */
 export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepared?: ReturnType<typeof prepareAiTask> } = {}): Promise<AiTaskResult> {
-  // Settings ▸ AI assistant ▸ "Hide AI actions": the window offers none, and a stale one is refused here (the CLI and MCP are explicit calls)
+  // Settings ▸ AI Assistant ▸ "Hide AI actions": the window offers none, and a stale one is refused here (the CLI and MCP are explicit calls)
   if (deps.surface === 'app' && aiHidden(deps.settings))
-    throw new ApsError('ConfigurationError', 'AI actions are hidden', { why: 'Settings ▸ AI assistant has "Hide all AI actions" on, so the window runs no AI task. Nothing was sent.', suggestions: ['Turn it off in Settings ▸ AI assistant to use the AI actions again.'] });
+    throw new ApsError('ConfigurationError', 'AI actions are hidden', { why: 'Settings ▸ AI Assistant has "Hide all AI actions" on, so the window runs no AI task. Nothing was sent.', suggestions: ['Turn it off in Settings ▸ AI Assistant to use the AI actions again.'] });
   // a workspace item: its context (a request and its latest response, a run result, a flow …), under what the caller passed
   let itemContext: Record<string, unknown> | undefined;
   let local: unknown;
@@ -482,7 +482,7 @@ export async function runAiTask(deps: AiRunDeps, req: AiTaskRequest, o: { prepar
           throw new ApsError('ValidationError', `The answer was cut at the output limit (${maxOutputTokens} tokens) and is incomplete`, {
             why: 'The model stopped because it reached the most tokens it may write, not because it was done; incomplete code is not offered.',
             details: { truncated: true, finishReason: r.finishReason, partial: r.text.slice(-500) },
-            suggestions: ['Ask for less at once (fewer steps, a folder instead of a collection).', 'Use a larger model for generation (Settings ▸ AI assistant ▸ Large tasks).'],
+            suggestions: ['Ask for less at once (fewer steps, a folder instead of a collection).', 'Use a larger model for generation (Settings ▸ AI Assistant ▸ Large tasks).'],
           });
         // made safe before it is verified (an unquoted {{ in YAML is quoted): the notes say what was fixed
         const n = def.normalize ? def.normalize(extractCodeBlock(r.text, langs)) : { code: extractCodeBlock(r.text, langs), notes: [] as string[] };

@@ -1,3 +1,4 @@
+import { inSettings } from './ui-names';
 /**
  * Everything TestPion itself sends over the network besides the requests you make: what the Privacy tab of Settings shows
  * (and docs/security/privacy.md says). `files` are the program files that make the calls: a test fails when another file
@@ -33,7 +34,7 @@ export const NETWORK_DISCLOSURES: NetworkDisclosure[] = [
     to: 'The AI provider you set up (or a model on this computer)',
     carries: 'The context of the action you started, with secrets and personal data masked: see "What will be sent" before every call.',
     when: 'Only when you use an AI action. Nothing is sent otherwise.',
-    off: 'Settings ▸ AI assistant ▸ Hide all AI actions, or Local only',
+    off: `${inSettings('assistant')} ▸ Hide all AI actions, or Local only`,
     files: [],
   },
   {

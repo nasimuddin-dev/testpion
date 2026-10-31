@@ -411,7 +411,7 @@ export function WebSocketView() {
                 { id: 'message', label: kafka ? 'Produce' : mqtt ? 'Publish' : sio ? 'Emit' : 'Message' },
                 ...(kafka
                   ? [
-                      { id: 'headers' as const, label: 'Message headers', badge: d.kafkaHeaders?.length },
+                      { id: 'headers' as const, label: 'Message Headers', badge: d.kafkaHeaders?.length },
                       { id: 'subscriptions' as const, label: 'Topics', badge: d.reads?.length },
                       { id: 'connection' as const, label: 'Connection' },
                     ]
@@ -420,7 +420,7 @@ export function WebSocketView() {
                       { id: 'subscriptions' as const, label: 'Subscriptions', badge: d.subscriptions?.length },
                       { id: 'connection' as const, label: 'Connection' },
                     ]
-                  : [{ id: 'headers' as const, label: 'Handshake headers', badge: d.headers.length }]),
+                  : [{ id: 'headers' as const, label: 'Handshake Headers', badge: d.headers.length }]),
                 ...(sio ? [{ id: 'auth' as const, label: 'Auth' }] : []),
               ]}
             />

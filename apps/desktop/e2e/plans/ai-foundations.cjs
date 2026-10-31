@@ -63,14 +63,14 @@ const steps = [
   step(
     'settings-panel',
     `await __t.view('Settings');
-     [...document.querySelectorAll('main [role=tab]')].find((t) => t.textContent.trim() === 'AI assistant')?.click(); await __t.sleep(600);
+     [...document.querySelectorAll('main [role=tab]')].find((t) => t.textContent.trim() === 'AI Assistant')?.click(); await __t.sleep(600);
      const p = vis('[data-ai-settings]')[0]; if (!p) return 'NO PANEL';
      return short(p.innerText, 1500);`,
   ),
   step(
     'usage-view',
     `await __t.view('AI Lab'); await __t.sleep(600);
-     tab('Models and keys')?.click(); await __t.sleep(500);
+     tab('Models and Keys')?.click(); await __t.sleep(500);
      [...document.querySelectorAll('[data-models-and-keys] [role=radio]')].find((x) => x.textContent.trim() === 'Usage')?.click();
      const u = await __t.waitFor(() => vis('[data-ai-feature-usage]')[0]?.querySelector('table') && vis('[data-ai-feature-usage]')[0], 8000); if (!u) return 'NO USAGE: ' + short(vis('main')[0]?.innerText, 200);
      return short(u.innerText, 300);`,

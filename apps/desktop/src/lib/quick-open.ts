@@ -1,5 +1,6 @@
 import { aiHidden } from './ai-visible';
 import { COMMAND_HELP, parseCommand, type DebuggerCommand, type ItemRef } from '@testpion/shared';
+import { inSettings } from './ui-names';
 
 /**
  * WF-01 Quick Open: one palette for items and commands, its mode chosen by the first character typed, as in VS Code
@@ -90,7 +91,7 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
       return { rows, text, placeholder: 'Environment or variable…', empty: 'No matching environment or variable' };
     }
     case 'ask':
-      if (aiHidden()) return { rows: [], text: '', placeholder: 'AI actions are hidden (Settings ▸ AI assistant)', empty: 'AI actions are hidden' };
+      if (aiHidden()) return { rows: [], text: '', placeholder: `AI actions are hidden (${inSettings('assistant')})`, empty: 'AI actions are hidden' };
       return {
         rows: text ? [askRow(text, s)] : [],
         text: '',

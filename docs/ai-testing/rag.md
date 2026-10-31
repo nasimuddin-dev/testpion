@@ -9,11 +9,11 @@ description: "Test a RAG system that runs somewhere else: connect any endpoint (
 
 TestPion tests a RAG system that runs somewhere else: you connect its endpoint, a dataset of questions is sent to it, and
 what comes back (the answer and the documents it retrieved) is scored. Everything is under **Evaluations** (the type
-*RAG*) and **RAG bots** (its own rail item: Start, Bots, Questions, Metrics, Checks; where you connect the bot). The full list of metrics is [RAG metrics](./rag-metrics.md).
+*RAG*) and **RAG Bots** (its own rail item: Start, Bots, Questions, Metrics, Checks; where you connect the bot). The full list of metrics is [RAG metrics](./rag-metrics.md).
 
 ## Try the sample first {#sample}
 
-**RAG bots ▸ Start ▸ Try the sample (offline)** makes everything a first run needs and runs it, with no key, no
+**RAG Bots ▸ Start ▸ Try the sample (offline)** makes everything a first run needs and runs it, with no key, no
 network and no server: an offline bot (an MCP mock with four clinic documents, `mocks/clinic-bot.mcp-mock.yaml`, served
 inside TestPion), the bot as a saved target (*Clinic bot (offline)*), six questions with their reference answers and right
 documents, and the evaluation *Sample: clinic bot* with the standard five measures; the offline demo model is the AI
@@ -82,7 +82,7 @@ response. It works over the protocols TestPion already speaks:
 | gRPC | a `type: grpc` step (a `.proto` file or server reflection) | the reply message |
 | MCP tool | a `type: mcp` step (`server`, `tool`, `arguments`) | the tool's structured result, or its text parsed as JSON |
 
-In **RAG bots ▸ Bots ▸ Connect a bot** (or **Checks ▸ Connect…** in a bot evaluation):
+In **RAG Bots ▸ Bots ▸ Connect a bot** (or **Checks ▸ Connect…** in a bot evaluation):
 
 1. **Start from** a preset if your system is one of the common ones: *OpenAI-compatible chat completions* (also streamed),
    *LangServe*, *LlamaIndex*, *Haystack (Hayhooks)*, *Dify*, *Flowise*, or a *generic JSON* request. The request and the
@@ -128,7 +128,7 @@ limits: { concurrency: 2, requestsPerMinute: 120, retries: 1 }
 
 ## The wizard {#wizard}
 
-AI quality > Start > **Answers come from my documents** opens a three-step wizard that saves an evaluation of type `rag`, the same file as the full editor makes (so `testpion rag run`, `testpion eval run` and CI run it unchanged).
+AI Quality > Start > **Answers come from my documents** opens a three-step wizard that saves an evaluation of type `rag`, the same file as the full editor makes (so `testpion rag run`, `testpion eval run` and CI run it unchanged).
 
 1. **Which bot?** Choose a connected bot, or **Connect a bot...** (a preset, one test question, click where the answer is).
 2. **Your questions.** The questions as records (a question, a reference answer, the ids of the right documents): type them, load a file, **Generate from documents...**, **From real calls...** or import another tool's file.
@@ -372,7 +372,7 @@ instruction.
 `refusal-correctness` reads `should_refuse` and counts both failures: **missed refusals** (it answered what it should have refused) and
 **false refusals** (it refused what it should have answered).
 
-**Probe sets.** *RAG bots ▸ Bots ▸ Safety probe sets* (or `testpion rag probes add`, the MCP tool `rag_probe_sets`) writes small seeded
+**Probe sets.** *RAG Bots ▸ Bots ▸ Safety probe sets* (or `testpion rag probes add`, the MCP tool `rag_probe_sets`) writes small seeded
 datasets into `datasets/`: `jailbreak`, `injection` (instructions planted in the text to read, with a made-up canary word that proves
 obedience), `pii`, `toxicity`, `bias`, `off-topic` and `benign` (harmless look-alikes, to count false refusals). They are ordinary
 JSON Lines files with `question`, `probe`, `should_refuse`, `canaries`, `tags`: add your own lines, and seeding again never overwrites a
@@ -464,7 +464,7 @@ be called or a judged metric has no judge.
 
 ### Make the test set, trust the judge, keep watching {#r4}
 
-* **Generate a test set from your documents** (RAG bots ▸ Questions): questions of five kinds with reference answers and the chunk
+* **Generate a test set from your documents** (RAG Bots ▸ Questions): questions of five kinds with reference answers and the chunk
   ids they come from, every one verified and reviewed before it joins a dataset: [Test sets from documents](./rag-testset.md).
 * **Build a dataset from real calls** (History, the Debugger, a run): the question, answer and contexts of calls that already
   happened, masked before they are written: [Datasets from real calls](./rag-capture.md).

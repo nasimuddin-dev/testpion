@@ -9,7 +9,7 @@ const steps = [
   [
     'server-info-says-how-agent-friendly-the-tools-are',
     `(async () => {
-      await __t.tab('Server info'); await __t.sleep(800);
+      await __t.tab('Server Info'); await __t.sleep(800);
       const box = await __t.waitFor(() => document.querySelector('[data-mcp-lint]'), 6000); if (!box) return 'NO LINT';
       const summary = box.querySelector('[data-mcp-lint-text]')?.textContent.trim();
       const levels = [...new Set([...box.querySelectorAll('[data-mcp-lint-finding]')].map((f) => f.getAttribute('data-mcp-lint-finding')))].sort().join(',');

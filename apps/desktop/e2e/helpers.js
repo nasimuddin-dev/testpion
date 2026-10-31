@@ -30,22 +30,22 @@ window.__t = (() => {
     view: async (label) => {
       await esc();
       if (label === 'Bot checks') {
-        await window.__t.rail('RAG bots');
+        await window.__t.rail('RAG Bots');
         await sleep(1000);
-        const checks = [...document.querySelectorAll('[role=tablist][aria-label="RAG bots"] [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Checks');
+        const checks = [...document.querySelectorAll('[role=tablist][aria-label="RAG Bots"] [role=tab]')].find((t) => t.offsetParent && t.textContent.trim() === 'Checks');
         if (checks && checks.getAttribute('aria-selected') !== 'true') { checks.click(); await sleep(1200); }
-        return !!document.querySelector('nav [aria-label="RAG bots"][aria-current="page"]');
+        return !!document.querySelector('nav [aria-label="RAG Bots"][aria-current="page"]');
       }
       const legacy = label === 'AI Lab' || label === 'Evaluations';
-      await window.__t.rail(legacy ? 'AI quality' : label);
+      await window.__t.rail(legacy ? 'AI Quality' : label);
       await sleep(1200);
       if (legacy) {
-        const tabs = [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].filter((t) => t.offsetParent);
+        const tabs = [...document.querySelectorAll('[role=tablist][aria-label="AI Quality"] [role=tab]')].filter((t) => t.offsetParent);
         const checks = tabs.find((t) => t.textContent.trim() === 'Checks');
         const onChecks = checks?.getAttribute('aria-selected') === 'true';
         const want = label === 'Evaluations' ? (onChecks ? undefined : checks) : onChecks ? tabs.find((t) => t.textContent.trim() === 'Start') : undefined;
         if (want) { want.click(); await sleep(1200); }
-        return !!document.querySelector('nav [aria-label="AI quality"][aria-current="page"]');
+        return !!document.querySelector('nav [aria-label="AI Quality"][aria-current="page"]');
       }
       return !!document.querySelector(`nav [aria-label="${label}"][aria-current="page"]`);
     },
@@ -74,7 +74,7 @@ window.__t = (() => {
       const plus = document.querySelector('[aria-label="New tab"]');
       if (!plus) return 'NO NEW TAB BUTTON';
       plus.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); await sleep(500);
-      const item = [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim().startsWith(label));
+      const item = [...document.querySelectorAll('[role=menuitem]')].find((x) => x.textContent.trim().toLowerCase().startsWith(label.toLowerCase()));
       item?.click(); await sleep(1500);
       return item ? 'ok' : `NO MENU ITEM ${label}`;
     },
@@ -104,7 +104,7 @@ window.__t = (() => {
       return [...document.querySelectorAll('[role=menu]:last-of-type [role=menuitem]')].map((m) => m.textContent.trim()).join(' | ') || 'NO MENU';
     },
     header: async (label) => { await esc(); aside()?.querySelector(`button[aria-label^="${label}"]`)?.click(); await sleep(1000); return (document.querySelector('[role=dialog]')?.innerText ?? document.querySelector('[role=menu]')?.innerText ?? 'NOTHING').slice(0, 80); },
-    tab: async (label) => { const all = [...document.querySelectorAll('main [role=tab]')].filter((x) => x.textContent.trim().startsWith(label)); const t = all.find((x) => x.offsetParent !== null && !x.closest('[aria-label="AI quality"]')) ?? all.find((x) => x.offsetParent !== null) ?? all[0]; t?.click(); await sleep(900); return !!t; },
+    tab: async (label) => { const all = [...document.querySelectorAll('main [role=tab]')].filter((x) => x.textContent.trim().toLowerCase().startsWith(label.toLowerCase())); const t = all.find((x) => x.offsetParent !== null && !x.closest('[aria-label="AI Quality"]')) ?? all.find((x) => x.offsetParent !== null) ?? all[0]; t?.click(); await sleep(900); return !!t; },
     // a response action: a button when the panel is wide, else an item of its ⋯ menu ("Response actions")
     responseAction: async (label) => {
       let b = [...document.querySelectorAll('main button')].find((x) => x.offsetParent && x.textContent.trim() === label);

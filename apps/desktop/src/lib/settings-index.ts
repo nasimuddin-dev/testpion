@@ -1,20 +1,21 @@
+import { SETTINGS_TAB_NAME } from './ui-names';
 /** What Settings is made of, for its search field and the one line under each tab: where a setting lives and what it applies to. */
 export type SettingsTabId = 'appearance' | 'keyboard' | 'requests' | 'git' | 'proxy' | 'certificates' | 'privacy' | 'pricing' | 'load' | 'storage' | 'assistant' | 'about' | 'agents';
 
 export const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTabId; label: string }> = [
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'keyboard', label: 'Keyboard' },
-  { id: 'requests', label: 'Requests' },
-  { id: 'git', label: 'Git' },
-  { id: 'proxy', label: 'Proxy' },
-  { id: 'certificates', label: 'Certificates' },
-  { id: 'privacy', label: 'Privacy & security' },
-  { id: 'pricing', label: 'Model pricing' },
-  { id: 'load', label: 'Load testing' },
-  { id: 'storage', label: 'Storage' },
-  { id: 'assistant', label: 'AI assistant' },
-  { id: 'agents', label: 'AI agents (MCP)' },
-  { id: 'about', label: 'About' },
+  { id: 'appearance', label: SETTINGS_TAB_NAME.appearance },
+  { id: 'keyboard', label: SETTINGS_TAB_NAME.keyboard },
+  { id: 'requests', label: SETTINGS_TAB_NAME.requests },
+  { id: 'git', label: SETTINGS_TAB_NAME.git },
+  { id: 'proxy', label: SETTINGS_TAB_NAME.proxy },
+  { id: 'certificates', label: SETTINGS_TAB_NAME.certificates },
+  { id: 'privacy', label: SETTINGS_TAB_NAME.privacy },
+  { id: 'pricing', label: SETTINGS_TAB_NAME.pricing },
+  { id: 'load', label: SETTINGS_TAB_NAME.load },
+  { id: 'storage', label: SETTINGS_TAB_NAME.storage },
+  { id: 'assistant', label: SETTINGS_TAB_NAME.assistant },
+  { id: 'agents', label: SETTINGS_TAB_NAME.agents },
+  { id: 'about', label: SETTINGS_TAB_NAME.about },
 ];
 
 /** The line under a tab: what its settings apply to. Settings belong to the app on this computer, so most are for every workspace. */
@@ -66,7 +67,7 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { tab: 'privacy', label: 'Check for updates when the app starts', words: 'update github network telemetry' },
   { tab: 'privacy', label: 'What leaves this computer', words: 'network telemetry privacy' },
   { tab: 'privacy', label: 'What scripts were allowed', words: 'trust forget secrets hosts programs' },
-  { tab: 'pricing', label: 'Model pricing', words: 'cost price tokens per million' },
+  { tab: 'pricing', label: SETTINGS_TAB_NAME.pricing, words: 'cost price tokens per million' },
   { tab: 'load', label: 'Allow load tests against remote (non-local) hosts by default', words: 'load remote hosts' },
   { tab: 'load', label: 'Maximum virtual users', words: 'vus load limit' },
   { tab: 'storage', label: 'Storage', words: 'disk space size clean up delete' },
@@ -79,7 +80,7 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { tab: 'assistant', label: 'Model', words: 'ai assistant' },
   { tab: 'assistant', label: 'Wait for a model', words: 'ai timeout limits' },
   { tab: 'assistant', label: 'Silence in a stream', words: 'ai timeout limits' },
-  { tab: 'agents', label: 'AI agents (MCP)', words: 'mcp claude code cursor copilot server command' },
+  { tab: 'agents', label: SETTINGS_TAB_NAME.agents, words: 'mcp claude code cursor copilot server command' },
   { tab: 'about', label: 'Check for updates when the app starts', words: 'update version' },
   { tab: 'about', label: 'Diagnostics bundle', words: 'bug report doctor support' },
   { tab: 'about', label: 'Export settings', words: 'backup copy another computer' },

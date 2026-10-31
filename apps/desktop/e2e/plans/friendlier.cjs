@@ -15,7 +15,7 @@ const steps = [
   ),
   step(
     'agents-tab-says-toggles-are-not-saved',
-    `const agentsTab = [...document.querySelectorAll('main [role=tab]')].find((t) => t.textContent.trim().startsWith('AI agents')); agentsTab?.click(); await __t.sleep(700);
+    `const agentsTab = [...document.querySelectorAll('main [role=tab]')].find((t) => t.textContent.trim().toLowerCase().startsWith('ai agents')); agentsTab?.click(); await __t.sleep(700);
      return 'hint: ' + !!document.querySelector('[data-agents-unsaved]');`,
   ),
   step(

@@ -212,7 +212,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
   },
   trust_status: {
     when: 'Use it to see why a script was refused a secret or a host, or whether a stdio MCP server of the workspace is allowed to start.',
-    whenNot: 'To allow something: an agent cannot; ask the user to do it in Settings ▸ Privacy & security or with `testpion trust`.',
+    whenNot: 'To allow something: an agent cannot; ask the user to do it in Settings ▸ Privacy & Security or with `testpion trust`.',
     example: {},
   },
   check_certificate: {

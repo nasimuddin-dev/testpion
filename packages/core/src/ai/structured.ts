@@ -197,7 +197,7 @@ export async function chatStructured<T = unknown>(o: StructuredOptions): Promise
         details: { truncated: true, finishReason: r.finishReason, partial: text.slice(-500) },
         suggestions: [
           'Ask for less at once (a folder instead of the whole collection, fewer steps).',
-          'Use a larger model for generation (Settings ▸ AI assistant ▸ Large tasks), or raise the output limit.',
+          'Use a larger model for generation (Settings ▸ AI Assistant ▸ Large tasks), or raise the output limit.',
         ],
       });
     const parsed = extractJson(text);

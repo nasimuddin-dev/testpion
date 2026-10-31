@@ -15,7 +15,7 @@ const H = `
 const steps = [
   step(
     'two-answers-then-the-difference',
-    `${H} await __t.view('AI Lab'); await __t.sleep(800); tab('Try a prompt')?.click(); await __t.sleep(800);
+    `${H} await __t.view('AI Lab'); await __t.sleep(800); tab('Try a Prompt')?.click(); await __t.sleep(800);
      const i = input(); if (!i) return 'NO INPUT';
      await setText(i, 'Please book me for Tuesday');
      button('Run')?.click(); if (!(await ran())) return 'NO FIRST ANSWER'; await __t.sleep(600);

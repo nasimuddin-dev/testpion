@@ -90,7 +90,7 @@ export function draftable(store: Pick<WorkspaceStore, 'safePath'>, dataset: stri
 export async function prepareReferences(store: WorkspaceStore, context: Record<string, unknown>, o: { privacy: AiPrivacy }): Promise<PreparedItem> {
   // the passages and questions ARE the context: a lower privacy level would send none of them, so the task says so instead of asking blind
   if (o.privacy !== 'full')
-    throw new ApsError('ConfigurationError', `Drafting reference answers sends the questions and passages of the dataset, and the AI privacy level is "${o.privacy}"`, { suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted): secrets and personal data are masked before anything is sent.'] });
+    throw new ApsError('ConfigurationError', `Drafting reference answers sends the questions and passages of the dataset, and the AI privacy level is "${o.privacy}"`, { suggestions: ['Settings ▸ AI Assistant ▸ Privacy ▸ Full (redacted): secrets and personal data are masked before anything is sent.'] });
   const dataset = datasetRel(context.dataset);
   const d = draftable(store, dataset, { ids: asIds(context.ids), limit: Number(context.limit ?? 8) });
   if (!d.order.length)

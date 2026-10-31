@@ -84,7 +84,7 @@ export function clampCount(v: unknown): number {
 export async function prepareTestset(store: WorkspaceStore, context: Record<string, unknown>, o: { privacy: AiPrivacy }): Promise<PreparedItem> {
   // the passages ARE the context: a lower privacy level would send none of them, so the task says so instead of asking blind
   if (o.privacy !== 'full')
-    throw new ApsError('ConfigurationError', `Generating a test set sends passages of your documents, and the AI privacy level is "${o.privacy}"`, { suggestions: ['Settings ▸ AI assistant ▸ Privacy ▸ Full (redacted): secrets and personal data are masked before anything is sent.'] });
+    throw new ApsError('ConfigurationError', `Generating a test set sends passages of your documents, and the AI privacy level is "${o.privacy}"`, { suggestions: ['Settings ▸ AI Assistant ▸ Privacy ▸ Full (redacted): secrets and personal data are masked before anything is sent.'] });
   const seed = String(context.seed ?? 'testpion');
   const count = clampCount(context.count);
   const types = parseTypes(context.types);

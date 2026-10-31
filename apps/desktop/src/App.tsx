@@ -232,7 +232,7 @@ export default function App() {
   const askSearch = useApp((s) => s.askSearch);
   const aiAnalysis = useApp((s) => s.aiAnalysis);
   const tidyImport = useApp((s) => s.tidyImport);
-  // Settings ▸ AI assistant ▸ Hide all AI actions: no AI command, panel or dialog
+  // Settings ▸ AI Assistant ▸ Hide all AI actions: no AI command, panel or dialog
   const aiOn = useAiEnabled();
   const openapiDiff = useApp((s) => s.openapiDiff);
   const exportBundle = useApp((s) => s.exportBundle);

@@ -129,9 +129,9 @@ const steps = [
      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area, 'a%20b%26c'); area.dispatchEvent(new Event('input', { bubbles: true }));
      [...dock().querySelectorAll('button')].find((b) => b.textContent.trim() === 'URL decode')?.click(); await __t.sleep(300);
      const out = dock().querySelector('[data-convert-result]')?.value;
-     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Incoming requests'))?.click(); await __t.sleep(400);
+     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Incoming Requests'))?.click(); await __t.sleep(400);
      const incoming = !!document.querySelector('main [data-incoming]') || vis('main *').some((x) => x.children.length === 0 && x.textContent.trim() === 'No incoming requests');
-     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Outgoing requests'))?.click(); await __t.sleep(300);
+     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Outgoing Requests'))?.click(); await __t.sleep(300);
      rail('Convert')?.click(); await __t.sleep(200);
      return 'decoded: ' + out + ' | incoming tab: ' + incoming + ' | dock closed: ' + !dock();`,
   ),

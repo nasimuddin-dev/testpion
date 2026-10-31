@@ -31,7 +31,7 @@ The workspace is copied into your data folder once. You can change it freely: ap
 | MCP over Streamable HTTP, no account | MCP servers ▸ **Public servers** (Petstore MCP, DeepWiki, Hugging Face Hub) and **Docs & search** (Microsoft Learn, Context7, Cloudflare, Astro, the MCP spec through GitMCP); tests in Tests ▸ `mcp/` | petstore.run.mcp.com.ai, mcp.deepwiki.com, huggingface.co/mcp, learn.microsoft.com/api/mcp, mcp.context7.com, docs.mcp.cloudflare.com, mcp.docs.astro.build, gitmcp.io |
 | MCP over stdio, every MCP feature (tools, resources with subscriptions, prompts, completions, logging, long-running progress) | MCP servers ▸ **Reference servers ▸ Everything**; needs Node.js (it starts `npx -y @modelcontextprotocol/server-everything`) | the official reference server |
 | MCP mock (offline) | MCP view ▸ **Weather (offline mock)**, from `mocks/weather.mcp-mock.yaml` | none |
-| AI prompts: JSON output, summaries, a prompt injection | AI quality ▸ Try a prompt ▸ **Saved prompts** | the offline demo model |
+| AI prompts: JSON output, summaries, a prompt injection | AI Quality ▸ Try a Prompt ▸ **Saved prompts** | the offline demo model |
 | Evaluation over a dataset, safety, RAG, an agent that calls MCP tools | Tests ▸ `ai/`, `agent/` | the offline demo model (+ Petstore MCP for the agent) |
 | **Learn by example**: MCP mocks with computed answers, every kind of prompt check, a dataset evaluation, safety probes, agents with tools, a bot with sources and measures of your own | see [Learn by example](#learn-by-example) below | the offline demo model (examples); nothing leaves the computer |
 | Test suites | Tests ▸ **All examples** (everything), **Offline** (no internet needed) and **Learn by example** | |
@@ -51,7 +51,7 @@ A set of small, commented files to read, run and change: every one works offline
 | `mocks/todo.mcp-mock.yaml` · `tests/mcp/todo-mock.yaml` | A mock with four tools, a resource and a prompt. How a mock picks its answer (`when` on the arguments, `{{args.x}}`, `isError`). Tests for a tool and the shape of its answer (`json-schema`), arguments that change the answer, a value carried from one call to the next (`extract`, `dependsOn`), an error on purpose, a resource by URI, a prompt filled with arguments, and a ping. |
 | `mocks/payments.mcp-mock.yaml` · `tests/mcp/payments-mock.yaml` | Answers computed by a `script` (a fee from the amount; a thrown error is a tool error), a dynamic value (`{{$randomInt(…)}}`), an answer in several `content` parts, and checks on numbers and ids (`equals`, `regex`). |
 
-**AI quality** (AI quality ▸ Try a prompt ▸ **Learn by example**, Checks ▸ **Learn: …**, tests in Tests ▸ `ai/`, `agent/`)
+**AI Quality** (AI Quality ▸ Try a Prompt ▸ **Learn by example**, Checks ▸ **Learn: …**, tests in Tests ▸ `ai/`, `agent/`)
 
 | File | What it shows |
 |---|---|
@@ -64,7 +64,7 @@ A set of small, commented files to read, run and change: every one works offline
 | Saved evaluations **Learn: review sentiment (prompt)**, **Learn: task agent (agent)** | A prompt evaluation and an agent evaluation ready to run from **Checks**, with their report cards. |
 | Monitor **Learn: nightly intent check (prompt)** | The sentiment evaluation on a schedule, switched off. Turn it on in **Monitors** to see a nightly check that fails when the pass rate falls. |
 
-**RAG bots** (RAG bots ▸ Bots, Questions, Metrics, Checks)
+**RAG Bots** (RAG Bots ▸ Bots, Questions, Metrics, Checks)
 
 | File | What it shows |
 |---|---|
@@ -75,15 +75,15 @@ A set of small, commented files to read, run and change: every one works offline
 | `tests/ai/rag-inline.yaml` | The same measures when you already have the answer and the documents (a log, a capture): no model is called. One test fails on purpose to show a retrieval miss. |
 | `metrics/*.yaml` | A measure of each kind: `cites-a-source` (a rule), `plain-language` (a criterion an AI reviewer decides), `reply-checklist` (a checklist), `answer-quality` (a formula over other measures), `short-and-grounded` (a script). Each has examples; **Metrics** checks them. |
 
-The AI reviewer and the model of these files is **Offline demo model (examples)**, a second offline model whose rules answer exactly these prompts (AI quality ▸ Models and keys). Point `model:` or `judge:` at a real provider to see how a real model does.
+The AI reviewer and the model of these files is **Offline demo model (examples)**, a second offline model whose rules answer exactly these prompts (AI Quality ▸ Models and Keys). Point `model:` or `judge:` at a real provider to see how a real model does.
 
 :::
 
 ## The offline demo model
 
-AI examples use **Offline demo model**, a deterministic stand-in that runs inside TestPion. It classifies the example intents, refuses the prompt injection, answers the RAG question and calls the Petstore MCP tool. It is set up in **AI quality ▸ Models and keys**, with rules (regular expression → reply or tool call) in its `x-mock-rules` header. So evaluations, safety tests and the agent test run without an API key and give the same result every time.
+AI examples use **Offline demo model**, a deterministic stand-in that runs inside TestPion. It classifies the example intents, refuses the prompt injection, answers the RAG question and calls the Petstore MCP tool. It is set up in **AI Quality ▸ Models and Keys**, with rules (regular expression → reply or tool call) in its `x-mock-rules` header. So evaluations, safety tests and the agent test run without an API key and give the same result every time.
 
-To try a real model, add an API key to **OpenAI**, **Anthropic** or **Google Gemini** under **AI quality ▸ Models and keys**, or start Ollama locally. Then pick that provider in AI quality, or change `provider:` in a test file.
+To try a real model, add an API key to **OpenAI**, **Anthropic** or **Google Gemini** under **AI Quality ▸ Models and Keys**, or start Ollama locally. Then pick that provider in AI quality, or change `provider:` in a test file.
 
 ## From the terminal
 

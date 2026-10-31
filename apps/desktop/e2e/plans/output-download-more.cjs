@@ -106,7 +106,7 @@ const steps = [
      const info = await window.aps.invoke('mock.start', { collectionId: 'e2e-mocked' });
      await window.aps.invoke('http.send', { request: { method: 'POST', url: info.url + '/pets?source=e2e', headers: [{ key: 'Authorization', value: 'Bearer e2e-secret-token-0123456789', enabled: true }, { key: 'Content-Type', value: 'application/json', enabled: true }], body: { type: 'json', content: '{"name":"Rex"}' } } });
      await __t.view('Debugger'); await __t.sleep(800);
-     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Incoming requests'))?.click(); await __t.sleep(600);
+     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Incoming Requests'))?.click(); await __t.sleep(600);
      const row = await __t.waitFor(() => vis('main [data-incoming-row]').find((x) => x.textContent.includes('/pets')), 4000); if (!row) return 'NO ROW';
      row.click(); await __t.sleep(800);
      return await save('debugger.exchange');`,
@@ -146,7 +146,7 @@ const steps = [
      return await save('mcp.prompt', 'Conversation (Markdown)');`,
   ),
   file('mcp-prompt-file', `return 'heading: ' + text.startsWith('# packing_list') + ' | user: ' + text.includes('## user');`),
-  step('mcp-trace', `await __t.tab('Protocol trace'); await __t.sleep(600); return await save('mcp.trace');`),
+  step('mcp-trace', `await __t.tab('Protocol Trace'); await __t.sleep(600); return await save('mcp.trace');`),
   file(
     'mcp-trace-file',
     `const lines = text.trim().split('\\n').map((l) => JSON.parse(l)); return 'messages: ' + (lines.length >= 2) + ' | methods: ' + lines.map((l) => l.method).includes('initialize');`,
@@ -156,7 +156,7 @@ const steps = [
   step(
     'ai-answer',
     `await __t.view('AI Lab'); await __t.sleep(800);
-     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Try a prompt'))?.click(); await __t.sleep(600);
+     vis('main [role=tab]').find((t) => t.textContent.trim().startsWith('Try a Prompt'))?.click(); await __t.sleep(600);
      if (!(await __t.button('Run'))) return 'NO BUTTON Run';
      await __t.waitFor(() => /Latency/.test(document.querySelector('main')?.innerText ?? ''), 20000); await __t.sleep(400);
      return await save('ai.answers');`,

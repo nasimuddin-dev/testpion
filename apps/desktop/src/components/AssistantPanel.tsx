@@ -16,6 +16,7 @@ import { offerUndo } from '../lib/undo';
 import { AiPreviewDialog, taskParams, type AiPrivacy } from './ai/AiPreviewDialog';
 import { AiEstimateLine, estimateOf, type EstimateState } from './ai/AiEstimateLine';
 import { ProposalReview, VerificationBadgeView } from './ai/ProposalReview';
+import { inSettings } from '../lib/ui-names';
 
 /** "≈ 1.2k tokens · $0.01" (no cost when the model has no price). */
 export function answerCostText(tokens: number, costUsd?: number): string {
@@ -457,7 +458,7 @@ const Answer = memo(function Answer({
             </Badge>
           </span>
           {turn.tokens ? (
-            <span data-answer-cost title="What this answer used. The cost comes from your price table (Settings ▸ Model pricing).">
+            <span data-answer-cost title={`What this answer used. The cost comes from your price table (${inSettings('pricing')}).`}>
               {answerCostText(turn.tokens, turn.costUsd)}
             </span>
           ) : null}

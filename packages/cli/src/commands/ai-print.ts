@@ -38,7 +38,7 @@ export function printPreview(r: AiTaskResult): void {
   console.log(`  model     ${p.providerName} / ${p.model} (${p.tier} task, from ${p.modelSource})${p.local ? green(' · stays on this computer') : ''}`);
   console.log(`  privacy   ${p.privacy}`);
   console.log(
-    `  estimate  ≈ ${p.estimate.inputTokens.toLocaleString('en-US')} tokens in, up to ${p.estimate.maxOutputTokens.toLocaleString('en-US')} out${p.estimate.priceKnown ? ` · up to ${formatUsd(p.estimate.maxCostUsd)}` : dim(' · no price for this model (Settings ▸ Model pricing)')}`,
+    `  estimate  ≈ ${p.estimate.inputTokens.toLocaleString('en-US')} tokens in, up to ${p.estimate.maxOutputTokens.toLocaleString('en-US')} out${p.estimate.priceKnown ? ` · up to ${formatUsd(p.estimate.maxCostUsd)}` : dim(' · no price for this model (Settings ▸ Model Pricing)')}`,
   );
   for (const s of p.context.sections) console.log(dim(`  section   ${s.name}: ${s.tokens} tokens${s.notes.length ? ` (${s.notes.join('; ')})` : ''}`));
   if (p.redactionCount) console.log(dim(`  masked    ${p.redactionCount}: ${[...new Set(p.redactions.map((x) => x.kind))].join(', ')}`));

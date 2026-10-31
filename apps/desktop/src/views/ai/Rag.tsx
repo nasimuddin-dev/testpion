@@ -11,6 +11,7 @@ import { CustomMetricsList, MetricEditor } from '../../components/rag/CustomMetr
 import { RagDataIntro, RagDatasetsList } from '../../components/rag/RagDataPanel';
 import { ProbeSets } from '../../components/rag/ProbeSets';
 import { Badge, Button, Empty } from '../../components/ui';
+import { inSettings } from '../../lib/ui-names';
 
 /**
  * The Bots, Questions and Metrics tabs of RAG bots (R-1): the bots under test (a request of any protocol and the
@@ -109,7 +110,7 @@ export function Rag({ side, openTarget, connectAt }: { side: 'bots' | 'questions
             <ol className="list-decimal pl-5 text-muted flex flex-col gap-1 max-w-2xl">
               <li>Bots: request, probe, click-to-map, save.</li>
               <li>Checks: choose the bot, the questions (question, reference answer, right documents; Ragas and DeepEval files convert) and the measures.</li>
-              <li>A measure decided by an AI reviewer needs a reviewer model: choose one for the evaluation, or set Settings ▸ AI assistant. It never falls back on a mock silently.</li>
+              <li>A measure decided by an AI reviewer needs a reviewer model: choose one for the evaluation, or set {inSettings('assistant')}. It never falls back on a mock silently.</li>
               <li>Metrics: write your own measure, check it against examples, and use it in the picker like any other.</li>
             </ol>
             <ProbeSets />

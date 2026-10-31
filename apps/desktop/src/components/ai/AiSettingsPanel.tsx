@@ -6,7 +6,7 @@ import { PRIVACY_OPTIONS, type AiPrivacy } from './AiPreviewDialog';
 type AiSettings = NonNullable<AppSettings['ai']>;
 
 /**
- * Settings ▸ AI assistant, the part every AI feature shares (AIB-6, AIB-7): a model for small tasks (explain,
+ * Settings ▸ AI Assistant, the part every AI feature shares (AIB-6, AIB-7): a model for small tasks (explain,
  * classify, a commit message) and one for generation (tests, flows), Local only, the default privacy level, personal
  * data masking and the cost caps. The CLI and CI read the same settings (and TESTPION_AI_* variables).
  */

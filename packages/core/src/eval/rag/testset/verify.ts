@@ -64,7 +64,7 @@ export async function verifySupport(item: ProposalItem, ctx: VerifyContext): Pro
       entail = { verifier: 'testset-support', status: 'warn', label: `lexical overlap ${pct(cov)}; the judge did not check it`, detail: (e as Error).message };
     }
   } else if (host?.dry) entail = { verifier: 'testset-support', status: 'skip', label: `lexical overlap ${pct(cov)}; nothing sent (dry run)` };
-  else entail = { verifier: 'testset-support', status: cov < SUPPORT_WARN ? 'warn' : 'pass', label: `lexical overlap ${pct(cov)}; no judge to check the claims`, detail: 'Set a judge (Settings ▸ AI assistant, or --judge) to have every claim checked against its chunks.' };
+  else entail = { verifier: 'testset-support', status: cov < SUPPORT_WARN ? 'warn' : 'pass', label: `lexical overlap ${pct(cov)}; no judge to check the claims`, detail: 'Set a judge (Settings ▸ AI Assistant, or --judge) to have every claim checked against its chunks.' };
   if (copy >= COPY_AT && entail.status !== 'fail') return { verifier: 'testset-support', status: 'warn', label: 'the question copies the text of its chunk', detail: `${pct(copy)} of the question's words are a run from the chunk: a retriever finds it by string match, which tests little.` };
   if (entail.status === 'pass' && cov < SUPPORT_WARN) return { ...entail, status: 'warn' };
   return entail;

@@ -215,7 +215,7 @@ export function ApiDefinitionView() {
                 },
                 { id: 'fuzz' as const, label: 'Fuzz' },
                 { id: 'coverage' as const, label: 'Coverage' },
-                { id: 'compare' as const, label: 'Compare versions' },
+                { id: 'compare' as const, label: 'Compare Versions' },
               ]),
         ]}
       />

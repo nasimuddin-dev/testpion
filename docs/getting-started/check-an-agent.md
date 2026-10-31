@@ -15,7 +15,7 @@ An agent can give a good-looking answer and still do the wrong thing on the way:
 
 ## 1. Run the offline agent
 
-1. Open **AI quality** in the left bar, then the **Checks** tab.
+1. Open **AI Quality** in the left bar, then the **Checks** tab.
 2. In the list, open **Learn: task agent (agent)** (in the folder **Learn by example** of the Examples workspace).
 3. Click **Run**.
 

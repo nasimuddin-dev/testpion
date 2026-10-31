@@ -1,5 +1,5 @@
 # Learn by example · a measure of your own, kind `rule`: deterministic checks on the answer, no model. Here: the answer names
-# at least one document as [id]. Use it in an evaluation as custom/cites-a-source. RAG bots ▸ Metrics checks it against the
+# at least one document as [id]. Use it in an evaluation as custom/cites-a-source. RAG Bots ▸ Metrics checks it against the
 # examples below.
 id: cites-a-source
 name: Cites a source

@@ -1,4 +1,4 @@
-// Settings ▸ Privacy & security ▸ Script trust: what the open workspace was allowed (hosts, secret reads) is listed, each row has a
+// Settings ▸ Privacy & Security ▸ Script trust: what the open workspace was allowed (hosts, secret reads) is listed, each row has a
 // Forget button that asks first, and Forget everything empties the list. A decision made while a script was refused shows up here.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -15,7 +15,7 @@ const steps = [
     'decisions-are-listed',
     `await window.aps.invoke('scripts.allow', { host: 'api.e2e-trust.test' });
      await window.aps.invoke('scripts.allow', { secrets: true });
-     await __t.view('Settings'); await __t.tab('Privacy & security');
+     await __t.view('Settings'); await __t.tab('Privacy & Security');
      if (!(await __t.waitFor(() => panel(), 3000))) return 'NO PANEL';
      return rows().join(' | ');`,
   ),

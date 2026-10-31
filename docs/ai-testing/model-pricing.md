@@ -5,11 +5,11 @@ description: "Where the cost of an AI call comes from: the prices you enter in S
 
 # Model pricing
 
-TestPion shows what an AI call costs before it is sent (the estimate) and after (the real tokens). The dollar amount comes from **Settings ▸ Model pricing**. **No prices are built in**: providers change them, so you enter the ones you pay.
+TestPion shows what an AI call costs before it is sent (the estimate) and after (the real tokens). The dollar amount comes from **Settings ▸ Model Pricing**. **No prices are built in**: providers change them, so you enter the ones you pay.
 
 ## Add a price
 
-1. Open **Settings ▸ Model pricing** and choose **Add price**. (In AI quality, **Set a price…** on a model that has none adds the row with that model filled in.)
+1. Open **Settings ▸ Model Pricing** and choose **Add price**. (In AI quality, **Set a price…** on a model that has none adds the row with that model filled in.)
 2. Fill the row: the **provider**, the **model**, the price per **million input tokens**, the price per **million output tokens**, and a **version**, the date you read the price.
 3. **Save settings**.
 

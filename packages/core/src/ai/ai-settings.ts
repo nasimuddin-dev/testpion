@@ -1,5 +1,5 @@
 /**
- * The AI settings every host shares (the desktop app's Settings ▸ AI assistant, the CLI and CI through environment
+ * The AI settings every host shares (the desktop app's Settings ▸ AI Assistant, the CLI and CI through environment
  * variables, the MCP server through the app settings): which model a task uses (small or large tier), whether only a
  * model on this computer may be used, how much of the context is sent (privacy level), and the cost caps.
  */
@@ -74,7 +74,7 @@ function aiNotSetUpError(): ApsError {
     why: 'No model is chosen for the AI features, so nothing was sent.',
     details: { setup: { assistant: true } },
     suggestions: [
-      'In the app: Settings ▸ AI assistant: save your Claude (Anthropic) API key, or choose a provider of this workspace (a local model works offline).',
+      'In the app: Settings ▸ AI Assistant: save your Claude (Anthropic) API key, or choose a provider of this workspace (a local model works offline).',
       'In the CLI or CI: pass --provider and --model, or set TESTPION_AI_PROVIDER and TESTPION_AI_MODEL (e.g. TESTPION_AI_PROVIDER=ollama).',
     ],
   });
@@ -113,7 +113,7 @@ export function assertLocalAllowed(cfg: ProviderConfig, localOnly: boolean): voi
     why: `${cfg.name} (${cfg.kind}${cfg.baseUrl ? `, ${cfg.baseUrl}` : ''}) is not a model on this computer, and the AI settings allow only local models. Nothing was sent.`,
     details: { setup: { assistant: true }, localOnly: true },
     suggestions: [
-      'Choose a local model in Settings ▸ AI assistant (Ollama or LM Studio on 127.0.0.1), or turn Local only off there.',
+      'Choose a local model in Settings ▸ AI Assistant (Ollama or LM Studio on 127.0.0.1), or turn Local only off there.',
       'CLI and CI: --provider ollama (or a workspace provider on 127.0.0.1), or unset TESTPION_AI_LOCAL_ONLY.',
     ],
   });

@@ -2,8 +2,9 @@ import { useEffect } from 'react';
 import { useApp } from '../../store';
 import { rememberAiView } from '../../lib/ai-quality';
 import { Tabs } from '../ui';
+import { AI_TAB_NAME, VIEW_NAME } from '../../lib/ui-names';
 
-/** The tabs of the one "AI quality" rail item (AU-21). */
+/** The tabs of the one "AI Quality" rail item (AU-21). */
 export type AiQualityTab = 'start' | 'checks' | 'playground' | 'compare' | 'providers';
 
 /**
@@ -15,15 +16,15 @@ export function AiQualityTabs({ active, models }: { active: AiQualityTab; /** Ho
   useEffect(() => rememberAiView(active === 'checks' ? 'evaluations' : 'ai'), [active]);
   return (
     <Tabs
-      label="AI quality"
+      label={VIEW_NAME.aiQuality}
       value={active}
       onChange={(t) => (t === 'checks' ? useApp.getState().openIntent('evaluations', { host: 'ai' }) : useApp.getState().openIntent('ai', { tab: t }))}
       tabs={[
-        { id: 'start', label: 'Start', title: 'What do you want to check? Cards by task, the sample, your latest runs' },
-        { id: 'checks', label: 'Checks', title: 'Your evaluations: test cases, what a good answer is, and the runs' },
-        { id: 'playground', label: 'Try a prompt', title: 'Send one prompt to a model and see the answer' },
-        { id: 'compare', label: 'Compare', title: 'The same input on several models: the fastest and the cheapest are marked' },
-        { id: 'providers', label: 'Models and keys', badge: models || undefined, title: 'The AI providers prompts are sent to, their keys and prices, and what you have used' },
+        { id: 'start', label: AI_TAB_NAME.start, title: 'What do you want to check? Cards by task, the sample, your latest runs' },
+        { id: 'checks', label: AI_TAB_NAME.checks, title: 'Your evaluations: test cases, what a good answer is, and the runs' },
+        { id: 'playground', label: AI_TAB_NAME.playground, title: 'Send one prompt to a model and see the answer' },
+        { id: 'compare', label: AI_TAB_NAME.compare, title: 'The same input on several models: the fastest and the cheapest are marked' },
+        { id: 'providers', label: AI_TAB_NAME.providers, badge: models || undefined, title: 'The AI providers prompts are sent to, their keys and prices, and what you have used' },
       ]}
     />
   );

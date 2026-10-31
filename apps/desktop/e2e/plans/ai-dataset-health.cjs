@@ -12,7 +12,7 @@ const steps = [
      await __t.tab('Checks'); await __t.sleep(600);
      const row = await __t.waitFor(() => [...document.querySelectorAll('aside *, main *')].find((e) => e.children.length === 0 && e.offsetParent && e.textContent.trim() === 'Sample: support intents'), 8000); if (!row) return 'NO ROW';
      await __t.real.click(row); await __t.sleep(900);
-     const casesTab = [...document.querySelectorAll('[role=tab]')].find((t) => t.offsetParent && /^Test cases/.test(t.textContent.trim())); if (!casesTab) return 'NO TAB';
+     const casesTab = [...document.querySelectorAll('[role=tab]')].find((t) => t.offsetParent && /^Test Cases/.test(t.textContent.trim())); if (!casesTab) return 'NO TAB';
      await __t.real.click(casesTab); await __t.sleep(600);
      return 'notes: ' + !!document.querySelector('[data-dataset-health]');`,
   ),
@@ -26,7 +26,7 @@ const steps = [
      await __t.real.click(document.querySelector('[data-paste-add]')); await __t.sleep(800);
      const box = await __t.waitFor(() => document.querySelector('[data-dataset-health]'), 8000); if (!box) return 'NO NOTES';
      const text = box.textContent.replace(/\\s+/g, ' ').trim();
-     return 'cases: ' + ([...document.querySelectorAll('[role=tab]')].find((t) => t.offsetParent && /^Test cases/.test(t.textContent.trim()))?.textContent.replace(/\\D+/g, '')) + ' | repeat: ' + /1 case repeats an input already in the list/.test(text) + ' | names the case: ' + /case 11/.test(text);`,
+     return 'cases: ' + ([...document.querySelectorAll('[role=tab]')].find((t) => t.offsetParent && /^Test Cases/.test(t.textContent.trim()))?.textContent.replace(/\\D+/g, '')) + ' | repeat: ' + /1 case repeats an input already in the list/.test(text) + ' | names the case: ' + /case 11/.test(text);`,
   ),
 ];
 

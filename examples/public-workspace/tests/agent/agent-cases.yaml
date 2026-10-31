@@ -1,6 +1,6 @@
 # Learn by example · agent cases from a table. Each row of datasets/agent-cases.csv is one test: `input` is what the person
 # says; `should_call` and `should_not_call` name the tools (with arguments when they matter: `add_task(title=Buy milk)`) and
-# become tool-called / tool-not-called checks on their own. The same table is what AI quality ▸ Checks shows for an agent.
+# become tool-called / tool-not-called checks on their own. The same table is what AI Quality ▸ Checks shows for an agent.
 name: Task agent cases
 type: agent
 tags: [ai, agent, mcp, offline, learn]

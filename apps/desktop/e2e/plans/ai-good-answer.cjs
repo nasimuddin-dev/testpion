@@ -69,7 +69,7 @@ const steps = [
   ),
   step(
     'a-big-run-on-a-paid-model-asks-once',
-    `${H} await __t.real.click(tab('Test cases')); await __t.sleep(400);
+    `${H} await __t.real.click(tab('Test Cases')); await __t.sleep(400);
      await __t.real.click([...vis('main button')].find((b) => b.textContent.trim() === 'Edit as text')); await __t.sleep(600);
      (window.__monaco?.editor.getEditors() ?? []).find((e) => e.getDomNode()?.offsetParent).getModel().setValue(Array.from({ length: 150 }, (_, i) => JSON.stringify({ input: 'case ' + i, expected: 'x' })).join('\\n')); await __t.sleep(1000);
      await __t.real.click(vis('main button[data-eval-run]')[0]);

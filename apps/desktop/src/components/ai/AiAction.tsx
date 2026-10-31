@@ -7,6 +7,7 @@ import { useAiEnabled } from '../../lib/use-ai-enabled';
 import { Button, cx, IconButton, LinkButton } from '../ui';
 import { AiEstimateLine, estimateText } from './AiEstimateLine';
 import { AiPreviewDialog, taskParams } from './AiPreviewDialog';
+import { inSettings } from '../../lib/ui-names';
 
 /**
  * Start an AI action: the assistant panel opens on it, runs it (streamed, Stop cancels) and shows the answer — and, for
@@ -86,9 +87,9 @@ export function AiAction({
       );
     });
   };
-  const title = [hint, configured ? (estimate ?? 'AI: the answer is a suggestion you review') : 'Set up the AI assistant first (Settings ▸ AI assistant)'].filter(Boolean).join('\n');
+  const title = [hint, configured ? (estimate ?? 'AI: the answer is a suggestion you review') : `Set up the AI assistant first (${inSettings('assistant')})`].filter(Boolean).join('\n');
   const icon = <Sparkles size={12} />;
-  // Settings ▸ AI assistant ▸ Hide all AI actions: the button is not there at all
+  // Settings ▸ AI Assistant ▸ Hide all AI actions: the button is not there at all
   if (!enabled) return null;
   const main =
     variant === 'link' ? (

@@ -77,7 +77,7 @@ const choose = (name, label) =>
 const steps = [
   step(
     'open',
-    `await __t.view('Environments'); await __t.sleep(800); const t = tabs().find((x) => x.textContent.trim().startsWith('Collection variables')); t?.click(); await __t.sleep(800);
+    `await __t.view('Environments'); await __t.sleep(800); const t = tabs().find((x) => x.textContent.trim().startsWith('Collection Variables')); t?.click(); await __t.sleep(800);
     const b = [...document.querySelectorAll('main [aria-label="Collections"] button')].find((x) => x.textContent.includes('E2E conflict')); if (!b) return 'NO COLLECTION'; b.click(); await __t.sleep(800);
     return userId() ? 'ready' : 'NO ROW';`,
   ),

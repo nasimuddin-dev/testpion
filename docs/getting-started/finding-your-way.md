@@ -141,7 +141,7 @@ Results that name an item carry a `ref`, the same object everywhere: MCP tool re
 | `test`, `flow` | `path` (inside tests/), `step?` | the test file, the flow designer |
 | `run`, `test-case` | `runId` / `testId` | the run's results, Tests |
 | `history`, `trace`, `exchange` | `historyId` / `traceId` / `exchangeId` | History, Traces, the HTTP Debugger |
-| `mcp-server`, `provider` | `serverId` / `providerId` | MCP, AI quality ▸ Models and keys |
+| `mcp-server`, `provider` | `serverId` / `providerId` | MCP, AI Quality ▸ Models and Keys |
 | `spec`, `dataset` | `path` (specs/…) / `name` (inside datasets/) | the API definition, the dataset |
 | `certificate`, `git-file`, `doc` | `host` / `path` / `url` | Settings ▸ Certificates, Git, a documentation page |
 | `capture` | `name` | a Debugger capture session saved as `debugger/<name>.har`, opened in the Debugger |

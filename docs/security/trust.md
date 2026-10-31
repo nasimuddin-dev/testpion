@@ -13,7 +13,7 @@ A workspace comes from somewhere: a git repository, an import, a teammate, a sha
 
 Decisions are kept in the app's data folder (`~/.testpion/trust/<hash of the workspace's real path>.json`), one file per workspace. A `.local/trust.json` inside a workspace folder (written by versions before 0.55) is **ignored**: you are asked again the next time it matters. That is the one-time migration, and it never trusts anything silently. Imports, bundles and zip files refuse any path under `.local/`.
 
-**Settings ▸ Privacy & security ▸ Script trust** lists what the open workspace was allowed (secret reads, hosts, programs) with a **Forget** button for each and **Forget everything**. On the command line: `testpion trust list --json` and `testpion trust forget [--host h | --secrets | --all]`. An agent can read the list with the MCP tool `trust_status`, never change it.
+**Settings ▸ Privacy & Security ▸ Script trust** lists what the open workspace was allowed (secret reads, hosts, programs) with a **Forget** button for each and **Forget everything**. On the command line: `testpion trust list --json` and `testpion trust forget [--host h | --secrets | --all]`. An agent can read the list with the MCP tool `trust_status`, never change it.
 
 ## Programs
 
@@ -50,7 +50,7 @@ Pointing at a file on this computer (a client certificate, a data file, a folder
 
 ## Agents (MCP)
 
-See [Agents over MCP](/ai-testing/mcp-server#confirmation). In short: a tool that deletes, overwrites or spends needs a **confirmation code** you give the agent when the agent's app cannot ask you; sending requests and AI calls stop at a budget per session; AI calls from agents have default caps (`$5` a day, 50,000 tokens a call, 1,000,000 tokens a day) until you set your own in Settings ▸ AI assistant ▸ Limits.
+See [Agents over MCP](/ai-testing/mcp-server#confirmation). In short: a tool that deletes, overwrites or spends needs a **confirmation code** you give the agent when the agent's app cannot ask you; sending requests and AI calls stop at a budget per session; AI calls from agents have default caps (`$5` a day, 50,000 tokens a call, 1,000,000 tokens a day) until you set your own in Settings ▸ AI Assistant ▸ Limits.
 
 ## The app itself
 

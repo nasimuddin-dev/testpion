@@ -476,7 +476,7 @@ const cycle = (c) => {
        }
        out.push('session ' + session);
        // two saved prompts in the AI Lab: one kept, one a preview; then both closed
-       await __t.view('AI Lab'); await __t.tab('Try a prompt');
+       await __t.view('AI Lab'); await __t.tab('Try a Prompt');
        const prompt = (n) => [...document.querySelectorAll('[data-tree-row]')].find((x) => x.getAttribute('aria-label') === n);
        const pa = await __t.waitFor(() => prompt('Classify intent (JSON)'), 4000);
        let prompts = 'no prompt';
@@ -566,8 +566,8 @@ const cycle = (c) => {
        }
        out.push('review ' + review);
        await closeAll();
-       // 4. Settings ▸ AI assistant
-       await __t.view('Settings'); await __t.tab('AI assistant');
+       // 4. Settings ▸ AI Assistant
+       await __t.view('Settings'); await __t.tab('AI Assistant');
        out.push('settings ' + !!(await __t.waitFor(() => vis('[data-ai-settings]')[0], 3000)));
        // 5. the assistant answers a suggested question
        await __t.view('Collections');

@@ -638,8 +638,8 @@ export function TrafficSide({ side, onSide, incoming }: { side: 'outgoing' | 'in
       value={side}
       onChange={onSide}
       tabs={[
-        { id: 'outgoing', label: 'Outgoing requests' },
-        { id: 'incoming', label: 'Incoming requests', badge: incoming || undefined },
+        { id: 'outgoing', label: 'Outgoing Requests' },
+        { id: 'incoming', label: 'Incoming Requests', badge: incoming || undefined },
       ]}
     />
   );

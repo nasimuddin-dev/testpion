@@ -41,12 +41,12 @@ Three rules hold everywhere:
 
 ## Set up a model
 
-AI features need a model; without one they say so and offer **Set up AI** (nothing is sent). **Settings ▸ AI assistant**, then **Turn on the AI assistant** and choose one of:
+AI features need a model; without one they say so and offer **Set up AI** (nothing is sent). **Settings ▸ AI Assistant**, then **Turn on the AI assistant** and choose one of:
 
 - **Claude (Anthropic), with your API key** — paste the key, **Save key**: TestPion checks it with Anthropic, then keeps it in the OS secret store, never in a file. See [Your Claude API key](/ai-testing/overview#your-claude-api-key).
-- **A provider of this workspace** — any provider of **AI quality ▸ Models and keys**: a cloud one with its key, or a model on this computer: **Ollama (local)** (`http://127.0.0.1:11434`, no key) or **LM Studio (local)** (its OpenAI-compatible server on `http://127.0.0.1:1234/v1`, no key). With no provider selected, **AI quality ▸ Models and keys** offers both (and the cloud ones) as one-click presets.
+- **A provider of this workspace** — any provider of **AI Quality ▸ Models and Keys**: a cloud one with its key, or a model on this computer: **Ollama (local)** (`http://127.0.0.1:11434`, no key) or **LM Studio (local)** (its OpenAI-compatible server on `http://127.0.0.1:1234/v1`, no key). With no provider selected, **AI Quality ▸ Models and Keys** offers both (and the cloud ones) as one-click presets.
 
-Then **Save settings**. A provider without its key answers with **Add the key**, which opens it in AI quality ▸ Models and keys.
+Then **Save settings**. A provider without its key answers with **Add the key**, which opens it in AI Quality ▸ Models and Keys.
 
 <figure class="aps-screenshot">
   <img src="/images/settings-ai.jpg" alt="Settings, AI assistant: the assistant on with the offline demo model, Models per task with Ollama (local) for small tasks and the demo model for large tasks, Local only turned on, What is sent by default set to Full (redacted), Mask personal data, and the Limits: tokens per call, tokens per day and cost per day" width="1440" height="900" loading="lazy">
@@ -86,7 +86,7 @@ The eye beside every AI button — **What will be sent…** — and the same ico
 - the **privacy level**, which you can switch there;
 - each **section** of the context with its tokens, and how a large one was fitted (*sampled 20 of 340 items (first, last, failed, one of each shape)*, *shortened long texts*);
 - what was **masked**, and where;
-- the **token and cost estimate** (the price comes from **Settings ▸ Model pricing**; without one it says *no price set*);
+- the **token and cost estimate** (the price comes from **Settings ▸ Model Pricing**; without one it says *no price set*);
 - the exact **messages**.
 
 **Send** goes ahead with the chosen level; **Cancel** sends nothing.
@@ -105,14 +105,14 @@ From the terminal: `--dry-run` on `testpion ai run` and `testpion flow generate`
 | **Metadata only** | Methods, URLs without query values, statuses, names, and the *shape* of bodies (`{ id: number, items: [ {…} ×20 ] }`) — no body values. |
 | **Names only** | Names, kinds and the structure; no URLs, bodies or values. |
 
-The default is **Settings ▸ AI assistant ▸ What is sent by default**; each action can change it (the dialog, `--privacy full|metadata|names`, `privacy` for agents).
+The default is **Settings ▸ AI Assistant ▸ What is sent by default**; each action can change it (the dialog, `--privacy full|metadata|names`, `privacy` for agents).
 
 ### Redaction
 
 Always, at every level:
 
 - **Secret values**: secret variables, keys the engine resolved, values of sensitive headers — wherever they appear.
-- **Sensitive field names**: `password`, `authorization`, `token`, `apiKey`, `client_secret` … (the list in **Settings ▸ Privacy & security**).
+- **Sensitive field names**: `password`, `authorization`, `token`, `apiKey`, `client_secret` … (the list in **Settings ▸ Privacy & Security**).
 - **Credentials found by their shape** in any field or text: JWTs, `Bearer` / `Basic` credentials, private keys, API keys of the big providers (OpenAI, Anthropic, AWS, Google, GitHub, Slack, Stripe, GitLab, npm, Hugging Face), and credential query parameters (`?access_token=…`, `?api_key=…`).
 - **Personal data** (on by default; **Mask personal data** turns it off): e-mail addresses, phone numbers, card numbers (Luhn-checked) and IBANs (checksum-checked).
 
@@ -255,7 +255,7 @@ $ testpion ai triage --privacy metadata --dry-run
 What will be sent — Explain and fix failures
   model     Offline mock / mock (large task, from env) · stays on this computer
   privacy   metadata
-  estimate  ≈ 2,189 tokens in, up to 4,000 out · no price for this model (Settings ▸ Model pricing)
+  estimate  ≈ 2,189 tokens in, up to 4,000 out · no price for this model (Settings ▸ Model Pricing)
   section   run: 41 tokens
   section   groups: 552 tokens
 …the exact system and user messages, then:
@@ -467,11 +467,11 @@ MCP: `write_script`.
 
 *Generate checks from this response* on a result of a run asks the verified-assertions task for checks written for **the response the run stored**; each is run against it, and accepted ones join the step of the test file (or the saved request) that produced the result. Checks the step already has are not proposed again. *Suggest checks with AI…* does the same for a saved request's latest response. CLI: `testpion ai run generate-assertions --item run:<runId>:<resultId>`.
 
-**Prefer stable checks** (Settings ▸ AI assistant; `--prefer-stable` / `preferStable`) asks for types, formats and presence instead of literal ids, times and tokens, and offers a check that pins a value the server makes up in its stable form.
+**Prefer stable checks** (Settings ▸ AI Assistant; `--prefer-stable` / `preferStable`) asks for types, formats and presence instead of literal ids, times and tokens, and offers a check that pins a value the server makes up in its stable form.
 
 ## Hiding the AI
 
-**Settings ▸ AI assistant ▸ Hide all AI actions** removes every AI button, menu item, palette command, the assistant panel and the Ask search from the window — whether or not a model is set up. AI quality (testing models), the CLI and the MCP tools are not affected, and nothing is deleted. Every right-click "… with AI" item comes from one table (`testpion kinds` lists them); a node with several keeps them in an **AI ▸** submenu.
+**Settings ▸ AI Assistant ▸ Hide all AI actions** removes every AI button, menu item, palette command, the assistant panel and the Ask search from the window — whether or not a model is set up. AI quality (testing models), the CLI and the MCP tools are not affected, and nothing is deleted. Every right-click "… with AI" item comes from one table (`testpion kinds` lists them); a node with several keeps them in an **AI ▸** submenu.
 
 ## Ask: search in your own words
 
@@ -499,9 +499,9 @@ Agents: `search_ask` (`question`, or a `query` object; `sources`, `noAi`, `dryRu
 ## Cost: estimates, caps and usage
 
 - **Before sending**: the estimate in **What will be sent…**, in the flow dialog and on hover over an AI button (≈ tokens in, the most the answer may cost).
-- **Caps**: **Settings ▸ AI assistant ▸ Limits** — **Tokens per call**, **Tokens per day** and **Cost per day ($)**, per workspace; empty is no cap. A call over a cap is refused with *Over an AI limit … Nothing was sent.* and **Change the limits**. The CLI, MCP and CI calls count and are capped too.
+- **Caps**: **Settings ▸ AI Assistant ▸ Limits** — **Tokens per call**, **Tokens per day** and **Cost per day ($)**, per workspace; empty is no cap. A call over a cap is refused with *Over an AI limit … Nothing was sent.* and **Change the limits**. The CLI, MCP and CI calls count and are capped too.
 - **Waits**: the same panel has **Wait for a model (ms)** (the longest wait for a provider's answer, or for the first bytes of a stream; 120000 unless changed) and **Silence in a stream (ms)** (a stream that sends nothing for this long ends with what it had and *The model stopped sending*; 60000 unless changed). 0 waits forever. Cancel always works. In settings.json: `ai.requestTimeoutMs`, `ai.idleTimeoutMs`.
-- **AI quality ▸ Models and keys ▸ Usage ▸ AI features**: calls, tokens and cost today and over 30 days, what is left of the daily caps, tokens per task, calls per model and per surface (*App*, *CLI*, *MCP agents*, *CI*), and the latest calls with their outcome (*ok*, *accepted*, *discarded*, *error*). The AI quality's own prompts follow below it.
+- **AI Quality ▸ Models and Keys ▸ Usage ▸ AI features**: calls, tokens and cost today and over 30 days, what is left of the daily caps, tokens per task, calls per model and per surface (*App*, *CLI*, *MCP agents*, *CI*), and the latest calls with their outcome (*ok*, *accepted*, *discarded*, *error*). The AI quality's own prompts follow below it.
 
 <figure class="aps-screenshot">
   <img src="/images/ai-feature-usage.jpg" alt="AI quality, Usage: the AI features section with calls today, cost today, the last 30 days and tokens left today, tokens per task, the models and the surfaces the calls came from" width="1440" height="900" loading="lazy">
@@ -537,7 +537,7 @@ A dry run prints:
 What will be sent — Explain an error
   model     Ollama / llama3.2 (small task, from env) · stays on this computer
   privacy   full
-  estimate  ≈ 168 tokens in, up to 2,000 out · no price for this model (Settings ▸ Model pricing)
+  estimate  ≈ 168 tokens in, up to 2,000 out · no price for this model (Settings ▸ Model Pricing)
   section   error: 20 tokens
   section   request: 25 tokens
   masked    1: query-credential
@@ -598,11 +598,11 @@ AI_EVAL_LIVE=1 TESTPION_AI_PROVIDER=ollama TESTPION_AI_MODEL=llama3.2 npx vitest
 
 | You see | Why, and what to do |
 |---|---|
-| **The AI assistant is off** with **Set up AI** | No model is chosen: **Settings ▸ AI assistant**. CLI: `--provider` / `--model` or `TESTPION_AI_PROVIDER` / `TESTPION_AI_MODEL`. |
-| **No API key for …** with **Add the key** | The provider needs its key: AI quality ▸ Models and keys ▸ the provider ▸ API key. CLI/CI: `TESTPION_SECRET_PROVIDER_<ID>_APIKEY`. |
-| **No model name given for provider …** | The provider has no default model: set one in AI quality ▸ Models and keys, or pass `--model` / `TESTPION_AI_MODEL`. |
+| **The AI assistant is off** with **Set up AI** | No model is chosen: **Settings ▸ AI Assistant**. CLI: `--provider` / `--model` or `TESTPION_AI_PROVIDER` / `TESTPION_AI_MODEL`. |
+| **No API key for …** with **Add the key** | The provider needs its key: AI Quality ▸ Models and Keys ▸ the provider ▸ API key. CLI/CI: `TESTPION_SECRET_PROVIDER_<ID>_APIKEY`. |
+| **No model name given for provider …** | The provider has no default model: set one in AI Quality ▸ Models and Keys, or pass `--model` / `TESTPION_AI_MODEL`. |
 | **Local only is on: … would send the context off this computer** | Choose a model on this computer, or turn Local only off (unset `TESTPION_AI_LOCAL_ONLY`). It comes before **No API key for …**: a keyless cloud provider is refused for leaving the computer. |
-| **Over an AI limit** with **Change the limits** | A per-call or per-day cap; nothing was sent. **AI quality ▸ Models and keys ▸ Usage** shows what is left today. |
+| **Over an AI limit** with **Change the limits** | A per-call or per-day cap; nothing was sent. **AI Quality ▸ Models and Keys ▸ Usage** shows what is left today. |
 | **Could not reach Ollama at http://127.0.0.1:11434/…** | The local model's server is not running (start Ollama, or LM Studio's server). |
 | An item unticked with *fails on the current response* or *the value changes* | Its check does not hold; pick a **Safer** form, or **Run now** after fixing the request. |
 | *Still wrong after the repairs* | The model could not fix its answer in two turns: **Regenerate** with a hint, choose a larger model for large tasks, or use a smaller folder. |

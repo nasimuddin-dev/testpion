@@ -668,7 +668,7 @@ export function EvaluationsView() {
           value={sub}
           onChange={setSub}
           tabs={[
-            { id: 'dataset', label: 'Test cases', badge: count },
+            { id: 'dataset', label: 'Test Cases', badge: count },
             ...(ragTarget ? [] : [{ id: 'prompt' as const, label: d.type === 'rag' ? 'Prompt (optional)' : d.type === 'agent' ? 'Tools' : 'Prompt' }]),
             { id: 'evaluators', label: d.type === 'rag' ? 'Metrics' : 'Checks', badge: d.evaluators.length },
           ]}

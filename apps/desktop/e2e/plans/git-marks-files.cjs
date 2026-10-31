@@ -47,7 +47,7 @@ const steps = [
   s(
     'workspace-variables-show-the-mark',
     `await __t.view('Environments'); await __t.sleep(800);
-     const t = tabs().find((x) => x.textContent.trim().startsWith('Workspace variables')); if (!t) return 'NO TAB';
+     const t = tabs().find((x) => x.textContent.trim().startsWith('Workspace Variables')); if (!t) return 'NO TAB';
      t.click(); await __t.sleep(600);
      const ok = await __t.waitFor(() => markIn(wsPane()) !== 'none', 15000);
      return 'mark: ' + markIn(wsPane()) + (markIn(wsPane()) === 'none' ? ' | ' + JSON.stringify((await window.aps.invoke('git.changes')).changes.map((c) => [c.file, c.kindId, c.ref])).slice(0, 400) + ' | pane: ' + !!wsPane() : '');`,

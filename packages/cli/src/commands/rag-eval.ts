@@ -76,7 +76,7 @@ export function printEstimate(e: RunEstimate): void {
   if (e.judge) console.log(`${bold('Judge')} ${e.judge.provider} / ${e.judge.model}${e.judge.local ? dim(' (stays on this computer)') : dim(' (sent to the provider)')}`);
   if (e.judgeProblem) console.log(red(`No judge: ${e.judgeProblem}`));
   if (e.costUsd) console.log(`${bold('Cost')} ${money(e.costUsd.low)} to ${money(e.costUsd.high)}`);
-  else if (e.judge) console.log(`${bold('Cost')} ${yellow('no price set for this model: add one in Settings ▸ AI assistant to see a cost')}`);
+  else if (e.judge) console.log(`${bold('Cost')} ${yellow('no price set for this model: add one in Settings ▸ AI Assistant to see a cost')}`);
   if (e.target) console.log(`${bold('Your RAG system')} ${e.target.calls} call(s)`);
   for (const x of e.caps.exceeds) console.log(red(`Would exceed ${x}`));
   for (const n of e.notes) console.log(dim(n));

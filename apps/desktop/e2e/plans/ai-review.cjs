@@ -33,7 +33,7 @@ const steps = [
   ),
   step(
     'add-to-dataset',
-    `await __t.view('AI Lab'); await __t.sleep(800); tab('Try a prompt')?.click(); await __t.sleep(600);
+    `await __t.view('AI Lab'); await __t.sleep(800); tab('Try a Prompt')?.click(); await __t.sleep(600);
      button('Run')?.click(); await __t.waitFor(() => /Latency/.test(document.querySelector('main')?.innerText ?? ''), 20000); await __t.sleep(400);
      vis('main button').find((b) => b.textContent.trim() === 'Add to dataset')?.click(); await __t.sleep(500);
      const ok = [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Add'); if (!ok) return 'NO DIALOG';

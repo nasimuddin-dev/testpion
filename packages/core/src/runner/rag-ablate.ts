@@ -122,7 +122,7 @@ export async function ablateSample(
   if (!sample?.question) throw new ApsError('ValidationError', `The result "${o.resultId}" kept no question and documents: run the evaluation again`);
   if (!found.targetRef) throw new ApsError('ValidationError', 'This run kept no saved bot to ask again: its documents were written in the dataset, or it ran an older version');
   const target = findRagTarget(store, found.targetRef);
-  if (!acceptsDocuments(target)) throw new ApsError('ConfigurationError', ablationNeedsDocuments, { suggestions: ['Edit the bot in AI quality ▸ RAG bots ▸ Bots, or its target in the library.'] });
+  if (!acceptsDocuments(target)) throw new ApsError('ConfigurationError', ablationNeedsDocuments, { suggestions: ['Edit the bot in AI Quality ▸ RAG Bots ▸ Bots, or its target in the library.'] });
   const all = (sample.contexts ?? []).map((c, i) => ({ id: String(c.id ?? `doc-${i + 1}`), text: String(c.text ?? '') })).filter((d) => d.text.trim());
   if (!all.length) throw new ApsError('ValidationError', 'This sample retrieved no documents, so there is nothing to leave out');
   const max = o.max ?? MAX_ABLATION_DOCUMENTS;

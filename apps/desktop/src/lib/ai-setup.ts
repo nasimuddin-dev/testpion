@@ -7,7 +7,7 @@ type AppState = ReturnType<(typeof import('../store'))['useApp']['getState']>;
  * The one way the window offers to fix an AI setup problem, wherever it shows up (a toast, the assistant panel, an
  * error panel, an AI button): a provider without its key → "Add the key" (AI Lab ▸ Providers, its key field); a cap
  * of the AI settings → "Change the limits"; no model,
- * the app's Claude key missing, or Local only refusing a cloud model → "Set up AI" (Settings ▸ AI assistant).
+ * the app's Claude key missing, or Local only refusing a cloud model → "Set up AI" (Settings ▸ AI Assistant).
  */
 export function aiSetupActionFor(e: unknown, app: () => AppState): { label: string; onClick(): void } | undefined {
   const err: NormalizedError = asError(e);

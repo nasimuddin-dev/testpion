@@ -253,9 +253,9 @@ export function EnvironmentsView() {
         onChange={setScope}
         tabs={[
           { id: 'environment', label: 'Environments', badge: envs.length },
-          { id: 'collection', label: 'Collection variables', badge: colVarCount },
-          { id: 'workspace', label: 'Workspace variables', badge: wsVars.length },
-          { id: 'global', label: 'Global variables', badge: globals.length },
+          { id: 'collection', label: 'Collection Variables', badge: colVarCount },
+          { id: 'workspace', label: 'Workspace Variables', badge: wsVars.length },
+          { id: 'global', label: 'Global Variables', badge: globals.length },
         ]}
         right={<span className="text-xs text-muted pr-2">Precedence: Global → Workspace → Environment → Collection → Request → Runtime</span>}
       />

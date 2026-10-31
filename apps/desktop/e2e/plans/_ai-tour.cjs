@@ -3,7 +3,7 @@
 const { withExpect, step } = require('../lib.cjs');
 
 const steps = [
-  step('playground', `await __t.view('AI Lab'); await __t.sleep(800); tab('Try a prompt')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
+  step('playground', `await __t.view('AI Lab'); await __t.sleep(800); tab('Try a Prompt')?.click(); await __t.sleep(800); return short(document.querySelector('main')?.innerText);`),
   step(
     'playground-run',
     `button('Run')?.click(); await __t.waitFor(() => /Latency/.test(document.querySelector('main')?.innerText ?? ''), 20000); await __t.sleep(600); return short(document.querySelector('main')?.innerText, 600);`,

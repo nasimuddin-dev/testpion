@@ -59,13 +59,13 @@ See [HTTP Debugger](/api-testing/http-debugger).
 ## An AI model is not set up
 
 **"The AI assistant is off" or "No model is set up".**
-Open **Settings ▸ AI assistant**, choose a provider and paste a key. Or choose a model on this computer, such as Ollama.
+Open **Settings ▸ AI Assistant**, choose a provider and paste a key. Or choose a model on this computer, such as Ollama.
 
 **The key is rejected.**
 Check that it is for the provider you chose, that it has credit, and that the model name is spelled as the provider writes it.
 
 **You have no key and only want to try things.**
-Use the offline demo model. It needs no key and no network. The samples under **AI quality** and **RAG bots** use it.
+Use the offline demo model. It needs no key and no network. The samples under **AI Quality** and **RAG Bots** use it.
 
 **"needs an embedding model".**
 A check that compares meaning needs a model that can embed text. Set `embedder: provider/model` on the check, or choose a provider that embeds. The offline demo model can embed.

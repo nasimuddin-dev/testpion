@@ -1,4 +1,4 @@
-// The rail shows 7 views by default (AI quality and RAG bots included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
+// The rail shows 7 views by default (AI Quality | RAG BotsandAI Quality | RAG Bots included, so a new person sees them) and More… for the rest; right-click an item to hide, keep or move it (saved per
 // computer in the app's settings); Ctrl+Alt+1…9, the tooltips, the shortcuts list and the palette follow the shown views.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect, step } = require('../lib.cjs');
@@ -56,8 +56,8 @@ const steps = [
   step(
     'ai-quality-is-one-item-with-six-tabs',
     `${H} await __t.view('Home');
-     await __t.real.click(item('AI quality')); await __t.sleep(1200);
-     const tabs = () => [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].filter((t) => t.offsetParent);
+     await __t.real.click(item('AI Quality')); await __t.sleep(1200);
+     const tabs = () => [...document.querySelectorAll('[role=tablist][aria-label="AI Quality"] [role=tab]')].filter((t) => t.offsetParent);
      const names = tabs().map((t) => t.textContent.trim().replace(/\d+$/, '')).join(' | ');
      const cur = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      return 'item: ' + cur + ' | old items on the rail: ' + (!!item('AI Lab') || !!item('Evaluations')) + ' | tabs: ' + names;`,
@@ -65,35 +65,35 @@ const steps = [
   step(
     'bots-with-sources-is-its-own-item',
     `${H} await __t.view('Home');
-     await __t.real.click(item('RAG bots')); await __t.sleep(1200);
-     const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="RAG bots"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
-     const names = [...document.querySelectorAll('[role=tablist][aria-label="RAG bots"] [role=tab]')].filter((t) => t.offsetParent).map((t) => t.textContent.trim()).join(' | ');
+     await __t.real.click(item('RAG Bots')); await __t.sleep(1200);
+     const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="RAG Bots"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
+     const names = [...document.querySelectorAll('[role=tablist][aria-label="RAG Bots"] [role=tab]')].filter((t) => t.offsetParent).map((t) => t.textContent.trim()).join(' | ');
      const cur = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      await __t.real.click(tb('Checks')); await __t.sleep(1500);
      const curA = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      const selA = tb('Checks')?.getAttribute('aria-selected');
      const typeA = document.querySelector('[data-eval-type]')?.getAttribute('data-eval-type') ?? (/bot/i.test(document.querySelector('input[aria-label="Evaluation name"]')?.value ?? '') ? 'bot' : 'other');
      // AI quality's Checks shows a prompt evaluation again, under its own strip
-     await __t.real.click(item('AI quality')); await __t.sleep(1000);
-     const ai = (t) => [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
+     await __t.real.click(item('AI Quality')); await __t.sleep(1000);
+     const ai = (t) => [...document.querySelectorAll('[role=tablist][aria-label="AI Quality"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim() === t);
      await __t.real.click(ai('Checks')); await __t.sleep(1500);
      const curB = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      const typeB = document.querySelector('[data-eval-type]')?.getAttribute('data-eval-type') ?? 'llm';
-     return 'item: ' + cur + ' | tabs: ' + names + ' | checks: ' + curA + ' ' + selA + ' ' + typeA + ' | back to AI quality checks: ' + curB + ' ' + typeB;`,
+     return 'item: ' + cur + ' | tabs: ' + names + ' | checks: ' + curA + ' ' + selA + ' ' + typeA + ' | back to AI Quality | RAG Botschecks: ' + curB + ' ' + typeB;`,
   ),
   step(
     'checks-and-the-others-stay-under-the-one-item',
-    `${H} const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="AI quality"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim().startsWith(t));
+    `${H} const tb = (t) => [...document.querySelectorAll('[role=tablist][aria-label="AI Quality"] [role=tab]')].find((x) => x.offsetParent && x.textContent.trim().startsWith(t));
      await __t.real.click(tb('Checks')); await __t.sleep(1200);
      const onChecks = !!document.querySelector('input[aria-label="Evaluation name"], [data-eval-run]') || /No open evaluations/.test(document.querySelector('main')?.innerText ?? '');
      const curA = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
      const selA = tb('Checks').getAttribute('aria-selected');
-     await __t.real.click(tb('Try a prompt')); await __t.sleep(1200);
+     await __t.real.click(tb('Try a Prompt')); await __t.sleep(1200);
      const curB = document.querySelector('nav [aria-current=page]')?.getAttribute('aria-label');
-     const selB = tb('Try a prompt').getAttribute('aria-selected');
+     const selB = tb('Try a Prompt').getAttribute('aria-selected');
      await __t.real.click(item('Home')); await __t.sleep(600);
-     await __t.real.click(item('AI quality')); await __t.sleep(1000);
-     return 'checks: ' + onChecks + ' ' + curA + ' ' + selA + ' | try a prompt: ' + curB + ' ' + selB + ' | back from Home to the tab used last: ' + tb('Try a prompt').getAttribute('aria-selected');`,
+     await __t.real.click(item('AI Quality')); await __t.sleep(1000);
+     return 'checks: ' + onChecks + ' ' + curA + ' ' + selA + ' | try a prompt: ' + curB + ' ' + selB + ' | back from Home to the tab used last: ' + tb('Try a Prompt').getAttribute('aria-selected');`,
   ),
   step(
     'reset',
@@ -107,15 +107,15 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'default-rail': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| History \| More views \| Settings$/,
+  'default-rail': /^Home \| Collections \| Tests \| AI Quality | RAG Bots\|AI Quality | RAG Bots \| Environments \| History \| More views \| Settings$/,
   'more-reaches-hidden': /^debugger shown: true \| on the rail while open: Debugger \| gone after: true$/,
   'shortcut-follows-shown': /^3: tests \| 9 \(no 9th\): tests$/,
-  'hide-history': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","rag","environments"\]\}$/,
-  'keep-git': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
-  'move-git-up': /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","rag","git","environments"\]\}$/,
+  'hide-history': /^Home \| Collections \| Tests \| AI Quality | RAG Bots\|AI Quality | RAG Bots \| Environments \| More views \| Settings \|\| \{"order":\[.*\],"shown":\["home","collections","tests","aiquality","rag","environments"\]\}$/,
+  'keep-git': /^Home \| Collections \| Tests \| AI Quality | RAG Bots\|AI Quality | RAG Bots \| Environments \| Git \| More views \| Settings \|\| Ctrl\+Alt\+7: git$/,
+  'move-git-up': /^Home \| Collections \| Tests \| AI Quality | RAG Bots\|AI Quality | RAG Bots \| Git \| Environments \| More views \| Settings \|\| .*"shown":\["home","collections","tests","aiquality","rag","git","environments"\]\}$/,
   'palette-hint': /^Go to Git hint: Ctrl\+Alt\+6$/,
-  'ai-quality-is-one-item-with-six-tabs': /^item: AI quality \| old items on the rail: false \| tabs: Start \| Checks \| Try a prompt \| Compare \| Models and keys\d* ?$/,
-  'bots-with-sources-is-its-own-item': /^item: RAG bots \| tabs: Start \| Bots \| Questions \| Metrics \| Checks \| checks: RAG bots true bot \| back to AI quality checks: AI quality llm$/,
-  'checks-and-the-others-stay-under-the-one-item': /^checks: true AI quality true \| try a prompt: AI quality true \| back from Home to the tab used last: true$/,
-  reset: /^Home \| Collections \| Tests \| AI quality \| RAG bots \| Environments \| History \| More views \| Settings \|\| null$/,
+  'ai-quality-is-one-item-with-six-tabs': /^item: AI Quality \| old items on the rail: false \| tabs: Start \| Checks \| Try a Prompt \| Compare \| Models and Keys\d* ?$/,
+  'bots-with-sources-is-its-own-item': /^item: RAG Bots \| tabs: Start \| Bots \| Questions \| Metrics \| Checks \| checks:AI Quality | RAG Bots true bot \| back to AI Quality | RAG Botschecks: AI Quality | RAG Botsllm$/,
+  'checks-and-the-others-stay-under-the-one-item': /^checks: true AI Quality | RAG Botstrue \| try a prompt: AI Quality | RAG Botstrue \| back from Home to the tab used last: true$/,
+  reset: /^Home \| Collections \| Tests \| AI Quality | RAG Bots\|AI Quality | RAG Bots \| Environments \| History \| More views \| Settings \|\| null$/,
 });

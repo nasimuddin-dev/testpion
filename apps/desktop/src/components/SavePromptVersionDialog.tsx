@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { call } from '../api';
 import { attempt, useApp } from '../store';
 import { Button, Field, Input, Modal, Select } from './ui';
+import { AI_TAB_NAME, VIEW_NAME, where } from '../lib/ui-names';
 
 interface Choice {
   id: string;
@@ -28,7 +29,7 @@ export function SavePromptVersionDialog({ prompt, system, onClose }: { prompt: s
       () => setChoices([]),
     );
   }, []);
-  const why = !prompt.trim() ? 'Write a prompt first' : !choices?.length ? 'Save an evaluation first (AI quality ▸ Checks): a version belongs to one' : !name.trim() ? 'Give the version a name' : '';
+  const why = !prompt.trim() ? 'Write a prompt first' : !choices?.length ? `Save an evaluation first (${where(VIEW_NAME.aiQuality, AI_TAB_NAME.checks)}): a version belongs to one` : !name.trim() ? 'Give the version a name' : '';
   const save = async () => {
     if (why) return;
     setBusy(true);

@@ -188,7 +188,7 @@ describe('no silent judge', () => {
       expect(err!.message).toMatch(/needs a judge model, and none is set up/);
       const hints = err!.suggestions!.join('\n');
       expect(hints).toMatch(/choose the judge/);
-      expect(hints).toMatch(/Settings ▸ AI assistant/);
+      expect(hints).toMatch(/Settings ▸ AI Assistant/);
       expect(hints).toMatch(/--judge <provider>\/<model>/);
       expect(hints).toMatch(/TESTPION_AI_PROVIDER/);
       expect(h.rec.requests).toHaveLength(0);

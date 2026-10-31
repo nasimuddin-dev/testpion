@@ -15,7 +15,7 @@ A bot can fail in two different ways. It can **find the wrong documents**, or it
 
 ## 1. Run the offline sample
 
-1. Click **RAG bots** in the left bar. It opens on the **Start** tab.
+1. Click **RAG Bots** in the left bar. It opens on the **Start** tab.
 2. Click **Try the sample (offline)**.
 
 TestPion makes a small bot (an offline clinic helper), six questions with their right documents, and a check. It runs everything and opens the result. Nothing leaves your computer.

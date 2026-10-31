@@ -163,9 +163,9 @@ export function PromptEditor({ d, set }: { d: Draft; set(p: Partial<Draft>): voi
         value={sub}
         onChange={setSub}
         tabs={[
-          { id: 'prompt', label: 'Prompt template' },
+          { id: 'prompt', label: 'Prompt Template' },
           { id: 'system', label: 'System' },
-          { id: 'format', label: 'Structured output', badge: d.format !== 'text' ? d.format : undefined },
+          { id: 'format', label: 'Structured Output', badge: d.format !== 'text' ? d.format : undefined },
           { id: 'evaluators', label: 'Checks', badge: d.evaluators.length },
         ]}
       />

@@ -5,7 +5,7 @@
 #
 # Two of the eight questions FAIL ON PURPOSE (see the mock): "laptop" states something no document says, "parental leave"
 # retrieves the wrong document. Run this file alone and open the report to see how each kind of defect shows up.
-# The same bot and questions as a saved evaluation: RAG bots ▸ Checks ▸ "Learn: handbook bot".
+# The same bot and questions as a saved evaluation: RAG Bots ▸ Checks ▸ "Learn: handbook bot".
 name: Handbook bot
 type: rag
 tags: [ai, rag, offline, learn, fails-on-purpose]

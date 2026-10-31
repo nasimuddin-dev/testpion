@@ -10,6 +10,7 @@ import { useApp, attempt, toastError } from '../../store';
 import type { ProviderConfig } from '../../types';
 import { uid } from '../../lib/format';
 import { Badge, Button, Empty, Field, Input, PageHeader, Select, Split } from '../../components/ui';
+import { inSettings } from '../../lib/ui-names';
 
 /** kind, label, default base URL: the shared table, in the shape this view reads. */
 const KINDS: Array<[ProviderConfig['kind'], string, string]> = PROVIDER_KINDS.map((k) => [k.kind, k.label, k.baseUrl]);
@@ -135,7 +136,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
           <div className="p-4 flex flex-col gap-3 max-w-2xl">
             <PageHeader help="ai-testing/overview#providers" icon={<Sparkles size={18} />} title={p.name} subtitle="Built in: the assistant's Claude key from Settings" />
             <p className="text-sm text-muted">
-              This provider uses the Anthropic API key saved in <b>Settings ▸ AI assistant</b> (kept in the OS secret store). It is available in every workspace; tests and prompts refer to it as <code>claude-app</code>.
+              This provider uses the Anthropic API key saved in <b>{inSettings('assistant')}</b> (kept in the OS secret store). It is available in every workspace; tests and prompts refer to it as <code>claude-app</code>.
             </p>
             <div className="text-sm">
               Model: <span className="mono">{p.defaultModel}</span>

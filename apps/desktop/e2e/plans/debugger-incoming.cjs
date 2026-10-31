@@ -24,7 +24,7 @@ const steps = [
   step(
     'listed-in-incoming',
     `await __t.view('Debugger'); await __t.sleep(800);
-     tab('Incoming requests')?.click(); await __t.sleep(600);
+     tab('Incoming Requests')?.click(); await __t.sleep(600);
      const row = await __t.waitFor(() => vis('main [data-incoming-row]').find((x) => x.textContent.includes('/pets')), 4000);
      // the cells after # and the time: method, path, status, mock server, the example that answered
      return 'row: ' + (row ? [...row.children].slice(2).map((c) => c.textContent.trim()).join(' | ') : 'NONE');`,
@@ -39,7 +39,7 @@ const steps = [
      await __t.sleep(300); const body = [...document.querySelectorAll('main [data-details-pane=response] [data-raw-view] .leading-5 > span:last-child')].map((x) => x.textContent).join('').replace(/\\s+/g, '');
      await window.aps.invoke('mock.stop', { collectionId: 'e2e-mocked' });
      await window.aps.invoke('col.delete', { id: 'e2e-mocked' }).catch(() => undefined);
-     tab('Outgoing requests')?.click();
+     tab('Outgoing Requests')?.click();
      return 'request line: ' + /POST \\/pets\\?source=e2e/.test(req) + ' | secret masked: ' + (!/e2e-secret-token/.test(req) && /\\*\\*\\*/.test(req)) + ' | response: ' + /201/.test(res) + ' | body: ' + body.trim() + ' | buttons: ' + buttons.join(',');`,
   ),
 ];

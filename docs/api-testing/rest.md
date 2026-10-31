@@ -342,7 +342,7 @@ After you send, the response body opens on **Visualize** (next to Pretty and Raw
 
 ## AI help
 
-With an assistant model set in **Settings ▸ AI assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled, checked by TestPion and shown to you in a review first; nothing is added until you accept it, and nothing is sent or run on its own.
+With an assistant model set in **Settings ▸ AI Assistant** (a local model works offline), the request builder can draft work for you. Everything the AI produces is labelled, checked by TestPion and shown to you in a review first; nothing is added until you accept it, and nothing is sent or run on its own.
 
 - **Suggest assertions** (a response's actions): the review opens at once with TestPion checks for the response — status, headers, fields, types. Each check has already run against the response on screen and, for a saved request, the one before it in History: a check that passes now but failed before is unticked (*the value changes*), and one that pins a generated value (an id, a time, a token) is flagged with **Safer:** forms (`type`, `exists`, a format `regex`) — click one to use it. **Add to the checks** adds the ticked ones to the Tests tab.
 - **Generate tests** (a response's actions): one `tp.test(...)` per item, each run once in the sandbox against the response (and the previous one); a failing test is unticked with its message, and a test written with `pm.*` is sent back to the model to be written with `tp.*`. **Add to the Post-response script** adds the ticked tests after your own script, never replacing it.

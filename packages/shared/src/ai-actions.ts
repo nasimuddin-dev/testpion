@@ -3,7 +3,7 @@
  * "… with AI" item comes from. A view never writes an AI item of its own: it says it can do the action (`on`), and the
  * menu builder (node-menu.ts) takes the item — its label, icon, group, the kinds it applies to — from here. The same table
  * names the AI task each one runs and its CLI and MCP equivalents (the docs table and `testpion kinds --json` print them),
- * and Settings ▸ AI assistant ▸ "Hide all AI actions" removes every item that comes from it in one place.
+ * and Settings ▸ AI Assistant ▸ "Hide all AI actions" removes every item that comes from it in one place.
  *
  * Adding an AI menu item is adding a row here (and its LABEL text); a test lists every row against the AI tasks, the CLI,
  * the MCP tools, the item kinds' `ai` capability and the window's views.

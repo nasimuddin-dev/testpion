@@ -109,7 +109,7 @@ export function isLocalHost(host: string): boolean {
 export function checkLoadSafeguards(cfg: LoadTestConfig, resolvedUrl?: string): void {
   if (cfg.maxVirtualUsers && cfg.virtualUsers > cfg.maxVirtualUsers)
     throw new ApsError('ConfigurationError', `Virtual users (${cfg.virtualUsers}) exceed the configured maximum (${cfg.maxVirtualUsers})`, {
-      suggestions: ['Raise the limit in Settings → Load testing if this is intentional.'],
+      suggestions: ['Raise the limit in Settings → Load Testing if this is intentional.'],
     });
   if (cfg.environmentIsProduction && !cfg.allowProduction)
     throw new ApsError('ConfigurationError', 'A load test against an environment marked as production needs confirmation', {
