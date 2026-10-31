@@ -40,7 +40,7 @@ export function RagEmbeddingMap({ runId, onClose }: { runId: string; onClose(): 
   return (
     <Modal title="Map by meaning" onClose={onClose} onSubmit={() => void draw()} width={720} footer={<Button onClick={onClose}>Close</Button>}>
       <div className="grid gap-3 text-sm" data-rag-embedding-map>
-        <p className="text-muted">Places the questions and the documents by what they mean: things close together mean alike. It asks an embedding model, not your bot.</p>
+        <p className="text-muted">Places the questions and the documents by what they mean: things close together mean alike. A red ring marks a question no document is near. It asks an embedding model, not your bot.</p>
         <div className="flex items-end gap-2">
           <div className="flex-1">
             <Field label="Embedding model" hint="provider/model; empty: the provider of the AI reviewer">
@@ -61,23 +61,19 @@ export function RagEmbeddingMap({ runId, onClose }: { runId: string; onClose(): 
           <>
             <p data-embedding-text>{map.text}</p>
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-md border border-line bg-surface" role="img" aria-label="Questions and documents by meaning" data-embedding-plot>
-              {map.points.map((p) => (
-                <circle
-                  key={p.id}
-                  cx={at(p.x, W)}
-                  cy={at(-p.y, H)}
-                  r={p.kind === 'question' ? 6 : 5}
-                  className={KINDS.find((k) => k.kind === p.kind)!.cls}
-                  fillOpacity={hover && hover !== p.id ? 0.35 : 0.9}
-                  stroke="var(--bg)"
-                  strokeWidth={1.5}
-                  onMouseEnter={() => setHover(p.id)}
-                  onMouseLeave={() => setHover(undefined)}
-                  data-embedding-point={p.kind}
-                >
-                  <title>{`${p.label}: ${p.text}`}</title>
-                </circle>
-              ))}
+              {map.points.map((p) => {
+                const far = p.kind === 'question' && map.farQuestions.some((f) => `q:${f.case}` === p.id);
+                const name = p.kind === 'question' ? p.id.slice(2) : p.label;
+                return (
+                  <g key={p.id} opacity={hover && hover !== p.id ? 0.4 : 1} onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover(undefined)} data-embedding-point={p.kind} data-embedding-far-point={far ? '' : undefined}>
+                    <circle cx={at(p.x, W)} cy={at(-p.y, H)} r={p.kind === 'question' ? 6 : 5} className={KINDS.find((k) => k.kind === p.kind)!.cls} stroke={far ? 'var(--bad, #e5484d)' : 'var(--bg)'} strokeWidth={far ? 2.5 : 1.5} />
+                    <text x={at(p.x, W) + (p.x > 0.6 ? -9 : 9)} y={at(-p.y, H) + 3} textAnchor={p.x > 0.6 ? 'end' : 'start'} className="fill-muted" fontSize="10">
+                      {name.length > 16 ? `${name.slice(0, 15)}…` : name}
+                    </text>
+                    <title>{`${p.label}: ${p.text}`}</title>
+                  </g>
+                );
+              })}
             </svg>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
               {KINDS.map((k) => (

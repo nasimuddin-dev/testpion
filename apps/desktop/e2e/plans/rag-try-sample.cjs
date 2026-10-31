@@ -65,8 +65,12 @@ const steps = [
      const docs = document.querySelectorAll('[data-embedding-point=right],[data-embedding-point=retrieved]').length;
      const text = document.querySelector('[data-embedding-text]')?.textContent ?? '';
      const findings = !!document.querySelector('[data-embedding-findings]');
-     const cl = vis('[role=dialog] button').filter((x) => x.textContent.trim() === 'Close'); for (const b of cl.reverse()) { await __t.real.click(b); await __t.sleep(300); }
      return 'questions: ' + q + ' | documents: ' + (docs > 0) + ' | sentence: ' + /6 questions and \\d+ documents placed by meaning/.test(text) + ' | findings: ' + findings;`,
+  ),
+  step(
+    'the-map-closes',
+    `const cl = vis('[role=dialog] button').filter((x) => x.textContent.trim() === 'Close'); for (const b of cl.reverse()) { await __t.real.click(b); await __t.sleep(300); }
+     return 'dialog closed: ' + !document.querySelector('[data-rag-embedding-map]');`,
   ),
   step(
     'the-bot-and-its-mock-exist',
@@ -90,6 +94,7 @@ module.exports = withExpect(steps, {
   'the-report-opens-on-the-two-goals-and-the-causes': /^Backed by the sources: 5 of 6 \| Right documents found: 5 of 6 \| chips: claim not backed by the sources1 \| right document not found1 \| failures: 2 → parking \(pressed true\) → 2$/,
   'a-sample-opens-by-stage': /^stages: question:info,retrieved:bad,used:info,answer:bad \| start here: retrieved \| 2Retrievedstart here1 document · right documents found 0 of 1 \| missed row: true \| marked right: true \/ add row: true$/,
   'map-by-meaning': /^questions: 6 \| documents: true \| sentence: true \| findings: true$/,
+  'the-map-closes': /^dialog closed: true$/,
   'the-bot-and-its-mock-exist': /^target: mcp \| server: mock$/,
   'start-lists-the-run': /^row: Sample: clinic bot.*4 of 6 passed/,
 });
