@@ -24,6 +24,8 @@ import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
+import { EvalCostLine } from '../components/ai/EvalCostLine';
+import { useEvalEstimate, type CostDraft } from '../lib/eval-estimate';
 import { Badge, Button, cx, Empty, Field, Input, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
 import { NoOpenItems } from '../components/LibraryTabStrip';
 import { useCollectionTree } from '../lib/collections-store';
@@ -628,6 +630,11 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
   // a prompt or agent evaluation is run as cases (a failing case fails the monitor); a bot with sources is scored by metrics and gates
   const pickedEvaluation = evaluations.lib.items.find((i) => i.id === d.evaluation || i.name === d.evaluation);
   const promptEvaluation = !!pickedEvaluation && pickedEvaluation.data.type !== 'rag';
+  // what one run costs, and the cap that stops it: nobody is there to be asked when a monitor runs (a free or local model costs nothing)
+  const evalEstimate = useEvalEstimate(
+    promptEvaluation ? ({ ...(pickedEvaluation!.data as unknown as CostDraft), limit: d.limit ?? (pickedEvaluation!.data as unknown as CostDraft).limit } as CostDraft) : { type: 'rag', provider: '', model: '', prompt: '', format: 'text', datasetFormat: 'jsonl', dataset: '', evaluators: [], concurrency: 1 },
+    d.environment,
+  );
   // the gates as the person writes them: metric=minimum, comma separated (the same names as `testpion rag run --min`)
   const [gatesText, setGatesText] = useState(Object.entries(draft.gates ?? {}).map(([k, v]) => `${k}=${v}`).join(', '));
   // the monitor changed on disk (a pull, the CLI, an agent): follow it, or ask when the form has edits (WF-15)
@@ -803,6 +810,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             <Field label="Cases" hint="Only the first n cases. A failing case fails the monitor.">
               <Input type="number" min={1} placeholder="all" value={d.limit ?? ''} onChange={(e) => setD({ ...d, limit: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} aria-label="Number of cases" />
             </Field>
+            {evalEstimate && <div className="col-span-2 text-xs"><EvalCostLine estimate={evalEstimate} model={(pickedEvaluation!.data as { model?: string }).model ?? ''} /></div>}
             <Field label="Pass rate" hint="Also fail when the pass rate falls more than this many points against the run before.">
               <div className="flex items-center gap-2">
                 <input type="checkbox" checked={d.baseline === 'previous'} onChange={(e) => setD({ ...d, baseline: e.target.checked ? 'previous' : undefined })} aria-label="Fail on a drop in pass rate" />

@@ -22,7 +22,8 @@ const steps = [
      ${setSelect(`document.querySelector('select[aria-label="Evaluation"]')`, 'Sample: support intents')}
      await __t.sleep(800);
      const own = await __t.waitFor(() => document.querySelector('[data-monitor-prompt-fields]'), 5000); if (!own) return 'NO OWN FIELDS';
-     return 'prompt fields: true | bot fields: ' + !!document.querySelector('[data-rag-monitor-fields]') + ' | gates field: ' + !!document.querySelector('input[aria-label="Gates"]');`,
+     await __t.sleep(1200);
+     return 'prompt fields: true | bot fields: ' + !!document.querySelector('[data-rag-monitor-fields]') + ' | gates field: ' + !!document.querySelector('input[aria-label="Gates"]') + ' | cost line: ' + !!document.querySelector('[data-monitor-prompt-fields] [data-eval-cost]');`,
   ),
   step(
     'saving-keeps-the-evaluation-and-the-baseline',
@@ -39,6 +40,6 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'the-sample-evaluation-exists': /^sample: Sample: support intents$/,
-  'a-prompt-evaluation-shows-its-own-fields': /^prompt fields: true \| bot fields: false \| gates field: false$/,
+  'a-prompt-evaluation-shows-its-own-fields': /^prompt fields: true \| bot fields: false \| gates field: false \| cost line: true$/,
   'saving-keeps-the-evaluation-and-the-baseline': /^saved: true \| evaluation: ev-\S+ \| limit: 4 \| baseline: previous \| rag-only cleared: true$/,
 });
