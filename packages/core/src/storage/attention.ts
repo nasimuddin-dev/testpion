@@ -9,6 +9,7 @@ import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
 import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
 import { flakyTests } from '../runner/test-history.js';
+import { listSavedEvaluations } from '../runner/saved-evaluations.js';
 import { collectionRequests } from '../runner/collection-run.js';
 import { ragTrendFindings } from '../runner/rag-trend.js';
 import { missingSecrets } from './missing-secrets.js';
@@ -47,6 +48,36 @@ export function secretsAttention(store: WorkspaceStore, secrets: SecretReader): 
       type: 'warning',
       message: `${name ? `Environment "${name}" has` : 'The globals have'} ${keys.length === 1 ? 'a secret' : `${keys.length} secrets`} with no value on this computer: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ' …' : ''}`,
       ref: env ? { kind: 'environment', environmentId: env.id } : { kind: 'environment', scope: 'globals' },
+    });
+  }
+  return out;
+}
+
+/** How many points the pass rate must fall between two runs of an evaluation to be listed. */
+const DROP_POINTS = 10;
+
+/** Evaluations (not bots with sources: their trend is above) whose latest finished run passed clearly less than the one before it. */
+function evaluationDrops(store: WorkspaceStore): AttentionItem[] {
+  const out: AttentionItem[] = [];
+  for (const e of listSavedEvaluations(store).slice(0, 60)) {
+    if (e.type === 'rag') continue;
+    const runs = store.meta
+      .listRuns({ query: e.name, limit: 12 })
+      .items.filter((r) => r.name === e.name && r.total - r.skipped > 0)
+      .slice(0, 2);
+    if (runs.length < 2) continue;
+    const [now, before] = runs as [(typeof runs)[number], (typeof runs)[number]];
+    const rate = (r: typeof now) => r.passed / (r.total - r.skipped);
+    const drop = Math.round((rate(before) - rate(now)) * 100);
+    if (drop < DROP_POINTS) continue;
+    out.push({
+      kind: 'run',
+      severity: drop >= 30 ? 'high' : 'medium',
+      group: 'Runs',
+      type: 'warning',
+      at: now.startedAt,
+      message: `Evaluation "${e.name}" passed ${now.passed} of ${now.total - now.skipped}, down from ${before.passed} of ${before.total - before.skipped} the run before`,
+      ref: { kind: 'run', runId: now.id },
     });
   }
   return out;
@@ -121,6 +152,12 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
       out.push({ kind: 'run', severity: 'medium', group: 'RAG metrics', type: 'warning', message: `${evaluation}: ${f.text}`, ref: { kind: 'run', runId: f.runId } });
   } catch {
     /* a trend is a courtesy: the rest of the list stands */
+  }
+  // a prompt or agent evaluation whose latest run passed clearly fewer cases than the run before it (a model switch, a prompt edit, a flaky check)
+  try {
+    out.push(...evaluationDrops(store));
+  } catch {
+    /* a courtesy: the rest of the list stands */
   }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity]);
