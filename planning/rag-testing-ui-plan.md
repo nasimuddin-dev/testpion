@@ -107,7 +107,8 @@ Not planned (and why): a hosted annotation service or multi-user queues (the clo
 | R-6 | Built: `mapping.meta` (names to JSONPaths), `sample.meta`, `EvalReport.underTest` with a change mark, the *Under test* field of the connect dialog. |
 | R-7 | Covered by A-6 (the review queue, shared) and the existing *Trust the AI reviewer*; no separate retrieval-judge queue. |
 | R-9 | Built: `eval/rag/shapes.ts` (`detectRagShape`: every preset's mapping and eight more shapes tried on the probe's response), `rag probe` returns `shapes`, the connect dialog's *Use this mapping* row. |
-| R-11, R-12 | Not built (a bot whose request accepts a document list; an embedding provider setting). |
+| R-11 | Built (0.55.6): `runner/rag-ablate.ts` (`ablateSample`, `ablationInfo`, `acceptsDocuments`: the bot's request takes `"documents": "{{documents}}"`), RPC `rag.ablate` / `rag.ablationInfo`, `testpion rag ablate`, the sample's *Which document mattered?* (`RagAblation.tsx`). Answers are compared by words (token F1), no judge. Not an MCP tool (the tool list is full). |
+| R-12 | Built (0.55.6): `eval/embedding-map.ts` (`embeddingMap`: PCA to 2D of the questions, right and retrieved documents; look-alikes and far questions), RPC `rag.embeddingMap`, `testpion rag map`, MCP `rag_calibrate` with `map`, the *Map by meaning…* dialog. The embedder is `provider/model` or the AI reviewer's provider. |
 | R-13 | Built: `docs/getting-started/check-a-rag-bot.md`, the *What was under test* and *Read a result* sections of `docs/ai-testing/rag.md`. |
 
 ## 5. Release grouping (AI items ≤ half of a release; Fiddler work continues alongside)
