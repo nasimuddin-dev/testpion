@@ -102,6 +102,7 @@ See [WebSocket](./api-testing/websocket.md).
 - Tools, resources, resource templates and prompts, with input forms generated from JSON Schema, the server's suggestions (completions) for arguments, and resource subscriptions.
 - Elicitation, sampling and roots: answer a server that asks for input (a form from its schema) or for an LLM completion (reviewed before anything is sent), in the inspector and in tests.
 - A protocol trace of every JSON-RPC message, with direction, payloads and latency.
+- **For AI agents** (Server info, or `testpion mcp --lint`): how easy the server's tools are for an agent to use.
 
 ::: details More in this area (4 more)
 
@@ -147,6 +148,8 @@ See [WebSocket](./api-testing/websocket.md).
 <figure class="aps-screenshot">
   <img src="/images/evaluations.jpg" alt="The Evaluations view with a JSONL dataset and a completed run" width="1440" height="900" loading="lazy">
 </figure>
+
+- Look after your evaluations: **Are the test cases any good?** names repeated inputs and one answer most cases expect (`testpion eval lint`), prompt versions show **what changed** word by word, an agent report names the **tools never called**, and a **monitor** can run a prompt or agent evaluation every night and fail on a drop in pass rate.
 
 - Stream JSONL, CSV, JSON or Markdown datasets through evaluators.
 - **Deterministic** evaluators cover exact match, JSON Schema, regex and thresholds.
@@ -250,7 +253,8 @@ In git, flow files are compared by meaning like collections: steps added, remove
 
 - Workspaces are plain files made for git: the **Git** view lists changes by meaning (requests, and flows step by step), **Pull & push** merges collections request by request and pushes in one step (with a background fetch every 5 minutes and a count on the rail), conflicts are resolved request by request, and every open editor offers **Keep mine** / **Take the new version** after a pull.
 - `testpion git sync` and the `git_sync` MCP tool do the same.
-- [Keep your workspace in git](/getting-started/git)
+- Made for teams: **Invite a teammate…**, **Your team's changes** on Home, a **note for your team** under the workspace name, **secrets to fill in** after a clone and **Who are you?** for a computer that has never used git.
+- [Keep your workspace in git](/getting-started/git), [Work as a team](/getting-started/team)
 
 ## For AI agents and scripts
 
