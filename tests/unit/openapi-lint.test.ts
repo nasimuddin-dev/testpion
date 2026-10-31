@@ -148,7 +148,7 @@ describe('OpenAPI lint', () => {
         security: [{ key: [] }],
         paths: {
           '/pets': {
-            get: { operationId: 'list', tags: ['p'], summary: 's', parameters: [{ name: 'b', in: 'body', schema: { $ref: '#/definitions/Pet' } }], responses: { 200: { description: 'ok' } } },
+            get: { operationId: 'list', tags: ['p'], summary: 's', parameters: [{ name: 'b', in: 'body', description: 'The pet', schema: { $ref: '#/definitions/Pet' } }], responses: { 200: { description: 'ok' }, 404: { description: 'missing' } } },
           },
         },
         definitions: { Pet: { type: 'object' } },
@@ -159,5 +159,35 @@ describe('OpenAPI lint', () => {
     const out = lintOpenApi(v2);
     expect(out.problems.map((p) => p.rule)).toEqual(['request-body-on-get']);
     expect(out.problems[0]!.line).toBeGreaterThan(1);
+  });
+
+  it('asks for a description on every parameter and for a documented failure, as information', () => {
+    const doc = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'T', version: '1' },
+      servers: [{ url: 'https://api.example.com' }],
+      paths: {
+        '/pets': {
+          get: {
+            operationId: 'listPets',
+            summary: 'List pets',
+            tags: ['pets'],
+            parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer' } }, { name: 'sort', in: 'query', description: 'Sort order', schema: { type: 'string' } }],
+            responses: { 200: { description: 'ok' } },
+          },
+        },
+      },
+      tags: [{ name: 'pets' }],
+    });
+    const out = lintOpenApi(doc);
+    expect(out.problems.map((p) => [p.rule, p.severity, p.message])).toEqual([
+      ['parameter-description', 'info', 'Parameter "limit" of GET /pets has no description'],
+      ['error-responses', 'info', 'GET /pets documents no error response (4xx or 5xx) or default: callers cannot tell how it fails'],
+    ]);
+    // a description on the schema counts, and so does a default response
+    const fixed = JSON.parse(doc);
+    fixed.paths['/pets'].get.parameters[0].schema.description = 'How many';
+    fixed.paths['/pets'].get.responses.default = { description: 'error' };
+    expect(lintOpenApi(JSON.stringify(fixed)).problems).toEqual([]);
   });
 });

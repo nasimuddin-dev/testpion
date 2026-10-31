@@ -174,7 +174,7 @@ specs/clinic.yaml: 12 operations, 2 errors, 1 warning, 3 notes
 |---|---|
 | Errors | `syntax`, `info` (title and version), `ref-unresolved`, `path-ambiguous` (`/pets/{id}` and `/pets/{petId}`), `path-param-undeclared`, `path-param-unused`, `path-param-required`, `parameter-duplicate`, `operation-id-unique`, `operation-responses`, `security-scheme-defined` |
 | Warnings | `example-valid`, `operation-id`, `operation-success-response`, `response-schema`, `request-body-on-get`, `path-trailing-slash`, `server-not-https` |
-| Notes | `operation-summary`, `operation-tags`, `servers`, `component-unused` |
+| Notes | `operation-summary`, `parameter-description`, `error-responses`, `operation-tags`, `servers`, `component-unused` |
 
 `--disable` leaves rules out and `--fail-on warning` makes warnings fail the build too. In the app, an API definition's **Lint** tab lists the problems, marks them in the editor as you type, and a click shows the place; **How to fix (AI)** asks the assistant for the changes. Agents use the MCP tool `openapi_lint`.
 

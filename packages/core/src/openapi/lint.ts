@@ -57,6 +57,8 @@ export const OPENAPI_LINT_RULES: OpenApiLintRule[] = [
   { id: 'path-trailing-slash', severity: 'warning', description: 'Paths do not end with a slash.' },
   { id: 'server-not-https', severity: 'warning', description: 'Servers other than localhost use https.' },
   { id: 'operation-summary', severity: 'info', description: 'Every operation has a summary or a description.' },
+  { id: 'parameter-description', severity: 'info', description: 'Every parameter says what it is (an AI agent, or a developer, guesses otherwise).' },
+  { id: 'error-responses', severity: 'info', description: 'Every operation documents how it fails: a 4xx or 5xx response, or a default one.' },
   { id: 'operation-tags', severity: 'info', description: 'Every operation has a tag, and tags used are declared at the top.' },
   { id: 'servers', severity: 'info', description: 'The document names its servers.' },
   { id: 'component-unused', severity: 'info', description: 'Every component is used somewhere.' },
@@ -270,6 +272,7 @@ export function lintOpenApi(text: string, opts: { disable?: string[]; minSeverit
         if (p.required !== true) add('path-param-required', `Path parameter "${p.name}" must be required: true`, pat, label);
       }
       for (const { p, at: pat } of own) if (p && p.example !== undefined && p.schema) checkExample(p.schema, p.example, [...pat, 'example'], label);
+      for (const { p, at: pat } of own) if (p && typeof p.name === 'string' && !String(p.description ?? '').trim() && !(p.schema as Json | undefined)?.description) add('parameter-description', `Parameter "${p.name}" of ${label} has no description`, pat, label);
 
       if (typeof op.operationId === 'string' && op.operationId) {
         const before = opIds.get(op.operationId);
@@ -294,6 +297,7 @@ export function lintOpenApi(text: string, opts: { disable?: string[]; minSeverit
       if (!responses || !Object.keys(responses).length) add('operation-responses', `${label} documents no response`, oat, label);
       else {
         const codes = Object.keys(responses);
+        if (!codes.some((c) => /^[45]/.test(c) || c === 'default')) add('error-responses', `${label} documents no error response (4xx or 5xx) or default: callers cannot tell how it fails`, [...oat, 'responses'], label);
         if (!codes.some((c) => /^[23]/.test(c) || c === 'default')) add('operation-success-response', `${label} documents no success response (2xx / 3xx) or default`, [...oat, 'responses'], label);
         for (const code of codes) {
           const r = deref(responses[code]) as Json;

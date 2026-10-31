@@ -277,10 +277,11 @@ describe('the OpenAPI tools answer for a 300-operation document as they did', ()
   it('lints it, in JSON and in YAML, with each problem at its place', () => {
     const j = lintOpenApi(json);
     const y = lintOpenApi(yaml);
-    expect(j.problems).toHaveLength(986);
-    expect(y.problems).toHaveLength(986);
-    expect(hash(j)).toBe('d4c36ebc9e7d3f7d');
-    expect(hash(y)).toBe('443aa581a100cf60');
+    // (the two information rules of 0.55.6, parameter-description and error-responses, added 900 problems of severity info)
+    expect(j.problems).toHaveLength(1886);
+    expect(y.problems).toHaveLength(1886);
+    expect(hash(j)).toBe('d60fde25b1d93a1b');
+    expect(hash(y)).toBe('5d570c6ccb89a454');
     // a path that two keys spell the same way: the first key is where the problem is shown
     const dup = JSON.parse(json);
     dup.paths['/dup/{id}'] = dup.paths['/res1/{id}/sub1'];

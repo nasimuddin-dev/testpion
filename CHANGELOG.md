@@ -10,6 +10,10 @@
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
+### OpenAPI: two more notes, for agents and developers
+
+- The OpenAPI lint now also notes a **parameter without a description** and an operation that **documents no failure** (no 4xx, 5xx or default response). Both are information, so they do not fail a build. An AI agent that uses your API as a tool, and a new developer, guess without them.
+
 ### MCP: are your tools easy for an agent to use?
 
 - A connected MCP server's **Server info** has a **For AI agents** section, and `testpion mcp --lint` does the same from a terminal. It checks the tool list the way an agent meets it: descriptions that say when to use a tool, parameters that say what they are, destructive tools that say so, names a client accepts, and a list that does not fill the context. The MCP tool `mcp_server_tools` returns the same as `lint`.
