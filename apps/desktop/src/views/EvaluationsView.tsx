@@ -131,6 +131,12 @@ interface CompareHandOver {
   models: Array<{ provider: string; name: string }>;
 }
 
+/** The result of an evaluation's latest finished run for its list row: " · ✗ 4/6" or " · ✓ 6/6" (nothing before its first run). */
+function lastResult(runs: RunRow[], name: string): string {
+  const r = runs.find((x) => x.name === name && x.total > 0);
+  return r ? ` · ${r.passed === r.total ? '✓' : '✗'} ${r.passed}/${r.total}` : '';
+}
+
 /** Evaluation Lab: dataset × prompt × model × evaluators, streamed through the test runner. */
 export function EvaluationsView() {
   // WF-19: open evaluations are tabs (each its own draft; a single click in the list opens a preview tab)
@@ -295,10 +301,10 @@ export function EvaluationsView() {
         id: i.id,
         name: i.name,
         folder: i.folder,
-        subtitle: `${i.data.model || i.data.provider || 'model'} · ${countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl')} cases`,
+        subtitle: `${i.data.model || i.data.provider || 'model'} · ${countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl')} cases${lastResult(runs, i.name)}`,
         icon: <FlaskConical size={12} className="text-muted" />,
       })),
-    [hostItems],
+    [hostItems, runs],
   );
 
   /** What stops a run, with its one-click remedy (AU-8): Run is never disabled without one. */
