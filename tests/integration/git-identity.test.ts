@@ -23,6 +23,10 @@ describe('git identity', () => {
       expect(cliData<{ ok: boolean }>(before.out).ok).toBe(false);
       expect(before.status).toBe(2);
 
+      // the doctor says it too, as a warning with the command
+      const doc = await runCli(['doctor', '-w', ws, '--json'], { env });
+      expect(JSON.stringify(cliData(doc.out))).toMatch(/Git identity[^}]*warn[^}]*testpion git identity/);
+
       const refused = await runCli(['git', 'commit', '-m', 'first', '-w', ws], { env });
       expect(refused.status).not.toBe(0);
       expect(refused.err + refused.out).toMatch(/Git does not know who you are/);
@@ -37,6 +41,8 @@ describe('git identity', () => {
       expect(() => execFileSync('git', ['config', '--global', '--get', 'user.email'], { env, stdio: 'pipe' })).toThrow();
       expect(execFileSync('git', ['config', '--local', '--get', 'user.email'], { cwd: ws, env }).toString().trim()).toBe('ana@example.com');
 
+      const doc2 = await runCli(['doctor', '-w', ws, '--json'], { env });
+      expect(JSON.stringify(cliData(doc2.out))).toMatch(/Git identity[^}]*ok[^}]*Ana Silva <ana@example.com>/);
       const ok = await runCli(['git', 'commit', '-m', 'first', '-w', ws, '--json'], { env });
       expect(ok.status).toBe(0);
       expect(execFileSync('git', ['log', '-1', '--format=%an <%ae>'], { cwd: ws, env }).toString().trim()).toBe('Ana Silva <ana@example.com>');

@@ -1,7 +1,7 @@
 /** `testpion doctor`: is this machine (and the workspace) ready to run TestPion? */
 import { accessSync, constants, existsSync } from 'node:fs';
 import { Command } from 'commander';
-import { missingSecrets, WorkspaceManager, workspaceStorage, ENGINE_VERSION, collectDiagnostics, diagnosticsSummary } from '@testpion/core';
+import { gitIdentity, isInGitRepository, missingSecrets, WorkspaceManager, workspaceStorage, ENGINE_VERSION, collectDiagnostics, diagnosticsSummary } from '@testpion/core';
 import { cliSecrets, EXIT, green, red, yellow, dim, bold, printJson, findWorkspaceUp, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 interface Check {
@@ -72,7 +72,7 @@ export function registerDoctorCommand(program: Command): void {
       const where = o.workspace ? undefined : findWorkspaceUp(process.cwd());
       if (o.workspace || where) {
         try {
-          await withWorkspace(o.workspace, (store) => {
+          await withWorkspace(o.workspace, async (store) => {
             const cols = store.listCollections();
             const broken = cols.filter((c) => (c as { problem?: string }).problem);
             add('Workspace', 'ok', `${store.workspace.name} (${store.root})`);
@@ -88,6 +88,11 @@ export function registerDoctorCommand(program: Command): void {
             add('History index', store.meta.backend === 'sqlite' ? 'ok' : 'warn', store.meta.backend === 'sqlite' ? 'SQLite' : 'JSON lines (slower; needs Node.js 22.5+ for SQLite)');
             const miss = missingSecrets(store, cliSecrets());
             add('Secret values', miss.count ? 'warn' : 'ok', miss.count ? `${miss.text} Give them to the CLI as environment variables: ${miss.items.slice(0, 6).map((i) => i.envVar).join(', ')}${miss.count > 6 ? ' …' : ''}` : 'every secret variable has a value here');
+            // a workspace in git: git needs a name and an e-mail to sign a commit
+            if (isInGitRepository(store.root)) {
+              const who = await gitIdentity(store.root);
+              add('Git identity', who.ok ? 'ok' : 'warn', who.ok ? `${who.name} <${who.email}>` : 'git does not know who you are, so a commit fails: testpion git identity --name "Your Name" --email you@example.com');
+            }
             const u = workspaceStorage(store);
             add(
               'Kept data',
