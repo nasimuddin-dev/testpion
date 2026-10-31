@@ -88,6 +88,10 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
       toastError(e);
     }
   };
+  /** Mark these retrieved documents Right (one that already is stays so: the buttons toggle, this only sets). */
+  const markRight = async (ids: string[]) => {
+    for (const id of ids) if (chunks[id]?.label !== 'relevant') await labelChunk(id, 'relevant');
+  };
   const addRight = async () => {
     try {
       const r = await call<{ text: string }>('rag.addRightDocuments', { runId, resultId });
@@ -235,7 +239,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
               )}
               <div>
                 <div className="text-xs text-muted">Retrieved documents ({sample.contexts?.length ?? 0}){gold.size ? ` · right documents: ${[...gold].join(', ')}` : ''}</div>
-                {(sample.contexts?.length ?? 0) > 0 && <RagAblation runId={runId} resultId={resultId} />}
+                {(sample.contexts?.length ?? 0) > 0 && <RagAblation runId={runId} resultId={resultId} onMarkRight={markRight} />}
                 <table className="w-full text-xs mt-1" data-rag-lane>
                   <tbody>
                     {(sample.contexts ?? []).map((c, i) => {

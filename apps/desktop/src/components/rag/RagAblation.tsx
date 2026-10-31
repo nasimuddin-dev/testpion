@@ -10,7 +10,7 @@ import { Badge, Button, Spinner } from '../ui';
  * whose absence changes the answer. It calls the bot (n + 1 times), so it says so first. It is only offered when the bot's request takes
  * the documents as input; otherwise the button says what to add.
  */
-export function RagAblation({ runId, resultId }: { runId: string; resultId: string }) {
+export function RagAblation({ runId, resultId, onMarkRight }: { runId: string; resultId: string; /** Mark these retrieved documents Right (the sample's own marks). */ onMarkRight?(ids: string[]): void | Promise<void> }) {
   const info = useRpc<AblationInfo>('rag.ablationInfo', { runId, resultId });
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Ablation>();
@@ -43,6 +43,18 @@ export function RagAblation({ runId, resultId }: { runId: string; resultId: stri
       {result && (
         <div className="mt-1 grid gap-1" data-rag-ablation-result>
           <p>{result.text}</p>
+          {onMarkRight && result.documents.some((d) => d.loadBearing) && (
+            <div>
+              <Button
+                size="sm"
+                onClick={() => void onMarkRight(result.documents.filter((d) => d.loadBearing).map((d) => d.id))}
+                title="Mark the documents the answer depends on as Right: your reading of the sample, which can then become its right documents"
+                data-rag-ablation-mark
+              >
+                Mark the load-bearing documents Right
+              </Button>
+            </div>
+          )}
           <ul className="grid gap-0.5">
             {result.documents.map((d) => (
               <li key={d.id} className="flex items-center gap-2" data-rag-ablation-doc={d.id} data-load-bearing={d.loadBearing ? 'true' : 'false'}>

@@ -57,7 +57,7 @@ In an open sample, **Which document mattered?** asks your bot again, once with e
 
 - It needs a bot whose request takes the documents as input: put `"documents": "{{documents}}"` (a list of `{ id, text }`) or `"documents": "{{document_texts}}"` (a list of texts) in its body, and make the bot answer from them. The button says so when the bot does not.
 - It says the number of calls first. For 3 documents it is 4 calls to your bot. Only the question and the documents of that sample are sent.
-- No AI reviewer is used: answers are compared by their words.
+- No AI reviewer is used: answers are compared by their words. **Mark the load-bearing documents Right** then sets your own Right marks on them.
 - From a terminal: `testpion rag ablate <run> --result <id>`.
 
 ## What was under test? {#under-test}

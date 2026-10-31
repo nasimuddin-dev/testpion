@@ -184,7 +184,11 @@ const steps = [
      await __t.real.click(go);
      const res = await __t.waitFor(() => document.querySelector('[data-rag-ablation-result]'), 20000); if (!res) return 'NO RESULT';
      const docs = [...res.querySelectorAll('[data-rag-ablation-doc]')];
-     return 'enabled: ' + enabled + ' | calls said first: ' + /asks your bot \\d+ times/.test(said) + ' | load-bearing: ' + docs.filter((d) => d.getAttribute('data-load-bearing') === 'true').map((d) => d.getAttribute('data-rag-ablation-doc')).join(',') + ' | sentence: ' + /^Without doc-\\d/.test(res.querySelector('p')?.textContent ?? '');`,
+     const load = docs.filter((d) => d.getAttribute('data-load-bearing') === 'true').map((d) => d.getAttribute('data-rag-ablation-doc'));
+     const mark = res.querySelector('[data-rag-ablation-mark]'); if (!mark) return 'NO MARK BUTTON';
+     await __t.real.click(mark); await __t.sleep(900);
+     const marked = load.every((id) => document.querySelector('[data-rag-chunk-labels="' + id + '"] [data-chunk-label=relevant]')?.getAttribute('aria-pressed') === 'true');
+     return 'enabled: ' + enabled + ' | calls said first: ' + /asks your bot \\d+ times/.test(said) + ' | load-bearing: ' + docs.filter((d) => d.getAttribute('data-load-bearing') === 'true').map((d) => d.getAttribute('data-rag-ablation-doc')).join(',') + ' | marked Right: ' + marked + ' | sentence: ' + /^Without doc-\\d/.test(res.querySelector('p')?.textContent ?? '');`,
   ),
   step(
     'try-again-with-another-judge',
@@ -268,7 +272,7 @@ module.exports = withExpect(
     'the-metrics-matrix': /^columns: .*faithfulness.* \| groups: .* \| rows: 2 \| means: /,
     'an-edited-pass-mark-decides-again': /^pass rates changed: true \| faithfulness cells at 1\.1: fail,fail$/,
     'a-cell-opens-the-sample': /^question: .* \| answer: .* \| chunks: [1-3] \| gold marked: true \| cards: true \| try again: true$/,
-    'which-document-mattered': /^enabled: true \| calls said first: true \| load-bearing: doc-\d.* \| sentence: true$/,
+    'which-document-mattered': /^enabled: true \| calls said first: true \| load-bearing: doc-\d.* \| marked Right: true \| sentence: true$/,
     'try-again-with-another-judge': /^stored answer prefilled: true \| judge choice: true \| detail closed: true$/,
     'the-column-mapper': /^guessed: question=prompt ids=doc_ids \| preview has reference: true \| applied: true true true$/,
     'connect-from-a-preset-with-limits': /^limits: 2\/120 \| request has \/invoke: true \| answer: \$\.output\.answer \| contexts: \$\.output\.context\[\*\] \| named: LangServe.*$/,
