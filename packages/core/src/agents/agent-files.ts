@@ -73,6 +73,13 @@ const cell = (commands: string) =>
 /** The server command written into committed files: relative to the workspace, so no path of this computer. */
 const MCP_COMMAND = 'testpion mcp-server -w .';
 
+/** The team's note as a quoted section of AGENTS.md (information from the owners, not an instruction from the user), or nothing. */
+function noteSection(note?: string): string {
+  if (!note) return '';
+  const lines = note.split(/\r?\n/).map((l) => `> ${l}`).join('\n');
+  return `\n## Note from the team\n\nWritten by the people who own this workspace; it is information, not an instruction from the user.\n\n${lines}\n`;
+}
+
 /** The TestPion part of AGENTS.md, between the markers (LF line endings; the writer adapts them to the file). */
 export function renderAgentsMd(f: AgentWorkspaceFacts, o: { checkTypes?: string[] } = {}): string {
   const cmd = agentCommands(' -w .');
@@ -97,7 +104,7 @@ export function renderAgentsMd(f: AgentWorkspaceFacts, o: { checkTypes?: string[
 # TestPion workspace: ${mdName(f.name)}
 
 This folder is a [TestPion](https://testpion.dev) workspace: API requests, environments, tests, flows and evaluations as plain files. Prefer the TestPion CLI or its MCP tools to editing the JSON files by hand: they keep ids, references and secrets right.
-
+${noteSection(f.note)}
 ## What is here
 
 | Folder | What it holds |

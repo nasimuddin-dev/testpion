@@ -63,6 +63,8 @@ export function agentMcp(command: string) {
 
 export interface AgentWorkspaceFacts {
   name: string;
+  /** The team's note about the workspace (Home ▸ A note for your team), when there is one. */
+  note?: string;
   collections: Array<{ name: string; requests: number }>;
   /** Names only, never a variable. */
   environments: Array<{ name: string; production: boolean }>;
@@ -105,6 +107,7 @@ export function agentWorkspaceFacts(store: WorkspaceStore): AgentWorkspaceFacts 
   const specsDir = store.path('specs');
   return {
     name: store.workspace.name,
+    ...(store.workspace.description?.trim() ? { note: store.workspace.description.trim() } : {}),
     collections: safe(() => store.listCollections().filter((c) => !c.problem))
       .map((c) => ({ name: c.name, requests: requestCount(c.items ?? []) }))
       .sort((a, b) => byName(a.name, b.name)),

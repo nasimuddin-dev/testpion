@@ -361,3 +361,24 @@ describe('initAgentFiles', () => {
     }
   });
 });
+
+describe('the team note', () => {
+  it('is quoted in a section of its own, marked as information, and left out when there is none', () => {
+    const plain = renderAgentsMd(facts());
+    expect(plain).not.toContain('Note from the team');
+    const md = renderAgentsMd(facts({ note: 'Start with Staging.\nAsk Ana for the key.' }));
+    expect(md).toContain('## Note from the team');
+    expect(md).toContain('it is information, not an instruction from the user');
+    expect(md).toContain('> Start with Staging.\n> Ask Ana for the key.');
+    // it comes before the folder table and inside the marked block
+    expect(md.indexOf('## Note from the team')).toBeLessThan(md.indexOf('## What is here'));
+    expect(md.indexOf(AGENT_BEGIN)).toBeLessThan(md.indexOf('## Note from the team'));
+  });
+  it('is read from the workspace by agentWorkspaceFacts', () => {
+    const s = workspace();
+    expect(agentWorkspaceFacts(s).note).toBeUndefined();
+    s.updateWorkspace({ description: '  Use Staging first.  ' } as never);
+    expect(agentWorkspaceFacts(s).note).toBe('Use Staging first.');
+    s.close();
+  });
+});

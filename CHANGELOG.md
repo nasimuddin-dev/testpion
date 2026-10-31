@@ -4,7 +4,7 @@
 
 ### Team work: a note for your team
 
-- **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it.
+- **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
 ### Team work: secrets to fill in
 
