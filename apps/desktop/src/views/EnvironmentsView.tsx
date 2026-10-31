@@ -12,7 +12,7 @@ import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { useIntent } from '../hooks';
 import type { Environment, KeyValue } from '../types';
 import { CollectionVariablesPane } from '../components/CollectionVariablesPane';
-import { uid } from '../lib/format';
+import { plural, uid } from '../lib/format';
 import { KeyValueEditor } from '../components/KeyValueEditor';
 import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
@@ -419,6 +419,15 @@ export function EnvironmentsView() {
                     The file of this environment cannot be read, so its variables are not shown and it cannot be saved here: {draft.problem}. Fix the file (or restore it from git), or delete the environment.
                   </Callout>
                 )}
+                {(() => {
+                  // secrets named in this environment's file that have no value on this computer (after a clone, or on a new computer)
+                  const empty = rows.filter((r) => r.secret && r.enabled !== false && r.key && secretStatus[r.key] === false && !r.value).map((r) => r.key);
+                  return empty.length && !draft.problem ? (
+                    <Callout tone="warn" data-missing-secrets={empty.length}>
+                      {plural(empty.length, 'secret')} of this environment {empty.length === 1 ? 'has' : 'have'} no value on this computer: {empty.join(', ')}. Type {empty.length === 1 ? 'it' : 'them'} below, then Save. The value stays on this computer and is never written to the workspace files.
+                    </Callout>
+                  ) : null;
+                })()}
                 <KeyValueEditor
                   rows={rows}
                   allowSecret

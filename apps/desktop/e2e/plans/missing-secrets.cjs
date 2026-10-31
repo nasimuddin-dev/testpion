@@ -31,11 +31,12 @@ const steps = [
      await __t.real.click(row.querySelector('button') ?? row);
      await __t.waitFor(() => localStorage.getItem('aps.view') === 'environments', 5000);
      const box = await __t.waitFor(() => [...document.querySelectorAll('input')].find((i) => i.offsetParent && /^No value on this computer/.test(i.placeholder)), 8000);
-     return 'view: ' + localStorage.getItem('aps.view') + ' | secret field says where to type: ' + !!box;`,
+     const banner = document.querySelector('[data-missing-secrets]');
+     return 'view: ' + localStorage.getItem('aps.view') + ' | secret field says where to type: ' + !!box + ' | banner: ' + (banner ? banner.textContent.replace(/\\s+/g, ' ').trim().slice(0, 62) : 'none');`,
   ),
 ];
 
 module.exports = withExpect(steps, {
   'home-lists-the-environment': /^says: Environment "E2E clone" has a secret with no value on this computer: apiKey$/,
-  'the-row-opens-the-environment-and-the-secret-says-where-to-type': /^view: environments \| secret field says where to type: true$/,
+  'the-row-opens-the-environment-and-the-secret-says-where-to-type': /^view: environments \| secret field says where to type: true \| banner: 1 secret of this environment has no value/,
 }, { prepare });
