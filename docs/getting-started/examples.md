@@ -62,6 +62,7 @@ A set of small, commented files to read, run and change: every one works offline
 | `tests/agent/agent-cases.yaml` · `datasets/agent-cases.csv` | The same agent from a table: `input`, `should_call` (with arguments: `add_task(title=Buy milk)`) and `should_not_call` columns become the checks. |
 | Saved prompts **Learn: …** | The same four prompts as saved prompts, to run in **Try a prompt** and compare models. |
 | Saved evaluations **Learn: review sentiment (prompt)**, **Learn: task agent (agent)** | A prompt evaluation and an agent evaluation ready to run from **Checks**, with their report cards. |
+| Monitor **Learn: nightly intent check (prompt)** | The sentiment evaluation on a schedule, switched off. Turn it on in **Monitors** to see a nightly check that fails when the pass rate falls. |
 
 **RAG bots** (RAG bots ▸ Bots, Questions, Metrics, Checks)
 
