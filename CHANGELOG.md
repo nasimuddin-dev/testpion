@@ -1,77 +1,77 @@
 # Changelog
 
-## Unreleased
+## 0.55.5 — 2026-10-30
 
-### Team work in git
-
-- **Your team's changes** on Home: the commits other people made in the last 14 days, each with what it changed in words (*Ana, 2 hours ago, Point search at v2: MCP server Search: URL*). `testpion git activity`.
-- **A toast when your team pushed** (*Your team pushed 2 commits*, with Pull) when the background fetch finds commits and "pull by itself" does not take them.
-- **Invite a teammate…** (Git view ⋯): the clone address and the steps for someone new, as one message to copy; a sign-in typed into the address is left out.
-
-- **Pull my team's commits by itself** (Settings ▸ Git, off by default). When the background fetch finds new commits and the workspace has no change of yours (not even a new file), nothing unpushed and no merge under way, TestPion pulls them as a plain fast-forward (`git pull --ff-only`: never a merge, a stash or a rewrite), shows the new version and says who changed what (*Pulled 2 commits from your team (Ana): "Tighten the auth check"*, with an **Open Git** button). With changes of yours it does nothing and the Git view offers Pull as before. `testpion git pull --ff-only` is the same pull in a terminal; the setting is `git.autoPull`.
-- **Who last changed it, on hover.** Rest the pointer on a request, environment, flow, MCP server, prompt … in the explorer and a card says who changed it last, when, the commit's message and what it changed. An item with a change of yours not committed yet says so. One shared controller for every list, so a row costs two handlers; the answer is cached by commit (`git.lastChange`).
-
-### Docs for every reader
-
-- **Start here** (docs ▸ Getting started): pick the line that sounds like you (new to testing, tester, building with AI, RAG, team, CI, moving from Postman, using an AI assistant), try the Examples workspace in two minutes, find a task in one table, and learn the words you will meet.
-- **A glossary of every word** in plain language, A to Z, each with a link to learn more.
-- **Your first request** no longer needs a server: it uses the Examples workspace and a free public test site, explains the status code and the checks, and ends with what to read next.
-- **An *In short* box** under the title of 28 key pages (what it is, what you need), a *Next* list at the end of the guides, a plainer home page with a *Choose your path* table, and *Features* with a finder and its long paragraphs as short points.
-- The ten densest pages (HTTP Debugger, AI features, Integration testing, Finding your way, Privacy, Import fidelity, Export and import, the test runner, RAG, the MCP server) have their long paragraphs as short points, one sentence each: 190 very long lines became 129.
-- A test keeps the front-door pages plain (short sentences and paragraphs, an *In short* box) so they stay easy.
-
-### RAG bots: connect faster
-
-- **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
-
-### AI quality: try a wording, keep it as a version
-
-- **Save as a prompt version…** in Try a prompt: the wording you just tried becomes a version of a saved evaluation, beside its other versions. The evaluation keeps the prompt it has until you make the version current. `testpion eval version-save <evaluation> <name> --prompt <text|@file> [--system …]` does the same from a script.
-
-### RAG bots: mark the right documents
-
-- **From a script or an agent:** `testpion rag label document <run> --result <id> --doc <id> --right` (or `--partly`, `--wrong`, `--clear`, and `--add-to-right-documents`), and the MCP tool `rag_label` with `document`. `git_history` with `team: true` lists what your team changed lately.
-
-- **Your verdict on each retrieved document.** In an open sample every retrieved document has *Right*, *Partly* and *Wrong*; the labels are kept with the run, and *Add the documents you marked Right to the right documents of this question* writes them into the saved questions, so the next run measures the retrieval against documents you have read.
-
-### RAG bots: what was under test
-
-- **The report says what was under test.** Name the details your bot reports about itself (corpus version, top k, prompt version) under *Under test* in the connect dialog (`mapping.meta`); every run records them and the report card says *Corpus version v13 (was v12)* with a mark when one changed since the last run, so a score change comes with what changed.
-
-### Agents: compare two models
-
-- **Compare mode for agents.** *Compare* on an agent evaluation adds a variant (another model or other instructions); the table adds *Tool calls per case* and *Same tools as A*, and the sentence says *B used other tools in 1 of 2 cases.* A cheaper model that passes the same cases but calls other tools is a change you want to know about.
-
-### RAG bots: what changed, by question
-
-- **A case against the run before shows the documents.** *Since last run* on a failed case of a bot with sources lists the retrieved documents that were dropped (red) or added (green), how many of the right documents each run found (*1 of 1 → 0 of 1*) and why it fails now (*right document not found*). `testpion eval diff` and the `eval_case_diff` tool carry it as `retrieved`.
-- Two short guides in plain language: *Test a RAG bot in 5 minutes* and *Check an AI agent in 5 minutes*, linked from Start here.
-
-### AI quality: review answers
-
-- **Read the answers yourself.** *Review answers* on the report card: ten answers one at a time, the failed ones first and the rest spread across the run; <kbd>G</kbd> good, <kbd>B</kbd> bad, <kbd>J</kbd> / <kbd>K</kbd> next and back, a note if you like. What the checks decided stays hidden until the answer is graded, then it shows whether it agrees; at the end *The checks agreed with you on 8 of 10*. The grades are the run's reviews. *Add the good answers to the test cases* writes them as the expected answers (a case that has one keeps it). `testpion eval review [--export]` and `eval review-add`.
-
-### AI quality: prompt versions
-
-- **Which wording is better?** *Prompt versions* above the prompt: **Save as version…** keeps the prompt (and the agent's instructions) under a name; each version shows the result of the run made with exactly that wording (a run is tied to its version by the hash of the prompt it sent), and the report card says which version a run used. **Make current** asks first, with the numbers, when a version is under the pass line, did worse than the prompt in use, or was never run; the prompt in use is kept as *Before …*. `testpion eval versions | version-save | version-use [--confirm]`, `eval_variants` with `versions: true`.
-
-### Agents: a golden run
-
-- **Has the agent started using other tools?** Mark a run you trust as the **baseline** (the report card of an agent evaluation, or `testpion eval baseline <run>`). Later runs say, case by case, *same tools in the same order*, *dropped X; added Y*, *same tools in another order* or *same tools, but X was called with other arguments*; the report card shows *Tools against the baseline: 4 of 5 cases the same, 1 changed* and *Show the steps* adds the comparison (`eval trajectory --against`, `eval summary` → `agentBaseline`). One field of the saved evaluation; no model is called.
-
-### Agents: see what the agent did
-
-- **The trajectory of an agent case.** A failed agent case has *Show the steps*: the question, each model call, each tool call with its arguments and result, the final answer, down one line, with the tool checks pinned to the step that decided them (green at the call that met a *should call*, red on a forbidden call or on one that broke the allow-list or the call limit, grey *never called* at the end). `testpion eval trajectory <run> <case>`, the MCP tool `eval_case_diff` with `steps: true` and `eval.trajectory` say the same; a run now keeps what the model said at each step. No model is called.
-
-### RAG bots: read a result faster
-
-- **The report card opens on the two goals and the causes.** *Backed by the sources: 5 of 6 · Right documents found: 5 of 6*, then *Why the failed cases failed* as chips in plain words (*claim not backed by the sources*, *right document not found*, *ranked too low* …) that narrow the failed cases to that reason. Rule-based from the run's own scores, no model. In `eval summary`, `eval_summary` and `eval.summary` as `goals`, `causes` and `cause` on each failure.
-- **A sample opens by stage.** Question, Retrieved, Used, Answer, one line each, with *start here* on the first stage that went wrong; a right document that was not retrieved is listed with the retrieved document closest to the reference answer.
-
-### Learn by example
-
-- **The Examples workspace teaches MCP, AI quality and RAG bots by example.** New, commented files that run offline and give the same result every time: two MCP mocks (a task list with a resource and a prompt; payments with answers computed by a script) and their tests; one prompt test per kind of check; an evaluation over a dataset; safety probes; an agent with the tools of a mock, as tests and as a table (`should_call` / `should_not_call`); a bot with sources (an offline handbook bot, its saved target, eight questions, an end-to-end check with the offline demo model as the reviewer: 6 of 8 pass, two defects seeded on purpose); the same measures on an answer you already have; and one measure of your own of each kind under `metrics/`. A second offline model, *Offline demo model (examples)*, answers exactly these prompts. Suite **Learn by example**; `testpion run --suite learn`. Existing copies of the Examples workspace get the new files on update. Docs: Examples workspace ▸ Learn by example.
-- Found while writing them, fixed: a rag test without a target now hands its `reference_ids` and `reference_contexts` to the retrieval measures (they said "needs the gold chunk ids"); a record whose `reference_ids` is an empty list (a question no document answers) passes the id measures as "nothing to find" instead of failing as a missing column; *negative-rejection* and the failure analysis recognise "I could not find that in the documents" and the like as declining.
+### Team work in git
+
+- **Your team's changes** on Home: the commits other people made in the last 14 days, each with what it changed in words (*Ana, 2 hours ago, Point search at v2: MCP server Search: URL*). `testpion git activity`.
+- **A toast when your team pushed** (*Your team pushed 2 commits*, with Pull) when the background fetch finds commits and "pull by itself" does not take them.
+- **Invite a teammate…** (Git view ⋯): the clone address and the steps for someone new, as one message to copy; a sign-in typed into the address is left out.
+
+- **Pull my team's commits by itself** (Settings ▸ Git, off by default). When the background fetch finds new commits and the workspace has no change of yours (not even a new file), nothing unpushed and no merge under way, TestPion pulls them as a plain fast-forward (`git pull --ff-only`: never a merge, a stash or a rewrite), shows the new version and says who changed what (*Pulled 2 commits from your team (Ana): "Tighten the auth check"*, with an **Open Git** button). With changes of yours it does nothing and the Git view offers Pull as before. `testpion git pull --ff-only` is the same pull in a terminal; the setting is `git.autoPull`.
+- **Who last changed it, on hover.** Rest the pointer on a request, environment, flow, MCP server, prompt … in the explorer and a card says who changed it last, when, the commit's message and what it changed. An item with a change of yours not committed yet says so. One shared controller for every list, so a row costs two handlers; the answer is cached by commit (`git.lastChange`).
+
+### Docs for every reader
+
+- **Start here** (docs ▸ Getting started): pick the line that sounds like you (new to testing, tester, building with AI, RAG, team, CI, moving from Postman, using an AI assistant), try the Examples workspace in two minutes, find a task in one table, and learn the words you will meet.
+- **A glossary of every word** in plain language, A to Z, each with a link to learn more.
+- **Your first request** no longer needs a server: it uses the Examples workspace and a free public test site, explains the status code and the checks, and ends with what to read next.
+- **An *In short* box** under the title of 28 key pages (what it is, what you need), a *Next* list at the end of the guides, a plainer home page with a *Choose your path* table, and *Features* with a finder and its long paragraphs as short points.
+- The ten densest pages (HTTP Debugger, AI features, Integration testing, Finding your way, Privacy, Import fidelity, Export and import, the test runner, RAG, the MCP server) have their long paragraphs as short points, one sentence each: 190 very long lines became 129.
+- A test keeps the front-door pages plain (short sentences and paragraphs, an *In short* box) so they stay easy.
+
+### RAG bots: connect faster
+
+- **The connect dialog recognises the response.** After a probe it says *Looks like LlamaIndex query endpoint · reads "…" and 3 documents* with **Use this mapping**: OpenAI chat (with citations), Anthropic messages with citations, LangServe, LlamaIndex, Haystack, Dify, Flowise, Cohere, LangChain RetrievalQA and a plain answer with sources. Each candidate mapping is tried on your response with the engine's own reader, so it is never a guess; no model is called. `testpion rag probe` and the `rag_probe` tool return the same as `shapes`.
+
+### AI quality: try a wording, keep it as a version
+
+- **Save as a prompt version…** in Try a prompt: the wording you just tried becomes a version of a saved evaluation, beside its other versions. The evaluation keeps the prompt it has until you make the version current. `testpion eval version-save <evaluation> <name> --prompt <text|@file> [--system …]` does the same from a script.
+
+### RAG bots: mark the right documents
+
+- **From a script or an agent:** `testpion rag label document <run> --result <id> --doc <id> --right` (or `--partly`, `--wrong`, `--clear`, and `--add-to-right-documents`), and the MCP tool `rag_label` with `document`. `git_history` with `team: true` lists what your team changed lately.
+
+- **Your verdict on each retrieved document.** In an open sample every retrieved document has *Right*, *Partly* and *Wrong*; the labels are kept with the run, and *Add the documents you marked Right to the right documents of this question* writes them into the saved questions, so the next run measures the retrieval against documents you have read.
+
+### RAG bots: what was under test
+
+- **The report says what was under test.** Name the details your bot reports about itself (corpus version, top k, prompt version) under *Under test* in the connect dialog (`mapping.meta`); every run records them and the report card says *Corpus version v13 (was v12)* with a mark when one changed since the last run, so a score change comes with what changed.
+
+### Agents: compare two models
+
+- **Compare mode for agents.** *Compare* on an agent evaluation adds a variant (another model or other instructions); the table adds *Tool calls per case* and *Same tools as A*, and the sentence says *B used other tools in 1 of 2 cases.* A cheaper model that passes the same cases but calls other tools is a change you want to know about.
+
+### RAG bots: what changed, by question
+
+- **A case against the run before shows the documents.** *Since last run* on a failed case of a bot with sources lists the retrieved documents that were dropped (red) or added (green), how many of the right documents each run found (*1 of 1 → 0 of 1*) and why it fails now (*right document not found*). `testpion eval diff` and the `eval_case_diff` tool carry it as `retrieved`.
+- Two short guides in plain language: *Test a RAG bot in 5 minutes* and *Check an AI agent in 5 minutes*, linked from Start here.
+
+### AI quality: review answers
+
+- **Read the answers yourself.** *Review answers* on the report card: ten answers one at a time, the failed ones first and the rest spread across the run; <kbd>G</kbd> good, <kbd>B</kbd> bad, <kbd>J</kbd> / <kbd>K</kbd> next and back, a note if you like. What the checks decided stays hidden until the answer is graded, then it shows whether it agrees; at the end *The checks agreed with you on 8 of 10*. The grades are the run's reviews. *Add the good answers to the test cases* writes them as the expected answers (a case that has one keeps it). `testpion eval review [--export]` and `eval review-add`.
+
+### AI quality: prompt versions
+
+- **Which wording is better?** *Prompt versions* above the prompt: **Save as version…** keeps the prompt (and the agent's instructions) under a name; each version shows the result of the run made with exactly that wording (a run is tied to its version by the hash of the prompt it sent), and the report card says which version a run used. **Make current** asks first, with the numbers, when a version is under the pass line, did worse than the prompt in use, or was never run; the prompt in use is kept as *Before …*. `testpion eval versions | version-save | version-use [--confirm]`, `eval_variants` with `versions: true`.
+
+### Agents: a golden run
+
+- **Has the agent started using other tools?** Mark a run you trust as the **baseline** (the report card of an agent evaluation, or `testpion eval baseline <run>`). Later runs say, case by case, *same tools in the same order*, *dropped X; added Y*, *same tools in another order* or *same tools, but X was called with other arguments*; the report card shows *Tools against the baseline: 4 of 5 cases the same, 1 changed* and *Show the steps* adds the comparison (`eval trajectory --against`, `eval summary` → `agentBaseline`). One field of the saved evaluation; no model is called.
+
+### Agents: see what the agent did
+
+- **The trajectory of an agent case.** A failed agent case has *Show the steps*: the question, each model call, each tool call with its arguments and result, the final answer, down one line, with the tool checks pinned to the step that decided them (green at the call that met a *should call*, red on a forbidden call or on one that broke the allow-list or the call limit, grey *never called* at the end). `testpion eval trajectory <run> <case>`, the MCP tool `eval_case_diff` with `steps: true` and `eval.trajectory` say the same; a run now keeps what the model said at each step. No model is called.
+
+### RAG bots: read a result faster
+
+- **The report card opens on the two goals and the causes.** *Backed by the sources: 5 of 6 · Right documents found: 5 of 6*, then *Why the failed cases failed* as chips in plain words (*claim not backed by the sources*, *right document not found*, *ranked too low* …) that narrow the failed cases to that reason. Rule-based from the run's own scores, no model. In `eval summary`, `eval_summary` and `eval.summary` as `goals`, `causes` and `cause` on each failure.
+- **A sample opens by stage.** Question, Retrieved, Used, Answer, one line each, with *start here* on the first stage that went wrong; a right document that was not retrieved is listed with the retrieved document closest to the reference answer.
+
+### Learn by example
+
+- **The Examples workspace teaches MCP, AI quality and RAG bots by example.** New, commented files that run offline and give the same result every time: two MCP mocks (a task list with a resource and a prompt; payments with answers computed by a script) and their tests; one prompt test per kind of check; an evaluation over a dataset; safety probes; an agent with the tools of a mock, as tests and as a table (`should_call` / `should_not_call`); a bot with sources (an offline handbook bot, its saved target, eight questions, an end-to-end check with the offline demo model as the reviewer: 6 of 8 pass, two defects seeded on purpose); the same measures on an answer you already have; and one measure of your own of each kind under `metrics/`. A second offline model, *Offline demo model (examples)*, answers exactly these prompts. Suite **Learn by example**; `testpion run --suite learn`. Existing copies of the Examples workspace get the new files on update. Docs: Examples workspace ▸ Learn by example.
+- Found while writing them, fixed: a rag test without a target now hands its `reference_ids` and `reference_contexts` to the retrieval measures (they said "needs the gold chunk ids"); a record whose `reference_ids` is an empty list (a question no document answers) passes the id measures as "nothing to find" instead of failing as a missing column; *negative-rejection* and the failure analysis recognise "I could not find that in the documents" and the like as declining.
 - Trying a sample no longer drops the rules the Examples workspace gave the offline demo model (the injection refusal, the pet-shop tool call): the sample's rules go first and the workspace's own are kept after them, with its other headers.
 
 ## 0.55.4 — 2026-10-29
