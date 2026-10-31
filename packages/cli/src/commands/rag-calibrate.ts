@@ -7,7 +7,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, ablateSample, ablationInfo, defaultLabelsName, embeddingMap, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
+import { ApsError, applyThreshold, calibrateRun, calibrationMarkdown, ablateSample, ablationInfo, readRunSummary, resolveRunRef, defaultLabelsName, embeddingMap, labelDocument, labelResult, listLabelSets, readLabels, unlabel, type CalibrationReport, type MetricCalibration } from '@testpion/core';
 import { EXIT, CliError, bold, cliContext, dim, green, printJson, respond, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const needWorkspace = (ephemeral: string | undefined) => {
@@ -134,7 +134,7 @@ export function registerRagCalibrateCommands(rag: Command): void {
         const info = await ablationInfo(store, { run, resultId: o.result, max });
         if (!info.possible) throw new CliError(info.reason ?? 'This sample cannot be ablated', EXIT.CONFIG_ERROR);
         if (!o.json) console.log(dim(`${info.calls} calls to the bot (${info.documents} documents and the full one)${info.skipped ? `, ${info.skipped} more documents left out` : ''}.`));
-        const ctx = cliContext(store);
+        const ctx = cliContext(store, readRunSummary(store, resolveRunRef(store, run).runId)?.environment);
         try {
           const a = await wrap(() => ablateSample(store, ctx, { run, resultId: o.result, max })).catch((e) => {
             throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;

@@ -198,7 +198,8 @@ export function ragHandlers(be: Backend): Handlers {
     'rag.ablationInfo': ({ runId, resultId }: { runId: string; resultId: string }) => ablationInfo(be.ws, { run: runId, resultId }),
     /** Which document mattered: the bot asked again without each retrieved document in turn (n + 1 calls to the bot). */
     'rag.ablate': async ({ runId, resultId, max }: { runId: string; resultId: string; max?: number }) => {
-      const ctx = be.context({});
+      // in the environment the run was made in (its variables, its production guard)
+      const ctx = be.context({ environment: readRunSummary(be.ws, runId)?.environment });
       try {
         return await ablateSample(be.ws, ctx, { run: runId, resultId, max });
       } finally {
