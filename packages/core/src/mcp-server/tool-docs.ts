@@ -193,7 +193,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
   },
   openapi_lint: {
     when: 'Find errors and usability problems in an OpenAPI or Swagger document before testing it.',
-    whenNot: 'To compare versions: `openapi_diff`; to read it: `openapi_outline`.',
+    whenNot: 'Compare: `openapi_diff`; read: `openapi_outline`.',
     example: { spec: 'specs/veterinary-api.yaml', severity: 'error' },
     narrow: '`severity`, or `disable` noisy rules.',
   },
