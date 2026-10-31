@@ -16,7 +16,7 @@
  * A plan is a CommonJS module exporting an array of steps [name, code, shot?, expect?]: `code` is an expression run in
  * the window (it may use the helpers in e2e/helpers.js as __t); `expect` is a RegExp the result must match, or a
  * function (result) => true | 'reason'. Without one, the result must not show a failure marker (NO …, ERR, NOT …).
- * The array may carry `prepare(workspaceDir, outDir)` (fixtures before the app starts) and `env` (extra variables).
+ * The array may carry `prepare(workspaceDir, outDir)` (fixtures before the app starts), `after()` (when the plan is over) and `env` (extra variables).
  * A plan that fails is run once more; passing then is reported as flaky. Exit code 1 when anything failed.
  */
 import { spawn } from 'node:child_process';
@@ -100,7 +100,12 @@ async function runPlan(file, attempt) {
   if (typeof plan.prepare === 'function') await plan.prepare(ws, planOut);
   const env = typeof plan.env === 'function' ? plan.env(planOut) : (plan.env ?? {});
   const t0 = Date.now();
-  await launch(file, home, planOut, env);
+  try {
+    await launch(file, home, planOut, env);
+  } finally {
+    // a plan puts back what its `prepare` took away (the demo RAG system another plan left running)
+    if (typeof plan.after === 'function') await plan.after();
+  }
   const reportFile = join(planOut, 'report.json');
   if (!existsSync(reportFile)) return { name, ok: false, seconds: Math.round((Date.now() - t0) / 1000), failures: [{ step: '(plan)', why: 'no report: the app exited or timed out' }], out: planOut };
   const report = JSON.parse(readFileSync(reportFile, 'utf8'));

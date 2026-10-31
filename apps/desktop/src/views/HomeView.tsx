@@ -459,6 +459,11 @@ export function HomeView() {
                       {c.changes.length + c.more > 3 ? ` · and ${c.changes.length + c.more - 3} more` : ''}
                     </span>
                   )}
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-4">
           {/* WF-10: the items opened lately in this workspace (any kind), newest first; requests sent show until there are some */}
@@ -590,11 +595,6 @@ export function HomeView() {
           </div>
         )}
 
-                </button>
-              ))}
-            </div>
-          </Card>
-        )}
 
         {certs.length > 0 && (
           // HTTPS hosts called from here (app, runs, monitors, agents): the certificates that expire first

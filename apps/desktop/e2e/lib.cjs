@@ -1,6 +1,6 @@
 /**
  * Helpers for e2e plans (files in e2e/plans). A plan is an array of steps [name, code, shot?, expect?, options?];
- * `withExpect` adds the expectations by step name, and `prepare` / `env` / `settings` (merged into the app's settings,
+ * `withExpect` adds the expectations by step name, and `prepare` / `after` (runs when the plan is over, in the runner) / `env` / `settings` (merged into the app's settings,
  * e.g. the AI assistant's provider) / `allowErrors` (steps whose console errors are expected, e.g. a step that throws on purpose).
  */
 function withExpect(steps, expect = {}, extra = {}) {
@@ -8,6 +8,7 @@ function withExpect(steps, expect = {}, extra = {}) {
   for (const k of Object.keys(expect)) if (!names.has(k)) throw new Error(`expectation for unknown step "${k}"`);
   const out = steps.map(([name, code, shot = true]) => [name, code, shot, expect[name], { allowErrors: (extra.allowErrors ?? []).includes(name) }]);
   if (extra.prepare) out.prepare = extra.prepare;
+  if (extra.after) out.after = extra.after;
   if (extra.env) out.env = extra.env;
   if (extra.settings) out.settings = extra.settings;
   return out;

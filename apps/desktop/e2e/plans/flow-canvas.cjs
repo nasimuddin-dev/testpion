@@ -5,7 +5,8 @@
 // the canvas's actions first (Auto-arrange keeps the notes and frames); Align left lines two steps up; a narrow window
 // folds the toolbar's less used actions into its ⋯ menu.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
-const { withExpect, stepOf } = require('../lib.cjs');
+let stopped = false;
+const { withExpect, stepOf, ensureRagServer } = require('../lib.cjs');
 
 const FILE = 'rest/canvas-flow.yaml';
 const API = 'http://127.0.0.1:4010';
@@ -517,10 +518,15 @@ module.exports = withExpect(
   'keep-or-take-is-asked': /^asked: Keep mine \/ Take the new version \| taken: true \| my edit dropped: true$/,
 },
   {
-    // a plan before this one may have left the demo RAG system on port 4020, the default port of a flow's webhook
+    // a plan before this one may have left the demo RAG system on port 4020, the default port of a flow's webhook: it is closed for this
+    // plan and put back after it, because the plans after it (rag-capture …) use it without starting it
     async prepare() {
       const s = globalThis.__e2eRagServer;
+      stopped = !!s;
       if (s) (delete globalThis.__e2eRagServer, await s.close());
+    },
+    async after() {
+      if (stopped) await ensureRagServer('__e2eRagServer', 4020, 4021);
     },
   },
 );
