@@ -93,7 +93,7 @@ module.exports = withExpect(steps, {
   'fuzz-runs-and-summarises': /^summary: \d+ requests to 16 operations:/,
   'preview-lists-the-operations': /^operations: 19 \| tags: pet,store,user$/,
   'an-operation-opens-as-a-request': /^params: true \| opened: true$/,
-  'lint-tab-lists-the-notes': /^rules: component-unused,component-unused$/,
+  'lint-tab-lists-the-notes': /^rules: parameter-description,component-unused,component-unused$/,
   // the selected tabs of the page (the editor tab, …) include Definition; the selection is on the problem's line
   'a-row-opens-its-place': /^tab: .*\bDefinition\b.* \| line: [1-9]\d+$/,
 });
