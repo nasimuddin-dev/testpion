@@ -17,6 +17,7 @@ import { readResultsFile, runTests, type RunEvent } from './runner.js';
 import { isSuiteFile, loadSuite, loadTestsFromFile, streamTests } from './loader.js';
 import { findSavedEvaluation } from './saved-evaluations.js';
 import { runMonitorEvaluation, type MonitorRagInfo } from './monitor-rag.js';
+import { runMonitorPromptEvaluation } from './monitor-prompt.js';
 import { resolveMetric } from '../eval/rag/metric-registry.js';
 import { netFetch } from '../net/proxy.js';
 
@@ -200,8 +201,16 @@ export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> 
   if (!targets) throw invalid('A monitor needs what to run: a collection, a test file under tests/, or a saved RAG evaluation');
   if (m.evaluation?.trim()) {
     const ev = findSavedEvaluation(store, m.evaluation.trim());
-    if (ev.type !== 'rag') throw invalid(`"${ev.name}" is not a RAG evaluation`);
     if (m.selection?.length) throw invalid('Folders and requests are picked in a collection; an evaluation runs as a whole');
+    if (ev.type !== 'rag') {
+      // a prompt or agent evaluation: cases pass or fail; what is judged by a sample, a budget or metric gates belongs to a bot with sources
+      const ragOnly = (['gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd'] as const).filter((k) => m[k] !== undefined && !(k === 'gates' && !Object.keys(m.gates ?? {}).length));
+      if (ragOnly.length) throw invalid(`${ragOnly.join(', ')} ${ragOnly.length === 1 ? 'is' : 'are'} for a bot with sources: "${ev.name}" is a prompt or agent evaluation`);
+      if (m.limit !== undefined && !(Number.isInteger(m.limit) && m.limit >= 1)) throw invalid('The limit is a number of cases (1 or more)');
+      if (m.maxDrop !== undefined && !(m.maxDrop > 0 && m.maxDrop <= 1)) throw invalid('The largest drop allowed is more than 0 and at most 1 (0.1 fails a pass rate that fell by 10 points)');
+      if (m.baseline !== undefined && m.baseline !== 'previous') throw invalid('A prompt or agent evaluation can be compared with the previous run only (baseline: previous)');
+      return;
+    }
     if (m.judgeSample !== undefined && !(m.judgeSample > 0 && m.judgeSample <= 1)) throw invalid('The judged share is more than 0 and at most 1 (0.2 judges one sample in five)');
     if (m.judgeBudgetUsdPerDay !== undefined && !(m.judgeBudgetUsdPerDay >= 0)) throw invalid('The daily judge budget is an amount in USD (0 or more)');
     if (m.limit !== undefined && !(Number.isInteger(m.limit) && m.limit >= 1)) throw invalid('The limit is a number of records (1 or more)');
@@ -401,8 +410,15 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
   let gateReasons: string[] = [];
   let gated = false;
   let rag: MonitorRagInfo | undefined;
+  // a prompt or agent evaluation is run as cases (pass or fail); a bot with sources is scored by metrics (see monitor-rag.ts)
+  const promptEvaluation = !!monitor.evaluation && findSavedEvaluation(store, monitor.evaluation).type !== 'rag';
   try {
-    if (monitor.evaluation) {
+    if (monitor.evaluation && promptEvaluation) {
+      const r = await runMonitorPromptEvaluation(o);
+      summary = r.summary;
+      runId = r.runId;
+      gateReasons = r.gateReasons;
+    } else if (monitor.evaluation) {
       const r = await runMonitorEvaluation(o);
       summary = r.summary;
       runId = r.runId;
@@ -459,7 +475,7 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
     durationMs: summary.durationMs,
     runId,
     // an evaluation with gates is judged by its gates (a sample that scores low is what a metric is for); the system not answering always fails
-    status: (monitor.evaluation && (gated || Object.keys(monitor.gates ?? {}).length || monitor.baseline) ? summary.errors || gateReasons.length || summary.cancelled : summary.failed || summary.errors || summary.cancelled) || slow || certSoon ? 'failed' : 'passed',
+    status: (monitor.evaluation && !promptEvaluation && (gated || Object.keys(monitor.gates ?? {}).length || monitor.baseline) ? summary.errors || gateReasons.length || summary.cancelled : summary.failed || summary.errors || summary.cancelled || gateReasons.length) || slow || certSoon ? 'failed' : 'passed',
     total: summary.total,
     passed: summary.passed,
     failed: summary.failed,

@@ -107,9 +107,9 @@ const steps = [
      hb.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); await __t.sleep(600);
      const add = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((x) => /^New monitor/.test(x.textContent.trim())), 3000); if (!add) return 'NO NEW MONITOR ITEM';
      add.click(); await __t.sleep(800);
-     ${setSelect(`document.querySelector('select[aria-label="What the monitor runs"]')`, 'A RAG evaluation')}
+     ${setSelect(`document.querySelector('select[aria-label="What the monitor runs"]')`, 'An evaluation (a prompt, an agent or a bot with sources)')}
      await __t.sleep(500);
-     ${setSelect(`document.querySelector('select[aria-label="RAG evaluation"]')`, 'Clinic nightly')}
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation"]')`, 'Clinic nightly')}
      await __t.sleep(800);
      const f = await __t.waitFor(() => document.querySelector('[data-rag-monitor-fields]'), 5000); if (!f) return 'NO FIELDS';
      await __t.real.click('input[placeholder="e.g. API health"]'); await __t.real.type('Clinic nightly check'); await __t.sleep(200);

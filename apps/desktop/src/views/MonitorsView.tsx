@@ -625,6 +625,9 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
   const testFiles = useTestFiles();
   const evaluations = useLibrary<{ type?: string }>('evaluations');
   const ragEvaluations = evaluations.lib.items.filter((i) => i.data.type === 'rag');
+  // a prompt or agent evaluation is run as cases (a failing case fails the monitor); a bot with sources is scored by metrics and gates
+  const pickedEvaluation = evaluations.lib.items.find((i) => i.id === d.evaluation || i.name === d.evaluation);
+  const promptEvaluation = !!pickedEvaluation && pickedEvaluation.data.type !== 'rag';
   // the gates as the person writes them: metric=minimum, comma separated (the same names as `testpion rag run --min`)
   const [gatesText, setGatesText] = useState(Object.entries(draft.gates ?? {}).map(([k, v]) => `${k}=${v}`).join(', '));
   // the monitor changed on disk (a pull, the CLI, an agent): follow it, or ask when the form has edits (WF-15)
@@ -697,7 +700,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     if (!(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
     if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
     if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
-    if (target === 'evaluation' && !d.evaluation) return setError('Pick the RAG evaluation to run.');
+    if (target === 'evaluation' && !d.evaluation) return setError('Pick the evaluation to run.');
     if (target === 'evaluation' && d.rotate && !d.limit) return setError('A rotating sample needs the number of questions to score each night.');
     if (target === 'evaluation' && d.baseline === '') return setError('Name the run to compare with, or choose the previous run.');
     const gates: Record<string, number> = {};
@@ -709,7 +712,9 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     // one target: the others are cleared
     const none = { evaluation: undefined, limit: undefined, gates: undefined, judgeSample: undefined, judgeBudgetUsdPerDay: undefined, rotate: undefined, maxCostUsd: undefined, baseline: undefined, maxDrop: undefined };
     const what =
-      target === 'evaluation'
+      target === 'evaluation' && promptEvaluation
+        ? { collectionId: '', selection: undefined, testFile: undefined, gates: undefined, judgeSample: undefined, judgeBudgetUsdPerDay: undefined, rotate: undefined, maxCostUsd: undefined, ...(d.baseline ? { baseline: 'previous' } : {}) }
+        : target === 'evaluation'
         ? { collectionId: '', selection: undefined, testFile: undefined, ...(Object.keys(gates).length ? { gates } : { gates: undefined }) }
         : target === 'file'
           ? { ...none, collectionId: '', selection: undefined, testFile: d.testFile }
@@ -748,7 +753,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
           <Select value={target} onChange={(e) => setTarget(e.target.value as 'collection' | 'file')} aria-label="What the monitor runs">
             <option value="collection">A collection</option>
             <option value="file">A test file or flow</option>
-            <option value="evaluation">A RAG evaluation</option>
+            <option value="evaluation">An evaluation (a prompt, an agent or a bot with sources)</option>
           </Select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -759,10 +764,10 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               </Select>
             </Field>
           ) : target === 'evaluation' ? (
-            <Field label="RAG evaluation">
-              <Select value={d.evaluation ?? ''} onChange={(e) => setD({ ...d, evaluation: e.target.value || undefined })} aria-label="RAG evaluation">
-                <option value="">Pick a saved RAG evaluation…</option>
-                <NamedOptions items={ragEvaluations} />
+            <Field label="Evaluation">
+              <Select value={d.evaluation ?? ''} onChange={(e) => setD({ ...d, evaluation: e.target.value || undefined })} aria-label="Evaluation">
+                <option value="">Pick a saved evaluation…</option>
+                <NamedOptions items={evaluations.lib.items} />
               </Select>
             </Field>
           ) : (
@@ -793,7 +798,21 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             </Select>
           </div>
         </Field>
-        {target === 'evaluation' && (
+        {target === 'evaluation' && promptEvaluation && (
+          <div className="grid grid-cols-2 gap-3" data-monitor-prompt-fields>
+            <Field label="Cases" hint="Only the first n cases. A failing case fails the monitor.">
+              <Input type="number" min={1} placeholder="all" value={d.limit ?? ''} onChange={(e) => setD({ ...d, limit: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} aria-label="Number of cases" />
+            </Field>
+            <Field label="Pass rate" hint="Also fail when the pass rate falls more than this many points against the run before.">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={d.baseline === 'previous'} onChange={(e) => setD({ ...d, baseline: e.target.checked ? 'previous' : undefined })} aria-label="Fail on a drop in pass rate" />
+                <Input type="number" min={1} max={100} className="w-20" disabled={d.baseline !== 'previous'} value={Math.round((d.maxDrop ?? 0.1) * 100)} onChange={(e) => setD({ ...d, maxDrop: Math.min(1, Math.max(0.01, Number(e.target.value) / 100)) })} aria-label="Points of drop" />
+                <span className="text-xs text-muted">points</span>
+              </div>
+            </Field>
+          </div>
+        )}
+        {target === 'evaluation' && !promptEvaluation && (
           <>
             <Field label="Gates (optional)" hint="The run fails when the mean of a metric is under its minimum: faithfulness=0.8, context-recall=0.7. Without gates a run fails when a sample fails. The reason names the metric.">
               <Input value={gatesText} placeholder="faithfulness=0.8, context-recall=0.7" onChange={(e) => setGatesText(e.target.value)} aria-label="Gates" />

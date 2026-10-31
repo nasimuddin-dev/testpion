@@ -10,6 +10,10 @@
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
+### AI quality: watch a prompt or agent on a schedule
+
+- A **monitor** can now run a saved prompt or agent evaluation every night (or every hour). A failing case fails it, and **Fail on a drop in pass rate** also fails it when the pass rate falls by more than a number of points against the run before, so a hosted model that changed without a word is noticed. `testpion monitor add … --evaluation … --baseline previous`.
+
 ### AI quality: a drop in pass rate shows up by itself
 
 - **Needs attention** now lists a prompt or agent evaluation whose latest run passed clearly fewer cases than the run before it (*passed 5 of 10, down from 9 of 10*), so a model switch or a prompt edit that made it worse is not missed. The saved evaluations list also shows each one's latest result (✓ 6/6, ✗ 4/6). The same list is in `testpion problems` and the MCP tool `what_needs_attention`.

@@ -67,7 +67,7 @@ describe('a monitor that runs a RAG evaluation', () => {
   it('is validated: one target, a RAG evaluation, a sane judged share, known metrics', () => {
     expect(() => saveMonitor(store, base({ collectionId: 'c1' }))).toThrow(/not both/);
     expect(() => saveMonitor(store, base({ evaluation: 'Nope' }))).toThrow(/No saved evaluation/);
-    expect(() => saveMonitor(store, base({ evaluation: 'Plain LLM eval' }))).toThrow(/not a RAG evaluation/);
+    expect(() => saveMonitor(store, base({ evaluation: 'Plain LLM eval', gates: { faithfulness: 0.8 } }))).toThrow(/for a bot with sources/);
     expect(() => saveMonitor(store, base({ judgeSample: 0 }))).toThrow(/more than 0/);
     expect(() => saveMonitor(store, base({ gates: { nonsense: 1 } }))).toThrow(/not a metric name/);
     expect(saveMonitor(store, base({ gates: { faithfulness: 0.7, 'recall@3': 1 }, judgeSample: 1 })).evaluation).toBe('Clinic monitor eval');

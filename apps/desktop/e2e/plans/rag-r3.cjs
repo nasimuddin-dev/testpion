@@ -229,14 +229,14 @@ const steps = [
      const add = vis('[role=menuitem]').find((x) => x.textContent.trim() === 'New monitor'); if (!add) return 'NO NEW MONITOR ITEM (saved dialog clicked: ' + !!save + ')';
      await __t.real.click(add); await __t.sleep(600);
      if (!document.querySelector('select[aria-label="What the monitor runs"]')) return 'NO EDITOR after clicking "' + add.textContent.trim() + '": ' + (document.querySelector('[role=dialog]')?.innerText ?? 'no dialog').slice(0, 200);
-     ${setSelect(`document.querySelector('select[aria-label="What the monitor runs"]')`, 'A RAG evaluation')}
+     ${setSelect(`document.querySelector('select[aria-label="What the monitor runs"]')`, 'An evaluation (a prompt, an agent or a bot with sources)')}
      await __t.sleep(500);
-     const pick = document.querySelector('select[aria-label="RAG evaluation"]'); if (!pick) return 'NO RAG EVALUATION SELECT';
-     ${setSelect(`document.querySelector('select[aria-label="RAG evaluation"]')`, 'R3 views')}
+     const pick = document.querySelector('select[aria-label="Evaluation"]'); if (!pick) return 'NO RAG EVALUATION SELECT';
+     ${setSelect(`document.querySelector('select[aria-label="Evaluation"]')`, 'R3 views')}
      await __t.sleep(500);
      const fields = ['Gates', 'Share of samples judged', 'Daily judge budget in USD'].map((l) => l + ':' + !!document.querySelector('[aria-label="' + l + '"]')).join(',');
      await __t.real.click('[aria-label="Gates"]'); await __t.real.type('faithfulness=0.8'); await __t.sleep(300);
-     return 'evaluation chosen: ' + document.querySelector('select[aria-label="RAG evaluation"]').selectedOptions[0]?.textContent + ' | fields: ' + fields + ' | gates typed: ' + document.querySelector('[aria-label="Gates"]').value;`,
+     return 'evaluation chosen: ' + document.querySelector('select[aria-label="Evaluation"]').selectedOptions[0]?.textContent + ' | fields: ' + fields + ' | gates typed: ' + document.querySelector('[aria-label="Gates"]').value;`,
   ),
   step(
     'the-ci-dialog-has-the-rag-options',
