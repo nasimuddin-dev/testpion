@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { ApsError } from '../../errors.js';
 import type { Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
-import { gitLog, gitStage, gitStatus, gitSync, gitUnstage } from '../../git/git.js';
+import { gitIdentity, gitLog, gitStage, gitStatus, gitSync, gitUnstage } from '../../git/git.js';
 import { gitConflictDetail, gitResolve } from '../../git/conflicts.js';
 import type { Redactor } from '../../util/redact.js';
 import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../../git/semantic.js';
@@ -75,7 +75,9 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
       inputSchema: { type: 'object', properties: {} },
       run: async () => {
         const st = await gitStatus(store.root);
-        return st.files ? { ...st, files: st.files.map((f) => ({ ...f, ref: { kind: 'git-file', path: f.path } })) } : st;
+        // who commits are from (a commit fails when git has no name and e-mail; the CLI sets them: `testpion git identity`)
+        const who = st.repository ? { identity: await gitIdentity(store.root) } : {};
+        return st.files ? { ...st, ...who, files: st.files.map((f) => ({ ...f, ref: { kind: 'git-file', path: f.path } })) } : { ...st, ...who };
       },
     },
     {
