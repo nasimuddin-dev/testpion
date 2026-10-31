@@ -24,6 +24,19 @@ The `testpion` command does from a terminal what the app does: run tests, send a
 | Share work through git | `testpion git sync` |
 | Set up an AI assistant to use TestPion | `testpion agents init` |
 
+A few more that came with teamwork and AI quality:
+
+| I want to… | Command |
+|---|---|
+| See what my team changed lately | `testpion git activity` |
+| Tell git who I am | `testpion git identity --name "Ana" --email ana@example.com` |
+| Write a note for my team on Home | `testpion workspace note "Start with Staging."` |
+| List the secrets this computer still needs | `testpion secrets --missing` |
+| Check the test cases of an evaluation | `testpion eval lint "Support intents"` |
+| See what changed between two prompts | `testpion eval version-diff "Support intents" "Shorter"` |
+| Place a bot run's questions and documents by meaning | `testpion rag map <run>` |
+| Check how easy an MCP server is for an agent | `testpion mcp --lint -- node server.js` |
+
 Add `--json` to almost any command to get the answer as data for a script, and `--help` to see its options. A command that finds a problem exits with a non-zero number, which is how CI knows to fail. Add `-w <folder>` to say which workspace; without it, the nearest `workspace.json` is used.
 
 ::: v-pre
