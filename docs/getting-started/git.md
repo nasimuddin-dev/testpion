@@ -101,6 +101,7 @@ git config diff.testpion.xfuncname "^== (.*) ==$"
 
 - **Invite a teammate…** (Git view ⋯) writes the message to send: what to install, where to click (the workspace switcher ▸ Clone), the address to paste and the first-time guide. A sign-in typed into the address is left out. Who may read the repository is set on the Git host, not in TestPion.
 - **Your team's changes** (a card on Home, when the workspace is in git and others committed in the last 14 days) lists their commits with what each changed in words: *Ana, 2 hours ago, Point search at v2: MCP server Search: URL*. `testpion git activity [--days n] [--limit n] [--json]` says the same.
+- **Waiting on origin/main** (in the Git view, when your team pushed commits you have not pulled) shows what a pull would bring, before you pull: the commits and the items they change, in words. It reads what the last fetch left and changes nothing. `testpion git incoming [--limit n] [--json]` says the same.
 
 ## Step 2: Sign in to the remote
 

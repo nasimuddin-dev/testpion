@@ -11,6 +11,7 @@ import {
   gitPull,
   gitPullFastForward,
   teamActivity,
+  incomingChanges,
   gitIdentity,
   setGitIdentity,
   gitPush,
@@ -166,6 +167,19 @@ export function registerGitCommands(git: Command, program: Command): void {
           for (const x of c.changes) console.log(`  ${x.change === 'added' ? green('+') : x.change === 'removed' ? red('-') : '~'} ${x.title}${x.details.length ? dim(`: ${x.details.join(', ')}`) : ''}`);
           if (c.more) console.log(dim(`  and ${c.more} more`));
         }
+      });
+    }),
+  );
+
+  wsOpt(git.command('incoming').description('what a pull would bring in, by meaning, before you pull: the upstream’s commits not yet here and the items they change (reads the last fetch; run `git fetch` first)').option('--limit <n>', 'at most this many commits (default 20)', (v) => Number(v))).action((o) =>
+    withWorkspace(o.workspace, async (s) => {
+      const inc = await incomingChanges(s.root, { limit: o.limit });
+      if (!inc) throw new CliError('This branch has no upstream to compare with: push it once, or `git branch --set-upstream-to=origin/main`', EXIT.CONFIG_ERROR);
+      out(o.json, inc, () => {
+        console.log(inc.text);
+        for (const c of inc.commits) console.log(`  ${dim(c.short)} ${c.author}: ${c.subject}`);
+        for (const x of inc.changes) console.log(`  ${x.change === 'added' ? green('+') : x.change === 'removed' ? red('-') : '~'} ${x.title}${x.details.length ? dim(`: ${x.details.join(', ')}`) : ''}`);
+        if (inc.more) console.log(dim(`  and ${inc.more} more`));
       });
     }),
   );

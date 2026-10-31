@@ -674,7 +674,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { path: 'collections/veterinary-api.json', side: 'theirs', confirm: true },
   },
   git_status: {
-    when: 'Use it to see the branch, ahead / behind counts and changed files of the workspace.',
+    when: 'Use it to see the branch, ahead / behind counts, changed files and, when behind, `incoming` (what a pull brings).',
     whenNot: 'For what changed inside the files, use `git_diff`.',
     example: {},
   },
@@ -684,7 +684,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { confirm: true },
   },
   git_changes: {
-    when: 'Use it to list what changed since the last commit item by item, named like the app: "MCP server Weather", "Dataset users.csv: 12 rows added", "Prompt Greeting".',
+    when: 'Use it to list what changed since the last commit item by item, named like the app ("MCP server Weather").',
     whenNot: 'For the branch and ahead / behind counts use `git_status`; for one item side by side or between two commits use `git_diff`.',
     example: { kind: 'mcp-server' },
     narrow: 'Give `kind` or `file`, lower `limit`, or page with `cursor`.',

@@ -29,6 +29,7 @@ A few more that came with teamwork and AI quality:
 | I want to… | Command |
 |---|---|
 | See what my team changed lately | `testpion git activity` |
+| See what a pull would bring | `testpion git incoming` |
 | Tell git who I am | `testpion git identity --name "Ana" --email ana@example.com` |
 | Write a note for my team on Home | `testpion workspace note "Start with Staging."` |
 | List the secrets this computer still needs | `testpion secrets --missing` |

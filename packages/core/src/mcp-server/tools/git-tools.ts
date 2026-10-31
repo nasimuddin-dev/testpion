@@ -4,6 +4,7 @@ import { ApsError } from '../../errors.js';
 import type { Collection } from '../../model/types.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { gitIdentity, gitLog, gitStage, gitStatus, gitSync, gitUnstage } from '../../git/git.js';
+import { incomingChanges } from '../../git/team-activity.js';
 import { gitConflictDetail, gitResolve } from '../../git/conflicts.js';
 import type { Redactor } from '../../util/redact.js';
 import { changesMarkdown, describeGitChanges, describeItemDiff, describeRevChanges } from '../../git/semantic.js';
@@ -77,6 +78,9 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
         const st = await gitStatus(store.root);
         // who commits are from (a commit fails when git has no name and e-mail; the CLI sets them: `testpion git identity`)
         const who = st.repository ? { identity: await gitIdentity(store.root) } : {};
+        // when the remote is ahead: what a pull would bring, by meaning
+        const incoming = st.repository && st.behind > 0 ? await incomingChanges(store.root).catch(() => undefined) : undefined;
+        if (incoming) Object.assign(who, { incoming });
         return st.files ? { ...st, ...who, files: st.files.map((f) => ({ ...f, ref: { kind: 'git-file', path: f.path } })) } : { ...st, ...who };
       },
     },

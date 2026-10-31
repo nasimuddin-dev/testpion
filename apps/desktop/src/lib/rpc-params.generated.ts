@@ -175,6 +175,7 @@ export interface RpcParamTypes {
   'git.fixSecrets': RpcCommonParams & { findings: unknown[]; environmentId: string };
   'git.fixStaged': RpcCommonParams & { findings: unknown[]; environmentId: string };
   'git.identity': RpcCommonParams;
+  'git.incoming': RpcCommonParams;
   'git.init': RpcCommonParams & { remote?: string };
   'git.itemBlame': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string; limit?: number };
   'git.itemDiscard': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string; dryRun?: boolean };
@@ -410,4 +411,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 393;
+export const RPC_METHOD_COUNT = 394;

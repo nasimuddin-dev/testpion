@@ -23,6 +23,7 @@ import { GitLargeFiles } from '../components/GitLargeFiles';
 import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
 import { GitInviteDialog } from '../components/GitInviteDialog';
 import { GitIdentityDialog } from '../components/GitIdentityDialog';
+import { GitIncoming } from '../components/GitIncoming';
 import { toastWithUndo } from '../lib/git-items';
 import { gitSnapshot, refreshGit, useGitFull, useWhenShown } from '../lib/git';
 
@@ -467,6 +468,7 @@ export function GitView() {
           {secrets && secrets.length > 0 && <GitSecretsPanel findings={secrets} onChange={setSecrets} onCommitAnyway={() => void commit(true)} />}
         </section>
 
+        {status.remote && status.behind > 0 && <GitIncoming behind={status.behind} />}
         {status.remote && status.behind > 0 && (status.ahead > 0 || files.length > 0) ? (
           // the team pushed: pull first (Pull & push does both), before a push is refused
           <Callout

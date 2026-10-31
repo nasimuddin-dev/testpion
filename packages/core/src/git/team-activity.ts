@@ -88,3 +88,46 @@ export async function teamActivity(ws: string, o: { days?: number; limit?: numbe
     : `Nobody else has changed this workspace in the last ${days} days.`;
   return { ...(me ? { me } : {}), days, commits, text };
 }
+
+export interface IncomingChanges {
+  /** The branch the commits come from ("origin/main"). */
+  upstream: string;
+  /** The commits on it that this branch does not have yet, newest first. */
+  commits: Array<{ hash: string; short: string; author: string; date: string; subject: string }>;
+  /** What they change, by meaning, against the point the two branches split (so your own commits are not in it). */
+  changes: TeamChange[];
+  more: number;
+  /** "2 commits by 1 person change 3 items: Search: URL · …" or "Nothing is waiting on origin/main." */
+  text: string;
+}
+
+/**
+ * What a pull would bring in, before it is pulled: the commits the upstream has and this branch has not, and what they change item by
+ * item (the same words as the Git view). Nothing is fetched or written: it reads what the last fetch left.
+ */
+export async function incomingChanges(ws: string, o: { limit?: number } = {}): Promise<IncomingChanges | undefined> {
+  const upstream = (await runGit(ws, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).catch(() => '')).trim();
+  if (!upstream) return undefined;
+  const limit = Math.min(Math.max(1, Math.floor(o.limit ?? 20)), 100);
+  const log = await runGit(ws, ['log', `HEAD..${upstream}`, `--max-count=${limit}`, '--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1e']).catch(() => '');
+  const commits = log
+    .split('\x1e')
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .map((r) => {
+      const [hash, short, author, date, subject] = r.split('\x1f');
+      return { hash: hash!, short: short!, author: author!, date: date!, subject: subject ?? '' };
+    });
+  if (!commits.length) return { upstream, commits: [], changes: [], more: 0, text: `Nothing is waiting on ${upstream}.` };
+  const base = (await runGit(ws, ['merge-base', 'HEAD', upstream]).catch(() => '')).trim();
+  let all: SemanticChange[] = [];
+  try {
+    all = await describeRevChanges(ws, base || EMPTY_TREE, commits[0]!.hash);
+  } catch {
+    // a diff that cannot be read: the commits are still listed
+  }
+  const changes = all.slice(0, 12).map((x) => ({ change: x.change, title: x.title, details: x.details, kind: x.kind, ...(x.ref ? { ref: x.ref } : {}) }));
+  const people = new Set(commits.map((c) => c.author));
+  const text = `${commits.length} ${commits.length === 1 ? 'commit' : 'commits'} by ${people.size} ${people.size === 1 ? 'person' : 'people'}${all.length ? ` change ${all.length} ${all.length === 1 ? 'item' : 'items'}: ${changes.slice(0, 3).map((c) => `${c.title}${c.details.length ? `: ${c.details.slice(0, 2).join(', ')}` : ''}`).join(' · ')}${all.length > 3 ? ' …' : ''}` : ''}.`;
+  return { upstream, commits, changes, more: Math.max(0, all.length - changes.length), text };
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Team work: before you pull
+
+- **Waiting on origin/main** in the Git view: when your team pushed, a fold-out lists the incoming commits and what they change in words (*Point search at v2: MCP server Search: URL*) before you pull. `testpion git incoming [--limit n] [--json]` says the same, and an AI agent's `git_status` carries it as `incoming`.
+
 ### Git: who are you?
 
 - A computer that has never used git has no name and e-mail, and git refused to commit with a cryptic message. Now the Git view asks *Who are you?*, keeps the answer for this workspace only (never the global git config) and commits again by itself. `testpion git identity` shows or sets it, and a commit from the command line says what to run.

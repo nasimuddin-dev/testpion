@@ -237,6 +237,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'flows.webhooks.stop': {},
   'git.autoFetchSet': { enabled: 'b' },
   'git.teamActivity': { days: 'n?', limit: 'n?' },
+  'git.incoming': {},
   'git.identity': {},
   'git.setIdentity': { name: 's', email: 's' },
   'rag.ablationInfo': { runId: 's', resultId: 's' },

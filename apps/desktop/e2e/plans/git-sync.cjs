@@ -85,6 +85,17 @@ const steps = [
     })()`,
   ],
   [
+    'incoming-previewed',
+    `(async () => {
+      const box = await __t.waitFor(() => document.querySelector('[data-git-incoming]'), 8000); if (!box) return 'NO FOLD-OUT';
+      box.open = true; await __t.sleep(400);
+      const commits = box.querySelector('[data-git-incoming-commits]')?.textContent ?? '';
+      const changes = box.querySelector('[data-git-incoming-changes]')?.textContent ?? '';
+      const api = await window.aps.invoke('git.incoming', {});
+      return 'title: ' + box.querySelector('summary').textContent.includes('Waiting on origin/main') + ' | commit: ' + /Teammate renames the JSON post/.test(commits) + ' | change in words: ' + /JSON/.test(changes) + ' | api: ' + api.commits.length;
+    })()`,
+  ],
+  [
     'pull-and-push',
     `(async () => {
       ${button('Pull & push')}?.click();
@@ -118,6 +129,7 @@ module.exports = withExpect(
     'first-push': /^committed: true \| upstream: origin\/main$/,
     'both-change': /^ready$/,
     'behind-shown': /^pull: Pull 1 \| strip: Your team pushed 1 commit\. Pull before pushing\..* \| pull & push: true \| push: false \| rail: 1$/,
+    'incoming-previewed': /^title: true \| commit: true \| change in words: true \| api: 1$/,
     'pull-and-push': /^Pulled 1 commit, merged, and pushed [2-9] commits\. \| theirs: true \| mine: true \| ahead\/behind: 0\/0 \| strip: false \| rail: false$/,
     'remote-has-both': /^teammate: true \| mine: true \| merge: true$/,
   },

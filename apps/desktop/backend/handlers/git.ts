@@ -36,6 +36,7 @@ import {
   gitSync,
   gitUnstage,
   teamActivity,
+  incomingChanges,
   gitIdentity,
   setGitIdentity,
   scanStagedSecrets,
@@ -165,6 +166,8 @@ export function gitHandlers(be: Backend): Handlers {
       rmSync(proposalFile(), { force: true });
       return changed({ committed: true, commit, secrets: [] });
     },
+    /** What a pull would bring in, by meaning: the upstream's commits not yet here and what they change (reads the last fetch; writes nothing). */
+    'git.incoming': () => incomingChanges(ws()),
     /** Who commits are from on this computer (git's name and e-mail; `ok` when both are set). */
     'git.identity': () => gitIdentity(ws()),
     /** Set the name and e-mail for this workspace's repository only (never the global git config). */
