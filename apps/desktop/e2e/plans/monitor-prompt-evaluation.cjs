@@ -10,6 +10,22 @@ const steps = [
     `const r = await window.aps.invoke('ai.sample', { run: false });
      return 'sample: ' + (r.evaluation?.name ?? r.name ?? 'NONE');`,
   ),
+  // the evaluation's own menu: Monitor on a schedule… opens the editor with it picked
+  step(
+    'the-evaluations-menu-offers-a-schedule',
+    `await __t.view('AI Lab'); await __t.sleep(900); await __t.tab('Checks'); await __t.sleep(600);
+     const row = await __t.waitFor(() => [...document.querySelectorAll('aside *, main *')].find((e) => e.children.length === 0 && e.offsetParent && e.textContent.trim() === 'Sample: support intents'), 8000); if (!row) return 'NO ROW';
+     const r = row.getBoundingClientRect();
+     row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 10, clientY: r.top + 5 }));
+     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Monitor on a schedule/.test(m.textContent.trim())), 4000); if (!item) return 'NO MENU ITEM';
+     await __t.real.click(item);
+     const sel = await __t.waitFor(() => document.querySelector('select[aria-label="Evaluation"]'), 8000); if (!sel) return 'NO EDITOR';
+     const name = document.querySelector('input[placeholder="e.g. API health"]')?.value;
+     const out = 'editor opened: true | evaluation picked: ' + (sel.selectedOptions[0]?.textContent === 'Sample: support intents') + ' | name: ' + name;
+     // the editor is a new monitor's tab: cancelling closes it
+     const cancel = [...document.querySelectorAll('button')].find((b) => b.offsetParent && b.textContent.trim() === 'Cancel'); if (cancel) { await __t.real.click(cancel); await __t.sleep(500); }
+     return out;`,
+  ),
   step(
     'a-prompt-evaluation-shows-its-own-fields',
     `await __t.view('Monitors'); await __t.sleep(900);
@@ -40,6 +56,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'the-sample-evaluation-exists': /^sample: Sample: support intents$/,
+  'the-evaluations-menu-offers-a-schedule': /^editor opened: true \| evaluation picked: true \| name: Sample: support intents nightly$/,
   'a-prompt-evaluation-shows-its-own-fields': /^prompt fields: true \| bot fields: false \| gates field: false \| cost line: true$/,
   'saving-keeps-the-evaluation-and-the-baseline': /^saved: true \| evaluation: ev-\S+ \| limit: 4 \| baseline: previous \| rag-only cleared: true$/,
 });

@@ -190,9 +190,12 @@ export function MonitorsView() {
   useIntent(
     'monitors',
     // create: { collectionId } (a collection's ▸ Monitor…) or { testFile } (a flow's Deploy ▸ Schedule): the editor opens prefilled
-    (p?: { create?: { collectionId?: string; selection?: string[]; testFile?: string }; monitorId?: string }) => {
+    (p?: { create?: { collectionId?: string; selection?: string[]; testFile?: string; evaluation?: string; evaluationName?: string }; monitorId?: string }) => {
       if (p?.monitorId) openTab(p.monitorId);
-      if (p?.create) {
+      if (p?.create?.evaluation) {
+        // an evaluation's ▸ Monitor on a schedule…: nightly, with the pass-rate check on (a bot with sources keeps its own gates)
+        setEditing({ name: `${p.create.evaluationName ?? 'Evaluation'} nightly`, collectionId: '', evaluation: p.create.evaluation, everyMinutes: 1440, enabled: true, environment: useApp.getState().environment });
+      } else if (p?.create) {
         const testFile = p.create.testFile || undefined;
         const name = testFile ? testFile.replace(/^.*\//, '').replace(/\.(ya?ml|json)$/i, '') : '';
         setEditing({ name, collectionId: testFile ? '' : (p.create.collectionId ?? ''), selection: testFile ? undefined : p.create.selection, testFile, everyMinutes: 15, enabled: true, environment: useApp.getState().environment });

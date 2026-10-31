@@ -611,7 +611,7 @@ const KINDS: readonly ItemKindInfo[] = [
     git: { merge: 'by-id' },
     listed: true,
     sample: 'library/evaluations.json',
-    capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.58' }, monitor: { planned: '0.58' } },
+    capabilities: { ...LIBRARY_ITEM, run: true, ci: { planned: '0.58' }, monitor: true },
     deletes: LIBRARY_DELETE,
   },
   {

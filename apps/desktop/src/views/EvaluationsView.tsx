@@ -405,6 +405,8 @@ export function EvaluationsView() {
                       void openSaved(id).then((it) => {
                         if (it) void startRun({ ...drafts.load(), ...it.data, name: it.name });
                       }),
+                    // run it on a schedule: the monitor editor opens with this evaluation picked
+                    monitor: () => useApp.getState().openIntent('monitors', { create: { evaluation: id, evaluationName: saved.lib.items.find((i) => i.id === id)?.name } }),
                   },
                 })}
                 items={savedItems}
