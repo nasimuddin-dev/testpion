@@ -393,7 +393,7 @@ It runs with your permissions. Allow it only if you know where this workspace co
               <PromptsPanel serverId={current.id} prompts={disc.prompts} />
             ) : (
               <div className="h-full overflow-auto">
-                <AgentFriendly tools={disc.tools} instructions={disc.instructions} />
+                <AgentFriendly tools={disc.tools} instructions={disc.instructions} prompts={disc.prompts} resources={disc.resources} />
                 <JsonTree data={{ serverInfo: disc.serverInfo, capabilities: disc.capabilities, instructions: disc.instructions }} />
               </div>
             )}

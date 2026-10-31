@@ -39,7 +39,8 @@ An AI agent picks a tool by its description and fills its arguments from the sch
 - **parameters without descriptions**, and no list of which are required;
 - a tool that **sounds destructive** (*delete*, *reset* …) but has no `destructiveHint`, so a client cannot ask first;
 - **names** a client rejects, a schema that is not an object, a `required` that names nothing;
-- **too many tools**, or a list so big that it fills the agent's context (about 4 characters a token).
+- **too many tools**, or a list so big that it fills the agent's context (about 4 characters a token);
+- **prompts and resources** without a description.
 
 Errors make the command exit with 1; warnings and tips are advice. `--json` prints the findings. The MCP tool `mcp_server_tools` returns the same as `lint`.
 

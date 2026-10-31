@@ -379,7 +379,7 @@ ${cyan(r.url)}`);
           }
           const d = await s.discover();
           if (o.lint) {
-            const l = lintMcpTools(d.tools, { instructions: d.instructions });
+            const l = lintMcpTools(d.tools, { instructions: d.instructions, prompts: d.prompts, resources: d.resources });
             if (o.json) printJson({ serverInfo: d.serverInfo, ...l });
             else {
               console.log(bold(`${d.serverInfo?.name ?? 'server'} ${d.serverInfo?.version ?? ''}`));

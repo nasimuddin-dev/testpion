@@ -64,4 +64,13 @@ describe('lintMcpTools', () => {
     expect(r.errors).toBeGreaterThanOrEqual(2);
     expect(r.errors + r.warnings + r.tips).toBe(r.findings.length);
   });
+
+  it('looks at prompts and resources too', () => {
+    const r = lintMcpTools([good()], {
+      prompts: [{ name: 'review', arguments: [{ name: 'file' }, { name: 'style', description: 'tone' }] }, { name: 'ok', description: 'Review a file.' }],
+      resources: [{ name: 'readme', uri: 'file:///r' }, { name: 'api', uri: 'file:///a', description: 'The API notes' }],
+    });
+    expect(r.findings.map((f) => `${f.level}:${f.code}`)).toEqual(['warn:prompt-no-description', 'tip:prompt-argument-no-description', 'tip:resource-no-description']);
+    expect(r.findings[2]!.text).toBe('1 resource has no description: readme.');
+  });
 });

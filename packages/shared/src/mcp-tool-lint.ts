@@ -48,7 +48,19 @@ const BIG_LIST_TOKENS = 20_000;
 
 const words = (s: string) => s.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
 
-export function lintMcpTools(tools: LintTool[], o: { instructions?: string } = {}): ToolLint {
+export interface LintPrompt {
+  name: string;
+  description?: string;
+  arguments?: Array<{ name: string; description?: string }>;
+}
+
+export interface LintResource {
+  name: string;
+  uri?: string;
+  description?: string;
+}
+
+export function lintMcpTools(tools: LintTool[], o: { instructions?: string; prompts?: LintPrompt[]; resources?: LintResource[] } = {}): ToolLint {
   const findings: ToolFinding[] = [];
   const add = (level: LintLevel, code: string, text: string, tool?: string) => findings.push({ level, code, text, ...(tool ? { tool } : {}) });
 
@@ -87,6 +99,15 @@ export function lintMcpTools(tools: LintTool[], o: { instructions?: string } = {
     if (a.readOnlyHint === undefined && a.destructiveHint === undefined && !sounds) add('tip', 'no-annotations', `${name} has no readOnlyHint: say when it only reads, so a client can run it without asking.`, name);
     if (!t.outputSchema) add('tip', 'no-output-schema', `${name} has no output schema: an agent reads its result as free text.`, name);
   }
+
+  // prompts and resources are read by agents too: a name alone does not say when to use them
+  for (const p of o.prompts ?? []) {
+    if (!(p.description ?? '').trim()) add('warn', 'prompt-no-description', `The prompt ${p.name} has no description: a client cannot tell when to offer it.`, p.name);
+    const bare = (p.arguments ?? []).filter((a) => !(a.description ?? '').trim());
+    if (bare.length) add('tip', 'prompt-argument-no-description', `${bare.length} argument${bare.length === 1 ? '' : 's'} of the prompt ${p.name} ${bare.length === 1 ? 'has' : 'have'} no description: ${bare.slice(0, 4).map((a) => a.name).join(', ')}.`, p.name);
+  }
+  const bareResources = (o.resources ?? []).filter((r) => !(r.description ?? '').trim());
+  if (bareResources.length) add('tip', 'resource-no-description', `${bareResources.length} resource${bareResources.length === 1 ? '' : 's'} ${bareResources.length === 1 ? 'has' : 'have'} no description: ${bareResources.slice(0, 4).map((r) => r.name || r.uri).join(', ')}${bareResources.length > 4 ? ' …' : ''}.`);
 
   const listTokens = Math.round(JSON.stringify(tools).length / 4);
   if (tools.length > TOO_MANY) add('error', 'too-many-tools', `${tools.length} tools is too many: agents pick worse the more they are offered. Group them, or offer a smaller set per task.`);

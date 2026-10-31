@@ -371,7 +371,7 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
         const s = await d.mcpSession(String(a.server));
         try {
           const disc = await s.discover();
-          const lint = lintMcpTools(disc.tools, { instructions: disc.instructions });
+          const lint = lintMcpTools(disc.tools, { instructions: disc.instructions, prompts: disc.prompts, resources: disc.resources });
           return { serverInfo: disc.serverInfo, instructions: disc.instructions, tools: disc.tools, resources: disc.resources.slice(0, 200), prompts: disc.prompts, lint: { ...lint, findings: lint.findings.slice(0, 40) } };
         } finally {
           await s.close();
