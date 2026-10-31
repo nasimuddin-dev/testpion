@@ -106,6 +106,8 @@ function execGit<E extends 'utf8' | 'buffer'>(cwd: string, args: string[], opts:
         if ((err as { killed?: boolean }).killed) cleanAfterTimeout(cwd, child.pid, opts.timeoutMs ?? 120_000);
         const text = String(stderr);
         const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
+        // a merge, a stash or a revert on a computer that has never told git who it is: the same plain error as a commit
+        if (/Author identity unknown|unable to auto-detect email address|empty ident name|Committer identity unknown/i.test(text)) return fail(identityError());
         fail(
           new ApsError('ConfigurationError', missing ? 'Git is not installed' : (text || err.message).trim().split('\n').slice(-3).join(' '), {
             suggestions: missing ? ['Install Git from https://git-scm.com and restart TestPion.'] : gitHints(text),
