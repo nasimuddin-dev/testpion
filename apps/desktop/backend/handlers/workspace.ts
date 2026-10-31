@@ -48,6 +48,7 @@ import {
   samePath,
   type RefResolution,
   importFileFilters,
+  setWorkspaceNote,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { workspaceLockedBy } from '../backend-health.js';
@@ -170,7 +171,8 @@ export function workspaceHandlers(be: Backend): Handlers {
             }
         vars = vars.map((v) => (v.secret ? { ...v, value: '' } : v));
       }
-      return ws.updateWorkspace({ ...(name ? { name } : {}), ...(description !== undefined ? { description } : {}), ...(vars ? { variables: vars } : {}) });
+      if (description !== undefined) setWorkspaceNote(ws, description); // checks the length and keeps it trimmed
+      return ws.updateWorkspace({ ...(name ? { name } : {}), ...(vars ? { variables: vars } : {}) });
     },
     'ws.duplicate': ({ ref, name }: { ref: string; name: string }) => be.manager.duplicate(ref, name),
     /** A workspace with counts (collections, environments, tests) and whether deleting removes its files. */

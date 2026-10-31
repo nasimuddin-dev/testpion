@@ -1,5 +1,5 @@
 /** Managing workspaces. */
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
 import {
@@ -17,6 +17,8 @@ import {
   exportSummary,
   exportWholeWorkspace,
   workspaceExportFileName,
+  setWorkspaceNote,
+  workspaceNote,
 } from '@testpion/core';
 import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, respond, withWorkspace, JSON_OPTION } from '../shared.js';
 import { registerGitCommands } from './git.js';
@@ -42,6 +44,28 @@ export function registerWorkspaceCommands(program: Command): void {
       if (o.json) printJson(w);
       else console.log(green(`Renamed to "${w.name}"`));
     });
+  ws.command('note')
+    .description('show or set the note of a workspace: a few lines everyone who opens it sees on Home (it is saved in the workspace file, so with git it travels to your team). Never put a password in it')
+    .argument('[text]', 'the new note; "-" reads it from standard input; omit it to show the note')
+    .option('--clear', 'remove the note')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option('--json', 'print as JSON')
+    .action((text: string | undefined, o: { clear?: boolean; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+        let note = workspaceNote(store);
+        if (o.clear || text !== undefined) {
+          const next = o.clear ? '' : text === '-' ? readFileSync(0, 'utf8') : text!;
+          try {
+            note = setWorkspaceNote(store, next);
+          } catch (e) {
+            throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+          }
+        }
+        if (o.json) return printJson({ workspace: store.workspace.name, note });
+        console.log(note || dim('No note. Set one with `testpion workspace note "text"`.'));
+      }),
+    );
   ws.command('delete')
     .description('delete a workspace the app created (its folder is removed), or unregister a folder you opened (its files stay)')
     .argument('<nameOrPath>')

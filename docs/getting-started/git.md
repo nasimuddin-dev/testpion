@@ -18,6 +18,8 @@ Put your workspace in git and your team can share requests and tests: everyone p
 3. Work, commit, and press **Pull & push**. TestPion can pull your team's changes by itself ([Settings ▸ Git](#step-4-branches-pull-and-push)).
 4. Different requests merge by themselves. If two people changed the same request, you choose which version to keep.
 
+Leave a **note for your team** on Home (**Add a note for your team**): a few lines under the workspace name, such as *Start with Staging; ask Ana for the key*. It is saved in the workspace file, so everyone who clones the workspace sees it. Never write a password in it.
+
 The rest of this page explains each step in detail.
 
 A TestPion workspace is a folder of plain JSON and YAML files, so it can live in a git repository: on its own, or in a folder of your code repository (for example `api-tests/`). Your team reviews changes to requests in pull requests, CI runs the tests from the same files, and secrets never get committed.

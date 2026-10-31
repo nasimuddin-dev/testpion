@@ -46,3 +46,6 @@ export function formatDuration(ms: number): string {
   const m = Math.floor(ms / 60_000);
   return `${m}m ${((ms % 60_000) / 1000).toFixed(0)}s`;
 }
+
+/** The longest note a workspace can carry for its team (shown on Home to everyone who opens it). */
+export const WORKSPACE_NOTE_LIMIT = 1500;

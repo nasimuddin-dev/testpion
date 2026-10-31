@@ -20,6 +20,7 @@ import { CheckCircle2, Circle } from 'lucide-react';
 import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
+import { WorkspaceNoteDialog } from '../components/WorkspaceNoteDialog';
 import { StartupProblem } from '../components/StartupProblem';
 import { RecentRuns } from '../components/charts';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
@@ -208,6 +209,7 @@ export function HomeView() {
   const [health, setHealth] = useState<Record<string, { sent: number; failing: number }>>({});
   /** What other people changed in this workspace lately (a workspace in git with commits by others). */
   const [team, setTeam] = useState<TeamActivity>();
+  const [noting, setNoting] = useState(false);
   const [certs, setCerts] = useState<Array<{ host: string; issuer?: string; validTo?: string; daysLeft?: number; lastSeen: string }>>([]);
   const [activity, setActivity] = useState<Activity>();
   // the dashboard's period, remembered
@@ -347,7 +349,19 @@ export function HomeView() {
           <div aria-hidden className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-[var(--brand-from)] opacity-10 blur-3xl" />
           <p className="relative text-sm font-medium text-accent">{greeting()} 👋</p>
           <h1 className="relative text-hero font-semibold tracking-tight mt-1">{ws ? ws.name : 'Welcome to TestPion'}</h1>
-          <p className="relative text-sm text-muted mt-1.5 max-w-2xl">Build, test and debug REST, GraphQL, gRPC, WebSocket, MCP and AI APIs. Everything stays on this computer.</p>
+          {ws?.description?.trim() && !inExamples ? (
+            <p className="relative text-sm mt-1.5 max-w-3xl whitespace-pre-wrap" data-workspace-note-text>
+              {ws.description.trim()}
+            </p>
+          ) : (
+            <p className="relative text-sm text-muted mt-1.5 max-w-2xl">Build, test and debug REST, GraphQL, gRPC, WebSocket, MCP and AI APIs. Everything stays on this computer.</p>
+          )}
+          {ws && !inExamples && (
+            <LinkButton className="relative block mt-2 text-xs" onClick={() => setNoting(true)} title="A few lines everyone who opens this workspace sees here; with git it travels to your team" data-workspace-note-edit>
+              {ws.description?.trim() ? 'Edit the note for your team' : 'Add a note for your team'}
+            </LinkButton>
+          )}
+          {noting && <WorkspaceNoteDialog note={ws?.description ?? ''} onClose={() => setNoting(false)} />}
           {inExamples ? (
             <p className="relative text-sm mt-3 max-w-3xl">
               These examples use free public APIs. Open a collection and press <b>Send</b>, run a whole collection, or run the <b>All examples</b> and <b>Offline</b> suites in{' '}
