@@ -270,7 +270,7 @@ function ItemRow({
   busy?: boolean;
   onAlternative?(a: NonNullable<ProposalItem['alternatives']>[number]): void;
 }) {
-  const diff = useMemo(() => (open ? unifiedDiff(item.before ?? null, item.after, item.path ?? ITEM_WORD[item.kind]) : ''), [open, item]);
+  const diff = useMemo(() => (open ? unifiedDiff(item.before ?? null, item.after, item.path ?? ITEM_WORD[item.kind]).replace(/^--- .*\n\+\+\+ .*\n/, '') : ''), [open, item]);
   return (
     <li className={cx('rounded-lg border min-w-0', picked ? 'border-accent/50' : 'border-line')} data-proposal-item={item.id}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 min-w-0">
