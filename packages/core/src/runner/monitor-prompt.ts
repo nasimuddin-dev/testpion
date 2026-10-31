@@ -15,6 +15,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId } from '../util/ids.js';
 import { readRunSummary, recordRun } from './run-records.js';
 import { evaluationTests, findSavedEvaluation } from './saved-evaluations.js';
+import { capRunOptions, estimateEvaluation, spendPlan } from '../eval/llm-estimate.js';
 import { MONITOR_RUN_PREFIX } from './result-source.js';
 
 export interface PromptMonitorOutcome {
@@ -53,11 +54,15 @@ export async function runMonitorPromptEvaluation(o: {
   mkdirSync(dir, { recursive: true });
   const ctx = o.context({ environment: monitor.environment });
   let summary: RunSummary;
+  const gateReasons: string[] = [];
   try {
-    summary = await runTests({
+    // nobody is there to be asked: the evaluation's spend cap (its own, else the default for a paid model) stops the run, and the monitor says so
+    const d = { ...saved, name, ...(monitor.limit ? { limit: monitor.limit } : {}) };
+    const est = estimateEvaluation(ctx.services, d);
+    const capped = capRunOptions({
       name,
       runId,
-      tests: evaluationTests({ ...saved, name, ...(monitor.limit ? { limit: monitor.limit } : {}) }, { store }),
+      tests: evaluationTests(d, { store }),
       concurrency: saved.concurrency ?? 4,
       retries: saved.retries ?? 0,
       services: ctx.services,
@@ -67,12 +72,17 @@ export async function runMonitorPromptEvaluation(o: {
       ...(o.onTrace ? { onTrace: (t: Parameters<WorkspaceStore['saveTrace']>[0]) => o.onTrace!(t, runId) } : { onTraceBatch: (batch: Array<{ trace: Parameters<WorkspaceStore['saveTrace']>[0] }>) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))) }),
       environment: monitor.environment,
       onEvent: o.onEvent,
-    });
+    }, spendPlan(est, saved.maxCostUsd).capUsd);
+    summary = await runTests(capped.options);
+    // a run stopped at its cap is not a cancelled one: it says how far it got and fails
+    if (capped.guard.stopped) {
+      summary = { ...summary, cancelled: false };
+      gateReasons.push(capped.guard.message(est.cases));
+    }
   } finally {
     await ctx.dispose();
   }
   await recordRun(store, summary, dir, { reports: ['json', 'html'] });
-  const gateReasons: string[] = [];
   if (monitor.baseline === 'previous') {
     const now = passRate(summary);
     const before = previousRate(store, name, runId);
