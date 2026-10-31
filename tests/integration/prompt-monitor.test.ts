@@ -64,3 +64,20 @@ describe('testpion monitor add --evaluation', () => {
     expect(refused.err + refused.out).toMatch(/for a bot with sources/);
   }, 120_000);
 });
+
+describe('testpion eval lint', () => {
+  it('says what is off about the cases, exits 1 for it, and is quiet for healthy cases', async () => {
+    const { runCli, cliData } = await import('../helpers.js');
+    const env = { ...process.env, TESTPION_HOME: join(t.dir, 'home') };
+    const ws = store.root;
+    const healthy = await runCli(['eval', 'lint', SAMPLE_NAME, '-w', ws, '--json'], { env });
+    expect(healthy.status).toBe(0);
+    expect(cliData<{ notes: unknown[]; cases: number }>(healthy.out)).toMatchObject({ cases: 10, notes: [] });
+    edit((d) => ({ ...d, dataset: [...d.dataset.split('\n'), d.dataset.split('\n')[0]!].join('\n') }));
+    const off = await runCli(['eval', 'lint', SAMPLE_NAME, '-w', ws, '--json'], { env });
+    expect(off.status).toBe(1);
+    expect(cliData<{ notes: Array<{ kind: string; cases: number[] }> }>(off.out).notes).toMatchObject([{ kind: 'duplicates', cases: [11] }]);
+    const listed = await runCli(['eval', 'list', '-w', ws, '--json'], { env });
+    expect(JSON.stringify(cliData(listed.out))).toContain('repeats an input already in the list');
+  }, 120_000);
+});

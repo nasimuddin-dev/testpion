@@ -1,6 +1,6 @@
 import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
-import { casesToJsonl, datasetFormatOfName, datasetRecords, SHOULD_CALL, SHOULD_NOT_CALL, type CaseRow, type DatasetTextFormat } from '@testpion/shared';
+import { casesToJsonl, datasetFormatOfName, datasetRecords, SHOULD_CALL, SHOULD_NOT_CALL, type CaseRow, type DatasetHealth, type DatasetTextFormat } from '@testpion/shared';
 import { call } from '../../api';
 import { useSticky } from '../../lib/sticky';
 import { pickTextFile } from '../../lib/files';
@@ -43,6 +43,7 @@ export function CasesPane({
   onExportRag,
   onExample,
   onGenerate,
+  health,
 }: {
   d: CasesDraft;
   set(p: Partial<CasesDraft>): void;
@@ -61,6 +62,8 @@ export function CasesPane({
   onExample(): void;
   /** Write cases with AI (AU-13): the button is shown for a prompt evaluation when this is given. */
   onGenerate?(): void;
+  /** What is off about the cases (repeats, missing expected answers …): shown under the toolbar, nothing when they look healthy. */
+  health?: DatasetHealth;
 }) {
   const [view, setView] = useSticky<'table' | 'text'>('eval:casesView', 'table', { persist: true });
   const [pasting, setPasting] = useState(false);
@@ -76,6 +79,16 @@ export function CasesPane({
   return (
     <div className="h-full flex flex-col">
       {pasting && <PasteCasesDialog inputName={inputName} expectedField={d.expectedField} onApply={apply} onClose={() => setPasting(false)} />}
+      {health && health.notes.length > 0 && (
+        <ul className="px-3 py-1.5 text-xs text-warn border-b border-line list-disc pl-6" data-dataset-health>
+          {health.notes.map((n) => (
+            <li key={n.kind + n.text}>
+              {n.text}
+              {n.cases?.length ? <span className="text-muted"> (case {n.cases.join(', ')})</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm border-b border-line">
         {d.type !== 'rag' && (
           <Segmented

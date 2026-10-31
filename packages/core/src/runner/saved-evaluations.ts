@@ -10,7 +10,7 @@ import { expandDataset } from './loader.js';
 import type { RagJudgeSetup, RagTarget } from '@testpion/shared';
 import { findRagTarget } from '../eval/rag/targets.js';
 import { applyRagasCompat } from '../eval/rag/ragas-io.js';
-import { datasetFormatOf, countDatasetRecords } from '@testpion/shared';
+import { datasetFormatOf, countDatasetRecords, datasetHealth } from '@testpion/shared';
 export { datasetFormatOf, countDatasetRecords };
 
 /**
@@ -158,20 +158,27 @@ interface SavedEvaluationInfo {
   evaluators: string[];
   /** type `rag`: the RAG target it calls. */
   target?: string;
+  /** What is off about its test cases (duplicates, missing expected answers, a skewed answer set …), in words; absent when they look healthy. */
+  notes?: string[];
 }
 
 export function listSavedEvaluations(store: WorkspaceStore): SavedEvaluationInfo[] {
-  return store.getLibrary<SavedEvaluation>(EVALUATIONS_LIBRARY).items.map((i) => ({
-    id: i.id,
-    name: i.name,
-    folder: i.folder,
-    type: i.data.type ?? 'llm',
-    provider: i.data.provider,
-    model: i.data.model,
-    cases: countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl'),
-    evaluators: (i.data.evaluators ?? []).map((e) => e.type),
-    ...(i.data.target ? { target: i.data.target } : {}),
-  }));
+  return store.getLibrary<SavedEvaluation>(EVALUATIONS_LIBRARY).items.map((i) => {
+    // a bot with sources reads its questions from the dataset too; only the first cases are looked at here (a list is asked for often)
+    const notes = datasetHealth({ dataset: i.data.dataset ?? '', datasetFormat: i.data.datasetFormat ?? 'jsonl', expectedField: i.data.expectedField, prompt: i.data.type === 'rag' ? '' : i.data.prompt, evaluators: i.data.type === 'rag' ? [] : (i.data.evaluators as unknown as Array<Record<string, unknown>>) }, 500).notes.filter((n) => n.kind !== 'empty');
+    return {
+      id: i.id,
+      name: i.name,
+      folder: i.folder,
+      type: i.data.type ?? 'llm',
+      provider: i.data.provider,
+      model: i.data.model,
+      cases: countDatasetRecords(i.data.dataset ?? '', i.data.datasetFormat ?? 'jsonl'),
+      evaluators: (i.data.evaluators ?? []).map((e) => e.type),
+      ...(i.data.target ? { target: i.data.target } : {}),
+      ...(notes.length ? { notes: notes.map((n) => n.text) } : {}),
+    };
+  });
 }
 
 /** A saved evaluation by id or name (case-insensitive). */

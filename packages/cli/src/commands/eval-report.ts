@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import type { Command } from 'commander';
 import { aiRunDeps, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, diffPromptVersions, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
-import { formatUsd } from '@testpion/shared';
+import { datasetHealth, formatUsd } from '@testpion/shared';
 import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { printPreview } from './ai-print.js';
 
@@ -198,6 +198,25 @@ export function registerEvalReportCommands(ev: Command): void {
         console.log(`${bold(v.evaluation)}${v.passLine ? dim(` · pass line ${v.passLine}%`) : ''}`);
         console.log(v.text);
         if (!v.currentSaved) console.log(yellow(`The prompt in use is not saved as a version${v.currentRun ? ` (its last run: ${v.currentRun.passed} of ${v.currentRun.total} passed)` : ''}: \`testpion eval version-save "${v.evaluation}" "<name>"\`.`));
+      }),
+    );
+
+  ev.command('lint')
+    .description('look at the test cases of a saved evaluation: repeated inputs, cases without the expected answer a check compares with, prompt variables a case does not fill, one answer most cases expect, very long inputs (exit 1 when there is something to look at)')
+    .argument('<evaluation>', 'saved evaluation name or id')
+    .option(...WORKSPACE_OPTION)
+    .option('--json', 'print as JSON')
+    .action((ref: string, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const d = findSavedEvaluation(store, ref);
+        const h = datasetHealth({ dataset: d.dataset, datasetFormat: d.datasetFormat, expectedField: d.expectedField, prompt: d.type === 'rag' ? '' : d.prompt, evaluators: d.type === 'rag' ? [] : (d.evaluators as unknown as Array<Record<string, unknown>>) });
+        if (o.json) printJson({ evaluation: d.name, ...h });
+        else {
+          console.log(h.notes.length ? yellow(h.text) : green(h.text));
+          for (const n of h.notes) if (n.cases?.length) console.log(dim(`  ${n.kind}: case ${n.cases.join(', ')}`));
+        }
+        if (h.notes.length) process.exitCode = EXIT.TEST_FAILURE;
       }),
     );
 

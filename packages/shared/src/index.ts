@@ -28,6 +28,7 @@ export * from './run-status.js';
 export * from './response-diff.js';
 export * from './text-diff.js';
 export * from './word-diff.js';
+export * from './dataset-health.js';
 export * from './node-ids.js';
 export * from './import-formats.js';
 export * from './migrate-tools.js';

@@ -50,6 +50,18 @@ AI agents use the `eval_sample` tool of `testpion mcp-server`.
 
 The **Test cases** tab shows the cases as a table: one row per case, one column per field, cells you type in. Columns named in the prompt as `{{name}}` and the expected answer column are marked. **Enter** in the last row adds a case; **Add column** adds a field. **Paste cases…** takes cells copied from a spreadsheet, a CSV file, JSONL lines or a JSON list: it finds the columns, guesses which one is the input and which is the expected answer (you can change both), and adds the cases to the table or replaces it. **Edit as text** shows the same cases as the text of a file (JSONL, JSON, CSV or Markdown); **Load file…** reads one. The table stays quick with thousands of cases, and holds up to 20,000 (edit larger sets as text). A bot with sources keeps the text editor, with its import and column mapping.
 
+## Are the test cases any good? {#health}
+
+Under the toolbar of **Test cases**, TestPion says in words what is off about your cases. It shows nothing when they look healthy.
+
+- **A repeated input.** The same input twice counts double.
+- **No expected answer.** A check compares the answer with it, and some cases have none.
+- **A prompt variable a case does not fill.** The model would be sent the braces.
+- **One answer most cases expect.** A model that always says it already passes 80% or more.
+- **A very long input.** It costs more, and a model may cut it.
+
+From a terminal, `testpion eval lint <evaluation>` prints the same and exits with 1 when there is something to look at. `list_evaluations` carries it as `notes`.
+
 ## What is a good answer?
 
 On the **Checks** tab of a prompt evaluation, tick what applies: *Matches the expected answer exactly*, *Contains a word or phrase*, *Matches a pattern*, *Is valid JSON*, *Similar meaning to the expected answer*, *Graded by an AI reviewer*. One sentence under each says what it decides. For each tick, **Try on case N** sends that case to the model and shows the reply, whether the check passed and why (an AI reviewer's reason when it grades), before you save anything. A check of fixed rules on the offline demo model is free and runs at once. A call to a paid model, and any check an AI reviewer grades, show what it costs first and send only when you press **Send**. The other checks, and the ones this evaluation already has, are under **More checks**.

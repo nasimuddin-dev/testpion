@@ -10,6 +10,10 @@
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
+### AI quality: are the test cases any good?
+
+- Under the toolbar of **Test cases**, TestPion now says what is off about the cases: a repeated input, cases without the expected answer, a prompt variable a case does not fill, one answer that most cases expect (a model that always says it passes), a very long input. `testpion eval lint <evaluation>` prints it for scripts and `list_evaluations` carries it as `notes`.
+
 ### Agents: which tools were never called
 
 - The report of an agent evaluation now says which tools the cases called (*add_task in 3 cases*) and which of the offered tools **no case called** (*Never called: delete_task*), in amber. A tool nothing calls is a tool nothing tests.

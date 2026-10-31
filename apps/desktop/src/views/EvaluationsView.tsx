@@ -13,7 +13,7 @@ import { call, on } from '../api';
 import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
 import { templateVars, timeAgo } from '../lib/format';
-import { casesToJsonl, countDatasetRecords, datasetFormatOf, datasetRecords, previewDatasetRecords } from '@testpion/shared';
+import { casesToJsonl, countDatasetRecords, datasetFormatOf, datasetHealth, datasetRecords, previewDatasetRecords } from '@testpion/shared';
 import { downloadContent } from '../lib/files';
 import { CasesPane } from '../components/ai/CasesPane';
 import { GenerateCasesDialog } from '../components/ai/GenerateCasesDialog';
@@ -294,6 +294,8 @@ export function EvaluationsView() {
   const preview = useMemo(() => previewDatasetRecords(d.dataset, d.datasetFormat), [d.dataset, d.datasetFormat]);
   const previewKeys = useMemo(() => (preview[0] ? Object.keys(preview[0]) : []), [preview]);
   const vars = useMemo(() => templateVars(d.prompt), [d.prompt]);
+  // what is off about the test cases (a bot with sources has its own questions and checks): repeats, missing expected answers, a skewed answer set
+  const health = useMemo(() => (d.type === 'rag' ? undefined : datasetHealth({ dataset: d.dataset, datasetFormat: d.datasetFormat, expectedField: d.expectedField, prompt: d.prompt, evaluators: d.evaluators as unknown as Array<Record<string, unknown>> })), [d.type, d.dataset, d.datasetFormat, d.expectedField, d.prompt, d.evaluators]);
   // the saved list's rows (a dataset is counted when the library changes, not on every keystroke)
   const savedItems = useMemo(
     () =>
@@ -681,6 +683,7 @@ export function EvaluationsView() {
               onExportRag={(to) => void exportRag(to)}
               onExample={addExampleCases}
               onGenerate={d.type === 'llm' ? () => setGenerating(true) : undefined}
+              health={health}
             />
           )}
           {sub === 'prompt' && d.type === 'agent' && (
