@@ -1,5 +1,5 @@
 /** RPC handlers: the report card of a run, why a case failed, a case against the run before, and compare mode (variants of an evaluation). */
-import { ApsError, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
+import { ApsError, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, diffPromptVersions, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, evaluationVariants, variantsSummary, type SavedEvaluation } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { estimateDraft, startDraftRun } from './eval-quality.js';
 
@@ -21,6 +21,8 @@ export function evalReportHandlers(be: Backend): Handlers {
     },
     /** The prompt versions of a saved evaluation, each with the result of its latest run (what `testpion eval versions` prints). */
     'eval.versions': ({ evaluation }: { evaluation: string }) => listPromptVersions(be.ws, evaluation),
+    /** What changed between a version and another (or the prompt in use), word by word (what `testpion eval version-diff` prints). */
+    'eval.versionDiff': ({ evaluation, version, other }: { evaluation: string; version: string; other?: string }) => diffPromptVersions(be.ws, { evaluation, version, other }),
     /** Save the evaluation's prompt and system prompt now as a named version; with `prompt` (and `system`), a draft kept beside the others without changing the evaluation. */
     'eval.saveVersion': ({ evaluation, name, note, prompt, system }: { evaluation: string; name: string; note?: string; prompt?: string; system?: string }) => {
       const v = savePromptVersion(be.ws, { evaluation, name, note, prompt, system });

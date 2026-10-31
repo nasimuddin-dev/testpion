@@ -1,5 +1,6 @@
-import { History } from 'lucide-react';
-import type { PromptVersions } from '@testpion/core';
+import { GitCompare, History } from 'lucide-react';
+import { useState } from 'react';
+import type { PromptVersionDiff, PromptVersions } from '@testpion/core';
 import { asError, call } from '../../api';
 import { timeAgo } from '../../lib/format';
 import { useRpc } from '../../lib/use-rpc';
@@ -50,6 +51,20 @@ export function PromptVersionsBar({ evaluation, dirty, onUsed }: { evaluation?: 
     }
   };
 
+  // what a version changed against the prompt in use, word by word (a click on its "Changes")
+  const [diffOf, setDiffOf] = useState<string>();
+  const [diff, setDiff] = useState<PromptVersionDiff>();
+  const toggleDiff = async (v: PromptVersions['versions'][number]) => {
+    if (diffOf === v.id) return setDiffOf(undefined);
+    setDiffOf(v.id);
+    setDiff(undefined);
+    try {
+      setDiff(await call<PromptVersionDiff>('eval.versionDiff', { evaluation, version: v.id }));
+    } catch (e) {
+      toastError(e);
+      setDiffOf(undefined);
+    }
+  };
   const inUse = data?.versions.find((v) => v.current);
   return (
     <details className="border-b border-line text-sm" data-prompt-versions>
@@ -74,9 +89,9 @@ export function PromptVersionsBar({ evaluation, dirty, onUsed }: { evaluation?: 
             {data.versions.map((v) => {
               const under = !!v.run && typeof data.passLine === 'number' && v.run.passRate * 100 < data.passLine;
               return (
-                <li key={v.id} className="flex items-center gap-2 py-1 border-t border-line/60 first:border-t-0 text-xs" data-version={v.name} data-version-current={v.current ? 'true' : undefined}>
+                <li key={v.id} className="flex flex-wrap items-center gap-2 py-1 border-t border-line/60 first:border-t-0 text-xs" data-version={v.name} data-version-current={v.current ? 'true' : undefined}>
                   <span className="min-w-0 flex-1 truncate" title={v.note || v.prompt}>
-                    <span className="font-medium">{v.name}</span> <span className="text-muted">· {timeAgo(v.at)}{v.note ? ` · ${v.note}` : ''}</span>
+                    <span className="font-medium">{v.name}</span> <span className="text-muted">· {timeAgo(v.at)}{v.note ? ` · ${v.note}` : ''}{v.changed ? ` · ${v.changed.replace(/\.$/, '')} since the one before` : ''}</span>
                   </span>
                   {v.run ? (
                     <span className={cx('tabular-nums', under ? 'text-bad' : 'text-muted')} title={`The latest run made with this prompt, ${timeAgo(v.run.startedAt)}`} data-version-result>
@@ -87,12 +102,30 @@ export function PromptVersionsBar({ evaluation, dirty, onUsed }: { evaluation?: 
                       not run yet
                     </span>
                   )}
+                  {!v.current && (
+                    <Button size="sm" variant="ghost" icon={<GitCompare size={12} />} onClick={() => void toggleDiff(v)} aria-pressed={diffOf === v.id} title="What this version changes against the prompt in use, word by word" data-version-changes={v.name}>
+                      Changes
+                    </Button>
+                  )}
                   {v.current ? (
                     <Badge tone="accent">in use</Badge>
                   ) : (
                     <Button size="sm" onClick={() => void use(v)} title="Make this the evaluation’s prompt. Under the pass line, worse than the prompt in use, or never run: it asks first." data-version-use={v.name}>
                       Make current
                     </Button>
+                  )}
+                  {diffOf === v.id && (
+                    <div className="basis-full rounded-md border border-line p-2 text-xs whitespace-pre-wrap leading-relaxed" data-version-diff={v.name}>
+                      {!diff ? (
+                        <span className="text-muted">Comparing…</span>
+                      ) : (
+                        <>
+                          <p className="text-muted mb-1">{diff.text}</p>
+                          <WordSegments label="Prompt" diff={diff.prompt} />
+                          {diff.system && <WordSegments label="System prompt" diff={diff.system} />}
+                        </>
+                      )}
+                    </div>
                   )}
                 </li>
               );
@@ -108,5 +141,21 @@ export function PromptVersionsBar({ evaluation, dirty, onUsed }: { evaluation?: 
         )}
       </div>
     </details>
+  );
+}
+
+/** A text with what was added in green and what was removed struck through in red (a word diff). */
+function WordSegments({ label, diff }: { label: string; diff: PromptVersionDiff['prompt'] }) {
+  return (
+    <div className="mt-1">
+      <div className="text-muted">{label}</div>
+      <div className="mono">
+        {diff.segments.map((s, i) => (
+          <span key={i} className={cx(s.type === 'add' && 'bg-ok/15 text-ok', s.type === 'del' && 'bg-bad/15 text-bad line-through')} data-diff-segment={s.type}>
+            {s.text}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -45,6 +45,16 @@ const steps = [
      const row = await __t.waitFor(() => document.querySelector('[data-version="Shorter"]'), 8000); if (!row) return 'NO ROW';
      return 'result: ' + row.querySelector('[data-version-result]').textContent.trim() + ' | make current offered: ' + !!row.querySelector('[data-version-use]');`,
   ),
+  // what a version changes against the prompt in use, word by word
+  step(
+    'changes-are-shown-word-by-word',
+    `await __t.real.click(document.querySelector('[data-version-changes="Shorter"]'));
+     const panel = await __t.waitFor(() => { const p = document.querySelector('[data-version-diff="Shorter"]'); return p && p.querySelector('[data-diff-segment]') ? p : null; }, 6000); if (!panel) return 'NO DIFF';
+     const kinds = [...new Set([...panel.querySelectorAll('[data-diff-segment]')].map((x) => x.getAttribute('data-diff-segment')))].sort().join(',');
+     const sentence = panel.querySelector('p')?.textContent.trim();
+     await __t.real.click(document.querySelector('[data-version-changes="Shorter"]')); await __t.sleep(300);
+     return 'sentence: ' + /^Shorter to the prompt in use\\. Prompt: (Added|Removed) \\d+ words?/.test(sentence ?? '') + ' | segments: ' + kinds + ' | closed again: ' + !document.querySelector('[data-version-diff]');`,
+  ),
   step(
     'making-it-current-asks-first-and-says-why',
     `await __t.real.click(document.querySelector('[data-version-use="Shorter"]'));
@@ -63,5 +73,6 @@ module.exports = withExpect(steps, {
   'versions-start-empty-and-the-prompt-is-not-a-version': /^summary: none saved yet \| save enabled: true$/,
   'save-the-prompt-as-a-version': /^result: 10 of 10 passed \(100%\) \| in use: true \| save disabled again: true$/,
   'another-version-that-was-never-run': /^result: not run yet \| make current offered: true$/,
+  'changes-are-shown-word-by-word': /^sentence: true \| segments: (add,same|add,del,same|add,del) \| closed again: true$/,
   'making-it-current-asks-first-and-says-why': /^asked: true \| prompt now: Classify: \{\{input\}\} \| in use: Shorter$/,
 });

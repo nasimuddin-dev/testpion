@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### AI quality: what changed between two prompts
+
+- **Changes** on a prompt version shows what it changes against the prompt in use, word by word (added words in green, removed words struck through). Each version also says what it changed since the one before. `testpion eval version-diff <evaluation> <version> [other]` prints it for scripts.
+
 ### RAG bots: map by meaning
 
 - **Map by meaning…** on a bot run places its questions and documents by what they mean, and lists the *look-alikes* (a retrieved document that reads like a right one it is not) and the *far questions* (no document near them). It asks an embedding model, not your bot. `testpion rag map <run>` and the MCP tool `rag_calibrate` with `map` do the same.

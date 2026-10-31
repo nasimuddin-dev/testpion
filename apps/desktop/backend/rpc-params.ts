@@ -169,6 +169,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'eval.versions': { evaluation: 's' },
   'eval.reviewQueue': { run: 's', count: 'n?' },
   'eval.reviewToDataset': { run: 's', resultIds: 'sa?' },
+  'eval.versionDiff': { evaluation: 's', version: 's', other: 's?' },
   'eval.saveVersion': { evaluation: 's', name: 's', note: 's?', prompt: 's?', system: 's?' },
   'eval.useVersion': { evaluation: 's', version: 's', confirm: 'b?' },
   'eval.why': { run: 's', case: 's' },

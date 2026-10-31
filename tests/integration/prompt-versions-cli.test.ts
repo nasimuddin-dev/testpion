@@ -123,3 +123,24 @@ describe('a draft prompt kept as a version', () => {
     expect((await cli(['eval', 'version-save', SAMPLE_NAME, 'Empty', '--prompt', '   ', '-w', ws])).status).not.toBe(0);
   }, 60_000);
 });
+
+describe('what changed between versions', () => {
+  it('says it in words, word by word, and each version row says what changed since the one before', async () => {
+    const one = await cli(['eval', 'version-save', SAMPLE_NAME, 'Short ask', '--prompt', 'Reply in one short sentence about {{topic}}.', '-w', ws]);
+    expect(one.status).toBe(0);
+    const two = await cli(['eval', 'version-save', SAMPLE_NAME, 'Short ask, polite', '--prompt', 'Please reply in one short and polite sentence about {{topic}}.', '-w', ws]);
+    expect(two.status).toBe(0);
+    const d = cliData<{ from: string; to: string; prompt: { added: number; removed: number; segments: Array<{ type: string; text: string }> }; text: string }>(
+      (await cli(['eval', 'version-diff', SAMPLE_NAME, 'Short ask', 'Short ask, polite', '-w', ws, '--json'])).out,
+    );
+    expect(d).toMatchObject({ from: 'Short ask', to: 'Short ask, polite' });
+    expect(d.prompt.added).toBeGreaterThan(0);
+    expect(d.prompt.segments.some((s) => s.type === 'add' && /polite/.test(s.text))).toBe(true);
+    // against the prompt in use (the sample's own prompt), and in words for a person
+    const inUse = await cli(['eval', 'version-diff', SAMPLE_NAME, 'Short ask', '-w', ws]);
+    expect(inUse.out).toMatch(/Short ask to the prompt in use/);
+    const rows = (await versions()).versions as Array<{ name: string; changed?: string }>;
+    expect(rows.find((r) => r.name === 'Short ask, polite')?.changed).toMatch(/^Added \d+ words?/);
+    expect((await cli(['eval', 'version-diff', SAMPLE_NAME, 'No such version', '-w', ws])).status).not.toBe(0);
+  }, 60_000);
+});

@@ -153,6 +153,7 @@ export interface RpcParamTypes {
   'eval.tryCheck': RpcCommonParams & { draft: Record<string, unknown>; check: Record<string, unknown>; caseNumber?: number; dryRun?: boolean };
   'eval.useVersion': RpcCommonParams & { evaluation: string; version: string; confirm?: boolean };
   'eval.variantsSummary': RpcCommonParams & { draft: Record<string, unknown>; runs?: string[] };
+  'eval.versionDiff': RpcCommonParams & { evaluation: string; version: string; other?: string };
   'eval.versions': RpcCommonParams & { evaluation: string };
   'eval.why': RpcCommonParams & { run: string; case: string };
   'feedback.compose': RpcCommonParams & { kind: string; title: string; description: string; steps?: string; expected?: string; where?: string; diagnostics?: string[]; errors?: string[] };
@@ -405,4 +406,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 388;
+export const RPC_METHOD_COUNT = 389;

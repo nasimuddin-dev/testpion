@@ -5,6 +5,7 @@
  * (`evaluationTests`), and a version is its own hash. Making a version current is gated: one that failed the pass line, or did worse
  * than the prompt in use, or was never run, asks first and says the numbers.
  */
+import { wordDiff, type WordDiff } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { readRunSummary } from './run-records.js';
@@ -36,6 +37,8 @@ export interface PromptVersionRow {
   run?: PromptVersionRun;
   prompt: string;
   system?: string;
+  /** What changed since the version saved before this one, in words: "Added 3 words, removed 1." */
+  changed?: string;
 }
 
 export interface PromptVersions {
@@ -79,7 +82,7 @@ export async function listPromptVersions(store: WorkspaceStore, ref: string): Pr
   const currentHash = promptHashOf(saved);
   const runs = await runsByPrompt(store, saved.name);
   const list = [...(saved.promptVersions ?? [])].sort((a, b) => b.at.localeCompare(a.at));
-  const versions: PromptVersionRow[] = list.map((v) => ({ id: v.id, name: v.name, at: v.at, ...(v.note ? { note: v.note } : {}), current: v.id === currentHash, ...(runs.get(v.id) ? { run: runs.get(v.id)! } : {}), prompt: v.prompt, ...(v.system ? { system: v.system } : {}) }));
+  const versions: PromptVersionRow[] = list.map((v, i) => ({ ...(list[i + 1] ? { changed: wordDiff(list[i + 1]!.prompt, v.prompt).text } : {}), id: v.id, name: v.name, at: v.at, ...(v.note ? { note: v.note } : {}), current: v.id === currentHash, ...(runs.get(v.id) ? { run: runs.get(v.id)! } : {}), prompt: v.prompt, ...(v.system ? { system: v.system } : {}) }));
   const currentSaved = versions.some((v) => v.current);
   const currentRun = !currentSaved ? runs.get(currentHash) : undefined;
   const say = (v: PromptVersionRow) => `${v.current ? '* ' : '  '}${v.name}: ${v.run ? `${v.run.passed} of ${v.run.total} passed (${percent(v.run.passRate)})` : 'not run yet'}`;
@@ -158,4 +161,38 @@ export async function usePromptVersion(store: WorkspaceStore, o: { evaluation: s
     return { ...rest, prompt: v.prompt, ...(v.system ? { system: v.system } : {}) };
   });
   return { evaluation: list.evaluation, version: v.name, ...(kept ? { kept } : {}), gated: gate.reasons };
+}
+
+export interface PromptVersionDiff {
+  evaluation: string;
+  /** The older wording: a version's name. */
+  from: string;
+  /** The newer wording: another version's name, or "the prompt in use". */
+  to: string;
+  prompt: WordDiff;
+  system?: WordDiff;
+  /** One or two sentences: "Prompt: Added 3 words, removed 1. System prompt: No change." */
+  text: string;
+}
+
+/**
+ * What changed between two wordings of an evaluation: a version against another version, or (without `other`) against the prompt in
+ * use. Word by word, for the prompt and for the system prompt, so a change in the results can be read next to the change in the words.
+ */
+export async function diffPromptVersions(store: WorkspaceStore, o: { evaluation: string; version: string; other?: string }): Promise<PromptVersionDiff> {
+  const list = await listPromptVersions(store, o.evaluation);
+  const find = (ref: string) => {
+    const want = ref.trim().toLowerCase();
+    const v = list.versions.find((x) => x.id === ref || x.name.toLowerCase() === want);
+    if (!v) throw new ApsError('ValidationError', `No version "${ref}" of "${list.evaluation}". Saved: ${list.versions.map((x) => x.name).join(', ') || 'none'}`);
+    return v;
+  };
+  const from = find(o.version);
+  const saved = findSavedEvaluation(store, o.evaluation);
+  const to = o.other ? find(o.other) : { name: 'the prompt in use', prompt: saved.prompt, system: saved.system };
+  const prompt = wordDiff(from.prompt, to.prompt);
+  const hasSystem = !!(from.system || to.system);
+  const system = hasSystem ? wordDiff(from.system ?? '', to.system ?? '') : undefined;
+  const text = `${from.name} to ${to.name}. Prompt: ${prompt.text}${system ? ` System prompt: ${system.text}` : ''}`;
+  return { evaluation: list.evaluation, from: from.name, to: to.name, prompt, ...(system ? { system } : {}), text };
 }

@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import type { Command } from 'commander';
-import { aiRunDeps, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
+import { aiRunDeps, evalCaseDiff, evalReport, evalReviewQueue, evalTrajectory, evalWhy, diffPromptVersions, listPromptVersions, reviewToDataset, savePromptVersion, setEvaluationBaseline, usePromptVersion, findSavedEvaluation, runAiTask, variantsSummary, WorkspaceManager } from '@testpion/core';
 import { formatUsd } from '@testpion/shared';
 import { EXIT, bold, dim, green, red, yellow, CliError, printJson, withWorkspace, cliContext, requireEnvironment, WORKSPACE_OPTION } from '../shared.js';
 import { printPreview } from './ai-print.js';
@@ -217,6 +217,29 @@ export function registerEvalReportCommands(ev: Command): void {
         const v = savePromptVersion(store, { evaluation: ref, name, note: o.note, prompt: text(o.prompt), system: text(o.system) });
         if (o.json) return printJson(v);
         console.log(green(`Saved version "${v.name}" (${v.id})`));
+      }),
+    );
+
+  ev.command('version-diff')
+    .description('what changed between a version and another one (or the prompt in use), word by word, for the prompt and the system prompt')
+    .argument('<evaluation>', 'saved evaluation name or id')
+    .argument('<version>', 'the older wording: a version’s name or id')
+    .argument('[other]', 'the newer wording: another version (default: the prompt in use)')
+    .option(...WORKSPACE_OPTION)
+    .option('--json', 'print as JSON: the segments (same, add, del) and the counts')
+    .action((ref: string, version: string, other: string | undefined, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw noWorkspace();
+        const d = await diffPromptVersions(store, { evaluation: ref, version, other });
+        if (o.json) return printJson(d);
+        console.log(bold(d.text));
+        const show = (label: string, segs: typeof d.prompt.segments) => {
+          console.log(dim(`
+${label}`));
+          console.log(segs.map((s) => (s.type === 'add' ? green(s.text) : s.type === 'del' ? red(`[-${s.text}-]`) : s.text)).join(''));
+        };
+        show('Prompt', d.prompt.segments);
+        if (d.system) show('System prompt', d.system.segments);
       }),
     );
 
