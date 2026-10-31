@@ -140,6 +140,7 @@ function build(a: AppMenuActions): Menu {
         item({ label: 'Keyboard Shortcuts', i: 'shortcuts', click: () => a.menu('shortcuts') }),
         sep,
         item({ label: 'Documentation', i: 'docs', click: () => a.openExternal(DOCS) }),
+        item({ label: 'When Something Does Not Work', i: 'docs', click: () => a.openExternal(`${DOCS}getting-started/troubleshooting`) }),
         item({ label: 'Release Notes', i: 'releaseNotes', click: () => a.openExternal(`${DOCS}changelog`) }),
         sep,
         item({ label: 'Send Feedback or Report a Problem…', i: 'issue', click: () => a.menu('feedback') }),
