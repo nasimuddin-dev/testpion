@@ -210,7 +210,7 @@ export function registerEvalReportCommands(ev: Command): void {
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw noWorkspace();
         const d = findSavedEvaluation(store, ref);
-        const h = datasetHealth({ dataset: d.dataset, datasetFormat: d.datasetFormat, expectedField: d.expectedField, prompt: d.type === 'rag' ? '' : d.prompt, evaluators: d.type === 'rag' ? [] : (d.evaluators as unknown as Array<Record<string, unknown>>) });
+        const h = datasetHealth({ dataset: d.dataset, datasetFormat: d.datasetFormat, expectedField: d.expectedField, prompt: d.type === 'rag' ? '' : d.prompt, rag: d.type === 'rag', evaluators: d.type === 'rag' ? [] : (d.evaluators as unknown as Array<Record<string, unknown>>) });
         if (o.json) printJson({ evaluation: d.name, ...h });
         else {
           console.log(h.notes.length ? yellow(h.text) : green(h.text));

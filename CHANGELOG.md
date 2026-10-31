@@ -28,7 +28,7 @@
 
 ### AI quality: are the test cases any good?
 
-- Under the toolbar of **Test cases**, TestPion now says what is off about the cases: a repeated input, cases without the expected answer, a prompt variable a case does not fill, one answer that most cases expect (a model that always says it passes), a very long input. `testpion eval lint <evaluation>` prints it for scripts and `list_evaluations` carries it as `notes`.
+- Under the toolbar of **Test cases**, TestPion now says what is off about the cases: a repeated input, cases without the expected answer, a prompt variable a case does not fill, one answer that most cases expect (a model that always says it passes), a very long input, and for a bot with sources the questions that name no gold documents while others do. `testpion eval lint <evaluation>` prints it for scripts and `list_evaluations` carries it as `notes`.
 
 ### Agents: which tools were never called
 

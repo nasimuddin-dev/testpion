@@ -295,7 +295,7 @@ export function EvaluationsView() {
   const previewKeys = useMemo(() => (preview[0] ? Object.keys(preview[0]) : []), [preview]);
   const vars = useMemo(() => templateVars(d.prompt), [d.prompt]);
   // what is off about the test cases (a bot with sources: repeated questions): repeats, missing expected answers, a skewed answer set
-  const health = useMemo(() => datasetHealth({ dataset: d.dataset, datasetFormat: d.datasetFormat, expectedField: d.expectedField, prompt: d.type === 'rag' ? '' : d.prompt, evaluators: d.type === 'rag' ? [] : (d.evaluators as unknown as Array<Record<string, unknown>>) }), [d.type, d.dataset, d.datasetFormat, d.expectedField, d.prompt, d.evaluators]);
+  const health = useMemo(() => datasetHealth({ dataset: d.dataset, datasetFormat: d.datasetFormat, expectedField: d.expectedField, prompt: d.type === 'rag' ? '' : d.prompt, rag: d.type === 'rag', evaluators: d.type === 'rag' ? [] : (d.evaluators as unknown as Array<Record<string, unknown>>) }), [d.type, d.dataset, d.datasetFormat, d.expectedField, d.prompt, d.evaluators]);
   // the saved list's rows (a dataset is counted when the library changes, not on every keystroke)
   const savedItems = useMemo(
     () =>

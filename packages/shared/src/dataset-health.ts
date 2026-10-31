@@ -12,8 +12,9 @@ import type { DatasetTextFormat } from './datasets.js';
  *  - `missing-column`: a `{{variable}}` of the prompt that some case has no value for (the model is sent the braces).
  *  - `skewed`: most cases expect the same answer, so a model that always says it already passes.
  *  - `long`: very long inputs (cost and truncation).
+ *  - `no-gold-ids` (a bot with sources): some questions name the documents that answer them and some do not, so the retrieval scores skip the others.
  */
-export type DatasetNoteKind = 'empty' | 'duplicates' | 'no-expected' | 'missing-column' | 'skewed' | 'long';
+export type DatasetNoteKind = 'empty' | 'duplicates' | 'no-expected' | 'missing-column' | 'skewed' | 'long' | 'no-gold-ids';
 
 export interface DatasetNote {
   kind: DatasetNoteKind;
@@ -38,7 +39,13 @@ export interface DatasetHealthInput {
   prompt?: string;
   /** The checks: only whether any reads `{{expected}}` or an expected value matters here. */
   evaluators?: Array<Record<string, unknown>>;
+  /** A bot with sources: also look at the gold document ids. */
+  rag?: boolean;
 }
+
+/** The column names a bot-with-sources dataset may keep the gold document ids in (see core's dataset-columns). */
+const GOLD_ID_COLUMNS = ['reference_ids', 'reference_context_ids', 'gold_ids', 'doc_ids', 'positive_ids', 'relevant_ids', 'pids'];
+const goldIds = (r: CaseRow) => GOLD_ID_COLUMNS.map((c) => r[c]).find((v) => filled(v) && (!Array.isArray(v) || v.length > 0));
 
 const LONG_CHARS = 8000;
 const MIN_FOR_SKEW = 5;
@@ -93,6 +100,12 @@ export function datasetHealth(i: DatasetHealthInput, limit = 5000): DatasetHealt
     if (top && counts.size > 1 && answered >= MIN_FOR_SKEW && top[1] / answered >= SKEW_SHARE && top[0].length <= 40) {
       notes.push({ kind: 'skewed', text: `${top[1]} of ${answered} cases expect "${top[0]}": a model that always says that already passes ${Math.round((top[1] / answered) * 100)}%. Add cases for the other answers.` });
     }
+  }
+
+  // a bot with sources: questions without the documents that answer them, while others have them
+  if (i.rag) {
+    const lacking = first((r) => !goldIds(r));
+    if (lacking.length && lacking.length < rows.length) notes.push({ kind: 'no-gold-ids', text: `${plural(lacking.length, 'question')} ${lacking.length === 1 ? 'names' : 'name'} no gold document ids while ${rows.length - lacking.length} do, so the retrieval scores skip ${lacking.length === 1 ? 'it' : 'them'}.`, cases: lacking.slice(0, 10) });
   }
 
   // very long inputs

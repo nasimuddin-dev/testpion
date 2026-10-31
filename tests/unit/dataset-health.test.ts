@@ -52,6 +52,16 @@ describe('datasetHealth', () => {
     expect(h.notes).toMatchObject([{ kind: 'duplicates', cases: [2] }]);
   });
 
+  it('notices questions of a bot with sources that name no gold documents while others do', () => {
+    const rows = [{ question: 'Q1', reference_ids: ['d1'] }, { question: 'Q2' }, { question: 'Q3', gold_ids: ['d2'] }, { question: 'Q4', reference_ids: [] }];
+    const h = datasetHealth({ dataset: jsonl(rows), datasetFormat: 'jsonl', rag: true });
+    expect(h.notes).toMatchObject([{ kind: 'no-gold-ids', cases: [2, 4] }]);
+    expect(h.notes[0]!.text).toBe('2 questions name no gold document ids while 2 do, so the retrieval scores skip them.');
+    // none of them naming gold ids is a choice, not a gap; and a plain prompt evaluation is not asked
+    expect(datasetHealth({ dataset: jsonl([{ question: 'A' }, { question: 'B' }]), datasetFormat: 'jsonl', rag: true }).notes).toEqual([]);
+    expect(datasetHealth({ dataset: jsonl(rows), datasetFormat: 'jsonl' }).notes).toEqual([]);
+  });
+
   it('notices very long inputs and reads CSV too', () => {
     const long = datasetHealth({ ...base, evaluators: [], dataset: jsonl([{ input: 'x'.repeat(9000) }, { input: 'short' }]) });
     expect(long.notes).toMatchObject([{ kind: 'long', cases: [1] }]);

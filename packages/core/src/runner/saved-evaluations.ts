@@ -165,7 +165,7 @@ interface SavedEvaluationInfo {
 export function listSavedEvaluations(store: WorkspaceStore): SavedEvaluationInfo[] {
   return store.getLibrary<SavedEvaluation>(EVALUATIONS_LIBRARY).items.map((i) => {
     // a bot with sources reads its questions from the dataset too; only the first cases are looked at here (a list is asked for often)
-    const notes = datasetHealth({ dataset: i.data.dataset ?? '', datasetFormat: i.data.datasetFormat ?? 'jsonl', expectedField: i.data.expectedField, prompt: i.data.type === 'rag' ? '' : i.data.prompt, evaluators: i.data.type === 'rag' ? [] : (i.data.evaluators as unknown as Array<Record<string, unknown>>) }, 500).notes.filter((n) => n.kind !== 'empty');
+    const notes = datasetHealth({ dataset: i.data.dataset ?? '', datasetFormat: i.data.datasetFormat ?? 'jsonl', expectedField: i.data.expectedField, prompt: i.data.type === 'rag' ? '' : i.data.prompt, rag: i.data.type === 'rag', evaluators: i.data.type === 'rag' ? [] : (i.data.evaluators as unknown as Array<Record<string, unknown>>) }, 500).notes.filter((n) => n.kind !== 'empty');
     return {
       id: i.id,
       name: i.name,
