@@ -12,6 +12,17 @@
         "everyMinutes": 60,
         "enabled": false
       }
+    },
+    {
+      "id": "mon-learn-prompt",
+      "name": "Learn: nightly intent check (prompt)",
+      "data": {
+        "evaluation": "ev-learn-sentiment",
+        "baseline": "previous",
+        "maxDrop": 0.1,
+        "everyMinutes": 1440,
+        "enabled": false
+      }
     }
   ]
 }
