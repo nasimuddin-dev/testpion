@@ -12,7 +12,8 @@ const step = stepOf(H);
 const steps = [
   step('open-three', `await __t.view('Tests'); await __t.sleep(1000); for (const f of ['httpbin.yaml', 'countries.yaml', 'echo.yaml']) if (!(await openRow(f))) return 'NO ROW ' + f; return state();`),
   // THE badge (TreeBadge): every badge of the Tests tree is one pill of one width, whatever it says (HTTP, GQL, WS, AI, SUITE …)
-  step('badges-same-width', `const w = [...new Set([...document.querySelectorAll('[data-node-id^="tests:"] .method-badge')].filter((b) => b.offsetParent).map((b) => Math.round(b.getBoundingClientRect().width)))]; const n = document.querySelectorAll('[data-node-id^="tests:"] .method-badge').length; return 'badges: ' + (n > 3) + ' | widths: ' + w.join(',');`),
+  // a badge is as wide as its text (at least three letters): badges of one length share a width, and none clips its text
+  step('badges-fit-their-text', `const all = [...document.querySelectorAll('[data-node-id^="tests:"] .method-badge')].filter((b) => b.offsetParent); const byLen = {}; for (const b of all) (byLen[Math.max(3, b.textContent.trim().length)] ??= new Set()).add(Math.round(b.getBoundingClientRect().width)); const clipped = all.filter((b) => b.scrollWidth > b.clientWidth + 1).length; return 'badges: ' + (all.length > 3) + ' | one width per length: ' + Object.values(byLen).every((w) => w.size === 1) + ' | clipped: ' + clipped;`),
   step('reopen-one', `await openRow('httpbin.yaml'); return state();`),
   step('close-active', `const t = tabs().find((x) => x.getAttribute('aria-selected') === 'true'); t.querySelector('[aria-label^="Close"]').click(); await __t.sleep(700); return state();`),
   // the Runs tab is there once something opened it (the sidebar's Runs pane, a run), and closes like a file's tab
@@ -24,7 +25,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'open-three': /^HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ \*WSecho\.yaml$/,
-  'badges-same-width': /^badges: true \| widths: \d+$/,
+  'badges-fit-their-text': /^badges: true \| one width per length: true \| clipped: 0$/,
   'reopen-one': /^\*HTTPhttpbin\.yaml \/ GQLcountries\.yaml \/ WSecho\.yaml$/,
   'close-active': /^\*GQLcountries\.yaml \/ WSecho\.yaml$/,
   'runs-tab-opens-from-the-sidebar': /^GQLcountries\.yaml \/ WSecho\.yaml \/ \*Runs/,

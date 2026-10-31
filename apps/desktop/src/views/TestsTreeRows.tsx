@@ -17,10 +17,10 @@ export interface TestNode {
 
 /** What a test file is (by its folder: rest/ → HTTP, ai/ → AI …; a suite; else its format), as the one badge. */
 export function TestFileBadge({ path }: { path: string }) {
-  if (/\.suite\.ya?ml$/i.test(path)) return <TreeBadge label="SUITE" className="text-judge" />;
+  if (/\.suite\.ya?ml$/i.test(path)) return <TreeBadge fit label="SUITE" className="text-judge" />;
   const kind = TEST_KINDS[path.split('/')[0]!.toLowerCase()];
-  if (kind && path.includes('/')) return <TreeBadge label={kind[0]} className={kind[1]} />;
-  return <TreeBadge label={/\.json$/i.test(path) ? 'JSON' : /\.csv$/i.test(path) ? 'CSV' : 'YAML'} className="text-muted" />;
+  if (kind && path.includes('/')) return <TreeBadge fit label={kind[0]} className={kind[1]} />;
+  return <TreeBadge fit label={/\.json$/i.test(path) ? 'JSON' : /\.csv$/i.test(path) ? 'CSV' : 'YAML'} className="text-muted" />;
 }
 
 /** What the rows of the test file tree call, through one ref the view keeps current (the rows are memoized). */

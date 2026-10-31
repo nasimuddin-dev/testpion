@@ -113,10 +113,12 @@ const SHORT_METHOD: Record<string, string> = { DELETE: 'DEL', OPTIONS: 'OPT' };
  * on every row. Long labels are cut to five letters; the full word is the tooltip. Colours come from KIND_COLOR (a
  * kind) or `method-<METHOD>` (an HTTP method).
  */
-export const TreeBadge = memo(function TreeBadge({ label, className }: { label: string; className?: string }) {
+export const TreeBadge = memo(function TreeBadge({ label, className, fit }: { label: string; className?: string; fit?: boolean }) {
   const text = SHORT_METHOD[label.toUpperCase()] ?? label.slice(0, 5);
+  // `fit`: as wide as its text (at least three letters, so AI and AGT line up), for a list whose rows share one kind (a folder of tests): a short badge hugs the name.
+  // Lists that mix methods keep one width, so their names line up.
   return (
-    <span className={cx('mono method-badge text-3xs font-bold w-[2.375rem] shrink-0 text-center', className)} title={label}>
+    <span className={cx('mono method-badge text-3xs font-bold shrink-0 text-center', fit ? '' : 'w-[2.375rem]', className)} style={fit ? { width: `calc(${Math.max(3, text.length)}ch + 8px)` } : undefined} title={label}>
       {text}
     </span>
   );
