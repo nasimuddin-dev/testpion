@@ -57,7 +57,7 @@ Open the **Tests** tab on the same request and add a check, for example *status 
 | Make sure a chatbot refuses harmful requests | [Safety](/ai-testing/safety) |
 | Test an AI agent that uses tools | [Check an AI agent in 5 minutes](/getting-started/check-an-agent) |
 | Know how much an AI test costs | [Model pricing](/ai-testing/model-pricing) |
-| Keep my work in git and share it | [Keep your workspace in git](/getting-started/git) |
+| Keep my work in git and share it | [Keep your workspace in git](/getting-started/git), [Work as a team](/getting-started/team) |
 | Keep secrets (passwords, keys) safe | [Secrets](/security/secrets) |
 | Test how fast an API is under load | [Load testing](/performance/load-testing) |
 | Watch an API all day and get an alert | [Monitors](/test-runner/monitors) |

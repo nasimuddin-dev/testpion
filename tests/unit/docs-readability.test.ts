@@ -21,6 +21,7 @@ const WITH_IN_SHORT = [
   'getting-started/workspaces',
   'getting-started/save-and-export-results',
   'getting-started/git',
+  'getting-started/team',
   'test-runner/overview',
   'test-runner/ci-cd',
   'test-runner/assertions',
