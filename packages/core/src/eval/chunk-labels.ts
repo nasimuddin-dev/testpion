@@ -41,6 +41,8 @@ export function chunkLabels(store: Store, runId: string): ChunkLabels {
 export function setChunkLabel(store: Store, o: { run: string; resultId: string; doc: string; label: ChunkLabel | null }): Record<string, ChunkLabelEntry> {
   if (o.label !== null && !CHUNK_LABELS.includes(o.label)) throw new ApsError('ValidationError', `A document is relevant, partly or not, not ${String(o.label)}`);
   if (!o.doc.trim()) throw new ApsError('ValidationError', 'Name the document');
+  // ids are object keys in the file: a prototype name would be lost or change the object
+  if ([o.doc, o.resultId].some((k) => k === '__proto__' || k === 'constructor' || k === 'prototype')) throw new ApsError('ValidationError', 'That name cannot be used for a document or a result');
   const all = chunkLabels(store, o.run);
   const mine = { ...(all[o.resultId] ?? {}) };
   if (o.label === null) delete mine[o.doc];

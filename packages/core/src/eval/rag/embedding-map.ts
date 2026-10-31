@@ -155,7 +155,8 @@ export async function embeddingMap(
   const xy = pca2(vectors);
   const points: MapPoint[] = items.map((it, i) => ({ id: it.id, kind: it.kind, label: it.label, text: it.text.length > 200 ? `${it.text.slice(0, 199)}…` : it.text, x: xy[i]![0], y: xy[i]![1] }));
 
-  const at = (id: string) => vectors[items.findIndex((x) => x.id === id)]!;
+  const index = new Map(items.map((x, i) => [x.id, i] as const));
+  const at = (id: string) => vectors[index.get(id)!]!;
   const rightIds = [...docs].filter(([, d]) => d.right).map(([id]) => id);
   const lookAt = o.lookAlikeAt ?? LOOK_ALIKE_AT;
   const lookAlikes: LookAlike[] = [];

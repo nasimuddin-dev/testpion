@@ -52,5 +52,7 @@ describe('chunk labels', () => {
     const cleared = await labelDocument(store, { run: out.runId, result: cancel, doc: 'doc-9', label: null });
     expect(cleared.labels).toEqual({});
     await expect(labelDocument(store, { run: out.runId, result: cancel, doc: ' ', label: 'not' })).rejects.toThrow(/Name the document/);
+    await expect(labelDocument(store, { run: out.runId, result: cancel, doc: '__proto__', label: 'not' })).rejects.toThrow(/cannot be used/);
+    await expect(labelDocument(store, { run: out.runId, result: 'constructor', doc: 'doc-1', label: 'not' })).rejects.toThrow(/cannot be used/);
   }, 120_000);
 });
