@@ -405,6 +405,11 @@ export function EvaluationsView() {
                       void openSaved(id).then((it) => {
                         if (it) void startRun({ ...drafts.load(), ...it.data, name: it.name });
                       }),
+                    // a pipeline that runs it: the CI dialog opens with this evaluation picked (a bot with sources runs `rag run`)
+                    ci: () => {
+                      const it = saved.lib.items.find((i) => i.id === id);
+                      if (it) useApp.getState().set({ ci: it.data.type === 'rag' ? { ragEvaluation: it.name } : { evaluation: it.name } });
+                    },
                     // run it on a schedule: the monitor editor opens with this evaluation picked
                     monitor: () => useApp.getState().openIntent('monitors', { create: { evaluation: id, evaluationName: saved.lib.items.find((i) => i.id === id)?.name } }),
                   },

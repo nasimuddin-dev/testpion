@@ -26,6 +26,21 @@ const steps = [
      const cancel = [...document.querySelectorAll('button')].find((b) => b.offsetParent && b.textContent.trim() === 'Cancel'); if (cancel) { await __t.real.click(cancel); await __t.sleep(500); }
      return out;`,
   ),
+  // and Run in CI… opens the pipeline dialog with it picked
+  step(
+    'the-evaluations-menu-offers-ci',
+    `await __t.view('AI Lab'); await __t.sleep(900); await __t.tab('Checks'); await __t.sleep(600);
+     const row = await __t.waitFor(() => [...document.querySelectorAll('aside *, main *')].find((e) => e.children.length === 0 && e.offsetParent && e.textContent.trim() === 'Sample: support intents'), 8000); if (!row) return 'NO ROW';
+     const r = row.getBoundingClientRect();
+     row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + 10, clientY: r.top + 5 }));
+     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Run in CI/.test(m.textContent.trim())), 4000); if (!item) return 'NO MENU ITEM';
+     await __t.real.click(item);
+     const dlg = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /Run in CI/.test(d.textContent)), 6000); if (!dlg) return 'NO DIALOG';
+     const picked = await __t.waitFor(() => [...dlg.querySelectorAll('select')].map((x) => x.selectedOptions[0]?.textContent ?? '').find((t) => /^Evaluation: /.test(t)), 5000);
+     const command = /eval run/.test(dlg.textContent);
+     await __t.real.key('Escape'); await __t.sleep(400);
+     return 'evaluation picked: ' + picked + ' | pipeline runs it: ' + command;`,
+  ),
   step(
     'a-prompt-evaluation-shows-its-own-fields',
     `await __t.view('Monitors'); await __t.sleep(900);
@@ -57,6 +72,7 @@ const steps = [
 module.exports = withExpect(steps, {
   'the-sample-evaluation-exists': /^sample: Sample: support intents$/,
   'the-evaluations-menu-offers-a-schedule': /^editor opened: true \| evaluation picked: true \| name: Sample: support intents nightly$/,
+  'the-evaluations-menu-offers-ci': /^evaluation picked: Evaluation: Sample: support intents \| pipeline runs it: true$/,
   'a-prompt-evaluation-shows-its-own-fields': /^prompt fields: true \| bot fields: false \| gates field: false \| cost line: true$/,
   'saving-keeps-the-evaluation-and-the-baseline': /^saved: true \| evaluation: ev-\S+ \| limit: 4 \| baseline: previous \| rag-only cleared: true$/,
 });

@@ -205,7 +205,7 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | The sidebar’s blank area | New …, Import… | Recently deleted… | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
 | Saved prompt (AI Lab) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Saved load test |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
-| Saved evaluation |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… | Monitor on a schedule… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| Saved evaluation |  | Open <kbd>Enter</kbd>, Open in new tab |  | Run | Copy link, Export… | Monitor on a schedule…, Run in CI… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Monitor |  | Open <kbd>Enter</kbd>, Open in new tab, Edit |  | Run now, Pause, Resume | Copy link, Export… |  | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Folder of a list (monitors, prompts, load tests, evaluations) | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Tests section (and its blank area) | New …, Import… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |

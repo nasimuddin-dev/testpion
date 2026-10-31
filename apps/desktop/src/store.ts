@@ -55,6 +55,8 @@ export type ToastAction = { label: string; onClick(): void } | { ref: ItemRef; l
 export interface CiRequest {
   /** A saved prompt evaluation (Evaluations: Run in CI): the pipeline runs it and fails when a case got worse than the last good run. */
   evaluation?: string;
+  /** A saved evaluation of a bot with sources: the pipeline runs `testpion rag run` (its metrics, gates and a report). */
+  ragEvaluation?: string;
   suite?: string;
   collection?: string;
   folders?: string[];

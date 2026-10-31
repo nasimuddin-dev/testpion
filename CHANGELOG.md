@@ -32,7 +32,7 @@
 
 ### AI quality: watch a prompt or agent on a schedule
 
-- A **monitor** can now run a saved prompt or agent evaluation every night (or every hour). A failing case fails it, and **Fail on a drop in pass rate** also fails it when the pass rate falls by more than a number of points against the run before, so a hosted model that changed without a word is noticed. `testpion monitor add … --evaluation … --baseline previous`.
+- A **monitor** can now run a saved prompt or agent evaluation every night (or every hour); right-click an evaluation for **Monitor on a schedule…** and **Run in CI…**. A failing case fails it, and **Fail on a drop in pass rate** also fails it when the pass rate falls by more than a number of points against the run before, so a hosted model that changed without a word is noticed. `testpion monitor add … --evaluation … --baseline previous`.
 
 ### AI quality: a drop in pass rate shows up by itself
 

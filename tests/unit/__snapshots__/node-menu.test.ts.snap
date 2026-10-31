@@ -150,6 +150,7 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Monitor on a schedule…",
+      "Run in CI…",
     ],
     [
       "Git",
@@ -783,6 +784,9 @@ exports[`node menus > a shape per kind (any change to a menu shows here) 1`] = `
     ],
     [
       "Export…",
+    ],
+    [
+      "Run in CI…",
     ],
   ],
   "section:load-test": [

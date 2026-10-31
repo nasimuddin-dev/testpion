@@ -49,7 +49,7 @@ export function CiDialog() {
   const environments = useApp(selectEnvironments);
   const [provider, setProvider] = usePersisted<Provider>('aps.ci.provider', 'github', { parse: (v) => (v as Provider) || undefined, text: true });
   const [target, setTarget] = useState<string>(
-    req.evaluation ? `evaluation:${req.evaluation}` : req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : req.tests?.length === 1 ? `file:${req.tests[0]}` : req.tests?.length ? 'selected' : 'tests',
+    req.evaluation ? `evaluation:${req.evaluation}` : req.ragEvaluation ? `rag:${req.ragEvaluation}` : req.collection ? `collection:${req.collection}` : req.suite ? `suite:${req.suite}` : req.tests?.length === 1 ? `file:${req.tests[0]}` : req.tests?.length ? 'selected' : 'tests',
   );
   const [environment, setEnvironment] = useState(req.environment ?? useApp.getState().environment ?? '');
   // one flow file: how the pipeline runs it (once, per data row, in several environments), and what it keeps
