@@ -36,9 +36,12 @@ async function prepare(ws) {
 }
 
 const runButton = `vis('main button').find((b) => /^Run \\d+ cases/.test(b.textContent.trim()))`;
-const runOnce = (n) => `await __t.real.click(${runButton});
+// (a second run waits a moment: on a busy machine the first is still being put away, and its button is not ready)
+const runOnce = (n) => `${n > 1 ? 'await __t.sleep(4000);' : ''} await __t.real.click(${runButton});
      const d = await __t.waitFor(() => document.querySelector('[data-rag-estimate-run]'), 10000); if (!d) return 'NO DIALOG';
-     await __t.real.click(d); await __t.sleep(300);
+     // the estimate fills in after the dialog opens and moves the button: click once it has settled
+     await __t.waitFor(() => document.querySelector('[data-rag-estimate-total]'), 10000); await __t.sleep(500);
+     await __t.real.click(document.querySelector('[data-rag-estimate-run]')); await __t.sleep(300);
      let runs = [];
      for (let i = 0; i < 120 && !(runs.length === ${n} && runs.every((r) => r.total > 0)); i++) {
        await __t.sleep(500);
