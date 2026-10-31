@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lintMcpTools, type LintTool } from '../../packages/core/src/index.js';
+import { lintMcpTools, type LintTool } from '../../packages/shared/src/mcp-tool-lint.js';
 
 const good = (over: Partial<LintTool> = {}): LintTool => ({
   name: 'search_orders',

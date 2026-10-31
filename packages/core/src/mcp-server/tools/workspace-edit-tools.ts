@@ -9,7 +9,7 @@ import { shortId } from '../../util/ids.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { McpSession } from '../../protocols/mcp/client.js';
-import { lintMcpTools } from '../../protocols/mcp/tool-lint.js';
+import { lintMcpTools } from '@testpion/shared';
 import { str, type Tool } from '../tool.js';
 
 /**

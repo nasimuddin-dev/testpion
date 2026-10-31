@@ -32,7 +32,7 @@ assertions:
 
 ## Are the tools easy for an agent to use? {#lint}
 
-An AI agent picks a tool by its description and fills its arguments from the schema. `testpion mcp --lint -- node server.js` (or `--url`, or `--server <name>`) connects and checks the tool list in words:
+An AI agent picks a tool by its description and fills its arguments from the schema. On a connected server, **Server info** has a **For AI agents** section that checks the tool list in words. From a terminal, `testpion mcp --lint -- node server.js` (or `--url`, or `--server <name>`) connects and checks the tool list in words:
 
 - a tool with **no description**, a very short one, or one that only repeats its name;
 - two tools with **the same description**, which an agent cannot tell apart;

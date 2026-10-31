@@ -3,10 +3,10 @@ import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command, Option } from 'commander';
+import { lintMcpTools } from '@testpion/shared';
 import { createInterface } from 'node:readline';
 import { addGatewayOptions, gatewayFromFlags, type GatewayFlags } from './debug-enterprise.js';
 import {
-  lintMcpTools,
   DebuggerSession,
   SessionSpool,
   describeNetworkSpeed,

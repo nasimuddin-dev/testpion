@@ -12,7 +12,7 @@
 
 ### MCP: are your tools easy for an agent to use?
 
-- `testpion mcp --lint` connects to an MCP server and checks its tool list the way an agent meets it: descriptions that say when to use a tool, parameters that say what they are, destructive tools that say so, names a client accepts, and a list that does not fill the context. The MCP tool `mcp_server_tools` returns the same as `lint`.
+- A connected MCP server's **Server info** has a **For AI agents** section, and `testpion mcp --lint` does the same from a terminal. It checks the tool list the way an agent meets it: descriptions that say when to use a tool, parameters that say what they are, destructive tools that say so, names a client accepts, and a list that does not fill the context. The MCP tool `mcp_server_tools` returns the same as `lint`.
 
 ### AI quality: are the test cases any good?
 

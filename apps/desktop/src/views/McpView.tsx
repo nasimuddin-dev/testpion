@@ -25,6 +25,7 @@ import { treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { PromptsPanel, ResourcesPanel, type Discovery } from '../components/mcp/McpPanels';
 import { splitCommandLine, joinCommandLine } from '../lib/command-line';
+import { AgentFriendly } from '../components/mcp/AgentFriendly';
 import { ToolsPanel } from '../components/mcp/ToolsPanel';
 import { OutputActions, OutputBarStart } from '../components/output/OutputFrame';
 import { traceOutputSpec } from '../components/output/mcp-specs';
@@ -391,7 +392,8 @@ It runs with your permissions. Allow it only if you know where this workspace co
             ) : tab === 'prompts' ? (
               <PromptsPanel serverId={current.id} prompts={disc.prompts} />
             ) : (
-              <div className="h-full">
+              <div className="h-full overflow-auto">
+                <AgentFriendly tools={disc.tools} instructions={disc.instructions} />
                 <JsonTree data={{ serverInfo: disc.serverInfo, capabilities: disc.capabilities, instructions: disc.instructions }} />
               </div>
             )}
