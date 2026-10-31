@@ -62,6 +62,7 @@ Open the **Tests** tab on the same request and add a check, for example *status 
 | Test how fast an API is under load | [Load testing](/performance/load-testing) |
 | Watch an API all day and get an alert | [Monitors](/test-runner/monitors) |
 | Bring my Postman collections | [Migrate from Postman](/migrate/postman) |
+| Fix an error or something that does not work | [When something does not work](/getting-started/troubleshooting) |
 | Find a keyboard shortcut | [Keyboard shortcuts](/getting-started/keyboard-shortcuts) |
 | Find a setting or a word I do not know | [The words you will meet](#the-words-you-will-meet), [Glossary](/getting-started/glossary) |
 

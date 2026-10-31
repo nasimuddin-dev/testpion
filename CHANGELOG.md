@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Docs: when something does not work
+
+- A new page, [When something does not work](/getting-started/troubleshooting): find the fix by what you see (a failed request, a variable that stays as it is, no traffic captured, an AI model that is not set up, git that will not push, an installer warning). Start here links to it.
+
 ### AI quality: what changed between two prompts
 
 - **Changes** on a prompt version shows what it changes against the prompt in use, word by word (added words in green, removed words struck through). Each version also says what it changed since the one before. `testpion eval version-diff <evaluation> <version> [other]` prints it for scripts.

@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 const root = resolve('docs');
 
 /** The pages a new reader meets first. */
-const FRONT_DOOR = ['getting-started/start-here', 'getting-started/first-request', 'getting-started/installation', 'getting-started/check-a-rag-bot', 'getting-started/check-an-agent'];
+const FRONT_DOOR = ['getting-started/start-here', 'getting-started/troubleshooting', 'getting-started/first-request', 'getting-started/installation', 'getting-started/check-a-rag-bot', 'getting-started/check-an-agent'];
 /** Pages that carry an In short box (the key guides and references). */
 const WITH_IN_SHORT = [
   ...FRONT_DOOR,

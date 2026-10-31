@@ -88,6 +88,7 @@ const docsSidebar = [
       { text: 'Check an AI answer in 5 minutes', link: '/getting-started/check-an-ai-answer' },
       { text: 'Test a RAG bot in 5 minutes', link: '/getting-started/check-a-rag-bot' },
       { text: 'Check an AI agent in 5 minutes', link: '/getting-started/check-an-agent' },
+      { text: 'When something does not work', link: '/getting-started/troubleshooting' },
       { text: 'Glossary: every word explained', link: '/getting-started/glossary' },
     ],
   },
