@@ -246,7 +246,7 @@ module.exports = withExpect(
     'prompt-folder': X('Save current prompt here ‖ Expand all | Collapse all ‖ Export… ‖ Rename folder ‖ Delete folder…'),
     'prompt-header': X('Save current prompt | New folder… | Import… ‖ Expand all | Collapse all ‖ Export…'),
     'load-test': X('Open | Open in new tab ‖ Run ‖ Copy link | Export… ‖ Rename | Duplicate | Move to folder ‖ Delete…'),
-    evaluation: X('Open | Open in new tab ‖ Run ‖ Copy link | Export… ‖ Rename | Duplicate | Move to folder ‖ Delete…'),
+    evaluation: X('Open | Open in new tab ‖ Run ‖ Copy link | Export… ‖ Monitor on a schedule… ‖ Rename | Duplicate | Move to folder ‖ Delete…'),
     monitor: X('Open | Open in new tab | Edit ‖ Run now | Resume ‖ Copy link | Export… ‖ Rename | Duplicate | Move to folder ‖ Delete…'),
     'test-folder': X('New test file here ‖ Expand all | Collapse all ‖ Run folder ‖ Export… ‖ Run in CI… ‖ Rename folder ‖ Delete folder…'),
     'test-file': X(
