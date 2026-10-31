@@ -174,6 +174,7 @@ export interface RpcParamTypes {
   'git.fixPlan': RpcCommonParams & { hook?: boolean; untrack?: boolean };
   'git.fixSecrets': RpcCommonParams & { findings: unknown[]; environmentId: string };
   'git.fixStaged': RpcCommonParams & { findings: unknown[]; environmentId: string };
+  'git.identity': RpcCommonParams;
   'git.init': RpcCommonParams & { remote?: string };
   'git.itemBlame': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string; limit?: number };
   'git.itemDiscard': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string; dryRun?: boolean };
@@ -187,6 +188,7 @@ export interface RpcParamTypes {
   'git.openFolder': RpcCommonParams & { path: string };
   'git.renameBranch': RpcCommonParams & { from: string; to: string };
   'git.resolve': RpcCommonParams & { path: string; side?: string; resolutions?: Record<string, unknown> };
+  'git.setIdentity': RpcCommonParams & { name: string; email: string };
   'git.shareSession': RpcCommonParams & { name: string; dryRun?: boolean; bundle?: boolean; notes?: string };
   'git.stage': RpcCommonParams & { paths: string[] };
   'git.stashApply': RpcCommonParams & { index?: number; hash?: string; pop?: boolean };
@@ -406,4 +408,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 389;
+export const RPC_METHOD_COUNT = 391;

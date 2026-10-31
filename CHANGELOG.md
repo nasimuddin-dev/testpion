@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Git: who are you?
+
+- A computer that has never used git has no name and e-mail, and git refused to commit with a cryptic message. Now the Git view asks *Who are you?*, keeps the answer for this workspace only (never the global git config) and commits again by itself. `testpion git identity` shows or sets it, and a commit from the command line says what to run.
+
 ### Team work: a note for your team
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.

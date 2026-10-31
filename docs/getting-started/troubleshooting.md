@@ -78,6 +78,9 @@ Install git, then restart TestPion.
 **"The workspace is not in a git repository" or "no remote".**
 Open the **Git** view. Press **Initialize repository**, and give it a remote address to share it.
 
+**"Git does not know who you are" when you commit.**
+A computer that has never used git has no name and e-mail. The Git view asks for them in a small dialog and commits again. They are kept for this workspace only. On the command line, run `testpion git identity --name "Your Name" --email you@example.com`.
+
 **A push is refused.**
 Your team pushed first. Press **Pull & push**: TestPion merges your changes by request and pushes.
 

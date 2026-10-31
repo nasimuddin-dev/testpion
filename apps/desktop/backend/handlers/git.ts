@@ -36,6 +36,8 @@ import {
   gitSync,
   gitUnstage,
   teamActivity,
+  gitIdentity,
+  setGitIdentity,
   scanStagedSecrets,
   commitVerdict,
   fixStagedFiles,
@@ -163,6 +165,10 @@ export function gitHandlers(be: Backend): Handlers {
       rmSync(proposalFile(), { force: true });
       return changed({ committed: true, commit, secrets: [] });
     },
+    /** Who commits are from on this computer (git's name and e-mail; `ok` when both are set). */
+    'git.identity': () => gitIdentity(ws()),
+    /** Set the name and e-mail for this workspace's repository only (never the global git config). */
+    'git.setIdentity': ({ name, email }: { name: string; email: string }) => setGitIdentity(ws(), { name, email }),
     /** What a commit of the staged files would publish: the secret scan of the index. */
     'git.stagedScan': () => scanStagedSecrets(ws()),
     /**

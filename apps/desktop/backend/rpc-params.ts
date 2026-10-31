@@ -237,6 +237,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'flows.webhooks.stop': {},
   'git.autoFetchSet': { enabled: 'b' },
   'git.teamActivity': { days: 'n?', limit: 'n?' },
+  'git.identity': {},
+  'git.setIdentity': { name: 's', email: 's' },
   'rag.embeddingMap': { runId: 's', embedder: 's?', lookAlike: 'n?', far: 'n?' },
   'rag.chunkLabel': { runId: 's', resultId: 's', doc: 's', label: 's?' },
   'rag.addRightDocuments': { runId: 's', resultId: 's' },

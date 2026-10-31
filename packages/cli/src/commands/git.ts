@@ -11,6 +11,8 @@ import {
   gitPull,
   gitPullFastForward,
   teamActivity,
+  gitIdentity,
+  setGitIdentity,
   gitPush,
   gitResolve,
   gitStatus,
@@ -165,6 +167,26 @@ export function registerGitCommands(git: Command, program: Command): void {
           if (c.more) console.log(dim(`  and ${c.more} more`));
         }
       });
+    }),
+  );
+
+  wsOpt(
+    git
+      .command('identity')
+      .description('who your commits are from: show the name and e-mail git uses, or set them for this workspace’s repository only (never the global git config)')
+      .option('--name <name>', 'your name')
+      .option('--email <email>', 'your e-mail address'),
+  ).action((o) =>
+    withWorkspace(o.workspace, async (s) => {
+      let id = await gitIdentity(s.root);
+      if (o.name !== undefined || o.email !== undefined) {
+        if (o.name === undefined || o.email === undefined) throw new CliError('Give both --name and --email', EXIT.CONFIG_ERROR);
+        id = await setGitIdentity(s.root, { name: o.name, email: o.email }).catch((e) => {
+          throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+        });
+      }
+      out(o.json, id, () => console.log(id.ok ? `${bold(id.name!)} <${id.email}>` : yellow('Git does not know who you are. Set it with `testpion git identity --name "Your Name" --email you@example.com`.')));
+      if (!id.ok) process.exitCode = EXIT.CONFIG_ERROR;
     }),
   );
 

@@ -2,6 +2,7 @@ import { execFileChecked } from '../net/process.js';
 import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
+import { gitIdentity, identityError } from './identity.js';
 
 /**
  * Git for a workspace (GIT-201), through the system `git`: it brings the user's SSH keys, credential helper (Git
@@ -372,6 +373,7 @@ export async function gitDiscard(ws: string, files: Array<Pick<GitFile, 'path' |
 export async function gitCommit(ws: string, message: string, opts: { paths?: string[]; amend?: boolean } = {}): Promise<GitCommit> {
   if (!message.trim() && !opts.amend) throw new ApsError('ValidationError', 'A commit needs a message');
   if (opts.paths?.length) await gitStage(ws, opts.paths);
+  if (!(await gitIdentity(ws)).ok) throw identityError();
   await runGit(ws, ['commit', '-F', '-', ...(opts.amend ? ['--amend'] : [])], { input: message });
   return (await gitLog(ws, { limit: 1 }))[0]!;
 }

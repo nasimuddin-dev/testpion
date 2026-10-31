@@ -22,6 +22,7 @@ import { GitFixDialog } from '../components/GitFixDialog';
 import { GitLargeFiles } from '../components/GitLargeFiles';
 import { GitCodeownersDialog } from '../components/GitCodeownersDialog';
 import { GitInviteDialog } from '../components/GitInviteDialog';
+import { GitIdentityDialog } from '../components/GitIdentityDialog';
 import { toastWithUndo } from '../lib/git-items';
 import { gitSnapshot, refreshGit, useGitFull, useWhenShown } from '../lib/git';
 
@@ -123,6 +124,8 @@ export function GitView() {
   const [fixOpen, setFixOpen] = useState(false);
   const [codeowners, setCodeowners] = useState(false);
   const [inviting, setInviting] = useState(false);
+  // the commit that was refused because git has no name and e-mail yet: asked for them, then it runs again (with the same "anyway")
+  const [askingWho, setAskingWho] = useState<{ force: boolean }>();
   const [toFix, setToFix] = useState(0);
   const refreshToFix = useCallback(() => void call<{ steps: Array<{ state: string }> }>('git.fixPlan', {}).then((p) => setToFix(p.steps.filter((x) => x.state === 'todo').length), () => setToFix(0)), []);
 
@@ -237,7 +240,9 @@ export function GitView() {
       setMessage('');
       useApp.getState().toast(`Committed ${r.commit?.short ?? ''}`, 'success');
     } catch (e) {
-      toastError(e);
+      // a computer that has never used git: ask who the commits are from, then commit again
+      if (asError(e).message.includes('Git does not know who you are')) setAskingWho({ force });
+      else toastError(e);
     } finally {
       setBusy(undefined);
       void load();
@@ -547,6 +552,16 @@ export function GitView() {
         />
       )}
       {codeowners && <GitCodeownersDialog onClose={() => setCodeowners(false)} onDone={() => void load()} />}
+      {askingWho && (
+        <GitIdentityDialog
+          onClose={() => setAskingWho(undefined)}
+          onDone={() => {
+            const again = askingWho.force;
+            setAskingWho(undefined);
+            void commit(again);
+          }}
+        />
+      )}
       {inviting && status.remote && <GitInviteDialog remote={status.remote} onClose={() => setInviting(false)} />}
       {itemDiff && <GitItemDiffDialog file={itemDiff.file} itemId={itemDiff.itemId} onClose={() => setItemDiff(undefined)} />}
     </div>
