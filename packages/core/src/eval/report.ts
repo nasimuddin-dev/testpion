@@ -5,7 +5,7 @@
  *
  * Host-agnostic: it reads a run's summary.json and results.jsonl through the workspace store and keeps nothing.
  */
-import { diffResponses, type ResponseDiff } from '@testpion/shared';
+import { diffResponses, plural, type ResponseDiff } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import type { CheckResult, RunSummary, TestResult } from '../model/types.js';
 import { resolveRunRef } from '../runner/eval-matrix-runs.js';
@@ -106,6 +106,14 @@ export interface EvalReportTrendPoint {
   passRate: number;
 }
 
+/** The tools of an agent run: what the cases called, and the offered tools nothing called (a case that never exercises a tool). */
+export interface EvalReportToolUse {
+  used: Array<{ name: string; calls: number; cases: number }>;
+  /** Tools the evaluation offers that no case called. */
+  neverCalled: string[];
+  text: string;
+}
+
 export interface EvalReport {
   run: { id: string; name: string; startedAt: string; environment?: string };
   passed: number;
@@ -145,6 +153,8 @@ export interface EvalReport {
   flipped?: EvalReportFlip[];
   /** An agent evaluation with a baseline run (A-2): the tools of each case against the golden run's. */
   agentBaseline?: EvalReportAgentBaseline;
+  /** An agent evaluation: which tools were called in how many cases, and which of the tools it offers were never called by any case. */
+  toolUse?: EvalReportToolUse;
   /** What was under test (R-6): the bot's own values, and whether any changed since the run before. */
   underTest?: EvalReportUnderTest[];
   /** The prompt version this run was made with (A-4), when the evaluation keeps versions: its name, or none when this prompt was never saved as one. */
@@ -348,6 +358,29 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
       // the baseline run was deleted: the report simply has no such line
     }
   }
+  // an agent evaluation: which tools were called, and which of the offered tools no case called
+  let toolUse: EvalReportToolUse | undefined;
+  if (saved?.type === 'agent' && trajectories.size) {
+    const calls = new Map<string, { calls: number; cases: Set<string> }>();
+    for (const [key, t] of trajectories)
+      for (const it of t.items)
+        if (it.kind === 'tool' && it.tool) {
+          const e = calls.get(it.tool.name) ?? { calls: 0, cases: new Set<string>() };
+          e.calls++;
+          e.cases.add(key);
+          calls.set(it.tool.name, e);
+        }
+    const offered = (saved.tools ?? []).map((t) => t.name);
+    const neverCalled = offered.filter((n) => !calls.has(n));
+    const used = [...calls].map(([name, e]) => ({ name, calls: e.calls, cases: e.cases.size })).sort((a, b) => b.calls - a.calls);
+    toolUse = {
+      used,
+      neverCalled,
+      text: used.length
+        ? `Tools called: ${used.slice(0, 5).map((u) => `${u.name} in ${plural(u.cases, 'case')}`).join(', ')}${used.length > 5 ? ` and ${used.length - 5} more` : ''}.${neverCalled.length ? ` Never called: ${neverCalled.join(', ')}.` : ''}`
+        : `No tool was called in any case.${neverCalled.length ? ` Never called: ${neverCalled.join(', ')}.` : ''}`,
+    };
+  }
 
   // the trend: this run and the ones before it of the same name
   const trend: EvalReportTrendPoint[] = store.meta
@@ -390,6 +423,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     underTest ? `Under test: ${underTest.map((u) => `${u.name} ${u.values.join(' / ')}${u.changed ? ` (was ${u.previous!.join(' / ')})` : ''}`).join(', ')}.` : '',
     promptVersion ? (promptVersion.name ? `Prompt version: ${promptVersion.name}${promptVersion.current ? '' : ' (not the one in use now)'}.` : 'Prompt version: this prompt is not saved as a version.') : '',
     agentBaseline ? agentBaseline.text : '',
+    toolUse ? toolUse.text : '',
     flipped?.length ? `Got worse: ${flipped.filter((f) => f.to === 'failed').map((f) => f.name).join(', ') || 'none'}. Got better: ${flipped.filter((f) => f.to === 'passed').map((f) => f.name).join(', ') || 'none'}.` : '',
     offline ? 'Offline demo model: its answers come from rules, not from a real model.' : '',
   ].filter(Boolean);
@@ -417,6 +451,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ...(vsLast ? { vsLast } : {}),
     ...(flipped?.length ? { flipped } : {}),
     ...(agentBaseline ? { agentBaseline } : {}),
+    ...(toolUse ? { toolUse } : {}),
     ...(promptVersion ? { promptVersion } : {}),
     ...(underTest ? { underTest } : {}),
     ...(trajectories.size ? { agentCases: trajectories.size, ...(saved?.baselineRun ? { baselineRun: saved.baselineRun } : {}) } : {}),

@@ -85,6 +85,12 @@ const steps = [
      const text = document.querySelector('[data-eval-trajectory] p')?.textContent.trim();
      return 'tool steps: ' + (tools.length > 0) + ' | red pin on a call: ' + (redAtATool > 0) + ' | starts with the question: ' + kinds.startsWith('input') + ' | ends with the answer: ' + /answer(,end)?$/.test(kinds) + ' | ' + text;`,
   ),
+  // which tools the cases called, and which offered tools no case called
+  step(
+    'the-report-says-which-tools-were-called',
+    `${H} const line = await __t.waitFor(() => document.querySelector('[data-eval-tool-use]'), 8000); if (!line) return 'NO LINE';
+     return line.textContent.trim().replace(/^(Tools called: .{0,200}?)( Never called: .*)?$/, (m, a, b) => (a.length > 12 ? 'Tools called: ' + (b ? '| never called: yes' : '| never called: no') : m));`,
+  ),
   step(
     'a-run-can-be-marked-as-the-baseline',
     `${H} const before = document.querySelector('[data-eval-baseline]')?.getAttribute('data-eval-baseline');
@@ -127,6 +133,7 @@ module.exports = withExpect(steps, {
   'try-on-the-failing-case-shows-which-check-failed': /checks: passed:Should call: passed.* \|\| failed:Should not call: failed/,
   'run-saves-an-agent-evaluation-and-runs-it': /^headline: 2 of 3 passed \| type: agent \| tools: search_docs,delete_record \| prompt: \{\{input\}\} \| columns: input,should_call,should_not_call \| extra fields: none \| wizard closed: true$/,
   'the-failed-case-shows-the-steps-the-agent-took': /^tool steps: true \| red pin on a call: true \| starts with the question: true \| ends with the answer: true \| \d+ tool calls? .* in \d+ model calls?\.$/,
+  'the-report-says-which-tools-were-called': /^Tools called: \| never called: (yes|no)$/,
   'a-run-can-be-marked-as-the-baseline': /^before: none \| after: this \| saved: true \| clear offered: true$/,
   'compare-mode-is-offered-for-an-agent': /^compare offered: true \| panel: true$/,
   'the-full-editor-shows-the-agent-setup': /^type select: agent \| tool rows: 2 \| instructions box: true$/,

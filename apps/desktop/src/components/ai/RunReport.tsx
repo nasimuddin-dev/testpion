@@ -299,6 +299,11 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
           ))}
         </div>
       )}
+      {r && !compact && r.toolUse ? (
+        <div className={cx('px-3 pb-1 text-xs', r.toolUse.neverCalled.length ? 'text-warn' : 'text-muted')} data-eval-tool-use title="The tools the cases called, and the tools the agent offers that no case called: a case that exercises them is missing">
+          {r.toolUse.text}
+        </div>
+      ) : null}
       {r && !compact && r.agentCases ? (
         <div className="px-3 pb-1.5 flex flex-wrap items-center gap-2 text-xs" data-eval-baseline={r.baselineRun === runId ? 'this' : r.baselineRun ? 'other' : 'none'}>
           <Pin size={12} className="text-muted" />

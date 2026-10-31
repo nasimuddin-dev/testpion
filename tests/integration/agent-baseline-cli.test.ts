@@ -65,6 +65,11 @@ describe('the golden trajectory of an agent evaluation', () => {
     const before = cliData((await cli(['eval', 'summary', 'last', '-w', ws, '--json'])).out);
     expect(before.agentCases).toBe(2);
     expect(before.agentBaseline).toBeUndefined();
+    // the tools the cases called, and the offered ones no case called
+    expect(before.toolUse.used).toEqual([{ name: 'add_task', calls: 1, cases: 1 }, { name: 'list_tasks', calls: 1, cases: 1 }]);
+    expect(before.toolUse.neverCalled).toEqual(['delete_task']);
+    expect(before.toolUse.text).toBe('Tools called: add_task in 1 case, list_tasks in 1 case. Never called: delete_task.');
+    expect(before.text).toContain('Never called: delete_task.');
     const set = cliData((await cli(['eval', 'baseline', 'last', '-w', ws, '--json'])).out);
     expect(set).toMatchObject({ evaluation: NAME });
     expect(set.baselineRun).toMatch(/^run-/);

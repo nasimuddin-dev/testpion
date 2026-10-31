@@ -10,6 +10,10 @@
 
 - **Add a note for your team** on Home: a few lines shown under the workspace name to everyone who opens it (*Start with Staging; ask Ana for the key*). It is saved in the workspace file, so with git it travels to your team. `testpion workspace note` shows or sets it, and the AGENTS.md that `testpion agents init` writes carries it for AI agents.
 
+### Agents: which tools were never called
+
+- The report of an agent evaluation now says which tools the cases called (*add_task in 3 cases*) and which of the offered tools **no case called** (*Never called: delete_task*), in amber. A tool nothing calls is a tool nothing tests.
+
 ### AI quality: watch a prompt or agent on a schedule
 
 - A **monitor** can now run a saved prompt or agent evaluation every night (or every hour). A failing case fails it, and **Fail on a drop in pass rate** also fails it when the pass rate falls by more than a number of points against the run before, so a hosted model that changed without a word is noticed. `testpion monitor add … --evaluation … --baseline previous`.
