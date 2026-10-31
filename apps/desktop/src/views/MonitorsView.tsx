@@ -22,7 +22,7 @@ import { deleteWithUndo } from '../lib/undo-delete';
 import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
-import { formatMs, timeAgo } from '../lib/format';
+import { formatCost, formatMs, timeAgo } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { useEvalEstimate, type CostDraft } from '../lib/eval-estimate';
@@ -810,7 +810,16 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             <Field label="Cases" hint="Only the first n cases. A failing case fails the monitor.">
               <Input type="number" min={1} placeholder="all" value={d.limit ?? ''} onChange={(e) => setD({ ...d, limit: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : undefined })} aria-label="Number of cases" />
             </Field>
-            {evalEstimate && <div className="col-span-2 text-xs"><EvalCostLine estimate={evalEstimate} model={(pickedEvaluation!.data as { model?: string }).model ?? ''} /></div>}
+            {evalEstimate && (
+              <div className="col-span-2 text-xs grid gap-0.5">
+                <EvalCostLine estimate={evalEstimate} model={(pickedEvaluation!.data as { model?: string }).model ?? ''} />
+                {!evalEstimate.free && evalEstimate.costUsd !== undefined && minutes >= 1 && (
+                  <span className="text-muted" data-monitor-month>
+                    At this schedule: about {formatCost(evalEstimate.costUsd * (43200 / minutes))} a month.
+                  </span>
+                )}
+              </div>
+            )}
             <Field label="Pass rate" hint="Also fail when the pass rate falls more than this many points against the run before.">
               <div className="flex items-center gap-2">
                 <input type="checkbox" checked={d.baseline === 'previous'} onChange={(e) => setD({ ...d, baseline: e.target.checked ? 'previous' : undefined })} aria-label="Fail on a drop in pass rate" />
