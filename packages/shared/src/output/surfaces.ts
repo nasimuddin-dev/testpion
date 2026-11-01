@@ -68,6 +68,8 @@ export type OutputSource =
   | { kind: 'runs-overview'; query?: string; limit?: number }
   /** The workspace's uncommitted changes: one file's diff (`path`), or all of them. */
   | { kind: 'git-diff'; path?: string; staged?: boolean }
+  /** Every monitor's state, uptime and a block per day: a status page to host (HTML), a wiki table (md) or data (json). */
+  | { kind: 'monitors-status'; days?: number; tzOffsetMin?: number }
   /** The workspace at a glance (activity, collections' health, monitors, latest runs) as one HTML page. */
   | { kind: 'workspace-report'; days?: number; tzOffsetMin?: number }
   /** A RAG run's samples × metrics matrix, every row: `names: ragas` names the score columns as Ragas does; `thresholds` are the edited pass marks. */
@@ -138,6 +140,7 @@ const SURFACES = [
   s('monitor.runs', 'Monitor runs', ['csv', 'json'], 'none', { cli: 'monitor results', sources: ['monitor-runs'] }),
   s('runs.overview', 'Runs overview and test history', ['csv', 'json'], 'none', { cli: 'output', sources: ['runs-overview'] }),
   s('workspace.report', 'Workspace report', ['html'], 'none', { cli: 'workspace-report', sources: ['workspace-report'] }),
+  s('monitors.status', 'Monitors status page', ['html', 'md', 'json'], 'none', { cli: 'monitor status', sources: ['monitors-status'] }),
   s('collection.docs', 'Collection documentation', ['md', 'html'], 'redacted-default', { cli: 'docs', capturedRedacted: true }),
   s('settings.export', 'Settings (to keep or copy to another computer)', ['json'], 'none', { cli: 'settings get' }),
   s('settings.diagnostics', 'Settings diagnostics', ['text', 'json', 'zip'], 'redacted-default', { capturedRedacted: true }),

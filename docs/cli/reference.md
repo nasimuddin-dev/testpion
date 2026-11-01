@@ -1170,6 +1170,7 @@ testpion monitor uptime "API health" -w my-workspace --days 90   # uptime per da
 testpion monitor requests "API health" -w my-workspace          # each request over the latest runs: median / p95, failures
 testpion monitor pause "API health" --for 2h --why "deploy" -w my-workspace   # or --until <time>; it runs again by itself when the time comes
 testpion monitor resume "API health" -w my-workspace   # the schedule goes on now
+testpion monitor status -o status.html -w my-workspace   # every monitor as a status page to host (also -o status.md, --json; --days 30)
 testpion monitor start -w my-workspace          # keep running them until Ctrl+C
 ```
 

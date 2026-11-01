@@ -57,6 +57,7 @@ export const OUTPUT_PARAMS: Record<string, { params: Array<keyof OutputParams>; 
   'runs.overview': { params: ['query', 'limit'], hint: 'filters of the runs list' },
   'git.diff': { params: ['path', 'staged'], hint: 'one file, or all uncommitted changes' },
   'workspace.report': { params: ['days'], hint: 'days of activity (1 to 90, default 14)' },
+  'monitors.status': { params: ['days'], hint: 'days of uptime (1 to 90, default 30)' },
   'response.body': { params: ['historyId'], required: ['historyId'], hint: 'a History entry id (`testpion history list`)' },
   'graphql.response': { params: ['historyId'], required: ['historyId'], hint: 'a History entry id (`testpion history list`)' },
 };
@@ -120,6 +121,8 @@ export function outputSourceFor(store: WorkspaceStore, surface: string, format: 
       return { kind: 'runs-overview', query: p.query, limit };
     case 'workspace.report':
       return { kind: 'workspace-report', days: p.days === undefined ? undefined : Number(p.days), tzOffsetMin: new Date().getTimezoneOffset() };
+    case 'monitors.status':
+      return { kind: 'monitors-status', days: p.days === undefined ? undefined : Number(p.days), tzOffsetMin: new Date().getTimezoneOffset() };
     case 'git.diff':
       return { kind: 'git-diff', path: p.path, staged: p.staged };
     default: {

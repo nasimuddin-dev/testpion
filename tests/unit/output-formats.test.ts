@@ -443,11 +443,12 @@ describe('the surfaces registry', () => {
       'runs.overview': ['runs-overview'],
       'git.diff': ['git-diff'],
       'workspace.report': ['workspace-report'],
+      'monitors.status': ['monitors-status'],
       'rag.calibration': ['rag-calibration'],
       'rag.matrix': ['rag-matrix'],
     });
     // a redacted source (the console, the log, a run, History, traces) is never offered by a surface whose policy is none:
     // those hold only numbers, names and the workspace's own files
-    for (const s of OUTPUT_SURFACES) if (s.redaction === 'none') for (const k of s.sources ?? []) expect(['grid', 'monitor-runs', 'runs-overview', 'git-diff', 'workspace-report', 'rag-matrix'], `${s.id} ${k}`).toContain(k);
+    for (const s of OUTPUT_SURFACES) if (s.redaction === 'none') for (const k of s.sources ?? []) expect(['grid', 'monitor-runs', 'runs-overview', 'git-diff', 'workspace-report', 'monitors-status', 'rag-matrix'], `${s.id} ${k}`).toContain(k);
   });
 });

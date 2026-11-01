@@ -331,6 +331,7 @@ export async function buildSource(
     case 'runs-overview':
     case 'git-diff':
     case 'workspace-report':
+    case 'monitors-status':
     case 'rag-matrix':
     case 'rag-calibration':
       return text(await dataSource(deps, src, format));

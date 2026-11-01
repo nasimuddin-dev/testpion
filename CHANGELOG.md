@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Monitors: a status page to host
+
+- **Status page** in the Monitors view and `testpion monitor status -o status.html`: every monitor's state now, its uptime over the last 30 days and a block per day, as one self-contained HTML page (no script, nothing from the internet) for GitHub Pages, an intranet or a shared drive; `-o status.md` writes a wiki table, `--json` the data. The output surface is `monitors.status` (`testpion output monitors.status --format html`).
+
 ### Monitors: pause for a while
 
 - **Pause ▸ For 1 hour / For 4 hours / Until tomorrow 09:00** on a monitor, with why (*deploy*): it says *paused until 14:30 (deploy)* and the schedule goes on by itself when the time comes, so a deploy or a maintenance window no longer means a monitor left off for good. `testpion monitor pause <name> --for 2h --why "deploy"` (or `--until <time>`), `monitor resume`; `paused`, `pausedUntil`, `pauseReason` in `monitor list --json` and `list_monitors`.

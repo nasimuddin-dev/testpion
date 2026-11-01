@@ -10,6 +10,7 @@ import { describeGitChanges, changesMarkdown } from '../git/semantic.js';
 import { gitDiff, gitStatus } from '../git/git.js';
 import { listMonitors, monitorResults } from '../runner/monitors.js';
 import { workspaceReportHtml } from '../report/workspace-report.js';
+import { monitorsStatus, monitorsStatusHtml, monitorsStatusMarkdown } from '../report/monitors-status.js';
 import { workspaceAttention } from '../storage/attention.js';
 import { buildMetricMatrix } from '../eval/rag/metric-matrix.js';
 import { ragMatrixCsv, ragMatrixHtml, ragMatrixJson } from '../eval/rag/matrix-export.js';
@@ -23,7 +24,7 @@ import type { OutputDeps } from './types.js';
 const MAX_ROWS = 2000;
 const cap = (n: number | undefined, dflt: number) => Math.max(1, Math.min(Math.floor(n ?? dflt) || dflt, MAX_ROWS));
 
-type DataSource = Extract<OutputSource, { kind: 'history' | 'traces' | 'monitor-runs' | 'runs-overview' | 'git-diff' | 'workspace-report' | 'rag-matrix' | 'rag-calibration' }>;
+type DataSource = Extract<OutputSource, { kind: 'history' | 'traces' | 'monitor-runs' | 'runs-overview' | 'git-diff' | 'workspace-report' | 'monitors-status' | 'rag-matrix' | 'rag-calibration' }>;
 
 const json = (v: unknown) => JSON.stringify(v, null, 2) + '\n';
 
@@ -102,6 +103,10 @@ export async function dataSource(deps: OutputDeps, src: DataSource, format: Outp
     }
     case 'workspace-report':
       return workspaceReportHtml(store, { days: Math.min(Math.max(Math.floor(src.days ?? 14) || 14, 1), 90), tzOffsetMin: src.tzOffsetMin, attention: await workspaceAttention(store) });
+    case 'monitors-status': {
+      const status = monitorsStatus(store, { days: src.days, tzOffsetMin: src.tzOffsetMin });
+      return format === 'json' ? json(status) : format === 'md' ? monitorsStatusMarkdown(status) : monitorsStatusHtml(status);
+    }
     case 'git-diff': {
       if (format === 'md') return changesMarkdown(await describeGitChanges(store.root, (await gitStatus(store.root)).files));
       const where = src.path || '.';

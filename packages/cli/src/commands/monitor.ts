@@ -16,6 +16,8 @@ import {
   monitorRequestStats,
   monitorResults,
   monitorStatus,
+  monitorsStatus,
+  monitorsStatusMarkdown,
   parseEvery,
   parsePauseFor,
   pauseMonitor,
@@ -142,6 +144,26 @@ export function registerMonitorCommands(program: Command): void {
         const m = findMonitor(store, ref);
         deleteMonitor(store, m.id);
         respond({ removed: m.name, id: m.id }, () => console.log(green(`Removed monitor "${m.name}"`)));
+      }),
+    );
+
+  mon
+    .command('status')
+    .description('every monitor as a status page: state now, uptime over the period and a block per day. --format html is one page to host (no script, works offline), md a table for a wiki, json the data')
+    .option('--days <n>', 'days of uptime (1 to 90)', '30')
+    .option('-o, --out <file>', 'write the page (or table, or JSON) here; without it the table is printed')
+    .option('--format <format>', 'html, md or json (default: from the file name, else html)')
+    .requiredOption('-w, --workspace <nameOrPath>')
+    .option(...JSON_OPTION)
+    .action((o: { days: string; out?: string; format?: string; workspace: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store) => {
+        if (o.out) {
+          const saved = await saveSurface({ store, surface: 'monitors.status', format: o.format ?? (/\.(md|json)$/i.test(o.out) ? o.out.replace(/^.*\./, '').toLowerCase() : 'html'), out: o.out, params: { days: Number(o.days) || 30 } });
+          return o.json ? printJson(saved) : console.log(savedLine(saved));
+        }
+        const status = monitorsStatus(store, { days: Number(o.days) || 30 });
+        if (o.json) return printJson(status);
+        console.log(monitorsStatusMarkdown(status));
       }),
     );
 

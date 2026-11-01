@@ -49,6 +49,8 @@ To be warned before a certificate expires, set the monitor's **Certificate warni
 
 **Uptime by day** shows the last 30 days like a status page: one block per day, green when every run passed, amber at 90% or more, red below that and grey when nothing ran; hover a day for its runs and its slowest p95. `testpion monitor uptime "API health" -w my-workspace [--days 90] [--json]` prints the same, and the `monitor_uptime` MCP tool returns it to agents.
 
+**A status page to host.** `testpion monitor status -o status.html` writes every monitor's state, uptime and a block per day as one self-contained page (no script, nothing loaded from the internet): put it on GitHub Pages, an intranet or a shared drive, or let a pipeline refresh it after `monitor run --due`. `-o status.md` writes the same as a table for a wiki, `--json` prints the data; `testpion output monitors.status --format html` is the same surface, and the Monitors view offers it under **Status page**.
+
 ```json
 { "text": "🔴 Monitor \"Checkout\" failed: 3 of 4 requests", "status": "failed", "total": 4, "passed": 1, "failed": 3 }
 ```

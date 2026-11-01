@@ -104,6 +104,7 @@ describe('the policy is the registry’s', () => {
       'history',
       'logs',
       'monitor-runs',
+      'monitors-status',
       'rag-calibration',
       'rag-matrix',
       'response',
@@ -112,6 +113,22 @@ describe('the policy is the registry’s', () => {
       'traces',
       'workspace-report',
     ]);
+  });
+
+  it('the monitors status page: one HTML page with no script, a Markdown table, and the data as JSON', async () => {
+    const html = await build('monitors.status', 'html', { kind: 'monitors-status', days: 7 });
+    expect(html).toContain('<!doctype html>');
+    expect(html).not.toMatch(/<script/i);
+    expect(html).toContain('Smoke monitor');
+    expect(html).toMatch(/class="overall (operational|degraded|down|none)"/);
+    const md = await build('monitors.status', 'md', { kind: 'monitors-status', days: 7 });
+    expect(md).toMatch(/^# .* — status\n/);
+    expect(md).toContain('| Monitor | State | Uptime | Runs | Schedule | Last run |');
+    const data = JSON.parse(await build('monitors.status', 'json', { kind: 'monitors-status', days: 7 }));
+    expect(data.days).toBe(7);
+    expect(data.monitors.map((m: { name: string }) => m.name)).toContain('Smoke monitor');
+    expect(data.monitors[0].daily).toHaveLength(7);
+    expect(['operational', 'degraded', 'down', 'none']).toContain(data.overall);
   });
 
   it('the app’s console and Debugger session are the app’s: a workspace alone says so', async () => {

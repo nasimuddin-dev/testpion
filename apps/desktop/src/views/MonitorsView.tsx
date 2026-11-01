@@ -271,6 +271,21 @@ export function MonitorsView() {
       disabled: busy.includes(m.id) || m.running ? { run: 'It is running now' } : {},
     });
 
+  /** The status page of every monitor (the output surface monitors.status): HTML to host, a Markdown table, or the data. */
+  const statusSpec = useMemo<OutputSpec>(() => {
+    const source = { kind: 'monitors-status' as const, days: 30, tzOffsetMin: new Date().getTimezoneOffset() };
+    return {
+      id: 'monitors.status',
+      what: 'status page',
+      name: outputFileName({ name: 'status', ext: '' }),
+      formats: [
+        { format: 'html', label: 'Status page (HTML, to host)', source, default: true },
+        { format: 'md', label: 'Status table (Markdown)', source },
+        { format: 'json', label: 'Status data (JSON)', source },
+      ],
+      empty: rows.length ? undefined : 'No monitors yet',
+    };
+  }, [rows.length]);
   const newDraft = (): MonitorDraft => ({ name: '', collectionId: collections[0]?.id ?? '', everyMinutes: 15, enabled: true, environment: useApp.getState().environment });
   /** Change the monitors library directly (folders): monitors keep their data, only folders change. */
   const editLibrary = async (fn: (lib: Library<unknown>) => Library<unknown>) => {
@@ -433,6 +448,10 @@ export function MonitorsView() {
             // every tab closed: the shared empty state of a tab view (Tests, Load tests, Evaluations, Playground, Environments)
             <NoOpenItems icon={AlarmClock} title="No open monitors" newLabel="New monitor" onNew={() => setEditing(newDraft())}>
               Open a monitor from the list: its uptime, response times and runs show here.
+              <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted" data-output="monitors.status">
+                <span>Every monitor as a page to host:</span>
+                <OutputActions spec={statusSpec} />
+              </div>
             </NoOpenItems>
           ) : (
             <Empty

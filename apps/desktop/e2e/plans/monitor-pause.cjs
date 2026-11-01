@@ -41,10 +41,25 @@ const steps = [
      await window.aps.invoke('monitor.delete', { id: window.__pauseMonitorId });
      return 'says: ' + sched.textContent.trim() + ' | paused: ' + st.paused + ' | pausedUntil: ' + st.pausedUntil + ' | pause button back: ' + !!document.querySelector('[data-monitor-pause]');`,
   ),
+  // with no monitor open, the right side offers every monitor as a status page (the shared output control: HTML to host, Markdown, JSON)
+  step(
+    'the-status-page-is-offered',
+    `const cols = await window.aps.invoke('col.list');
+     const other = await window.aps.invoke('monitor.save', { monitor: { name: 'Status me', collectionId: cols[0].id, everyMinutes: 60, enabled: true } });
+     await __t.sleep(900);
+     // every open monitor tab closed: the right side is the view's empty state
+     for (let i = 0; i < 6; i++) { const x = document.querySelector('[role=tablist][aria-label="Open monitors"] button[aria-label^="Close "]'); if (!x) break; x.click(); await __t.sleep(300); }
+     const box = await __t.waitFor(() => document.querySelector('[data-output="monitors.status"]'), 8000);
+     const labels = box ? [...box.querySelectorAll('button')].map((b) => b.textContent.trim() || b.getAttribute('aria-label') || '').filter(Boolean).join(' | ') : '';
+     await window.aps.invoke('monitor.delete', { id: other.id });
+     if (!box) return 'NO STATUS PAGE CONTROL';
+     return 'offered: true | buttons: ' + (labels.length > 0) + ' | says: ' + /page to host/.test(box.textContent);`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
   'a-monitor-to-pause': /^saved: Pause me$/,
   'pause-for-an-hour-asks-why-and-says-until-when': /^menu: Until I resume it \| For 1 hour \| For 4 hours \| Until tomorrow 09:00 \| says: paused until HH:MM \(deploy\) \| paused: true \| due: false \| enabled: true \| in an hour: true \| resume shown: true$/,
+  'the-status-page-is-offered': /^offered: true \| buttons: true \| says: true$/,
   'resume-brings-the-schedule-back': /^says: hourly \| paused: false \| pausedUntil: undefined \| pause button back: true$/,
 });
