@@ -73,6 +73,13 @@ export interface RpcParamTypes {
   'col.tree': RpcCommonParams & { ids?: string[] };
   'col.uploadDataFile': RpcCommonParams & { name: string; text: string };
   'col.variableFlow': RpcCommonParams & { collectionId: string };
+  'comments.add': RpcCommonParams & { ref: unknown; text: string };
+  'comments.counts': RpcCommonParams;
+  'comments.delete': RpcCommonParams & { ref: unknown; id: string };
+  'comments.list': RpcCommonParams & { ref: unknown };
+  'comments.open': RpcCommonParams;
+  'comments.resolve': RpcCommonParams & { ref: unknown; id: string; resolved?: boolean };
+  'comments.restore': RpcCommonParams & { ref: unknown; comment: Record<string, unknown> };
   'cookies.clear': RpcCommonParams & { domain?: string };
   'cookies.delete': RpcCommonParams & { domain: string; name: string; path?: string };
   'cookies.set': RpcCommonParams & { cookie: Record<string, unknown>; replace?: Record<string, unknown> };
@@ -411,4 +418,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 394;
+export const RPC_METHOD_COUNT = 401;

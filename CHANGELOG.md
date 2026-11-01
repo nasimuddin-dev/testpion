@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Team work: comments next to the item
+
+- **Comments for your team** in the Info panel of a request, a folder, a test file, an evaluation, a monitor or any other item: a question or a note, signed with your git name and dated, saved in the workspace under `comments/` (one small file per item, so two people never conflict) and carried by git to the team. Mark as settled greys it and takes it out of the open list; the Git view names the change *Comments for the team*. `testpion item comment list|add|resolve|delete <item>` and `item comment open --json` (every open comment of the workspace) for pipelines and agents; RPC `comments.*`.
+
 ### The judge, judged: a judge fooled by length
 
 - The report card of an evaluation with an LLM judge now says when the judge's scores follow the length of the answers (*The judge "helpful" favours longer answers (its scores follow the length of the answer over 12 cases: the longest third scored 0.91, the shortest 0.4)*), in amber, with what to do about it. Computed from the run, no model is called; `judgeBias` in `testpion eval summary --json` and `eval_summary`.

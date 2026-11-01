@@ -238,7 +238,9 @@ export function describeFile(file: string, before: string | undefined, after: st
     const meaning = (isFlowFile(file) ? flowChanges(file, before, after) : undefined) ?? libraryChanges(file, before, after) ?? describeOtherFile(file, before, after, state, { sizes });
     if (meaning) return meaning;
   }
-  return [{ file, kind: fileGroup(file), change: state, title: file, details: state === 'renamed' && from ? [`was ${from}`] : [] }];
+  // a thread of comments for the team (storage/comments.ts): named as such, not by its hashed file name
+  const title = file.startsWith('comments/') ? 'Comments for the team' : file;
+  return [{ file, kind: fileGroup(file), change: state, title, details: state === 'renamed' && from ? [`was ${from}`] : [] }];
 }
 
 /** The text of a file in the working folder; undefined when it is missing, binary or too big (its size is said instead). */

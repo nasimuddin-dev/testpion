@@ -1,5 +1,6 @@
 /** RPC handlers: Workspaces, environments, current values, cookies and variables. */
 import { describeVariables } from '../var-descriptions.js';
+import { commentsHandlers } from './comments.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import {
@@ -81,6 +82,8 @@ export function workspaceHandlers(be: Backend): Handlers {
     return { kind: 'collection', ...r, workspace: be.ws.workspace.name };
   };
   return {
+    // comments for the team on an item (their own module; registered with the workspace's handlers)
+    ...commentsHandlers(be),
     'ws.list': () => be.manager.list(),
     /** Why no workspace is open after the start, if the last one could not be opened. */
     'ws.openProblem': () => (be.store ? null : (be.startupProblem ?? null)),

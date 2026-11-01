@@ -12,6 +12,7 @@ import { useSticky } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
 import { timeAgo } from '../lib/format';
 import { useEditorTabsStore } from './EditorTabs';
+import { ItemComments } from './ItemComments';
 import { PinnablePanel, usePinnablePanel } from './PinnablePanel';
 import { RefLink } from './RefLink';
 import { EnvBadge } from './EnvSelect';
@@ -180,6 +181,7 @@ function ContextInfo() {
           <EmptyNote>No run included it yet.</EmptyNote>
         )}
       </section>
+      <ItemComments ref={ref} />
       {ref.kind === 'request' && (
         <section>
           <SectionTitle>

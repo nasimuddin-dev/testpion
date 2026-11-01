@@ -38,6 +38,7 @@ import { registerOpenApiCommands } from './commands/openapi.js';
 import { registerGenerateCommands } from './commands/generate.js';
 import { registerReplaceCommands } from './commands/replace.js';
 import { registerVarsMoveCommand } from './commands/vars-move.js';
+import { registerCommentCommand } from './commands/comment.js';
 import { registerTidyCommand } from './commands/tidy.js';
 import { registerAiSpecCommands } from './commands/ai-spec.js';
 import { registerAiSecurityCommands } from './commands/ai-security.js';
@@ -107,6 +108,7 @@ export function buildProgram(): Command {
   registerBundleCommands(program);
   registerRagCommands(program);
   registerItemCommand(program);
+  registerCommentCommand(program); // joins the item group: item comment list|add|resolve|delete|open
   registerOutputCommand(program);
   registerTrustCommands(program);
   registerSettingsCommands(program);

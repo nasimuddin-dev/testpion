@@ -45,6 +45,7 @@ describe('CLI smoke', () => {
     expect(json(['lint-tests', '-w', ws, '--json'])).toHaveProperty('files');
     expect(json(['lint', 'Veterinary API', '-w', ws, '--json'])).toBeDefined();
     expect(json(['vars', 'usages', 'baseUrl', '-w', ws, '--json'])).toBeDefined();
+    expect(json(['item', 'comment', 'open', '-w', ws, '--json'])).toEqual({ open: [] });
     expect(json(['openapi-lint', 'specs/veterinary-api.yaml', '-w', ws, '--json'])).toBeDefined();
     expect(json(['openapi-ops', 'specs/veterinary-api.yaml', '-w', ws, '--json'])).toBeDefined();
     expect(json(['storage', '-w', ws, '--json'])).toBeDefined();

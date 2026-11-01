@@ -1105,6 +1105,18 @@ testpion kinds --json            # { kinds: [{ id, label, ref, library, aliases,
 
 `nodes` is the menu of every row the kind has in the app (the item's row, its section header, its folders; a request's also the protocol group's and Favorites'), as the app builds it: `{ node, creates, groups: [{ group, actions: [{ id, label, shortcut?, submenu? }] }] }`, the groups in the order create · open · tree · run · share · tools · git · edit · danger, `label` the key of the app's vocabulary (`rename`, `moveToFolder`, `delete` …), `shortcut` the key that runs it on a focused row (<kbd>Enter</kbd> open, <kbd>F2</kbd> rename, <kbd>Del</kbd> delete, <kbd>*</kbd> expand all), `creates` whether the node offers New … items. The same table is in [Finding your way around](/getting-started/finding-your-way#menus).
 
+## `item comment`
+
+Comments for your team on an item, kept in the workspace under `comments/` (one file per item; git carries them). An item is `request:<collectionId>:<requestId>`, `folder:<collectionId>:<folderId>`, `test:tests/x.yaml`, `flow:tests/x.flow.yaml`, `saved:<library>:<id>`, `monitor:<id>`, `spec:specs/x.yaml`, or a `testpion://` link.
+
+```bash
+testpion item comment list request:payments:create-invoice          # the thread, oldest first (--json: { item, comments })
+testpion item comment add request:payments:create-invoice "Why does this send X-Trace twice?"   # signed with your git name; "-" reads stdin
+testpion item comment resolve request:payments:create-invoice c-abc  # mark it settled (--reopen undoes it)
+testpion item comment delete request:payments:create-invoice c-abc
+testpion item comment open --json                                   # every open comment of the workspace, newest first, each with its ref
+```
+
 ## `item`
 
 ```bash
