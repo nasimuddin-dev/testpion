@@ -11,7 +11,7 @@ A TestPion workspace is a folder of plain files, so your team shares it through 
 
 ## What is shared and what is not
 
-Requests, environments, tests and flows are shared through git. Secret values are not. Each person types their own, and they stay on that person's computer.
+Requests, environments, tests, flows and the comments you leave on items (`comments/`) are shared through git. Secret values are not: each person types their own, and they stay on that person's computer. So do the problems you snoozed and the mock servers' state.
 
 ## Set it up once
 
