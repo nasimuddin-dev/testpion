@@ -128,6 +128,6 @@ export async function incomingChanges(ws: string, o: { limit?: number } = {}): P
   }
   const changes = all.slice(0, 12).map((x) => ({ change: x.change, title: x.title, details: x.details, kind: x.kind, ...(x.ref ? { ref: x.ref } : {}) }));
   const people = new Set(commits.map((c) => c.author));
-  const text = `${commits.length} ${commits.length === 1 ? 'commit' : 'commits'} by ${people.size} ${people.size === 1 ? 'person' : 'people'}${all.length ? ` change ${all.length} ${all.length === 1 ? 'item' : 'items'}: ${changes.slice(0, 3).map((c) => `${c.title}${c.details.length ? `: ${c.details.slice(0, 2).join(', ')}` : ''}`).join(' · ')}${all.length > 3 ? ' …' : ''}` : ''}.`;
+  const text = `${commits.length} ${commits.length === 1 ? 'commit' : 'commits'} by ${people.size} ${people.size === 1 ? 'person' : 'people'}${all.length ? `, changing ${all.length} ${all.length === 1 ? 'item' : 'items'}: ${changes.slice(0, 3).map((c) => `${c.title}${c.details.length ? `: ${c.details.slice(0, 2).join(', ')}` : ''}`).join(' · ')}${all.length > 3 ? ' …' : ''}` : ''}.`;
   return { upstream, commits, changes, more: Math.max(0, all.length - changes.length), text };
 }

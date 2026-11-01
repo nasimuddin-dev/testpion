@@ -192,7 +192,7 @@ export function GitConflictDialog({ path, onClose, onResolved }: { path: string;
       ) : (
         <div className="grid gap-4">
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-muted">{keys.length} conflicts</span>
+            <span className="text-muted">{plural(keys.length, 'conflict')}</span>
             <Button size="sm" onClick={() => all('ours')}>
               Keep all mine
             </Button>

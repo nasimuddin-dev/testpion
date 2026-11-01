@@ -5,6 +5,7 @@ import { Badge, Busy, Button, Empty } from './ui';
 import { generateTestsFromDefinition } from '../lib/spec-tests';
 
 import { refOfWorkspacePath } from '@testpion/shared';
+import { plural } from '../lib/format';
 interface Message {
   name: string;
   summary?: string;
@@ -106,7 +107,7 @@ export function AsyncPreviewPanel({ outline, error, spec, onRetry }: { outline?:
           <span className="font-semibold">{outline.title}</span>
           {outline.version && <Badge>v{outline.version}</Badge>}
           <Badge tone="accent">AsyncAPI {outline.asyncapi}</Badge>
-          <span className="text-xs text-muted">{outline.channels.length} channels</span>
+          <span className="text-xs text-muted">{plural(outline.channels.length, 'channel')}</span>
           <Button size="sm" className="ml-auto" icon={<FlaskConical size={12} />} onClick={() => void generate()}>
             Generate tests
           </Button>

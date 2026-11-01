@@ -4,6 +4,7 @@ import { formatBytes, formatMs } from '@testpion/shared';
 import { cx, Empty, SectionTitle } from '../ui';
 import { headerSizes, kb, speedOf, versionOf, type Exchange } from './model';
 import { cachingRows, tlsRows } from './InspectorSections';
+import { plural } from '../../lib/format';
 
 /** The path of an absolute URL, cut by hand (a `new URL` per row costs 20 µs and the tree reads thousands); anything else falls back to the parser. */
 const SCHEME_HOST = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
@@ -492,7 +493,7 @@ export function PerformancePanel({ rows, onPick }: { rows: Exchange[]; onPick(id
   return (
     <div className="flex-1 min-h-0 overflow-auto" data-performance>
       <p className="px-2 pt-2 text-xs">
-        {done.length} requests · {Math.round(waitShare * 100)}% of the time is spent waiting for servers
+        {plural(done.length, 'request')} · {Math.round(waitShare * 100)}% of the time is spent waiting for servers
         {waitShare > 0.7 ? ' (the servers are the bottleneck)' : waitShare < 0.3 ? ' (transfers are the bottleneck)' : ''}.
       </p>
       {title('Slowest responses')}

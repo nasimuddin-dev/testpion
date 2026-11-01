@@ -8,6 +8,7 @@ import { examplesOpenKey, folderOpenKey, scopedNodeId, type ExtraGroup, type Tre
 import { CLOSED_ICON, CountPill, FOLDER_ICON, KIND_COLOR, OPEN_ICON, TreeBadge } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
 import { Button, cx, StatusDot } from './ui';
+import { plural } from '../lib/format';
 
 /*
  * The rows of the Collections tree (CollectionTree draws them through a VirtualList): a collection, a protocol
@@ -113,7 +114,7 @@ export const RequestRow = memo(function RequestRow({
           tabIndex={-1}
           className="absolute inset-y-0 flex items-center w-3.5 text-muted hover:text-fg"
           style={{ left: 9 + depth * 12 }}
-          aria-label={examplesOpen ? 'Hide examples' : `Show ${examples.length} examples`}
+          aria-label={examplesOpen ? 'Hide examples' : `Show ${plural(examples.length, 'example')}`}
           aria-expanded={examplesOpen}
           onClick={(e) => {
             e.stopPropagation();

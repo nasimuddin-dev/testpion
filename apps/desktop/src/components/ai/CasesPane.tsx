@@ -9,6 +9,7 @@ import { Button, Callout, cx, Input, Segmented, Select, Split } from '../ui';
 import { CodeEditor } from '../CodeEditor';
 import { CaseTable } from './CaseTable';
 import { PasteCasesDialog } from './PasteCasesDialog';
+import { plural } from '../../lib/format';
 
 /** The editor's language for each dataset format: colours, and each format's own checks (JSONL line by line). */
 const EDITOR_LANGUAGE = { json: 'json', jsonl: 'jsonl', csv: 'csv', md: 'markdown' } as const;
@@ -200,7 +201,7 @@ export function CasesPane({
               <CodeEditor language={EDITOR_LANGUAGE[readAs]} value={d.dataset} onChange={(dataset) => set({ dataset })} />
               <div className="h-full overflow-auto p-2 text-xs">
                 <div className="text-muted mb-1">
-                  Preview · {count} cases · each column is available as {'{{column}}'} in the prompt and checks
+                  Preview · {plural(count, 'case')} · each column is available as {'{{column}}'} in the prompt and checks
                   {d.type === 'rag' && (ragTarget ? ' · for a bot with sources: question, reference (the expected answer), reference_ids (the right document ids), reference_contexts' : ' · cases for a bot with sources need question, contexts [{id,text}] and optionally answer/expected')}
                 </div>
                 {preview.length > 0 && (

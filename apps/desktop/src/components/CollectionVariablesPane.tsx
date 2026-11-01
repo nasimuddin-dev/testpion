@@ -125,7 +125,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
           <>
             <div className="flex items-center gap-2 min-w-0">
               <h2 className="font-semibold truncate">{current.name}</h2>
-              <span className="text-xs text-muted shrink-0">{rows.length} variables</span>
+              <span className="text-xs text-muted shrink-0">{plural(rows.length, 'variable')}</span>
               <Button size="sm" variant="ghost" className="ml-auto" icon={<ExternalLink size={13} />} onClick={() => void openRef({ kind: 'collection', collectionId: current.id, tab: 'variables' })}>
                 Open collection
               </Button>

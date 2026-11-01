@@ -46,7 +46,7 @@ describe('incomingChanges', () => {
       ]),
     );
     expect(inc.changes.some((c) => /notes/.test(c.title))).toBe(false);
-    expect(inc.text).toMatch(/^2 commits by 2 people change 2 items: /);
+    expect(inc.text).toMatch(/^2 commits by 2 people, changing 2 items: /);
   });
 
   it('says so when nothing is waiting, and gives nothing without an upstream', async () => {

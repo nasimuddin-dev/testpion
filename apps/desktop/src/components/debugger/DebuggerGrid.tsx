@@ -622,7 +622,7 @@ export const GridTotals = memo(function GridTotals({ rows, selectedIds, total }:
     <div className="px-2 py-1 border-t border-line text-xs text-muted flex gap-4 shrink-0 tabular-nums" data-grid-totals>
       <span>
         {selectedIds.length > 1 ? `${pick.length} selected · ` : ''}
-        {rows.length === total || total === undefined ? `${rows.length} requests` : `${rows.length} of ${total} requests`}
+        {rows.length === total || total === undefined ? plural(rows.length, 'request') : `${rows.length} of ${plural(total, 'request')}`}
       </span>
       <span>{formatBytes(bytes)}</span>
       <span>{secs.toFixed(3)} sec</span>
