@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { ownershipOf } from '../git/owners.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { appendBoundedLine } from '../util/jsonl-append.js';
 import { dirname, join } from 'node:path';
@@ -112,6 +113,16 @@ export function monitorAlert(m: Pick<Monitor, 'alertAfter'>, result: MonitorResu
   return streak >= n ? 'recovered' : undefined;
 }
 
+/** The owners (CODEOWNERS) of what a monitor runs: its collection's file or its test file; none without CODEOWNERS. */
+export async function monitorOwners(store: WorkspaceStore, m: Monitor): Promise<string[]> {
+  try {
+    const file = m.testFile ? `tests/${m.testFile}` : m.collectionId ? store.collectionFileOf(m.collectionId) : undefined;
+    return file ? (await ownershipOf(store.root, file)).owners : [];
+  } catch {
+    return [];
+  }
+}
+
 /** The metric means, the sample and the regressions of a RAG monitor run, as lines under the alert's text. */
 function ragLines(r: MonitorResult): string {
   if (!r.rag) return '';
@@ -124,11 +135,13 @@ function ragLines(r: MonitorResult): string {
  * Tell the monitor's webhook that it started failing or recovered. Never throws (a failing webhook must
  * not break the schedule); returns what happened for logs.
  */
-export async function notifyMonitorWebhook(url: string, monitor: Pick<Monitor, 'id' | 'name'>, result: MonitorResult, opts: { signal?: AbortSignal } = {}): Promise<{ ok: boolean; status?: number; error?: string }> {
+export async function notifyMonitorWebhook(url: string, monitor: Pick<Monitor, 'id' | 'name'> & { owners?: string[] }, result: MonitorResult, opts: { signal?: AbortSignal } = {}): Promise<{ ok: boolean; status?: number; error?: string }> {
   const bad = result.status !== 'passed';
-  const text = bad
+  // several teams: the owners of what the monitor runs (CODEOWNERS) come first, so a shared channel pages the right people
+  const who = monitor.owners?.length ? `${monitor.owners.join(' ')} ` : '';
+  const text = who + (bad
     ? `🔴 Monitor "${monitor.name}" ${result.status === 'error' ? `could not run: ${result.error ?? 'error'}` : result.reason && !(result.failed + result.errors) ? (result.reason.startsWith('p95') ? 'is too slow' : 'needs attention') : `failed: ${result.failed + result.errors} of ${result.total} requests`}`
-    : `🟢 Monitor "${monitor.name}" passes again (${result.passed} of ${result.total} requests)`;
+    : `🟢 Monitor "${monitor.name}" passes again (${result.passed} of ${result.total} requests)`);
   const why = bad && result.reason ? ` (${result.reason})` : '';
   try {
     if (!/^https?:\/\//i.test(url)) throw new Error('the webhook must be an http(s) URL');
@@ -618,6 +631,8 @@ interface MonitorSchedulerOptions {
   /** Current monitors (read on every tick, so edits apply without a restart). */
   list(): Monitor[];
   last(id: string): MonitorResult | undefined;
+  /** The owners of what a monitor runs (CODEOWNERS), named first in its alert. Default: none. */
+  owners?(m: Monitor): Promise<string[]>;
   /** The latest results of a monitor, newest first (`alertAfter` of them): a monitor that alerts after n failures in a row needs them. Default: the last one. */
   recent?(id: string, limit: number): MonitorResult[];
   run(m: Monitor): Promise<MonitorResult>;
@@ -670,7 +685,7 @@ export class MonitorScheduler {
           this.o.onResult?.(m, r, previous);
           if (m.webhook && monitorAlert(m, r, this.o.recent ? this.o.recent(m.id, alertAfterOf(m)) : previous ? [previous] : [])) {
             const url = this.o.resolve ? this.o.resolve(m, m.webhook) : m.webhook;
-            const sent = await notifyMonitorWebhook(url, m, r);
+            const sent = await notifyMonitorWebhook(url, { ...m, owners: this.o.owners ? await this.o.owners(m) : [] }, r);
             this.o.onWebhook?.(m, sent);
           }
         } catch (e) {

@@ -4,6 +4,7 @@ import {
   MonitorScheduler,
   alertAfterOf,
   monitorAlert,
+  monitorOwners,
   notifyMonitorWebhook,
   deleteMonitor,
   executeMonitor,
@@ -226,7 +227,7 @@ export function registerMonitorCommands(program: Command): void {
           const r = await run(m, ref || o.all ? 'manual' : 'schedule');
           // cron (`--due`) and manual runs alert the webhook too: at the failure that makes the streak, and at the recovery after one
           if (m.webhook && monitorAlert(m, r, recent)) {
-            const sent = await notifyMonitorWebhook(webhookUrl(store, m), m, r);
+            const sent = await notifyMonitorWebhook(webhookUrl(store, m), { ...m, owners: await monitorOwners(store, m) }, r);
             if (!sent.ok && !o.json) console.error(yellow(`webhook for ${m.name} failed: ${sent.error ?? `HTTP ${sent.status}`}`));
           }
           results.push({ ...r, name: m.name, environment: m.environment ?? null });
@@ -317,6 +318,7 @@ export function registerMonitorCommands(program: Command): void {
           list: () => listMonitors(store),
           last: (id) => lastMonitorResult(store, id),
           recent: (id, n) => monitorResults(store, id, n),
+          owners: (m) => monitorOwners(store, m),
           run: (m) => run(m, 'schedule'),
           onResult: (m, r, prev) => {
             if (o.json) return printJson({ ...r, name: m.name });

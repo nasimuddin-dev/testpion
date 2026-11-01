@@ -31,6 +31,7 @@ export async function runMonitorNow(be: Backend, m: Monitor, trigger: MonitorRes
 }
 
 /** The latest results of a monitor, newest first: the scheduler's `recent` (a monitor that alerts after n failures in a row). */
+export { monitorOwners } from '@testpion/core';
 export const recentMonitorResults = (be: Backend, id: string, n: number) => monitorResults(be.ws, id, n);
 
 export function monitorHandlers(be: Backend): Handlers {

@@ -123,7 +123,7 @@ describe('the policy is the registry’s', () => {
     expect(html).toMatch(/class="overall (operational|degraded|down|none)"/);
     const md = await build('monitors.status', 'md', { kind: 'monitors-status', days: 7 });
     expect(md).toMatch(/^# .* — status\n/);
-    expect(md).toContain('| Monitor | State | Uptime | Runs | Schedule | Last run |');
+    expect(md).toContain('| Monitor | Environment | State | Uptime | Runs | Schedule | Last run |');
     const data = JSON.parse(await build('monitors.status', 'json', { kind: 'monitors-status', days: 7 }));
     expect(data.days).toBe(7);
     expect(data.monitors.map((m: { name: string }) => m.name)).toContain('Smoke monitor');

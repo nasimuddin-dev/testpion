@@ -4,6 +4,7 @@
  * a program. Only names, counts and timings: no request bodies, headers or variable values. No script in the page.
  */
 import { ENGINE_VERSION } from '../version.js';
+import { environmentLabel } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { listMonitors, monitorDaily, monitorResults, monitorStatus, pausedFor, type Monitor, type MonitorDay, type MonitorResult } from '../runner/monitors.js';
 import { findSavedEvaluation } from '../runner/saved-evaluations.js';
@@ -13,6 +14,9 @@ export interface MonitorStatusRow {
   name: string;
   /** What it runs: the collection's name, the test file, or the evaluation. */
   target: string;
+  /** The environment it runs in, with its group (a tenant): "Acme ▸ Staging". */
+  environment?: string;
+  group?: string;
   /** How often, or "paused" / "paused until 14:30 (deploy)". */
   schedule: string;
   paused: boolean;
@@ -69,6 +73,7 @@ export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffs
         id: m.id,
         name: m.name,
         target: targetOf(store, m),
+        ...(m.environment ? { environment: m.environment, ...(store.getEnvironment(m.environment)?.group ? { group: store.getEnvironment(m.environment)!.group } : {}) } : {}),
         schedule: st.schedule,
         paused: !m.enabled || pausedFor(m, now),
         state: !last ? 'unknown' : last.status === 'passed' ? 'up' : 'down',
@@ -113,7 +118,7 @@ export function monitorsStatusHtml(s: MonitorsStatus): string {
   const rows = s.monitors
     .map(
       (m) => `<section class="mon ${m.state}${m.paused ? ' paused' : ''}">
-<div class="head"><span class="dot"></span><h2>${esc(m.name)}</h2><span class="muted">${esc(m.target)}</span><span class="state">${m.paused ? esc(m.schedule) : STATE_TEXT[m.state]}</span></div>
+<div class="head"><span class="dot"></span><h2>${esc(m.name)}</h2><span class="muted">${esc(m.target)}${m.environment ? ` · ${esc(environmentLabel({ name: m.environment, group: m.group }))}` : ''}</span><span class="state">${m.paused ? esc(m.schedule) : STATE_TEXT[m.state]}</span></div>
 <div class="days" aria-label="Uptime by day">${dayBlocks(m.daily)}</div>
 <div class="muted small">${s.days} days: ${esc(pct(m.uptime))} of ${plural(m.runs, 'run')} passed${m.paused ? '' : ` · ${esc(m.schedule)}`}${lastLine(m)}</div>
 </section>`,
@@ -148,10 +153,10 @@ ${rows || '<p class="muted">No monitors. Add one in TestPion (Monitors) or with 
 export function monitorsStatusMarkdown(s: MonitorsStatus): string {
   const lines = [`# ${s.workspace} — status`, '', `${OVERALL_TEXT[s.overall]} · ${s.monitors.length} monitor${s.monitors.length === 1 ? '' : 's'} · last ${s.days} days · ${when(s.generatedAt)} UTC`, ''];
   if (s.monitors.length) {
-    lines.push('| Monitor | State | Uptime | Runs | Schedule | Last run |', '|---|---|---|---|---|---|');
+    lines.push('| Monitor | Environment | State | Uptime | Runs | Schedule | Last run |', '|---|---|---|---|---|---|---|');
     for (const m of s.monitors) {
       const state = m.paused ? m.schedule : m.state === 'up' ? '🟢 Up' : m.state === 'down' ? '🔴 Down' : '⚪ No run yet';
-      lines.push(`| ${m.name} | ${state} | ${pct(m.uptime)} | ${m.runs} | ${m.paused ? '—' : m.schedule} | ${m.last ? `${when(m.last.startedAt)} ${m.last.status}${m.last.reason ? ` (${m.last.reason})` : ''}` : '—'} |`);
+      lines.push(`| ${m.name} | ${m.environment ? environmentLabel({ name: m.environment, group: m.group }) : '—'} | ${state} | ${pct(m.uptime)} | ${m.runs} | ${m.paused ? '—' : m.schedule} | ${m.last ? `${when(m.last.startedAt)} ${m.last.status}${m.last.reason ? ` (${m.last.reason})` : ''}` : '—'} |`);
     }
   } else lines.push('No monitors.');
   return lines.join('\n') + '\n';
