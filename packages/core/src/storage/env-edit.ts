@@ -204,3 +204,26 @@ export async function addVariablesToEnvironments(
   }
   return out;
 }
+
+/**
+ * A new tenant from an existing one: every environment of `group` copied into `newGroup` (same names, production flag, variables
+ * and colour; secret values are not copied: they belong to the tenant). Ids come from the group and the name (acme-staging ▸
+ * globex-staging). Returns the new environments. Nothing when the group has none; an error when the new group exists already.
+ */
+export function duplicateEnvironmentGroup(store: WorkspaceStore, group: string, newGroup: string): Environment[] {
+  const want = newGroup.trim();
+  if (!want) throw new ApsError('ValidationError', 'Name the new group (the tenant)');
+  const envs = store.listEnvironments().filter((e) => !e.problem);
+  const from = environmentsOfGroup(envs, group);
+  if (!from.length) throw new ApsError('ValidationError', `No environment is in the group "${group}"`);
+  if (environmentsOfGroup(envs, want).length) throw new ApsError('ValidationError', `The group "${want}" exists already: its environments would be mixed with the copies`);
+  const taken = new Set(envs.map((e) => e.id));
+  return from.map((e) => {
+    let id = slugify(`${want} ${e.name}`) || 'environment';
+    for (let n = 2; taken.has(id); n++) id = `${slugify(`${want} ${e.name}`)}-${n}`;
+    taken.add(id);
+    const copy: Environment = { ...e, id, group: want, variables: e.variables.map((v) => ((v as { secret?: boolean }).secret ? { ...v, value: '' } : v)) };
+    delete (copy as { problem?: string }).problem;
+    return store.saveEnvironment(copy);
+  });
+}

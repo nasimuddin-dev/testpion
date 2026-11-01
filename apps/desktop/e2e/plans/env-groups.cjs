@@ -21,12 +21,24 @@ const steps = [
      const row = await __t.waitFor(() => [...document.querySelectorAll('[data-tree-row]')].find((r) => /Acme ▸/.test(r.textContent) && /Staging/.test(r.textContent)), 8000); if (!row) return 'NO ROW';
      row.click(); await __t.sleep(900);
      const field = await __t.waitFor(() => document.querySelector('[data-env-group]'), 6000); if (!field) return 'NO FIELD';
-     await window.aps.invoke('env.delete', { id: 'e2e-acme-staging' }).catch(() => undefined); await window.aps.invoke('env.delete', { id: 'e2e-acme-prod' }).catch(() => undefined);
      return 'row: ' + row.textContent.replace(/\s+/g, ' ').trim().slice(0, 30) + ' | field: ' + field.value;`,
+  ),
+  // a new tenant: the editor of a grouped environment offers to copy the whole group; the copies keep names and variables
+  step(
+    'a-new-tenant-from-the-group',
+    `const btn = await __t.waitFor(() => document.querySelector('[data-env-duplicate-group]'), 6000); if (!btn) return 'NO BUTTON';
+     const label = btn.textContent.trim();
+     const made = await window.aps.invoke('env.duplicateGroup', { group: 'Acme', newGroup: 'Globex' });
+     await __t.sleep(800);
+     const list = await window.aps.invoke('env.list');
+     const globex = list.filter((e) => e.group === 'Globex').map((e) => e.name + ':' + e.variables.length).sort().join(',');
+     for (const e of [...made, { id: 'e2e-acme-staging' }, { id: 'e2e-acme-prod' }]) await window.aps.invoke('env.delete', { id: e.id }).catch(() => undefined);
+     return 'button: ' + label + ' | copies: ' + made.length + ' | globex: ' + globex;`,
   ),
 ];
 
 module.exports = withExpect(steps, {
   'grouped-environments-in-the-picker': /^picker: Acme ▸ Production {2}\(production\) \| Acme ▸ Staging$/,
   'the-list-and-the-editor-show-the-group': /^row: Acme ▸ Staging.* \| field: Acme$/,
+  'a-new-tenant-from-the-group': /^button: New tenant from Acme… \| copies: 2 \| globex: Production:0,Staging:1$/,
 });

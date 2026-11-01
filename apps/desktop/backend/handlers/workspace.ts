@@ -24,6 +24,7 @@ import {
   workspaceExportFileName,
   exportPostmanEnvironment,
   CONTEXT_VARIABLES,
+  duplicateEnvironmentGroup,
   DYNAMIC_VARIABLES,
   variableUsages,
   renameVariable,
@@ -319,6 +320,8 @@ export function workspaceHandlers(be: Backend): Handlers {
       return { ...saved, warnings };
     },
     'env.list': () => be.ws.listEnvironments({ etag: true }),
+    /** A new tenant: every environment of a group copied into a new group (secret values are not copied). */
+    'env.duplicateGroup': ({ group, newGroup }: { group: string; newGroup: string }) => duplicateEnvironmentGroup(be.ws, group, newGroup),
     'env.save': async ({ env, secrets }: { env: Environment; secrets?: Record<string, string> }) => {
       for (const [k, v] of Object.entries(secrets ?? {})) if (v) await be.secrets.set(secretKeys.envVar(env.id, k), v);
       return be.ws.saveEnvironmentAsync(env);

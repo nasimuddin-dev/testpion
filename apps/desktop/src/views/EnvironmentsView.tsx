@@ -1,5 +1,5 @@
 import { envColor } from '../components/EnvSelect';
-import { Plus, ArrowLeftRight, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
+import { Plus, ArrowLeftRight, Copy, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGitRepo } from '../lib/git';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,7 +17,7 @@ import { KeyValueEditor } from '../components/KeyValueEditor';
 import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle, EmptyNote } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, LinkButton, Menu, MoreMenu, Split, Tabs, Toggle, EmptyNote } from '../components/ui';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/TreeParts';
 import { buildNodeMenu } from '../lib/node-menu';
@@ -78,6 +78,21 @@ export function EnvironmentsView() {
     await load();
     setSel(env.id);
     await useApp.getState().refreshWorkspace();
+  };
+  /** A new tenant: every environment of the group copied under a new group name (secret values are not copied). */
+  const duplicateGroup = async (group: string) => {
+    const name = await promptText('New tenant from ' + group, { message: `Every environment of ${group} is copied with its names and variables (secret values are not). Name the new group:`, placeholder: 'Globex', okLabel: 'Copy' });
+    if (!name?.trim()) return;
+    let made: Environment[];
+    try {
+      made = await call<Environment[]>('env.duplicateGroup', { group, newGroup: name.trim() });
+    } catch (e) {
+      return toastError(e);
+    }
+    await load();
+    if (made[0]) setSel(made[0].id);
+    await useApp.getState().refreshWorkspace();
+    useApp.getState().toast(`${plural(made.length, 'environment')} copied into ${name.trim()}`);
   };
   /** At once, with Undo in the message (the environment and its secret values come back from Recently deleted). */
   const deleteEnv = (env: Environment) =>
@@ -365,7 +380,14 @@ export function EnvironmentsView() {
                     <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
                   </Field>
                   <Field label="Group" hint="A tenant, a customer or a deployment (Acme): the lists show Acme ▸ Staging and keep the group together">
-                    <Input value={draft.group ?? ''} placeholder="none" className="w-40" aria-label="Environment group" onChange={(e) => setDraft({ ...draft, group: e.target.value || undefined })} data-env-group />
+                    <div className="flex items-center gap-2">
+                      <Input value={draft.group ?? ''} placeholder="none" className="w-40" aria-label="Environment group" onChange={(e) => setDraft({ ...draft, group: e.target.value || undefined })} data-env-group />
+                      {savedEnv?.group?.trim() && (
+                        <LinkButton className="text-xs" icon={<Copy size={12} />} title="Copy every environment of this group for a new tenant (same names and variables; secret values are not copied)" onClick={() => void duplicateGroup(savedEnv.group!.trim())} data-env-duplicate-group>
+                          New tenant from {savedEnv.group.trim()}…
+                        </LinkButton>
+                      )}
+                    </div>
                   </Field>
                   <Field label="Color">
                     <input type="color" aria-label="Environment color" className="field h-8 w-14 p-1 cursor-pointer" value={draft.color ?? '#1a7f37'} onChange={(e) => setDraft({ ...draft, color: e.target.value })} />

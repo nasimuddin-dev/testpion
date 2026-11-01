@@ -2,7 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MemorySecretStore, WorkspaceStore, copyVariableToEnvironment, expandEnvironmentGroups, secretKeys, setEnvironmentVariables, unsetEnvironmentVariables } from '../../packages/core/src/index.js';
+import { MemorySecretStore, WorkspaceStore, copyVariableToEnvironment, duplicateEnvironmentGroup, expandEnvironmentGroups, secretKeys, setEnvironmentVariables, unsetEnvironmentVariables } from '../../packages/core/src/index.js';
+
+describe('a new tenant from an existing one (duplicateEnvironmentGroup)', () => {
+  it('copies every environment of the group with its names, flags and variables, blanks secret values, refuses an existing group', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-dupgroup-'));
+    const store = WorkspaceStore.create(join(dir, 'ws'), 'W');
+    try {
+      store.saveEnvironment({ id: 'acme-staging', name: 'Staging', group: 'Acme', color: '#123456', variables: [{ key: 'baseUrl', value: 'https://acme.test', enabled: true }, { key: 'token', value: '', secret: true }] } as never);
+      store.saveEnvironment({ id: 'acme-prod', name: 'Production', group: 'Acme', isProduction: true, variables: [] } as never);
+      const made = duplicateEnvironmentGroup(store, 'acme', 'Globex');
+      expect(made.map((e) => [e.id, e.name, e.group, e.isProduction ?? false])).toEqual([
+        ['globex-production', 'Production', 'Globex', true],
+        ['globex-staging', 'Staging', 'Globex', false],
+      ]);
+      const staging = store.getEnvironment('globex-staging')!;
+      expect(staging.color).toBe('#123456');
+      expect(staging.variables).toEqual([{ key: 'baseUrl', value: 'https://acme.test', enabled: true }, { key: 'token', value: '', secret: true }]);
+      expect(store.listEnvironments().filter((e) => e.group === 'Globex')).toHaveLength(2);
+      expect(() => duplicateEnvironmentGroup(store, 'Acme', 'globex')).toThrow(/exists already/);
+      expect(() => duplicateEnvironmentGroup(store, 'Nobody', 'X')).toThrow(/No environment is in the group/);
+      expect(() => duplicateEnvironmentGroup(store, 'Acme', '  ')).toThrow(/Name the new group/);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('environment groups in a matrix (--env-matrix group:Acme)', () => {
   it('unfolds a group into its environments, keeps names as written, and never repeats one', () => {

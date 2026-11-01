@@ -139,6 +139,7 @@ export interface RpcParamTypes {
   'diagnostics.zip': RpcCommonParams;
   'env.delete': RpcCommonParams & { id: string };
   'env.diff': RpcCommonParams & { left: string; right: string };
+  'env.duplicateGroup': RpcCommonParams & { group: string; newGroup: string };
   'env.export': RpcCommonParams & { id: string; format?: string };
   'env.quickLook': RpcCommonParams;
   'env.save': RpcCommonParams & { env: Record<string, unknown>; secrets?: Record<string, unknown> };
@@ -426,4 +427,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 409;
+export const RPC_METHOD_COUNT = 410;

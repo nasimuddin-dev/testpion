@@ -1213,6 +1213,7 @@ testpion env diff Staging Production -w my-workspace --values   # what differs (
 testpion env diff Staging Production --request "List patients" -w my-workspace   # send it to both, diff the responses
 testpion env matrix -w my-workspace                         # every variable in every environment: set, empty, missing or off
 testpion env order Development Staging Production -w my-workspace
+testpion env duplicate-group Acme Globex -w my-workspace     # a new tenant: every environment of Acme copied into Globex (secret values are not)
 ```
 
 `env order` sets the order of the environment picker. Environments you don't name keep their order after the named ones. Both commands take `--json`.
