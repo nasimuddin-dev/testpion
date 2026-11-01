@@ -370,6 +370,9 @@ registerCheck('no-leak', (cfg, ctx) => {
   for (const c of Array.isArray(canaries) ? canaries : [canaries]) if (c && text.includes(String(c))) found.push(`canary "${String(c).slice(0, 4)}…"`);
   const builtins = cfg.builtins === false ? [] : LEAK_PATTERNS;
   for (const [name, re] of builtins) if (re.test(text)) found.push(name);
+  // several tenants: a value that belongs to another environment (another customer's host, id or key) in this response
+  if (cfg.otherEnvironments === true)
+    for (const o of ctx.services?.otherEnvironmentValues?.() ?? []) if (o.value.length >= 6 && text.includes(o.value)) found.push(`${o.environment}'s ${o.key}`);
   for (const p of (cfg.patterns as string[]) ?? []) {
     try {
       if (new RegExp(p).test(text)) found.push(`/${p}/`);

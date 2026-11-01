@@ -88,6 +88,8 @@ export interface ExecServices {
   onHttpResponse?: (r: { testId: string; status: number; statusText: string; headers: Array<[string, string]>; body: string; durationMs: number; url: string; timing?: ReturnType<typeof timingSummary> }) => void;
   /** HTTPS: the server certificate a response came with (recorded per host for the workspace's certificate list). */
   onCertificate?: (url: string, certificate: NonNullable<NonNullable<HttpResponseData['connection']>['certificate']>) => void;
+  /** The values of the OTHER environments of the workspace (several tenants): what a response must not hold (`no-leak` with `otherEnvironments: true`). Secret values stay inside: only the environment and the key are named. */
+  otherEnvironmentValues?: () => Array<{ environment: string; key: string; value: string }>;
   /** A response said its endpoint is going away (Deprecation / Sunset / Warning 299 headers): the workspace records it. */
   onDeprecation?: (method: string, url: string, headers: HttpResponseData['headers']) => void;
   /** The active environment's name (tp.environment.name). */
@@ -282,7 +284,7 @@ async function executeTestIn(testIn: TestCase, svc: ExecServices, opts: { tracer
     ctx.error = err;
     root.event('error', { kind: err.kind, message: err.message });
   }
-  ctx.services = { providers: svc.providers, signal: opts.signal, span: root, ragJudge: svc.ragJudge };
+  ctx.services = { providers: svc.providers, signal: opts.signal, span: root, ragJudge: svc.ragJudge, otherEnvironmentValues: svc.otherEnvironmentValues };
   ctx.workspaceRoot ??= svc.workspaceRoot;
 
   // test script (sandboxed)

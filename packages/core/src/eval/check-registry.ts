@@ -56,7 +56,7 @@ export interface CheckContext {
   judge?: RagJudgeSetup;
   /** RAG: set when the answer and contexts come from a RAG target (or a stored sample): the judged metrics then use the judge service strictly, and know which metrics run beside them (the shared claim pass). */
   ragRun?: { strict: boolean; metrics: string[] };
-  services?: { providers?: ProviderRegistry; signal?: AbortSignal; span?: SpanHandle; ragJudge?: RagJudgeHost; /** Reads the pictures of a RAG sample (a test host lends fixtures; the default fetches under the network policy). */ imageSource?: import('./rag/images.js').ImageSource };
+  services?: { providers?: ProviderRegistry; signal?: AbortSignal; span?: SpanHandle; ragJudge?: RagJudgeHost; /** The other environments' values (several tenants), for `no-leak` with otherEnvironments. */ otherEnvironmentValues?: () => Array<{ environment: string; key: string; value: string }>; /** Reads the pictures of a RAG sample (a test host lends fixtures; the default fetches under the network policy). */ imageSource?: import('./rag/images.js').ImageSource };
 }
 
 export type CheckFn = (cfg: CheckConfig, ctx: CheckContext) => Promise<CheckResult> | CheckResult;

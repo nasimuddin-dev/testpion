@@ -6,6 +6,10 @@
 
 - An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it.
 
+### Several tenants: nothing of one in another's response
+
+- The `no-leak` check takes `otherEnvironments: true`: a response or an answer that holds a value of another environment of the workspace (another customer's host, id or key, a secret one included) fails it, naming the environment and the variable, never the value.
+
 ### Several teams in one workspace: who owns what
 
 - The Info panel of an item says **Owned by @org/payments** (from the repository's `CODEOWNERS`) and **Last changed by Ana 2 days ago** (from git); `testpion item owners <item>` prints the same, and a problem under Needs attention starts with the owners of what it is about, so a shared list reads as a to-do per team. `planning/multi-team.md` lays out the rest for teams and tenants.

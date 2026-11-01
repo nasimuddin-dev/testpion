@@ -184,6 +184,19 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
       }),
     onCertificate: (url, c) => recordCertificate(store, url, c),
     onDeprecation: (method, url, headers) => recordDeprecation(store, method, url, deprecationOf(headers)),
+    // several tenants: the other environments' values (a `no-leak` check with otherEnvironments: true fails a response that holds one)
+    otherEnvironmentValues: () => {
+      const own = new Set((environment?.variables ?? []).map((v) => String(v.value ?? '')));
+      const out: Array<{ environment: string; key: string; value: string }> = [];
+      for (const e of store.listEnvironments())
+        if (!e.problem && e.name !== environment?.name)
+          for (const v of e.variables) {
+            if (v.enabled === false) continue;
+            const value = v.secret ? (opts.secrets.get(secretKeys.envVar(e.id, v.key)) ?? '') : String(v.value ?? '');
+            if (value.length >= 6 && !own.has(value)) out.push({ environment: e.name, key: v.key, value });
+          }
+      return out;
+    },
     ragJudge: createRagJudgeHost({ store, providers, redactor, settings, surface: opts.aiSurface ?? 'cli', env: opts.aiEnv }),
   };
   return { services, vars, redactor, environment, collection, dispose: () => mcp.close() };

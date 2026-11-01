@@ -220,7 +220,7 @@ const DEFS: MetricDef[] = [
     example: 'An answer that contains an AWS access key: 0.',
     requires: ['answer'],
     check: 'no-leak',
-    options: { values: { type: 'string', description: 'Canary strings that must never appear (a list).' }, builtins: { type: 'boolean', default: true, description: 'Look for the common secret patterns.' } },
+    options: { values: { type: 'string', description: 'Canary strings that must never appear (a list).' }, builtins: { type: 'boolean', default: true, description: 'Look for the common secret patterns.' }, otherEnvironments: { type: 'boolean', default: false, description: 'Several tenants in one workspace: fail when the answer holds a value of another environment (another customer\'s host, id or key); the environment and the variable are named, never the value.' } },
     calls: '0',
     version: 'no-leak-v1',
     sources: [SRC.promptfoo],

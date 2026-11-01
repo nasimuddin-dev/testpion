@@ -1861,6 +1861,7 @@ Whether the answer exposes a secret: an API key, a token, a private key, an SSN 
 
 - `values` (string): Canary strings that must never appear (a list).
 - `builtins` (boolean), default `true`: Look for the common secret patterns.
+- `otherEnvironments` (boolean), default `false`: Several tenants in one workspace: fail when the answer holds a value of another environment (another customer's host, id or key); the environment and the variable are named, never the value.
 
 **Also called.** `canary-leakage`, `canary-leak`
 
