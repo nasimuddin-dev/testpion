@@ -10,6 +10,10 @@
 
 - A variable holding a JSON Web Token that expired or expires within 3 days is listed under Needs attention (Home, the Problems panel, `testpion attention`, `what_needs_attention`): *The token in {{apiToken}} (Staging) expires in 2 days*, or in red *expired 3 days ago: requests that use it get 401 until it is renewed*. The variable is named, never its value.
 
+### Monitors: alert after n failures in a row
+
+- **Alert after** on a monitor (`--alert-after 3`): the webhook is posted only at that many failures in a row, and the recovery only after such an alert, so one blip no longer pages anyone. The default stays 1: the first failure and the first pass after it.
+
 ### Monitors: a status page to host
 
 - **Status page** in the Monitors view and `testpion monitor status -o status.html`: every monitor's state now, its uptime over the last 30 days and a block per day, as one self-contained HTML page (no script, nothing from the internet) for GitHub Pages, an intranet or a shared drive; `-o status.md` writes a wiki table, `--json` the data. The output surface is `monitors.status` (`testpion output monitors.status --format html`).

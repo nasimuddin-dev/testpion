@@ -64,6 +64,7 @@ interface MonitorDraft {
   iterations?: number;
   bail?: boolean;
   webhook?: string;
+  alertAfter?: number;
   /** Fail runs whose p95 response time is over this (ms). */
   maxP95Ms?: number;
   minCertDays?: number;
@@ -669,7 +670,7 @@ function useTestFiles(): string[] {
 /** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
@@ -964,6 +965,9 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               Send test alert
             </Button>
           </div>
+        </Field>
+        <Field label="Alert after" hint="Failures in a row before the alert is posted (1: at the first failure). A single blip stays quiet; the recovery is posted only after an alert.">
+          <Input type="number" min={1} max={10} className="w-24" aria-label="Alert after this many failures in a row" value={d.alertAfter ?? 1} onChange={(e) => setD({ ...d, alertAfter: Math.min(10, Math.max(1, Number(e.target.value) || 1)) })} data-monitor-alert-after />
         </Field>
       </div>
     </ModalOrPanel>

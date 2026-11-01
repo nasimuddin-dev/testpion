@@ -73,6 +73,8 @@ interface MonitorData {
    * URL (POST JSON with `text`, `content` and the details). May be a {{variable}} of the environment.
    */
   webhook?: string;
+  /** Post the alert only at this many failures in a row (1, the default: at the first); recovery is told when an alert went out. A blip stays quiet. */
+  alertAfter?: number;
   /** Fail a run whose requests' p95 response time is over this many ms (even when every check passed). */
   maxP95Ms?: number;
   /** Fail a run when the TLS certificate of a host it calls expires in fewer than this many days. */
@@ -89,6 +91,25 @@ export function monitorStateChanged(result: MonitorResult, previous?: MonitorRes
   const bad = result.status !== 'passed';
   const wasBad = previous ? previous.status !== 'passed' : false;
   return bad !== wasBad;
+}
+
+/** How many failures in a row a monitor waits for before it alerts (1 to 10; 1 when unset). */
+export const alertAfterOf = (m: Pick<Monitor, 'alertAfter'>): number => Math.min(10, Math.max(1, Math.floor(m.alertAfter ?? 1) || 1));
+
+/**
+ * Whether this result is the moment to alert: `failing` at the run that makes `alertAfter` failures in a row (a shorter streak
+ * stays quiet), `recovered` at the first pass after such a streak (a pass after a shorter one told nobody, so says nothing).
+ * `recent` is the results before this one, newest first (at least `alertAfter` of them to decide).
+ */
+export function monitorAlert(m: Pick<Monitor, 'alertAfter'>, result: MonitorResult, recent: MonitorResult[]): 'failing' | 'recovered' | undefined {
+  const n = alertAfterOf(m);
+  let streak = 0;
+  for (const r of recent) {
+    if (r.status === 'passed') break;
+    streak++;
+  }
+  if (result.status !== 'passed') return streak + 1 === n ? 'failing' : undefined;
+  return streak >= n ? 'recovered' : undefined;
 }
 
 /** The metric means, the sample and the regressions of a RAG monitor run, as lines under the alert's text. */
@@ -597,6 +618,8 @@ interface MonitorSchedulerOptions {
   /** Current monitors (read on every tick, so edits apply without a restart). */
   list(): Monitor[];
   last(id: string): MonitorResult | undefined;
+  /** The latest results of a monitor, newest first (`alertAfter` of them): a monitor that alerts after n failures in a row needs them. Default: the last one. */
+  recent?(id: string, limit: number): MonitorResult[];
   run(m: Monitor): Promise<MonitorResult>;
   onResult?(m: Monitor, r: MonitorResult, previous: MonitorResult | undefined): void;
   onError?(m: Monitor, e: unknown): void;
@@ -645,7 +668,7 @@ export class MonitorScheduler {
           const r = await this.o.run(m);
           ran++;
           this.o.onResult?.(m, r, previous);
-          if (m.webhook && monitorStateChanged(r, previous)) {
+          if (m.webhook && monitorAlert(m, r, this.o.recent ? this.o.recent(m.id, alertAfterOf(m)) : previous ? [previous] : [])) {
             const url = this.o.resolve ? this.o.resolve(m, m.webhook) : m.webhook;
             const sent = await notifyMonitorWebhook(url, m, r);
             this.o.onWebhook?.(m, sent);

@@ -8,6 +8,8 @@ import {
   MemorySecretStore,
   MonitorScheduler,
   WorkspaceStore,
+  alertAfterOf,
+  monitorAlert,
   createEngineContext,
   deleteMonitor,
   executeMonitor,
@@ -179,6 +181,25 @@ describe('monitors in a workspace', () => {
     const r = await executeMonitor({ store, monitor: { ...monitor, id: 'mon-broken', collectionId: 'gone' }, context });
     expect(r.status).toBe('error');
     expect(r.error).toBeTruthy();
+  });
+
+  it('alert after n failures in a row: quiet until the streak, recovery told only after an alert', () => {
+    const r = (status: 'passed' | 'failed') => ({ status }) as MonitorResult;
+    const m = { alertAfter: 3 };
+    expect(alertAfterOf({})).toBe(1);
+    expect(alertAfterOf({ alertAfter: 0 })).toBe(1);
+    expect(alertAfterOf({ alertAfter: 99 })).toBe(10);
+    expect(monitorAlert(m, r('failed'), [])).toBeUndefined();
+    expect(monitorAlert(m, r('failed'), [r('failed')])).toBeUndefined();
+    expect(monitorAlert(m, r('failed'), [r('failed'), r('failed')])).toBe('failing');
+    expect(monitorAlert(m, r('failed'), [r('failed'), r('failed'), r('failed')])).toBeUndefined();
+    expect(monitorAlert(m, r('passed'), [r('failed'), r('failed')])).toBeUndefined();
+    expect(monitorAlert(m, r('passed'), [r('failed'), r('failed'), r('failed'), r('passed')])).toBe('recovered');
+    // the default (1) is the old rule: the first failure and the first pass after it
+    expect(monitorAlert({}, r('failed'), [])).toBe('failing');
+    expect(monitorAlert({}, r('failed'), [r('failed')])).toBeUndefined();
+    expect(monitorAlert({}, r('passed'), [r('failed')])).toBe('recovered');
+    expect(monitorAlert({}, r('passed'), [r('passed')])).toBeUndefined();
   });
 
   it('alerts the webhook when a monitor starts failing and when it recovers, not on every run', async () => {

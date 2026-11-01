@@ -2,7 +2,8 @@
 import { Command } from 'commander';
 import {
   MonitorScheduler,
-  monitorStateChanged,
+  alertAfterOf,
+  monitorAlert,
   notifyMonitorWebhook,
   deleteMonitor,
   executeMonitor,
@@ -103,6 +104,7 @@ export function registerMonitorCommands(program: Command): void {
     .option('-n, --iteration-count <n>', 'iterations per run')
     .option('--bail', 'stop a run at the first failure')
     .option('--webhook <url>', 'POST an alert here when the monitor starts failing or recovers (Slack / Teams / Discord webhook or any URL; {{variables}} work)')
+    .option('--alert-after <n>', 'post the alert only at this many failures in a row (default 1: at the first); a blip stays quiet')
     .option('--max-p95 <ms>', 'fail a run whose p95 response time is over this many milliseconds (even when its checks pass)')
     .option('--min-cert-days <days>', 'fail a run when the TLS certificate of a host it calls expires within this many days')
     .option('--paused', 'save it paused')
@@ -124,6 +126,7 @@ export function registerMonitorCommands(program: Command): void {
           iterations: o.iterationCount ? Number(o.iterationCount) : undefined,
           bail: o.bail || undefined,
           webhook: o.webhook || existing?.webhook,
+          alertAfter: o.alertAfter !== undefined ? Number(o.alertAfter) : existing?.alertAfter,
           maxP95Ms: o.maxP95 !== undefined ? Number(o.maxP95) : existing?.maxP95Ms,
           minCertDays: o.minCertDays !== undefined ? Number(o.minCertDays) : existing?.minCertDays,
           // a production environment: data changes on its schedule only with --allow-production (kept while the environment is)
@@ -219,10 +222,10 @@ export function registerMonitorCommands(program: Command): void {
         const results: Array<MonitorResult & { name: string; environment: string | null }> = [];
         for (const m of chosen) {
           if (!o.json) process.stdout.write(`${m.name} … `);
-          const previous = lastMonitorResult(store, m.id);
+          const recent = monitorResults(store, m.id, alertAfterOf(m));
           const r = await run(m, ref || o.all ? 'manual' : 'schedule');
-          // cron (`--due`) and manual runs alert the webhook too, when the state changes
-          if (m.webhook && monitorStateChanged(r, previous)) {
+          // cron (`--due`) and manual runs alert the webhook too: at the failure that makes the streak, and at the recovery after one
+          if (m.webhook && monitorAlert(m, r, recent)) {
             const sent = await notifyMonitorWebhook(webhookUrl(store, m), m, r);
             if (!sent.ok && !o.json) console.error(yellow(`webhook for ${m.name} failed: ${sent.error ?? `HTTP ${sent.status}`}`));
           }
@@ -313,6 +316,7 @@ export function registerMonitorCommands(program: Command): void {
         const scheduler = new MonitorScheduler({
           list: () => listMonitors(store),
           last: (id) => lastMonitorResult(store, id),
+          recent: (id, n) => monitorResults(store, id, n),
           run: (m) => run(m, 'schedule'),
           onResult: (m, r, prev) => {
             if (o.json) return printJson({ ...r, name: m.name });

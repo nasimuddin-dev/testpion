@@ -30,6 +30,9 @@ export async function runMonitorNow(be: Backend, m: Monitor, trigger: MonitorRes
   }
 }
 
+/** The latest results of a monitor, newest first: the scheduler's `recent` (a monitor that alerts after n failures in a row). */
+export const recentMonitorResults = (be: Backend, id: string, n: number) => monitorResults(be.ws, id, n);
+
 export function monitorHandlers(be: Backend): Handlers {
   // `recent`: results of the latest runs, oldest first, for the small strips in lists
   // `uptime7d`: share of the last 7 days' runs that passed (absent when nothing ran)

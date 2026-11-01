@@ -101,7 +101,7 @@ import { aiTriageHandlers } from './handlers/ai-triage.js';
 import { aiSpecHandlers } from './handlers/ai-spec.js';
 import { aiSecurityHandlers } from './handlers/ai-security.js';
 import { testingHandlers } from './handlers/testing.js';
-import { monitorHandlers, runMonitorNow } from './handlers/monitors.js';
+import { monitorHandlers, recentMonitorResults, runMonitorNow } from './handlers/monitors.js';
 import { grpcHandlers } from './handlers/grpc.js';
 import { agentHandlers } from './handlers/agents.js';
 import { feedbackHandlers } from './handlers/feedback.js';
@@ -303,7 +303,7 @@ export class Backend {
     this.monitorScheduler = new MonitorScheduler({
       // read on every tick, so a workspace switch or an edited monitor applies right away
       list: () => (this.store ? listMonitors(this.store).filter((m) => !this.runningMonitors.has(m.id)) : []),
-      last: (id) => lastMonitorResult(this.ws, id),
+      last: (id) => lastMonitorResult(this.ws, id), recent: (id, n) => recentMonitorResults(this, id, n),
       run: (m) => this.net.run(() => withScriptRunner(this.scripts, () => runMonitorNow(this, m, 'schedule'))),
       onResult: (monitor, result, previous) => this.host.emit('monitor.result', { monitor, result, previous }),
       resolve: (m, text) => {

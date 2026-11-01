@@ -39,7 +39,7 @@ When a monitor starts failing, or passes again, TestPion shows a notification.
 
 ### Alerts to Slack, Teams, Discord or any URL
 
-Give a monitor an **Alert webhook** (or `testpion monitor add … --webhook <url>`; **Send test alert** checks it) and TestPion posts to it when the monitor starts failing and when it passes again, not on every run. The JSON has a `text` field (Slack and Microsoft Teams incoming webhooks show it), `content` (Discord), and the details for any other receiver: `monitor`, `status`, `total`, `passed`, `failed`, `errors`, `p50Ms`, `p95Ms`, `startedAt`, `runId`, `error` and `reason`.
+Give a monitor an **Alert webhook** (or `testpion monitor add … --webhook <url>`; **Send test alert** checks it) and TestPion posts to it when the monitor starts failing and when it passes again, not on every run. **Alert after** (or `--alert-after 3`) waits for that many failures in a row before the first alert, so a single blip stays quiet; the recovery is posted only when an alert went out. The JSON has a `text` field (Slack and Microsoft Teams incoming webhooks show it), `content` (Discord), and the details for any other receiver: `monitor`, `status`, `total`, `passed`, `failed`, `errors`, `p50Ms`, `p95Ms`, `startedAt`, `runId`, `error` and `reason`.
 
 A **Response time limit** (or `--max-p95 <ms>`) makes a run fail when the p95 response time of its requests is over it, even when every check passes: the run shows *Too slow* with the reason (for example "p95 830 ms is over the 500 ms limit") and alerts like any other failure. The *Response p95* chart shows each run's p95 with the limit as a dashed line.
 
