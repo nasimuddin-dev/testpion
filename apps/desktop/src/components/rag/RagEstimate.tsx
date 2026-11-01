@@ -2,7 +2,7 @@ import { AlertTriangle, Laptop } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { RunEstimate } from '@testpion/core';
 import { asError, call } from '../../api';
-import { formatCost } from '../../lib/format';
+import { formatCost, plural } from '../../lib/format';
 import { Badge, Callout, Spinner } from '../ui';
 
 /** The cost range of an estimate in one phrase ("$0.04 to $0.09"), or why there is none. */
@@ -91,7 +91,7 @@ export function RagEstimateView({ estimate, compact }: { estimate: RunEstimate; 
         </tbody>
       </table>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-rag-estimate-total>
-        <Figure label="Judge calls" value={estimate.total.llmCalls.toLocaleString()} sub={estimate.cache.exact ? `${estimate.cache.hits} already cached` : `for ${estimate.samples} samples`} />
+        <Figure label="Judge calls" value={estimate.total.llmCalls.toLocaleString()} sub={estimate.cache.exact ? `${estimate.cache.hits} already cached` : `for ${plural(estimate.samples, 'sample')}`} />
         <Figure label="Tokens" value={`${estimate.total.inputTokens.toLocaleString()} in`} sub={`about ${estimate.total.outputTokens.toLocaleString()} out`} />
         <Figure label="Cost" value={costRange(estimate) || '—'} sub={estimate.costUsd ? 'a range: outputs vary' : undefined} />
         {estimate.target && <Figure label="Your RAG system" value={`${estimate.target.calls.toLocaleString()} calls`} sub="one per question" />}

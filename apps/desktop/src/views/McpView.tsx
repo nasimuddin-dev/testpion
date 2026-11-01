@@ -93,7 +93,7 @@ export function McpView() {
     useCallback(() => {
       if (!server) return undefined;
       return {
-        label: `MCP ${server.name}${disc ? ` · ${disc.tools.length} tools` : connError ? ' · error' : ''}`,
+        label: `MCP ${server.name}${disc ? ` · ${plural(disc.tools.length, 'tool')}` : connError ? ' · error' : ''}`,
         context: {
           mcpServer: { name: server.name, transport: server.transport, ...('url' in server ? { url: server.url } : {}), ...('command' in server ? { command: server.command } : {}) },
           ...(disc ? { serverInfo: disc.serverInfo, instructions: disc.instructions?.slice(0, 2000), tools: disc.tools.slice(0, 60).map((t) => ({ name: t.name, description: t.description?.slice(0, 200) })), resources: disc.resources.slice(0, 30).map((r) => r.uri), prompts: disc.prompts.map((p) => p.name) } : {}),

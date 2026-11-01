@@ -194,7 +194,7 @@ export function ImportDialog({ onClose, onDone, initial, tool: toolIn, migrate }
               </span>
             )}
             <Button variant="primary" loading={busy} disabled={!plans.length && !preview?.snippets} reason="Nothing could be read from what was given" onClick={() => void apply()}>
-              Import{plans.length > 1 ? ` ${plans.length} files` : ''}
+              Import{plans.length > 1 ? ` ${plural(plans.length, 'file')}` : ''}
             </Button>
           </>
         ) : (
@@ -357,7 +357,7 @@ function PlanCard({ source, plan, single }: { source: string; plan: ImportPlan; 
     ...plan.collections.map((c) => `collection "${c.name}": ${plural(c.requests, 'request')}${c.folders ? `, ${plural(c.folders, 'folder')}` : ''}${c.nameTaken ? ' (a collection of this name exists: this one is added beside it)' : ''}`),
     ...plan.environments.map((e) => `environment "${e.renamedTo ?? e.name}": ${plural(e.variables, 'variable')}${e.secrets ? `, ${plural(e.secrets, 'secret')}` : ''}${e.renamedTo ? ' (renamed: the name is taken)' : ''}`),
     ...plan.specs.map((s) => `API definition ${s.path}${s.existing === 'different' ? ' (a different document is there: both are kept)' : s.existing === 'same' ? ' (already there)' : ''}`),
-    ...plan.flows.map((f) => `flow ${f.path} (${f.steps} steps)`),
+    ...plan.flows.map((f) => `flow ${f.path} (${plural(f.steps, 'step')})`),
     ...Object.entries(plan.library).map(([k, n]) => plural(n, k === 'grpc' ? 'gRPC call' : 'connection')),
   ];
   return (

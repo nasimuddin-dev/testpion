@@ -158,7 +158,7 @@ function FlakyTests({ refresh }: { refresh?: string }) {
       {rows.length ? (
         <div className="flex flex-col">
           {rows.slice(0, 8).map((t) => (
-            <div key={t.id} className="flex items-center gap-2 py-1 text-xs min-w-0" title={`${t.name}: ${t.passed} of ${t.runs} runs passed, the result flipped ${t.flips} times${t.retried ? `, ${t.retried} passed after a retry` : ''}`}>
+            <div key={t.id} className="flex items-center gap-2 py-1 text-xs min-w-0" title={`${t.name}: ${t.passed} of ${plural(t.runs, 'run')} passed, the result flipped ${t.flips} times${t.retried ? `, ${t.retried} passed after a retry` : ''}`}>
               <RecentRuns statuses={t.recent} />
               <span className="truncate flex-1 min-w-0 text-fg">{t.name}</span>
               <span className="text-warn tabular-nums shrink-0">
@@ -218,7 +218,7 @@ function ScoreTrends({ runIds, onSelect }: { runIds: string[]; onSelect?(id: str
                     <div className="text-muted">{p.name} · {new Date(p.startedAt).toLocaleString()}</div>
                   </>
                 )}
-                label={`${e} mean score in the last ${series.length} runs, latest ${last.toFixed(2)}`}
+                label={`${e} mean score in the last ${plural(series.length, 'run')}, latest ${last.toFixed(2)}`}
                 onPick={onSelect ? (p) => onSelect(p.runId) : undefined}
               />
             </ChartCard>

@@ -598,7 +598,7 @@ export function TestsView() {
     const files: string[] = [];
     const walk = (x: Node) => (x.kind === 'file' ? files.push(x.path) : (x.children ?? []).forEach(walk));
     walk(n);
-    if (files.length > 200 && !(await confirmAction({ title: 'Delete the folder', message: `Delete tests/${n.path} and the ${files.length} files in it? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
+    if (files.length > 200 && !(await confirmAction({ title: 'Delete the folder', message: `Delete tests/${n.path} and the ${plural(files.length, 'file')} in it? This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
     let kept: Array<{ path: string; content: string }> = [];
     await deleteWithUndo({
       kind: dir ? 'folder' : 'test',

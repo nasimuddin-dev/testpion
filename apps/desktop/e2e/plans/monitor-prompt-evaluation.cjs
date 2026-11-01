@@ -60,7 +60,7 @@ const steps = [
     'saving-keeps-the-evaluation-and-the-baseline',
     `await __t.real.click('input[placeholder="e.g. API health"]'); await __t.real.type('Intents nightly');
      await __t.real.click('input[aria-label="Number of cases"]'); await __t.real.type('4'); await __t.sleep(200);
-     await __t.real.click('input[aria-label="Fail on a drop in pass rate"]'); await __t.sleep(300);
+     await __t.real.click('[data-monitor-drop]'); await __t.sleep(300);
      const save = [...document.querySelectorAll('button')].find((b) => b.offsetParent && b.textContent.trim() === 'Create monitor'); if (!save) return 'NO SAVE';
      await __t.real.click(save);
      const m = await __t.waitFor(async () => (await window.aps.invoke('monitor.list')).find((x) => x.name === 'Intents nightly'), 8000);

@@ -12,7 +12,7 @@ import { openRef, reportIfGone } from '../lib/open-ref';
 import { setGraphQLSchema } from '../monaco';
 import type { AuthConfig, CheckConfig, CheckResult, Collection, HttpRequestSpec, HttpResponseData, KeyValue, SavedGraphQLRequest } from '../types';
 import { CodeModal } from '../components/CodeModal';
-import { formatMs, uid } from '../lib/format';
+import { formatMs, uid, plural } from '../lib/format';
 import { AssertionEditor } from '../components/AssertionEditor';
 import { AuthEditor } from '../components/AuthEditor';
 import { useInheritedAuth } from '../lib/inherited-auth';
@@ -192,7 +192,7 @@ export function GraphQLView() {
       setSchema(r.summary);
       setSdl(r.sdl);
       setGraphQLSchema(r.sdl);
-      useApp.getState().toast(`Schema loaded: ${r.summary.types.length} types`, 'success');
+      useApp.getState().toast(`Schema loaded: ${plural(r.summary.types.length, 'type')}`, 'success');
     } catch (e) {
       setSchemaError(asError(e));
     } finally {

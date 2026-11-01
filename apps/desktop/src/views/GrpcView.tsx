@@ -240,7 +240,7 @@ export function GrpcView() {
       const r = await call<{ services: string[]; descriptorSet: string; methods: MethodInfo[] }>('grpc.reflect', { target: from.target, tls: from.tls || undefined, tlsOptions, metadata: from.metadata, environment: env });
       // keep the method the request was saved with (functional update: the draft may have changed meanwhile)
       setD((cur) => (cur.target === from.target ? { ...cur, descriptorSet: r.descriptorSet, reflectedFrom: from.target } : cur));
-      if (!quiet) useApp.getState().toast(`Server reflection: ${r.services.length} services, ${r.methods.length} methods`, 'success');
+      if (!quiet) useApp.getState().toast(`Server reflection: ${plural(r.services.length, 'service')}, ${plural(r.methods.length, 'method')}`, 'success');
       setTab('message');
     } catch (e) {
       toastError(e);
@@ -471,7 +471,7 @@ export function GrpcView() {
                   </Button>
                   <span className="text-xs text-muted ml-auto flex items-center gap-2">
                     <GitMark to={{ section: 'proto' }} />
-                    {methods.length} methods
+                    {plural(methods.length, 'method')}
                   </span>
                 </div>
                 {protoError && <div className="px-3 py-2 text-xs text-bad border-b border-line">{protoError}</div>}

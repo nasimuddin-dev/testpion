@@ -2,7 +2,7 @@ import { GanttChart } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { outputFileName, timelineSvg, type FlowTimeline } from '@testpion/shared';
 import { asError, call } from '../api';
-import { formatMs } from '../lib/format';
+import { formatMs, plural } from '../lib/format';
 import { Empty, Metric, MetricGrid, Spinner } from './ui';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
@@ -81,7 +81,7 @@ export function RunTimeline({ runId, file, onPickStep }: { runId: string; file?:
         <MetricGrid compact className="flex-1">
           <Metric label="Total" value={formatMs(tl.totalMs)} />
           <Metric label="Steps" value={tl.bars.length} sub={t.truncated ? 'the first ones of the run' : undefined} />
-          <Metric label="Critical path" value={`${tl.criticalPath.length} steps`} sub={`${formatMs(tl.criticalBusyMs)} running${tl.waitMs ? ` · ${formatMs(tl.waitMs)} waiting` : ''}`} />
+          <Metric label="Critical path" value={`${plural(tl.criticalPath.length, 'step')}`} sub={`${formatMs(tl.criticalBusyMs)} running${tl.waitMs ? ` · ${formatMs(tl.waitMs)} waiting` : ''}`} />
           <Metric label="Most at once" value={tl.lanes} />
           {tl.slowest[0] && <Metric label="Slowest step" value={formatMs(tl.slowest[0].durationMs)} sub={tl.slowest[0].name} />}
         </MetricGrid>

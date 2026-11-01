@@ -3,6 +3,7 @@ import type { MenuItem } from '../components/ui';
 import { icon, type Act, type NodeMenuCtx } from './node-menu-actions';
 import { LABEL } from './vocabulary';
 import { aiHidden } from './ai-visible';
+import { plural } from './format';
 
 export { MENU_GROUPS, NODE_KINDS, baseKind, nodeCapabilities } from '@testpion/shared';
 export type { Act, ActionDef, ActionId, NodeKind, NodeMenuCtx } from './node-menu-actions';
@@ -58,7 +59,7 @@ type MenuGroup = ReturnType<typeof nodeMenuEntries>[number]['group'];
 export function buildNodeMenu(kind: NodeKind, ctx: NodeMenuCtx): MenuItem[] {
   const groups = nodeMenuGroups(kind, ctx).map((g) => g.items);
   const out = groups.filter((g) => g.length).flatMap((g, i) => g.map((it, j) => ({ ...it, separator: i > 0 && j === 0 })));
-  if (out.length > MAX_MENU_ITEMS && import.meta.env?.DEV) console.error(`The ${kind} menu has ${out.length} items (at most ${MAX_MENU_ITEMS}): fold some into a submenu`);
+  if (out.length > MAX_MENU_ITEMS && import.meta.env?.DEV) console.error(`The ${kind} menu has ${plural(out.length, 'item')} (at most ${MAX_MENU_ITEMS}): fold some into a submenu`);
   return out;
 }
 

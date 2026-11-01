@@ -7,6 +7,7 @@ import { useDoc } from '../../lib/docs';
 import { Button, cx, Empty, type EmptyAction, Field, FilterInput, IconButton, Input, Menu, type MenuItem, Segmented, Select } from '../ui';
 import { SCRIPT_TEMPLATE } from './RuleScriptFields';
 import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
+import { plural } from '../../lib/format';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
 
@@ -67,7 +68,7 @@ export function RuleList({
     const all = state?.rules ?? [];
     const mine = all.map((r, at) => ({ r, at })).filter((x) => kinds.includes(x.r.kind));
     void deleteWithUndo({
-      what: `all ${mine.length} rules of this list`,
+      what: `all ${plural(mine.length, 'rule')} of this list`,
       run: async () => {
         let s: RulesState | undefined;
         try {
@@ -109,7 +110,7 @@ export function RuleList({
           icon={<Trash2 size={12} />}
           disabled={!rules.length || !!f}
           reason={!rules.length ? 'No rules to remove' : 'Clear the search box first: Remove all takes the whole list, not the rows found'}
-          title={`Remove all ${rules.length} rules of this list (Undo brings them back)`}
+          title={`Remove all ${plural(rules.length, 'rule')} of this list (Undo brings them back)`}
           data-clear-rules
           onClick={clearAll}
         >

@@ -19,7 +19,7 @@ export function EvalCostLine({ estimate, model }: { estimate?: EvalEstimateResul
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted" data-eval-cost={estimate.offline ? 'offline' : estimate.free ? 'free' : estimate.priced ? 'priced' : 'unknown'}>
       <span>
         {cases} · {estimate.free ? (estimate.offline ? 'free' : 'free, runs on this computer') : estimate.costUsd !== undefined ? `about ${formatCost(estimate.costUsd)}` : 'cost unknown'}
-        {estimate.reviewerChecks > 0 && ` · ${estimate.calls} calls with the AI reviewer`} · {time(estimate.seconds)}
+        {estimate.reviewerChecks > 0 && ` · ${plural(estimate.calls, 'call')} with the AI reviewer`} · {time(estimate.seconds)}
       </span>
       {estimate.offline && (
         <Badge tone="warn" title="The offline demo model needs no key and no network. Its answers come from rules, so use it to try things out, not to judge a real model.">

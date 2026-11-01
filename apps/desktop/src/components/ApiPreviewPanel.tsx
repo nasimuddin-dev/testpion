@@ -9,6 +9,7 @@ import { generateFlows } from '../lib/files';
 import { aiMenuItems } from '../lib/ai-menu';
 import { useAiEnabled } from '../lib/use-ai-enabled';
 import { startFlowGenerate } from './ai/flow-generate';
+import { plural } from '../lib/format';
 
 interface OutlineOperation {
   method: string;
@@ -125,7 +126,7 @@ function Operation({ op }: { op: OutlineOperation }) {
 export const generateSpecTests = (spec: string) =>
   generateTestsFromDefinition(spec, {
     message: `A test file per tag under tests/, with each operation's example (its documented status, the OpenAPI contract, latency) and one invalid request that must get a 4xx, and a suite that runs them. Test files that exist are kept.`,
-    summary: (r, n) => `${r.written.length} files, ${n} tests${r.skipped.length ? ` (${r.skipped.length} kept as they were)` : ''}: review the example values, then run the suite`,
+    summary: (r, n) => `${plural(r.written.length, 'file')}, ${plural(n, 'test')}${r.skipped.length ? ` (${r.skipped.length} kept as they were)` : ''}: review the example values, then run the suite`,
     onWritten: () => ({ label: 'Open tests', onClick: () => useApp.getState().setView('tests') }),
   });
 

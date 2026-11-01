@@ -97,7 +97,7 @@ export function AsyncPreviewPanel({ outline, error, spec, onRetry }: { outline?:
   const generate = () =>
     generateTestsFromDefinition(spec, {
       message: 'A realtime test per channel: its example message sent through the broker or server and read back, checked against this document. The suite runs with the servers environment its import made. Test files that exist are kept.',
-      summary: (r, n) => `${r.written.length} files, ${n} tests: review the example messages, then run the suite`,
+      summary: (r, n) => `${plural(r.written.length, 'file')}, ${plural(n, 'test')}: review the example messages, then run the suite`,
       onWritten: (r) => ({ ref: refOfWorkspacePath(r.written[0]!.path) ?? { kind: 'test', path: r.written[0]!.path } }),
     });
   return (

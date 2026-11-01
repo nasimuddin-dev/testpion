@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { itemRefKey, toItemRef, type ItemRef } from '@testpion/shared';
+import { plural } from './format';
 
 /**
  * Dragging items between parts of the app: every draggable item (a request in the explorer, a folder, a saved gRPC
@@ -25,7 +26,7 @@ export function setDragRefs(e: React.DragEvent | DragEvent, refs: ItemRef[], lab
   if (label && !dt.types.includes('text/plain')) dt.setData('text/plain', label);
   // a move inside the explorer stays a move; a drop elsewhere (the canvas) copies
   dt.effectAllowed = dt.effectAllowed === 'move' || dt.effectAllowed === 'copyMove' ? 'copyMove' : 'copy';
-  setDragChip(dt, refs.length > 1 ? `${refs.length} items` : (label ?? '1 item'));
+  setDragChip(dt, refs.length > 1 ? `${plural(refs.length, 'item')}` : (label ?? '1 item'));
   beginDragSession();
 }
 

@@ -35,7 +35,7 @@ export function RagCharts({ m }: { m: MetricMatrix }) {
             const max = Math.max(1, ...a.distribution);
             return (
               <ChartCard key={c.key} title={c.key} aside={a.mean !== undefined ? <span>mean <b>{a.mean}</b></span> : undefined}>
-                <div className="flex items-end gap-1 h-24" role="img" aria-label={`${c.key} score distribution, ${a.n} samples`} data-rag-histogram={c.key}>
+                <div className="flex items-end gap-1 h-24" role="img" aria-label={`${c.key} score distribution, ${plural(a.n, 'sample')}`} data-rag-histogram={c.key}>
                   {a.distribution.map((n, i) => (
                     <div key={i} className="flex-1 flex flex-col justify-end items-center h-full" title={`${(i / 10).toFixed(1)}–${((i + 1) / 10).toFixed(1)}: ${plural(n, 'sample')}`}>
                       <div className={cx('w-full rounded-t', c.threshold !== undefined && (c.direction === 'lower' ? (i + 1) / 10 <= c.threshold + 1e-9 : i / 10 >= c.threshold - 1e-9) ? 'bg-ok/70' : 'bg-bad/60')} style={{ height: `${Math.max(n ? 6 : 0, (n / max) * 100)}%` }} />

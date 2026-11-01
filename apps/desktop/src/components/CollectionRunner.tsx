@@ -411,7 +411,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
                 </LinkButton>
               </div>
               {requests.length > 8 && (
-                <FilterInput className="w-full mb-1" placeholder={`Filter ${requests.length} requests by name, folder or method`} label="Filter requests" value={reqFilter} onChange={setReqFilter} />
+                <FilterInput className="w-full mb-1" placeholder={`Filter ${plural(requests.length, 'request')} by name, folder or method`} label="Filter requests" value={reqFilter} onChange={setReqFilter} />
               )}
               <div className="rounded-md border border-line divide-y divide-line/60">
                 {shownRequests.map((r) => (

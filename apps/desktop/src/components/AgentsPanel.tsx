@@ -6,6 +6,7 @@ import { toastError, useApp, attempt } from '../store';
 import { Badge, Button, Tabs, Toggle } from './ui';
 import { copyText } from '../lib/clipboard';
 import { RunInTerminalButton } from './RunInTerminal';
+import { plural } from '../lib/format';
 
 interface AgentInfo {
   command: string;
@@ -176,7 +177,7 @@ export function AgentsPanel() {
         {test.result && (
           <div className="text-sm flex items-center gap-2 flex-wrap">
             <Badge tone="ok">Works</Badge>
-            {test.result.server?.name} {test.result.server?.version} started in {(test.result.ms / 1000).toFixed(1)} s: {test.result.tools} tools ({test.result.readOnlyTools} read-only), {test.result.resources} resources, {test.result.prompts.length} prompts
+            {test.result.server?.name} {test.result.server?.version} started in {(test.result.ms / 1000).toFixed(1)} s: {plural(test.result.tools, 'tool')} ({test.result.readOnlyTools} read-only), {test.result.resources} resources, {test.result.prompts.length} prompts
             <span className="text-muted">({test.result.prompts.join(', ')})</span>
           </div>
         )}

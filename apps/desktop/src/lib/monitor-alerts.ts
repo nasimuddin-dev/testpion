@@ -2,6 +2,7 @@ import { on } from '../api';
 import type { ItemRef } from '@testpion/shared';
 import { notifySystem, useApp } from '../store';
 import { sharedCall } from './shared-call';
+import { plural } from './format';
 
 /** Mirrors core's Monitor / MonitorResult (runner/monitors.ts). */
 export interface MonitorResult {
@@ -64,7 +65,7 @@ export function watchMonitorAlerts(): () => void {
     const wasBad = previous ? previous.status !== 'passed' : false;
     if (bad === wasBad) return;
     const text = bad
-      ? `Monitor "${monitor.name}" ${result.status === 'error' ? `could not run: ${result.error}` : result.reason && !(result.failed + result.errors) ? (result.reason.startsWith('p95') ? `is too slow: ${result.reason}` : `needs attention: ${result.reason}`) : `failed: ${result.failed + result.errors} of ${result.total} requests`}`
+      ? `Monitor "${monitor.name}" ${result.status === 'error' ? `could not run: ${result.error}` : result.reason && !(result.failed + result.errors) ? (result.reason.startsWith('p95') ? `is too slow: ${result.reason}` : `needs attention: ${result.reason}`) : `failed: ${result.failed + result.errors} of ${plural(result.total, 'request')}`}`
       : `Monitor "${monitor.name}" passes again`;
     // a failed run opens at its results; otherwise (it could not run, it recovered) the monitor
     const ref: ItemRef | undefined = bad && result.runId && result.total ? { kind: 'run', runId: result.runId } : monitor.id ? { kind: 'monitor', monitorId: monitor.id } : undefined;

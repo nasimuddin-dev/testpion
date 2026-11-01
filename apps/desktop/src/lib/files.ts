@@ -1,5 +1,6 @@
 import { call } from '../api';
 import { useApp, attempt } from '../store';
+import { plural } from './format';
 
 /**
  * Host-agnostic file handling for the UI (desktop today, browser / cloud later). The UI never gets
@@ -74,7 +75,7 @@ export async function generateFlows(source: { path: string } | { collectionId: s
       .getState()
       .toast(
         r.written.length
-          ? `${r.resources.length} flows, ${n} steps${r.skipped.length ? ` (${r.skipped.length} files kept as they were)` : ''}. The environment must set ${r.variables.map((v) => `{{${v}}}`).join(', ')}; review the bodies, then run the suite`
+          ? `${r.resources.length} flows, ${plural(n, 'step')}${r.skipped.length ? ` (${plural(r.skipped.length, 'file')} kept as they were)` : ''}. The environment must set ${r.variables.map((v) => `{{${v}}}`).join(', ')}; review the bodies, then run the suite`
           : r.skipped.length
             ? `Every file exists already: ${r.skipped.join(', ')}`
             : 'No resource to make a flow of: the API needs a POST with a sibling GET / PUT / DELETE /{id} path',

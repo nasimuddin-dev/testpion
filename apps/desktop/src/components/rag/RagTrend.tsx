@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { RagTrend as RagTrendData, TrendPoint } from '@testpion/core';
 import { asError, call } from '../../api';
-import { timeAgo } from '../../lib/format';
+import { timeAgo, plural } from '../../lib/format';
 import { ChartCard, PointLine, Swatch } from '../charts';
 import { Callout, Empty, Spinner } from '../ui';
 
@@ -44,7 +44,7 @@ export function RagTrend({ evaluation, onOpenRun }: { evaluation: string; onOpen
           const pts = data.points.filter((p) => p.metrics[k]?.mean !== undefined);
           const last = pts[pts.length - 1]!;
           return (
-            <ChartCard key={k} title={k} aside={<span>latest <b>{last.metrics[k]!.mean}</b> · {pts.length} runs</span>} legend={pts.some((p) => p.judgeChanged) ? <Swatch color="var(--warn)" label="judge or wording changed" /> : undefined}>
+            <ChartCard key={k} title={k} aside={<span>latest <b>{last.metrics[k]!.mean}</b> · {plural(pts.length, 'run')}</span>} legend={pts.some((p) => p.judgeChanged) ? <Swatch color="var(--warn)" label="judge or wording changed" /> : undefined}>
               <div data-rag-trend-chart={k}>
                 <PointLine<TrendPoint>
                   items={pts}
@@ -53,7 +53,7 @@ export function RagTrend({ evaluation, onOpenRun }: { evaluation: string; onOpen
                   keyOf={(p) => p.runId}
                   axis={(v) => String(Math.round(v * 100) / 100)}
                   ends={(p) => timeAgo(p.at)}
-                  label={`${k} across ${pts.length} runs`}
+                  label={`${k} across ${plural(pts.length, 'run')}`}
                   tip={(p) => (
                     <div className="text-xs">
                       <div className="font-medium">
@@ -61,7 +61,7 @@ export function RagTrend({ evaluation, onOpenRun }: { evaluation: string; onOpen
                       </div>
                       <div>{new Date(p.at).toLocaleString()}</div>
                       <div className="text-muted">
-                        {p.n} samples{p.metrics[k]!.naCount ? ` · ${p.metrics[k]!.naCount} n/a` : ''}
+                        {plural(p.n, 'sample')}{p.metrics[k]!.naCount ? ` · ${p.metrics[k]!.naCount} n/a` : ''}
                         {p.metrics[k]!.ci ? ` · 95% ${p.metrics[k]!.ci![0]} to ${p.metrics[k]!.ci![1]}` : ''}
                       </div>
                       {p.judge && <div className="text-muted">judge {p.judge}</div>}

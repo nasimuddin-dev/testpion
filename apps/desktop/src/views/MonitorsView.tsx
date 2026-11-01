@@ -22,7 +22,7 @@ import { deleteWithUndo } from '../lib/undo-delete';
 import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
 import type { Collection, CollectionNode, Library } from '../types';
-import { formatCost, formatMs, timeAgo } from '../lib/format';
+import { formatCost, formatMs, timeAgo, plural } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { useEvalEstimate, type CostDraft } from '../lib/eval-estimate';
@@ -526,7 +526,7 @@ function MonitorDetail(p: {
 
       <MetricGrid compact>
         <Metric label="Last result" value={statusLabel(last)} tone={last ? (last.status === 'passed' ? 'ok' : 'bad') : undefined} sub={last ? (last.reason ?? timeAgo(last.startedAt)) : undefined} />
-        <Metric label="Success rate" value={stats.uptime === undefined ? '—' : `${stats.uptime}%`} tone={stats.uptime === undefined ? undefined : stats.uptime === 100 ? 'ok' : stats.uptime >= 90 ? 'warn' : 'bad'} sub={results.length === 1 ? 'the last run' : `last ${results.length} runs`} />
+        <Metric label="Success rate" value={stats.uptime === undefined ? '—' : `${stats.uptime}%`} tone={stats.uptime === undefined ? undefined : stats.uptime === 100 ? 'ok' : stats.uptime >= 90 ? 'warn' : 'bad'} sub={results.length === 1 ? 'the last run' : `last ${plural(results.length, 'run')}`} />
         <Metric label="Median run time" value={stats.median === undefined ? '—' : formatMs(stats.median)} />
         <Metric label="Median response" value={!last?.p50Ms || !last.passed ? '—' : formatMs(last.p50Ms)} sub="last run's requests" />
         {last?.certDaysLeft !== undefined && <Metric label="Certificate" value={last.certDaysLeft < 0 ? 'Expired' : `${last.certDaysLeft} days`} tone={last.certDaysLeft < (m.minCertDays ?? 14) ? 'bad' : last.certDaysLeft < 30 ? 'warn' : 'ok'} sub="left on the first to expire" />}
@@ -823,9 +823,9 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
                 )}
               </div>
             )}
-            <Field label="Pass rate" hint="Also fail when the pass rate falls more than this many points against the run before.">
+            <Field label="Pass rate" hint="The pass rate is compared with the run before. Off: only failing cases fail the monitor.">
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked={d.baseline === 'previous'} onChange={(e) => setD({ ...d, baseline: e.target.checked ? 'previous' : undefined })} aria-label="Fail on a drop in pass rate" />
+                <Toggle checked={d.baseline === 'previous'} onChange={(v) => setD({ ...d, baseline: v ? 'previous' : undefined })} label="Also fail when it drops by" data-monitor-drop="1" />
                 <Input type="number" min={1} max={100} className="w-20" disabled={d.baseline !== 'previous'} value={Math.round((d.maxDrop ?? 0.1) * 100)} onChange={(e) => setD({ ...d, maxDrop: Math.min(1, Math.max(0.01, Number(e.target.value) / 100)) })} aria-label="Points of drop" />
                 <span className="text-xs text-muted">points</span>
               </div>
@@ -885,7 +885,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
           </div>
           {recentP95.length > 0 && (
             <p className="text-xs text-muted mt-1">
-              The last {recentP95.length === 1 ? 'run' : `${recentP95.length} runs`} measured p95 {recentP95.length === 1 ? formatMs(recentP95[0]!) : `${formatMs(recentP95[Math.floor((recentP95.length - 1) / 2)]!)} (median), ${formatMs(recentP95[recentP95.length - 1]!)} at worst`}.
+              The last {recentP95.length === 1 ? 'run' : `${plural(recentP95.length, 'run')}`} measured p95 {recentP95.length === 1 ? formatMs(recentP95[0]!) : `${formatMs(recentP95[Math.floor((recentP95.length - 1) / 2)]!)} (median), ${formatMs(recentP95[recentP95.length - 1]!)} at worst`}.
             </p>
           )}
         </Field>

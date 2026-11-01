@@ -68,7 +68,7 @@ export function ReplayDialog({ rows, start, onClose, onOpen }: { rows: Exchange[
   const invalid = !Number.isFinite(count) || count < 1 || count > 200 ? 'Send 1 to 200 times' : undefined;
   const send = async (n = count) => {
     const remote = [...new Set(rows.filter((r) => !isReplayLocalHost(r.host)).map((r) => r.host))];
-    if (n > 1 && remote.length && !(await confirmAction({ title: 'Send requests to a server that is not yours?', message: `This sends ${n} requests to ${remote.join(', ')}.`, detail: 'A burst can look like an attack or hit a rate limit. Go on only if the server is yours or you have permission.', confirmLabel: `Send ${n}` }))) return;
+    if (n > 1 && remote.length && !(await confirmAction({ title: 'Send requests to a server that is not yours?', message: `This sends ${plural(n, 'request')} to ${remote.join(', ')}.`, detail: 'A burst can look like an attack or hit a rate limit. Go on only if the server is yours or you have permission.', confirmLabel: `Send ${n}` }))) return;
     setBusy(true);
     try {
       setAnswer(await call<ReplayAnswer>('debug.replay', { ids: rows.map((r) => r.id), times: n, concurrency: Number(concurrency) || 1, delayMs: Number(delayMs) || 0, stopOnFailure: stop, confirmRemote: true, environment: useApp.getState().environment }));

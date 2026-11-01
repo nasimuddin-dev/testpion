@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { Button, Field, Input, Modal, Select, Toggle, Textarea } from './ui';
+import { plural } from '../lib/format';
 
 interface Outline {
   tags: Array<{ operations: Array<{ method: string; path: string; operationId?: string; summary?: string; requestBody?: { contentType: string } }> }>;
@@ -69,7 +70,7 @@ export function GenerateDataDialogBody({ onClose, onDone }: { onClose(): void; o
         ...(source === 'operation' ? { spec, operation } : { schema }),
         overwrite,
       });
-      useApp.getState().toast(`${out.path}: ${out.rows} rows (${out.columns.join(', ')})`, 'success');
+      useApp.getState().toast(`${out.path}: ${plural(out.rows, 'row')} (${out.columns.join(', ')})`, 'success');
       onDone(out);
     } catch (e) {
       toastError(e);

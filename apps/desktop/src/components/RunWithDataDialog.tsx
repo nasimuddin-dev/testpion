@@ -121,7 +121,7 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
                   {all.map((d) => (
                     <option key={d.path} value={d.path}>
                       {d.name}
-                      {d.count !== undefined ? ` (${d.count} rows)` : ''}
+                      {d.count !== undefined ? ` (${plural(d.count, 'row')})` : ''}
                     </option>
                   ))}
                 </Select>

@@ -1,5 +1,6 @@
 import { jsonPretty, markdownTable, outputFileName } from '@testpion/shared';
 import type { OutputSpec } from './output-core';
+import { plural } from '../../lib/format';
 
 /**
  * The reports about an API definition or a collection — OpenAPI lint, fuzzing, coverage, the security review and the
@@ -41,7 +42,7 @@ export function lintReport(
     kind: 'lint',
     title: `API lint · ${spec.replace(/^specs\//, '')}`,
     data: result,
-    markdown: `# API lint: ${spec}\n\n${counts.error} errors, ${counts.warning} warnings, ${counts.info} notes in ${result.operations} operations.\n\n${
+    markdown: `# API lint: ${spec}\n\n${plural(counts.error, 'error')}, ${counts.warning} warnings, ${counts.info} notes in ${result.operations} operations.\n\n${
       result.problems.length
         ? markdownTable(
             ['severity', 'rule', 'where', 'line', 'message'],
@@ -104,7 +105,7 @@ export function fuzzReport(
       counts: report.counts,
       findings: findings.map((r) => ({ operation: r.case.operation, case: r.case.name, verdict: r.verdict, status: r.status, message: r.message, url: r.case.request.url })),
     },
-    markdown: `# Fuzzing: ${spec}\n\n${report.cases} requests to ${report.operations} operations: ${report.counts['server-error'] ?? 0} server errors, ${report.counts['accepted-invalid'] ?? 0} invalid inputs accepted, ${report.counts['undocumented-status'] ?? 0} undocumented statuses.\n\n${
+    markdown: `# Fuzzing: ${spec}\n\n${plural(report.cases, 'request')} to ${report.operations} operations: ${report.counts['server-error'] ?? 0} server errors, ${report.counts['accepted-invalid'] ?? 0} invalid inputs accepted, ${report.counts['undocumented-status'] ?? 0} undocumented statuses.\n\n${
       findings.length
         ? markdownTable(
             ['verdict', 'operation', 'case', 'status', 'message'],

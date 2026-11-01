@@ -4,6 +4,7 @@ import { OutputActions } from './output/OutputFrame';
 import { SectionTitle } from './ui';
 import type { OutputSpec } from './output/output-core';
 import { chartPng, chartSvg } from './output/chart-image';
+import { plural } from '../lib/format';
 
 /** Width of an element, kept current (charts draw at their real size: round markers, crisp text). */
 export function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
@@ -126,7 +127,7 @@ export function DurationBar({ ms, max, bad, className }: { ms: number; max: numb
 export function RecentRuns({ statuses, className }: { statuses: string[]; className?: string }) {
   if (!statuses.length) return null;
   const passed = statuses.filter((s) => s === 'passed').length;
-  const label = statuses.length === 1 ? `The last run ${passed ? 'passed' : 'failed'}` : `${passed} of the last ${statuses.length} runs passed (oldest left)`;
+  const label = statuses.length === 1 ? `The last run ${passed ? 'passed' : 'failed'}` : `${passed} of the last ${plural(statuses.length, 'run')} passed (oldest left)`;
   return (
     <span className={'inline-flex items-end gap-px h-3 shrink-0 ' + (className ?? '')} role="img" aria-label={label} title={label}>
       {statuses.map((s, i) => (
@@ -368,7 +369,7 @@ export function ArrivalSpark({ times, buckets = 30 }: { times: number[]; buckets
     return { counts, max, end, gap: times.length > 1 ? (end - first) / (times.length - 1) : 0 };
   }, [times, buckets]);
   if (times.length < 2) return null;
-  const label = `${times.length} messages over ${(end / 1000).toFixed(2)} s, ${gap < 1 ? 'arriving together' : `one every ${Math.round(gap)} ms on average`}`;
+  const label = `${plural(times.length, 'message')} over ${(end / 1000).toFixed(2)} s, ${gap < 1 ? 'arriving together' : `one every ${Math.round(gap)} ms on average`}`;
   return (
     <span className="inline-flex items-end gap-px h-4 w-[90px] shrink-0" role="img" aria-label={label} title={label}>
       {counts.map((c, i) => (

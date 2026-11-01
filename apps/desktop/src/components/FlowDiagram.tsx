@@ -35,6 +35,7 @@ import { FlowEdgeView, FlowNodeView, portY } from './FlowNode';
 import { DropHintLayer, useFlowDrop, type FlowDropEvent } from './FlowDrop';
 import { findMatches, FlowFindBar, FlowFrame, FlowProblems, FlowToolbarFrame, GRID, groupKey, placeDragged } from './FlowDiagramParts';
 import { useCanvasView, viewTransform } from './use-canvas-view';
+import { plural } from '../lib/format';
 
 /** What is selected on an editable diagram: steps and notes (several with Shift or a Shift-drag box), or one edge. */
 export interface FlowSelection {
@@ -675,7 +676,7 @@ export function FlowDiagram({
           onCanvasDoubleClick(toGraph(e.clientX, e.clientY), { x: e.clientX, y: e.clientY });
         }}
         role="img"
-        aria-label={`Flow of ${graph.nodes.length} steps`}
+        aria-label={`Flow of ${plural(graph.nodes.length, 'step')}`}
       >
         <defs>
           <marker id={arrow} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">

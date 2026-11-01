@@ -121,7 +121,7 @@ export function VariantsPanel({ draft, onVariants, providers, environment, runs,
     if (plan?.total.ask) {
       const ok = await confirmAction({
         title: 'These runs cost money',
-        message: `The ${plan.total.variants} variants make about ${plan.total.calls} calls and cost about ${formatCost(plan.total.costUsd)}.`,
+        message: `The ${plan.total.variants} variants make about ${plural(plan.total.calls, 'call')} and cost about ${formatCost(plan.total.costUsd)}.`,
         detail: 'Set “Only the first … cases” under Options to try a few cases first.',
         confirmLabel: `Run ${plan.total.variants} variants`,
       });

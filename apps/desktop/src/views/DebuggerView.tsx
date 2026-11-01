@@ -309,7 +309,7 @@ export function DebuggerView() {
     if (!name) return;
     await attempt(async () => {
       const r = await call<{ name: string; exchanges: number }>('debug.saveSession', { name });
-      toast(`Saved ${r.exchanges} exchanges as ${r.name}`);
+      toast(`Saved ${plural(r.exchanges, 'exchange')} as ${r.name}`);
     });
   };
   /** A saved session opens in its own tab (WF-19); the live capture goes on in its tab. `preview`: a single click. */
@@ -329,7 +329,7 @@ export function DebuggerView() {
     await attempt(async () => {
       const r = await call<Status & { loaded: number }>('debug.openSession', { text: f.text, append: rows.length > 0 });
       setStatus(r);
-      toast(`Imported ${r.loaded} exchanges from ${f.name}`);
+      toast(`Imported ${plural(r.loaded, 'exchange')} from ${f.name}`);
       void load();
     });
   };
@@ -339,7 +339,7 @@ export function DebuggerView() {
     await attempt(async () => {
       const r = await call<Status & { loaded: number }>('debug.openSession', { base64: f.base64, append: rows.length > 0 });
       setStatus(r);
-      toast(`Imported ${r.loaded} exchanges from ${f.name}`);
+      toast(`Imported ${plural(r.loaded, 'exchange')} from ${f.name}`);
       void load();
     });
   };
@@ -438,7 +438,7 @@ export function DebuggerView() {
     onReadHttps: () => void readHttps(),
     onBookmark: async (e) => (await call('debug.bookmark', { id: e.id, on: !e.bookmarked }), void load()),
     onNote: async (e, ids, remove) => {
-      const note = remove ? '' : await promptText(ids.length > 1 ? `Note on ${ids.length} exchanges` : 'Note on this exchange', { message: 'A comment to find it again. It shows in the Comments column and is saved with the session.', value: e.note ?? '', placeholder: 'What to remember about this exchange', okLabel: 'Save' });
+      const note = remove ? '' : await promptText(ids.length > 1 ? `Note on ${plural(ids.length, 'exchange')}` : 'Note on this exchange', { message: 'A comment to find it again. It shows in the Comments column and is saved with the session.', value: e.note ?? '', placeholder: 'What to remember about this exchange', okLabel: 'Save' });
       if (note === null) return;
       await call('debug.annotate', { ids, note }).then(() => void load(), toastError);
     },
@@ -565,14 +565,16 @@ export function DebuggerView() {
         title="HTTP Debugger"
         subtitle={
           status?.running ? (
-            <span className="inline-flex items-center gap-1.5">
-              Proxy address <code className="font-mono text-fg">{status.url}</code>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="shrink-0">Proxy address</span> <code className="font-mono text-fg shrink-0">{status.url}</code>
               <button type="button" className="text-muted hover:text-fg" title="Copy the proxy address" aria-label="Copy the proxy address" onClick={() => void copyText(status.url ?? '', 'the proxy address')}>
                 <Copy size={12} />
               </button>
-              {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
-              {status.gateway ? ` · leaving through ${status.gateway}` : ''}
-              {status.spilled ? ` · ${status.spilled.toLocaleString()} older exchanges kept on disk` : ''}
+              <span className="truncate" title="The proxy address, and what points at it">
+                {status.systemProxy ? ' · the system proxy points here' : ' · programs sent through it show below'}
+                {status.gateway ? ` · leaving through ${status.gateway}` : ''}
+                {status.spilled ? ` · ${plural(status.spilled, 'older exchange')} kept on disk` : ''}
+              </span>
             </span>
           ) : (
             'Capture all traffic to see every program on this computer that follows the system proxy, or watch one program: a browser or a terminal opened through the proxy.'
@@ -1108,14 +1110,14 @@ function StatsPanel({ stats, onPick, running, onStart, onRecord }: { stats?: Sta
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 grid gap-4 content-start max-w-5xl">
       <div className="text-sm text-muted">
-        {stats.total} exchanges · {formatBytes(stats.bytes)} received · {stats.errors} errors
+        {plural(stats.total, 'exchange')} · {formatBytes(stats.bytes)} received · {plural(stats.errors, 'error')}
         {stats.firstAt && stats.lastAt ? ` · ${new Date(stats.firstAt).toLocaleTimeString()} – ${new Date(stats.lastAt).toLocaleTimeString()}` : ''}
       </div>
       <section>
         <SectionTitle size="sm" className="mb-1">Requests over time</SectionTitle>
         <div className="flex items-end gap-px h-20 border-b border-line" role="img" aria-label="Requests per time slice">
           {stats.timeline.map((b, i) => (
-            <div key={i} className="flex-1 flex flex-col justify-end h-full" title={`${new Date(b.t).toLocaleTimeString()}: ${b.count} requests, ${b.errors} errors`}>
+            <div key={i} className="flex-1 flex flex-col justify-end h-full" title={`${new Date(b.t).toLocaleTimeString()}: ${plural(b.count, 'request')}, ${plural(b.errors, 'error')}`}>
               <div className={cx('w-full rounded-t-sm', b.errors ? 'bg-bad/70' : 'bg-accent/70')} style={{ height: `${(b.count / peak) * 100}%` }} />
             </div>
           ))}

@@ -14,6 +14,7 @@ import { RagCalibration } from './RagCalibration';
 import { RagEmbeddingMap } from './RagEmbeddingMap';
 import { RagTrend } from './RagTrend';
 import { RunReport } from '../ai/RunReport';
+import { plural } from '../../lib/format';
 
 const PAGE = 100;
 /** A sample row is one fixed height, so only the rows on screen are drawn (100 rows × 84 metrics is 8,400 cells). */
@@ -347,7 +348,7 @@ export function RagMetricMatrix({
           ))}
         </Select>
         <span className="text-xs text-muted ml-auto">
-          {m.total} samples · {m.columns.length} metrics
+          {plural(m.total, 'sample')} · {plural(m.columns.length, 'metric')}
           {m.failures.length > 0 && <> · {m.failures.map((f) => `${f.label} ${f.count}`).join(', ')}</>}
         </span>
       </div>

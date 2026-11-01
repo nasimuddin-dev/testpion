@@ -4,6 +4,7 @@
  * go to the backend as text (or base64 for a ZIP) and the backend decides what each one is.
  */
 import type { ImportSource } from '../types';
+import { plural } from './format';
 
 const MAX_TOTAL = 200 * 1024 * 1024;
 const MAX_FILES = 20_000;
@@ -23,7 +24,7 @@ async function read(f: File, path: string): Promise<PickedFile> {
 }
 
 async function readAll(list: Array<{ file: File; path: string }>): Promise<PickedFile[]> {
-  if (list.length > MAX_FILES) throw new Error(`More than ${MAX_FILES} files: choose a smaller folder`);
+  if (list.length > MAX_FILES) throw new Error(`More than ${plural(MAX_FILES, 'file')}: choose a smaller folder`);
   if (list.reduce((n, x) => n + x.file.size, 0) > MAX_TOTAL) throw new Error(`The files are larger than ${MAX_TOTAL / 1024 / 1024} MB`);
   return Promise.all(list.map((x) => read(x.file, x.path)));
 }

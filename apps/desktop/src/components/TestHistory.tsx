@@ -112,7 +112,7 @@ export function TestHistory({ id, name, runId }: { id: string; name: string; run
                 {p.failures.length > 0 && <div className="text-bad">{p.failures.join('; ')}</div>}
               </>
             )}
-            label={`Time of ${name} in the last ${timed.length} runs, median ${formatMs(median)}`}
+            label={`Time of ${name} in the last ${plural(timed.length, 'run')}, median ${formatMs(median)}`}
           />
         </ChartCard>
       )}

@@ -29,7 +29,7 @@ export function SidebarShell({ id, panes, value, onChange }: { id: string; panes
   const listRef = useRef<HTMLDivElement>(null);
   return (
     <div className="h-full flex flex-col bg-panel/50 border-r border-line min-w-0">
-      {/* labels show (two panes always; more when the sidebar is wide enough, a container query), otherwise icons with tooltips */}
+      {/* labels show (two panes always; with more, the open one always and the others when the sidebar is wide enough, a container query), otherwise icons with tooltips */}
       <div
         ref={listRef}
         role="tablist"
@@ -55,12 +55,13 @@ export function SidebarShell({ id, panes, value, onChange }: { id: string; panes
               aria-label={p.label}
               onClick={() => pick(p.id)}
               className={cx(
-                'flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 h-7 rounded-md text-xs font-medium transition-colors',
+                'min-w-0 inline-flex items-center justify-center gap-1.5 h-7 rounded-md text-xs font-medium transition-colors',
+                panes.length > 2 && pane.id === p.id ? 'flex-[3]' : 'flex-1',
                 pane.id === p.id ? 'bg-bg shadow-sm border border-line text-fg' : 'text-muted hover:text-fg hover:bg-hover',
               )}
             >
               {p.icon}
-              <span className={cx('truncate', panes.length <= 2 ? 'inline' : panes.length > 3 ? 'hidden @[24rem]:inline' : 'hidden @[18rem]:inline')}>{p.label}</span>
+              <span className={cx('truncate', panes.length <= 2 || pane.id === p.id ? 'inline' : panes.length > 3 ? 'hidden @[30rem]:inline' : 'hidden @[26rem]:inline')}>{p.label}</span>
             </button>
           </Tooltip>
         ))}

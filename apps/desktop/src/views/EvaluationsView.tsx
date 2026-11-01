@@ -12,7 +12,7 @@ import { useIntent } from '../hooks';
 import { call, on } from '../api';
 import { persisted, promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig, ProviderConfig } from '../types';
-import { templateVars, timeAgo } from '../lib/format';
+import { templateVars, timeAgo, plural } from '../lib/format';
 import { casesToJsonl, countDatasetRecords, datasetFormatOf, datasetHealth, datasetRecords, previewDatasetRecords } from '@testpion/shared';
 import { downloadContent } from '../lib/files';
 import { CasesPane } from '../components/ai/CasesPane';
@@ -625,7 +625,7 @@ export function EvaluationsView() {
             <summary className="cursor-pointer text-muted select-none">
               Options
               <span className="ml-1">
-                · randomness {d.temperature ?? 'default'} · {d.concurrency} at once · try again {d.retries}× · {d.limit ? `first ${d.limit} cases` : 'all cases'}
+                · randomness {d.temperature ?? 'default'} · {d.concurrency} at once · try again {d.retries}× · {d.limit ? `first ${plural(d.limit, 'case')}` : 'all cases'}
               </span>
             </summary>
             <div className="grid gap-2 mt-2 pb-1">

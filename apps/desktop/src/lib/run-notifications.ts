@@ -1,6 +1,6 @@
 import { on } from '../api';
 import { notifySystem, useApp } from '../store';
-import { formatMs } from './format';
+import { formatMs, plural } from './format';
 
 interface RunFinished {
   runId: string;
@@ -22,7 +22,7 @@ export function watchRunNotifications(): () => void {
     if (useApp.getState().settings?.notifyRunFinished === false) return;
     if (p.cancelled || !p.total || document.hasFocus()) return;
     const bad = (p.failed ?? 0) + (p.errors ?? 0);
-    notifySystem(bad ? `${p.name}: ${bad} of ${p.total} failed` : `${p.name}: all ${p.total} passed`, `${p.passed ?? 0} passed${p.failed ? ` · ${p.failed} failed` : ''}${p.errors ? ` · ${p.errors} errors` : ''} · ${formatMs(p.durationMs)}`, {
+    notifySystem(bad ? `${p.name}: ${bad} of ${p.total} failed` : `${p.name}: all ${p.total} passed`, `${p.passed ?? 0} passed${p.failed ? ` · ${p.failed} failed` : ''}${p.errors ? ` · ${plural(p.errors, 'error')}` : ''} · ${formatMs(p.durationMs)}`, {
       ref: { kind: 'run', runId: p.runId },
       tag: p.runId,
     });

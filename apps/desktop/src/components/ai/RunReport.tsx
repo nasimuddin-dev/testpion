@@ -2,7 +2,7 @@ import { ClipboardCheck, Cloud, GitCompareArrows, ListTree, Pin, Sparkles, X } f
 import { useEffect, useState } from 'react';
 import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy, TrajectoryWithBaseline } from '@testpion/core';
 import { call, on } from '../../api';
-import { formatCost, formatMs } from '../../lib/format';
+import { formatCost, formatMs, plural } from '../../lib/format';
 import { useRpc } from '../../lib/use-rpc';
 import { LABEL } from '../../lib/vocabulary';
 import { toastError, useApp } from '../../store';
@@ -26,7 +26,7 @@ function PassTrend({ trend }: { trend: EvalReport['trend'] }) {
   const h = 22;
   const pts = trend.map((t, i) => [(i / (trend.length - 1)) * (w - 4) + 2, h - 3 - t.passRate * (h - 6)] as const);
   const last = trend[trend.length - 1]!;
-  const label = `Pass rate of the last ${trend.length} runs: ${trend.map((t) => `${Math.round(t.passRate * 100)}%`).join(', ')}`;
+  const label = `Pass rate of the last ${plural(trend.length, 'run')}: ${trend.map((t) => `${Math.round(t.passRate * 100)}%`).join(', ')}`;
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted" title={label} data-eval-trend>
       <svg width={w} height={h} role="img" aria-label={label}>
@@ -264,7 +264,7 @@ export function RunReport({ runId, offline, compact, onCi, onCover, ciReason }: 
         )}
         {r && (
           <span className="text-xs text-muted">
-            {r.costUsd ? `Cost ${formatCost(r.costUsd)}${r.cost?.lastUsd !== undefined ? ` (last run ${formatCost(r.cost.lastUsd)})` : ''}${r.cost && r.cost.monthRuns > 1 ? `, this month ${formatCost(r.cost.monthUsd)} over ${r.cost.monthRuns} runs` : ''} · ` : ''}
+            {r.costUsd ? `Cost ${formatCost(r.costUsd)}${r.cost?.lastUsd !== undefined ? ` (last run ${formatCost(r.cost.lastUsd)})` : ''}${r.cost && r.cost.monthRuns > 1 ? `, this month ${formatCost(r.cost.monthUsd)} over ${plural(r.cost.monthRuns, 'run')}` : ''} · ` : ''}
             {r.avgMs !== undefined ? `Average ${formatMs(r.avgMs)} · ` : ''}
             {r.slowestMs !== undefined && r.slowestMs > (r.avgMs ?? 0) * 1.5 ? `Slowest ${formatMs(r.slowestMs)} · ` : ''}
             {formatMs(r.durationMs)} in all

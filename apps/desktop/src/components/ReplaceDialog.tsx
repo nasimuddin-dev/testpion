@@ -57,7 +57,7 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
       onDone();
       onClose();
       // Undo: the collection as it was before
-      useApp.getState().toast(`${r.count} changes saved in ${collection.name}`, 'success', undefined, {
+      useApp.getState().toast(`${plural(r.count, 'change')} saved in ${collection.name}`, 'success', undefined, {
         undo: () => call('col.save', collection).then(onDone),
         restored: `${collection.name} is back as it was`,
       });

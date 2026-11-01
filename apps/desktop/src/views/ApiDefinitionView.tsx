@@ -22,6 +22,7 @@ import { ApiFuzzPanel } from '../components/ApiFuzzPanel';
 import { AsyncPreviewPanel, type AsyncOutline } from '../components/AsyncPreviewPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
 import { Badge, Button, Empty, Tabs, useDebounced } from '../components/ui';
+import { plural } from '../lib/format';
 
 type Tab = 'definition' | 'preview' | 'lint' | 'fuzz' | 'coverage' | 'compare';
 
@@ -211,7 +212,7 @@ export function ApiDefinitionView() {
                   id: 'lint' as const,
                   label: 'Lint',
                   badge: lint && (lint.counts.error || lint.counts.warning) ? <Badge tone={lint.counts.error ? 'bad' : 'warn'}>{lint.counts.error || lint.counts.warning}</Badge> : undefined,
-                  title: lint ? `${lint.counts.error} errors, ${lint.counts.warning} warnings, ${lint.counts.info} notes` : undefined,
+                  title: lint ? `${plural(lint.counts.error, 'error')}, ${lint.counts.warning} warnings, ${lint.counts.info} notes` : undefined,
                 },
                 { id: 'fuzz' as const, label: 'Fuzz' },
                 { id: 'coverage' as const, label: 'Coverage' },

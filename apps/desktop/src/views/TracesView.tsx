@@ -46,7 +46,7 @@ function OtlpDialog({ ids, selected, onClose }: { ids: string[]; selected?: stri
     setBusy(true);
     try {
       const r = await call<{ spans: number; url: string }>('traces.exportOtlp', { ids: list, endpoint: cfg.endpoint, headers: cfg.headers, environment: env });
-      useApp.getState().toast(`Sent ${r.spans} spans to ${r.url}`, 'success');
+      useApp.getState().toast(`Sent ${plural(r.spans, 'span')} to ${r.url}`, 'success');
       onClose();
     } catch (e) {
       toastError(e);

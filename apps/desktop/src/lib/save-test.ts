@@ -6,6 +6,7 @@ import { promptText, toastError, useApp, attempt } from '../store';
 import type { CheckConfig } from '../types';
 import type { MenuItem } from '../components/ui';
 import { openRef, refLabel } from './open-ref';
+import { plural } from './format';
 
 /**
  * WF-07 "Save as test", the one way, from everywhere: an editor's ⋯ menu (REST, GraphQL, gRPC, WebSocket, an MCP tool
@@ -48,7 +49,7 @@ export async function saveAsTest(target: SaveTestTarget): Promise<string | undef
   if (!name) return undefined;
   try {
     const r = await call<{ path: string; tests: number; ref: ItemRef }>('tests.saveFrom', 'ref' in target ? { name, ref: target.ref } : { name, source: target.source, assertions: target.assertions });
-    useApp.getState().toast(`Saved tests/${r.path}${r.tests > 1 ? ` (${r.tests} tests)` : ''}`, 'success', [{ label: 'Run now', onClick: () => void runTestFileNow(r.path) }, { ref: r.ref }]);
+    useApp.getState().toast(`Saved tests/${r.path}${r.tests > 1 ? ` (${plural(r.tests, 'test')})` : ''}`, 'success', [{ label: 'Run now', onClick: () => void runTestFileNow(r.path) }, { ref: r.ref }]);
     return r.path;
   } catch (e) {
     toastError(e);

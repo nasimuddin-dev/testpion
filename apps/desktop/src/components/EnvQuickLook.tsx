@@ -8,6 +8,7 @@ import { openRef } from '../lib/open-ref';
 import type { ItemRef } from '@testpion/shared';
 import { Badge, Button, cx, FilterInput, Tooltip } from './ui';
 import { Callout } from '../components/ui';
+import { plural } from '../lib/format';
 
 interface Row {
   key: string;
@@ -202,7 +203,7 @@ export function EnvQuickLook() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <FilterInput autoFocus className="flex-1" placeholder={`Filter ${count} variables by name or value`} label="Filter variables" value={filter} onChange={setFilter} />
+              <FilterInput autoFocus className="flex-1" placeholder={`Filter ${plural(count, 'variable')} by name or value`} label="Filter variables" value={filter} onChange={setFilter} />
             </div>
           )}
           {trace?.winner?.row && (

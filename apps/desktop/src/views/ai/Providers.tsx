@@ -8,7 +8,7 @@ import { deleteWithUndo } from '../../lib/undo-delete';
 import { call } from '../../api';
 import { useApp, attempt, toastError } from '../../store';
 import type { ProviderConfig } from '../../types';
-import { uid } from '../../lib/format';
+import { uid, plural } from '../../lib/format';
 import { Badge, Button, Empty, Field, Input, PageHeader, Select, Split } from '../../components/ui';
 import { inSettings } from '../../lib/ui-names';
 
@@ -99,7 +99,7 @@ export function Providers({ providers, onSaved, focus }: { providers: ProviderCo
     try {
       await save();
       const models = await call<string[]>('ai.models', { providerId: p.id, environment: env });
-      useApp.getState().toast(`Connected — ${models.length} models available`, 'success');
+      useApp.getState().toast(`Connected — ${plural(models.length, 'model')} available`, 'success');
     } catch (e) {
       toastError(e, 'Connection failed');
     } finally {

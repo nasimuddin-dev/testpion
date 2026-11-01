@@ -39,7 +39,7 @@ function TipBody({ r }: { r: RunPoint }) {
         {STATUS_LABEL[r.status]} · {timeAgo(r.startedAt)}
       </div>
       <div className="text-muted mt-0.5">
-        {r.total ? `${r.passed}/${r.total} requests passed · ` : ''}
+        {r.total ? `${r.passed}/${plural(r.total, 'request')} passed · ` : ''}
         {formatMs(r.durationMs)}
         {r.p50Ms !== undefined ? ` · median response ${formatMs(r.p50Ms)}` : ''}
       </div>
@@ -78,12 +78,12 @@ function AvailabilityStrip({ runs }: { runs: RunPoint[] }) {
         <>
           <Swatch color="var(--ok)" label="Passed" />
           <Swatch color="var(--bad)" label="Failed or could not run" />
-          <span className="ml-auto">{ordered.length === 1 ? 'the last run' : ordered.length ? `last ${ordered.length} runs, oldest left` : ''}</span>
+          <span className="ml-auto">{ordered.length === 1 ? 'the last run' : ordered.length ? `last ${plural(ordered.length, 'run')}, oldest left` : ''}</span>
         </>
       }
     >
       <div ref={ref} {...chartKeys(ordered.length, hover, setHover)} className="relative h-8 outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded" onMouseLeave={() => setHover(undefined)}>
-        <svg width={width} height={32} role="img" aria-label={`${ordered.filter((r) => r.status === 'passed').length} of the last ${ordered.length} runs passed`}>
+        <svg width={width} height={32} role="img" aria-label={`${ordered.filter((r) => r.status === 'passed').length} of the last ${plural(ordered.length, 'run')} passed`}>
           {ordered.map((r, i) => (
             <rect
               key={r.runId}
@@ -120,7 +120,7 @@ function RunTimeChart({ runs }: { runs: RunPoint[] }) {
         reference={median}
         ends={(r) => timeAgo(r.startedAt)}
         tip={(r) => <TipBody r={r} />}
-        label={`Run time of the last ${ordered.length} runs, median ${formatMs(median)}`}
+        label={`Run time of the last ${plural(ordered.length, 'run')}, median ${formatMs(median)}`}
       />
     </Card>
   );
@@ -179,7 +179,7 @@ function ResponseP95Chart({ runs, limit }: { runs: RunPoint[]; limit?: number })
             {limit !== undefined && <div className={r.p95Ms! > limit ? 'text-bad' : 'text-muted'}>{r.p95Ms! > limit ? `over the ${formatMs(limit)} limit` : `within the ${formatMs(limit)} limit`}</div>}
           </>
         )}
-        label={`p95 response time of the last ${ordered.length} runs`}
+        label={`p95 response time of the last ${plural(ordered.length, 'run')}`}
       />
     </Card>
   );

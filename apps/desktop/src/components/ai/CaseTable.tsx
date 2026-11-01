@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { caseColumns, casesToJsonl, cellText, cellValue, datasetRecords, MAX_TABLE_ROWS, type CaseRow, type DatasetTextFormat } from '@testpion/shared';
 import { promptText } from '../../store';
 import { Button, cx, Empty, IconButton, VirtualList } from '../ui';
+import { plural } from '../../lib/format';
 
 const ROW = 30;
 const COL_MIN = 160;
@@ -132,7 +133,7 @@ export function CaseTable({
           />
         </div>
         <div className="flex items-center gap-2 px-2 py-1.5 border-t border-line text-xs text-muted shrink-0">
-          <Button size="sm" icon={<Plus size={12} />} onClick={addRow} disabled={tooMany} reason={`A table holds up to ${MAX_TABLE_ROWS} cases: edit the rest as text`} data-case-add>
+          <Button size="sm" icon={<Plus size={12} />} onClick={addRow} disabled={tooMany} reason={`A table holds up to ${plural(MAX_TABLE_ROWS, 'case')}: edit the rest as text`} data-case-add>
             Add case
           </Button>
           <Button
