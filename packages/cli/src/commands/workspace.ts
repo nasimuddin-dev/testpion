@@ -19,6 +19,10 @@ import {
   workspaceExportFileName,
   setWorkspaceNote,
   workspaceNote,
+  CONVENTIONS_FILE,
+  conventionFindings,
+  initConventions,
+  readConventions,
 } from '@testpion/core';
 import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, respond, withWorkspace, JSON_OPTION } from '../shared.js';
 import { registerGitCommands } from './git.js';
@@ -64,6 +68,36 @@ export function registerWorkspaceCommands(program: Command): void {
         }
         if (o.json) return printJson({ workspace: store.workspace.name, note });
         console.log(note || dim('No note. Set one with `testpion workspace note "text"`.'));
+      }),
+    );
+  ws.command('conventions')
+    .description(`check the workspace against the team's conventions (${CONVENTIONS_FILE} next to workspace.json: name patterns for collections, requests and environments; every environment in a group; every collection owned in CODEOWNERS; every monitor with a webhook). Exit 1 when something breaks one; --init writes the file with every rule explained and off`)
+    .option('--init', `write ${CONVENTIONS_FILE} with every rule explained (nothing is overwritten)`)
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option('--json', 'print as JSON')
+    .action((o: { init?: boolean; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+        if (o.init) {
+          const written = initConventions(store);
+          if (o.json) return printJson({ file: CONVENTIONS_FILE, written });
+          return console.log(written ? green(`Wrote ${CONVENTIONS_FILE}: uncomment the rules your team keeps.`) : yellow(`${CONVENTIONS_FILE} exists already; nothing written.`));
+        }
+        let conventions;
+        try {
+          conventions = readConventions(store);
+        } catch (e) {
+          throw new CliError(`${CONVENTIONS_FILE}: ${(e as Error).message}`, EXIT.CONFIG_ERROR);
+        }
+        if (!conventions) {
+          if (o.json) return printJson({ file: CONVENTIONS_FILE, present: false, findings: [] });
+          return console.log(dim(`No ${CONVENTIONS_FILE}: write one with \`testpion workspace conventions --init\`.`));
+        }
+        const findings = await conventionFindings(store, conventions);
+        if (o.json) printJson({ file: CONVENTIONS_FILE, present: true, findings });
+        else if (!findings.length) console.log(green('Everything follows the team conventions.'));
+        else for (const f of findings) console.log(`${yellow(f.rule.padEnd(21))} ${f.message}`);
+        if (findings.length) process.exitCode = EXIT.TEST_FAILURE;
       }),
     );
   ws.command('delete')

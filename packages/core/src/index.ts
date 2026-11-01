@@ -336,6 +336,7 @@ export * from './storage/certificates.js';
 export * from './storage/mcp-usage.js';
 export * from './storage/llm-usage.js';
 export * from './storage/attention.js';
+export * from './storage/conventions.js';
 export * from './storage/collection-timing.js';
 export * from './util/jwt.js';
 export * from './storage/workspace.js';

@@ -18,15 +18,16 @@ import { flakyTests } from '../runner/test-history.js';
 import { listSavedEvaluations } from '../runner/saved-evaluations.js';
 import { collectionRequests } from '../runner/collection-run.js';
 import { ragTrendFindings } from '../runner/rag-trend.js';
+import { CONVENTIONS_FILE, conventionFindings } from './conventions.js';
 import { missingSecrets } from './missing-secrets.js';
 import { secretKeys } from './secrets.js';
 import type { SecretReader } from '../vars/variables.js';
 
 export interface AttentionItem {
-  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token' | 'deprecation';
+  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token' | 'deprecation' | 'convention';
   severity: 'high' | 'medium' | 'low';
   /** What the list groups it under. */
-  group: 'Workspace files' | 'Secrets' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Endpoints going away' | 'Flaky tests' | 'RAG metrics';
+  group: 'Workspace files' | 'Secrets' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Endpoints going away' | 'Flaky tests' | 'RAG metrics' | 'Team conventions';
   /** A check that did not hold (failure), something that could not run or be read (error), or a warning. */
   type: 'failure' | 'error' | 'warning';
   /** When it happened (ISO), when known. */
@@ -266,6 +267,12 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
     out.push(...evaluationDrops(store));
   } catch {
     /* a courtesy: the rest of the list stands */
+  }
+  // the team's conventions (conventions.yaml): what breaks them, as warnings; a file that cannot be read is one error
+  try {
+    for (const f of await conventionFindings(store)) out.push({ kind: 'convention', severity: 'low', group: 'Team conventions', type: 'warning', message: f.message, ref: f.ref });
+  } catch (e) {
+    out.push({ kind: 'convention', severity: 'medium', group: 'Team conventions', type: 'error', message: `${CONVENTIONS_FILE} can't be read: ${(e as Error).message}`, ref: { kind: 'environment', scope: 'workspace' } });
   }
   const rank = { high: 0, medium: 1, low: 2 };
   // several teams in one workspace: a problem names the owners of the file it is about (CODEOWNERS), so a shared list reads per team

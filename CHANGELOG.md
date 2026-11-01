@@ -6,6 +6,10 @@
 
 - An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it.
 
+### Several teams: the team's conventions, checked
+
+- `conventions.yaml` next to `workspace.json` holds how the team names and files things (patterns for collection, request and environment names; every environment in a group; every collection owned in `CODEOWNERS`; every monitor with a webhook and an environment); what breaks a rule is a warning under Needs attention and in `testpion workspace conventions` (exit 1, for CI). `testpion workspace conventions --init` writes the file with every rule explained and off.
+
 ### Several teams: whose change it is
 
 - **Your team's changes** on Home names the teams whose files each commit touched (from `CODEOWNERS`); `testpion git activity --owner @org/payments` lists one team's commits.

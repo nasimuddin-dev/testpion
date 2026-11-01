@@ -17,7 +17,7 @@ import { touchesFiles, type DataChangedEvent, type FileKind } from './data-chang
  * the same (a component renders only when the list changed).
  */
 export interface Problem {
-  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token' | 'deprecation';
+  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token' | 'deprecation' | 'convention';
   severity: 'high' | 'medium' | 'low';
   /** What it is about (its kind and item): the handle to snooze it. */
   key: string;
