@@ -212,7 +212,10 @@ export function MonitorsView() {
   const current = rows.find((m) => m.id === sel);
   const colName = (id: string) => collections.find((c) => c.id === id)?.name ?? 'missing collection';
   /** What a monitor runs, as lists show it: its collection, or tests/<file>. */
-  const targetName = (m: MonitorDraft) => (m.testFile ? `tests/${m.testFile}` : colName(m.collectionId));
+  // what a monitor runs, by name: a test file, a saved evaluation (prompt, agent or bot with sources), else its collection
+  const savedEvaluations = useLibrary<{ type?: string }>('evaluations');
+  const targetName = (m: MonitorDraft) =>
+    m.testFile ? `tests/${m.testFile}` : m.evaluation ? `evaluation ${savedEvaluations.lib.items.find((i) => i.id === m.evaluation || i.name === m.evaluation)?.name ?? m.evaluation}` : colName(m.collectionId);
 
   const run = async (m: MonitorRow) => {
     setBusy((b) => [...b, m.id]);
