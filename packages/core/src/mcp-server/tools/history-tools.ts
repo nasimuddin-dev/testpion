@@ -1,6 +1,6 @@
 import { flakyTests, summarizeTestHistory, testHistory } from '../../runner/test-history.js';
 import { scoreTrend } from '../../runner/score-trend.js';
-import { workspaceAttention } from '../../storage/attention.js';
+import { problemsOwnedBy, workspaceAttention } from '../../storage/attention.js';
 import { splitSnoozed } from '../../storage/attention-snooze.js';
 import { responseTimeStats } from '../../report/response-stats.js';
 import type { Collection, CollectionNode } from '../../model/types.js';
@@ -134,8 +134,11 @@ export function historyTools({ store, secrets, redactor, findCollection, findReq
       name: 'what_needs_attention',
       description:
         'What needs attention in this workspace, most severe first: failing monitors, TLS certificates that expire within 30 days, the latest run if it failed, saved requests whose latest response failed, and flaky tests. Each item has a message and a ref, an ItemRef {kind, …ids}: monitor (monitorId, runId), certificate (host), run (runId), request (collectionId + requestId), test-case (testId); resolve_ref names it and gives the link that opens it in the app. Start here to find out what to fix.',
-      inputSchema: { type: 'object', properties: { certDays: { type: 'number', description: 'Warn about certificates that expire within this many days (default 30)' } } },
-      run: async (a) => splitSnoozed(store, await workspaceAttention(store, { certDays: Number(a.certDays) || 30, secrets })).shown,
+      inputSchema: { type: 'object', properties: { certDays: { type: 'number', description: 'Warn about certificates that expire within this many days (default 30)' }, owner: { type: 'string', description: 'Only one team (CODEOWNERS owner, e.g. @org/payments)' } } },
+      run: async (a) => {
+        const shown = splitSnoozed(store, await workspaceAttention(store, { certDays: Number(a.certDays) || 30, secrets })).shown;
+        return a.owner ? problemsOwnedBy(shown, String(a.owner)) : shown;
+      },
     },
     {
       name: 'workspace_activity',

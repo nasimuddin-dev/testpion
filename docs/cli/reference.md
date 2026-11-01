@@ -388,7 +388,8 @@ testpion storage -w my-workspace --delete-runs-older-than 30   # disk use; clean
 testpion load-history -w my-workspace          # earlier load tests: req/s, p95 (and server p95), errors, pass rules
 testpion variable-flow "Veterinary API"  # who sets and uses each variable; exit 1 on used-before-set / never-set
 testpion attention -w my-workspace --markdown    # what needs attention (exit 1 on a high-severity item); --markdown to post it
-testpion problems --json                 # the same list as the app's Problems (alias of attention): kind, group, type (failure / error / warning), ref
+testpion problems --json                 # the same list as the app's Problems (alias of attention): kind, group, type (failure / error / warning), ref, owners
+testpion problems --owner @org/payments  # one team's problems, as the repository's CODEOWNERS names it (the @ is optional)
 testpion certificates --warn 21          # TLS certificates of the hosts called, soonest to expire first; exit 1 if one expires within 21 days
 testpion certificates --check api.example.com:443 https://auth.example.com --warn 21   # connect and check now (trust, days left)
 testpion workspace-report -o report.html # what needs attention, activity, collection health, monitors (with 30-day uptime) and runs as one HTML file to share

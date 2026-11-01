@@ -8,7 +8,7 @@ import { ProblemList } from './ProblemList';
 import { OutputActions } from './output/OutputFrame';
 import { OutputHint } from './output/OutputToolbar';
 import type { OutputSpec } from './output/output-core';
-import { Bar, Empty } from './ui';
+import { Bar, Empty, Select } from './ui';
 
 const COLUMNS = ['severity', 'type', 'kind', 'group', 'message', 'at'] as const;
 /** A problem as a row of the exported list (its ref as JSON, for what it names). */
@@ -16,7 +16,11 @@ const row = (p: Problem) => ({ severity: p.severity, type: p.type, kind: p.kind,
 
 /** WF-03: the bottom panel's Problems tab: every problem of the workspace, grouped, F8 / Shift+F8 to step through. */
 export function ProblemsPanel() {
-  const problems = useProblems();
+  const all = useProblems();
+  // several teams in one workspace: one team's problems, by the owners CODEOWNERS names (the select appears only when some problem has owners)
+  const owners = useMemo(() => [...new Set(all.flatMap((p) => p.owners ?? []))].sort(), [all]);
+  const [owner, setOwner] = useState('');
+  const problems = useMemo(() => (owner && owners.includes(owner) ? all.filter((p) => p.owners?.includes(owner)) : all), [all, owner, owners]);
   // the problems set aside on this computer: a line says how many, Show lists them greyed with Bring it back
   const [snoozed, setSnoozed] = useState<Problem[]>([]);
   const [showSnoozed, setShowSnoozed] = useState(false);
@@ -48,6 +52,16 @@ export function ProblemsPanel() {
         <span>
           {plural(failures, 'failure')} · {plural(errors, 'error')} · {plural(problems.length - failures - errors, 'warning')}
         </span>
+        {owners.length > 0 && (
+          <Select className="ml-2 h-6 py-0 text-xs" value={owners.includes(owner) ? owner : ''} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" title="Only one team's problems (the owners CODEOWNERS names)" data-problems-owner>
+            <option value="">Every owner</option>
+            {owners.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </Select>
+        )}
         {/* the keys behind the ⓘ (the same hint as every output bar's): as text they were the first thing clipped in a narrow pane */}
         {snoozed.length > 0 && (
           <button type="button" className="ml-2 hover:text-fg" onClick={() => setShowSnoozed((v) => !v)} title="Problems you set aside on this computer; they come back when the time passes or they change" data-problems-snoozed={snoozed.length}>
@@ -62,7 +76,7 @@ export function ProblemsPanel() {
         {problems.length || (showSnoozed && snoozed.length) ? (
           <ProblemList problems={showSnoozed ? [...problems, ...snoozed] : problems} grouped />
         ) : (
-          <Empty icon={<CheckCircle2 size={22} />} title="No problems">
+          <Empty icon={<CheckCircle2 size={22} />} title={owner && all.length ? `No problems of ${owner}` : 'No problems'}>
             Monitors, runs, requests, certificates and workspace files are all fine.{snoozed.length ? ` ${plural(snoozed.length, 'problem')} set aside: Show above lists them.` : ''}
           </Empty>
         )}

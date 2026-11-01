@@ -4,7 +4,7 @@ import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment } from '@testpion/core';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
@@ -342,13 +342,16 @@ export function registerDataCommands(program: Command): void {
     .option(...JSON_OPTION)
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .option('--all', 'include the problems snoozed in the app on this computer (set aside for a while or until they change)')
-    .action(async (o: { workspace?: string; certDays: string; json?: boolean; markdown?: boolean; all?: boolean }) => {
+    .option('--owner <team>', 'only the problems of this team or person, as CODEOWNERS names them (@org/payments; the @ is optional)')
+    .action(async (o: { workspace?: string; certDays: string; json?: boolean; markdown?: boolean; all?: boolean; owner?: string }) => {
       return withWorkspace(o.workspace, async (store) => {
         const all = await workspaceAttention(store, { certDays: Number(o.certDays) || 30, secrets: cliSecrets() });
         const split = splitSnoozed(store, all);
-        const items = o.all ? all.map((i) => ({ ...i, key: split.snoozed.find((x) => x.message === i.message)?.key, snoozed: split.snoozed.some((x) => x.message === i.message) || undefined })) : split.shown;
+        const listed: Array<(typeof all)[number] & { key?: string; snoozed?: true }> = o.all ? all.map((i) => ({ ...i, key: split.snoozed.find((x) => x.message === i.message)?.key, snoozed: split.snoozed.some((x) => x.message === i.message) || undefined })) : split.shown;
+        const items = o.owner ? problemsOwnedBy(listed, o.owner) : listed;
         if (o.json) printJson(items);
         else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n') : '✅ Nothing needs attention.');
+        else if (!items.length && o.owner) console.log(green(`Nothing of ${o.owner} needs attention.`));
         else if (!items.length) console.log(green(split.snoozed.length ? `Nothing needs attention (${split.snoozed.length} snoozed: --all shows them).` : 'Nothing needs attention.'));
         else for (const i of items) console.log(`${i.severity === 'high' ? red('high  ') : i.severity === 'medium' ? yellow('medium') : dim('low   ')} ${dim(i.type.padEnd(7))} ${i.message}`);
         process.exitCode = items.some((i) => i.severity === 'high') ? EXIT.TEST_FAILURE : EXIT.SUCCESS;

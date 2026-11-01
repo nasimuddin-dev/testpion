@@ -146,6 +146,17 @@ function evaluationDrops(store: WorkspaceStore): AttentionItem[] {
   return out;
 }
 
+/** Whether an owner name names a team or person of an item (`@org/payments`, `payments`, a mail address): case-insensitive, the `@` optional. */
+export function sameOwner(a: string, b: string): boolean {
+  const norm = (x: string) => x.trim().replace(/^@/, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/** The problems of one team: those whose owners (CODEOWNERS) include the name; none has owners when the repository has no CODEOWNERS. */
+export function problemsOwnedBy<T extends { owners?: string[] }>(items: T[], owner: string): T[] {
+  return items.filter((i) => i.owners?.some((o) => sameOwner(o, owner)));
+}
+
 export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number; tokenDays?: number; secrets?: SecretReader; /** Read secret values for the token check only (the app: its missing secrets are a banner of their own). */ tokenSecrets?: SecretReader } = {}): Promise<AttentionItem[]> {
   const out: AttentionItem[] = [];
   if (opts.secrets) out.push(...secretsAttention(store, opts.secrets));

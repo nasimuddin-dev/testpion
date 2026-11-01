@@ -16,7 +16,7 @@
 
 ### Several teams in one workspace: who owns what
 
-- The Info panel of an item says **Owned by @org/payments** (from the repository's `CODEOWNERS`) and **Last changed by Ana 2 days ago** (from git); `testpion item owners <item>` prints the same, and a problem under Needs attention starts with the owners of what it is about, so a shared list reads as a to-do per team. `planning/multi-team.md` lays out the rest for teams and tenants.
+- The Info panel of an item says **Owned by @org/payments** (from the repository's `CODEOWNERS`) and **Last changed by Ana 2 days ago** (from git); `testpion item owners <item>` prints the same, and a problem under Needs attention starts with the owners of what it is about, so a shared list reads as a to-do per team. The Problems panel has an **Owner** select when problems have owners (*Every owner*, *@org/payments*, …); `testpion problems --owner @org/payments` and `what_needs_attention { owner }` list one team's. `planning/multi-team.md` lays out the rest for teams and tenants.
 
 ### Endpoints going away
 

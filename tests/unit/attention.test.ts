@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, type RunSummary } from '../../packages/core/src/index.js';
+import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, problemsOwnedBy, sameOwner, type RunSummary } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-attention-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -81,6 +81,17 @@ describe('what needs attention', () => {
     const store = WorkspaceStore.create(join(dir, 'ok'), 'Fine');
     expect(await workspaceAttention(store)).toEqual([]);
     store.close();
+  });
+});
+
+describe('the problems of one team', () => {
+  it('keeps the items whose CODEOWNERS owners include the name, the @ and the case not mattering; nothing when no item has owners', () => {
+    const items = [{ owners: ['@org/payments', '@ana'], message: 'a' }, { owners: ['@org/catalog'], message: 'b' }, { message: 'c' }];
+    expect(problemsOwnedBy(items, '@org/payments').map((i) => i.message)).toEqual(['a']);
+    expect(problemsOwnedBy(items, 'ORG/Catalog').map((i) => i.message)).toEqual(['b']);
+    expect(problemsOwnedBy(items, '@nobody')).toEqual([]);
+    expect(problemsOwnedBy([{ message: 'c' }], '@ana')).toEqual([]);
+    expect(sameOwner('@Ana', 'ana ')).toBe(true);
   });
 });
 

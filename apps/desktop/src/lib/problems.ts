@@ -23,6 +23,8 @@ export interface Problem {
   key: string;
   /** Set aside, for a while (`until`) or until the problem changes. */
   snoozed?: { until?: string; hash: string; at: string };
+  /** The owners of what it is about (CODEOWNERS), when the repository names them: the team the problem is for. */
+  owners?: string[];
   group: string;
   type: 'failure' | 'error' | 'warning';
   at?: string;
