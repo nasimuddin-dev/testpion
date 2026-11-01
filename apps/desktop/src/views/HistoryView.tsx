@@ -67,7 +67,7 @@ const StatusMix = memo(function StatusMix({ items }: { items: Entry[] }) {
   for (const e of items) counts[bucket(e.status)]++;
   const shown = MIX.filter((m) => counts[m.key] > 0);
   return (
-    <div className="px-3 pb-2" aria-label={`Outcomes of the ${items.length} entries shown: ${shown.map((m) => `${counts[m.key]} ${m.label}`).join(', ')}`} role="img">
+    <div className="px-3 pb-2" aria-label={`Outcomes of the ${plural(items.length, 'entry', 'entries')} shown: ${shown.map((m) => `${counts[m.key]} ${m.label}`).join(', ')}`} role="img">
       <div className="flex h-2 rounded overflow-hidden gap-0.5">
         {shown.map((m) => (
           <span key={m.key} style={{ flex: counts[m.key], background: m.color }} title={`${m.label}: ${counts[m.key]} (${Math.round((counts[m.key] / items.length) * 100)}%)`} />

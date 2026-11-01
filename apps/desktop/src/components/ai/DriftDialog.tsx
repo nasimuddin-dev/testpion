@@ -188,7 +188,7 @@ export function DriftDialog({ request, onClose }: { request: Extract<AiAnalysisR
           {report && (
             <>
               <div className="flex items-center gap-2 flex-wrap text-xs text-muted">
-                <Badge tone={report.findings.length ? 'warn' : 'ok'}>{report.findings.length ? `${report.findings.length} kinds of drift` : 'no drift'}</Badge>
+                <Badge tone={report.findings.length ? 'warn' : 'ok'}>{report.findings.length ? `${plural(report.findings.length, 'kind')} of drift` : 'no drift'}</Badge>
                 <span>
                   in {report.exchanges} responses · {report.matched} match an operation of the document
                   {report.patchable ? ` · ${report.patchable} can be patched from what was observed` : ''}

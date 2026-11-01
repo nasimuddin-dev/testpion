@@ -465,7 +465,7 @@ export function FlowMatrixGrid({ id }: { id: string }) {
           </Badge>
         )}
         <span className="text-sm">
-          {m.passed} of {m.environments.length} environments passed
+          {m.passed} of {plural(m.environments.length, 'environment')} passed
         </span>
         {!m.running && <span className="text-xs text-muted">{formatMs(m.durationMs)}</span>}
         <OutputActions spec={spec}>

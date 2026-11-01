@@ -1,3 +1,4 @@
+import { plural } from '../lib/format';
 import { prettyBody } from '../lib/pretty';
 import { useMemo, useState } from 'react';
 import { Copy } from 'lucide-react';
@@ -96,7 +97,7 @@ export function TraceView({ trace }: { trace: Trace & { refs?: ItemRef[] } }) {
         <span className="font-medium truncate min-w-0">{trace.name}</span>
         <Badge tone={trace.status === 'ok' ? 'ok' : trace.status === 'error' ? 'bad' : 'default'}>{trace.status}</Badge>
         <span className="text-muted whitespace-nowrap tabular-nums shrink-0">
-          {formatMs(total)} · {trace.spans.length} spans{tokens > 0 ? ` · ${tokens.toLocaleString()} tokens` : ''}
+          {formatMs(total)} · {plural(trace.spans.length, 'span')}{tokens > 0 ? ` · ${tokens.toLocaleString()} tokens` : ''}
         </span>
         <RelatedRefs refs={trace.refs} className="min-w-0 flex-nowrap overflow-hidden" />
         <span className="text-muted mono text-xs ml-auto truncate min-w-0 hidden xl:inline" title="Trace ID (OpenTelemetry-compatible)">
