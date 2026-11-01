@@ -18,8 +18,7 @@ import {
   CAPTURE_SESSIONS_DIR,
   captureSessionFileName,
   recordCaptureSession,
-  removeOwned,
-} from '@testpion/core';
+  removeOwned, recordDeprecation, deprecationOf } from '@testpion/core';
 import {
   ensureRootCertificate,
   installedBrowsers,
@@ -551,6 +550,13 @@ export function debuggerHandlers(be: Backend): Handlers {
           changed(state, e);
           touch();
           signals.push(e.id);
+          // a captured response that says its endpoint is going away (Deprecation / Sunset headers): the workspace records it, as a sent request would
+          if (e.responseHeaders && be.store && e.url.startsWith('http'))
+            try {
+              recordDeprecation(be.ws, e.method, e.url, deprecationOf(e.responseHeaders));
+            } catch {
+              /* a workspace that cannot be written: the list stays as it was */
+            }
         },
       });
       startAutosave();
