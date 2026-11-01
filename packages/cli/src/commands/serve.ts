@@ -247,8 +247,9 @@ ${cyan(r.url)}`);
     .option('-p, --port <port>', 'port to listen on (default: any free port)')
     .option('--delay <ms>', 'delay every response by this many ms')
     .option('--fallback <url>', 'forward requests that match no example to this API (partial mocking)')
+    .option('--stateful', 'keep state: a POST creates, a GET returns it, PUT / PATCH change it, DELETE removes it (the examples seed and answer the rest)')
     .option('-q, --quiet', 'do not log requests')
-    .action(async (ref: string, o: { workspace?: string; port?: string; delay?: string; fallback?: string; quiet?: boolean }) => {
+    .action(async (ref: string, o: { workspace?: string; port?: string; delay?: string; fallback?: string; stateful?: boolean; quiet?: boolean }) => {
       process.exitCode = await executeMock(ref, o);
     });
   program

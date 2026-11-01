@@ -17,7 +17,7 @@ export function refreshMock(be: Backend, collectionId: string): void {
 export function mockInfo(be: Backend, collectionId: string) {
   const m = be.mocks.get(collectionId);
   const view = (routes: MockRoute[]) => routes.map((r) => ({ method: r.method, path: r.path, status: r.example.status, example: r.example.name, request: r.requestName, requestId: r.requestId }));
-  if (m) return { running: true, url: m.url, port: m.port, routes: view(m.routes) };
+  if (m) return { running: true, url: m.url, port: m.port, stateful: !!m.state, routes: view(m.routes) };
   let routes: MockRoute[] = [];
   try {
     routes = collectMockRoutes(be.ws.getCollection(collectionId));

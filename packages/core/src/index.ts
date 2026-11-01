@@ -94,6 +94,7 @@ export * from './storage/missing-secrets.js';
 export * from './storage/workspace-note.js';
 export * from './storage/comments.js';
 export * from './storage/attention-snooze.js';
+export * from './mock/mock-state.js';
 export * from './report/monitors-status.js';
 export * from './runner/prompt-versions.js';
 export * from './eval/variants.js';

@@ -1,8 +1,8 @@
-import { Copy, Play, Radio, Square } from 'lucide-react';
+import { Copy, Play, Radio, RotateCcw, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call, on } from '../api';
 import { attempt, toastError, useApp } from '../store';
-import { Badge, Button, cx, Empty, Field, Input, statusTone } from './ui';
+import { Badge, Button, cx, Empty, Field, Input, statusTone, Toggle } from './ui';
 import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
@@ -11,6 +11,7 @@ interface MockInfo {
   running: boolean;
   url?: string;
   port?: number;
+  stateful?: boolean;
   routes: Array<{ method: string; path: string; status: number; example: string; request: string; requestId: string }>;
 }
 interface MockHit {
@@ -35,6 +36,7 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
   const [port, setPort] = usePersisted(portKey(collectionId), '', { text: true });
   const [delay, setDelay] = useState('');
   const [fallback, setFallback] = usePersisted(`aps.mockFallback.${collectionId}`, '', { text: true });
+  const [stateful, setStateful] = usePersisted(`aps.mockStateful.${collectionId}`, false);
   const [busy, setBusy] = useState(false);
   const [hits, setHits] = useState<MockHit[]>([]);
 
@@ -49,7 +51,7 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
     try {
       const p = port.trim() ? Number(port) : undefined;
       if (p !== undefined && !(p > 0 && p < 65536)) throw new Error('Port must be between 1 and 65535, or empty for any free port');
-      const r = await call<MockInfo>('mock.start', { collectionId, port: p, delayMs: delay ? Number(delay) : undefined, fallbackUrl: fallback.trim() || undefined });
+      const r = await call<MockInfo>('mock.start', { collectionId, port: p, delayMs: delay ? Number(delay) : undefined, fallbackUrl: fallback.trim() || undefined, stateful });
       setInfo(r);
       toast(`Mock server running on ${r.url}`, 'success');
     } catch (e) {
@@ -102,6 +104,20 @@ export function MockPanel({ collectionId, onOpenRequest, onShowRequests }: { col
         <Field label="Forward the rest to" hint="Optional: requests without an example go to this API" className="flex-1">
           <Input value={fallback} onChange={(e) => setFallback(e.target.value)} placeholder="https://api.example.com" className="mono" disabled={info.running} aria-label="Fallback URL" />
         </Field>
+        <Field label="Stateful" hint="POST creates, GET returns it, PUT / PATCH change it, DELETE removes it; the examples seed and answer the rest">
+          <div className="h-8 flex items-center">
+            {info.running ? (
+              <span className="text-sm" data-mock-stateful={String(!!info.stateful)}>{info.stateful ? 'On' : 'Off'}</span>
+            ) : (
+              <Toggle checked={stateful} onChange={setStateful} label={stateful ? 'On' : 'Off'} data-mock-stateful-toggle="1" />
+            )}
+          </div>
+        </Field>
+        {info.running && info.stateful && (
+          <Button className="mt-6" icon={<RotateCcw size={12} />} title="Forget what was created and changed: the next request starts from the examples again" onClick={() => void call('mock.resetState', { collectionId }).then(() => toast('Mock state reset', 'success'), toastError)} data-mock-reset-state>
+            Reset state
+          </Button>
+        )}
         {info.running ? (
           <Button variant="danger" className="mt-6" icon={<Square size={12} />} onClick={() => void stop()}>
             Stop

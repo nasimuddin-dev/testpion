@@ -622,7 +622,7 @@ export async function executeSend(
 }
 
 /** `testpion mock`: serve saved examples until interrupted. */
-export async function executeMock(ref: string, o: { workspace?: string; port?: string; delay?: string; fallback?: string; quiet?: boolean }): Promise<number> {
+export async function executeMock(ref: string, o: { workspace?: string; port?: string; delay?: string; fallback?: string; stateful?: boolean; quiet?: boolean }): Promise<number> {
   const collection = await loadCollectionRef(ref, o.workspace);
   const port = o.port ? Number(o.port) : 0;
   if (!(port >= 0 && port < 65536)) throw new CliError('--port must be between 0 and 65535', EXIT.CONFIG_ERROR);
@@ -632,6 +632,7 @@ export async function executeMock(ref: string, o: { workspace?: string; port?: s
       port,
       delayMs: o.delay ? Number(o.delay) : undefined,
       fallbackUrl: o.fallback,
+      stateful: o.stateful,
       onRequest: (e) => {
         if (o.quiet) return;
         const status = e.status < 400 ? green(String(e.status)) : e.example ? yellow(String(e.status)) : red(String(e.status));
@@ -642,7 +643,7 @@ export async function executeMock(ref: string, o: { workspace?: string; port?: s
     throw e instanceof ApsError && e.kind === 'ConfigurationError' ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
   }
   if (!mock.routes.length) console.log(yellow(`"${collection.name}" has no saved examples yet: every request will get a 404.`));
-  console.log(bold(`Mock server for ${collection.name}: ${mock.url}`));
+  console.log(bold(`Mock server for ${collection.name}: ${mock.url}${mock.state ? ' (stateful)' : ''}`));
   for (const r of mock.routes) console.log(dim(`  ${r.method.padEnd(7)} ${r.path} → ${r.example.status} ${r.example.name}`));
   console.log(dim('Press Ctrl+C to stop.'));
   // --json: the address, as the first line (a script or an agent needs it while the server runs)

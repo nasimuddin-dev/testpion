@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Mock servers: stateful
+
+- **Stateful** on a mock server (the Mock tab, `testpion mock … --stateful`): what a client creates, the mock remembers while it runs. `POST /pets` answers 201 with the record and a new id, `GET /pets` lists it, `GET /pets/3` returns it, PUT and PATCH change it, DELETE removes it. A resource is a path whose GET example answers with a JSON array (it seeds the state) or whose item path has an example; everything else is answered by the examples as before. Reset state forgets it; nothing is written to disk.
+
 ### Problems: snooze one
 
 - A problem's ⋯ has **Snooze for 1 hour**, **Snooze until tomorrow 09:00** and **Snooze until it changes**: it leaves the Problems list, the status-bar count and Home, and comes back by itself when the time passes or when its words change; **Bring it back** returns it now. Snoozes are yours and on this computer (`.local`); a teammate still sees the problem. The panel says how many are snoozed and shows them on request; `testpion problems --all` includes them.

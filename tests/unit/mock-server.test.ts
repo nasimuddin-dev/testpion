@@ -162,6 +162,40 @@ describe('mock server: matching on the request body and headers', () => {
     }
   });
 
+  it('a stateful mock: POST creates, GET returns it (the list example seeds), PATCH changes, DELETE removes; a POST with no resource goes to the examples', async () => {
+    const stateful: Collection = {
+      ...collection,
+      items: [
+        { kind: 'http', id: 'list2', name: 'List pets', request: { method: 'GET', url: '{{baseUrl}}/pets' }, examples: [{ id: 'l', name: 'All', status: 200, headers: [], body: '[{"id":1,"name":"Rex"},{"id":2,"name":"Tom"}]' }] },
+        { kind: 'http', id: 'login', name: 'Log in', request: { method: 'POST', url: '{{baseUrl}}/login' }, examples: [{ id: 'ok', name: 'Success', status: 200, headers: [], body: '{"token":"t"}' }] },
+      ],
+    };
+    const m = await startMockServer(stateful, { stateful: true });
+    try {
+      const j = async (method: string, path: string, body?: unknown) => {
+        const r = await fetch(m.url + path, { method, headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+        return { status: r.status, state: r.headers.get('x-mock-state'), location: r.headers.get('location'), body: r.status === 204 ? undefined : await r.json() };
+      };
+      expect((await j('GET', '/pets')).body).toEqual([{ id: 1, name: 'Rex' }, { id: 2, name: 'Tom' }]);
+      const created = await j('POST', '/pets', { name: 'Fluffy' });
+      expect(created).toMatchObject({ status: 201, state: '/pets', location: '/pets/3', body: { id: 3, name: 'Fluffy' } });
+      expect((await j('GET', '/pets')).body).toHaveLength(3);
+      expect((await j('GET', '/pets/3')).body).toEqual({ id: 3, name: 'Fluffy' });
+      expect((await j('PATCH', '/pets/3', { name: 'Fluff' })).body).toEqual({ id: 3, name: 'Fluff' });
+      expect((await j('PUT', '/pets/1', { name: 'Rexy', age: 4 })).body).toEqual({ id: 1, name: 'Rexy', age: 4 });
+      expect((await j('DELETE', '/pets/2')).status).toBe(204);
+      expect((await j('GET', '/pets/2')).status).toBe(404);
+      expect((await j('GET', '/pets')).body.map((p: { id: number }) => p.id)).toEqual([1, 3]);
+      expect(m.state!.snapshot()).toEqual({ '/pets': [{ id: 1, name: 'Rexy', age: 4 }, { id: 3, name: 'Fluff' }] });
+      // not a resource: the examples answer, as always
+      expect(await j('POST', '/login', { user: 'a' })).toMatchObject({ status: 200, state: null, body: { token: 't' } });
+      m.state!.reset();
+      expect((await j('GET', '/pets')).body).toHaveLength(2);
+    } finally {
+      await m.close();
+    }
+  });
+
   it('forwards requests without an example to a fallback API (partial mocking)', async () => {
     const { createServer } = await import('node:http');
     const real = createServer((req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ real: true, path: req.url, method: req.method })));

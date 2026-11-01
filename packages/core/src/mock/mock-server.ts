@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { MockState } from './mock-state.js';
 import type { AddressInfo } from 'node:net';
 import type { Collection, CollectionNode, SavedExample, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
@@ -168,6 +169,8 @@ export interface MockServerOptions {
   }) => void;
   /** Forward requests that match no example to this API (partial mocking); without it they get a 404. */
   fallbackUrl?: string;
+  /** Keep state: a POST creates, a GET returns it, PUT / PATCH change it, DELETE removes it (mock-state.ts); the examples seed and answer the rest. */
+  stateful?: boolean;
 }
 
 const FORWARD_SKIP = /^(connection|keep-alive|proxy-authenticate|proxy-authorization|te|trailer|transfer-encoding|upgrade|host|content-length|accept-encoding|content-encoding)$/i;
@@ -194,6 +197,8 @@ export interface MockServer {
   routes: MockRoute[];
   /** Replace the routes (after the collection's examples change). */
   update(collection: Collection): void;
+  /** The state a stateful mock keeps (what was created and changed), and a way to forget it. */
+  state?: { snapshot(): Record<string, Array<Record<string, unknown>>>; reset(): void };
   close(): Promise<void>;
 }
 
@@ -274,6 +279,7 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
   const host = opts.host ?? '127.0.0.1';
   if (!LOCAL_HOSTS.has(host)) throw new ApsError('ConfigurationError', `The mock server only listens on localhost, not ${host}`);
   let routes = collectMockRoutes(collection);
+  const state = opts.stateful ? new MockState(routes) : undefined;
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     // DNS rebinding: a page on another name that resolves to this computer sends its own Host header
@@ -292,6 +298,17 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
     const body = await readBody(req);
     const flatHeaders = flattenHeaders(req.headers);
     const seen = { method: req.method ?? 'GET', path: u.pathname, query: u.search, headers: flatHeaders, ...(body ? { body } : {}) };
+    // a stateful resource answers from what was created and changed (the examples seed it); the rest goes to the examples
+    const kept = state?.handle(req.method ?? 'GET', u.pathname, body);
+    if (kept) {
+      if (opts.delayMs) await new Promise((ok) => setTimeout(ok, opts.delayMs));
+      const headers = { ...cors, ...kept.headers, ...(kept.body !== undefined ? { 'content-length': String(Buffer.byteLength(kept.body)) } : {}) };
+      res.writeHead(kept.status, headers);
+      const sent = req.method === 'HEAD' ? undefined : kept.body;
+      res.end(sent);
+      opts.onRequest?.({ ...seen, status: kept.status, example: 'state', responseHeaders: headers, ...(sent ? { responseBody: sent } : {}), ms: Date.now() - t0 });
+      return;
+    }
     const r = matchMockRoute(routes, { method: req.method ?? 'GET', path: u.pathname, query, headers: req.headers, body });
     if (opts.delayMs) await new Promise((ok) => setTimeout(ok, opts.delayMs));
     if (!r && opts.fallbackUrl) {
@@ -349,7 +366,9 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
     },
     update(c) {
       routes = collectMockRoutes(c);
+      state?.learn(routes);
     },
+    ...(state ? { state: { snapshot: () => state.snapshot(), reset: () => state.reset() } } : {}),
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();
