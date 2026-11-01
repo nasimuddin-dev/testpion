@@ -298,6 +298,8 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
     const body = await readBody(req);
     const flatHeaders = flattenHeaders(req.headers);
     const seen = { method: req.method ?? 'GET', path: u.pathname, query: u.search, headers: flatHeaders, ...(body ? { body } : {}) };
+    // a test suite starts clean: a request with `x-mock-state-reset: true` forgets what was created and changed first
+    if (state && /^(true|1|yes)$/i.test(flatHeaders['x-mock-state-reset'] ?? '')) state.reset();
     // a stateful resource answers from what was created and changed (the examples seed it); the rest goes to the examples
     const kept = state?.handle(req.method ?? 'GET', u.pathname, body);
     if (kept) {

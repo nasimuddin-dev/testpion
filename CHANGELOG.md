@@ -12,7 +12,7 @@
 
 ### Mock servers: stateful
 
-- **Stateful** on a mock server (the Mock tab, `testpion mock … --stateful`): what a client creates, the mock remembers while it runs. `POST /pets` answers 201 with the record and a new id, `GET /pets` lists it, `GET /pets/3` returns it, PUT and PATCH change it, DELETE removes it. A resource is a path whose GET example answers with a JSON array (it seeds the state) or whose item path has an example; everything else is answered by the examples as before. Reset state forgets it; nothing is written to disk.
+- **Stateful** on a mock server (the Mock tab, `testpion mock … --stateful`): what a client creates, the mock remembers while it runs. `POST /pets` answers 201 with the record and a new id, `GET /pets` lists it, `GET /pets/3` returns it, PUT and PATCH change it, DELETE removes it. A resource is a path whose GET example answers with a JSON array (it seeds the state) or whose item path has an example; everything else is answered by the examples as before. Reset state forgets it (so does a request with the header `x-mock-state-reset: true`, for a suite's first request); nothing is written to disk.
 
 ### Problems: snooze one
 

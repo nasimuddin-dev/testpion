@@ -191,6 +191,12 @@ describe('mock server: matching on the request body and headers', () => {
       expect(await j('POST', '/login', { user: 'a' })).toMatchObject({ status: 200, state: null, body: { token: 't' } });
       m.state!.reset();
       expect((await j('GET', '/pets')).body).toHaveLength(2);
+      // a request that carries x-mock-state-reset: true starts from the examples again (a suite's first request)
+      await j('POST', '/pets', { name: 'Again' });
+      expect((await j('GET', '/pets')).body).toHaveLength(3);
+      const r = await fetch(m.url + '/pets', { headers: { 'x-mock-state-reset': 'true' } });
+      expect((await r.json()).length).toBe(2);
+
     } finally {
       await m.close();
     }
