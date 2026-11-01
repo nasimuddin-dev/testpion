@@ -12,6 +12,8 @@ import { McpManager, type McpTraceEvent } from './protocols/mcp/client.js';
 import type { ExecServices } from './runner/execute.js';
 import type { WorkspaceStore } from './storage/workspace.js';
 import { recordCertificate } from './storage/certificates.js';
+import { recordDeprecation } from './storage/deprecations.js';
+import { deprecationOf } from '@testpion/shared';
 import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
 import { productionAllowed } from './net/production-guard.js';
@@ -181,6 +183,7 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
           ),
       }),
     onCertificate: (url, c) => recordCertificate(store, url, c),
+    onDeprecation: (method, url, headers) => recordDeprecation(store, method, url, deprecationOf(headers)),
     ragJudge: createRagJudgeHost({ store, providers, redactor, settings, surface: opts.aiSurface ?? 'cli', env: opts.aiEnv }),
   };
   return { services, vars, redactor, environment, collection, dispose: () => mcp.close() };

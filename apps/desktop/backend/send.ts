@@ -1,5 +1,5 @@
 /** Sending a request: HTTP (httpSend), GraphQL (gqlSend) and the code snippet of a request. The Backend methods are one-line delegates. */
-import { ApsError, hostOfUrl, Tracer, executeHttp, executeGraphQL, inheritedAuthFor, normalizeError, runChecks, runScript, scriptScopes, applyScriptOutput, responseCookies, applyCookieJarOps, folderChain, withFolderDefaults, withInheritedHeaders, inheritedHeaders, folderVariables, scriptRequestSender, shortId, prepareHttpRequest, renderVisualizer, generateCode, type SnippetRequest, type CheckContext, type HttpRequestSpec, recordCertificate, timingSummary, timingSpans, requireEnvironment, assertProductionStep, isDataChangingMethod } from '@testpion/core';
+import { ApsError, hostOfUrl, Tracer, executeHttp, executeGraphQL, inheritedAuthFor, normalizeError, runChecks, runScript, scriptScopes, applyScriptOutput, responseCookies, applyCookieJarOps, folderChain, withFolderDefaults, withInheritedHeaders, inheritedHeaders, folderVariables, scriptRequestSender, shortId, prepareHttpRequest, renderVisualizer, generateCode, type SnippetRequest, type CheckContext, type HttpRequestSpec, recordCertificate, timingSummary, timingSpans, requireEnvironment, assertProductionStep, isDataChangingMethod, recordDeprecation, deprecationOf } from '@testpion/core';
 import { clipConsole, consoleBody, consoleRefs } from './console-log.js';
 import type { GqlSendParams, HttpSendParams } from './params.js';
 import type { Backend } from './backend.js';
@@ -171,6 +171,7 @@ export async function httpSend(be: Backend, p: HttpSendParams) {
       }),
     );
     keep('certificate', () => recordCertificate(be.ws, prepared.url, response.connection?.certificate));
+    keep('deprecation', () => recordDeprecation(be.ws, prepared.method, prepared.url, deprecationOf(response.headers)));
     // values typed into sensitive headers are secrets too (e.g. echoed back in a response body)
     for (const h of spec.headers ?? [])
       if (h.enabled !== false && ctx.redactor.isSensitiveKey(h.key) && h.value.length >= 6) {
@@ -317,6 +318,7 @@ export async function gqlSend(be: Backend, p: GqlSendParams) {
     const trace = tracer.finish();
     be.ws.saveTrace(trace, 'graphql');
     recordCertificate(be.ws, r.prepared.url, r.response.connection?.certificate);
+    recordDeprecation(be.ws, 'POST', r.prepared.url, deprecationOf(r.response.headers));
     const historyId = shortId('h-');
     be.ws.meta.addHistory({ id: historyId, timestamp: new Date().toISOString(), kind: 'graphql', name: p.name ?? p.operationName ?? 'GraphQL query', method: 'POST', url: r.prepared.url, status: r.response.status, durationMs: r.response.durationMs, size: r.response.size, request: ctx.redactor.redact(p.request), responseMeta: { timing: timingSummary(r.response), ...(checks.length ? { checksOk: checks.every((c) => c.passed) } : {}) }, traceId: trace.traceId, collectionId: p.collectionId, requestId: p.requestId, payloadPath: r.response.payloadPath });
     const clip = (t: string) => clipConsole(t)!;

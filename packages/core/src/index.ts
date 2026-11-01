@@ -94,6 +94,8 @@ export * from './storage/missing-secrets.js';
 export * from './storage/workspace-note.js';
 export * from './storage/comments.js';
 export * from './storage/attention-snooze.js';
+export * from './storage/deprecations.js';
+export { deprecationOf, type DeprecationInfo } from '@testpion/shared';
 export * from './mock/mock-state.js';
 export * from './report/monitors-status.js';
 export * from './runner/prompt-versions.js';

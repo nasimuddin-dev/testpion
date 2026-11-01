@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Endpoints going away
+
+- A response with a `Deprecation`, `Sunset`, `Link rel="deprecation"` or `Warning: 299` header shows a **going away** badge beside the status, a test run says *endpoint going away* under the step, and Needs attention lists every saved request that calls such an endpoint (*List users calls an endpoint that is going away: sunset 2027-01-01 (in 61 days)*), in red within 30 days of the sunset. Recorded per method and URL from every response (the app, runs, monitors, agents).
+
 ### Environments: copy a value across
 
 - In **Compare** (two environments side by side) a row's **→** and **←** copy the variable to the other environment, replacing what is there or adding it, after asking; a secret's value is copied secret store to secret store and never shown. `testpion env copy <key> --from Staging --to Production`.

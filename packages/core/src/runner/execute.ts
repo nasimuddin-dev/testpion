@@ -1,4 +1,5 @@
 import type { HttpRequestSpec } from '../model/types.js';
+import { deprecationOf } from '@testpion/shared';
 import { pathToFileURL } from 'node:url';
 import type {
   AgentTest,
@@ -87,6 +88,8 @@ export interface ExecServices {
   onHttpResponse?: (r: { testId: string; status: number; statusText: string; headers: Array<[string, string]>; body: string; durationMs: number; url: string; timing?: ReturnType<typeof timingSummary> }) => void;
   /** HTTPS: the server certificate a response came with (recorded per host for the workspace's certificate list). */
   onCertificate?: (url: string, certificate: NonNullable<NonNullable<HttpResponseData['connection']>['certificate']>) => void;
+  /** A response said its endpoint is going away (Deprecation / Sunset / Warning 299 headers): the workspace records it. */
+  onDeprecation?: (method: string, url: string, headers: HttpResponseData['headers']) => void;
   /** The active environment's name (tp.environment.name). */
   environmentName?: string;
   /** Reads a workspace file by relative path (OpenAPI documents for contract checks); never outside the workspace. */
@@ -438,6 +441,8 @@ async function runHttp(test: HttpTest, scope: VariableScope, svc: ExecServices, 
     });
     svc.onHttpResponse?.({ testId: test.id ?? test.name, status: response.status, statusText: response.statusText ?? '', headers: response.headers, body: response.bodyPreview, durationMs: response.durationMs, url: prepared.url, timing: timingSummary(response) });
     if (response.connection?.certificate) svc.onCertificate?.(prepared.url, response.connection.certificate);
+    const deprecation = deprecationOf(response.headers);
+    if (deprecation) svc.onDeprecation?.(prepared.method, prepared.url, response.headers);
     timingSpans(s, response.timeline);
     s.setAttributes({ url: prepared.url, status: response.status, size: response.size, durationMs: response.durationMs });
     s.span.input = { headers: prepared.headers, body: prepared.bodyPreview };
@@ -456,7 +461,7 @@ async function runHttp(test: HttpTest, scope: VariableScope, svc: ExecServices, 
         readFile: svc.readFile,
       },
       partial: { input: `${prepared.method} ${prepared.url}`, output: summarizeResponse(svc.redactor, response) },
-      metadata: { url: prepared.url, method: prepared.method, status: response.status, size: response.size, truncated: response.truncated, timing: timingSummary(response) },
+      metadata: { url: prepared.url, method: prepared.method, status: response.status, size: response.size, truncated: response.truncated, timing: timingSummary(response), ...(deprecation ? { deprecation: deprecation.text } : {}) },
     };
   } catch (e) {
     s.fail(e);
@@ -518,6 +523,7 @@ async function runGraphQL(test: GraphQLTest, scope: VariableScope, svc: ExecServ
     const out = await executeGraphQL({ ...r, auth }, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, cookieJar: svc.cookieJar, variableNames: () => scope.names() });
     svc.onHttpResponse?.({ testId: test.id ?? test.name, status: out.response.status, statusText: out.response.statusText ?? '', headers: out.response.headers, body: out.response.bodyPreview, durationMs: out.response.durationMs, url: out.prepared.url, timing: timingSummary(out.response) });
     if (out.response.connection?.certificate) svc.onCertificate?.(out.prepared.url, out.response.connection.certificate);
+    if (deprecationOf(out.response.headers)) svc.onDeprecation?.('POST', out.prepared.url, out.response.headers);
     timingSpans(s, out.response.timeline);
     s.setAttributes({ endpoint: svc.redactor.redactUrl(r.endpoint), status: out.response.status, operationType: out.operationType, errors: out.errors?.length ?? 0 });
     s.end({ status: out.errors?.length || out.response.status >= 400 ? 'error' : 'ok', output: summarizeValue(svc.redactor, out.response.json ?? out.response.bodyPreview, 16_000) });

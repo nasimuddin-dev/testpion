@@ -18,7 +18,7 @@ import { responseBaseName, responseSpecs } from './output/response-specs';
 import { Badge, Button, cx, Busy, Empty, OverflowActions, Segmented, statusTone, Tabs, type MenuItem } from './ui';
 import { JsonTable, tableRowsOf } from './JsonTable';
 import { JwtView } from './JwtView';
-import { findDecodedJwts } from '@testpion/shared';
+import { deprecationOf, findDecodedJwts } from '@testpion/shared';
 
 type Tab = 'body' | 'events' | 'headers' | 'cookies' | 'timeline' | 'tests' | 'trace' | 'code' | 'stream' | 'history' | 'jwt';
 
@@ -150,6 +150,8 @@ export function ResponseViewer({
         ]}
       />
     ) : undefined;
+  // Deprecation / Sunset / Warning 299 headers: the endpoint is going away
+  const deprecation = useMemo(() => deprecationOf(response.headers), [response.headers]);
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* one line, whatever the width: the numbers never break, and the actions fold into a ⋯ menu when the panel is narrow */}
@@ -169,6 +171,11 @@ export function ResponseViewer({
         {!!response.attempts && response.attempts > 1 && (
           <Badge tone="warn" title="Earlier attempts failed and were retried (request Settings ▸ Retries)">
             {response.attempts} attempts
+          </Badge>
+        )}
+        {deprecation && (
+          <Badge tone="warn" title={`This endpoint is going away: ${deprecation.text}${deprecation.link ? `. See ${deprecation.link}` : ''} (Deprecation / Sunset headers). It is listed under Needs attention until the server stops saying so.`} data-response-deprecated>
+            going away
           </Badge>
         )}
         {response.truncated && (

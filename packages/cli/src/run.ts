@@ -66,6 +66,7 @@ export function printResult(r: TestResult, verbose: boolean): void {
   const meta = [r.latencyMs !== undefined ? `${Math.round(r.latencyMs)}ms` : `${r.durationMs}ms`, r.tokens ? `${r.tokens.totalTokens} tok` : '', r.attempts > 1 ? `${r.attempts} attempts` : ''].filter(Boolean).join(', ');
   console.log(`  ${icon} ${r.name} ${dim(`(${meta})`)}`);
   if (r.status === 'skipped' && r.metadata?.reason) console.log(dim(`      skipped: ${r.metadata.reason}`));
+  if (r.metadata?.deprecation) console.log(yellow(`      endpoint going away: ${String(r.metadata.deprecation)}`));
   if (r.error) {
     console.log(red(`      ${r.error.kind}: ${r.error.message}`));
     if (r.error.why && r.error.why !== r.error.message) console.log(dim(`      why: ${r.error.why}`));

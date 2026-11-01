@@ -14,6 +14,8 @@ import { runCollection } from '../../runner/collection-run.js';
 import type { RunEvent } from '../../runner/runner.js';
 import { saveTest } from '../../runner/test-from-ref.js';
 import { recordCertificate } from '../../storage/certificates.js';
+import { recordDeprecation } from '../../storage/deprecations.js';
+import { deprecationOf } from '@testpion/shared';
 import { requireEnvironment } from '../../storage/env-edit.js';
 import { compareHistory } from '../../storage/history-compare.js';
 import { exportOtlp } from '../../trace/otlp.js';
@@ -71,9 +73,12 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
           assertProductionStep(ctx.services.production, { action: `${spec.method} ${spec.url}`, changesData: isDataChangingMethod(spec.method) });
           const { response, prepared } = await executeHttp({ ...spec, settings: { timeoutMs: settings.defaultTimeoutMs } }, { redactor: ctx.redactor, maxPreviewBytes: 1024 * 1024, cookieJar: ctx.services.cookieJar });
           recordCertificate(store, prepared.url, response.connection?.certificate);
+          const deprecation = deprecationOf(response.headers);
+          recordDeprecation(store, prepared.method, prepared.url, deprecation);
           return {
             status: response.status,
             statusText: response.statusText,
+            ...(deprecation ? { deprecation: deprecation.text } : {}),
             durationMs: response.durationMs,
             // DNS / TCP / TLS (on a new connection), time to first byte and download
             timing: timingSummary(response),

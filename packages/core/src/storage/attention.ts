@@ -7,6 +7,8 @@
 import { decodeJwt, type ItemRef } from '@testpion/shared';
 import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
+import { listDeprecations } from './deprecations.js';
+import { mockPathOf } from '../mock/mock-server.js';
 import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
 import { flakyTests } from '../runner/test-history.js';
 import { listSavedEvaluations } from '../runner/saved-evaluations.js';
@@ -17,10 +19,10 @@ import { secretKeys } from './secrets.js';
 import type { SecretReader } from '../vars/variables.js';
 
 export interface AttentionItem {
-  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token';
+  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token' | 'deprecation';
   severity: 'high' | 'medium' | 'low';
   /** What the list groups it under. */
-  group: 'Workspace files' | 'Secrets' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Flaky tests' | 'RAG metrics';
+  group: 'Workspace files' | 'Secrets' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Endpoints going away' | 'Flaky tests' | 'RAG metrics';
   /** A check that did not hold (failure), something that could not run or be read (error), or a warning. */
   type: 'failure' | 'error' | 'warning';
   /** When it happened (ISO), when known. */
@@ -165,6 +167,29 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
       type: c.daysLeft < 0 ? 'error' : 'warning',
       message: c.daysLeft < 0 ? `The certificate of ${c.host} has expired` : `The certificate of ${c.host} expires in ${c.daysLeft} day${c.daysLeft === 1 ? '' : 's'}`,
       ref: { kind: 'certificate', host: c.host },
+    });
+  }
+  // endpoints whose responses said they are going away (Deprecation / Sunset headers): the saved request that calls them, else the latest history entry
+  for (const d of listDeprecations(store)) {
+    let path: string;
+    try {
+      path = new URL(d.url).pathname.replace(/\/+$/, '') || '/';
+    } catch {
+      continue;
+    }
+    const saved = collections.flatMap((c) => collectionRequests(c).filter((r) => r.node.kind === 'http' && r.node.request.method.toUpperCase() === d.method && (mockPathOf(r.node.request.url).path.replace(/\/+$/, '') || '/') === path).map((r) => ({ c, r })))[0];
+    const history = saved ? undefined : store.meta.listHistory({ limit: 200 }).items.find((h) => h.kind === 'http' && (h.method ?? '').toUpperCase() === d.method && typeof h.url === 'string' && h.url.split('?')[0] === d.url);
+    if (!saved && !history) continue;
+    const soon = d.sunsetInDays !== undefined && d.sunsetInDays < 30;
+    const when = d.sunset ? (d.sunsetInDays! < 0 ? `its sunset (${d.sunset}) has passed` : `sunset ${d.sunset} (in ${d.sunsetInDays} day${d.sunsetInDays === 1 ? '' : 's'})`) : typeof d.deprecation === 'string' ? `deprecated since ${d.deprecation}` : d.warning ? `the server warns: ${d.warning}` : 'deprecated';
+    out.push({
+      kind: 'deprecation',
+      severity: soon ? 'high' : 'medium',
+      group: 'Endpoints going away',
+      type: 'warning',
+      at: d.lastSeen,
+      message: `${saved ? `${saved.c.name} › ${saved.r.name}` : `${d.method} ${d.url}`} calls an endpoint that is going away: ${when}${d.link ? ` (see ${d.link})` : ''}`,
+      ref: saved ? { kind: 'request', collectionId: saved.c.id, requestId: saved.r.id } : { kind: 'history', historyId: history!.id },
     });
   }
   const latest = store.meta.listRuns({ limit: 1 }).items[0];
