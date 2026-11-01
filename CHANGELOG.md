@@ -4,7 +4,7 @@
 
 ### Endpoints going away
 
-- A response with a `Deprecation`, `Sunset`, `Link rel="deprecation"` or `Warning: 299` header shows a **going away** badge beside the status, a test run says *endpoint going away* under the step, and Needs attention lists every saved request that calls such an endpoint (*List users calls an endpoint that is going away: sunset 2027-01-01 (in 61 days)*), in red within 30 days of the sunset. Recorded per method and URL from every response (the app, runs, monitors, agents).
+- A response with a `Deprecation`, `Sunset`, `Link rel="deprecation"` or `Warning: 299` header shows a **going away** badge beside the status, a test run says *endpoint going away* under the step, and Needs attention lists every saved request that calls such an endpoint (*List users calls an endpoint that is going away: sunset 2027-01-01 (in 61 days)*), in red within 30 days of the sunset. Recorded per method and URL from every response (the app, runs, monitors, agents). An API definition in the workspace that marks an operation `deprecated: true` lists its saved requests the same way, before any response.
 
 ### Environments: copy a value across
 

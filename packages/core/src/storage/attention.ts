@@ -8,6 +8,7 @@ import { decodeJwt, type ItemRef } from '@testpion/shared';
 import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
 import { listDeprecations } from './deprecations.js';
+import { deprecatedOperationCalls } from '../openapi/deprecated-calls.js';
 import { mockPathOf } from '../mock/mock-server.js';
 import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
 import { flakyTests } from '../runner/test-history.js';
@@ -192,6 +193,16 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
       ref: saved ? { kind: 'request', collectionId: saved.c.id, requestId: saved.r.id } : { kind: 'history', historyId: history!.id },
     });
   }
+  // and the saved requests that call an operation an API definition marks deprecated, before any response says so
+  for (const d of deprecatedOperationCalls(store))
+    out.push({
+      kind: 'deprecation',
+      severity: 'medium',
+      group: 'Endpoints going away',
+      type: 'warning',
+      message: `${d.collectionName} › ${d.requestName} calls ${d.method} ${d.path}, which the API definition ${d.spec} marks deprecated${d.summary ? ` (${d.summary})` : ''}`,
+      ref: { kind: 'request', collectionId: d.collectionId, requestId: d.requestId },
+    });
   const latest = store.meta.listRuns({ limit: 1 }).items[0];
   if (latest && latest.failed + latest.errors > 0)
     out.push({

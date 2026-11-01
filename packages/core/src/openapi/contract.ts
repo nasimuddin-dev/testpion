@@ -47,7 +47,7 @@ export function loadOpenApi(text: string): OpenApiDoc {
 }
 
 /** Base paths the API is served under (from `servers` or Swagger's `basePath`), longest first. */
-function basePaths(doc: OpenApiDoc): string[] {
+export function basePaths(doc: OpenApiDoc): string[] {
   const out = new Set<string>(['']);
   if (typeof doc.basePath === 'string') out.add(doc.basePath.replace(/\/$/, ''));
   for (const s of (doc.servers as Array<{ url?: string; variables?: Record<string, { default?: string }> }>) ?? []) {

@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, deprecationOf, forgetDeprecation, listDeprecations, recordDeprecation, workspaceAttention } from '../../packages/core/src/index.js';
+import { WorkspaceStore, deprecatedOperationCalls, deprecationOf, forgetDeprecation, listDeprecations, recordDeprecation, workspaceAttention } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-deprecation-'));
 const store = WorkspaceStore.create(join(dir, 'ws'), 'Deprecation');
@@ -54,6 +54,16 @@ describe('an endpoint that says it is going away', () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ severity: 'high', group: 'Endpoints going away', type: 'warning', ref: { kind: 'request', collectionId: 'api', requestId: 'users' } });
     expect(items[0]!.message).toBe('API › List users calls an endpoint that is going away: sunset 2026-11-20 (in 18 days)');
+    // the API definition itself marks an operation deprecated: the saved request that calls it is listed too, without any response
+    mkdirSync(store.path('specs'), { recursive: true });
+    writeFileSync(store.path('specs', 'api.yaml'), ['openapi: 3.0.3', 'info: { title: Pets, version: 1.0.0 }', 'servers: [{ url: https://api.example.com/v1 }]', 'paths:', '  /users:', '    get: { responses: { "200": { description: ok } } }', '  /old:', '    get: { deprecated: true, summary: The old way, responses: { "200": { description: ok } } }', ''].join('\n'));
+    store.saveCollection({ ...store.getCollection('api'), items: [...store.getCollection('api').items, { kind: 'http', id: 'old', name: 'Old way', request: { method: 'GET', url: '{{baseUrl}}/old', headers: [], params: [] } }] } as never);
+    const calls = deprecatedOperationCalls(store);
+    expect(calls.map((c) => [c.spec, c.requestName, c.method, c.path, c.summary])).toEqual([['specs/api.yaml', 'Old way', 'GET', '/old', 'The old way']]);
+    const fromSpec = (await workspaceAttention(store)).filter((i) => i.kind === 'deprecation' && /API definition/.test(i.message));
+    expect(fromSpec).toHaveLength(1);
+    expect(fromSpec[0]).toMatchObject({ severity: 'medium', group: 'Endpoints going away', ref: { kind: 'request', collectionId: 'api', requestId: 'old' } });
+    expect(fromSpec[0]!.message).toBe('API › Old way calls GET /old, which the API definition specs/api.yaml marks deprecated (The old way)');
     expect(forgetDeprecation(store, 'GET', 'https://api.example.com/v1/users')).toBe(true);
     expect(forgetDeprecation(store, 'GET', 'https://api.example.com/v1/users')).toBe(false);
     expect(listDeprecations(store, now)).toHaveLength(1);

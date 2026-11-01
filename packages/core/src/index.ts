@@ -95,6 +95,7 @@ export * from './storage/workspace-note.js';
 export * from './storage/comments.js';
 export * from './storage/attention-snooze.js';
 export * from './storage/deprecations.js';
+export * from './openapi/deprecated-calls.js';
 export { deprecationOf, type DeprecationInfo } from '@testpion/shared';
 export * from './mock/mock-state.js';
 export * from './report/monitors-status.js';
