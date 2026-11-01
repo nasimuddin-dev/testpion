@@ -10,7 +10,7 @@ import { LAZY_MODULES, lazyModulesPlugin, nodeBundleOptions } from '../../apps/d
  * The size gate is the build's own (scripts/build-main.mjs: 7.5 MB); this pins what must stay out of it.
  */
 const MAIN_BUDGET_BYTES = 7.5 * 1048576;
-const MUST_BE_LAZY = ['electron-updater', 'qrcode', 'acorn'];
+const MUST_BE_LAZY = ['electron-updater', 'qrcode', 'acorn', 'marked', 'yaml', 'js-yaml', 'fast-xml-parser', 'jsonpath-plus'];
 
 describe('the eager main bundle', () => {
   it('lists the update check, the QR code and the script parser as lazy modules', () => {
