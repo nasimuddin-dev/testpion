@@ -23,6 +23,7 @@ import {
   TRANSFER_LIMITS,
   workspaceExportFileName,
   exportPostmanEnvironment,
+  CONTEXT_VARIABLES,
   DYNAMIC_VARIABLES,
   variableUsages,
   renameVariable,
@@ -410,7 +411,7 @@ export function workspaceHandlers(be: Backend): Handlers {
     },
 
     /** The dynamic variables ({{$guid}}, {{$randomFirstName}} …) with what each one gives. */
-    'vars.dynamic': () => DYNAMIC_VARIABLES,
+    'vars.dynamic': () => [...CONTEXT_VARIABLES, ...DYNAMIC_VARIABLES],
     /** Where a variable is used or defined (requests, scripts, environments, collection/folder/workspace variables, test files). */
     'vars.usages': ({ name }: { name: string }) => variableUsages(be.ws, name),
     /** Rename a variable everywhere in the workspace; secret values move with it. */

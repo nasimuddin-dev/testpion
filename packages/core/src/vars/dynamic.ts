@@ -123,6 +123,12 @@ const GENERATORS: Record<string, [string, () => string | number | boolean]> = {
 /** Dynamic variable names with a description (for completion and docs). */
 export const DYNAMIC_VARIABLES: Array<{ name: string; description: string }> = Object.entries({ ...GENERATORS, ...MORE_GENERATORS }).map(([name, [description]]) => ({ name, description }));
 
+/** Built-in names the run's context gives (not dynamic: the same value through a run), for the same picker. */
+export const CONTEXT_VARIABLES: Array<{ name: string; description: string }> = [
+  { name: '$environment', description: 'The name of the environment the run uses' },
+  { name: '$group', description: 'The group (tenant) of the environment the run uses, or nothing' },
+];
+
 /** A fresh value of a dynamic variable, or undefined when the name isn't one. */
 export function dynamicValue(name: string): string | number | boolean | undefined {
   const g = GENERATORS[name] ?? MORE_GENERATORS[name];

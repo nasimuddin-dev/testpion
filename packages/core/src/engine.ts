@@ -121,7 +121,8 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
   ]);
   // read-only views (parsed once per change of the file): the context only looks at the environment and the collection
   const environment = opts.environment ? store.environmentView(opts.environment) : undefined;
-  vars.setScope('environment', environmentVariables(environment, opts.secrets, store.root));
+  // built-in: the environment's name and its group (a tenant), so one request or dataset path serves every tenant ({{$group}}/users.csv)
+  vars.setScope('environment', environment ? [{ key: '$environment', value: environment.name }, { key: '$group', value: environment.group ?? '' }, ...environmentVariables(environment, opts.secrets, store.root)] : []);
   let collection: Collection | undefined;
   if (opts.collectionId) {
     try {

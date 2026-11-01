@@ -10,6 +10,10 @@
 
 - A monitor's webhook text starts with the owners of what it runs (from `CODEOWNERS`), so a shared channel pages the right team; the status page says which environment (and tenant group) each monitor runs in.
 
+### Several tenants: one request for every tenant
+
+- `{{$group}}` is the group (tenant) of the environment a run uses and `{{$environment}}` its name, so a `X-Tenant: {{$group}}` header or a `datasets/{{$group}}/users.csv` path serves every tenant from one request; type `{{$` to pick them.
+
 ### Several tenants: nothing of one in another's response
 
 - The `no-leak` check takes `otherEnvironments: true`: a response or an answer that holds a value of another environment of the workspace (another customer's host, id or key, a secret one included) fails it, naming the environment and the variable, never the value.

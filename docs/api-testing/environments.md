@@ -61,7 +61,7 @@ Under an environment's variables, *Not used anywhere in the workspace* lists the
 
 ## Built-in variables
 
-`{{$env.NAME}}` (an OS environment variable; in the app only the names listed in **Settings ▸ Privacy & Security ▸ OS environment variables requests may read**, so a shared or imported collection can't read your keys; the CLI reads all of them), `{{$secret.NAME}}` (secret store) and `{{workspaceDir}}`, plus **dynamic variables** that give a new value every time they're used. Their names are Postman's, so imported Postman collections send the same kind of values. Type `{{$` to pick one; the list says what each gives.
+`{{$env.NAME}}` (an OS environment variable; in the app only the names listed in **Settings ▸ Privacy & Security ▸ OS environment variables requests may read**, so a shared or imported collection can't read your keys; the CLI reads all of them), `{{$secret.NAME}}` (secret store), `{{workspaceDir}}`, `{{$environment}}` (the name of the environment in use) and `{{$group}}` (its group, a tenant: *Acme*; empty without one, so `datasets/{{$group}}/users.csv` or a `X-Tenant: {{$group}}` header serves every tenant from one request), plus **dynamic variables** that give a new value every time they're used. Their names are Postman's, so imported Postman collections send the same kind of values. Type `{{$` to pick one; the list says what each gives.
 
 | Kind | Variables |
 | --- | --- |
