@@ -97,8 +97,8 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           <Button size="sm" variant="primary" disabled={busy || !text.trim()} title={text.trim() ? 'Add the comment (Ctrl+Enter)' : 'Type the comment first'} onClick={() => void add()} data-comment-add>
             Add comment
           </Button>
-          <span className="text-2xs text-muted">Saved in the workspace; commit comments/ to share it.</span>
         </div>
+        <p className="text-2xs text-muted">Saved in the workspace under comments/; commit it and your team reads it next to this item.</p>
       </div>
     </section>
   );
