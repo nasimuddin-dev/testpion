@@ -6,6 +6,7 @@ import { Button, cx, FilterInput } from './ui';
 import { closeTabsFor } from './EditorTabs';
 import { askFolderName, CLOSED_ICON, CountPill, focusRow, FOLDER_ICON, moveToFolderItem, OPEN_ICON, treeKeys } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
+import { CommentMark } from './CommentMark';
 import { useAreaMenu } from './AreaMenu';
 import { treeKey, useTreeOpen } from '../lib/tree-state';
 import { openRef } from '../lib/open-ref';
@@ -302,6 +303,7 @@ const FolderListRow = memo(function FolderListRow({ it, nodeId, active, renaming
       ctx={() => h().itemCtx(it)}
       drag={[h().refOf(it.id)]}
       git={h().refOf(it.id)}
+      mark={<CommentMark to={h().refOf(it.id)} />}
       rename={renaming ? { value: it.name, done: (name) => h().finishRename(it.id, name) } : undefined}
       className="pl-9"
     >

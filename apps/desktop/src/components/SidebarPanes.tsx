@@ -2,6 +2,7 @@ import { envColor } from './EnvSelect';
 import { Check, History, KeyRound, Plus } from 'lucide-react';
 import { TreeBadge, treeKeys } from './TreeParts';
 import { TreeRowShell } from './TreeRowShell';
+import { CommentMark } from './CommentMark';
 import { saveAsTest } from '../lib/save-test';
 import { useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
@@ -44,6 +45,7 @@ export function EnvironmentsPane() {
             key={e.id}
             kind="environment"
             git={{ kind: 'environment', environmentId: e.id }}
+            mark={<CommentMark to={{ kind: 'environment', environmentId: e.id }} />}
             nodeId={`env-pane:${e.id}`}
             label={e.name}
             active={e.name === env}
