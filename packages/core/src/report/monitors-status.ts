@@ -6,6 +6,7 @@
 import { ENGINE_VERSION } from '../version.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { listMonitors, monitorDaily, monitorResults, monitorStatus, pausedFor, type Monitor, type MonitorDay, type MonitorResult } from '../runner/monitors.js';
+import { findSavedEvaluation } from '../runner/saved-evaluations.js';
 
 export interface MonitorStatusRow {
   id: string;
@@ -38,7 +39,13 @@ export interface MonitorsStatus {
 
 function targetOf(store: WorkspaceStore, m: Monitor): string {
   if (m.testFile) return m.testFile;
-  if (m.evaluation) return `evaluation ${m.evaluation}`;
+  if (m.evaluation) {
+    try {
+      return `evaluation ${findSavedEvaluation(store, m.evaluation).name}`;
+    } catch {
+      return `evaluation ${m.evaluation}`;
+    }
+  }
   if (!m.collectionId) return 'nothing';
   try {
     return store.getCollection(m.collectionId).name;
