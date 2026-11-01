@@ -1,4 +1,4 @@
-import { ClipboardCheck, Cloud, GitCompareArrows, ListTree, Pin, X } from 'lucide-react';
+import { ClipboardCheck, Cloud, GitCompareArrows, ListTree, Pin, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { EvalCaseDiff, EvalReport, EvalReportFailure, EvalReportFlip, EvalWhy, TrajectoryWithBaseline } from '@testpion/core';
 import { call, on } from '../../api';
@@ -206,7 +206,16 @@ function FlipRow({ runId, f }: { runId: string; f: EvalReportFlip }) {
  * fail?" and "Since last run" (AU-15, AU-22). The words come from core (`eval.summary`), the same as `testpion eval summary`
  * and the `eval_summary` tool. `compact` is the sentence line alone (a place that shows the run's table itself).
  */
-export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: string; offline?: boolean; compact?: boolean; onCi?(): void; /** Why Run in CI is not available yet. */ ciReason?: string }) {
+/** The hint that asks the case generator for cases that use the tools and arguments no case exercised. */
+export const coverHint = (u: { neverCalled: string[]; argumentsNeverPassed: Array<{ tool: string; arguments: string[] }> }): string =>
+  [
+    u.neverCalled.length ? `cases where the agent must call ${u.neverCalled.join(', ')}` : '',
+    ...u.argumentsNeverPassed.map((a) => `cases where ${a.tool} is called with ${a.arguments.join(', ')}`),
+  ]
+    .filter(Boolean)
+    .join('; ');
+
+export function RunReport({ runId, offline, compact, onCi, onCover, ciReason }: { runId: string; offline?: boolean; compact?: boolean; onCi?(): void; /** Opens the case generator with a hint about the tools and arguments no case exercised. */ onCover?(hint: string): void; /** Why Run in CI is not available yet. */ ciReason?: string }) {
   const r = useRpc<EvalReport>('eval.summary', { run: runId }, {
     // the pass line is read from the saved evaluation: a save of the evaluations (written to disk) reads the report again
     reloadOn: compact ? ['run.finished'] : ['run.finished', 'data.changed'],
@@ -303,6 +312,18 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
       {r && !compact && r.toolUse ? (
         <div className={cx('px-3 pb-1 text-xs', r.toolUse.neverCalled.length || r.toolUse.argumentsNeverPassed.length ? 'text-warn' : 'text-muted')} data-eval-tool-use title="The tools the cases called, the tools the agent offers that no case called, and the arguments no case passed: a case that exercises them is missing">
           {r.toolUse.text}
+          {onCover && (r.toolUse.neverCalled.length > 0 || r.toolUse.argumentsNeverPassed.length > 0) ? (
+            <Button
+              size="sm"
+              className="ml-2"
+              icon={<Sparkles size={12} />}
+              title="Open the case generator with a hint that asks for cases using these tools and arguments; you read the cases before any is added"
+              onClick={() => onCover(coverHint(r.toolUse!))}
+              data-eval-cover-tools
+            >
+              Write cases for these…
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {r && !compact && r.agentCases ? (

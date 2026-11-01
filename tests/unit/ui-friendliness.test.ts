@@ -373,10 +373,11 @@ describe('docs say what the app says (P1)', () => {
     expect(bad).toEqual([]);
   });
 
-  it('the Settings tab names in the docs list are the tabs of SettingsView', () => {
-    // (the tab list lives in lib/settings-index.ts: the view, the search and the scope lines read it)
-    const view = readFileSync(join(SRC, 'views/SettingsView.tsx'), 'utf8') + readFileSync(join(SRC, 'lib/settings-index.ts'), 'utf8');
-    for (const t of TABS) expect(view, t).toContain(`label: '${t}'`);
+  it('the Settings tab names in the docs list are the tabs of SettingsView', async () => {
+    // (the tab list lives in lib/settings-index.ts, its names in lib/ui-names.ts: the view, the search and the scope lines read it)
+    const { SETTINGS_TABS } = await import('../../apps/desktop/src/lib/settings-index');
+    const labels = SETTINGS_TABS.map((t) => t.label);
+    for (const t of TABS) expect(labels, t).toContain(t);
   });
 });
 

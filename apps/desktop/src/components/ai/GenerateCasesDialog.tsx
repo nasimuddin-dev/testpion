@@ -55,12 +55,12 @@ export function recordsOfItems(items: ProposalItem[]): Array<Record<string, stri
  * you are editing, with Undo. Nothing is added before a person accepts. With no model set up, the offline demo model writes a few
  * cases so the feature can be tried.
  */
-export function GenerateCasesDialog({ draft, evaluation, providers, onAdd, onClose }: { draft: CasesDraftLike; evaluation?: string; providers: ProviderConfig[]; /** Adds the cases to the evaluation being edited; returns what takes them back. */ onAdd(records: Array<Record<string, string>>): () => void; onClose(): void }) {
+export function GenerateCasesDialog({ draft, evaluation, providers, initialHint, onAdd, onClose }: { draft: CasesDraftLike; /** The hint field starts with this. */ initialHint?: string; evaluation?: string; providers: ProviderConfig[]; /** Adds the cases to the evaluation being edited; returns what takes them back. */ onAdd(records: Array<Record<string, string>>): () => void; onClose(): void }) {
   const env = useApp((s) => s.environment);
   const cols = useCollectionTree().filter((c) => !c.problem);
   const [source, setSource] = useState<CaseSource>('prompt');
   const [count, setCount] = useState('10');
-  const [hint, setHint] = useState('');
+  const [hint, setHint] = useState(initialHint ?? '');
   const [provider, setProvider] = useState('');
   const [specs, setSpecs] = useState<string[]>([]);
   const [spec, setSpec] = useState('');

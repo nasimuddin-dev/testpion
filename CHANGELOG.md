@@ -4,7 +4,7 @@
 
 ### Agent evaluations: arguments no case passed
 
-- The report of an agent evaluation now also names the arguments a called tool declares that no case ever passed (*Arguments no case passed: add_task (due)*), in amber like a tool nothing called; `toolUse.argumentsNeverPassed` in `testpion eval summary --json`.
+- The report of an agent evaluation now also names the arguments a called tool declares that no case ever passed (*Arguments no case passed: add_task (due)*), in amber like a tool nothing called; `toolUse.argumentsNeverPassed` in `testpion eval summary --json`. A **Write cases for these…** button next to the line opens the case generator with a hint that asks for cases using them.
 
 ### Team work: before you pull
 

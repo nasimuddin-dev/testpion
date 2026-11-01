@@ -190,6 +190,8 @@ export function EvaluationsView() {
   // the wizard for "Answers are correct" (AU-12) and the AI case writer (AU-13)
   const [wizard, setWizard] = useState<false | 'llm' | 'agent' | 'bot'>(false);
   const [generating, setGenerating] = useState(false);
+  /** A hint the case generator opens with (the tools no case exercised). */
+  const [generateHint, setGenerateHint] = useState('');
   // RAG evaluations: the metric catalogue (what each evaluator is), the dialogs, and the estimate before a run
   const [estimating, setEstimating] = useState<boolean | Draft>(false);
   const [tryCheck, setTryCheck] = useState<CheckConfig>();
@@ -515,7 +517,8 @@ export function EvaluationsView() {
         draft={d}
         evaluation={savedId}
         providers={providers}
-        onClose={() => setGenerating(false)}
+        initialHint={generateHint}
+        onClose={() => (setGenerating(false), setGenerateHint(''))}
         onAdd={(records) => {
           const before = { dataset: d.dataset, datasetFormat: d.datasetFormat };
           set({ dataset: casesToJsonl([...datasetRecords(d.dataset, d.datasetFormat), ...records]), datasetFormat: 'jsonl' });
@@ -801,7 +804,7 @@ export function EvaluationsView() {
           </div>
         ) : runId ? (
           <div className="h-full flex flex-col min-h-0">
-            <RunReport runId={runId} offline={offline} onCi={() => useApp.getState().set({ ci: { evaluation: current?.name } })} ciReason={current ? undefined : 'Save this evaluation first: the pipeline runs it by name'} />
+            <RunReport runId={runId} offline={offline} onCover={(h) => (setGenerateHint(h), setGenerating(true))} onCi={() => useApp.getState().set({ ci: { evaluation: current?.name } })} ciReason={current ? undefined : 'Save this evaluation first: the pipeline runs it by name'} />
             <div className="flex-1 min-h-0">
               <RunPanel runId={runId} expectedTotal={d.limit ? Math.min(d.limit, count) : count} />
             </div>
