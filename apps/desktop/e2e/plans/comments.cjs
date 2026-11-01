@@ -38,6 +38,18 @@ const steps = [
      const open = await window.aps.invoke('comments.open'); const saved = open.filter((c) => /X-Trace twice/.test(c.text) && c.ref?.kind === 'request');
      return 'shown: ' + /X-Trace twice/.test(li.textContent) + ' | signed: ' + (by && by.length > 0) + ' | open count: ' + h.querySelector('[data-item-comments]')?.getAttribute('data-item-comments') + ' | box cleared: ' + (box.value === '') + ' | kind: ' + refKind + ' | saved in the workspace: ' + (saved.length === 1 && saved[0].by.length > 0);`,
   ),
+  // Home lists what the team is still asking; the item's name opens it
+  step(
+    'home-lists-what-the-team-is-asking',
+    `await __t.view('Home'); await __t.sleep(900);
+     const card = await __t.waitFor(() => document.querySelector('[data-home-comments]'), 8000); if (!card) return 'NO CARD';
+     const row = card.querySelector('[data-home-comment]');
+     const link = row?.querySelector('[data-ref-link]');
+     const text = /X-Trace twice/.test(row?.textContent ?? '');
+     link.click();
+     const opened = await __t.waitFor(() => /GET with query parameters/.test(document.querySelector('[role=tablist][aria-label="Open requests"] [role=tab][aria-selected="true"]')?.textContent ?? '') ? true : null, 6000);
+     return 'count: ' + card.getAttribute('data-home-comments') + ' | link: ' + link?.textContent.trim() + ' | text: ' + text + ' | opened: ' + !!opened + (opened ? '' : ' | view: ' + localStorage.getItem('aps.view') + ' | tabs: ' + [...document.querySelectorAll('[role=tablist][aria-label="Open requests"] [role=tab]')].map((t) => t.textContent.trim()).join(',') + ' | link tag: ' + link?.tagName + ' | toasts: ' + [...document.querySelectorAll('[role=status], [role=alert]')].map((t) => t.textContent.trim().slice(0, 80)).join(' / '));`,
+  ),
   step(
     'settling-greys-it-and-deleting-removes-it',
     `${H}
@@ -59,5 +71,6 @@ const steps = [
 module.exports = withExpect(steps, {
   'an-open-request-has-an-empty-thread': /^open: 0 \| empty note: true \| add off while empty: true$/,
   'adding-a-comment-signs-and-saves-it': /^shown: true \| signed: true \| open count: 1 \| box cleared: true \| kind: request \| saved in the workspace: true$/,
+  'home-lists-what-the-team-is-asking': /^count: 1 \| link: GET with query parameters \| text: true \| opened: true$/,
   'settling-greys-it-and-deleting-removes-it': /^open after settling: 0 \| toggle: Show 1 settled \| settled line: true \| gone: true \| empty note back: true$/,
 });

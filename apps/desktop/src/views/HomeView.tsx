@@ -3,7 +3,7 @@ import { openDocs } from '../lib/docs-link';
 import { openImport } from '../components/ImportHost';
 import { askAssistant } from '../components/ai/AiAction';
 import { useAiEnabled } from '../lib/use-ai-enabled';
-import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, FlaskConical, Gauge, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
+import { Activity as ActivityIcon, AlarmClock, BookOpen, Bug, FlaskConical, Gauge, Bot, LockKeyhole, ShieldCheck, FolderPlus, FolderTree, GitBranch, History, KeyRound, MessageSquare, Network, Play, Plug, Plus, Sparkles, Upload, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, modKey, on } from '../api';
 import { sharedCall } from '../lib/shared-call';
@@ -14,7 +14,7 @@ import { runMenuCommand } from '../menu-commands';
 import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { gitSnapshot } from '../lib/git';
-import type { TeamActivity } from '@testpion/core';
+import type { OpenComment, TeamActivity } from '@testpion/core';
 import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, StatusDot, statusTone } from '../components/ui';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
@@ -29,7 +29,7 @@ import { loopStep, runStep, WALKTHROUGHS, walkthroughDocs, type OnboardingStep }
 import { shouldAutoStart, useTour } from '../lib/tour';
 import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
-import { refIcon } from '../components/RefLink';
+import { RefLink, refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
 import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES } from '@testpion/shared';
 import { VIEW_NAME } from '../lib/ui-names';
@@ -210,6 +210,7 @@ export function HomeView() {
   const [health, setHealth] = useState<Record<string, { sent: number; failing: number }>>({});
   /** What other people changed in this workspace lately (a workspace in git with commits by others). */
   const [team, setTeam] = useState<TeamActivity>();
+  const [asked, setAsked] = useState<OpenComment[]>([]);
   const [noting, setNoting] = useState(false);
   const [certs, setCerts] = useState<Array<{ host: string; issuer?: string; validTo?: string; daysLeft?: number; lastSeen: string }>>([]);
   const [activity, setActivity] = useState<Activity>();
@@ -313,6 +314,7 @@ export function HomeView() {
     void sharedCall<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
     void sharedCall<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     // only a workspace in git has a team's history to show
+    void call<OpenComment[]>('comments.open').then((c) => setAsked(c.slice(0, 5)), () => setAsked([]));
     if (gitSnapshot().status?.repository) void call<TeamActivity>('git.teamActivity', { days: 14, limit: 5 }).then((t) => setTeam(t.commits.length ? t : undefined), () => setTeam(undefined));
     else setTeam(undefined);
     loadActivity();
@@ -461,6 +463,24 @@ export function HomeView() {
                     </span>
                   )}
                 </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {asked.length > 0 && (
+          <Card title="Your team is asking" icon={<MessageSquare size={15} />}>
+            <div data-home-comments={asked.length}>
+              {asked.map((c) => (
+                <div key={c.id} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm" data-home-comment>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <RefLink to={c.ref} className="font-medium min-w-0" />
+                    <span className="text-xs text-muted shrink-0 ml-auto">
+                      {c.by} · {timeAgo(c.at)}
+                    </span>
+                  </span>
+                  <span className="text-muted truncate">{c.text}</span>
+                </div>
               ))}
             </div>
           </Card>
