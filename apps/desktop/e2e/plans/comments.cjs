@@ -36,7 +36,8 @@ const steps = [
      const info = h.querySelector('[data-context-info]');
      const refKind = info?.getAttribute('data-context-info');
      const open = await window.aps.invoke('comments.open'); const saved = open.filter((c) => /X-Trace twice/.test(c.text) && c.ref?.kind === 'request');
-     return 'shown: ' + /X-Trace twice/.test(li.textContent) + ' | signed: ' + (by && by.length > 0) + ' | open count: ' + h.querySelector('[data-item-comments]')?.getAttribute('data-item-comments') + ' | box cleared: ' + (box.value === '') + ' | kind: ' + refKind + ' | saved in the workspace: ' + (saved.length === 1 && saved[0].by.length > 0);`,
+     const mark = await __t.waitFor(() => document.querySelector('[data-node-id] [data-comment-mark]'), 5000);
+     return 'shown: ' + /X-Trace twice/.test(li.textContent) + ' | row mark: ' + mark?.getAttribute('data-comment-mark') + ' | signed: ' + (by && by.length > 0) + ' | open count: ' + h.querySelector('[data-item-comments]')?.getAttribute('data-item-comments') + ' | box cleared: ' + (box.value === '') + ' | kind: ' + refKind + ' | saved in the workspace: ' + (saved.length === 1 && saved[0].by.length > 0);`,
   ),
   // Home lists what the team is still asking; the item's name opens it
   step(
@@ -64,13 +65,14 @@ const steps = [
      const settledLine = /Settled by/.test(settled?.textContent ?? '');
      await __t.real.click(settled.querySelector('[data-comment-delete]'));
      const gone = await __t.waitFor(() => (h.querySelector('[data-comment]') ? null : true), 6000);
-     return 'open after settling: 0 | toggle: ' + toggleText + ' | settled line: ' + settledLine + ' | gone: ' + !!gone + ' | empty note back: ' + /No comments yet/.test(h.querySelector('[data-item-comments]')?.textContent ?? '');`,
+     const markGone = await __t.waitFor(() => (document.querySelector('[data-node-id] [data-comment-mark]') ? null : true), 5000);
+     return 'open after settling: 0 | toggle: ' + toggleText + ' | settled line: ' + settledLine + ' | gone: ' + !!gone + ' | row mark gone: ' + !!markGone + ' | empty note back: ' + /No comments yet/.test(h.querySelector('[data-item-comments]')?.textContent ?? '');`,
   ),
 ];
 
 module.exports = withExpect(steps, {
   'an-open-request-has-an-empty-thread': /^open: 0 \| empty note: true \| add off while empty: true$/,
-  'adding-a-comment-signs-and-saves-it': /^shown: true \| signed: true \| open count: 1 \| box cleared: true \| kind: request \| saved in the workspace: true$/,
+  'adding-a-comment-signs-and-saves-it': /^shown: true \| row mark: 1 \| signed: true \| open count: 1 \| box cleared: true \| kind: request \| saved in the workspace: true$/,
   'home-lists-what-the-team-is-asking': /^count: 1 \| link: GET with query parameters \| text: true \| opened: true$/,
-  'settling-greys-it-and-deleting-removes-it': /^open after settling: 0 \| toggle: Show 1 settled \| settled line: true \| gone: true \| empty note back: true$/,
+  'settling-greys-it-and-deleting-removes-it': /^open after settling: 0 \| toggle: Show 1 settled \| settled line: true \| gone: true \| row mark gone: true \| empty note back: true$/,
 });

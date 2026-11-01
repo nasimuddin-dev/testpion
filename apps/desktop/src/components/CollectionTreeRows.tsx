@@ -6,6 +6,7 @@ import type { NodeMenuCtx } from '../lib/node-menu';
 import { categoryCounts, type RequestCategory } from '../lib/collection-filter';
 import { examplesOpenKey, folderOpenKey, scopedNodeId, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 import { CLOSED_ICON, CountPill, FOLDER_ICON, KIND_COLOR, OPEN_ICON, TreeBadge } from './TreeParts';
+import { CommentMark } from './CommentMark';
 import { TreeRowShell } from './TreeRowShell';
 import { Button, cx, StatusDot } from './ui';
 import { plural } from '../lib/format';
@@ -106,6 +107,7 @@ export const RequestRow = memo(function RequestRow({
       style={indent(depth, 16)}
       className={cx(examples.length > 0 && 'relative')}
       git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
+      mark={<CommentMark to={{ kind: 'request', collectionId: c.id, requestId: n.id }} />}
     >
       {examples.length > 0 && (
         // in the row's left padding (the row is positioned), where a folder's chevron would be

@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { itemRefKey, toItemRef, type ItemRef } from '@testpion/shared';
+import { itemRefIdentity, toItemRef, type ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { readJson, writeJson } from './fsutil.js';
 import { sha256Hex } from '../util/hash.js';
@@ -39,9 +39,9 @@ export interface OpenComment extends ItemComment {
 
 type Store = Pick<WorkspaceStore, 'root'>;
 
-/** The file of an item's thread: the ref's key, made safe for every file system (a short hash keeps two refs apart). */
+/** The file of an item's thread: the ref's identity (its required ids: any ref of the item finds it), made safe for every file system (a short hash keeps two refs apart). */
 export function commentFileOf(ref: ItemRef): string {
-  const key = itemRefKey(ref);
+  const key = itemRefIdentity(ref);
   const safe = key.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
   return `${safe}.${sha256Hex(key).slice(0, 8)}.json`;
 }
@@ -131,11 +131,11 @@ export function openComments(store: Store): OpenComment[] {
   return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
-/** How many open comments each item has: `itemRefKey(ref)` → count (badges). */
+/** How many open comments each item has: `itemRefIdentity(ref)` → count (the rows' marks). */
 export function openCommentCounts(store: Store): Record<string, number> {
   const out: Record<string, number> = {};
   for (const c of openComments(store)) {
-    const k = itemRefKey(c.ref);
+    const k = itemRefIdentity(c.ref);
     out[k] = (out[k] ?? 0) + 1;
   }
   return out;

@@ -10,13 +10,15 @@ export function commentsHandlers(be: Backend): Handlers {
     return ref;
   };
   /** Who signs: the git identity's name, else this computer's user name. */
+  /** The rows' marks and Home read the counts again. */
+  const changed = <T,>(r: T): T => (be.host.emit('comments.changed', {}), r);
   const who = async () => (await gitIdentity(be.ws.root).catch(() => ({ name: undefined }))).name || userInfo().username || 'someone';
   return {
     'comments.list': ({ ref }: { ref: unknown }) => listComments(be.ws, refOf(ref)),
-    'comments.add': async ({ ref, text }: { ref: unknown; text: string }) => addComment(be.ws, refOf(ref), text, await who()),
-    'comments.resolve': async ({ ref, id, resolved }: { ref: unknown; id: string; resolved?: boolean }) => resolveComment(be.ws, refOf(ref), id, await who(), resolved !== false),
-    'comments.delete': ({ ref, id }: { ref: unknown; id: string }) => (deleteComment(be.ws, refOf(ref), id), { deleted: id }),
-    'comments.restore': ({ ref, comment }: { ref: unknown; comment: Parameters<typeof restoreComment>[2] }) => restoreComment(be.ws, refOf(ref), comment),
+    'comments.add': async ({ ref, text }: { ref: unknown; text: string }) => changed(addComment(be.ws, refOf(ref), text, await who())),
+    'comments.resolve': async ({ ref, id, resolved }: { ref: unknown; id: string; resolved?: boolean }) => changed(resolveComment(be.ws, refOf(ref), id, await who(), resolved !== false)),
+    'comments.delete': ({ ref, id }: { ref: unknown; id: string }) => (deleteComment(be.ws, refOf(ref), id), changed({ deleted: id })),
+    'comments.restore': ({ ref, comment }: { ref: unknown; comment: Parameters<typeof restoreComment>[2] }) => changed(restoreComment(be.ws, refOf(ref), comment)),
     'comments.open': () => openComments(be.ws),
     'comments.counts': () => openCommentCounts(be.ws),
   };

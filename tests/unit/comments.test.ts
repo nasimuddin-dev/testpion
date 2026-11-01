@@ -24,6 +24,8 @@ describe('comments for your team', () => {
     expect(files).toEqual([commentFileOf(req)]);
     expect(files[0]).toMatch(/^request-payments-create-invoice\.[0-9a-f]{8}\.json$/);
     expect(commentFileOf(test)).not.toBe(commentFileOf(req));
+    // the same item through another ref (the editor's ref names the protocol): the same thread
+    expect(commentFileOf({ ...req, protocol: 'http' } as ItemRef)).toBe(commentFileOf(req));
   });
 
   it('an empty or too long comment is refused; a blank author becomes "someone"', () => {
@@ -38,11 +40,11 @@ describe('comments for your team', () => {
     expect(r.resolvedBy).toBe('Bo');
     expect(r.resolvedAt).toBeTruthy();
     expect(openComments(store).map((c) => c.text)).toEqual(['Flaky since the 2nd', 'Because the gateway adds one.']);
-    expect(openCommentCounts(store)).toEqual({ 'request|payments|create-invoice|': 1, 'test|tests/smoke.yaml||': 1 });
+    expect(openCommentCounts(store)).toEqual({ 'request|payments|create-invoice': 1, 'test|tests/smoke.yaml': 1 });
     expect(openComments(store)[0]!.ref).toEqual(test);
     const back = resolveComment(store, req, a!.id, 'Bo', false);
     expect(back.resolvedAt).toBeUndefined();
-    expect(openCommentCounts(store)['request|payments|create-invoice|']).toBe(2);
+    expect(openCommentCounts(store)['request|payments|create-invoice']).toBe(2);
     expect(() => resolveComment(store, req, 'nope', 'Bo')).toThrow(/No comment nope/);
   });
 

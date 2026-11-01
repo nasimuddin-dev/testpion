@@ -153,6 +153,16 @@ export function itemRefKey(ref: ItemRef): string {
   return [ref.kind, ...ITEM_REF_FIELDS[ref.kind].map((f) => r[f.replace(/\?$/, '')] ?? '')].join('|');
 }
 
+/**
+ * The identity of a ref: its kind and required ids only, the optional parts left out (a request's `protocol`, a collection's
+ * `tab`, a run's `resultId`). Two refs of the same item give the same identity however they were made: for what is kept
+ * beside an item (its comments) and looked up again from any ref of it.
+ */
+export function itemRefIdentity(ref: ItemRef): string {
+  const r = ref as unknown as Record<string, string | undefined>;
+  return [ref.kind, ...ITEM_REF_FIELDS[ref.kind].filter((f) => !f.endsWith('?')).map((f) => r[f] ?? '')].join('|');
+}
+
 /** The deep link that opens a ref in the desktop app: `testpion://open?kind=request&collectionId=…&requestId=…`. */
 export function itemRefUrl(ref: ItemRef): string {
   const r = ref as unknown as Record<string, string | undefined>;
