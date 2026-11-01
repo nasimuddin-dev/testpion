@@ -9,6 +9,9 @@ import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
 import { listDeprecations } from './deprecations.js';
 import { deprecatedOperationCalls } from '../openapi/deprecated-calls.js';
+import { ownersOf, workspaceCodeowners } from '../git/owners.js';
+import { toRepoPath } from '../git/git.js';
+import { itemInfo } from './item-info.js';
 import { mockPathOf } from '../mock/mock-server.js';
 import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
 import { flakyTests } from '../runner/test-history.js';
@@ -30,6 +33,8 @@ export interface AttentionItem {
   at?: string;
   /** One line for people. */
   message: string;
+  /** The owners of the file that holds it (the repository's CODEOWNERS), when a rule names it: the team the problem is for. */
+  owners?: string[];
   /**
    * What it is about, as an ItemRef (@testpion/shared): a monitor (with its failing run), a certificate's host, a run,
    * a request (collection id + request id), a flaky test's id. The app opens it with `openRef`.
@@ -252,5 +257,21 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
     /* a courtesy: the rest of the list stands */
   }
   const rank = { high: 0, medium: 1, low: 2 };
+  // several teams in one workspace: a problem names the owners of the file it is about (CODEOWNERS), so a shared list reads per team
+  const co = await workspaceCodeowners(store.root).catch(() => undefined);
+  if (co)
+    for (const item of out) {
+      let file: string | undefined;
+      try {
+        file = itemInfo(store, item.ref).file;
+      } catch {
+        file = undefined;
+      }
+      const owners = file ? ownersOf(co.rules, toRepoPath(co.repo, store.root, file)) : [];
+      if (owners.length) {
+        item.owners = owners;
+        item.message = `${owners.join(' ')}: ${item.message}`;
+      }
+    }
   return out.sort((a, b) => rank[a.severity] - rank[b.severity]);
 }

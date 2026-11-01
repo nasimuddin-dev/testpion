@@ -50,8 +50,7 @@ import {
   samePath,
   type RefResolution,
   importFileFilters,
-  setWorkspaceNote,
-} from '@testpion/core';
+  setWorkspaceNote, ownershipOf } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { workspaceLockedBy } from '../backend-health.js';
 import { takeOpenLinks } from '../open-links.js';
@@ -278,14 +277,16 @@ export function workspaceHandlers(be: Backend): Handlers {
      * WF-20 the context panel: one item's file, the runs that included it, and the {{variables}} it uses with where each
      * comes from in this environment (secrets masked, never sent to the window).
      */
-    'ref.info': ({ ref, environment }: { ref: unknown; environment?: string }) => {
+    'ref.info': async ({ ref, environment }: { ref: unknown; environment?: string }) => {
       const r = toItemRef(ref);
       if (!r) throw new ApsError('ValidationError', 'That is not a link to something in TestPion');
       const { text, ...info } = itemInfo(be.ws, r);
       const ctx = be.context({ environment, collectionId: info.collectionId });
       try {
         const variables = describeVariables(ctx.vars, (text ? templateVariables(text) : []).slice(0, 200), 200);
-        return { ...info, variables };
+        // several teams in one workspace: who owns the file (CODEOWNERS) and who last changed it
+        const ownership = info.file ? await ownershipOf(be.ws.root, info.file).catch(() => undefined) : undefined;
+        return { ...info, variables, ...(ownership ? { owners: ownership.owners, lastChange: ownership.lastChange } : {}) };
       } finally {
         void ctx.dispose();
       }

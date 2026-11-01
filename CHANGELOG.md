@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Several teams in one workspace: who owns what
+
+- The Info panel of an item says **Owned by @org/payments** (from the repository's `CODEOWNERS`) and **Last changed by Ana 2 days ago** (from git); `testpion item owners <item>` prints the same, and a problem under Needs attention starts with the owners of what it is about, so a shared list reads as a to-do per team. `planning/multi-team.md` lays out the rest for teams and tenants.
+
 ### Endpoints going away
 
 - A response with a `Deprecation`, `Sunset`, `Link rel="deprecation"` or `Warning: 299` header shows a **going away** badge beside the status, a test run says *endpoint going away* under the step, and Needs attention lists every saved request that calls such an endpoint (*List users calls an endpoint that is going away: sunset 2027-01-01 (in 61 days)*), in red within 30 days of the sunset. Recorded per method and URL from every response (the app, runs, monitors, agents, and the traffic the HTTP Debugger captures). An API definition in the workspace that marks an operation `deprecated: true` lists its saved requests the same way, before any response.

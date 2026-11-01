@@ -1115,6 +1115,7 @@ testpion item comment add request:payments:create-invoice "Why does this send X-
 testpion item comment resolve request:payments:create-invoice c-abc  # mark it settled (--reopen undoes it)
 testpion item comment delete request:payments:create-invoice c-abc
 testpion item comment open --json                                   # every open comment of the workspace, newest first, each with its ref (--markdown: a list to post)
+testpion item owners request:payments:create-invoice            # its owners from CODEOWNERS and who last changed its file (--json)
 ```
 
 ## `item`

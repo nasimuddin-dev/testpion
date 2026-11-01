@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { userInfo } from 'node:os';
-import { addComment, deleteComment, gitIdentity, listComments, openComments, parseItemRef, resolveComment, type ItemRef } from '@testpion/core';
+import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openComments, ownershipOf, parseItemRef, resolveComment, type ItemRef } from '@testpion/core';
 import { EXIT, bold, dim, green, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** An item by its reference text (`request:<collection>/<request>`, `test:tests/smoke.yaml`, a testpion:// link …). */
@@ -97,6 +97,27 @@ export function registerCommentCommand(program: Command): void {
         }
         if (o.json) return printJson({ item, deleted: id });
         console.log(`Deleted ${dim(id)}.`);
+      }),
+    );
+
+  item
+    .command('owners')
+    .description("who owns an item in a workspace several teams share: the owners the repository's CODEOWNERS names for its file, and who last changed the file in git")
+    .argument('<item>', 'the item (see `item comment list`)')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
+    .action(async (ref: string, o: { workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store) => {
+        const info = itemInfo(store, refArg(ref));
+        if (!info.file) {
+          if (o.json) return printJson({ item: ref, label: info.label, file: null, owners: [] });
+          return console.log(dim(`${info.label} is not kept in a file of the workspace: nobody owns it in CODEOWNERS.`));
+        }
+        const own = await ownershipOf(store.root, info.file);
+        if (o.json) return printJson({ item: ref, label: info.label, ...own });
+        console.log(`${bold(info.label)}  ${dim(own.file)}`);
+        console.log(own.owners.length ? `Owned by ${own.owners.join(' ')} (CODEOWNERS)` : dim('No CODEOWNERS rule names its file.'));
+        console.log(own.lastChange ? `Last changed by ${own.lastChange.author} on ${own.lastChange.date.slice(0, 10)}: ${own.lastChange.subject} (${own.lastChange.short})` : dim('Not committed yet.'));
       }),
     );
 

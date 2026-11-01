@@ -42,6 +42,10 @@ From a script or CI, `testpion secrets --missing` lists them with the variable t
 - **Your team's changes** on Home shows what others changed in the last two weeks, in words (*Ana, 2 hours ago: Search: URL*).
 - Rest the pointer on an item in the explorer to see who changed it last.
 
+## Who owns what
+
+When several teams share one workspace, the repository's `CODEOWNERS` (TestPion writes a starter one: the Git view, `testpion git codeowners`) says who reviews each part. TestPion reads it back: the **Info** panel of an item says *Owned by @org/payments* and *Last changed by Ana 2 days ago* (from git), `testpion item owners <item>` prints the same, and a problem under **Needs attention** starts with the owners of what it is about (*@org/payments: Monitor "Checkout" is failing*), so a shared Problems list reads as a to-do per team (`testpion problems --json` carries `owners`).
+
 ## Comments next to the item
 
 A question about a request, a test file, an evaluation or a monitor belongs next to it, not in a chat nobody finds again. Open the item, open the **Info** panel on the right, and write under **Comments for your team**: *Why does this send X-Trace twice?* The comment is signed with your git name and dated, and saved in the workspace under `comments/` (one small file per item, so two people commenting on different items never conflict). Commit and push it like anything else; a teammate who pulls sees it next to the same item, and the Git view names the change *Comments for the team*. **Mark as settled** greys a comment and takes it out of the open list (*Show 1 settled* brings it back); the bin removes it for good (Undo in the message puts it back). A request with open comments shows a small speech bubble and the count on its row in the tree. Home lists what your team is still asking under **Your team is asking**, newest first; the item's name opens it.

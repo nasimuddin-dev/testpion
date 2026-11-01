@@ -26,6 +26,9 @@ interface Info {
   label: string;
   detail?: string;
   file?: string;
+  /** From the repository's CODEOWNERS, and who last changed the file in git (several teams in one workspace). */
+  owners?: string[];
+  lastChange?: { author: string; date: string; subject: string; short: string };
   collectionId?: string;
   runs: Array<{ runId: string; name: string; startedAt: string; passed: number; failed: number; errors: number; total: number; environment?: string }>;
   variables: Array<{ name: string; scope?: string; value?: string; secret?: boolean }>;
@@ -156,6 +159,16 @@ function ContextInfo() {
               git && <span className="text-xs text-muted shrink-0">{git}</span>
             )}
           </div>
+          {(info.owners?.length || info.lastChange) && (
+            <div className="text-xs text-muted mt-1 flex flex-wrap gap-x-2" data-context-owners>
+              {info.owners?.length ? <span title="From the repository's CODEOWNERS: who reviews a change to this file">Owned by {info.owners.join(' ')}</span> : null}
+              {info.lastChange && (
+                <span title={`${info.lastChange.subject} (${info.lastChange.short})`}>
+                  Last changed by {info.lastChange.author} {timeAgo(info.lastChange.date)}
+                </span>
+              )}
+            </div>
+          )}
         </section>
       )}
       <section>
