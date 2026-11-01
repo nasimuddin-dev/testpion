@@ -104,7 +104,7 @@ export async function dataSource(deps: OutputDeps, src: DataSource, format: Outp
     case 'workspace-report':
       return workspaceReportHtml(store, { days: Math.min(Math.max(Math.floor(src.days ?? 14) || 14, 1), 90), tzOffsetMin: src.tzOffsetMin, attention: await workspaceAttention(store) });
     case 'monitors-status': {
-      const status = monitorsStatus(store, { days: src.days, tzOffsetMin: src.tzOffsetMin });
+      const status = monitorsStatus(store, { days: src.days, tzOffsetMin: src.tzOffsetMin, group: src.group });
       return format === 'json' ? json(status) : format === 'md' ? monitorsStatusMarkdown(status) : monitorsStatusHtml(status);
     }
     case 'git-diff': {

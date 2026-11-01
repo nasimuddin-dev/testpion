@@ -69,7 +69,7 @@ export type OutputSource =
   /** The workspace's uncommitted changes: one file's diff (`path`), or all of them. */
   | { kind: 'git-diff'; path?: string; staged?: boolean }
   /** Every monitor's state, uptime and a block per day: a status page to host (HTML), a wiki table (md) or data (json). */
-  | { kind: 'monitors-status'; days?: number; tzOffsetMin?: number }
+  | { kind: 'monitors-status'; days?: number; tzOffsetMin?: number; group?: string }
   /** The workspace at a glance (activity, collections' health, monitors, latest runs) as one HTML page. */
   | { kind: 'workspace-report'; days?: number; tzOffsetMin?: number }
   /** A RAG run's samples × metrics matrix, every row: `names: ragas` names the score columns as Ragas does; `thresholds` are the edited pass marks. */
