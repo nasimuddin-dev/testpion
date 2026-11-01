@@ -30,6 +30,7 @@ import {
   type MonitorResult,
   type WorkspaceStore,
   monitorTenants,
+  listMonitorDefinitions,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
@@ -118,7 +119,7 @@ export function registerMonitorCommands(program: Command): void {
         if ([o.collection, o.testFile, o.ragEvaluation].filter(Boolean).length !== 1) throw new CliError('Give --collection <name>, --test-file <path>, --rag-evaluation <name> or --evaluation <name> (one of them)', EXIT.CONFIG_ERROR);
         if (o.testFile && o.folder?.length) throw new CliError('--folder picks folders of a collection; a --test-file runs as a whole', EXIT.CONFIG_ERROR);
         const collection = o.collection ? requireCollection(store, String(o.collection), { loadable: true }) : undefined;
-        const existing = listMonitors(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
+        const existing = listMonitorDefinitions(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
         const m = saveMonitor(store, {
           id: existing?.id ?? shortId('mon-'),
           name,

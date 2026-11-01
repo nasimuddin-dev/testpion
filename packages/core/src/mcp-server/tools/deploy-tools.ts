@@ -5,7 +5,7 @@
  */
 import { editFlowFile } from '../../runner/flow-edit.js';
 import { flowDeployStatus } from '../../runner/flow-deploy.js';
-import { listMonitors, monitorStatus, parseEvery, saveMonitor } from '../../runner/monitors.js';
+import { listMonitorDefinitions, listMonitors, monitorStatus, parseEvery, saveMonitor } from '../../runner/monitors.js';
 import { findCollection } from '../../storage/env-edit.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { ApsError } from '../../errors.js';
@@ -71,6 +71,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           maxDrop: { type: 'number', description: 'With baseline: the smallest drop that fails (default 0.05)' },
           every: { type: ['string', 'number'], description: 'How often: minutes, or 15m, 1h, 1d' },
           environment: str('The environment it runs with'),
+          environmentGroup: str('Or every environment of a group (a tenant each)'),
           webhook: str('Alert URL (Slack / Teams / Discord webhook or any URL; {{variables}} work)'),
           enabled: { type: 'boolean', description: 'false saves it paused (default true)' },
         },
@@ -85,7 +86,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
         const collection = hasCollection ? findCollection(store, String(a.collection), { loadable: true }) : undefined;
         if (hasCollection && !collection) throw new ApsError('ValidationError', `No collection "${String(a.collection)}"`, { suggestions: [] });
         if (a.environment && !store.getEnvironment(String(a.environment))) throw new ApsError('ValidationError', `No environment "${String(a.environment)}"`, { suggestions: [] });
-        const existing = listMonitors(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
+        const existing = listMonitorDefinitions(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
         // production consent is the monitor's (given in the app or with --allow-production), never this call's: a
         // replacement keeps it while it runs in the same production environment
         const environment = a.environment ? String(a.environment) : undefined;
@@ -97,6 +98,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           everyMinutes: parseEvery(a.every as string | number),
           enabled: a.enabled !== false,
           ...(a.environment ? { environment: String(a.environment) } : {}),
+          ...(a.environmentGroup ? { environmentGroup: String(a.environmentGroup) } : existing?.environmentGroup && !a.environment ? { environmentGroup: existing.environmentGroup } : {}),
           ...(a.webhook ? { webhook: String(a.webhook) } : existing?.webhook ? { webhook: existing.webhook } : {}),
           ...(keepConsent ? { allowProduction: true } : {}),
         });
