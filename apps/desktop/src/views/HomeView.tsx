@@ -32,6 +32,7 @@ import { openRef } from '../lib/open-ref';
 import { refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
 import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES } from '@testpion/shared';
+import { VIEW_NAME } from '../lib/ui-names';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
 const historyMark = (r: { items: Array<{ id: string }>; total: number }) => `${r.total}|${r.items[0]?.id ?? ''}`;
@@ -57,7 +58,7 @@ function Action({ icon, title, text, onClick, hue }: { icon: ReactNode; title: s
     <button
       onClick={onClick}
       style={{ '--hue': c } as React.CSSProperties}
-      className="group text-left rounded-2xl border border-line bg-bg p-4 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-[color-mix(in_oklch,var(--hue)_45%,var(--line))] active:translate-y-0"
+      className="group flex flex-col justify-start text-left rounded-2xl border border-line bg-bg p-4 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-[color-mix(in_oklch,var(--hue)_45%,var(--line))] active:translate-y-0"
     >
       <div className="flex items-center gap-3">
         <span className="grid place-items-center h-9 w-9 rounded-xl text-[var(--hue)] bg-[color-mix(in_oklch,var(--hue)_14%,transparent)] ring-1 ring-[color-mix(in_oklch,var(--hue)_22%,transparent)] transition-transform duration-200 group-hover:scale-105">{icon}</span>
@@ -368,7 +369,7 @@ export function HomeView() {
               <LinkButton  icon={<ArrowRight size={12} />} onClick={() => setView('tests')}>
                 Tests
               </LinkButton>
-              . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and AI quality has prompts that run on an offline demo model.
+              . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and {VIEW_NAME.aiQuality} has prompts that run on an offline demo model.
             </p>
           ) : examplesSeen ? null : (
             <LinkButton className="relative block mt-3 text-sm" onClick={() => void runMenuCommand('open-examples')}>

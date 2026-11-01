@@ -11,7 +11,9 @@ const files = (dir: string): string[] =>
   });
 
 // the names that are more than one common word: spelled out in code they would drift when a place is renamed
-const NAMES = [VIEW_NAME.aiQuality, VIEW_NAME.rag, AI_TAB_NAME.playground, AI_TAB_NAME.providers, ...Object.values(SETTINGS_TAB_NAME).filter((n) => n.includes(' '))];
+const NAMES = [VIEW_NAME.aiQuality, VIEW_NAME.rag, AI_TAB_NAME.playground, AI_TAB_NAME.providers, SETTINGS_TAB_NAME.privacy, SETTINGS_TAB_NAME.load, SETTINGS_TAB_NAME.agents];
+// two names are also plain words in sentences (the assistant, the price table): only their exact spelling is a place
+const EXACT = [SETTINGS_TAB_NAME.assistant, SETTINGS_TAB_NAME.pricing];
 
 describe('the names of the places are written once', () => {
   it('points at a place through the constants', () => {
@@ -22,6 +24,7 @@ describe('the names of the places are written once', () => {
 
   it('no code line of the app spells one out (comments may)', () => {
     const found: string[] = [];
+    const lower = NAMES.map((n) => n.toLowerCase());
     for (const f of files(SRC)) {
       if (f.endsWith('ui-names.ts')) continue;
       readFileSync(f, 'utf8')
@@ -29,8 +32,8 @@ describe('the names of the places are written once', () => {
         .forEach((line, i) => {
           const t = line.trim();
           if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
-          const code = line.replace(/\s\/\/ .*$/, '');
-          if (NAMES.some((n) => code.includes(n))) found.push(`${f.slice(SRC.length + 1)}:${i + 1}: ${t.slice(0, 100)}`);
+          const code = line.replace(/\/\*.*?\*\//g, '').replace(/\s\/\/ .*$/, '');
+          if (lower.some((n) => code.toLowerCase().includes(n)) || EXACT.some((n) => code.includes(n))) found.push(`${f.slice(SRC.length + 1)}:${i + 1}: ${t.slice(0, 100)}`);
         });
     }
     expect(found).toEqual([]);

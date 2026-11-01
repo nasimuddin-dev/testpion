@@ -8,6 +8,7 @@ import type { ProviderConfig } from '../../types';
 import { LABEL } from '../../lib/vocabulary';
 import { Button, Empty, LinkButton, SectionTitle } from '../../components/ui';
 import { RunMiniBar, type RunRow } from '../../components/RunsOverview';
+import { AI_TAB_NAME } from '../../lib/ui-names';
 
 type Tab = 'playground' | 'compare' | 'providers' | 'start';
 
@@ -121,7 +122,7 @@ export function Start({ providers, onTab }: { providers?: ProviderConfig[]; onTa
           <StartCard
             id="models"
             icon={<Bot size={16} />}
-            title="Models and keys"
+            title={AI_TAB_NAME.providers}
             action={
               <Button size="sm" onClick={() => onTab('providers')} data-start-go="models">
                 Open

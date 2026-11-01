@@ -11,6 +11,7 @@ import { Playground } from './ai/Playground';
 import { Compare } from './ai/Compare';
 import { Providers } from './ai/Providers';
 import { Start } from './ai/Start';
+import { AI_TAB_NAME } from '../lib/ui-names';
 
 export function AiLabView() {
   // kept while the app runs, so switching tabs or views doesn't lose results
@@ -53,7 +54,7 @@ export function AiLabView() {
           <div className="h-full flex flex-col" data-models-and-keys>
             <div className="px-3 py-1.5 border-b border-line">
               <Segmented
-                label="Models and keys"
+                label={AI_TAB_NAME.providers}
                 size="xs"
                 value={models}
                 onChange={setModels}

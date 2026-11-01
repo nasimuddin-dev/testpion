@@ -12,6 +12,7 @@ import { FilterChips } from '../FilterChips';
 import { StepTimeline } from '../StepTimeline';
 import { ReviewQueue } from './ReviewQueue';
 import { AiAction } from './AiAction';
+import { AI_TAB_NAME } from '../../lib/ui-names';
 
 /** The sentence a run is reduced to: "17 of 20 passed" (the same words the CLI and the MCP tools say). */
 export function runHeadline(s: { passed: number; total: number }): string {
@@ -267,7 +268,7 @@ export function RunReport({ runId, offline, compact, onCi, ciReason }: { runId: 
         )}
         {r && !compact && <PassTrend trend={r.trend} />}
         {offline && (
-          <Badge tone="warn" title="These answers came from the offline demo model, which answers by rules. Connect a real model in Models and keys to judge a real one.">
+          <Badge tone="warn" title={`These answers came from the offline demo model, which answers by rules. Connect a real model in ${AI_TAB_NAME.providers} to judge a real one.`}>
             Offline demo
           </Badge>
         )}

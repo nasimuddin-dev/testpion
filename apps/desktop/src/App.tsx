@@ -70,6 +70,7 @@ const AiAnalysisDialog = lazy(async () => ({ default: (await import('./component
 const DriftDialog = lazy(async () => ({ default: (await import('./components/ai/DriftDialog')).DriftDialog }));
 const RecordDialog = lazy(async () => ({ default: (await import('./components/RecordDialog')).RecordDialog }));
 import { SaveConflictDialog } from './components/SaveConflictDialog';
+import { AI_TAB_NAME, RAG_TAB_NAME, VIEW_NAME, where } from './lib/ui-names';
 import './lib/save-conflict'; // registers the answer to a refused save
 const FeedbackDialog = lazy(async () => ({ default: (await import('./components/FeedbackDialog')).FeedbackDialog }));
 const VariableUsagesDialog = lazy(async () => ({ default: (await import('./components/VariableUsagesDialog')).VariableUsagesDialog }));
@@ -428,7 +429,7 @@ export default function App() {
     const s = useApp.getState();
     const cmds: PaletteCommand[] = [
       { id: 'new-graphql', label: 'New GraphQL request', hint: 'GraphQL', run: () => s.openIntent('graphql', { reset: true }) },
-      { id: 'new-ai', label: LABEL.newAiPrompt, hint: 'AI quality: Try a prompt', run: () => s.openIntent('ai', { reset: true }) },
+      { id: 'new-ai', label: LABEL.newAiPrompt, hint: where(VIEW_NAME.aiQuality, AI_TAB_NAME.playground), run: () => s.openIntent('ai', { reset: true }) },
       { id: 'new-ai-test', label: 'New AI test file', hint: 'Tests: an AI test that passes or fails, for CI', run: () => s.openIntent('tests', { newFile: 'llm' }) },
       { id: 'run-test', label: 'Run test', hint: 'Tests', run: () => s.openIntent('tests', { runCurrent: true }) },
       { id: 'run-suite', label: 'Run suite', hint: 'Tests', run: () => s.openIntent('tests', { runAll: true }) },
@@ -458,12 +459,12 @@ export default function App() {
       { id: 'feedback', label: 'Send feedback or report a problem…', hint: 'Help', run: () => s.set({ feedback: {} }) },
       { id: 'agents', label: 'Connect an AI agent (Claude, Cursor, VS Code, Codex) over MCP…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'agents' }) },
       { id: 'load', label: 'New load test', run: () => s.setView('load') },
-      { id: 'compare', label: 'Compare models', hint: 'AI quality: Compare', run: () => s.openIntent('ai', { tab: 'compare' }) },
-      { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: 'AI quality: Models and keys', run: () => s.openIntent('ai', { tab: 'usage' }) },
+      { id: 'compare', label: 'Compare models', hint: where(VIEW_NAME.aiQuality, AI_TAB_NAME.compare), run: () => s.openIntent('ai', { tab: 'compare' }) },
+      { id: 'ai-usage', label: 'AI usage: tokens and cost per model', hint: where(VIEW_NAME.aiQuality, AI_TAB_NAME.providers), run: () => s.openIntent('ai', { tab: 'usage' }) },
       { id: 'mcp-usage', label: 'MCP tool usage: calls, failures and time per tool', hint: 'MCP', run: () => s.openIntent('mcp', { tab: 'usage' }) },
-      { id: 'eval', label: 'New evaluation', hint: 'AI quality: Checks', run: () => s.openIntent('evaluations', { host: 'ai' }) },
-      { id: 'rag-connect', label: 'Connect a RAG bot', hint: 'RAG bots: Bots', run: () => s.openIntent('rag', { tab: 'bots', connect: true }) },
-      { id: 'ai-start', label: 'Check an AI answer', hint: 'AI quality: Start', run: () => s.openIntent('ai', { tab: 'start' }) },
+      { id: 'eval', label: 'New evaluation', hint: where(VIEW_NAME.aiQuality, AI_TAB_NAME.checks), run: () => s.openIntent('evaluations', { host: 'ai' }) },
+      { id: 'rag-connect', label: 'Connect a RAG bot', hint: where(VIEW_NAME.rag, RAG_TAB_NAME.bots), run: () => s.openIntent('rag', { tab: 'bots', connect: true }) },
+      { id: 'ai-start', label: 'Check an AI answer', hint: where(VIEW_NAME.aiQuality, AI_TAB_NAME.start), run: () => s.openIntent('ai', { tab: 'start' }) },
       { id: 'shortcuts', label: 'Keyboard shortcuts', hint: keyLabel('shortcuts', bindings), run: () => s.set({ shortcutsOpen: true }) },
       { id: 'keyboard-settings', label: 'Keyboard shortcuts: Change the keys…', hint: 'Settings', run: () => s.openIntent('settings', { tab: 'keyboard' }) },
       { id: 'git-ready', label: 'Make workspace ready for Git', hint: 'Workspace', run: () => void runMenuCommand('git-ready') },
