@@ -83,7 +83,7 @@ export function FlowInspector({
   const timelineIndex = viewRun ? Math.max(0, one ? viewRun.results.findIndex((r) => r.id === one.id) : viewRun.results.length - 1) : 0;
   const copied = getCopied();
   return (
-    <div className="h-full overflow-auto text-sm" data-flow-inspector>
+    <div className="h-full overflow-y-auto overflow-x-hidden min-w-0 text-sm" data-flow-inspector>
       {pause && <PausePanel key={`${pause.runId}:${pause.stepId}`} pause={pause} stepName={flow.steps.find((s) => s.id === pause.stepId)?.name ?? pause.stepId} onResume={onResume} />}
       {viewRun && (
         <div className="grid gap-3 p-3 border-b border-line" data-flow-run-view={viewRun.runId}>
