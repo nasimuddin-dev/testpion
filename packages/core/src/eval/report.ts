@@ -111,6 +111,8 @@ export interface EvalReportToolUse {
   used: Array<{ name: string; calls: number; cases: number }>;
   /** Tools the evaluation offers that no case called. */
   neverCalled: string[];
+  /** Called tools whose declared arguments no case ever passed (an argument no case exercises). */
+  argumentsNeverPassed: Array<{ tool: string; arguments: string[] }>;
   text: string;
 }
 
@@ -361,23 +363,31 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   // an agent evaluation: which tools were called, and which of the offered tools no case called
   let toolUse: EvalReportToolUse | undefined;
   if (saved?.type === 'agent' && trajectories.size) {
-    const calls = new Map<string, { calls: number; cases: Set<string> }>();
+    const calls = new Map<string, { calls: number; cases: Set<string>; passed: Set<string> }>();
     for (const [key, t] of trajectories)
       for (const it of t.items)
         if (it.kind === 'tool' && it.tool) {
-          const e = calls.get(it.tool.name) ?? { calls: 0, cases: new Set<string>() };
+          const e = calls.get(it.tool.name) ?? { calls: 0, cases: new Set<string>(), passed: new Set<string>() };
+          for (const a of Object.keys(it.tool.arguments ?? {})) e.passed.add(a);
           e.calls++;
           e.cases.add(key);
           calls.set(it.tool.name, e);
         }
     const offered = (saved.tools ?? []).map((t) => t.name);
     const neverCalled = offered.filter((n) => !calls.has(n));
+    const argumentsNeverPassed = (saved.tools ?? []).flatMap((t) => {
+      const e = calls.get(t.name);
+      const declared = Object.keys(((t.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {}) as Record<string, unknown>);
+      const missing = e ? declared.filter((a) => !e.passed.has(a)) : [];
+      return missing.length ? [{ tool: t.name, arguments: missing }] : [];
+    });
     const used = [...calls].map(([name, e]) => ({ name, calls: e.calls, cases: e.cases.size })).sort((a, b) => b.calls - a.calls);
     toolUse = {
       used,
       neverCalled,
+      argumentsNeverPassed,
       text: used.length
-        ? `Tools called: ${used.slice(0, 5).map((u) => `${u.name} in ${plural(u.cases, 'case')}`).join(', ')}${used.length > 5 ? ` and ${used.length - 5} more` : ''}.${neverCalled.length ? ` Never called: ${neverCalled.join(', ')}.` : ''}`
+        ? `Tools called: ${used.slice(0, 5).map((u) => `${u.name} in ${plural(u.cases, 'case')}`).join(', ')}${used.length > 5 ? ` and ${used.length - 5} more` : ''}.${neverCalled.length ? ` Never called: ${neverCalled.join(', ')}.` : ''}${argumentsNeverPassed.length ? ` Arguments no case passed: ${argumentsNeverPassed.map((a) => `${a.tool} (${a.arguments.join(', ')})`).join('; ')}.` : ''}`
         : `No tool was called in any case.${neverCalled.length ? ` Never called: ${neverCalled.join(', ')}.` : ''}`,
     };
   }

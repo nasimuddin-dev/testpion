@@ -44,7 +44,7 @@ beforeAll(() => {
       concurrency: 1,
       retries: 0,
       tools: [
-        { name: 'add_task', description: 'Add a task', inputSchema: { type: 'object', properties: { title: { type: 'string' } } }, result: { id: 'task-1' } },
+        { name: 'add_task', description: 'Add a task', inputSchema: { type: 'object', properties: { title: { type: 'string' }, due: { type: 'string' } } }, result: { id: 'task-1' } },
         { name: 'list_tasks', description: 'List tasks', inputSchema: { type: 'object', properties: {} }, result: { tasks: [] } },
         { name: 'delete_task', description: 'Delete a task', inputSchema: { type: 'object', properties: {} }, result: { ok: true } },
       ],
@@ -68,7 +68,9 @@ describe('the golden trajectory of an agent evaluation', () => {
     // the tools the cases called, and the offered ones no case called
     expect(before.toolUse.used).toEqual([{ name: 'add_task', calls: 1, cases: 1 }, { name: 'list_tasks', calls: 1, cases: 1 }]);
     expect(before.toolUse.neverCalled).toEqual(['delete_task']);
-    expect(before.toolUse.text).toBe('Tools called: add_task in 1 case, list_tasks in 1 case. Never called: delete_task.');
+    // a declared argument no case passed
+    expect(before.toolUse.argumentsNeverPassed).toEqual([{ tool: 'add_task', arguments: ['due'] }]);
+    expect(before.toolUse.text).toBe('Tools called: add_task in 1 case, list_tasks in 1 case. Never called: delete_task. Arguments no case passed: add_task (due).');
     expect(before.text).toContain('Never called: delete_task.');
     const set = cliData((await cli(['eval', 'baseline', 'last', '-w', ws, '--json'])).out);
     expect(set).toMatchObject({ evaluation: NAME });

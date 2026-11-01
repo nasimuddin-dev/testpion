@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Agent evaluations: arguments no case passed
+
+- The report of an agent evaluation now also names the arguments a called tool declares that no case ever passed (*Arguments no case passed: add_task (due)*), in amber like a tool nothing called; `toolUse.argumentsNeverPassed` in `testpion eval summary --json`.
+
 ### Team work: before you pull
 
 - **Waiting on origin/main** in the Git view: when your team pushed, a fold-out lists the incoming commits and what they change in words (*Point search at v2: MCP server Search: URL*) before you pull. `testpion git incoming [--limit n] [--json]` says the same, and an AI agent's `git_status` carries it as `incoming`.

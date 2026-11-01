@@ -60,7 +60,7 @@ Open **Compare** on an agent evaluation and add a variant: another model, or oth
 
 ### Which tools did the cases use? {#tool-use}
 
-The report card of an agent evaluation says which tools the cases called and in how many cases (*Tools called: add_task in 3 cases*). It also lists the tools the agent offers that **no case called** (*Never called: delete_task*), in amber. A tool nothing calls is a tool nothing tests: add a case that needs it, or a case that should refuse it. The same line is in `testpion eval summary --json` as `toolUse`.
+The report card of an agent evaluation says which tools the cases called and in how many cases (*Tools called: add_task in 3 cases*). It also lists the tools the agent offers that **no case called** (*Never called: delete_task*), in amber. It also names the arguments a called tool declares that **no case ever passed** (*Arguments no case passed: add_task (due)*). A tool nothing calls is a tool nothing tests: add a case that needs it, or a case that should refuse it. The same line is in `testpion eval summary --json` as `toolUse`.
 
 ### A golden run: has the agent started using other tools? {#baseline}
 
