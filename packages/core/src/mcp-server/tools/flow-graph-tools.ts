@@ -83,7 +83,7 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
             properties: {
               name: str('The step name'),
               type: { type: 'string', enum: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log', 'set', 'assert', 'wait'] },
-              if: str("An expression: the step runs only when it is true (status == 200 && $.role == 'admin' && {{count}} > 0); for type condition, the condition"),
+              if: str("The step runs only when this is true (status == 200 && $.role == 'admin'); for type condition, the condition"),
               when: { type: 'boolean', description: 'The branch of the condition it depends on: true or false' },
               repeat: { type: 'integer', minimum: 0, maximum: 10000, description: 'Run the step this many times ({{$index}} = 0, 1, …)' },
               forEach: { description: 'Run once per row: a list of rows, or { dataset: path }', anyOf: [{ type: 'array' }, { type: 'object', properties: { dataset: { type: 'string' }, limit: { type: 'integer' } }, required: ['dataset'] }] },
@@ -92,7 +92,7 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
               inputs: { type: 'object', additionalProperties: true, description: "type flow: the sub-flow's variables" },
               message: str('type log: the text to show, with {{variables}}'),
               until: {
-                description: "Wait until: run the request again until this holds on its response: { if: \"$.status == 'done'\", every: '2s', timeout: '60s', backoff: 1.5, maxEvery: '30s' } or just the expression",
+                description: "Run the request again until this holds: { if: \"$.status == 'done'\", every: '2s', timeout: '60s', backoff: 1.5, maxEvery: '30s' }, or the expression",
                 anyOf: [
                   { type: 'string' },
                   {
@@ -102,8 +102,8 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
                   },
                 ],
               },
-              finally: { type: 'boolean', description: 'A clean-up step: runs after every other step of the file, whatever happened (nothing may wait for it)' },
-              parallel: str('A parallel group: steps with the same group may run at the same time (dependsOn still applies)'),
+              finally: { type: 'boolean', description: 'A clean-up step: runs last, whatever happened' },
+              parallel: str('A parallel group: steps with the same group may run at once'),
               set: { type: 'object', additionalProperties: true, description: 'type set: { name: "{{template}}" } to write' },
               scope: { type: 'string', enum: ['run', 'environment', 'collection', 'global'], description: 'type set: where the values go (default run)' },
               subject: { type: 'string', enum: ['response', 'variables'], description: "type assert: what the assertions check (default the previous step's response)" },

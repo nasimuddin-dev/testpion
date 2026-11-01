@@ -243,22 +243,22 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
   },
   spec_gaps: {
     when: 'Use it when the user wants to learn what the workspace never tests about an API definition: operations never called, statuses never asserted, no negative, boundary, security or contract test; deterministic, no model.',
-    whenNot: 'For which operations the last run exercised, use `api_coverage`; to write the tests, use `spec_tests_generate` (or `generate_tests` for one happy path and one invalid request per operation).',
+    whenNot: 'What the last run exercised: `api_coverage`; to write the tests: `spec_tests_generate` or `generate_tests`.',
     example: { spec: 'specs/veterinary-api.yaml' },
   },
   spec_tests_generate: {
-    when: "Use it when the user wants tests for the gaps in an API definition's tests: negative, boundary and security cases, not one example per operation. TestPion builds them from the document, its own model adds ideas; it proposes them validated, with the coverage before and after.",
-    whenNot: 'For one happy path and one invalid request per operation, use `generate_tests`; to write a test yourself, `write_test_file`. Apply with `ai_apply_proposal` after the user agrees. `noAi: true`: TestPion’s own cases only.',
+    when: "Use it when the user wants tests for the gaps in an API definition's tests: negative, boundary and security cases, built from the document (a model adds ideas), proposed validated with the coverage before and after.",
+    whenNot: 'For one happy path and one invalid request per operation, `generate_tests`. Apply with `ai_apply_proposal` after the user agrees; `noAi: true` skips the model.',
     example: { spec: 'specs/veterinary-api.yaml', categories: ['negative', 'security'] },
   },
   tidy_import: {
-    when: "Use it when the user wants a fresh import (Postman, curl, HAR, Insomnia, Bruno) tidied: names and folders, the host and the token as variables, ids chained from earlier responses, tracking requests dropped; it proposes, and checks that every request still sends what it sent.",
-    whenNot: 'For duplicates, empty folders and unused variables only, use `collection_tidy`; to change one request, use `update_request`. Apply the proposal with `ai_apply_proposal` after the user agrees; `ai_undo_proposal` puts the collection back.',
+    when: 'Use it when the user wants a fresh import tidied: names and folders, host and token as variables, ids chained from earlier responses, tracking requests dropped; it proposes, and checks every request still sends what it sent.',
+    whenNot: 'For duplicates, empty folders and unused variables only, `collection_tidy`; one request, `update_request`. Apply with `ai_apply_proposal` after the user agrees.',
     example: { collection: 'HAR import 2026-10-19', source: 'har', flow: true },
   },
   security_tests_generate: {
-    when: "Use it when the user wants security tests for an API they own: BOLA (a second user reading the first user's objects), broken authentication, mass assignment, function-level authorization. Every verdict is a check computed from the responses, never the model's opinion.",
-    whenNot: 'For schema fuzzing, use `api_fuzz`; for leaked secrets and insecure settings, use `security_review`. Never against production. Apply with `ai_apply_proposal` after the user agrees, then `security_tests_run`.',
+    when: "Use it when the user wants security tests for an API they own: BOLA, broken authentication, mass assignment, function-level authorization. Every verdict is computed from the responses, never the model's opinion.",
+    whenNot: 'Schema fuzzing: `api_fuzz`; leaked secrets: `security_review`. Never against production. Apply with `ai_apply_proposal`, then `security_tests_run`.',
     example: { collection: 'Veterinary API', identities: { owner: 'tokenA', other: 'tokenB' }, environment: 'staging' },
   },
   security_tests_run: {
@@ -267,17 +267,17 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { path: 'security/veterinary-api.yaml', environment: 'staging' },
   },
   contract_drift: {
-    when: 'Use it when the user wants to know where real traffic (History, a HAR file, a run) differs from an OpenAPI document: undocumented fields, statuses and endpoints, type changes, nulls, enum values. With `ai: true`, also who is right and a verified fix proposal.',
-    whenNot: 'To compare two versions of a document, use `openapi_diff`; to lint one, `openapi_lint`; to check one response, add an `openapi` check to the request. Apply with `ai_apply_proposal` after the user agrees.',
+    when: 'Use it to see where real traffic (History, a HAR file, a run) differs from an OpenAPI document: undocumented fields, statuses, endpoints, type changes, enum values. `ai: true` adds who is right and a verified fix proposal.',
+    whenNot: 'Two versions of a document: `openapi_diff`; lint: `openapi_lint`; one response: an `openapi` check. Apply with `ai_apply_proposal` after the user agrees.',
     example: { spec: 'specs/veterinary-api.yaml', source: 'history', limit: 200, ai: true },
   },
   write_script: {
-    when: 'Use it when the user wants a pre-request or post-response script written (or a broken one fixed from its error): it uses the tp.* script API as the sandbox has it and is run once in the sandbox before it is offered.',
-    whenNot: 'For checks on a response, use `ai_run_task` with generate-assertions (JSON checks, no script); to edit a request yourself, use `update_request`. Apply the proposal with `ai_apply_proposal` after the user agrees.',
+    when: 'Use it when the user wants a pre-request or post-response script written, or a broken one fixed from its error: tp.* as the sandbox has it, run once there before it is offered.',
+    whenNot: 'Checks on a response: `ai_run_task` with generate-assertions (no script). Apply with `ai_apply_proposal` after the user agrees.',
     example: { describe: 'save the id of the first paid order in a variable', phase: 'post', request: 'request:veterinary-api:req-list-orders' },
   },
   search_ask: {
-    when: "Use it to find requests sent, runs, test results or traces from a question in plain words (\"failed payment calls last week over 2 s\", \"flaky tests\", \"traces where a tool timed out\"), or with a query of your own: TestPion's model only translates the question, TestPion runs the query, and the answer says how it was understood.",
+    when: "Use it to find requests sent, runs, results or traces from a question in plain words (\"failed payment calls last week over 2 s\"): TestPion's model only translates the question, TestPion runs the query and says how it understood it.",
     whenNot: 'To find a request, test, environment or variable by name, use `search_workspace`; to list history or runs with simple filters, `history_list` or `list_runs`; to read a run’s failures, `recent_failures`.',
     example: { question: 'failed payment calls last week over 2 s', sources: ['history'] },
     narrow: 'Name the `sources`, set `limit` (1 to 200) and `offset`: the outcome says `truncated: true` with `nextOffset` / `nextCursor` when more follow; pass `cursor` (or `offset`) back.',
@@ -695,6 +695,12 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     example: { file: 'collections/veterinary-api.json' },
     narrow: 'Give `file` or `item_id`, lower `limit`, or page with `cursor`.',
   },
+  team_comments: {
+    when: 'Use it to read what the team still asks about an item before changing it (`open`), or to answer in its thread (`add`, `resolve`).',
+    whenNot: 'For the workspace note or secrets to fill in, use `what_needs_attention`.',
+    example: { action: 'add', ref: { kind: 'request', collectionId: 'payments', requestId: 'create-invoice' }, text: 'Renamed the header to X-Trace-Id as asked.' },
+    narrow: 'Use `list` with one `ref` instead of `open`.',
+  },
   git_log: {
     when: 'Use it to see recent commits, or those that changed one file or collection.',
     whenNot: 'For what changed in them, use `git_diff` with `from` and `to`.',
@@ -780,7 +786,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── Generating ─────────────────────────────────────────────────────────
   generate_tests: {
-    when: 'Use it to write a first test suite from an OpenAPI document: success, contract and negative tests per operation. With `ai: true` it proposes (writes nothing) gap-driven positive, negative, boundary and security tests with the coverage before and after, like `spec_tests_generate`.',
+    when: 'Use it to write a first test suite from an OpenAPI document: success, contract and negative tests per operation. `ai: true` proposes gap-driven cases instead (like `spec_tests_generate`).',
     whenNot: 'For CRUD flows across operations, use `generate_flows`; to see the gaps first, use `spec_gaps` (what is never tested) or `api_coverage` (what the last run exercised).',
     example: { spec: 'specs/veterinary-api.yaml', negative: true },
   },
@@ -798,7 +804,7 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
 
   // ── HTTP Debugger ──────────────────────────────────────────────────────
   debugger_capture: {
-    when: 'Use it to start the proxy (optionally through a corporate gateway: upstream, no_upstream_for, ca_files, client_certs), then run a program through it or start one with action launch (proxy variables and switches for node, python, java, dotnet, curl, browsers); pause / resume stop and restart listing.',
+    when: 'Use it to start the proxy (a corporate gateway: upstream, no_upstream_for, ca_files, client_certs), run a program through it or start one with action launch (node, python, java, dotnet, curl, browsers); pause / resume stop and restart listing.',
     whenNot: 'To read what was captured, use `debugger_exchanges`.',
     example: { action: 'start' },
   },

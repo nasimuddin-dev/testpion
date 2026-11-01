@@ -133,6 +133,8 @@ describe('the shape of every tool', () => {
         'git_propose_commit',
         'git_stage_item',
         'restore_item',
+        // a comment or its settled mark in comments/<item>.json, the way the Info panel writes it (git brings the old file back)
+        'team_comments',
         // the person's own pass/fail label of a result, in labels/*.json (the editor of the matrix does the same)
         'rag_label',
         // adds one example to a custom metric's own file, as text, the way the editor does (git brings the old file back)

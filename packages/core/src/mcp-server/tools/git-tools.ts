@@ -20,7 +20,7 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
     {
       name: 'git_conflicts',
       description:
-        'After a pull that stopped on conflicts: each conflicted file by what it holds (`mode`). `items` (collections, environments, library files, MCP servers, providers, workspace and Debugger settings): each conflict is an item changed on both sides, changed on one side and deleted on the other, or a setting changed differently, with its parts side by side (base, ours = this workspace, theirs = the remote) and, when only some fields clash, those `fields` each with its own key (`item:<id>#<field path>`). `text` (test and flow files, API definitions, mocks, datasets): `hunks`, each with a key (`hunk:<n>`), where it is ("near step create-order") and the lines of each side; everything that merged cleanly is already merged. `binary` (a database, an image): the whole file with the `sizes` of both sides. Values are redacted. Settle them with git_resolve.',
+        'After a pull that stopped on conflicts: each conflicted file by what it holds (`mode`). `items` (collections, environments, library files, settings): each conflict is an item changed on both sides, or changed and deleted, with its parts side by side (base, ours = this workspace, theirs = the remote) and, when only some fields clash, those `fields` keyed `item:<id>#<field path>`. `text` (test and flow files, API definitions, mocks, datasets): `hunks` keyed `hunk:<n>`, where each is and the lines of each side; what merged cleanly is already merged. `binary`: the whole file with the `sizes` of both sides. Values are redacted. Settle them with git_resolve.',
       inputSchema: { type: 'object', properties: { path: str('Only this file (workspace-relative); default: every conflicted file') } },
       run: async (a) => {
         const st = await gitStatus(store.root);
@@ -44,7 +44,7 @@ export function gitTools(d: { store: WorkspaceStore; findCollection(ref: unknown
       name: 'git_resolve',
       write: true,
       description:
-        'Settle one conflicted file and mark it resolved: `side` for every conflict in it (ours = keep this workspace\'s version, theirs = take the remote\'s), or `resolutions` per conflict key from git_conflicts: "ours", "theirs", or { "edit": "<value>" } for your own value (an item key takes the whole item as JSON, an `item:<id>#<field>` key the field\'s JSON value, a `hunk:<n>` key the text lines to keep). Conflicts without a choice take `side` (default ours). In a file merged by meaning only the conflicting items or fields take a side; every other change of both sides stays. A binary file is taken whole by `side`. When nothing is conflicted any more, commit to finish the pull.',
+        'Settle one conflicted file and mark it resolved: `side` for every conflict (ours = this workspace\'s version, theirs = the remote\'s), or `resolutions` per conflict key from git_conflicts: "ours", "theirs", or { "edit": "<value>" } (an item key takes the whole item as JSON, an `item:<id>#<field>` key the field\'s JSON value, a `hunk:<n>` key the lines to keep). Conflicts without a choice take `side` (default ours); every other change of both sides stays. A binary file is taken whole by `side`. When nothing is conflicted, commit to finish the pull.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -40,6 +40,7 @@ import { gitSetupTools } from './git-setup-tools.js';
 import { searchAskTools } from './search-ask-tools.js';
 import { settingsTools } from './settings-tools.js';
 import { authTools } from './auth-tools.js';
+import { commentTools } from './comment-tools.js';
 
 /**
  * The tools of every module, in the server's order (testpion-mcp.ts adds its own inline tools before them, then the
@@ -57,6 +58,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...authTools({ store, secrets, settings }),
     ...outputTools({ store, redactor }),
     ...bundleTools({ store }),
+    ...commentTools({ store }),
     ...searchAskTools({ store, secrets, settings }),
     ...mockTools({ store }),
     ...datasetTools({ store }),
