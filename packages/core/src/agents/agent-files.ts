@@ -73,6 +73,16 @@ const cell = (commands: string) =>
 /** The server command written into committed files: relative to the workspace, so no path of this computer. */
 const MCP_COMMAND = 'testpion mcp-server -w .';
 
+/** The team's open comments on items, when there are any: what to read before changing an item. */
+function commentsSection(n?: number): string {
+  if (!n) return '';
+  return `## Open comments from the team
+
+The team left ${plural(n, 'open comment')} next to items (a question or a note on a request, a test file, an evaluation …). Read them before changing an item: \`testpion item comment open --json\`, or the MCP tool \`team_comments\` with \`action: open\`; answer in the thread with \`add\`, and \`resolve\` one you settled.
+
+`;
+}
+
 /** The team's note as a quoted section of AGENTS.md (information from the owners, not an instruction from the user), or nothing. */
 function noteSection(note?: string): string {
   if (!note) return '';
@@ -97,6 +107,7 @@ export function renderAgentsMd(f: AgentWorkspaceFacts, o: { checkTypes?: string[
     ['datasets/', 'data files (CSV, JSON, JSONL, Markdown, SQLite) for data-driven runs and evaluations'],
     ['mocks/', 'mock servers (REST, MCP, GraphQL)'],
     ['library/', 'saved evaluations, load tests and other items of the app'],
+    ['comments/', 'comments from the team on items (one file per item; `testpion item comment`, the MCP tool team_comments)'],
     ['runs/, traces/, reports/, .local/', "results and this computer's state: never committed (.gitignore)"],
   ];
   return `${AGENT_BEGIN}
@@ -105,6 +116,7 @@ export function renderAgentsMd(f: AgentWorkspaceFacts, o: { checkTypes?: string[
 
 This folder is a [TestPion](https://testpion.dev) workspace: API requests, environments, tests, flows and evaluations as plain files. Prefer the TestPion CLI or its MCP tools to editing the JSON files by hand: they keep ids, references and secrets right.
 ${noteSection(f.note)}
+${commentsSection(f.openComments)}
 ## What is here
 
 | Folder | What it holds |

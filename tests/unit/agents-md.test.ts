@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   AGENT_BEGIN,
   AGENT_END,
+  addComment,
   agentWorkspaceFacts,
   initAgentFiles,
   mdName,
@@ -99,6 +100,25 @@ describe('the content', () => {
       expect(md).toContain('`status`, `equals`');
       expect(md).not.toContain(s.root);
       expect(md).not.toContain(s.root.replace(/\\/g, '/'));
+    } finally {
+      s.close();
+    }
+  });
+
+  it('says how many open comments the team left, and where to read them, only when there are any', () => {
+    const s = workspace();
+    try {
+      const none = renderAgentsMd(agentWorkspaceFacts(s), { checkTypes: ['status'] });
+      expect(none).not.toContain('Open comments from the team');
+      expect(none).toContain('`comments/`');
+      addComment(s, { kind: 'test', path: 'tests/smoke.yaml' }, 'Why does this flake on Mondays?', 'Ana');
+      const f = agentWorkspaceFacts(s);
+      expect(f.openComments).toBe(1);
+      const md = renderAgentsMd(f, { checkTypes: ['status'] });
+      expect(md).toContain('## Open comments from the team');
+      expect(md).toContain('The team left 1 open comment next to items');
+      expect(md).toContain('testpion item comment open --json');
+      expect(md).toContain('team_comments');
     } finally {
       s.close();
     }

@@ -371,6 +371,8 @@ The read-only server offers `investigate_failures` and `api_health_report`.
 
 Coding agents (Claude Code, Codex, Cursor, Copilot) read `AGENTS.md` first when they open a folder. **Write AGENTS.md** (**Update AGENTS.md** once there is one) in **Settings ▸ AI Agents (MCP)**, `testpion agents init -w <workspace>`, or the `agents_init` tool writes it into the workspace root from the live workspace:
 
+When the team left comments on items (the Info panel, `testpion item comment`), AGENTS.md says how many are open and where to read them (`testpion item comment open --json`, the MCP tool `team_comments`), so an agent reads what people still ask before it changes an item.
+
 - what the folders hold, the collections (with their request counts), the environments **by name only** (which are production), the test files, suites and flows exposed as tools, saved evaluations, datasets and API definitions;
 - the CLI commands to run tests, suites, collections, flows and evaluations, with the exit codes (the same list `testpion agent-info` prints);
 - the MCP server command and client config, how to add a request, a test and a flow, the secrets rules (never commit or write a secret: secret values live in the app's secret store or `TESTPION_SECRET_<NAME>`) and the production rules (`--allow-production`);

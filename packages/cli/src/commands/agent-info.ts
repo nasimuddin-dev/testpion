@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { AGENT_ENVIRONMENT, agentCommands, agentMcp, ENGINE_VERSION, EXIT_CODES } from '@testpion/core';
+import { AGENT_ENVIRONMENT, agentCommands, agentMcp, ENGINE_VERSION, EXIT_CODES, openComments } from '@testpion/core';
 import { respond, withWorkspace, WORKSPACE_OPTION } from '../shared.js';
 
 /**
@@ -20,7 +20,9 @@ export function registerAgentInfoCommand(program: Command): void {
           root: store.root,
           collections: store.listCollections().map((c) => c.name),
           environments: store.listEnvironments().map((e) => e.name),
-          folders: { tests: 'tests/ (YAML test files and *.suite.yaml)', specs: 'specs/ (OpenAPI, AsyncAPI)', datasets: 'datasets/', mocks: 'mocks/', collections: 'collections/' },
+          folders: { tests: 'tests/ (YAML test files and *.suite.yaml)', specs: 'specs/ (OpenAPI, AsyncAPI)', datasets: 'datasets/', mocks: 'mocks/', collections: 'collections/', comments: 'comments/ (comments from the team on items)' },
+          // what the team still asks about items: read before changing one (`testpion item comment open --json`)
+          openComments: openComments(store).length,
         }));
       } catch {
         workspace = null;

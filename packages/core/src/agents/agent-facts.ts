@@ -8,6 +8,7 @@
  * written (see agent-files.ts).
  */
 import { existsSync, readdirSync } from 'node:fs';
+import { openComments } from '../storage/comments.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore, TestFileNode } from '../storage/workspace.js';
 import { exposedFlows } from '../runner/exposed-flows.js';
@@ -65,6 +66,8 @@ export interface AgentWorkspaceFacts {
   name: string;
   /** The team's note about the workspace (Home ▸ A note for your team), when there is one. */
   note?: string;
+  /** How many comments the team left on items that are still open (comments/): read them before changing an item. */
+  openComments?: number;
   collections: Array<{ name: string; requests: number }>;
   /** Names only, never a variable. */
   environments: Array<{ name: string; production: boolean }>;
@@ -108,6 +111,7 @@ export function agentWorkspaceFacts(store: WorkspaceStore): AgentWorkspaceFacts 
   return {
     name: store.workspace.name,
     ...(store.workspace.description?.trim() ? { note: store.workspace.description.trim() } : {}),
+    ...(safe(() => openComments(store)).length ? { openComments: safe(() => openComments(store)).length } : {}),
     collections: safe(() => store.listCollections().filter((c) => !c.problem))
       .map((c) => ({ name: c.name, requests: requestCount(c.items ?? []) }))
       .sort((a, b) => byName(a.name, b.name)),
