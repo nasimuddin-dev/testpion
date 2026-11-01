@@ -1,3 +1,4 @@
+import { EmptyNote } from './ui';
 import { trafficKindLabel } from '../lib/traffic-kinds';
 import { useState, type ReactNode } from 'react';
 import { formatMs, plural } from '../lib/format';
@@ -224,7 +225,7 @@ function Slowest({ rows }: { rows: Activity['slowest'] }) {
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted py-3">No timed requests in this period.</p>
+        <EmptyNote>No timed requests in this period.</EmptyNote>
       )}
     </ChartCard>
   );

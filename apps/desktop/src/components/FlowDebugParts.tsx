@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { TestResult } from '../types';
 import { formatMs, timeAgo } from '../lib/format';
 import { StatusIcon } from './Results';
-import { Badge, Button, cx, Empty, Input, LinkButton, SectionTitle } from './ui';
+import { Badge, Button, cx, Empty, Input, LinkButton, SectionTitle, EmptyNote } from './ui';
 import { EnvBadge } from './EnvSelect';
 import { valueText, VariablesTable } from './VariablesTable';
 
@@ -232,7 +232,7 @@ export function PausePanel({ pause, stepName, onResume }: { pause: FlowPause; st
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted">No variables yet.</p>
+        <EmptyNote>No variables yet.</EmptyNote>
       )}
       <p className="text-xs text-muted">A changed value holds for the rest of this run only; the environment and the file stay as they are.</p>
     </div>

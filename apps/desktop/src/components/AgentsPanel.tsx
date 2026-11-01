@@ -3,7 +3,7 @@ import { Bot, Copy, FileText, PlugZap, Workflow } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { toastError, useApp, attempt } from '../store';
-import { Badge, Button, Tabs, Toggle } from './ui';
+import { Badge, Button, Tabs, Toggle, EmptyNote } from './ui';
 import { copyText } from '../lib/clipboard';
 import { RunInTerminalButton } from './RunInTerminal';
 import { plural } from '../lib/format';
@@ -219,7 +219,7 @@ export function AgentsPanel() {
             ))}
           </ul>
         ) : (
-          <div className="text-sm text-muted">None yet.</div>
+          <EmptyNote>None yet.</EmptyNote>
         )}
         <p className="text-xs text-muted leading-relaxed">
           A test file or suite with an <span className="mono">expose:</span> block (Tests ▸ a file's menu ▸ <b>Expose as MCP tool…</b>, or <span className="mono">testpion flows</span>) is a tool of its own: an agent calls it by name with the inputs as arguments and gets each step's result and the values

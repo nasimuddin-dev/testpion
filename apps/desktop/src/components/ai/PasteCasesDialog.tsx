@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { caseColumns, guessCaseColumns, mapCaseColumns, parsePastedCases, type CaseRow } from '@testpion/shared';
 import { plural } from '../../lib/format';
-import { Button, Field, Modal, Select, Textarea, Toggle } from '../ui';
+import { Button, Field, Modal, Select, Textarea, Toggle, EmptyNote } from '../ui';
 
 /**
  * Paste cases (AU-10): cells copied from a spreadsheet, a CSV, JSONL or a JSON list. The columns are found, the one that
@@ -85,7 +85,7 @@ export function PasteCasesDialog({ inputName, expectedField, initial, onApply, o
             <div className="text-xs text-muted">The table will have the columns: {finalColumns.join(', ')}.</div>
           </>
         ) : (
-          <div className="text-sm text-muted">Nothing found yet.</div>
+          <EmptyNote>Nothing found yet.</EmptyNote>
         )}
       </div>
     </Modal>

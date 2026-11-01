@@ -7,7 +7,7 @@ import { aiSetupAction } from '../../lib/ai-errors';
 import { formatMs, formatCost, timeAgo } from '../../lib/format';
 import { openRef } from '../../lib/open-ref';
 import type { AskSearchRequest } from '../../store';
-import { Badge, Button, Callout, IconButton, Input, Modal, Select, Spinner, useDebounced } from '../ui';
+import { Badge, Button, Callout, IconButton, Input, Modal, Select, Spinner, useDebounced, EmptyNote } from '../ui';
 import { AiEstimateLine, estimateOf, type EstimateState } from './AiEstimateLine';
 
 /** What `search.fields` tells the editor: the fields, the sources and the operator labels. */
@@ -428,7 +428,7 @@ export function AskSearchDialog({ request, onClose }: { request: AskSearchReques
                   {o.rows.map((r) => (
                     <Hit key={`${r.source}:${r.id}`} row={r} labels={labels} onOpen={() => open(r)} />
                   ))}
-                  {!o.rows.length && <div className="px-3 py-4 text-muted">Nothing matches. Loosen a filter above and search again.</div>}
+                  {!o.rows.length && <EmptyNote inset>Nothing matches. Loosen a filter above and search again.</EmptyNote>}
                 </div>
               </section>
             )}

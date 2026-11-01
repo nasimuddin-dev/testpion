@@ -7,7 +7,7 @@ import { OFFLINE_DEMO_LABEL } from '../../lib/offline-demo';
 import { useCollectionTree } from '../../lib/collections-store';
 import { useApp, toastError, type AssistantRequest } from '../../store';
 import type { CheckConfig, ProviderConfig } from '../../types';
-import { Badge, Button, Field, Input, Modal, NamedOptions, Select, useDebounced } from '../ui';
+import { Badge, Button, Field, Input, Modal, NamedOptions, Select, useDebounced, EmptyNote } from '../ui';
 import { AiPreviewDialog } from './AiPreviewDialog';
 import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiRunFooter, AiTitle, discardProposal, useAiEstimate, useAiRun } from './ai-run';
 import { AiEstimateLine } from './AiEstimateLine';
@@ -204,7 +204,7 @@ export function GenerateCasesDialog({ draft, evaluation, providers, initialHint,
           {source === 'documents' && (
             <Field label="Documents of the workspace" hint="Markdown, text and HTML files. Tick a folder to use everything in it.">
               <div className="border border-line rounded-lg max-h-40 overflow-auto" data-gen-cases-files>
-                {!files.length && !folders.length && <div className="p-3 text-muted">No documents in the workspace yet. Add markdown or text files to it first.</div>}
+                {!files.length && !folders.length && <EmptyNote inset>No documents in the workspace yet. Add markdown or text files to it first.</EmptyNote>}
                 {folders.map((f) => (
                   <label key={`d-${f.path}`} className="flex items-center gap-2 px-2 py-1 border-b border-line/60 hover:bg-hover">
                     <input type="checkbox" checked={picked.includes(f.path)} onChange={() => setPicked((p) => (p.includes(f.path) ? p.filter((x) => x !== f.path) : [...p, f.path]))} aria-label={`Folder ${f.path}`} />

@@ -17,7 +17,7 @@ import { RefLink } from './RefLink';
 import { RowMenu } from './TreeParts';
 import { OutputActions } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
-import { Badge, Button, LinkButton, SectionTitle, cx } from './ui';
+import { Badge, Button, LinkButton, SectionTitle, cx, EmptyNote } from './ui';
 import { VirtualList } from './VirtualList';
 
 /** Up to this many lines (files and items) the changes are drawn whole, each file a card; above, a virtual list of lines. */
@@ -156,7 +156,7 @@ export function GitChanges({
         />
       )}
       {!files.length ? (
-        <div className="text-sm text-muted py-3">Nothing changed since the last commit.</div>
+        <EmptyNote>Nothing changed since the last commit.</EmptyNote>
       ) : rows.length > DRAW_ALL ? (
         // a bulk change (an import, a branch switch: thousands of files): one line per file and per item, only those on
         // screen drawn; it scrolls with the view, and the line diff of a file opens under the list

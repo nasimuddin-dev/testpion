@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { EmbeddingMap } from '@testpion/core';
 import { call } from '../../api';
 import { plural } from '../../lib/format';
-import { Button, Callout, cx, Field, Input, Modal, Spinner } from '../ui';
+import { Button, Callout, cx, Field, Input, Modal, Spinner, EmptyNote } from '../ui';
 
 const W = 640;
 const H = 380;
@@ -93,7 +93,7 @@ export function RagEmbeddingMap({ runId, onClose }: { runId: string; onClose(): 
             )}
             <div className="grid gap-1" data-embedding-findings>
               <h4 className="font-medium">Look-alikes</h4>
-              {map.lookAlikes.length === 0 && <p className="text-muted">No retrieved document reads like a right one it is not.</p>}
+              {map.lookAlikes.length === 0 && <EmptyNote>No retrieved document reads like a right one it is not.</EmptyNote>}
               {map.lookAlikes.map((l) => (
                 <button key={l.doc} className="text-left rounded px-2 py-1 hover:bg-hover" onMouseEnter={() => setHover(`d:${l.doc}`)} onMouseLeave={() => setHover(undefined)} data-embedding-lookalike={l.doc}>
                   <span className="mono">{l.doc}</span> reads like the right document <span className="mono">{l.like}</span> <span className="text-muted">({Math.round(l.similarity * 100)}% alike, retrieved for {l.cases.join(', ')})</span>

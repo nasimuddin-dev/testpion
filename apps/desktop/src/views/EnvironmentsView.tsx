@@ -17,7 +17,7 @@ import { KeyValueEditor } from '../components/KeyValueEditor';
 import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, MoreMenu, Split, Tabs, Toggle, EmptyNote } from '../components/ui';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/TreeParts';
 import { buildNodeMenu } from '../lib/node-menu';
@@ -563,7 +563,7 @@ function CurrentValues({ envName }: { envName: string }) {
           </tbody>
         </table>
       ) : (
-        <div className="px-3 py-2 text-xs text-muted">None yet. Scripts can set them with tp.environment.set("key", value).</div>
+        <EmptyNote inset>None yet. Scripts can set them with tp.environment.set("key", value).</EmptyNote>
       )}
     </div>
   );

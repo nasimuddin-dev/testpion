@@ -470,6 +470,11 @@ export interface EmptyAction {
   title?: string;
 }
 
+/** A one-line "nothing here yet" note inside a list or panel (the whole-view version is Empty). `inset` for a note that sits flush against its container's edge. */
+export function EmptyNote({ children, inset }: { children: ReactNode; inset?: boolean }) {
+  return <p className={`text-xs text-muted py-2${inset ? ' px-3' : ''}`}>{children}</p>;
+}
+
 /**
  * An empty view: what it is for, the next step as buttons (`actions`, the first primary; one with `items` opens a menu),
  * and `steps` (a numbered how-to) under them. One layout and one API for every view (WF-18): no other kind of button.

@@ -4,7 +4,7 @@ import { call } from '../api';
 import { promptText, useApp, attempt } from '../store';
 import { confirmDelete, deleteWithUndo } from '../lib/undo-delete';
 import { plural } from '../lib/format';
-import { Badge, Bar, Button, cx, Empty, Field, FilterInput, IconButton, Input, Modal, Toggle } from './ui';
+import { Badge, Bar, Button, cx, Empty, Field, FilterInput, IconButton, Input, Modal, Toggle, EmptyNote } from './ui';
 
 export interface JarCookie {
   name: string;
@@ -133,7 +133,7 @@ export function CookiesModal({ initialDomain, onClose }: { initialDomain?: strin
                 <Badge>{count(d)}</Badge>
               </button>
             ))}
-            {!domains.length && <p className="px-3 py-2 text-xs text-muted">No cookies yet. Cookies from responses appear here automatically.</p>}
+            {!domains.length && <EmptyNote inset>No cookies yet. Cookies from responses appear here automatically.</EmptyNote>}
           </div>
         </div>
 

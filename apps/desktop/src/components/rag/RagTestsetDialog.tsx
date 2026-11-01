@@ -8,7 +8,7 @@ import { applyProposalItems, discardProposal, skippedNote, useAiRun } from '../a
 import { useApp, type AssistantRequest } from '../../store';
 import { AiPreviewDialog } from '../ai/AiPreviewDialog';
 import { ProposalReview } from '../ai/ProposalReview';
-import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, Textarea, cx, useDebounced } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, Select, Spinner, Textarea, cx, useDebounced, EmptyNote } from '../ui';
 import { EstimateLoading, RagEstimateView } from './RagEstimate';
 
 interface Sources {
@@ -155,7 +155,7 @@ export function RagTestsetDialog({ onClose, onDone }: { onClose(): void; onDone?
                   <Spinner />
                 </div>
               )}
-              {src && !src.files.length && <div className="p-3 text-muted">No documents in the workspace yet. Add markdown or text files to it, or give public https pages below.</div>}
+              {src && !src.files.length && <EmptyNote inset>No documents in the workspace yet. Add markdown or text files to it, or give public https pages below.</EmptyNote>}
               {src?.folders.map((f) => (
                 <label key={`d-${f.path}`} className="flex items-center gap-2 px-2 py-1 border-b border-line/60 hover:bg-hover">
                   <input type="checkbox" checked={picked.includes(f.path)} onChange={() => toggle(f.path)} aria-label={`Folder ${f.path}`} />

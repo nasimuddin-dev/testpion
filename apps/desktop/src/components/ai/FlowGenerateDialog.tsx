@@ -6,7 +6,7 @@ import { useCollectionTree } from '../../lib/collections-store';
 import { AiEstimateLine } from './AiEstimateLine';
 import { useApp, type AssistantRequest, type FlowGenerateRequest } from '../../store';
 import type { CollectionNode } from '../../types';
-import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced, NamedOptions } from '../ui';
+import { Badge, Button, Field, Input, Modal, Segmented, Select, Spinner, Textarea, Toggle, useDebounced, NamedOptions, EmptyNote } from '../ui';
 import { AiPreviewDialog, type AiPrivacy } from './AiPreviewDialog';
 import { FlowProposalReview } from './FlowProposalReview';
 import { ProposalReview } from './ProposalReview';
@@ -228,7 +228,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
         />
         {mode === 'spec' ? (
           !specs.length ? (
-            <p className="text-muted">No API definitions in this workspace yet: import an OpenAPI document first.</p>
+            <EmptyNote>No API definitions in this workspace yet: import an OpenAPI document first.</EmptyNote>
           ) : (
             <div className="grid gap-3" data-spec-tests>
               <Field label="API definition">
@@ -278,7 +278,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
           )
         ) : mode === 'collection' || mode === 'security' ? (
           !cols.length ? (
-            <p className="text-muted">No collections in this workspace yet: import or create one, or describe the flow in words.</p>
+            <EmptyNote>No collections in this workspace yet: import or create one, or describe the flow in words.</EmptyNote>
           ) : (
             <div className="grid gap-3">
             <div className="grid grid-cols-2 gap-3">

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { call } from '../../api';
 import { selectEnvironments, toastError, useApp } from '../../store';
 import { openRef } from '../../lib/open-ref';
-import { Badge, Button, Callout, Field, Input, Modal, SectionTitle, Select, Spinner, statusTone, useDebounced } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, SectionTitle, Select, Spinner, statusTone, useDebounced, EmptyNote } from '../ui';
 import { plural } from '../../lib/format';
 
 interface Preview {
@@ -155,7 +155,7 @@ export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; sinc
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-muted">None found: each step waits for the one before it.</p>
+                <EmptyNote>None found: each step waits for the one before it.</EmptyNote>
               )}
             </div>
             {preview.variables.length > 0 && (

@@ -3,7 +3,7 @@ import { ChevronDown, Copy, Download, RefreshCw, ShieldCheck, ShieldOff } from '
 import { memo, useEffect, useMemo, useState } from 'react';
 import { call } from '../api';
 import { confirmAction, toastError, useApp } from '../store';
-import { Badge, Busy, Button, Empty, IconButton, Menu, Modal, SectionTitle, Select, Textarea } from './ui';
+import { Badge, Busy, Button, Empty, IconButton, Menu, Modal, SectionTitle, Select, Textarea, EmptyNote } from './ui';
 import { finishSave, type SaveResult } from '../lib/files';
 import { tryDecodeJwt } from '@testpion/shared';
 import { copyText } from '../lib/clipboard';
@@ -311,7 +311,7 @@ export const FramesView = memo(function FramesView({ frames, open }: { frames: F
         </span>
       </div>
       {!list.length ? (
-        <p className="text-sm text-muted">No frames yet.</p>
+        <EmptyNote>No frames yet.</EmptyNote>
       ) : (
         <table className="text-xs w-full">
           <tbody>

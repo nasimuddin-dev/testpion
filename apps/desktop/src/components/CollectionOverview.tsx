@@ -6,7 +6,7 @@ import { formatMs, plural, timeAgo } from '../lib/format';
 import { BarRow, ChartCard, RecentRuns, StatTile } from './charts';
 import { TimeByPhase } from './RunCharts';
 import { openRef } from '../lib/open-ref';
-import { LinkButton, Badge, cx, statusTone } from './ui';
+import { LinkButton, Badge, cx, statusTone, EmptyNote } from './ui';
 import { FilterChips } from './FilterChips';
 import { useRpc } from '../lib/use-rpc';
 
@@ -208,7 +208,7 @@ export function CollectionOverview({ collection, onOpen, onRun }: { collection: 
                 title={plural(n, `${m} request`)}
               />
             ))}
-            {!methods.length && <p className="text-xs text-muted">No requests yet.</p>}
+            {!methods.length && <EmptyNote>No requests yet.</EmptyNote>}
           </div>
         </ChartCard>
         <ChartCard title="Request health" aside="from responses sent in the app">

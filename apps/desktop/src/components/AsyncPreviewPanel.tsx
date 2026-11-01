@@ -1,7 +1,7 @@
 import { CodeBlock } from './CodeBlock';
 import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, FlaskConical, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
-import { Badge, Busy, Button, Empty } from './ui';
+import { Badge, Busy, Button, Empty, EmptyNote } from './ui';
 import { generateTestsFromDefinition } from '../lib/spec-tests';
 
 import { refOfWorkspacePath } from '@testpion/shared';
@@ -78,7 +78,7 @@ function ChannelRow({ c }: { c: Channel }) {
               )}
             </div>
           ))}
-          {!c.messages.length && <p className="text-xs text-muted">No messages are declared for this channel.</p>}
+          {!c.messages.length && <EmptyNote>No messages are declared for this channel.</EmptyNote>}
         </div>
       )}
     </li>

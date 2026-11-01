@@ -2,7 +2,7 @@ import { Check, Plus, PlugZap, Trash2, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { call } from '../../api';
 import { toastError, useApp } from '../../store';
-import { Button, Callout, Field, IconButton, Input, Modal, SectionTitle, Segmented, Spinner } from '../ui';
+import { Button, Callout, Field, IconButton, Input, Modal, SectionTitle, Segmented, Spinner, EmptyNote } from '../ui';
 
 interface ClientCert {
   id: string;
@@ -195,7 +195,7 @@ export function ConnectionsDialog({ onClose }: { onClose(): void }) {
               Extra certificate authorities
             </SectionTitle>
             <p className="text-xs text-muted">A corporate network often re-signs HTTPS with its own root. Servers whose certificate chains to one of these files are trusted, besides the usual authorities.</p>
-            {cas.length === 0 && <p className="text-xs text-muted">None. Add the PEM file your IT department gave you if the Debugger reports an untrusted certificate.</p>}
+            {cas.length === 0 && <EmptyNote>None. Add the PEM file your IT department gave you if the Debugger reports an untrusted certificate.</EmptyNote>}
             {cas.map((f, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input className="flex-1" value={f} onChange={(e) => patch({ caFiles: cas.map((x, j) => (j === i ? e.target.value : x)) })} placeholder="C:\certs\corp-root.pem" aria-label={`Certificate file ${i + 1}`} />
@@ -209,7 +209,7 @@ export function ConnectionsDialog({ onClose }: { onClose(): void }) {
               Client certificates
             </SectionTitle>
             <p className="text-xs text-muted">For servers that ask who you are (mutual TLS). The key stays in its file; only its passphrase is saved, in the secret store.</p>
-            {certs.length === 0 && <p className="text-xs text-muted">None. Add one when a server answers with a TLS handshake error that asks for a certificate.</p>}
+            {certs.length === 0 && <EmptyNote>None. Add one when a server answers with a TLS handshake error that asks for a certificate.</EmptyNote>}
             {certs.map((c, i) => (
               <div key={c.id || i} className="grid grid-cols-[1fr_1fr_1fr_9rem_auto] gap-2 items-end" data-client-cert>
                 <Field label="Servers" hint="host or *.host">

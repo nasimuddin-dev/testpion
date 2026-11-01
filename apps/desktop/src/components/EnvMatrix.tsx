@@ -2,7 +2,7 @@ import { Lock, RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { plural } from '../lib/format';
-import { Empty, Modal, Spinner, Toggle, cx } from './ui';
+import { Empty, Modal, Spinner, Toggle, cx, EmptyNote } from './ui';
 import { EnvOutputBar } from './EnvOutputBar';
 import { tableOutputSpec } from './output/table-specs';
 
@@ -109,7 +109,7 @@ export function EnvMatrix({ onClose }: { onClose(): void }) {
                 ))}
               </tbody>
             </table>
-            {!rows.length && <div className="p-3 text-muted">Nothing to show.</div>}
+            {!rows.length && <EmptyNote inset>Nothing to show.</EmptyNote>}
           </div>
           <p className="text-xs text-muted">
             Values are never shown here; secrets count as set when the secret store has a value. Agents get the same with the <code>environment_matrix</code> MCP tool; <code>testpion env matrix</code>{' '}

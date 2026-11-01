@@ -51,7 +51,7 @@ const TerminalPanel = lazy(() => import('./TerminalPanel'));
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { EnvQuickLook } from './EnvQuickLook';
 import { useApp, type DialogRequest, type DialogTone, type NavLocation } from '../store';
-import { Bar, Button, cx, HelpLink, IconButton, Input, Kbd, Menu, Modal, SectionTitle, Select, Spinner, Tabs } from './ui';
+import { Bar, Button, cx, HelpLink, IconButton, Input, Kbd, Menu, Modal, SectionTitle, Select, Spinner, Tabs, EmptyNote } from './ui';
 import { VIEW_DOCS } from '../lib/docs-pages';
 import { Toaster as SonnerToaster } from 'sonner';
 
@@ -611,7 +611,7 @@ export function SearchDialog() {
           />
         </div>
         <div className="max-h-[55vh] overflow-auto py-1" role="listbox">
-          {q && !hits.length && <div className="px-4 py-3 text-sm text-muted">No matching items</div>}
+          {q && !hits.length && <EmptyNote inset>No matching items</EmptyNote>}
           {shown.map((h, i) => (
             <button key={`${h.kind}:${h.id}`} role="option" aria-selected={i === idx} {...hoverSelect(() => setIdx(i))} onClick={() => open(h)} className={cx('w-full text-left px-4 py-2 flex items-center gap-3', i === idx && 'bg-accent-soft')}>
               <span className="text-muted">{iconOf(h)}</span>

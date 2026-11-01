@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { asError, call } from '../api';
 import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
-import { Badge, Button, Empty, Field, Input, Modal, Toggle, useDebounced } from './ui';
+import { Badge, Button, Empty, Field, Input, Modal, Toggle, useDebounced, EmptyNote } from './ui';
 import { FilterChips } from './FilterChips';
 import { plural } from '../lib/format';
 
@@ -113,7 +113,7 @@ export function ReplaceDialog({ collection, onClose, onDone, initialFind, initia
           ) : !preview ? (
             <p className="p-3 text-xs text-muted">Looking…</p>
           ) : !preview.count ? (
-            <p className="p-3 text-xs text-muted">Nothing matches in the chosen fields.</p>
+            <EmptyNote inset>Nothing matches in the chosen fields.</EmptyNote>
           ) : (
             <>
               <div className="px-3 py-2 text-xs text-muted border-b border-line">

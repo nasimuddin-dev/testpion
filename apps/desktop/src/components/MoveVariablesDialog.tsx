@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import type { Collection } from '../types';
-import { Badge, Button, cx, FilterInput, Modal } from './ui';
+import { Badge, Button, cx, FilterInput, Modal, EmptyNote } from './ui';
 import { useEnvironments } from '../lib/environments-store';
 import { plural } from '../lib/format';
 
@@ -95,7 +95,7 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
                   <span className="mono text-muted truncate ml-auto max-w-[45%]">{(v as { secret?: boolean }).secret ? '••••••' : v.value}</span>
                 </label>
               ))}
-              {!vars.length && <p className="p-2 text-xs text-muted">No variables.</p>}
+              {!vars.length && <EmptyNote inset>No variables.</EmptyNote>}
             </div>
           </div>
           <div className="grid gap-1 content-start">
@@ -108,7 +108,7 @@ export function MoveVariablesDialog({ collection, initial, onClose, onDone }: { 
                   {e.isProduction && <Badge tone="bad">prod</Badge>}
                 </label>
               ))}
-              {!envs.length && <p className="p-2 text-xs text-muted">No environments yet: create one in Environments first.</p>}
+              {!envs.length && <EmptyNote inset>No environments yet: create one in Environments first.</EmptyNote>}
             </div>
             {preview && (
               <ul className="text-xs grid gap-1 mt-2" data-move-preview>

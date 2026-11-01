@@ -4,7 +4,7 @@ import { asError, call } from '../api';
 import { formatBytes, formatMs, plural, timeAgo } from '../lib/format';
 import { JsonTree, RawView } from './JsonView';
 import { LatencyTrend } from './LatencyTrend';
-import { Badge, Bar, Button, cx, Empty, IconButton, LinkButton, Spinner, statusTone } from './ui';
+import { Badge, Bar, Button, cx, Empty, IconButton, LinkButton, Spinner, statusTone, EmptyNote } from './ui';
 import { jsonPretty, outputFileName, toCsv } from '@testpion/shared';
 import { OutputHeader } from './output/OutputFrame';
 import type { OutputSpec } from './output/output-core';
@@ -289,7 +289,7 @@ export function CompareView({ c, labels }: { c: Compared; labels?: [string, stri
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted">No header changes.</p>
+            <EmptyNote>No header changes.</EmptyNote>
           )}
         </section>
       </div>

@@ -15,7 +15,7 @@ import { useEditorTabsStore } from './EditorTabs';
 import { PinnablePanel, usePinnablePanel } from './PinnablePanel';
 import { RefLink } from './RefLink';
 import { EnvBadge } from './EnvSelect';
-import { Badge, Button, Empty, Segmented, SectionTitle } from './ui';
+import { Badge, Button, Empty, Segmented, SectionTitle, EmptyNote } from './ui';
 
 // the AI assistant (with its Markdown renderer) loads when it is first shown
 const AssistantPanel = lazy(async () => ({ default: (await import('./AssistantPanel')).AssistantPanel }));
@@ -177,7 +177,7 @@ function ContextInfo() {
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-muted">No run included it yet.</p>
+          <EmptyNote>No run included it yet.</EmptyNote>
         )}
       </section>
       {ref.kind === 'request' && (

@@ -23,7 +23,7 @@ import { asMap, asRows, asText, BlockFields, RunControlFields, useCommitted } fr
 import { ControlBlockFields, GroupFields, UntilFields } from './FlowControlFields';
 import { KeyValueEditor } from './KeyValueEditor';
 import { VarInput } from './VarInput';
-import { Badge, Button, cx, Field, FilterInput, Input, LinkButton, Modal, NamedOptions, SectionTitle, Select, statusTone, Textarea } from './ui';
+import { Badge, Button, cx, Field, FilterInput, Input, LinkButton, Modal, NamedOptions, SectionTitle, Select, statusTone, Textarea, EmptyNote } from './ui';
 
 /* ------------------------------------------------------------------ the hover card */
 
@@ -82,7 +82,7 @@ export function StepPreview({ step, result, runId }: { step: FlowStep; result?: 
       {body ? (
         <CodeBlock className="mono text-xs whitespace-pre-wrap break-all m-0 px-3 py-2 max-h-56 overflow-hidden" text={body} data-flow-preview-body />
       ) : (
-        <div className="px-3 py-2 text-muted">No response body.</div>
+        <EmptyNote inset>No response body.</EmptyNote>
       )}
     </div>
   );
@@ -369,7 +369,7 @@ export function StepInspector({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted">No other steps yet.</p>
+            <EmptyNote>No other steps yet.</EmptyNote>
           )}
         </>
       )}
@@ -417,7 +417,7 @@ export function CollectionPicker({ onPick, onClose }: { onPick(collection: strin
   return (
     <Modal title="Add steps from a collection" onClose={onClose} width={620}>
       {!cols.length ? (
-        <p className="text-sm text-muted">No collections in this workspace yet.</p>
+        <EmptyNote>No collections in this workspace yet.</EmptyNote>
       ) : (
         <div className="grid gap-3 text-sm" data-collection-picker>
           <Select aria-label="Collection" value={col?.id} onChange={(e) => setId(e.target.value)}>
@@ -658,7 +658,7 @@ export function BlockPalette({ onAdd }: { onAdd(block: PaletteBlock): void }) {
             </button>
           </div>
         ))}
-        {!shown.length && <p className="px-3 py-4 text-xs text-muted">No matching blocks</p>}
+        {!shown.length && <EmptyNote inset>No matching blocks</EmptyNote>}
       </div>
       <div className="border-t border-line p-2 text-xs text-muted grid gap-1">
         <span>Drag saved requests, folders, History entries and Debugger exchanges onto the canvas too.</span>
