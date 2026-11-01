@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Accessible names everywhere
+
+- Every visible button, tab, menu item, switch and link has a name, every input a label, every dialog a name, and no two elements share an id: a plan audits each view (`a11y-names`) and keeps it so. Found and fixed: the method picker of a load test had no label.
+
 ### Needs attention: a token about to expire
 
 - A variable holding a JSON Web Token that expired or expires within 3 days is listed under Needs attention (Home, the Problems panel, `testpion attention`, `what_needs_attention`): *The token in {{apiToken}} (Staging) expires in 2 days*, or in red *expired 3 days ago: requests that use it get 401 until it is renewed*. The variable is named, never its value.

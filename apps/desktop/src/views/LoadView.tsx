@@ -473,7 +473,7 @@ export function LoadView() {
               </div>
             ) : (
               <div className="flex gap-2">
-                <Select className="w-24 mono" value={d.method} onChange={(e) => set({ method: e.target.value })}>
+                <Select className="w-24 mono" aria-label="Method" value={d.method} onChange={(e) => set({ method: e.target.value })}>
                   {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
                     <option key={m}>{m}</option>
                   ))}
