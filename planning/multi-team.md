@@ -18,6 +18,20 @@ The owner asked (2026-11-01) to think about a multi-team environment. TestPion's
 5. **Team conventions as lint** (done 2026-11-01 as `conventions.yaml` next to workspace.json; `testpion workspace conventions [--init]`; Needs attention group "Team conventions"). A conventions file the lint reads: required tags, naming of collections (`<team>-<service>`), an owner for every folder; `testpion lint --conventions` and the Problems list say what breaks them. (Half a day.)
 6. **Activity by team** (done 2026-11-01: each commit carries its teams' names on Home; `testpion git activity --owner`, `git.teamActivity { owner }`).
 
+## Shared pieces across workspaces (design, not built)
+
+Item 4 above, written down so the cloud version and the next loop build the same thing:
+
+- `workspace.json` gets `shared: [{ "path": "../platform-shared", "kinds": ["environments", "specs"] }]`: a relative path to another workspace folder (a sibling checkout or a git submodule) and which of its folders are read. Only `environments`, `specs`, `datasets` and `library/<name>` can be shared; collections and tests stay the workspace's own (they are what a team owns).
+- Reading: `WorkspaceStore.listEnvironments()` appends the shared folder's environments after its own, each with `shared: "platform-shared"` (the folder's name) and `readOnly: true`; same for `listSpecs`. An id clash keeps the workspace's own item and lists the shared one as a problem (*shared environment Staging has the same id as yours*).
+- Writing: `saveEnvironment` on a shared item throws `ValidationError: "Staging" is shared from platform-shared: change it there`; the app shows shared rows greyed with the source's name and no editor, the Compare and Copy-across targets exclude them.
+- Secrets stay per computer and per workspace: a shared environment's secret variables are read from this workspace's secret store under the shared environment's id (nothing of the source workspace's store is read).
+- Git: the shared folder is the other repository's business; `git status` here never shows its files; Your team's changes names the source when a change came from it only if the folder is a submodule (then `git submodule status` says what moved).
+- CLI and agents: `testpion env list` prints `(shared from platform-shared)`; `list_environments` carries `shared`; `testpion workspace share add ../platform-shared --kinds environments,specs` writes the entry; `--json` everywhere.
+- Cloud: a shared reference becomes a link between two hosted workspaces of one organisation; the files do not change, the server resolves `path` to the other workspace.
+
+About a day of work: the store (two list methods and two guards), the Environments and API definitions views (greyed rows, no editor), the CLI command, tests with two fixture workspaces, docs. Not started because every team the owner described so far shares one repository.
+
 ## Several tenants
 
 A tenant here is a customer or an instance of the same API (Acme's and Globex's deployments of one product), tested by one team from one workspace. The on-prem rules: one tenant's values never reach another's run, result or export; a run says which tenant it was; a change made for every tenant is made once.
