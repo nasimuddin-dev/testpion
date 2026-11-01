@@ -16,7 +16,7 @@ The owner asked (2026-11-01) to think about a multi-team environment. TestPion's
 3. **Alerts to the owner** (done 2026-11-01). A monitor's webhook text starts with the owners of what it runs (`@payments-team`), so a shared Slack channel pages the right people; a per-team webhook can be a `{{variable}}` of the environment already.
 4. **A workspace per team with shared pieces.** Teams that want separate repositories still share environments and API definitions: a workspace can reference another folder (a git submodule or a sibling checkout) for `environments/` and `specs/` read-only (`shared:` in workspace.json). The app shows them greyed with the source's name; secrets are still per computer. (Design only; one day of work.)
 5. **Team conventions as lint.** A `.testpion/conventions.yaml` the lint reads: required tags, naming of collections (`<team>-<service>`), an owner for every folder; `testpion lint --conventions` and the Problems list say what breaks them. (Half a day.)
-6. **Activity by team.** Your team's changes grouped by owner; `testpion git activity --owner`.
+6. **Activity by team** (done 2026-11-01: each commit carries its teams' names on Home; `testpion git activity --owner`, `git.teamActivity { owner }`).
 
 ## Several tenants
 

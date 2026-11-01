@@ -39,6 +39,17 @@ describe('teamActivity', () => {
     expect(a.text).toBe('2 commits by 2 people in the last 14 days.');
   });
 
+  it('names the teams of the files a commit touched (CODEOWNERS) and lists one team only on request', async () => {
+    r.write('CODEOWNERS', 'mcp-servers.json @org/platform\n');
+    await r.commit('mine: owners');
+    const a = await teamActivity(r.ws, { days: 14 });
+    expect(a.commits.map((c) => c.owners)).toEqual([['@org/platform'], ['@org/platform']]);
+    expect((await teamActivity(r.ws, { owner: 'org/platform' })).commits).toHaveLength(2);
+    const none = await teamActivity(r.ws, { owner: '@org/payments' });
+    expect(none.commits).toEqual([]);
+    expect(none.text).toBe("Nobody else has changed @org/payments's part of this workspace in the last 14 days.");
+  });
+
   it('says so when nobody else changed anything, and respects the limit', async () => {
     expect((await teamActivity(r.ws, { limit: 1 })).commits).toHaveLength(1);
     const quiet = await makeRepo();

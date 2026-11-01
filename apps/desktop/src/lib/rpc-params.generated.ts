@@ -208,7 +208,7 @@ export interface RpcParamTypes {
   'git.stashShow': RpcCommonParams & { index?: number; hash?: string };
   'git.switch': RpcCommonParams & { branch: string; from?: string };
   'git.target': RpcCommonParams & { ref?: unknown; itemId?: string; file?: string };
-  'git.teamActivity': RpcCommonParams & { days?: number; limit?: number };
+  'git.teamActivity': RpcCommonParams & { days?: number; limit?: number; owner?: string };
   'git.undo': RpcCommonParams & { id?: string };
   'git.unshareSession': RpcCommonParams & { name: string };
   'git.unstage': RpcCommonParams & { paths: string[] };

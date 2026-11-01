@@ -39,7 +39,7 @@ From a script or CI, `testpion secrets --missing` lists them with the variable t
 
 - Change a request, then **Commit** with a short message, then **Pull & push**.
 - Turn on **Pull my team's commits by itself** in **Settings ▸ Git** to stay current without thinking about it.
-- **Your team's changes** on Home shows what others changed in the last two weeks, in words (*Ana, 2 hours ago: Search: URL*).
+- **Your team's changes** on Home shows what others changed in the last two weeks, in words (*Ana, 2 hours ago: Search: URL*). With a `CODEOWNERS`, each change carries the teams whose files it touched (*@org/payments*), and `testpion git activity --owner @org/payments` lists one team's.
 - Rest the pointer on an item in the explorer to see who changed it last.
 
 ## Who owns what

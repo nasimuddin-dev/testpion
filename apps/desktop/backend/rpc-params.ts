@@ -237,7 +237,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'flows.webhooks.status': {},
   'flows.webhooks.stop': {},
   'git.autoFetchSet': { enabled: 'b' },
-  'git.teamActivity': { days: 'n?', limit: 'n?' },
+  'git.teamActivity': { days: 'n?', limit: 'n?', owner: 's?' },
   'git.incoming': {},
   'git.identity': {},
   'git.setIdentity': { name: 's', email: 's' },

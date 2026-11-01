@@ -4,6 +4,7 @@
  * activity` and the RPC `git.teamActivity`. It reads history only (log and the same item-by-item diff the Git view uses): nothing is written.
  */
 import { runGit } from './git.js';
+import { ownersOf, workspaceCodeowners } from './owners.js';
 import { describeRevChanges, type SemanticChange } from './semantic.js';
 
 /** git's empty tree: the "parent" of a first commit. */
@@ -29,6 +30,8 @@ export interface TeamCommit {
   changes: TeamChange[];
   /** How many more changed beyond those listed. */
   more: number;
+  /** The teams the commit's files belong to (CODEOWNERS), when the repository names them: several teams in one workspace see whose change it is. */
+  owners: string[];
 }
 
 export interface TeamActivity {
@@ -43,7 +46,7 @@ export interface TeamActivity {
 const MAX_CHANGES = 6;
 
 /** The commits others made to the workspace in the last `days` days (default 14), newest first, at most `limit` (default 8). */
-export async function teamActivity(ws: string, o: { days?: number; limit?: number } = {}): Promise<TeamActivity> {
+export async function teamActivity(ws: string, o: { days?: number; limit?: number; /** Only the commits that touch this team's files (as CODEOWNERS names it; the @ optional). */ owner?: string } = {}): Promise<TeamActivity> {
   const days = Math.min(Math.max(1, Math.floor(o.days ?? 14)), 365);
   const limit = Math.min(Math.max(1, Math.floor(o.limit ?? 8)), 50);
   const me = (await runGit(ws, ['config', '--get', 'user.email']).catch(() => '')).trim().toLowerCase() || undefined;
@@ -61,10 +64,19 @@ export async function teamActivity(ws: string, o: { days?: number; limit?: numbe
       const [hash, short, author, email, date, subject] = r.split('\x1f');
       return { hash: hash!, short: short!, author: author!, email: (email ?? '').toLowerCase(), date: date!, subject: subject ?? '' };
     })
-    .filter((c) => !me || c.email !== me)
-    .slice(0, limit);
+    .filter((c) => !me || c.email !== me);
+  const co = await workspaceCodeowners(ws).catch(() => undefined);
+  const want = o.owner?.trim().replace(/^@/, '').toLowerCase();
   const commits: TeamCommit[] = [];
   for (const c of rows) {
+    if (commits.length >= limit) break;
+    // the teams of the files the commit touched (paths from the repository root, as CODEOWNERS reads them)
+    let owners: string[] = [];
+    if (co) {
+      const files = (await runGit(ws, ['diff-tree', '--no-commit-id', '--name-only', '-r', '--root', c.hash]).catch(() => '')).split(/\r?\n/).filter(Boolean);
+      owners = [...new Set(files.flatMap((f) => ownersOf(co.rules, f)))].sort();
+    }
+    if (want && !owners.some((x) => x.replace(/^@/, '').toLowerCase() === want)) continue;
     let changes: SemanticChange[] = [];
     try {
       const hasParent = (await runGit(ws, ['rev-parse', '--verify', '--quiet', `${c.hash}^`]).catch(() => '')).trim() !== '';
@@ -80,12 +92,13 @@ export async function teamActivity(ws: string, o: { days?: number; limit?: numbe
       subject: c.subject,
       changes: changes.slice(0, MAX_CHANGES).map((x) => ({ change: x.change, title: x.title, details: x.details, kind: x.kind, ...(x.ref ? { ref: x.ref } : {}) })),
       more: Math.max(0, changes.length - MAX_CHANGES),
+      owners,
     });
   }
   const people = new Set(commits.map((c) => c.author));
   const text = commits.length
     ? `${commits.length} commit${commits.length === 1 ? '' : 's'} by ${people.size} ${people.size === 1 ? 'person' : 'people'} in the last ${days} days.`
-    : `Nobody else has changed this workspace in the last ${days} days.`;
+    : `Nobody else has changed ${want ? `${o.owner!.trim()}'s part of ` : ''}this workspace in the last ${days} days.`;
   return { ...(me ? { me } : {}), days, commits, text };
 }
 

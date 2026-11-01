@@ -215,11 +215,11 @@ export function gitHandlers(be: Backend): Handlers {
     'git.log': ({ path, collectionId, limit }: { path?: string; collectionId?: string; limit?: number }) =>
       gitLog(ws(), { path: path ?? (collectionId ? be.ws.collectionFileOf(collectionId) : undefined), limit }),
     /** What other people changed in this workspace lately, by meaning (the Home card, `testpion git activity`). Cached by HEAD for a minute: the diffs are read once. */
-    'git.teamActivity': async ({ days, limit }: { days?: number; limit?: number } = {}) => {
+    'git.teamActivity': async ({ days, limit, owner }: { days?: number; limit?: number; owner?: string } = {}) => {
       const head = (await runGit(ws(), ['rev-parse', 'HEAD']).catch(() => '')).trim();
       const key = `${ws()}|${head}|${days ?? ''}|${limit ?? ''}`;
       if (teamCache && teamCache.key === key && Date.now() - teamCache.at < 60_000) return teamCache.value;
-      const value = await teamActivity(ws(), { days, limit });
+      const value = await teamActivity(ws(), { days, limit, owner });
       teamCache = { key, at: Date.now(), value };
       return value;
     },

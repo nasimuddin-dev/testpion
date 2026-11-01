@@ -6,6 +6,10 @@
 
 - An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it.
 
+### Several teams: whose change it is
+
+- **Your team's changes** on Home names the teams whose files each commit touched (from `CODEOWNERS`); `testpion git activity --owner @org/payments` lists one team's commits.
+
 ### Several teams: the alert names the owner; the status page names the tenant
 
 - A monitor's webhook text starts with the owners of what it runs (from `CODEOWNERS`), so a shared channel pages the right team; the status page says which environment (and tenant group) each monitor runs in.

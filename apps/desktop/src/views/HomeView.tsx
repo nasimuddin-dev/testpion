@@ -453,6 +453,7 @@ export function HomeView() {
                 <button key={c.hash} className="w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover" onClick={() => setView('git')} data-home-team-commit={c.short}>
                   <span className="flex items-center gap-2">
                     <span className="font-medium shrink-0">{c.author}</span>
+                    {c.owners?.length > 0 && <Badge title="The teams whose files this commit changed (CODEOWNERS)">{c.owners.join(' ')}</Badge>}
                     <span className="truncate flex-1 text-muted">{c.subject}</span>
                     <span className="text-xs text-muted shrink-0">{timeAgo(c.date)}</span>
                   </span>
