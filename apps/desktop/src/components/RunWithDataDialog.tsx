@@ -1,4 +1,5 @@
 import { plural } from '../lib/format';
+import { environmentLabel, groupEnvironments } from '@testpion/shared';
 import { FileSpreadsheet, Layers, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
@@ -162,15 +163,25 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
           <Field label="Environments" hint="The flow runs once in each, side by side: each step's status and time, and the values it extracted with those that differ marked.">
             <div className="flex flex-col rounded-md border border-line max-h-64 overflow-auto" role="group" aria-label="Environments">
               {usable.length ? (
-                usable.map((e) => {
+                // a group (a tenant) first: one tick for every environment of it
+                [...groupEnvironments(usable).filter((g) => g.group && g.environments.length > 1).map((g) => {
+                  const names = g.environments.map((e) => e.name);
+                  const all = names.every((n) => chosen.includes(n));
+                  return (
+                    <label key={`group:${g.group}`} className="flex items-center gap-2 px-2.5 py-1.5 text-sm border-b border-line/50 cursor-pointer hover:bg-hover font-medium">
+                      <input type="checkbox" checked={all} data-matrix-group={g.group} onChange={() => setChosen((c) => (all ? c.filter((x) => !names.includes(x)) : [...c, ...names.filter((n) => !c.includes(n))]))} />
+                      {g.group} ▸ every environment ({names.length})
+                    </label>
+                  );
+                }), ...usable.map((e) => {
                   const on = chosen.includes(e.name);
                   return (
                     <label key={e.name} className={cx('flex items-center gap-2 px-2.5 py-1.5 text-sm border-b border-line/50 last:border-0 cursor-pointer hover:bg-hover', on && 'bg-accent/5')}>
                       <input type="checkbox" checked={on} data-matrix-env={e.name} onChange={() => setChosen((c) => (on ? c.filter((x) => x !== e.name) : [...c, e.name]))} />
-                      {e.name}
+                      {environmentLabel(e)}
                     </label>
                   );
-                })
+                })]
               ) : (
                 <span className="p-2.5 text-xs text-muted">No environments yet: add some in Environments.</span>
               )}

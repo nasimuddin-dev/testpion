@@ -149,7 +149,7 @@ From a variable's popover, the button next to **Copy** goes to where that variab
 
 ## Groups: tenants, customers, deployments
 
-Give an environment a **Group** (*Acme*, *Globex*) when one workspace tests the same API for several tenants or deployments: the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; the status bar and run headers say which tenant a run was for. The group is a name in the environment file (`"group": "Acme"`), nothing more, so git carries it and the cloud version keeps it. `testpion env list --json` carries `group`.
+Give an environment a **Group** (*Acme*, *Globex*) when one workspace tests the same API for several tenants or deployments: the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; the status bar and run headers say which tenant a run was for. The group is a name in the environment file (`"group": "Acme"`), nothing more, so git carries it and the cloud version keeps it. `testpion env list --json` carries `group`. To run a flow for every tenant at once, tick **Acme ▸ every environment** in **Run in several environments**, or write `--env-matrix group:Acme` (`testpion test flows/checkout.yaml --env-matrix group:Acme`, also in a CI pipeline).
 
 ## Compare
 

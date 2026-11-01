@@ -2,7 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MemorySecretStore, WorkspaceStore, copyVariableToEnvironment, secretKeys, setEnvironmentVariables, unsetEnvironmentVariables } from '../../packages/core/src/index.js';
+import { MemorySecretStore, WorkspaceStore, copyVariableToEnvironment, expandEnvironmentGroups, secretKeys, setEnvironmentVariables, unsetEnvironmentVariables } from '../../packages/core/src/index.js';
+
+describe('environment groups in a matrix (--env-matrix group:Acme)', () => {
+  it('unfolds a group into its environments, keeps names as written, and never repeats one', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-envgroups-'));
+    const store = WorkspaceStore.create(join(dir, 'ws'), 'W');
+    try {
+      store.saveEnvironment({ id: 'dev', name: 'Dev', variables: [] } as never);
+      store.saveEnvironment({ id: 'acme-1', name: 'Acme Staging', group: 'Acme', variables: [] } as never);
+      store.saveEnvironment({ id: 'acme-2', name: 'Acme Production', group: 'Acme', variables: [] } as never);
+      expect(expandEnvironmentGroups(store, ['group:Acme'])).toEqual(['Acme Staging', 'Acme Production']);
+      expect(expandEnvironmentGroups(store, ['acme', 'Dev'])).toEqual(['Acme Staging', 'Acme Production', 'Dev']);
+      expect(expandEnvironmentGroups(store, ['Dev', 'Acme Staging', 'Nope'])).toEqual(['Dev', 'Acme Staging', 'Nope']);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('copy a variable to another environment (Compare → ←, env copy)', () => {
   it('replaces or adds the variable as on the source; a secret value goes store to store and is never in the file', async () => {

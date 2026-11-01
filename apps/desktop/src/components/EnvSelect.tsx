@@ -27,10 +27,10 @@ export function EnvBadge({ name, className }: { name?: string; className?: strin
     <span
       className={cx('inline-flex items-center gap-1.5 min-w-0', className)}
       data-env-badge={name ?? ''}
-      title={name ? `Environment: ${name}${env?.isProduction ? ' (production)' : ''}` : 'No environment'}
+      title={name ? `Environment: ${env ? environmentLabel({ name, group: env.group }) : name}${env?.isProduction ? ' (production)' : ''}` : 'No environment'}
     >
       <Dot color={envColor(env)} />
-      <span className="truncate">{name ?? 'No environment'}</span>
+      <span className="truncate">{name ? (env ? environmentLabel({ name, group: env.group }) : name) : 'No environment'}</span>
       {env?.isProduction && <Badge tone="bad">PRODUCTION</Badge>}
     </span>
   );

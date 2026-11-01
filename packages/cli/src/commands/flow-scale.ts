@@ -24,8 +24,7 @@ import {
   testFileRef,
   type DataRowResult,
   type FlowMatrixResult,
-  removeScratchDir,
-} from '@testpion/core';
+  removeScratchDir, expandEnvironmentGroups } from '@testpion/core';
 import { formatMs } from '@testpion/shared';
 import { EXIT, CliError, bold, cliContext, dim, green, openWorkspace, printJson, red, requireEnvironment, withWorkspace, yellow, WORKSPACE_OPTION, subcommand } from '../shared.js';
 import { cli, emitEvent, machine, noteError, streamData } from '../output.js';
@@ -81,7 +80,8 @@ export async function executeScaleRun(paths: string[], o: ScaleCliOptions): Prom
     };
     process.on('SIGINT', onSigint);
     try {
-      const matrix = [...(o.envMatrix ?? []).flatMap((e) => e.split(',')), ...(Array.isArray(o.environment) ? o.environment : [])].map((e) => e.trim()).filter(Boolean);
+      // a group (a tenant: `group:Acme`, or its name) stands for every environment of it
+      const matrix = expandEnvironmentGroups(store, [...(o.envMatrix ?? []).flatMap((e) => e.split(',')), ...(Array.isArray(o.environment) ? o.environment : [])]);
       if (matrix.length) {
         if (o.data !== undefined) throw new CliError('Use --data or an environment matrix, not both', EXIT.CONFIG_ERROR);
         for (const e of matrix) requireEnvironment(store, e);

@@ -3,6 +3,7 @@ import type { WorkspaceStore } from './workspace.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { secretKeys, type SecretStore } from './secrets.js';
+import { environmentsOfGroup } from '@testpion/shared';
 
 /**
  * Set or remove plain (non-secret) variables of an environment from the CLI or an AI agent. Secret
@@ -145,6 +146,26 @@ export async function copyVariableToEnvironment(
     }
   }
   return { from: src.name, to: dst.name, key, secret, replaced, secretCopied };
+}
+
+/**
+ * Environment names as a person or a pipeline writes them, with groups unfolded: `group:Acme` (or a group's name that is
+ * not an environment's) stands for every environment of that group, in list order. Names that match nothing stay as
+ * written (the caller says they are unknown).
+ */
+export function expandEnvironmentGroups(store: Pick<WorkspaceStore, 'listEnvironments'>, refs: string[]): string[] {
+  const envs = store.listEnvironments().filter((e) => !e.problem);
+  const out: string[] = [];
+  for (const raw of refs) {
+    const ref = raw.trim();
+    if (!ref) continue;
+    const direct = envs.find((e) => e.name === ref || e.id === ref);
+    const groupName = ref.replace(/^group:/i, '');
+    const group = direct ? [] : environmentsOfGroup(envs, groupName);
+    if (!direct && group.length) out.push(...group.map((e) => e.name));
+    else out.push(ref);
+  }
+  return [...new Set(out)];
 }
 
 /**
