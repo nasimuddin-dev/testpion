@@ -24,6 +24,8 @@ Open **Monitors** (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *
 - **What to run** (a collection): tick folders or requests. Tick nothing to run the whole collection. A test file always runs as a whole, its steps in order like `testpion test` (a suite runs its files).
 - **Stop at the first failure**, if later requests depend on earlier ones.
 
+**Every environment of a group.** When environments have a [group](/api-testing/environments#groups-tenants-customers-deployments) (a tenant: *Acme ▸ Staging*, *Acme ▸ Production*), a monitor can run in every environment of the group instead of one: pick **Every environment of Acme** under Environment (`--env-group Acme` from the terminal). The list, the status page and the alerts then show one monitor per environment (*Checkout · Acme ▸ Staging*), each with its own schedule, results and uptime, from this one definition: change it once for every tenant. Editing, pausing or deleting any of them changes the definition, so all of them.
+
 A monitor on an environment marked as [production](/api-testing/environments#production) asks when you save it whether it may change data there: with your yes its data-changing requests run on the schedule; without it its reads run and its writes fail. The first run starts as soon as the monitor is saved; after that it runs whenever it is due. For each monitor the page shows:
 
 - the last result, the success rate and the median run time;
@@ -76,6 +78,7 @@ The app runs monitors only while it is open. To run them all the time, use the C
 ```bash
 testpion monitor add "API health" --collection "Veterinary API" --folder Diagnostics --every 5m -e Development -w my-workspace
 testpion monitor add "Checkout flow" --test-file flows/checkout.yaml --every 15m -e Staging -w my-workspace   # a flow on a schedule
+testpion monitor add "Checkout" --collection "Shop API" --every 15m --env-group Acme -w my-workspace   # one monitor per environment of the group Acme (a tenant each)
 testpion monitor add "Prod orders" --test-file orders/new-order.yaml --every 1h -e Production --allow-production -w my-workspace   # may change data in production
 testpion monitor list -w my-workspace --json | jq '.data'   # schedule, last result, next run
 testpion monitor run "API health" -w my-workspace       # run one now

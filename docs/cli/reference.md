@@ -1165,6 +1165,7 @@ testpion history llm -w my-workspace                                    # AI qua
 ```bash
 testpion monitor add "API health" --collection "My API" --folder Smoke --every 15m -e Staging -w my-workspace
 testpion monitor add "Checkout flow" --test-file flows/checkout.yaml --every 15m -e Staging -w my-workspace   # a test file / flow instead of a collection
+testpion monitor add "Checkout" --collection "Shop API" --every 15m --env-group Acme -w my-workspace   # one monitor per environment of the group (a tenant each), from one definition
 testpion monitor add "API health" --collection "My API" --every 5m --max-p95 800 -w my-workspace   # also fail when p95 > 800 ms
 testpion monitor add "API health" --collection "My API" --every 1h --min-cert-days 21 -w my-workspace   # and when a certificate expires within 21 days
 testpion monitor run --due -w my-workspace      # for cron; exit 1 if a run failed

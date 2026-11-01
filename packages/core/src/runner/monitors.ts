@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { environmentLabel, environmentsOfGroup } from '@testpion/shared';
 import { ownershipOf } from '../git/owners.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { appendBoundedLine } from '../util/jsonl-append.js';
@@ -59,6 +60,12 @@ interface MonitorData {
   /** With a baseline: the smallest drop that fails (default 0.05), judged by the paired comparison. */
   maxDrop?: number;
   environment?: string;
+  /**
+   * Every environment of this group (a tenant each: Acme ▸ Staging, Acme ▸ Production) instead of one `environment`: the
+   * list, the scheduler and the status page see one monitor per environment (id `<id>@<environmentId>`, name
+   * "Checkout · Acme ▸ Staging"), each with its own results and schedule, from this one definition.
+   */
+  environmentGroup?: string;
   /** Minutes between runs (1 minute to 1 week). */
   everyMinutes: number;
   enabled: boolean;
@@ -164,6 +171,8 @@ export interface Monitor extends MonitorData {
   id: string;
   name: string;
   folder?: string;
+  /** On a monitor made from a grouped definition: which definition and which environment (listMonitors). */
+  tenant?: { of: string; environment: string };
 }
 
 export interface MonitorResult {
@@ -217,15 +226,37 @@ export function formatEvery(minutes: number): string {
   return minutes === 1 ? 'every minute' : `every ${minutes} minutes`;
 }
 
-export function listMonitors(store: WorkspaceStore): Monitor[] {
+/** The definitions as saved: a grouped one (`environmentGroup`) is one item here and several monitors in listMonitors. */
+export function listMonitorDefinitions(store: WorkspaceStore): Monitor[] {
   return store.getLibrary<MonitorData>(MONITORS_LIBRARY).items.map((i) => ({ ...i.data, id: i.id, name: i.name, folder: i.folder }));
 }
 
+const TENANT_SEP = '@';
+
+/** The monitors a definition stands for: itself, or one per environment of its group (a tenant each); none when the group is empty. */
+export function monitorTenants(store: WorkspaceStore, m: Monitor): Monitor[] {
+  if (!m.environmentGroup || m.tenant) return [m];
+  return environmentsOfGroup(store.listEnvironments().filter((e) => !e.problem), m.environmentGroup).map((e) => ({
+    ...m,
+    id: `${m.id}${TENANT_SEP}${e.id}`,
+    name: `${m.name} · ${environmentLabel(e)}`,
+    environment: e.name,
+    tenant: { of: m.id, environment: e.name },
+  }));
+}
+
+/** Every monitor that runs: a grouped definition appears once per environment of its group (see monitorTenants). */
+export function listMonitors(store: WorkspaceStore): Monitor[] {
+  return listMonitorDefinitions(store).flatMap((m) => monitorTenants(store, m));
+}
+
+/** By id or name: a tenant's (`<id>@<environmentId>`, "Checkout · Acme ▸ Staging") or a definition's (then grouped: see monitorTenants). */
 export function findMonitor(store: WorkspaceStore, ref: string): Monitor {
-  const all = listMonitors(store);
+  const defs = listMonitorDefinitions(store);
+  const all = defs.flatMap((m) => (m.environmentGroup ? monitorTenants(store, m) : []));
   const r = ref.toLowerCase();
-  const m = all.find((x) => x.id === ref) ?? all.find((x) => x.name.toLowerCase() === r);
-  if (!m) throw invalid(`No monitor "${ref}". Monitors: ${all.map((x) => x.name).join(', ') || 'none'}`);
+  const m = all.find((x) => x.id === ref) ?? defs.find((x) => x.id === ref) ?? all.find((x) => x.name.toLowerCase() === r) ?? defs.find((x) => x.name.toLowerCase() === r);
+  if (!m) throw invalid(`No monitor "${ref}". Monitors: ${defs.map((x) => x.name).join(', ') || 'none'}`);
   return m;
 }
 
@@ -265,6 +296,7 @@ export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> 
     if (!collectionRequests(collection, m.selection).length && !collectionRealtimeTests(store, collection, m.selection).length) throw invalid(`Nothing to run: the selection has no requests in "${collection.name}"`);
   }
   if (m.environment && !store.getEnvironment(m.environment)) throw invalid(`No environment "${m.environment}"`);
+  if (m.environmentGroup && !environmentsOfGroup(store.listEnvironments(), m.environmentGroup).length) throw invalid(`No environment is in the group "${m.environmentGroup}"`);
   if (m.webhook && !/^https?:\/\//i.test(m.webhook.trim()) && !/^\{\{[^}]+\}\}/.test(m.webhook.trim())) throw invalid('The alert webhook must be an http(s) URL or a {{variable}}');
   if (m.maxP95Ms !== undefined && !(m.maxP95Ms > 0)) throw invalid('The response time limit must be a positive number of milliseconds');
   if (m.minCertDays !== undefined && !(Number.isInteger(m.minCertDays) && m.minCertDays >= 1 && m.minCertDays <= 365)) throw invalid('The certificate warning must be 1 to 365 days');
@@ -291,13 +323,17 @@ function monitorTestPath(store: WorkspaceStore, file: string): string {
 
 /** Add or replace a monitor (by id). */
 export function saveMonitor(store: WorkspaceStore, m: Monitor): Monitor {
+  // a tenant of a grouped definition saved (edited in the app): the definition is what changes
+  if (m.tenant || m.id.includes(TENANT_SEP)) m = { ...m, id: m.tenant?.of ?? m.id.slice(0, m.id.indexOf(TENANT_SEP)), name: m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name, tenant: undefined };
+  if (m.environmentGroup?.trim()) m = { ...m, environmentGroup: m.environmentGroup.trim(), environment: undefined };
+  else if (m.environmentGroup !== undefined) m = { ...m, environmentGroup: undefined };
   // one target: an empty collection or file is no target
   if (m.testFile !== undefined) m = { ...m, testFile: m.testFile.trim() ? monitorTestFile(m.testFile) : undefined };
   if (!m.collectionId) m = { ...m, collectionId: undefined };
   if (m.evaluation !== undefined) m = { ...m, evaluation: m.evaluation.trim() || undefined };
   validateMonitor(store, m);
   const lib = store.getLibrary<MonitorData>(MONITORS_LIBRARY);
-  const { id, name, folder, ...data } = m;
+  const { id, name, folder, tenant: _tenant, ...data } = m;
   const item: LibraryItem<MonitorData> = { id, name: name.trim(), folder, data, updatedAt: new Date().toISOString() };
   const items = lib.items.some((i) => i.id === id) ? lib.items.map((i) => (i.id === id ? item : i)) : [...lib.items, item];
   store.saveLibrary(MONITORS_LIBRARY, { folders: lib.folders, items });
@@ -305,6 +341,8 @@ export function saveMonitor(store: WorkspaceStore, m: Monitor): Monitor {
 }
 
 export function deleteMonitor(store: WorkspaceStore, id: string): void {
+  // a tenant's id deletes the definition it comes from (there is no monitor of its own to delete)
+  if (id.includes(TENANT_SEP)) id = id.slice(0, id.indexOf(TENANT_SEP));
   const lib = store.getLibrary<MonitorData>(MONITORS_LIBRARY);
   store.saveLibrary(MONITORS_LIBRARY, { folders: lib.folders, items: lib.items.filter((i) => i.id !== id) });
 }

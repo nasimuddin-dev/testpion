@@ -10,6 +10,10 @@
 
 - A monitor's webhook text starts with the owners of what it runs (from `CODEOWNERS`), so a shared channel pages the right team; the status page says which environment (and tenant group) each monitor runs in.
 
+### Several tenants: one monitor for every tenant
+
+- A monitor can run in **every environment of a group** (*Every environment of Acme* under Environment; `testpion monitor add --env-group Acme`): the list, the status page and the alerts show one monitor per environment (*Checkout · Acme ▸ Staging*), each with its own schedule, results and uptime, from one definition you change once.
+
 ### Several tenants: one request for every tenant
 
 - `{{$group}}` is the group (tenant) of the environment a run uses and `{{$environment}}` its name, so a `X-Tenant: {{$group}}` header or a `datasets/{{$group}}/users.csv` path serves every tenant from one request; type `{{$` to pick them.

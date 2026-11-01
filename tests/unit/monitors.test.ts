@@ -18,6 +18,8 @@ import {
   formatEvery,
   isDue,
   listMonitors,
+  listMonitorDefinitions,
+  monitorTenants,
   monitorDaily,
   monitorResults,
   nextRunAt,
@@ -257,6 +259,39 @@ describe('monitors in a workspace', () => {
     deleteMonitor(store, 'mon-health');
     expect(listMonitors(store)).toEqual([]);
     expect(await s.tick(later + 60 * 60_000)).toBe(0);
+  });
+});
+
+describe('a monitor for every tenant (an environment group) from one definition', () => {
+  it('lists one monitor per environment of the group with its own id, name, environment and results; saving or deleting a tenant changes the definition', async () => {
+    store.saveEnvironment({ id: 'acme-staging', name: 'Staging', group: 'Acme', variables: [{ key: 'baseUrl', value: base, enabled: true }] });
+    store.saveEnvironment({ id: 'acme-prod', name: 'Production', group: 'Acme', variables: [{ key: 'baseUrl', value: base, enabled: true }] });
+    const grouped: Monitor = { id: 'mon-tenants', name: 'Checkout', collectionId: 'api', environment: 'Local', environmentGroup: 'Acme', everyMinutes: 5, enabled: true };
+    expect(() => saveMonitor(store, { ...grouped, id: 'x', environmentGroup: 'Nobody' })).toThrow(/No environment is in the group/);
+    const saved = saveMonitor(store, grouped);
+    expect(saved.environment).toBeUndefined();
+    expect(listMonitorDefinitions(store).filter((m) => m.id === 'mon-tenants')).toHaveLength(1);
+    const tenants = listMonitors(store).filter((m) => m.tenant?.of === 'mon-tenants');
+    expect(tenants.map((m) => [m.id, m.name, m.environment])).toEqual([
+      // environments list by file name: Production first
+      ['mon-tenants@acme-prod', 'Checkout · Acme ▸ Production', 'Production'],
+      ['mon-tenants@acme-staging', 'Checkout · Acme ▸ Staging', 'Staging'],
+    ]);
+    expect(findMonitor(store, 'mon-tenants@acme-prod').environment).toBe('Production');
+    expect(findMonitor(store, 'checkout · acme ▸ staging').id).toBe('mon-tenants@acme-staging');
+    expect(monitorTenants(store, findMonitor(store, 'Checkout'))).toHaveLength(2);
+    healthy = true;
+    for (const t of tenants) await executeMonitor({ store, monitor: t, context });
+    expect(monitorResults(store, 'mon-tenants@acme-staging')).toHaveLength(1);
+    expect(monitorResults(store, 'mon-tenants@acme-prod')).toHaveLength(1);
+    expect(monitorResults(store, 'mon-tenants')).toHaveLength(0);
+    // edited as the app sends it back (a tenant row): the definition changes, no second monitor appears
+    saveMonitor(store, { ...tenants[0]!, everyMinutes: 10 });
+    expect(listMonitorDefinitions(store).filter((m) => m.name === 'Checkout').map((m) => m.everyMinutes)).toEqual([10]);
+    deleteMonitor(store, 'mon-tenants@acme-prod');
+    expect(listMonitorDefinitions(store).some((m) => m.id === 'mon-tenants')).toBe(false);
+    store.deleteEnvironment('acme-staging');
+    store.deleteEnvironment('acme-prod');
   });
 });
 

@@ -8,6 +8,7 @@ import {
   monitorDaily,
   monitorRequestStats,
   monitorResults,
+  monitorTenants,
   monitorStatus,
   notifyMonitorWebhook,
   saveMonitor,
@@ -80,10 +81,14 @@ export function monitorHandlers(be: Backend): Handlers {
     'monitor.daily': ({ id, days, tzOffsetMin }: { id: string; days?: number; tzOffsetMin?: number }) => monitorDaily(be.ws, id, days ?? 30, tzOffsetMin),
     'monitor.run': async ({ id }: { id: string }) => {
       if (be.runningMonitors.has(id)) throw new ApsError('ValidationError', 'This monitor is already running', { suggestions: [] });
-      const m = findMonitor(be.ws, id);
-      const previous = monitorResults(be.ws, id, 1)[0];
-      const r = await runMonitorNow(be, m, 'manual');
-      be.host.emit('monitor.result', { monitor: m, result: r, previous });
+      // a grouped definition by its own id: every tenant of it runs (a tenant's id runs that one)
+      let r: MonitorResult | undefined;
+      for (const m of monitorTenants(be.ws, findMonitor(be.ws, id))) {
+        const previous = monitorResults(be.ws, m.id, 1)[0];
+        r = await runMonitorNow(be, m, 'manual');
+        be.host.emit('monitor.result', { monitor: m, result: r, previous });
+      }
+      if (!r) throw new ApsError('ValidationError', 'No environment is in this monitor\'s group', { suggestions: [] });
       return r;
     },
   };

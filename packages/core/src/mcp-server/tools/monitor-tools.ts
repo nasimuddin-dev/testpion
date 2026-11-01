@@ -1,7 +1,7 @@
 import { createEngineContext } from '../../engine.js';
 import type { TestResult } from '../../model/types.js';
 import { monitorRequestStats } from '../../runner/monitor-requests.js';
-import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorStatus } from '../../runner/monitors.js';
+import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorStatus, monitorTenants } from '../../runner/monitors.js';
 import type { RunEvent } from '../../runner/runner.js';
 import { str, limitArg } from '../tool.js';
 import type { Tool } from '../tool.js';
@@ -46,17 +46,22 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
       description: 'Run a monitor now (outside its schedule) and record the result like a scheduled run. Returns the result with per-request details of failures.',
       inputSchema: { type: 'object', properties: { monitor: str('Monitor name or id') }, required: ['monitor'] },
       run: async (a) => {
-        const m = findMonitor(store, String(a.monitor));
-        checkEnvironment(m.environment);
-        const failures: TestResult[] = [];
-        const r = await executeMonitor({
-          store,
-          monitor: m,
-          trigger: 'manual',
-          context: (o) => createEngineContext({ store, secrets, settings, environment: o.environment, collectionId: o.collectionId }),
-          onEvent: (e: RunEvent) => e.type === 'test-end' && e.result.status !== 'passed' && e.result.status !== 'skipped' && failures.push(e.result),
-        });
-        return { ...r, name: m.name, environment: m.environment ?? null, failures: failures.slice(0, 50).map(summarizeResult) };
+        // a grouped definition (one monitor per environment of a group): every tenant runs, and the answer is one result per tenant
+        const tenants = monitorTenants(store, findMonitor(store, String(a.monitor)));
+        const out = [];
+        for (const m of tenants) {
+          checkEnvironment(m.environment);
+          const failures: TestResult[] = [];
+          const r = await executeMonitor({
+            store,
+            monitor: m,
+            trigger: 'manual',
+            context: (o) => createEngineContext({ store, secrets, settings, environment: o.environment, collectionId: o.collectionId }),
+            onEvent: (e: RunEvent) => e.type === 'test-end' && e.result.status !== 'passed' && e.result.status !== 'skipped' && failures.push(e.result),
+          });
+          out.push({ ...r, name: m.name, environment: m.environment ?? null, failures: failures.slice(0, 50).map(summarizeResult) });
+        }
+        return out.length === 1 ? out[0] : out;
       },
     },
   ];

@@ -29,6 +29,7 @@ import {
   type Monitor,
   type MonitorResult,
   type WorkspaceStore,
+  monitorTenants,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
@@ -102,6 +103,7 @@ export function registerMonitorCommands(program: Command): void {
     .requiredOption('--every <interval>', 'how often: minutes, or e.g. 15m, 1h, 1d (1 minute to 7 days)')
     .option('--folder <nameOrId>', 'run only this folder or request (repeatable)', collect)
     .option('-e, --environment <name>', 'environment to run with')
+    .option('--env-group <group>', 'run in every environment of this group (a tenant each: one monitor per environment in lists, the status page and alerts, from this one definition)')
     .option('-n, --iteration-count <n>', 'iterations per run')
     .option('--bail', 'stop a run at the first failure')
     .option('--webhook <url>', 'POST an alert here when the monitor starts failing or recovers (Slack / Teams / Discord webhook or any URL; {{variables}} work)')
@@ -122,6 +124,7 @@ export function registerMonitorCommands(program: Command): void {
           name,
           ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : o.ragEvaluation ? { evaluation: String(o.ragEvaluation), ...(o.limit ? { limit: Number(o.limit) } : {}), ...(o.gate?.length ? { gates: parseGates(o.gate) } : {}), ...(o.judgeSample ? { judgeSample: Number(o.judgeSample) } : {}), ...(o.judgeBudget ? { judgeBudgetUsdPerDay: Number(o.judgeBudget) } : {}), ...(o.rotate ? { rotate: true } : {}), ...(o.maxCost ? { maxCostUsd: Number(o.maxCost) } : {}), ...(o.baseline ? { baseline: String(o.baseline) } : {}), ...(o.maxDrop ? { maxDrop: Number(o.maxDrop) } : {}) } : { testFile: String(o.testFile) }),
           environment: o.environment,
+          environmentGroup: o.envGroup ? String(o.envGroup) : existing?.environmentGroup,
           everyMinutes: parseEvery(o.every),
           enabled: !o.paused,
           iterations: o.iterationCount ? Number(o.iterationCount) : undefined,
@@ -217,7 +220,7 @@ export function registerMonitorCommands(program: Command): void {
     .action(async (ref: string | undefined, o) => {
       return withWorkspace(o.workspace, async (store) => {
         const all = listMonitors(store);
-        const chosen = ref ? [findMonitor(store, ref)] : o.all ? all.filter((m) => m.enabled) : o.due ? all.filter((m) => isDue(m, lastMonitorResult(store, m.id))) : undefined;
+        const chosen = ref ? monitorTenants(store, findMonitor(store, ref)) : o.all ? all.filter((m) => m.enabled) : o.due ? all.filter((m) => isDue(m, lastMonitorResult(store, m.id))) : undefined;
         if (!chosen) throw new CliError('Name a monitor, or pass --all or --due', EXIT.CONFIG_ERROR);
         const run = runner(store);
         const results: Array<MonitorResult & { name: string; environment: string | null }> = [];

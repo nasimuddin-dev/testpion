@@ -17,7 +17,7 @@ import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 import { asError, call, on } from '../api';
 import type { MonitorResult } from '../lib/monitor-alerts';
 import { useIntent } from '../hooks';
-import { promptText, toastError, useApp, attempt } from '../store';
+import { promptText, toastError, useApp, attempt, selectEnvironments } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import { restoreFolder } from '../components/FolderList';
 import { openRef } from '../lib/open-ref';
@@ -59,6 +59,8 @@ interface MonitorDraft {
   baseline?: string;
   maxDrop?: number;
   environment?: string;
+  /** Every environment of this group instead (one monitor per environment in the list, from this definition). */
+  environmentGroup?: string;
   everyMinutes: number;
   enabled: boolean;
   iterations?: number;
@@ -673,7 +675,7 @@ function useTestFiles(): string[] {
 /** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
@@ -696,6 +698,9 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     promptEvaluation ? ({ ...(pickedEvaluation!.data as unknown as CostDraft), limit: d.limit ?? (pickedEvaluation!.data as unknown as CostDraft).limit } as CostDraft) : { type: 'rag', provider: '', model: '', prompt: '', format: 'text', datasetFormat: 'jsonl', dataset: '', evaluators: [], concurrency: 1 },
     d.environment,
   );
+  // the tenant groups of the environments (an environment's `group`): a monitor may run in every environment of one
+  const envs = useApp(selectEnvironments);
+  const groups = useMemo(() => [...new Set(envs.map((e) => (e as { group?: string }).group?.trim()).filter((g): g is string => !!g))].sort(), [envs]);
   // the gates as the person writes them: metric=minimum, comma separated (the same names as `testpion rag run --min`)
   const [gatesText, setGatesText] = useState(Object.entries(draft.gates ?? {}).map(([k, v]) => `${k}=${v}`).join(', '));
   // the monitor changed on disk (a pull, the CLI, an agent): follow it, or ask when the form has edits (WF-15)
@@ -850,8 +855,20 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               </Select>
             </Field>
           )}
-          <Field label="Environment">
-            <EnvSelect value={d.environment} onChange={(environment) => setD({ ...d, environment })} />
+          <Field label="Environment" hint={groups.length ? 'One environment, or every environment of a group (a tenant each): the list, the status page and the alerts then show one monitor per environment, from this one definition.' : undefined}>
+            <div className="flex flex-wrap items-center gap-2">
+              {!d.environmentGroup && <EnvSelect value={d.environment} onChange={(environment) => setD({ ...d, environment })} />}
+              {groups.length > 0 && (
+                <Select value={d.environmentGroup ?? ''} onChange={(e) => setD({ ...d, environmentGroup: e.target.value || undefined, environment: e.target.value ? undefined : d.environment })} aria-label="Every environment of a group" data-monitor-env-group>
+                  <option value="">{d.environmentGroup ? 'One environment…' : 'Or every environment of a group…'}</option>
+                  {groups.map((g) => (
+                    <option key={g} value={g}>
+                      Every environment of {g}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
           </Field>
         </div>
         <Field label="Run every" hint="From 1 minute to 7 days. The first run starts as soon as it's saved.">
