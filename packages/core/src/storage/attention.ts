@@ -4,7 +4,7 @@
  * latest response failed, flaky tests. Names and counts only. The app's Problems panel (WF-03), Home's "Needs
  * attention", `what_needs_attention` and `testpion problems` are this one list.
  */
-import type { ItemRef } from '@testpion/shared';
+import { decodeJwt, type ItemRef } from '@testpion/shared';
 import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
 import { listMonitors, lastMonitorResult } from '../runner/monitors.js';
@@ -13,10 +13,11 @@ import { listSavedEvaluations } from '../runner/saved-evaluations.js';
 import { collectionRequests } from '../runner/collection-run.js';
 import { ragTrendFindings } from '../runner/rag-trend.js';
 import { missingSecrets } from './missing-secrets.js';
+import { secretKeys } from './secrets.js';
 import type { SecretReader } from '../vars/variables.js';
 
 export interface AttentionItem {
-  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file';
+  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token';
   severity: 'high' | 'medium' | 'low';
   /** What the list groups it under. */
   group: 'Workspace files' | 'Secrets' | 'Monitors' | 'Runs' | 'Requests' | 'Certificates' | 'Flaky tests' | 'RAG metrics';
@@ -53,6 +54,60 @@ export function secretsAttention(store: WorkspaceStore, secrets: SecretReader): 
   return out;
 }
 
+/** A token that expires within this many days is listed (an expired one always is). */
+export const TOKEN_DAYS = 3;
+
+const looksLikeJwt = (v: string) => /^(Bearer\s+)?eyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*$/.test(v.trim());
+
+/** "in 5 hours", "in 2 days", "3 days ago". */
+function relativeDays(sec: number): string {
+  const abs = Math.abs(sec);
+  const n = abs >= 86_400 ? Math.round(abs / 86_400) : abs >= 3600 ? Math.round(abs / 3600) : Math.max(1, Math.round(abs / 60));
+  const unit = abs >= 86_400 ? 'day' : abs >= 3600 ? 'hour' : 'minute';
+  const words = `${n} ${unit}${n === 1 ? '' : 's'}`;
+  return sec < 0 ? `${words} ago` : `in ${words}`;
+}
+
+/**
+ * Variables that hold a JSON Web Token which has expired or expires within `days` (TOKEN_DAYS): a request with such a token
+ * fails with 401 for a reason nothing else names. Plain values come from the files; secret ones from the secret store when
+ * a reader is given. Only the variable's name is said, never the token.
+ */
+export function tokensAttention(store: Pick<WorkspaceStore, 'id' | 'listEnvironments' | 'workspace'>, secrets?: SecretReader, days = TOKEN_DAYS, now = Date.now()): AttentionItem[] {
+  const out: AttentionItem[] = [];
+  const look = (value: string | undefined, key: string, where: string, ref: AttentionItem['ref']) => {
+    if (!value || !looksLikeJwt(value)) return;
+    let exp: number | undefined;
+    try {
+      exp = decodeJwt(value, now).expiresInSec;
+    } catch {
+      return;
+    }
+    if (exp === undefined || exp > days * 86_400) return;
+    const expired = exp <= 0;
+    out.push({
+      kind: 'token',
+      severity: expired ? 'high' : 'medium',
+      group: 'Secrets',
+      type: expired ? 'error' : 'warning',
+      message: expired ? `The token in {{${key}}} (${where}) expired ${relativeDays(exp)}: requests that use it get 401 until it is renewed` : `The token in {{${key}}} (${where}) expires ${relativeDays(exp)}`,
+      ref,
+    });
+  };
+  for (const env of store.listEnvironments())
+    for (const v of env.variables) {
+      if (v.enabled === false) continue;
+      const value = v.secret ? secrets?.get(secretKeys.envVar(env.id, v.key)) : v.value;
+      look(value, v.key, env.name, { kind: 'variable', key: v.key, environmentId: env.id });
+    }
+  for (const v of store.workspace.variables) {
+    if (v.enabled === false) continue;
+    const value = (v as { secret?: boolean }).secret ? secrets?.get(secretKeys.workspaceVar(store.id, v.key)) : v.value;
+    look(value, v.key, 'globals', { kind: 'variable', key: v.key });
+  }
+  return out;
+}
+
 /** How many points the pass rate must fall between two runs of an evaluation to be listed. */
 const DROP_POINTS = 10;
 
@@ -83,9 +138,10 @@ function evaluationDrops(store: WorkspaceStore): AttentionItem[] {
   return out;
 }
 
-export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number; secrets?: SecretReader } = {}): Promise<AttentionItem[]> {
+export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number; tokenDays?: number; secrets?: SecretReader; /** Read secret values for the token check only (the app: its missing secrets are a banner of their own). */ tokenSecrets?: SecretReader } = {}): Promise<AttentionItem[]> {
   const out: AttentionItem[] = [];
   if (opts.secrets) out.push(...secretsAttention(store, opts.secrets));
+  out.push(...tokensAttention(store, opts.tokenSecrets ?? opts.secrets, opts.tokenDays));
   // files that can't be read: nothing in them works until they are fixed
   for (const e of store.listEnvironments())
     if (e.problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Environment "${e.name}" can't be read: ${e.problem}`, ref: { kind: 'environment', environmentId: e.id } });

@@ -113,7 +113,7 @@ export function requestsHandlers(be: Backend): Handlers {
     /** What needs attention: failing monitors, expiring certificates, the latest failed run, failing requests, flaky tests. */
     'stats.attention': async () => {
       // what is cached is read from files; the secrets are asked of the secret store, which changes without a file changing
-      const list = await cachedAttention(be.ws);
+      const list = await cachedAttention(be.ws, be.secrets);
       const secrets = secretsAttention(be.ws, be.secrets);
       return secrets.length ? [...secrets, ...list].sort((a, b) => ({ high: 0, medium: 1, low: 2 })[a.severity] - ({ high: 0, medium: 1, low: 2 })[b.severity]) : list;
     },

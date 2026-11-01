@@ -11,7 +11,7 @@
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { workspaceAttention, type AttentionItem, type WorkspaceStore } from '@testpion/core';
+import { workspaceAttention, type AttentionItem, type WorkspaceStore, type SecretReader } from '@testpion/core';
 
 export interface CollectionHealth {
   sent: number;
@@ -62,7 +62,8 @@ export function filesSignature(dir: string): string {
 const attention = new WeakMap<WorkspaceStore, { key: string; value: Promise<AttentionItem[]> }>();
 
 /** What needs attention, remembered by what it reads (see the top of the file). */
-export function cachedAttention(ws: WorkspaceStore): Promise<AttentionItem[]> {
+/** `secrets`: read for the token-expiry check only (the app's missing secrets are a banner of their own). */
+export function cachedAttention(ws: WorkspaceStore, secrets?: SecretReader): Promise<AttentionItem[]> {
   const mark = historyMark(ws);
   const latestRun = ws.meta.listRuns({ limit: 1 }).items[0];
   const files = [ws.path('collections'), ws.path('environments'), ws.path('library'), ws.path('runs', 'monitors')].map(filesSignature);
@@ -71,7 +72,7 @@ export function cachedAttention(ws: WorkspaceStore): Promise<AttentionItem[]> {
   const key = JSON.stringify([mark.total, mark.latestId, latestRun?.id, files, certificates ? `${certificates.size}:${certificates.mtimeMs}` : '', day]);
   const known = attention.get(ws);
   if (known?.key === key) return known.value;
-  const value = workspaceAttention(ws);
+  const value = workspaceAttention(ws, { tokenSecrets: secrets });
   attention.set(ws, { key, value });
   // a failure is not remembered: the next ask tries again
   value.catch(() => attention.get(ws)?.value === value && attention.delete(ws));

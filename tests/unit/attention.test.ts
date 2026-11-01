@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, recordCertificate, saveMonitor, workspaceAttention, type RunSummary } from '../../packages/core/src/index.js';
+import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, type RunSummary } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-attention-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -41,6 +41,39 @@ describe('what needs attention', () => {
     expect(items[0]!.message).toBe('Monitor "Health" is failing: 1 of 1 requests failed');
     expect(items[1]!.message).toBe('The certificate of api.example.com expires in 3 days');
     expect(items[3]!.message).toBe('API › Login: the latest response was 500');
+    store.close();
+  });
+
+  it('a variable holding a JWT that expired or expires within 3 days is listed by name, never by value; a secret one only with a reader', async () => {
+    const store = WorkspaceStore.create(join(dir, 'ws-tokens'), 'Tokens');
+    const jwt = (expSec: number) => {
+      const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+      return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: 'me', exp: Math.round(Date.now() / 1000) + expSec })}.sig`;
+    };
+    store.saveEnvironment({
+      id: 'staging',
+      name: 'Staging',
+      variables: [
+        { key: 'apiToken', value: jwt(2 * 86_400), enabled: true },
+        { key: 'oldToken', value: `Bearer ${jwt(-3 * 86_400)}`, enabled: true },
+        { key: 'freshToken', value: jwt(30 * 86_400), enabled: true },
+        { key: 'offToken', value: jwt(-10), enabled: false },
+        { key: 'notAToken', value: 'eyJhbGciOi.notbase64!.x', enabled: true },
+        { key: 'secretToken', value: '', secret: true, enabled: true },
+      ],
+    });
+    const items = tokensAttention(store);
+    expect(items.map((i) => [i.severity, i.type, i.message])).toEqual([
+      ['medium', 'warning', 'The token in {{apiToken}} (Staging) expires in 2 days'],
+      ['high', 'error', 'The token in {{oldToken}} (Staging) expired 3 days ago: requests that use it get 401 until it is renewed'],
+    ]);
+    expect(items[0]!.ref).toEqual({ kind: 'variable', key: 'apiToken', environmentId: 'staging' });
+    expect(JSON.stringify(items)).not.toContain('eyJ');
+    // the secret store holds the value: only a reader sees it
+    const reader = { get: (name: string) => (name.includes('secretToken') ? jwt(3600) : undefined) };
+    expect(tokensAttention(store, reader as never).map((i) => i.message)).toContain('The token in {{secretToken}} (Staging) expires in 1 hour');
+    const all = await workspaceAttention(store);
+    expect(all.filter((i) => i.kind === 'token').map((i) => i.severity)).toEqual(['high', 'medium']);
     store.close();
   });
 
