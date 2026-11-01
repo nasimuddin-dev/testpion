@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Problems: snooze one
+
+- A problem's ⋯ has **Snooze for 1 hour**, **Snooze until tomorrow 09:00** and **Snooze until it changes**: it leaves the Problems list, the status-bar count and Home, and comes back by itself when the time passes or when its words change; **Bring it back** returns it now. Snoozes are yours and on this computer (`.local`); a teammate still sees the problem. The panel says how many are snoozed and shows them on request; `testpion problems --all` includes them.
+
 ### Accessible names everywhere
 
 - Every visible button, tab, menu item, switch and link has a name, every input a label, every dialog a name, and no two elements share an id: a plan audits each view (`a11y-names`) and keeps it so. Found and fixed: the method picker of a load test had no label.

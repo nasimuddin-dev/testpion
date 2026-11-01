@@ -61,6 +61,7 @@ export const RPC_GROUPS: Readonly<Record<string, string>> = {
   agents: 'AI agent setup files',
   feedback: 'feedback to the makers',
   comments: 'comments for the team on items',
+  attention: 'problems set aside (snoozed)',
   diagnostics: 'diagnostics of this computer',
   git: 'git',
   debug: 'HTTP Debugger: proxy, system proxy, certificate (acts on this computer)',

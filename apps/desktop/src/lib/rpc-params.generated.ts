@@ -43,6 +43,9 @@ export interface RpcParamTypes {
   'app.openExternal': RpcCommonParams & { url: string };
   'assistant.ask': RpcCommonParams & { task: string; question?: string; context?: unknown; history?: unknown[] };
   'asyncapi.outline': RpcCommonParams & { path?: string; text?: string };
+  'attention.snooze': RpcCommonParams & { item: Record<string, unknown>; minutes?: number };
+  'attention.snoozed': RpcCommonParams;
+  'attention.unsnooze': RpcCommonParams & { key: string };
   'auth.fetchToken': RpcCommonParams & { auth: Record<string, unknown> };
   'baselines.save': RpcCommonParams & { runId: string; name?: string };
   'bundle.apply': RpcCommonParams & { planId: string; onConflict?: string; decisions?: Record<string, unknown>; only?: string[]; workspaceVariables?: string; into?: Record<string, unknown> };
@@ -420,4 +423,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 403;
+export const RPC_METHOD_COUNT = 406;

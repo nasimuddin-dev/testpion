@@ -28,6 +28,30 @@ const steps = [
      await __t.waitFor(() => localStorage.getItem('aps.view') === 'environments', 5000);
      return 'view: ' + localStorage.getItem('aps.view');`,
   ),
+  // a problem set aside: it leaves the list and the count, the panel says how many are snoozed, Show lists it greyed, Bring it back returns it
+  step(
+    'snooze-and-bring-back',
+    `const b = document.querySelector('footer [data-status="problems"]'); if (!b) return 'NO BADGE';
+     let panel = document.querySelector('[data-bottom-panel="problems"]'); if (!panel) { b.click(); panel = await __t.waitFor(() => document.querySelector('[data-bottom-panel="problems"]'), 3000); }
+     const before = Number(b.textContent.trim());
+     const row = await __t.waitFor(() => panel.querySelector('[data-problem]'), 4000); if (!row) return 'NO ROW';
+     const text = row.querySelector('button')?.getAttribute('title');
+     row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 300 }));
+     const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Snooze for 1 hour'), 3000); if (!item) return 'NO SNOOZE ITEM: ' + [...document.querySelectorAll('[role=menuitem]')].map((m) => m.textContent.trim()).join(',');
+     item.click();
+     await __t.waitFor(() => Number(b.textContent.trim()) === before - 1, 6000);
+     const gone = ![...panel.querySelectorAll('[data-problem]')].some((r) => r.querySelector('button')?.getAttribute('title') === text);
+     const note = await __t.waitFor(() => panel.querySelector('[data-problems-snoozed]'), 4000); if (!note) return 'NO SNOOZED NOTE';
+     const noteText = note.textContent.trim();
+     await __t.real.click(note);
+     const grey = await __t.waitFor(() => panel.querySelector('[data-problem][data-snoozed="until"]'), 4000); if (!grey) return 'NO GREY ROW';
+     grey.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 300 }));
+     const back = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === 'Bring it back'), 3000); if (!back) return 'NO BRING BACK';
+     back.click();
+     const restored = await __t.waitFor(() => (Number(b.textContent.trim()) === before ? true : null), 6000);
+     if (!restored) { const sn = await window.aps.invoke('attention.snoozed'); const st = await window.aps.invoke('stats.attention'); return 'NOT RESTORED | snoozed: ' + sn.length + ' ' + JSON.stringify(sn.map((x) => x.key)) + ' | shown: ' + st.length + ' | badge: ' + b.textContent.trim() + ' | view: ' + localStorage.getItem('aps.view'); }
+     return 'count down by one: true | row gone: ' + gone + ' | note: ' + noteText + ' | greyed when shown: true | back: ' + (Number(b.textContent.trim()) === before) + ' | note gone: ' + !panel.querySelector('[data-problems-snoozed]');`,
+  ),
   step(
     'home-same-list',
     `await __t.view('Home'); await __t.sleep(800);
@@ -41,6 +65,7 @@ module.exports = withExpect(
   {
     'status-badge': /^count > 0: true \| groups: Workspace files.* \| first: Environment .*can't be read/,
     'f8-opens-it': /^view: environments$/,
+    'snooze-and-bring-back': /^count down by one: true \| row gone: true \| note: 1 snoozed problem · Show \| greyed when shown: true \| back: true \| note gone: true$/,
     'home-same-list': /^rows: [1-5] \| first is the file: true$/,
   },
   { prepare },

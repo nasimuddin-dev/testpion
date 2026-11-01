@@ -38,8 +38,7 @@ import {
   listCertificates,
   checkCertificate,
   recordCertificate,
-  collectionTiming,
-} from '@testpion/core';
+  collectionTiming, snoozeAttention, splitSnoozed, unsnoozeAttention } from '@testpion/core';
 import type { Backend, Handlers, HttpSendParams, GqlSendParams } from '../backend.js';
 
 export function requestsHandlers(be: Backend): Handlers {
@@ -115,8 +114,17 @@ export function requestsHandlers(be: Backend): Handlers {
       // what is cached is read from files; the secrets are asked of the secret store, which changes without a file changing
       const list = await cachedAttention(be.ws, be.secrets);
       const secrets = secretsAttention(be.ws, be.secrets);
-      return secrets.length ? [...secrets, ...list].sort((a, b) => ({ high: 0, medium: 1, low: 2 })[a.severity] - ({ high: 0, medium: 1, low: 2 })[b.severity]) : list;
+      const all = secrets.length ? [...secrets, ...list].sort((a, b) => ({ high: 0, medium: 1, low: 2 })[a.severity] - ({ high: 0, medium: 1, low: 2 })[b.severity]) : list;
+      // a snoozed problem is set aside for a while or until it changes (.local: this computer's)
+      return splitSnoozed(be.ws, all).shown;
     },
+    /** The problems set aside (snoozed), each with when the snooze ends. */
+    'attention.snoozed': async () => {
+      const list = await cachedAttention(be.ws, be.secrets);
+      return splitSnoozed(be.ws, [...secretsAttention(be.ws, be.secrets), ...list]).snoozed;
+    },
+    'attention.snooze': ({ item, minutes }: { item: { kind: string; ref: unknown; message: string }; minutes?: number }) => snoozeAttention(be.ws, item as never, { minutes }),
+    'attention.unsnooze': ({ key }: { key: string }) => ({ removed: unsnoozeAttention(be.ws, key) }),
     /** Where the time of a collection's requests went (DNS, TCP, TLS, server, download), from responses sent in the app. */
     'stats.collectionTiming': ({ collectionId }: { collectionId: string }) => collectionTiming(be.ws, collectionId) ?? null,
     'history.get': ({ id }: { id: string }) => be.ws.meta.getHistory(id),

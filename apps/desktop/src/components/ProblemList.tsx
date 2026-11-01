@@ -1,10 +1,10 @@
 import { Fragment, useState } from 'react';
-import { AlertCircle, AlertTriangle, ChevronRight, Info, Play } from 'lucide-react';
+import { AlertCircle, AlertTriangle, BellOff, ChevronRight, Info, Play } from 'lucide-react';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { runAgain } from '../lib/run-again';
-import { askAboutProblem, type Problem } from '../lib/problems';
+import { askAboutProblem, refreshProblems, type Problem } from '../lib/problems';
 import { timeAgo } from '../lib/format';
 import { RowMenu } from './TreeParts';
 import { flakyTestItems, triageRunItems } from './ai/ai-analysis';
@@ -27,6 +27,12 @@ function runMonitor(id: string) {
   );
 }
 
+/** Set a problem aside (for a while, or until its words change), or bring it back; the list is read again at once. */
+const snooze = (p: Problem, minutes?: number) =>
+  void call('attention.snooze', { item: { kind: p.kind, ref: p.ref, message: p.message }, ...(minutes ? { minutes } : {}) }).then(refreshProblems, toastError);
+const unsnooze = (p: Problem) => void call('attention.unsnooze', { key: p.key }).then(refreshProblems, toastError);
+const untilTomorrowMinutes = () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return Math.max(60, Math.round((d.getTime() - Date.now()) / 60_000)); };
+
 /** What a problem offers: open what it names, run it again (a run, a monitor), ask the assistant. */
 function problemActions(p: Problem): MenuItem[] {
   return [
@@ -37,6 +43,10 @@ function problemActions(p: Problem): MenuItem[] {
     ...((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId ? triageRunItems(p.ref.runId, { separator: true }) : []),
     ...(p.kind === 'flaky' && (p.ref as { testId?: string }).testId ? flakyTestItems((p.ref as { testId: string }).testId, { separator: true }) : []),
     ...aiMenuItems('askProblem', () => askAboutProblem(p), { separator: !((p.kind === 'run' || p.kind === 'monitor') && p.ref.runId) && p.kind !== 'flaky' }),
+    // set aside: personal and on this computer; it comes back by itself when the time passes or the problem changes
+    ...(p.snoozed
+      ? [{ label: 'Bring it back', icon: <BellOff size={14} />, separator: true, onSelect: () => unsnooze(p) }]
+      : [{ label: 'Snooze for 1 hour', icon: <BellOff size={14} />, separator: true, onSelect: () => snooze(p, 60) }, { label: 'Snooze until tomorrow 09:00', onSelect: () => snooze(p, untilTomorrowMinutes()) }, { label: 'Snooze until it changes', onSelect: () => snooze(p) }]),
   ];
 }
 
@@ -59,7 +69,8 @@ export function ProblemList({ problems, grouped, limit }: { problems: Problem[];
           <div
             role="listitem"
             data-problem={p.kind}
-            className={cx('group flex items-center gap-2 pl-2 pr-1 rounded-md text-sm', menuFor === keys[n] ? 'bg-hover' : 'hover:bg-hover')}
+            data-snoozed={p.snoozed ? (p.snoozed.until ? 'until' : 'changes') : undefined}
+            className={cx('group flex items-center gap-2 pl-2 pr-1 rounded-md text-sm', menuFor === keys[n] ? 'bg-hover' : 'hover:bg-hover', p.snoozed && 'opacity-60')}
             onContextMenu={(e) => {
               e.preventDefault();
               setMenuFor(keys[n]);

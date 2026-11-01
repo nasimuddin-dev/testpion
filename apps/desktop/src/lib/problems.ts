@@ -17,8 +17,12 @@ import { touchesFiles, type DataChangedEvent, type FileKind } from './data-chang
  * the same (a component renders only when the list changed).
  */
 export interface Problem {
-  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file';
+  kind: 'monitor' | 'certificate' | 'flaky' | 'request' | 'run' | 'file' | 'token';
   severity: 'high' | 'medium' | 'low';
+  /** What it is about (its kind and item): the handle to snooze it. */
+  key: string;
+  /** Set aside, for a while (`until`) or until the problem changes. */
+  snoozed?: { until?: string; hash: string; at: string };
   group: string;
   type: 'failure' | 'error' | 'warning';
   at?: string;
@@ -67,6 +71,9 @@ const soon = () => {
   clearTimeout(timer);
   timer = setTimeout(() => ((timer = undefined), void read()), SETTLE_MS);
 };
+
+/** Read the list again now (after a snooze: the row goes at once). */
+export const refreshProblems = (): void => void read();
 
 /** Start keeping the list read (the first user starts the subscriptions); returns the stop (the last one ends them). Exported for the tests. */
 export function startProblemsLive(): () => void {
