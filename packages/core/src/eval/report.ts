@@ -116,6 +116,23 @@ export interface EvalReportToolUse {
   text: string;
 }
 
+/**
+ * A judge that follows the length of the answers rather than their quality: over the cases an LLM judge scored, how strongly its
+ * scores rise (or fall) with the length of the answer (Spearman's rank correlation, -1 to 1). Reported when the run has at least
+ * 8 scored cases and the correlation is 0.5 or stronger either way.
+ */
+export interface EvalReportJudgeBias {
+  /** The judge check, by its name. */
+  check: string;
+  cases: number;
+  /** Spearman's rank correlation between the answer's length and the judge's score. */
+  rho: number;
+  /** Mean score of the longest third of the answers and of the shortest third. */
+  longest: number;
+  shortest: number;
+  text: string;
+}
+
 export interface EvalReport {
   run: { id: string; name: string; startedAt: string; environment?: string };
   passed: number;
@@ -155,6 +172,8 @@ export interface EvalReport {
   flipped?: EvalReportFlip[];
   /** An agent evaluation with a baseline run (A-2): the tools of each case against the golden run's. */
   agentBaseline?: EvalReportAgentBaseline;
+  /** LLM judges whose scores follow the length of the answer (long scored high, or short scored high), when the run shows it. */
+  judgeBias?: EvalReportJudgeBias[];
   /** An agent evaluation: which tools were called in how many cases, and which of the tools it offers were never called by any case. */
   toolUse?: EvalReportToolUse;
   /** What was under test (R-6): the bot's own values, and whether any changed since the run before. */
@@ -251,6 +270,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
   const trajectories = new Map<string, Trajectory>();
   let promptHash: string | undefined;
   const meta = new Map<string, Set<string>>();
+  const judged = new Map<string, Array<{ length: number; score: number }>>();
   let failedCount = 0;
   const causeCounts = new Map<FailureClass, number>();
   const goals = { backed: { passed: 0, total: 0 }, found: { passed: 0, total: 0 } };
@@ -261,6 +281,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     cases.set(evalCaseKey(r.id), { id: r.id, name: r.name });
     promptHash ??= r.tags?.find((t) => t.startsWith('prompt:'))?.slice(7);
     addMeta(meta, r);
+    addJudged(judged, r);
     const traj = trajectoryOf(r);
     if (traj) trajectories.set(evalCaseKey(r.id), traj);
     if ((r.latencyMs ?? r.durationMs) > slowest) slowest = r.latencyMs ?? r.durationMs;
@@ -392,6 +413,8 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     };
   }
 
+  const judgeBias = judgeBiasOf(judged);
+
   // the trend: this run and the ones before it of the same name
   const trend: EvalReportTrendPoint[] = store.meta
     .listRuns({ query: summary.name, limit: 200 })
@@ -434,6 +457,7 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     promptVersion ? (promptVersion.name ? `Prompt version: ${promptVersion.name}${promptVersion.current ? '' : ' (not the one in use now)'}.` : 'Prompt version: this prompt is not saved as a version.') : '',
     agentBaseline ? agentBaseline.text : '',
     toolUse ? toolUse.text : '',
+    judgeBias ? judgeBias.map((b) => b.text).join(' ') : '',
     flipped?.length ? `Got worse: ${flipped.filter((f) => f.to === 'failed').map((f) => f.name).join(', ') || 'none'}. Got better: ${flipped.filter((f) => f.to === 'passed').map((f) => f.name).join(', ') || 'none'}.` : '',
     offline ? 'Offline demo model: its answers come from rules, not from a real model.' : '',
   ].filter(Boolean);
@@ -462,12 +486,88 @@ export async function evalReport(store: Store, o: { run: string; /** Compare wit
     ...(flipped?.length ? { flipped } : {}),
     ...(agentBaseline ? { agentBaseline } : {}),
     ...(toolUse ? { toolUse } : {}),
+    ...(judgeBias ? { judgeBias } : {}),
     ...(promptVersion ? { promptVersion } : {}),
     ...(underTest ? { underTest } : {}),
     ...(trajectories.size ? { agentCases: trajectories.size, ...(saved?.baselineRun ? { baselineRun: saved.baselineRun } : {}) } : {}),
     trend,
     text: words.join(' '),
   };
+}
+
+/* ------------------------------------------------------------------ the judge and the length of the answers */
+
+/** The LLM-judge scores of a result with the length of the answer it scored (its output tokens, else the characters kept). */
+function addJudged(judged: Map<string, Array<{ length: number; score: number }>>, r: TestResult): void {
+  const length = r.tokens?.outputTokens || r.output?.length || 0;
+  if (!length) return;
+  for (const c of r.checks ?? [])
+    if (c.source === 'ai-judge' && typeof c.score === 'number' && Number.isFinite(c.score)) {
+      const k = c.name || c.type;
+      const list = judged.get(k) ?? [];
+      list.push({ length, score: c.score });
+      judged.set(k, list);
+    }
+}
+
+/** Ranks with ties sharing their mean rank. */
+function ranks(xs: number[]): number[] {
+  const order = xs.map((v, i) => [v, i] as const).sort((a, b) => a[0] - b[0]);
+  const out = new Array<number>(xs.length);
+  for (let i = 0; i < order.length; ) {
+    let j = i;
+    while (j + 1 < order.length && order[j + 1]![0] === order[i]![0]) j++;
+    const rank = (i + j) / 2 + 1;
+    for (let k = i; k <= j; k++) out[order[k]![1]] = rank;
+    i = j + 1;
+  }
+  return out;
+}
+
+/** Spearman's rank correlation of two series, or undefined when either does not vary. */
+export function spearman(xs: number[], ys: number[]): number | undefined {
+  const rx = ranks(xs);
+  const ry = ranks(ys);
+  const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+  const mx = mean(rx);
+  const my = mean(ry);
+  let num = 0;
+  let dx = 0;
+  let dy = 0;
+  for (let i = 0; i < rx.length; i++) {
+    num += (rx[i]! - mx) * (ry[i]! - my);
+    dx += (rx[i]! - mx) ** 2;
+    dy += (ry[i]! - my) ** 2;
+  }
+  return dx && dy ? num / Math.sqrt(dx * dy) : undefined;
+}
+
+const JUDGE_BIAS_MIN_CASES = 8;
+const JUDGE_BIAS_MIN_RHO = 0.5;
+
+/** The judges whose scores follow the length of the answers: a judge fooled by length scores a long wrong answer above a short right one. */
+function judgeBiasOf(judged: Map<string, Array<{ length: number; score: number }>>): EvalReportJudgeBias[] | undefined {
+  const out: EvalReportJudgeBias[] = [];
+  for (const [check, list] of judged) {
+    if (list.length < JUDGE_BIAS_MIN_CASES) continue;
+    const rho = spearman(list.map((x) => x.length), list.map((x) => x.score));
+    if (rho === undefined || Math.abs(rho) < JUDGE_BIAS_MIN_RHO) continue;
+    const sorted = [...list].sort((a, b) => a.length - b.length);
+    const third = Math.max(1, Math.floor(sorted.length / 3));
+    const avg = (xs: Array<{ score: number }>) => Math.round((xs.reduce((s, x) => s + x.score, 0) / xs.length) * 100) / 100;
+    const shortest = avg(sorted.slice(0, third));
+    const longest = avg(sorted.slice(-third));
+    const favours = rho > 0 ? 'longer' : 'shorter';
+    out.push({
+      check,
+      cases: list.length,
+      rho: Math.round(rho * 100) / 100,
+      longest,
+      shortest,
+      text: `The judge "${check}" favours ${favours} answers (its scores follow the length of the answer over ${plural(list.length, 'case')}: the longest third scored ${longest}, the shortest ${shortest}). Read a long and a short answer side by side; if the length is what it rewards, add a short right answer and a long wrong one to the cases, or tell the judge in its criteria that length does not count.`,
+    });
+  }
+  return out.length ? out : undefined;
 }
 
 /* ------------------------------------------------------------------ one case */

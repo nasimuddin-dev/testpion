@@ -326,6 +326,13 @@ export function RunReport({ runId, offline, compact, onCi, onCover, ciReason }: 
           ) : null}
         </div>
       ) : null}
+      {r && !compact && r.judgeBias?.length
+        ? r.judgeBias.map((b) => (
+            <div key={b.check} className="px-3 pb-1 text-xs text-warn" data-eval-judge-bias={b.check} title={`Spearman's rank correlation between the length of the answer and the judge's score: ${b.rho} over ${b.cases} cases`}>
+              {b.text}
+            </div>
+          ))
+        : null}
       {r && !compact && r.agentCases ? (
         <div className="px-3 pb-1.5 flex flex-wrap items-center gap-2 text-xs" data-eval-baseline={r.baselineRun === runId ? 'this' : r.baselineRun ? 'other' : 'none'}>
           <Pin size={12} className="text-muted" />

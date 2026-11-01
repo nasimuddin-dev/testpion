@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### The judge, judged: a judge fooled by length
+
+- The report card of an evaluation with an LLM judge now says when the judge's scores follow the length of the answers (*The judge "helpful" favours longer answers (its scores follow the length of the answer over 12 cases: the longest third scored 0.91, the shortest 0.4)*), in amber, with what to do about it. Computed from the run, no model is called; `judgeBias` in `testpion eval summary --json` and `eval_summary`.
+
 ### Agent evaluations: arguments no case passed
 
 - The report of an agent evaluation now also names the arguments a called tool declares that no case ever passed (*Arguments no case passed: add_task (due)*), in amber like a tool nothing called; `toolUse.argumentsNeverPassed` in `testpion eval summary --json`. A **Write cases for these…** button next to the line opens the case generator with a hint that asks for cases using them.

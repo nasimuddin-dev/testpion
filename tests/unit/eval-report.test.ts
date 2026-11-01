@@ -222,6 +222,44 @@ describe('why did this fail (AU-15)', () => {
   });
 });
 
+describe('a judge fooled by length', () => {
+  const summaryOf = (runId: string, n: number): RunSummary =>
+    ({ runId, name: 'Judge', startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), durationMs: 5, total: n, passed: n, failed: 0, skipped: 0, errors: 0, latency: { count: 0, min: 0, max: 0, mean: 0, p50: 0, p90: 0, p95: 0, p99: 0 }, tokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, costUsd: 0, cancelled: false, scores: {}, reproducibility: {} }) as unknown as RunSummary;
+  const judgedResult = (i: number, outputTokens: number, score: number): TestResult =>
+    ({ id: `hand:j${i}`, name: `j${i}`, type: 'llm', status: 'passed', startedAt: new Date().toISOString(), durationMs: 5, attempts: 1, input: 'q', output: 'a'.repeat(outputTokens), tokens: { inputTokens: 10, outputTokens, totalTokens: 10 + outputTokens }, checks: [{ type: 'llm-judge', name: 'helpful', passed: score >= 0.5, source: 'ai-judge', score, message: `judge score ${score}` }] }) as TestResult;
+  async function runWith(runId: string, rows: Array<[number, number]>) {
+    const out = store.runDir(runId);
+    mkdirSync(out, { recursive: true });
+    writeFileSync(join(out, 'results.jsonl'), rows.map(([len, score], i) => JSON.stringify(judgedResult(i, len, score))).join('\n') + '\n');
+    await recordRun(store, summaryOf(runId, rows.length), out);
+    return evalReport(store, { run: runId });
+  }
+
+  it('scores that rise with the length of the answer are reported, with the means of the longest and shortest third', async () => {
+    const r = await runWith('run-judge-long', [[20, 0.2], [40, 0.3], [60, 0.4], [80, 0.5], [100, 0.6], [120, 0.7], [140, 0.9], [160, 0.9], [180, 1]]);
+    expect(r.judgeBias).toHaveLength(1);
+    expect(r.judgeBias![0]).toMatchObject({ check: 'helpful', cases: 9, longest: 0.93, shortest: 0.3 });
+    expect(r.judgeBias![0]!.rho).toBeGreaterThan(0.9);
+    expect(r.judgeBias![0]!.text).toMatch(/^The judge "helpful" favours longer answers .*over 9 cases: the longest third scored 0.93, the shortest 0.3/);
+    expect(r.text).toContain('favours longer answers');
+  });
+
+  it('scores that fall with the length say the judge favours shorter answers', async () => {
+    const r = await runWith('run-judge-short', [[20, 1], [40, 0.9], [60, 0.8], [80, 0.7], [100, 0.5], [120, 0.4], [140, 0.3], [160, 0.2]]);
+    expect(r.judgeBias![0]).toMatchObject({ check: 'helpful', cases: 8 });
+    expect(r.judgeBias![0]!.rho).toBeLessThan(-0.9);
+    expect(r.judgeBias![0]!.text).toContain('favours shorter answers');
+  });
+
+  it('nothing is said when the scores do not follow the length, or with fewer than 8 scored cases', async () => {
+    const flat = await runWith('run-judge-flat', [[20, 0.9], [40, 0.2], [60, 0.8], [80, 0.3], [100, 0.9], [120, 0.1], [140, 0.7], [160, 0.4], [180, 0.6]]);
+    expect(flat.judgeBias).toBeUndefined();
+    expect(flat.text).not.toContain('favours');
+    const few = await runWith('run-judge-few', [[20, 0.2], [40, 0.4], [60, 0.6], [80, 0.8], [100, 1]]);
+    expect(few.judgeBias).toBeUndefined();
+  });
+});
+
 describe('compare mode (AU-16)', () => {
   it('the evaluation is the first variant and each variant changes only what it names', () => {
     const base: SavedEvaluation = { ...sampleWith({}), name: 'Intent', variants: [{ label: 'Shorter', prompt: 'Customer: {{input}}' }, { label: 'Haiku', provider: 'demo-b', model: 'haiku' }] };

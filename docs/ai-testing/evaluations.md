@@ -146,6 +146,8 @@ Above the cases of a run, one report says how it went. First the sentence (*17 o
 
 The cost line also says what the run before cost and what this evaluation has cost this month over its runs. Under the sentence, **Changed since the last run** lists the cases whose verdict flipped, the ones that got worse first; **What changed** on one of them shows its two replies side by side. The same numbers and words come back from `testpion eval summary` and the `eval_summary` tool (`cost`, `flipped`).
 
+When an **LLM judge** scored the cases, the report card also watches the judge itself. A judge can be fooled by length: it scores a long, confident, wrong answer above a short right one. When a judge's scores rise (or fall) with the length of the answers over at least eight cases, the report says so in amber: *The judge "helpful" favours longer answers (its scores follow the length of the answer over 12 cases: the longest third scored 0.91, the shortest 0.4)*. Read a long and a short answer side by side; if length is what the judge rewards, add a short right answer and a long wrong one to the cases, or say in the judge's criteria that length does not count. No model is called: it is computed from the run. `judgeBias` in `testpion eval summary --json` and `eval_summary` carries the check, the cases, the correlation (`rho`, -1 to 1) and the two means.
+
 ```bash
 testpion eval summary last              # the same words in a terminal (a run id, "last" or an evaluation name)
 testpion eval summary last --json       # headline, byCheck, failures, passLine, vsLast, trend, text
