@@ -402,6 +402,7 @@ export interface RpcParamTypes {
   'traces.exportOtlp': RpcCommonParams & { ids: string[]; endpoint: string; headers?: unknown[] };
   'traces.get': RpcCommonParams & { id: string };
   'vars.addToEnvironments': RpcCommonParams & { from: string; keys: string[]; to: string[]; copy?: boolean };
+  'vars.copyToEnvironment': RpcCommonParams & { from: string; to: string; key: string };
   'vars.inspect': RpcCommonParams & { template?: string };
   'vars.moveToEnvironments': RpcCommonParams & { collectionId: string; keys?: string[]; environments: string[] };
   'vars.rename': RpcCommonParams & { from: string; to: string };
@@ -425,4 +426,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 408;
+export const RPC_METHOD_COUNT = 409;

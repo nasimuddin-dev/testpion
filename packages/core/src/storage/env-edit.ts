@@ -116,6 +116,38 @@ export function unsetEnvironmentVariables(store: WorkspaceStore, ref: string, ke
 }
 
 /**
+ * Copy one variable from an environment to another (Compare's → and ←, `env copy`): the value, enabled and secret as on the
+ * source, replacing what the target has or adding it. A secret's value goes secret store to secret store (with `secrets`);
+ * without a store it is added as a secret with no value. Returns what changed.
+ */
+export async function copyVariableToEnvironment(
+  store: WorkspaceStore,
+  from: string,
+  to: string,
+  key: string,
+  opts: { secrets?: SecretStore } = {},
+): Promise<{ from: string; to: string; key: string; secret: boolean; replaced: boolean; secretCopied: boolean }> {
+  const src = requireEnvironment(store, from);
+  const dst = requireEnvironment(store, to);
+  if (src.id === dst.id) throw new ApsError('ValidationError', 'Pick two different environments');
+  const v = src.variables.find((x) => x.key === key);
+  if (!v) throw new ApsError('ValidationError', `"${src.name}" has no variable ${key}`);
+  const secret = !!(v as { secret?: boolean }).secret;
+  const replaced = dst.variables.some((x) => x.key === key);
+  const copy = { ...v, value: secret ? '' : v.value, enabled: v.enabled !== false };
+  store.saveEnvironment({ ...dst, variables: replaced ? dst.variables.map((x) => (x.key === key ? copy : x)) : [...dst.variables, copy] });
+  let secretCopied = false;
+  if (secret && opts.secrets) {
+    const value = opts.secrets.get(secretKeys.envVar(src.id, key));
+    if (value !== undefined) {
+      await opts.secrets.set(secretKeys.envVar(dst.id, key), value);
+      secretCopied = true;
+    }
+  }
+  return { from: src.name, to: dst.name, key, secret, replaced, secretCopied };
+}
+
+/**
  * WF-14 "also add to the other environments": the variables `keys` of environment `from`, added to each of `to` where
  * they are missing (an existing variable is never changed), empty or with the same value (`copy`). A secret variable
  * stays secret: its value is copied secret store to secret store (with `secrets`), else it is added without a value.

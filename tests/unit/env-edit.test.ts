@@ -2,7 +2,35 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, setEnvironmentVariables, unsetEnvironmentVariables } from '../../packages/core/src/index.js';
+import { MemorySecretStore, WorkspaceStore, copyVariableToEnvironment, secretKeys, setEnvironmentVariables, unsetEnvironmentVariables } from '../../packages/core/src/index.js';
+
+describe('copy a variable to another environment (Compare → ←, env copy)', () => {
+  it('replaces or adds the variable as on the source; a secret value goes store to store and is never in the file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tp-envcopy-'));
+    const store = WorkspaceStore.create(join(dir, 'ws'), 'W');
+    const secrets = new MemorySecretStore();
+    try {
+      store.saveEnvironment({ id: 'staging', name: 'Staging', variables: [{ key: 'baseUrl', value: 'https://staging.example.com', enabled: true }, { key: 'flag', value: 'on', enabled: false }, { key: 'apiKey', value: '', enabled: true, secret: true } as never] } as never);
+      store.saveEnvironment({ id: 'prod', name: 'Production', variables: [{ key: 'baseUrl', value: 'https://api.example.com', enabled: true }] } as never);
+      await secrets.set(secretKeys.envVar('staging', 'apiKey'), 'sk-staging');
+      expect(await copyVariableToEnvironment(store, 'Staging', 'Production', 'baseUrl', { secrets })).toEqual({ from: 'Staging', to: 'Production', key: 'baseUrl', secret: false, replaced: true, secretCopied: false });
+      expect(await copyVariableToEnvironment(store, 'staging', 'prod', 'flag', { secrets })).toMatchObject({ replaced: false, secret: false });
+      expect(await copyVariableToEnvironment(store, 'staging', 'prod', 'apiKey', { secrets })).toMatchObject({ secret: true, replaced: false, secretCopied: true });
+      const prod = store.getEnvironment('prod')!;
+      expect(prod.variables.map((v) => [v.key, v.value, v.enabled, !!(v as { secret?: boolean }).secret])).toEqual([
+        ['baseUrl', 'https://staging.example.com', true, false],
+        ['flag', 'on', false, false],
+        ['apiKey', '', true, true],
+      ]);
+      expect(secrets.get(secretKeys.envVar('prod', 'apiKey'))).toBe('sk-staging');
+      await expect(copyVariableToEnvironment(store, 'staging', 'staging', 'flag')).rejects.toThrow(/two different environments/);
+      await expect(copyVariableToEnvironment(store, 'staging', 'prod', 'nope')).rejects.toThrow(/has no variable nope/);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('editing environment variables (CLI / agents)', () => {
   it('sets and removes plain variables, creates environments on request, refuses secrets', () => {

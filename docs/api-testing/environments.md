@@ -158,6 +158,8 @@ From a variable's popover, the button next to **Copy** goes to where that variab
 
 Use it when a request works on Staging but fails on Production. Secret and sensitive-looking values (tokens, passwords, keys) are masked; secrets are compared by their stored values without being shown.
 
+A value that should be the same on both sides: the row's **→** copies the left value to the right environment (**←** the other way), replacing what is there or adding the variable; it asks first, since the old value is gone. A secret is copied secret store to secret store, never shown. `testpion env copy baseUrl --from Staging --to Production` does the same.
+
 From the terminal, `testpion env diff Staging Production -w my-workspace` lists the differences and exits with 1 when there are any. Add `--values` to see non-secret values, `--all` to include the variables that are the same, and `--json` for scripts. AI agents get the `compare_environments` tool, which returns statuses, never values.
 
 **Matrix** shows every variable across all environments at once: *set*, *empty*, *missing* or *off* in each, with a lock on secrets, the incomplete ones first. It catches the variable you added to Development and forgot in Staging. `testpion env matrix` prints it (exit 1 when a variable is incomplete somewhere) and agents use `environment_matrix`; neither shows values.

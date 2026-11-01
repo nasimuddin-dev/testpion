@@ -148,6 +148,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'debug.saveRule': { rule: 'o' },
   'env.delete': { id: 's' },
   'env.diff': { left: 's', right: 's' },
+  'vars.copyToEnvironment': { from: 's', to: 's', key: 's' },
   'env.export': { id: 's', format: 's?' },
   'env.quickLook': {},
   'env.save': { env: 'o', secrets: 'o?' },

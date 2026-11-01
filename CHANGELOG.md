@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Environments: copy a value across
+
+- In **Compare** (two environments side by side) a row's **→** and **←** copy the variable to the other environment, replacing what is there or adding it, after asking; a secret's value is copied secret store to secret store and never shown. `testpion env copy <key> --from Staging --to Production`.
+
 ### Mock servers: stateful
 
 - **Stateful** on a mock server (the Mock tab, `testpion mock … --stateful`): what a client creates, the mock remembers while it runs. `POST /pets` answers 201 with the record and a new id, `GET /pets` lists it, `GET /pets/3` returns it, PUT and PATCH change it, DELETE removes it. A resource is a path whose GET example answers with a JSON array (it seeds the state) or whose item path has an example; everything else is answered by the examples as before. Reset state forgets it; nothing is written to disk.

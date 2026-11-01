@@ -4,7 +4,7 @@ import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed } from '@testpion/core';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
@@ -952,6 +952,26 @@ export function registerDataCommands(program: Command): void {
         else console.log(names.join('\n'));
       });
     });
+  envCmd
+    .command('copy')
+    .description("copy one variable from an environment to another (value, enabled and secret as on the source; a secret's value store to store), replacing what the target has or adding it")
+    .argument('<key>', 'the variable')
+    .requiredOption('--from <environment>', 'environment name or id')
+    .requiredOption('--to <environment>', 'environment name or id')
+    .requiredOption('-w, --workspace <nameOrPath>')
+    .option(...JSON_OPTION)
+    .action(async (key: string, o: { from: string; to: string; workspace: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store) => {
+        let r;
+        try {
+          r = await copyVariableToEnvironment(store, o.from, o.to, key, { secrets: cliSecrets() });
+        } catch (e) {
+          throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+        }
+        if (o.json) return printJson(r);
+        console.log(green(`${r.replaced ? 'Replaced' : 'Added'} ${key} in ${r.to} from ${r.from}${r.secret ? (r.secretCopied ? ' (secret value copied)' : ' (secret: enter its value there)') : ''}`));
+      }),
+    );
   envCmd
     .command('diff')
     .description('compare two environments: variables missing on one side, different, disabled, or secrets set on one side only (exit 1 when they differ)')

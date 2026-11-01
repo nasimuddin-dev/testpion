@@ -40,6 +40,7 @@ import {
   findEnvironment,
   setEnvironmentVariables,
   addVariablesToEnvironments,
+  copyVariableToEnvironment,
   makeGitReady,
   requireCollectionFor,
   requireEnvironment,
@@ -334,6 +335,8 @@ export function workspaceHandlers(be: Backend): Handlers {
       const also = alsoIn?.length ? await addVariablesToEnvironments(be.ws, env.id, [name], alsoIn, { copy, secrets: be.secrets }) : [];
       return { environment: env.name, secret: !!env.variables.find((v) => v.key === name)?.secret, also };
     },
+    /** Copy one variable from an environment to another (Compare's → and ←): value, enabled and secret as on the source; a secret's value store to store. */
+    'vars.copyToEnvironment': ({ from, to, key }: { from: string; to: string; key: string }) => copyVariableToEnvironment(be.ws, from, to, key, { secrets: be.secrets }),
     /** Variables of one environment added to others where they are missing (after adding new ones in the Environments view). */
     'vars.addToEnvironments': ({ from, keys, to, copy }: { from: string; keys: string[]; to: string[]; copy?: boolean }) => addVariablesToEnvironments(be.ws, from, keys, to, { copy, secrets: be.secrets }),
     /** Delete an environment to Recently deleted (the kind's `ops` facet; its secret values stay in the secret store). */
