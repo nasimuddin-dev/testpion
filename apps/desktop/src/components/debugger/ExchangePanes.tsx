@@ -2,7 +2,7 @@ import { CookiesView, ErrorView, ParamsView, cookiesOf, paramsOf } from './Excha
 import { SummaryPanel } from './DockInsights';
 import { Bot, ChevronDown, Copy, ExternalLink, Lock, Pause, Play, Scale, Star, X } from 'lucide-react';
 import { memo, useMemo } from 'react';
-import { formatBytes } from '@testpion/shared';
+import { deprecationOf, formatBytes } from '@testpion/shared';
 import { Badge, Button, Menu, Split, statusTone } from '../ui';
 import { EventsView, FramesView, GrpcView } from '../DebuggerTools';
 import { bodyNote, curlOf, rawOf, versionOf, type Exchange } from './model';
@@ -43,10 +43,17 @@ export const ExchangePanes = memo(function ExchangePanes({ e, ...a }: { e: Excha
   const version = versionOf(e);
   const tunnel = e.kind === 'tunnel';
   const spec = useMemo(() => exchangeOutputSpec(e), [e]);
+  // Deprecation / Sunset / Warning 299 on the captured response: the endpoint is going away
+  const goingAway = useMemo(() => (e.responseHeaders ? deprecationOf(e.responseHeaders) : undefined), [e.responseHeaders]);
   return (
     <div className="h-full flex flex-col min-h-0" data-output="debugger.exchange">
       <div className="flex items-center gap-2 px-3 h-9 border-b border-line text-sm shrink-0 whitespace-nowrap overflow-hidden">
         <Badge tone={e.error ? 'bad' : statusTone(e.status)}>{e.error ? 'error' : `${e.status ?? '…'} ${e.statusText ?? ''}`}</Badge>
+        {goingAway && (
+          <Badge tone="warn" title={`This endpoint is going away: ${goingAway.text}${goingAway.link ? `. See ${goingAway.link}` : ''} (Deprecation / Sunset headers). It is listed under Needs attention.`} data-exchange-deprecated>
+            going away
+          </Badge>
+        )}
         <span className="mono text-xs truncate" title={e.url}>
           {e.method} {e.url}
         </span>
