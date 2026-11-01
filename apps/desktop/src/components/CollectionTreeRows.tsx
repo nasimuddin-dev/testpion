@@ -155,6 +155,7 @@ export const FolderRow = memo(function FolderRow({ c, n, depth, open, renaming, 
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth)}
       git={{ kind: 'folder', collectionId: c.id, folderId: n.id }}
+      mark={<CommentMark to={{ kind: 'folder', collectionId: c.id, folderId: n.id }} />}
     >
       {open ? OPEN_ICON : CLOSED_ICON}
       {FOLDER_ICON}
@@ -210,6 +211,7 @@ export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dr
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       className="pl-1.5 font-medium"
       git={{ kind: 'collection', collectionId: c.id }}
+      mark={<CommentMark to={{ kind: 'collection', collectionId: c.id }} />}
     >
       {open ? OPEN_ICON : CLOSED_ICON}
       <span className={cx('truncate', c.problem && 'text-bad')} title={c.problem}>
