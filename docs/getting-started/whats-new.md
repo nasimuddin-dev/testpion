@@ -1,13 +1,46 @@
 ---
 title: "What's new: how to use it"
-description: "What's new in TestPion 0.55 (traffic shaping and AI quality in one place), 0.54 (bundles to save and export everything, imports from every other tool with preview, report and Undo, Git history, restore, stage and conflicts for every item, AI that checks its work: tests from a spec, tidy import, security tests, contract drift, Ask; RAG testing, one row and one menu, a faster command line), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
+description: "What's new in TestPion 0.56 (comments for the team, monitors that pause and alert sensibly, a status page, tokens and endpoints going away under Needs attention, stateful mocks), 0.55 (traffic shaping and AI quality in one place), 0.54 (bundles to save and export everything, imports from every other tool with preview, report and Undo, Git history, restore, stage and conflicts for every item, AI that checks its work: tests from a spec, tidy import, security tests, contract drift, Ask; RAG testing, one row and one menu, a faster command line), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, step by step: one down arrow that saves every response and result (JSON, CSV, HTML, HAR, JUnit, ZIP …) with secrets masked, workspace exports with everything and no secrets, imports that list what to check, AI that explains and fixes a failed run and finds out why a test is flaky, AI that writes integration flows from a collection, verified checks and tests, what is sent, Local only and cost caps, a calmer rail with More…, your own keyboard shortcuts, compact density, Undo instead of confirmations, JSONPath suggestions and Diff vs previous, a visual flow designer, a Terminal, one production guard, and the behaviour changes to read before upgrading."
 ---
 
 ::: v-pre
 
 # What's new: how to use it
 
-The options added in 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.54](#behaviour-changes-in-0-54), [0.52](#behaviour-changes-in-0-52), [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+The options added in 0.56, 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48, 0.47 and 0.46, each with the steps to use it and a link to the full reference. Where it makes sense, an option also works from the terminal (`testpion …`, with `--json`) and for AI agents (an MCP tool of `testpion mcp-server`). **Read the behaviour changes of [0.54](#behaviour-changes-in-0-54), [0.52](#behaviour-changes-in-0-52), [0.51](#behaviour-changes-in-0-51), [0.50](#behaviour-changes-in-0-50), [0.49](#behaviour-changes-in-0-49), [0.48](#behaviour-changes-in-0-48), [0.47](#behaviour-changes-in-0-47) and [0.46](#behaviour-changes-read-before-upgrading) before upgrading.** The 0.45 additions follow [below](#what-was-new-in-0-45); older ones are in the [changelog](/changelog).
+
+## What's new in 0.56: work as a team, watch what matters, and mocks that remember {#whats-new-in-0-56}
+
+0.56 is about working with other people on one workspace, about the things that go wrong quietly (a token that expires, an endpoint going away, a monitor paged by a blip), and about a mock server you can build a client against.
+
+### Work as a team {#whats-new-team-work}
+- **Comments next to the item.** Open a request, a test file, an evaluation or a monitor, open the **Info** panel and write under **Comments for your team**: signed with your git name, saved in the workspace (`comments/`), carried by git. A request with open comments shows a speech bubble on its row; Home lists what the team is still asking under **Your team is asking**. `testpion item comment list|add|resolve|delete <item>`, `item comment open --json`. See [Work as a team](/getting-started/team).
+- **A note for your team** under the workspace name on Home (`testpion workspace note`), **Invite a teammate…** in the Git view, **secrets to fill in** after a clone (Needs attention and `testpion secrets --missing`), **Who are you?** when git has no name yet (`testpion git identity`), and **Waiting on origin/main**: what your team pushed, in words, before you pull (`testpion git incoming`).
+- **Copy a value across.** In **Compare** (two environments side by side) a row's **→** and **←** copy a variable to the other environment after asking; a secret's value goes secret store to secret store. `testpion env copy <key> --from Staging --to Production`.
+
+### Monitors {#whats-new-monitors}
+- **Pause for a while.** **Pause ▸ For 1 hour / For 4 hours / Until tomorrow 09:00**, with why: the monitor says *paused until 14:30 (deploy)* and goes on by itself. `testpion monitor pause <name> --for 2h --why deploy`, `monitor resume`.
+- **Alert after n failures in a row.** **Alert after** on a monitor (`--alert-after 3`) posts the webhook only at that many failures in a row; one blip stays quiet.
+- **A status page to host.** **Status page** in the Monitors view and `testpion monitor status -o status.html`: every monitor's state, uptime and a block per day as one page with no script, for GitHub Pages or an intranet; `-o status.md` for a wiki.
+- **Watch a prompt or agent.** A monitor can run a saved evaluation every night and fail on a drop in pass rate (right-click an evaluation ▸ **Monitor on a schedule…**).
+
+### Needs attention, and what to do with it {#whats-new-attention}
+- **A token about to expire.** A variable holding a JSON Web Token that expired or expires within 3 days is listed by name (*The token in {{apiToken}} (Staging) expires in 2 days*).
+- **Endpoints going away.** A response with a `Deprecation`, `Sunset` or `Warning: 299` header shows a **going away** badge, and every saved request that calls such an endpoint, or an operation the API definition marks `deprecated`, is listed; red within 30 days of the sunset.
+- **A drop in pass rate** of a prompt or agent evaluation is listed, with the numbers.
+- **Snooze one.** A problem's ⋯ has **Snooze for 1 hour**, **until tomorrow 09:00** or **until it changes**; it comes back by itself. Snoozes are yours and stay on this computer.
+
+### AI quality {#whats-new-ai-quality-056}
+- **The judge, judged.** The report card says when an LLM judge's scores follow the length of the answers (*favours longer answers*), with what to do about it; `judgeBias` in `testpion eval summary --json`.
+- **Are the cases any good?** Under **Test cases**: repeated inputs, cases without an expected answer, a prompt variable no case fills, one answer most cases expect. `testpion eval lint`.
+- **Agents.** The report names the tools no case called and the arguments no case passed, with **Write cases for these…**.
+- **Prompts.** **Changes** on a prompt version shows what it changed, word by word. **Map by meaning…** and **Which document mattered?** on a bot with sources. **For AI agents** on a connected MCP server (`testpion mcp --lint`) says how easy its tools are for an agent.
+
+### Mock servers that remember {#whats-new-mock-stateful}
+- **Stateful** on a mock server (the Mock tab, `testpion mock … --stateful`): `POST /pets` creates a record with a new id, `GET /pets` lists it, `GET /pets/3` returns it, PUT and PATCH change it, DELETE removes it, for as long as the mock runs. The list example seeds the state; **Reset state** forgets it. See [Mock servers](/api-testing/mock-servers).
+
+### Small things {#whats-new-small-056}
+- The OpenAPI lint notes a parameter without a description and an operation that documents no failure. Every button, input and dialog has a name for a screen reader (a plan keeps it so). Navigation names are in Title Case and read from one file, so a renamed view is one edit.
 
 ## What's new in 0.55: traffic you can shape, and AI quality in one place {#whats-new-in-0-55}
 
