@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { userInfo } from 'node:os';
-import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openComments, ownershipOf, parseItemRef, resolveComment, type ItemRef } from '@testpion/core';
+import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, type ItemRef } from '@testpion/core';
 import { EXIT, bold, dim, green, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** An item by its reference text (`request:<collection>/<request>`, `test:tests/smoke.yaml`, a testpion:// link …). */
@@ -126,14 +126,15 @@ export function registerCommentCommand(program: Command): void {
     .description('every open comment of the workspace, newest first: what your team is still asking')
     .option(...WORKSPACE_OPTION)
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
+    .option('--owner <team>', 'only the comments on items this team owns (as CODEOWNERS names it; the @ is optional)')
     .option(...JSON_RESULT_OPTION)
-    .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean }) =>
-      withWorkspace(o.workspace, (store) => {
-        const open = openComments(store);
+    .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean; owner?: string }) =>
+      withWorkspace(o.workspace, async (store) => {
+        const open = await openCommentsByOwner(store, o.owner);
         if (o.json) return printJson({ open });
         if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}** on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');
-        if (!open.length) return console.log(dim('No open comments.'));
-        for (const c of open) console.log(`${bold(c.by)} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${refText(c.ref)}\n  ${c.text}`);
+        if (!open.length) return console.log(dim(o.owner ? `No open comments on what ${o.owner} owns.` : 'No open comments.'));
+        for (const c of open) console.log(`${bold(c.by)} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${refText(c.ref)}${c.owners.length ? dim(`  (${c.owners.join(' ')})`) : ''}\n  ${c.text}`);
       }),
     );
 }

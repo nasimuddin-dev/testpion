@@ -14,7 +14,7 @@ import { runMenuCommand } from '../menu-commands';
 import type { CollectionNode, HttpRequestSpec } from '../types';
 import { timeAgo, uid, plural } from '../lib/format';
 import { gitSnapshot } from '../lib/git';
-import type { OpenComment, TeamActivity } from '@testpion/core';
+import type { OwnedComment, TeamActivity } from '@testpion/core';
 import { Badge, Callout, cx, Empty, Kbd, LinkButton, Segmented, StatusDot, statusTone } from '../components/ui';
 import { CheckCircle2, Circle } from 'lucide-react';
 import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/empty-actions';
@@ -210,7 +210,7 @@ export function HomeView() {
   const [health, setHealth] = useState<Record<string, { sent: number; failing: number }>>({});
   /** What other people changed in this workspace lately (a workspace in git with commits by others). */
   const [team, setTeam] = useState<TeamActivity>();
-  const [asked, setAsked] = useState<OpenComment[]>([]);
+  const [asked, setAsked] = useState<OwnedComment[]>([]);
   const [noting, setNoting] = useState(false);
   const [certs, setCerts] = useState<Array<{ host: string; issuer?: string; validTo?: string; daysLeft?: number; lastSeen: string }>>([]);
   const [activity, setActivity] = useState<Activity>();
@@ -314,7 +314,7 @@ export function HomeView() {
     void sharedCall<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
     void sharedCall<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     // only a workspace in git has a team's history to show
-    void call<OpenComment[]>('comments.open').then((c) => setAsked(c.slice(0, 5)), () => setAsked([]));
+    void call<OwnedComment[]>('comments.open').then((c) => setAsked(c.slice(0, 5)), () => setAsked([]));
     if (gitSnapshot().status?.repository) void call<TeamActivity>('git.teamActivity', { days: 14, limit: 5 }).then((t) => setTeam(t.commits.length ? t : undefined), () => setTeam(undefined));
     else setTeam(undefined);
     loadActivity();
@@ -476,6 +476,7 @@ export function HomeView() {
                 <div key={c.id} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm" data-home-comment>
                   <span className="flex items-center gap-2 min-w-0">
                     <RefLink to={c.ref} className="font-medium min-w-0" />
+                    {c.owners?.length > 0 && <Badge title="The team that owns this item (CODEOWNERS)">{c.owners.join(' ')}</Badge>}
                     <span className="text-xs text-muted shrink-0 ml-auto">
                       {c.by} · {timeAgo(c.at)}
                     </span>

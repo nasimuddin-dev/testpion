@@ -80,7 +80,7 @@ export interface RpcParamTypes {
   'comments.counts': RpcCommonParams;
   'comments.delete': RpcCommonParams & { ref: unknown; id: string };
   'comments.list': RpcCommonParams & { ref: unknown };
-  'comments.open': RpcCommonParams;
+  'comments.open': RpcCommonParams & { owner?: string };
   'comments.resolve': RpcCommonParams & { ref: unknown; id: string; resolved?: boolean };
   'comments.restore': RpcCommonParams & { ref: unknown; comment: Record<string, unknown> };
   'cookies.clear': RpcCommonParams & { domain?: string };

@@ -158,6 +158,24 @@ export function problemsOwnedBy<T extends { owners?: string[] }>(items: T[], own
   return items.filter((i) => i.owners?.some((o) => sameOwner(o, owner)));
 }
 
+/**
+ * The problems of one tenant (an environment group): those about a monitor that runs in one of its environments, or about
+ * one of its environments (a token, a secret, a convention). Problems that name no environment (a request, a run, a
+ * certificate) belong to no tenant and are left out.
+ */
+export function problemsOfGroup<T extends { ref: ItemRef & { monitorId?: string; environmentId?: string } }>(store: WorkspaceStore, items: T[], group: string): T[] {
+  const want = group.trim().toLowerCase();
+  if (!want) return items;
+  const envs = store.listEnvironments();
+  const groupOfEnv = (idOrName?: string) => (idOrName ? (envs.find((e) => e.id === idOrName || e.name === idOrName)?.group?.trim().toLowerCase() ?? '') : '');
+  const monitorEnv = new Map(listMonitors(store).map((m) => [m.id, m.environment] as const));
+  return items.filter((i) => {
+    if (i.ref.kind === 'monitor' && i.ref.monitorId) return groupOfEnv(monitorEnv.get(i.ref.monitorId)) === want;
+    if (i.ref.kind === 'environment' && i.ref.environmentId) return groupOfEnv(i.ref.environmentId) === want;
+    return false;
+  });
+}
+
 export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number; tokenDays?: number; secrets?: SecretReader; /** Read secret values for the token check only (the app: its missing secrets are a banner of their own). */ tokenSecrets?: SecretReader } = {}): Promise<AttentionItem[]> {
   const out: AttentionItem[] = [];
   if (opts.secrets) out.push(...secretsAttention(store, opts.secrets));

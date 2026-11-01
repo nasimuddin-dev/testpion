@@ -432,7 +432,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'comments.resolve': { ref: 'x', id: 's', resolved: 'b?' },
   'comments.delete': { ref: 'x', id: 's' },
   'comments.restore': { ref: 'x', comment: 'o' },
-  'comments.open': {},
+  'comments.open': { owner: 's?' },
   'attention.snoozed': {},
   'attention.snooze': { item: 'o', minutes: 'n?' },
   'attention.unsnooze': { key: 's' },

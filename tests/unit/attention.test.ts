@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, problemsOwnedBy, sameOwner, type RunSummary } from '../../packages/core/src/index.js';
+import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, problemsOwnedBy, problemsOfGroup, sameOwner, type RunSummary } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-attention-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -92,6 +92,32 @@ describe('the problems of one team', () => {
     expect(problemsOwnedBy(items, '@nobody')).toEqual([]);
     expect(problemsOwnedBy([{ message: 'c' }], '@ana')).toEqual([]);
     expect(sameOwner('@Ana', 'ana ')).toBe(true);
+  });
+});
+
+describe('the problems of one tenant', () => {
+  it('keeps the problems about a monitor running in the group or about one of its environments; nothing else has a tenant', () => {
+    const d = mkdtempSync(join(tmpdir(), 'tp-att-group-'));
+    const store = WorkspaceStore.create(join(d, 'ws'), 'G');
+    try {
+      store.saveEnvironment({ id: 'acme-staging', name: 'Staging', group: 'Acme', variables: [] } as never);
+      store.saveEnvironment({ id: 'local', name: 'Local', variables: [] } as never);
+      store.saveCollection({ schemaVersion: '1.0', id: 'c', name: 'C', version: 0, variables: [], updatedAt: '', items: [{ kind: 'request', id: 'r', name: 'R', request: { method: 'GET', url: 'https://x/', headers: [], params: [] } }] } as never);
+      saveMonitor(store, { id: 'm-acme', name: 'Acme', collectionId: 'c', environment: 'Staging', everyMinutes: 60, enabled: true });
+      saveMonitor(store, { id: 'm-local', name: 'Local', collectionId: 'c', environment: 'Local', everyMinutes: 60, enabled: true });
+      const items = [
+        { message: 'acme monitor', ref: { kind: 'monitor' as const, monitorId: 'm-acme' } },
+        { message: 'local monitor', ref: { kind: 'monitor' as const, monitorId: 'm-local' } },
+        { message: 'acme token', ref: { kind: 'environment' as const, environmentId: 'acme-staging' } },
+        { message: 'a request', ref: { kind: 'request' as const, collectionId: 'c', requestId: 'r' } },
+      ];
+      expect(problemsOfGroup(store, items, 'acme').map((i) => i.message)).toEqual(['acme monitor', 'acme token']);
+      expect(problemsOfGroup(store, items, 'Globex')).toEqual([]);
+      expect(problemsOfGroup(store, items, ' ')).toHaveLength(4);
+    } finally {
+      store.close();
+      rmSync(d, { recursive: true, force: true, maxRetries: 3 });
+    }
   });
 });
 

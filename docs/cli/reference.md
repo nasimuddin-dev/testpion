@@ -390,9 +390,10 @@ testpion variable-flow "Veterinary API"  # who sets and uses each variable; exit
 testpion attention -w my-workspace --markdown    # what needs attention (exit 1 on a high-severity item); --markdown to post it
 testpion problems --json                 # the same list as the app's Problems (alias of attention): kind, group, type (failure / error / warning), ref, owners
 testpion problems --owner @org/payments  # one team's problems, as the repository's CODEOWNERS names it (the @ is optional)
+testpion problems --group Acme           # one tenant's problems: its monitors and its environments (an environment group)
 testpion certificates --warn 21          # TLS certificates of the hosts called, soonest to expire first; exit 1 if one expires within 21 days
 testpion certificates --check api.example.com:443 https://auth.example.com --warn 21   # connect and check now (trust, days left)
-testpion workspace-report -o report.html # what needs attention, activity, collection health, monitors (with 30-day uptime) and runs as one HTML file to share
+testpion workspace-report -o report.html # what needs attention (and its sum by team from CODEOWNERS), activity, collection health, monitors (with 30-day uptime, and their sum by tenant) and runs as one HTML file to share
 testpion datasets                        # data files in datasets/ (for run-collection -d); SQLite tables too
 testpion requests "Veterinary API"       # its requests, then its gRPC calls and WebSocket / MQTT connections
 testpion requests "Veterinary API" --json
@@ -1209,7 +1210,7 @@ A pipeline whose environment is marked as production runs its reads only; `ci --
 ## `env`
 
 ```bash
-testpion env list -w my-workspace --json          # environments in display order, variable names only
+testpion env list -w my-workspace --json          # environments in display order, variable names only (--group Acme: one tenant's)
 testpion env diff Staging Production -w my-workspace --values   # what differs (exit 1 if anything does)
 testpion env diff Staging Production --request "List patients" -w my-workspace   # send it to both, diff the responses
 testpion env matrix -w my-workspace                         # every variable in every environment: set, empty, missing or off

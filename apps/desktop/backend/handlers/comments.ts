@@ -1,6 +1,6 @@
 /** RPC handlers: comments for your team on an item (storage/comments.ts), signed with the git identity. */
 import { userInfo } from 'node:os';
-import { ApsError, addComment, deleteComment, gitIdentity, listComments, openCommentCounts, openComments, resolveComment, restoreComment, toItemRef } from '@testpion/core';
+import { ApsError, addComment, deleteComment, gitIdentity, listComments, openCommentCounts, openCommentsByOwner, resolveComment, restoreComment, toItemRef } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export function commentsHandlers(be: Backend): Handlers {
@@ -19,7 +19,8 @@ export function commentsHandlers(be: Backend): Handlers {
     'comments.resolve': async ({ ref, id, resolved }: { ref: unknown; id: string; resolved?: boolean }) => changed(resolveComment(be.ws, refOf(ref), id, await who(), resolved !== false)),
     'comments.delete': ({ ref, id }: { ref: unknown; id: string }) => (deleteComment(be.ws, refOf(ref), id), changed({ deleted: id })),
     'comments.restore': ({ ref, comment }: { ref: unknown; comment: Parameters<typeof restoreComment>[2] }) => changed(restoreComment(be.ws, refOf(ref), comment)),
-    'comments.open': () => openComments(be.ws),
+    /** Every open comment with its item's owners (CODEOWNERS); `owner` keeps one team's. */
+    'comments.open': ({ owner }: { owner?: string } = {}) => openCommentsByOwner(be.ws, owner),
     'comments.counts': () => openCommentCounts(be.ws),
   };
 }

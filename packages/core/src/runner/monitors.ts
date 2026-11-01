@@ -324,7 +324,7 @@ function monitorTestPath(store: WorkspaceStore, file: string): string {
 /** Add or replace a monitor (by id). */
 export function saveMonitor(store: WorkspaceStore, m: Monitor): Monitor {
   // a tenant of a grouped definition saved (edited in the app): the definition is what changes
-  if (m.tenant || m.id.includes(TENANT_SEP)) m = { ...m, id: m.tenant?.of ?? m.id.slice(0, m.id.indexOf(TENANT_SEP)), name: m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name, tenant: undefined };
+  if (m.tenant || (typeof m.id === 'string' && m.id.includes(TENANT_SEP))) m = { ...m, id: m.tenant?.of ?? m.id.slice(0, m.id.indexOf(TENANT_SEP)), name: m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name, tenant: undefined };
   if (m.environmentGroup?.trim()) m = { ...m, environmentGroup: m.environmentGroup.trim(), environment: undefined };
   else if (m.environmentGroup !== undefined) m = { ...m, environmentGroup: undefined };
   // one target: an empty collection or file is no target

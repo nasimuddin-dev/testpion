@@ -8,6 +8,7 @@ import { treeKeys } from '../components/TreeParts';
 import { TreeRowShell } from '../components/TreeRowShell';
 import { RunMiniBar, type RunRow } from '../components/RunsOverview';
 import { EnvBadge } from '../components/EnvSelect';
+import { selectEnvironments, useApp } from '../store';
 import { TYPE_ICON } from '../components/ProblemList';
 import { startAiAnalysis } from '../components/ai/ai-analysis';
 import { copyText } from '../lib/clipboard';
@@ -20,8 +21,11 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
   // filter by name / environment, and only the runs where something failed
   const [query, setQuery] = useState('');
   const [failedOnly, setFailedOnly] = useState(false);
+  // the environment's group (a tenant) matches too: typing Acme lists every tenant run
+  const envs = useApp(selectEnvironments);
+  const groupOf = (name?: string) => (name ? ((envs.find((e) => e.name === name) as { group?: string } | undefined)?.group ?? '') : '');
   const q = query.toLowerCase();
-  const shown = runs.filter((r) => (!failedOnly || r.failed + r.errors > 0) && (!q || `${r.name} ${r.environment ?? ''}`.toLowerCase().includes(q)));
+  const shown = runs.filter((r) => (!failedOnly || r.failed + r.errors > 0) && (!q || `${r.name} ${r.environment ?? ''} ${groupOf(r.environment)}`.toLowerCase().includes(q)));
   const clearFilter = () => {
     setQuery('');
     setFailedOnly(false);
@@ -106,7 +110,7 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
         )}
         {runs.length > 0 && !shown.length && (
           <Empty title="No runs match" actions={[{ label: 'Clear filter', onClick: clearFilter, primary: false }]}>
-            No run has this name or environment{failedOnly ? ' with a failure' : ''}.
+            No run has this name, environment or tenant{failedOnly ? ' with a failure' : ''}.
           </Empty>
         )}
       </div>

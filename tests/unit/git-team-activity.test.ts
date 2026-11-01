@@ -28,6 +28,20 @@ beforeAll(async () => {
 });
 afterAll(() => r.cleanup());
 
+describe('open comments by team', () => {
+  it('carries the CODEOWNERS owners of the item each comment is on, and keeps one team on request', async () => {
+    const { addComment, openCommentsByOwner } = await import('../../packages/core/src/index.js');
+    r.write('CODEOWNERS', 'tests/ @org/platform\n');
+    r.write('tests/smoke.yaml', 'name: Smoke'+String.fromCharCode(10)+'tests: []'+String.fromCharCode(10));
+    addComment(r.store, { kind: 'test', path: 'smoke.yaml' }, 'Why v2?', 'Ana');
+    addComment(r.store, { kind: 'run', runId: 'r-1' }, 'Orphan', 'Ben');
+    const all = await openCommentsByOwner(r.store);
+    expect(all.map((c) => [c.text, c.owners])).toEqual([['Orphan', []], ['Why v2?', ['@org/platform']]]);
+    expect((await openCommentsByOwner(r.store, 'org/platform')).map((c) => c.text)).toEqual(['Why v2?']);
+    expect(await openCommentsByOwner(r.store, '@org/payments')).toEqual([]);
+  });
+});
+
 describe('teamActivity', () => {
   it('lists the commits of others, newest first, each with what it changed in words, and leaves mine out', async () => {
     const a = await teamActivity(r.ws, { days: 14, limit: 8 });

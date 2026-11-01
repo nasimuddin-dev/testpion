@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Redactor, WorkspaceStore, collectBuilt, gitVersion, outputSourceFor, prepareSource, saveMonitor, storeOutputDeps, writeChunks } from '../../packages/core/src/index.js';
+import { Redactor, WorkspaceStore, collectBuilt, gitVersion, outputSourceFor, prepareSource, saveMonitor, storeOutputDeps, workspaceReportHtml, writeChunks } from '../../packages/core/src/index.js';
 import { outputTools } from '../../packages/core/src/mcp-server/tools/output-tools.js';
 import { OUTPUT_SURFACES } from '../../packages/shared/src/index.js';
 import { tempDir } from '../helpers.js';
@@ -73,6 +73,18 @@ describe('list sources', () => {
     expect(html).not.toMatch(/<script/i);
     const none = JSON.parse(await build('traces', 'json', { kind: 'traces', traceKind: 'llm' }));
     expect(JSON.stringify(none.resourceSpans ?? [])).not.toContain('GET /pets');
+  });
+
+  it('the workspace report sums the problems by team (CODEOWNERS owners) and the monitors by tenant (environment group)', () => {
+    store.saveEnvironment({ id: 'acme-staging', name: 'Acme Staging', group: 'Acme', variables: [] } as never);
+    saveMonitor(store, { id: 'mon-acme', name: 'Acme smoke', testFile: 'm.yaml', environment: 'Acme Staging', everyMinutes: 15, enabled: true });
+    const html = workspaceReportHtml(store, { attention: [{ severity: 'high', message: 'a', owners: ['@org/payments'] }, { severity: 'low', message: 'b', owners: ['@org/payments', '@org/catalog'] }, { severity: 'medium', message: 'c' }] });
+    expect(html).toContain('<h2>By team</h2>');
+    expect(html).toMatch(/<tr><td>@org\/payments<\/td><td class="n bad">1<\/td><td class="n ">0<\/td><td class="n">1<\/td><\/tr>/);
+    expect(html).toMatch(/<tr><td>@org\/catalog<\/td><td class="n ">0<\/td><td class="n ">0<\/td><td class="n">1<\/td><\/tr>/);
+    expect(html).toContain('<h2>By tenant</h2>');
+    expect(html).toMatch(/<tr><td>Acme<\/td><td class="n">1<\/td><td class="n ok">0<\/td><\/tr>/);
+    expect(workspaceReportHtml(store, { attention: [{ severity: 'high', message: 'a' }] })).not.toContain('<h2>By team</h2>');
   });
 
   it('the workspace changes as a patch and as Markdown', async () => {

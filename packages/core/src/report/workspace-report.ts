@@ -46,7 +46,7 @@ function dayColumns(days: ActivityDay[], ok: (d: ActivityDay) => number, bad: (d
  * each collection's request health, monitors with their latest results, and the latest runs.
  * Only names, counts, statuses and timings: no request bodies, headers or variable values.
  */
-export function workspaceReportHtml(store: WorkspaceStore, opts: { days?: number; tzOffsetMin?: number; attention?: Array<{ severity: 'high' | 'medium' | 'low'; message: string }> } = {}): string {
+export function workspaceReportHtml(store: WorkspaceStore, opts: { days?: number; tzOffsetMin?: number; attention?: Array<{ severity: 'high' | 'medium' | 'low'; message: string; owners?: string[] }> } = {}): string {
   const ws = store.workspace;
   const a = store.meta.activity({ days: opts.days ?? 14, tzOffsetMin: opts.tzOffsetMin });
   const sum = (f: (d: ActivityDay) => number) => a.days.reduce((x, d) => x + f(d), 0);
@@ -73,7 +73,8 @@ export function workspaceReportHtml(store: WorkspaceStore, opts: { days?: number
     const daily = monitorDaily(store, m.id, 30, opts.tzOffsetMin);
     const dayRuns = daily.reduce((x, d) => x + d.runs, 0);
     const dayPassed = daily.reduce((x, d) => x + d.passed, 0);
-    return { name: m.name, enabled: m.enabled, last: recent[0], passed: recent.filter((r) => r.status === 'passed').length, total: recent.length, strip: [...recent].reverse(), daily, uptime: dayRuns ? pct(dayPassed, dayRuns) : '—' };
+    const group = m.environment ? store.getEnvironment(m.environment)?.group?.trim() : undefined;
+    return { name: m.name, enabled: m.enabled, group, last: recent[0], passed: recent.filter((r) => r.status === 'passed').length, total: recent.length, strip: [...recent].reverse(), daily, uptime: dayRuns ? pct(dayPassed, dayRuns) : '—' };
   });
   const runs = store.meta.listRuns({ limit: 10 }).items;
 
@@ -105,6 +106,22 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px
   if (opts.attention?.length) {
     out.push(`<h2>Needs attention</h2><table>`);
     for (const a of opts.attention.slice(0, 20)) out.push(`<tr><td class="${a.severity === 'high' ? 'bad' : a.severity === 'medium' ? 'warn' : 'muted'}" style="width:70px">${a.severity}</td><td>${esc(a.message)}</td></tr>`);
+    out.push(`</table>`);
+  }
+  // several teams: the problems per owner (CODEOWNERS), so each team sees its share at a glance
+  const byTeam = new Map<string, { high: number; medium: number; low: number }>();
+  for (const a of opts.attention ?? []) for (const o of a.owners ?? []) byTeam.set(o, { ...(byTeam.get(o) ?? { high: 0, medium: 0, low: 0 }), [a.severity]: (byTeam.get(o)?.[a.severity] ?? 0) + 1 });
+  if (byTeam.size) {
+    out.push(`<h2>By team</h2><table><tr><th>Team</th><th>High</th><th>Medium</th><th>Low</th></tr>`);
+    for (const [team, n] of [...byTeam].sort((x, y) => y[1].high - x[1].high || y[1].medium - x[1].medium || x[0].localeCompare(y[0]))) out.push(`<tr><td>${esc(team)}</td><td class="n ${n.high ? 'bad' : ''}">${n.high}</td><td class="n ${n.medium ? 'warn' : ''}">${n.medium}</td><td class="n">${n.low}</td></tr>`);
+    out.push(`</table>`);
+  }
+  // several tenants: the monitors per environment group, with how many are failing now
+  const byTenant = new Map<string, { monitors: number; down: number }>();
+  for (const m of monitors) if (m.group) byTenant.set(m.group, { monitors: (byTenant.get(m.group)?.monitors ?? 0) + 1, down: (byTenant.get(m.group)?.down ?? 0) + (m.enabled && m.last && m.last.status !== 'passed' ? 1 : 0) });
+  if (byTenant.size) {
+    out.push(`<h2>By tenant</h2><table><tr><th>Tenant</th><th>Monitors</th><th>Failing now</th></tr>`);
+    for (const [tenant, n] of [...byTenant].sort((x, y) => y[1].down - x[1].down || x[0].localeCompare(y[0]))) out.push(`<tr><td>${esc(tenant)}</td><td class="n">${n.monitors}</td><td class="n ${n.down ? 'bad' : 'ok'}">${n.down}</td></tr>`);
     out.push(`</table>`);
   }
   out.push(`<div class="charts">`);

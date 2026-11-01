@@ -12,7 +12,7 @@
 
 ### Several teams: whose change it is
 
-- **Your team's changes** on Home names the teams whose files each commit touched (from `CODEOWNERS`); `testpion git activity --owner @org/payments` lists one team's commits.
+- **Your team's changes** on Home names the teams whose files each commit touched (from `CODEOWNERS`); `testpion git activity --owner @org/payments` lists one team's commits. **Your team is asking** names the team that owns each commented item; `testpion item comment open --owner @org/payments` lists one team's open comments. The workspace report sums the problems **by team** and the monitors **by tenant**.
 
 ### Several teams: the alert names the owner; the status page names the tenant
 
@@ -24,7 +24,7 @@
 
 ### Several tenants: one request for every tenant
 
-- `{{$group}}` is the group (tenant) of the environment a run uses and `{{$environment}}` its name, so a `X-Tenant: {{$group}}` header or a `datasets/{{$group}}/users.csv` path serves every tenant from one request; type `{{$` to pick them.
+- Filtering the runs list by a group's name (*Acme*) lists every tenant's runs; `testpion problems --group Acme` lists one tenant's problems (its monitors and environments). `{{$group}}` is the group (tenant) of the environment a run uses and `{{$environment}}` its name, so a `X-Tenant: {{$group}}` header or a `datasets/{{$group}}/users.csv` path serves every tenant from one request; type `{{$` to pick them.
 
 ### Several tenants: nothing of one in another's response
 
