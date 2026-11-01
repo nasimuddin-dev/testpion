@@ -1114,7 +1114,7 @@ testpion item comment list request:payments:create-invoice          # the thread
 testpion item comment add request:payments:create-invoice "Why does this send X-Trace twice?"   # signed with your git name; "-" reads stdin
 testpion item comment resolve request:payments:create-invoice c-abc  # mark it settled (--reopen undoes it)
 testpion item comment delete request:payments:create-invoice c-abc
-testpion item comment open --json                                   # every open comment of the workspace, newest first, each with its ref
+testpion item comment open --json                                   # every open comment of the workspace, newest first, each with its ref (--markdown: a list to post)
 ```
 
 ## `item`

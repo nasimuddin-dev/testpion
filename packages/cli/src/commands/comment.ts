@@ -10,6 +10,13 @@ function refArg(text: string): ItemRef {
   return ref;
 }
 
+/** A ref as a person reads it in a list: `request:payments:create-invoice`, `test:tests/smoke.yaml`. */
+function refText(ref: ItemRef): string {
+  const r = ref as unknown as Record<string, string | undefined>;
+  const ids = Object.entries(r).filter(([k, v]) => k !== 'kind' && typeof v === 'string' && v).map(([, v]) => v);
+  return [ref.kind, ...ids].join(':');
+}
+
 /** `testpion item comment …`: comments for your team on an item, kept in the workspace under comments/ (git carries them). Registered after `item`, whose group it joins. */
 export function registerCommentCommand(program: Command): void {
   const item = program.commands.find((c) => c.name() === 'item') ?? program.command('item');
@@ -97,13 +104,15 @@ export function registerCommentCommand(program: Command): void {
     .command('open')
     .description('every open comment of the workspace, newest first: what your team is still asking')
     .option(...WORKSPACE_OPTION)
+    .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .option(...JSON_RESULT_OPTION)
-    .action(async (o: { workspace?: string; json?: boolean }) =>
+    .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean }) =>
       withWorkspace(o.workspace, (store) => {
         const open = openComments(store);
         if (o.json) return printJson({ open });
+        if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}** on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');
         if (!open.length) return console.log(dim('No open comments.'));
-        for (const c of open) console.log(`${bold(c.by)} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${JSON.stringify(c.ref)}\n  ${c.text}`);
+        for (const c of open) console.log(`${bold(c.by)} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${refText(c.ref)}\n  ${c.text}`);
       }),
     );
 }
