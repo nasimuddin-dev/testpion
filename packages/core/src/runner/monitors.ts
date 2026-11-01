@@ -61,6 +61,10 @@ interface MonitorData {
   /** Minutes between runs (1 minute to 1 week). */
   everyMinutes: number;
   enabled: boolean;
+  /** Paused for a while (a deploy, a maintenance window): no run until this time (ISO), then the schedule goes on by itself. */
+  pausedUntil?: string;
+  /** Why it waits, shown with the monitor while it does. */
+  pauseReason?: string;
   iterations?: number;
   /** Stop a run at the first failure. */
   bail?: boolean;
@@ -363,7 +367,54 @@ export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Dat
 }
 
 export function isDue(m: Monitor, last: MonitorResult | undefined, now = Date.now()): boolean {
-  return m.enabled && nextRunAt(m, last, now) <= now;
+  return m.enabled && !pausedFor(m, now) && nextRunAt(m, last, now) <= now;
+}
+
+/** Whether a timed pause is still on (an expired one is over: the schedule went on by itself). */
+export function pausedFor(m: Pick<Monitor, 'pausedUntil'>, now = Date.now()): boolean {
+  const t = m.pausedUntil ? Date.parse(m.pausedUntil) : NaN;
+  return Number.isFinite(t) && t > now;
+}
+
+/** "paused until 14:30 (deploy)": the time in the local clock, with the date when it is not today. */
+export function pausedText(m: Pick<Monitor, 'pausedUntil' | 'pauseReason'>, now = Date.now()): string {
+  const d = new Date(m.pausedUntil!);
+  const today = new Date(now);
+  const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+  const when = sameDay ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return `paused until ${when}${m.pauseReason ? ` (${m.pauseReason})` : ''}`;
+}
+
+/** "30m", "2h", "1d" (or minutes) to minutes; 1 minute to 30 days. */
+export function parsePauseFor(text: string | number): number {
+  const t = String(text).trim().toLowerCase();
+  const m = /^(\d+(?:\.\d+)?)\s*(m|min|minutes?|h|hours?|d|days?)?$/.exec(t);
+  if (!m) throw new ApsError('ValidationError', `"${text}" is not a duration: use 30m, 2h or 1d`);
+  const n = Number(m[1]);
+  const unit = m[2] ?? 'm';
+  const minutes = Math.round(unit.startsWith('h') ? n * 60 : unit.startsWith('d') ? n * 1440 : n);
+  if (minutes < 1 || minutes > 30 * 1440) throw new ApsError('ValidationError', 'A pause is 1 minute to 30 days');
+  return minutes;
+}
+
+/**
+ * Pause a monitor for a while (`minutes`, or until a time), with why: it runs again by itself when the time comes.
+ * Without a time: paused until resumed (`enabled: false`).
+ */
+export function pauseMonitor(store: WorkspaceStore, id: string, o: { minutes?: number; until?: string; reason?: string } = {}, now = Date.now()): Monitor {
+  const m = findMonitor(store, id);
+  const reason = o.reason?.trim() || undefined;
+  if (o.until === undefined && o.minutes === undefined) return saveMonitor(store, { ...m, enabled: false, pausedUntil: undefined, pauseReason: reason });
+  const until = o.until !== undefined ? Date.parse(o.until) : now + o.minutes! * 60_000;
+  if (!Number.isFinite(until)) throw new ApsError('ValidationError', `"${o.until}" is not a time`);
+  if (until <= now) throw new ApsError('ValidationError', 'The time to pause until is in the past');
+  return saveMonitor(store, { ...m, enabled: true, pausedUntil: new Date(until).toISOString(), pauseReason: reason });
+}
+
+/** The schedule goes on now: a pause of either kind ends. */
+export function resumeMonitor(store: WorkspaceStore, id: string): Monitor {
+  const m = findMonitor(store, id);
+  return saveMonitor(store, { ...m, enabled: true, pausedUntil: undefined, pauseReason: undefined });
 }
 
 /** A monitor with its schedule text, last result and next run (what list commands and MCP show). */
@@ -371,9 +422,10 @@ export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now(
   const last = lastMonitorResult(store, m.id);
   return {
     ...m,
-    schedule: m.enabled ? formatEvery(m.everyMinutes) : 'paused',
+    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : formatEvery(m.everyMinutes),
+    paused: !m.enabled || pausedFor(m, now),
     lastResult: last,
-    nextRunAt: m.enabled ? new Date(Math.max(nextRunAt(m, last, now), now)).toISOString() : undefined,
+    nextRunAt: m.enabled ? new Date(Math.max(nextRunAt(m, last, now), pausedFor(m, now) ? Date.parse(m.pausedUntil!) : now, now)).toISOString() : undefined,
     due: isDue(m, last, now),
   };
 }

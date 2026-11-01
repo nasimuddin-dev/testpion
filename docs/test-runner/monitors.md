@@ -31,7 +31,7 @@ A monitor on an environment marked as [production](/api-testing/environments#pro
 - a bar per recent run (height is the run time, red for a failure);
 - a list of runs. **Open run** shows the requests and checks in the Tests view; a failed run's ⋯ there (and the failing monitor in the **Problems** panel) has **Explain and fix failures with AI…**, which groups its failures by cause and proposes verified fixes ([triage](/ai-testing/ai-features#explain-and-fix-failures-triage)).
 
-**Run now** runs it immediately. **Pause** stops the schedule until you resume it.
+**Run now** runs it immediately. **Pause** stops the schedule until you resume it; **Pause ▸ For 1 hour / For 4 hours / Until tomorrow 09:00** pauses it for a while, with why (*deploy*), and the schedule goes on by itself when the time comes: the monitor says *paused until 14:30 (deploy)* meanwhile. From a pipeline: `testpion monitor pause <name> --for 2h --why "deploy"` (or `--until <time>`) and `testpion monitor resume <name>`; `monitor list --json` carries `paused`, `pausedUntil` and `pauseReason`.
 
 When a monitor starts failing, or passes again, TestPion shows a notification.
 

@@ -254,8 +254,10 @@ export interface RpcParamTypes {
   'mcp.saveTest': RpcCommonParams & { serverId: string; tool: string; args?: Record<string, unknown>; assertions?: unknown[]; name: string };
   'mock.start': RpcCommonParams & { collectionId: string; port?: number; delayMs?: number; fallbackUrl?: string };
   'monitor.daily': RpcCommonParams & { id: string; days?: number; tzOffsetMin?: number };
+  'monitor.pause': RpcCommonParams & { id: string; minutes?: number; until?: string; reason?: string };
   'monitor.requests': RpcCommonParams & { id: string; runs?: number };
   'monitor.results': RpcCommonParams & { id: string; limit?: number };
+  'monitor.resume': RpcCommonParams & { id: string };
   'monitor.run': RpcCommonParams & { id: string };
   'monitor.save': RpcCommonParams & { monitor: Record<string, unknown> };
   'monitor.testWebhook': RpcCommonParams & { webhook: string; name?: string };
@@ -418,4 +420,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 401;
+export const RPC_METHOD_COUNT = 403;

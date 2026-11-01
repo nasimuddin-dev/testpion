@@ -324,6 +324,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'monitor.requests': { id: 's', runs: 'n?' },
   'monitor.results': { id: 's', limit: 'n?' },
   'monitor.run': { id: 's' },
+  'monitor.pause': { id: 's', minutes: 'n?', until: 's?', reason: 's?' },
+  'monitor.resume': { id: 's' },
   'monitor.save': { monitor: 'o' },
   'monitor.testWebhook': { webhook: 's', name: 's?' },
   'mqtt.connect': { url: 's', subscriptions: 'a?' },

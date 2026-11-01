@@ -20,6 +20,12 @@ import {
   monitorResults,
   nextRunAt,
   parseEvery,
+  parsePauseFor,
+  pauseMonitor,
+  pausedFor,
+  pausedText,
+  monitorStatus,
+  resumeMonitor,
   saveMonitor,
   type Monitor,
   type MonitorResult,
@@ -82,6 +88,42 @@ describe('monitor schedule rules', () => {
     expect(formatEvery(60)).toBe('hourly');
     expect(formatEvery(180)).toBe('every 3 hours');
     expect(formatEvery(1440)).toBe('daily');
+  });
+
+  it('a pause for a while: not due until the time, then due by itself; the status says until when and why', () => {
+    const now = Date.parse('2026-09-29T12:00:00Z');
+    const paused = { ...monitor, pausedUntil: '2026-09-29T14:30:00Z', pauseReason: 'deploy' };
+    expect(pausedFor(paused, now)).toBe(true);
+    expect(isDue(paused, undefined, now)).toBe(false);
+    expect(isDue(paused, undefined, Date.parse('2026-09-29T14:30:00Z'))).toBe(true);
+    expect(pausedFor(paused, Date.parse('2026-09-29T14:30:00Z'))).toBe(false);
+    expect(pausedText(paused, now)).toMatch(/^paused until \d{1,2}:\d{2}( [AP]M)? \(deploy\)$/);
+    expect(parsePauseFor('2h')).toBe(120);
+    expect(parsePauseFor('30m')).toBe(30);
+    expect(parsePauseFor('1d')).toBe(1440);
+    expect(parsePauseFor(45)).toBe(45);
+    expect(() => parsePauseFor('soon')).toThrow(/not a duration/);
+    expect(() => parsePauseFor('31d')).toThrow(/1 minute to 30 days/);
+  });
+
+  it('pauseMonitor keeps the schedule on with a time, or switches it off without one; resumeMonitor ends either', () => {
+    const saved = saveMonitor(store, { ...monitor, id: 'mon-pause', name: 'Pausable' });
+    const now = Date.parse('2026-09-29T12:00:00Z');
+    const timed = pauseMonitor(store, saved.id, { minutes: 90, reason: 'deploy' }, now);
+    expect(timed).toMatchObject({ enabled: true, pausedUntil: '2026-09-29T13:30:00.000Z', pauseReason: 'deploy' });
+    expect(monitorStatus(store, timed, now)).toMatchObject({ paused: true, schedule: expect.stringMatching(/^paused until .*\(deploy\)$/) });
+    expect(Date.parse(monitorStatus(store, timed, now).nextRunAt!)).toBe(Date.parse('2026-09-29T13:30:00.000Z'));
+    expect(monitorStatus(store, timed, Date.parse('2026-09-29T13:31:00Z')).paused).toBe(false);
+    const off = pauseMonitor(store, saved.id, {}, now);
+    expect(off).toMatchObject({ enabled: false });
+    expect(off.pausedUntil).toBeUndefined();
+    expect(monitorStatus(store, off, now).schedule).toBe('paused');
+    expect(() => pauseMonitor(store, saved.id, { until: '2026-09-29T11:00:00Z' }, now)).toThrow(/in the past/);
+    const back = resumeMonitor(store, saved.id);
+    expect(back).toMatchObject({ enabled: true });
+    expect(back.pausedUntil).toBeUndefined();
+    expect(monitorStatus(store, back, now).paused).toBe(false);
+    deleteMonitor(store, saved.id);
   });
 
   it('is due when it never ran or its interval passed, and never when paused', () => {

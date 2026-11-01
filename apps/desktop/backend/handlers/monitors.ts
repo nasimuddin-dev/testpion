@@ -13,8 +13,7 @@ import {
   saveMonitor,
   shortId,
   type Monitor,
-  type MonitorResult,
-} from '@testpion/core';
+  type MonitorResult, pauseMonitor, resumeMonitor } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 /** Run a monitor with the app's secrets and current values; the result is sent to the renderer too. */
@@ -54,6 +53,9 @@ export function monitorHandlers(be: Backend): Handlers {
       return status(saveMonitor(be.ws, { ...monitor, id, allowProduction: consent || undefined }));
     },
     'monitor.delete': ({ id }: { id: string }) => deleteMonitor(be.ws, id),
+    // a pause for a while (a deploy): the schedule goes on by itself when the time comes
+    'monitor.pause': ({ id, minutes, until, reason }: { id: string; minutes?: number; until?: string; reason?: string }) => status(pauseMonitor(be.ws, id, { minutes, until, reason })),
+    'monitor.resume': ({ id }: { id: string }) => status(resumeMonitor(be.ws, id)),
     /** Post a sample "failed" alert to a webhook, to check it before relying on it. */
     'monitor.testWebhook': async ({ webhook, environment, name }: { webhook: string; environment?: string; name?: string }) => {
       const ctx = be.context({ environment });

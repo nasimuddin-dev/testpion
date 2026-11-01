@@ -1,6 +1,6 @@
 import { RecentRuns } from '../components/charts';
 import { AiAction } from '../components/ai/AiAction';
-import { AlarmClock, Folder, KeyRound, Pause, Pencil, Play, Plus } from 'lucide-react';
+import { AlarmClock, ChevronDown, Folder, KeyRound, Pause, Pencil, Play, Plus } from 'lucide-react';
 import { DocTabStrip } from '../components/DocTabStrip';
 import { noteClosedTabs } from '../lib/closed-tabs';
 import { LABEL } from '../lib/vocabulary';
@@ -26,7 +26,7 @@ import { formatCost, formatMs, timeAgo, plural } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { useEvalEstimate, type CostDraft } from '../lib/eval-estimate';
-import { Badge, Button, cx, Empty, Field, Input, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
+import { Badge, Button, cx, Empty, Field, Input, Menu, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
 import { NoOpenItems } from '../components/LibraryTabStrip';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
@@ -73,6 +73,10 @@ interface MonitorDraft {
 interface MonitorRow extends MonitorDraft {
   id: string;
   schedule: string;
+  /** Off, or paused for a while (`pausedUntil` in the future, with `pauseReason`). */
+  paused?: boolean;
+  pausedUntil?: string;
+  pauseReason?: string;
   lastResult?: MonitorResult;
   /** Statuses of the latest runs, oldest first. */
   recent?: string[];
@@ -229,9 +233,20 @@ export function MonitorsView() {
     await load();
     setSel(saved.id);
   };
+  /** Pause until resumed, or resume (a pause of either kind ends). */
   const toggle = async (m: MonitorRow) => {
     await attempt(async () => {
-      await call('monitor.save', { monitor: { ...m, enabled: !m.enabled } });
+      await call(m.paused ? 'monitor.resume' : 'monitor.pause', { id: m.id });
+    });
+    await load();
+  };
+  /** Pause for a while, with why: the schedule goes on by itself when the time comes. */
+  const pauseFor = async (m: MonitorRow, minutes: number | 'tomorrow') => {
+    const reason = await promptText('Why is it paused?', { message: 'Shown with the monitor while it waits, for your team (optional)', value: '', okLabel: 'Pause' });
+    if (reason == null) return;
+    const until = minutes === 'tomorrow' ? (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d.toISOString(); })() : undefined;
+    await attempt(async () => {
+      await call('monitor.pause', { id: m.id, ...(until ? { until } : { minutes }), reason: reason.trim() || undefined });
     });
     await load();
   };
@@ -328,7 +343,7 @@ export function MonitorsView() {
                   name: m.name,
                   folder: m.folder,
                   icon: <StatusDot className="block" tone={m.running ? 'accent' : !m.lastResult ? 'muted' : m.lastResult.status === 'passed' ? 'ok' : 'bad'} pulse={m.running} />,
-                  badge: m.enabled ? <RecentRuns statuses={m.recent ?? []} /> : <Badge>paused</Badge>,
+                  badge: !m.paused ? <RecentRuns statuses={m.recent ?? []} /> : <Badge title={m.pausedUntil ? m.schedule : undefined}>paused</Badge>,
                   subtitle: `${targetName(m)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
                 }))}
                 itemActions={(id) => {
@@ -409,6 +424,7 @@ export function MonitorsView() {
             onRun={() => void run(current)}
             onEdit={() => setEditing(current)}
             onToggle={() => void toggle(current)}
+            onPause={(minutes) => void pauseFor(current, minutes)}
             menu={monitorMenu(current)}
           />
         ) : (
@@ -452,6 +468,8 @@ function MonitorDetail(p: {
   onRun(): void;
   onEdit(): void;
   onToggle(): void;
+  /** Pause for a while (minutes, or until tomorrow 09:00), with why. */
+  onPause(minutes: number | 'tomorrow'): void;
   /** The monitor's ⋯ (lib/node-menu.ts builds it): rename, duplicate, Delete… with Undo, as its row in the list. */
   menu: MenuItem[];
 }) {
@@ -477,7 +495,7 @@ function MonitorDetail(p: {
     const ms = results.map((r) => r.durationMs).sort((a, b) => a - b);
     return { uptime: results.length ? Math.round((passed / results.length) * 1000) / 10 : undefined, median: ms[Math.max(0, Math.ceil(ms.length / 2) - 1)], count: done.length };
   }, [results]);
-  const next = m.enabled && m.nextRunAt ? Date.parse(m.nextRunAt) - Date.now() : undefined;
+  const next = m.enabled && !m.paused && m.nextRunAt ? Date.parse(m.nextRunAt) - Date.now() : undefined;
   return (
     <div className="p-4 pt-1 flex flex-col gap-4 max-w-6xl">
       {/* WF-11: the same line as every item view; the large header keeps its actions */}
@@ -493,7 +511,7 @@ function MonitorDetail(p: {
             {p.collectionName}
             {p.folderNames.length > 0 && ` › ${p.folderNames.join(', ')}`}
             {' · '}
-            <EnvBadge name={m.environment} /> · {m.schedule}
+            <EnvBadge name={m.environment} /> · <span data-monitor-schedule>{m.schedule}</span>
           </>
         }
         actions={
@@ -512,11 +530,28 @@ function MonitorDetail(p: {
                 },
               })} />
             )}
-            <Tooltip content={m.enabled ? 'Pause the schedule' : 'Resume the schedule'}>
-              <Button size="sm" icon={m.enabled ? <Pause size={14} /> : <AlarmClock size={14} />} onClick={p.onToggle}>
-                {m.enabled ? 'Pause' : 'Resume'}
-              </Button>
-            </Tooltip>
+            {m.paused ? (
+              <Tooltip content={m.enabled ? 'The schedule goes on now' : 'Resume the schedule'}>
+                <Button size="sm" icon={<AlarmClock size={14} />} onClick={p.onToggle} data-monitor-resume>
+                  Resume
+                </Button>
+              </Tooltip>
+            ) : (
+              <Menu
+                width={240}
+                items={[
+                  { label: 'Until I resume it', onSelect: p.onToggle },
+                  { label: 'For 1 hour', separator: true, onSelect: () => p.onPause(60) },
+                  { label: 'For 4 hours', onSelect: () => p.onPause(240) },
+                  { label: 'Until tomorrow 09:00', onSelect: () => p.onPause('tomorrow') },
+                ]}
+                trigger={
+                  <Button size="sm" icon={<Pause size={14} />} title="Pause the schedule: until you resume it, or for a while (it goes on by itself when the time comes)" data-monitor-pause>
+                    Pause <ChevronDown size={13} />
+                  </Button>
+                }
+              />
+            )}
             <Button size="sm" icon={<Pencil size={14} />} onClick={p.onEdit}>
               Edit
             </Button>

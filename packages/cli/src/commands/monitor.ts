@@ -17,6 +17,9 @@ import {
   monitorResults,
   monitorStatus,
   parseEvery,
+  parsePauseFor,
+  pauseMonitor,
+  resumeMonitor,
   saveMonitor,
   shortId,
   type Monitor,
@@ -139,6 +142,41 @@ export function registerMonitorCommands(program: Command): void {
         const m = findMonitor(store, ref);
         deleteMonitor(store, m.id);
         respond({ removed: m.name, id: m.id }, () => console.log(green(`Removed monitor "${m.name}"`)));
+      }),
+    );
+
+  mon
+    .command('pause')
+    .description('pause a monitor: for a while (--for 2h, --until <time>: it runs again by itself when the time comes), else until `monitor resume`; --why is shown with it while it waits')
+    .argument('<nameOrId>')
+    .option('--for <duration>', 'how long: 30m, 2h, 1d')
+    .option('--until <time>', 'an ISO time, e.g. 2026-11-02T09:00')
+    .option('--why <reason>', 'why it waits (a deploy, a maintenance window)')
+    .requiredOption('-w, --workspace <nameOrPath>')
+    .action((ref: string, o: { for?: string; until?: string; why?: string; workspace: string }) =>
+      withWorkspace(o.workspace, (store) => {
+        const m = findMonitor(store, ref);
+        let saved;
+        try {
+          saved = pauseMonitor(store, m.id, { minutes: o.for !== undefined ? parsePauseFor(o.for) : undefined, until: o.until, reason: o.why });
+        } catch (e) {
+          throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+        }
+        const st = monitorStatus(store, saved);
+        respond({ paused: saved.name, id: saved.id, pausedUntil: saved.pausedUntil, pauseReason: saved.pauseReason, schedule: st.schedule }, () => console.log(yellow(`"${saved.name}" ${st.schedule}`)));
+      }),
+    );
+
+  mon
+    .command('resume')
+    .description('the schedule goes on now (ends a pause of either kind)')
+    .argument('<nameOrId>')
+    .requiredOption('-w, --workspace <nameOrPath>')
+    .action((ref: string, o: { workspace: string }) =>
+      withWorkspace(o.workspace, (store) => {
+        const m = findMonitor(store, ref);
+        const saved = resumeMonitor(store, m.id);
+        respond({ resumed: saved.name, id: saved.id, schedule: formatEvery(saved.everyMinutes) }, () => console.log(green(`"${saved.name}" runs ${formatEvery(saved.everyMinutes)} again`)));
       }),
     );
 

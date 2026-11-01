@@ -1168,10 +1168,12 @@ testpion monitor add "API health" --collection "My API" --every 1h --min-cert-da
 testpion monitor run --due -w my-workspace      # for cron; exit 1 if a run failed
 testpion monitor uptime "API health" -w my-workspace --days 90   # uptime per day, like a status page
 testpion monitor requests "API health" -w my-workspace          # each request over the latest runs: median / p95, failures
+testpion monitor pause "API health" --for 2h --why "deploy" -w my-workspace   # or --until <time>; it runs again by itself when the time comes
+testpion monitor resume "API health" -w my-workspace   # the schedule goes on now
 testpion monitor start -w my-workspace          # keep running them until Ctrl+C
 ```
 
-`list`, `results`, `uptime` and `add` take `--json`. See [Monitors](/test-runner/monitors).
+`list`, `results`, `uptime`, `add`, `pause` and `resume` take `--json` (`list` carries `paused`, `pausedUntil`, `pauseReason`). See [Monitors](/test-runner/monitors).
 
 ## `ci`
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Monitors: pause for a while
+
+- **Pause ▸ For 1 hour / For 4 hours / Until tomorrow 09:00** on a monitor, with why (*deploy*): it says *paused until 14:30 (deploy)* and the schedule goes on by itself when the time comes, so a deploy or a maintenance window no longer means a monitor left off for good. `testpion monitor pause <name> --for 2h --why "deploy"` (or `--until <time>`), `monitor resume`; `paused`, `pausedUntil`, `pauseReason` in `monitor list --json` and `list_monitors`.
+
 ### Team work: comments next to the item
 
 - **Comments for your team** in the Info panel of a request, a folder, a test file, an evaluation, a monitor or any other item: a question or a note, signed with your git name and dated, saved in the workspace under `comments/` (one small file per item, so two people never conflict) and carried by git to the team. Mark as settled greys it and takes it out of the open list; a request's row in the tree shows a speech bubble with its open comments; Home lists the open ones under **Your team is asking**; the Git view names the change *Comments for the team*. `testpion item comment list|add|resolve|delete <item>` and `item comment open --json` (every open comment of the workspace) for pipelines and agents; RPC `comments.*`.
