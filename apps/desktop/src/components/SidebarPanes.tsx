@@ -60,7 +60,10 @@ export function EnvironmentsPane() {
             className={cx('pl-3', e.name === env && 'text-accent')}
           >
             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
-            <span className={cx('truncate', e.problem && 'text-bad')}>{e.name}</span>
+            <span className={cx('truncate', e.problem && 'text-bad')}>
+              {e.group ? <span className="text-muted">{e.group} ▸ </span> : null}
+              {e.name}
+            </span>
             {e.isProduction && <Badge tone="bad">prod</Badge>}
             {e.name === env && <Check size={13} className="ml-auto shrink-0" />}
           </TreeRowShell>

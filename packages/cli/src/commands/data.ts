@@ -932,9 +932,9 @@ export function registerDataCommands(program: Command): void {
       return withWorkspace(o.workspace, (store) => {
         const all = store.listEnvironments();
         const page = pagedList(all, o);
-        const envs = page.items.map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
+        const envs = page.items.map((e) => ({ id: e.id, name: e.name, ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
         if (o.json) printJson(envs);
-        else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
+        else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.group ? dim(`${e.group} ▸ `) : ''}${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
         if (!o.json) warnProblems(all, 'environment');
         reportPage(page, o, 'environments');
       });

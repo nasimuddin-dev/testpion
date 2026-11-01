@@ -147,6 +147,10 @@ From a variable's popover, the button next to **Copy** goes to where that variab
 
 **Show all variables** goes back to the full list.
 
+## Groups: tenants, customers, deployments
+
+Give an environment a **Group** (*Acme*, *Globex*) when one workspace tests the same API for several tenants or deployments: the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; the status bar and run headers say which tenant a run was for. The group is a name in the environment file (`"group": "Acme"`), nothing more, so git carries it and the cloud version keeps it. `testpion env list --json` carries `group`.
+
 ## Compare
 
 **Compare** (at the top of an environment) shows two environments side by side. Differences come first:

@@ -7,6 +7,7 @@ export * from './types.js';
 export * from './guards.js';
 export * from './jwt.js';
 export * from './deprecation.js';
+export * from './env-groups.js';
 export * from './format.js';
 export * from './url.js';
 export * from './csv.js';

@@ -1,4 +1,5 @@
 import { plural } from '../lib/format';
+import { environmentLabel } from '@testpion/shared';
 import { ChevronDown, KeyRound, TriangleAlert } from 'lucide-react';
 import { selectEnvironments, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
@@ -7,7 +8,7 @@ import { useVarPopover } from '../lib/var-popover';
 import { useRef } from 'react';
 import { Badge, Menu, cx, type MenuItem } from './ui';
 
-type Env = { id?: string; name: string; color?: string; isProduction?: boolean; problem?: string };
+type Env = { id?: string; name: string; color?: string; isProduction?: boolean; problem?: string; group?: string };
 
 /** An environment's colour: its own, else red for production and green otherwise; none: the line colour. */
 export const envColor = (e?: Pick<Env, 'color' | 'isProduction'>) => (e ? (e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)');
@@ -64,11 +65,11 @@ export function EnvSelect({
       // a name from a hand-edited file is text here whatever it holds (an object would blank the window)
       e.problem
         ? { label: `${String(e.name)}  (cannot be read)`, icon: <TriangleAlert size={13} className="text-bad" />, danger: true, disabled: true, title: e.problem, onSelect: () => undefined }
-        : { label: e.isProduction ? `${String(e.name)}  (production)` : String(e.name), icon: <Dot color={envColor(e)} ring={e.isProduction} />, onSelect: () => set(e.name) },
+        : { label: `${environmentLabel({ name: String(e.name), group: e.group })}${e.isProduction ? '  (production)' : ''}`, icon: <Dot color={envColor(e)} ring={e.isProduction} />, onSelect: () => set(e.name) },
     ),
     { label: 'Manage environments…', icon: <KeyRound size={14} />, separator: true, onSelect: () => void openRef({ kind: 'environment' }) },
   ];
-  const label = current === undefined || current === null || current === '' ? 'No environment' : String(current);
+  const label = current === undefined || current === null || current === '' ? 'No environment' : envObj ? environmentLabel({ name: String(envObj.name), group: envObj.group }) : String(current);
   const title = envObj ? `${controlled ? 'Environment' : 'Active environment'}: ${envObj.name}${envObj.isProduction ? ' (production)' : ''}` : 'No environment: choose one';
   const trigger =
     variant === 'topbar' ? (

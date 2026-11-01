@@ -642,6 +642,8 @@ export interface Environment {
   /** Marks the environment as production: anything that can change data there (load tests too) asks first, or needs --allow-production. */
   isProduction?: boolean;
   color?: string;
+  /** A tenant, a customer or a deployment the environment belongs to ("Acme"): lists and pickers show "Acme ▸ Staging" and keep a group together. */
+  group?: string;
   /** Position in environment lists and pickers (lowest first); environments without one follow, by file name. */
   order?: number;
   /** Set on a listed environment whose file cannot be read (invalid JSON): why. It has no variables then; never saved. */

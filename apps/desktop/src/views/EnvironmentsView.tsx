@@ -324,7 +324,10 @@ export function EnvironmentsView() {
                     className={cx('pl-3 cursor-grab active:cursor-grabbing', dragId === e.id && 'opacity-50')}
                   >
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
-                    <span className="truncate">{String(e.name)}</span>
+                    <span className="truncate">
+                      {e.group ? <span className="text-muted">{String(e.group)} ▸ </span> : null}
+                      {String(e.name)}
+                    </span>
                     {e.isProduction && <Badge tone="bad">prod</Badge>}
                     {e.problem ? (
                       <span className="ml-auto text-warn" title={`This environment's file cannot be read: ${e.problem}`}>
@@ -360,6 +363,9 @@ export function EnvironmentsView() {
                 <div className="flex items-end gap-3 flex-wrap">
                   <Field label="Name">
                     <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                  </Field>
+                  <Field label="Group" hint="A tenant, a customer or a deployment (Acme): the lists show Acme ▸ Staging and keep the group together">
+                    <Input value={draft.group ?? ''} placeholder="none" className="w-40" aria-label="Environment group" onChange={(e) => setDraft({ ...draft, group: e.target.value || undefined })} data-env-group />
                   </Field>
                   <Field label="Color">
                     <input type="color" aria-label="Environment color" className="field h-8 w-14 p-1 cursor-pointer" value={draft.color ?? '#1a7f37'} onChange={(e) => setDraft({ ...draft, color: e.target.value })} />

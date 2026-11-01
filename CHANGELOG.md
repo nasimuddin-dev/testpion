@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Several tenants in one workspace: environment groups
+
+- An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A name in the environment file, nothing more, so git carries it and the cloud version keeps it.
+
 ### Several teams in one workspace: who owns what
 
 - The Info panel of an item says **Owned by @org/payments** (from the repository's `CODEOWNERS`) and **Last changed by Ana 2 days ago** (from git); `testpion item owners <item>` prints the same, and a problem under Needs attention starts with the owners of what it is about, so a shared list reads as a to-do per team. `planning/multi-team.md` lays out the rest for teams and tenants.
