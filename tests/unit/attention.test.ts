@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, problemsOwnedBy, problemsOfGroup, sameOwner, type RunSummary } from '../../packages/core/src/index.js';
+import { WorkspaceStore, recordCertificate, saveMonitor, tokensAttention, workspaceAttention, problemsOwnedBy, problemsOfGroup, tenantOf, sameOwner, type RunSummary } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-attention-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -112,6 +112,7 @@ describe('the problems of one tenant', () => {
         { message: 'a request', ref: { kind: 'request' as const, collectionId: 'c', requestId: 'r' } },
       ];
       expect(problemsOfGroup(store, items, 'acme').map((i) => i.message)).toEqual(['acme monitor', 'acme token']);
+      expect(tenantOf(store, items)).toEqual(['Acme', undefined, 'Acme', undefined]);
       expect(problemsOfGroup(store, items, 'Globex')).toEqual([]);
       expect(problemsOfGroup(store, items, ' ')).toHaveLength(4);
     } finally {

@@ -32,7 +32,7 @@
 
 ### Several tenants: one request for every tenant
 
-- Filtering the runs list by a group's name (*Acme*) lists every tenant's runs; `testpion problems --group Acme` lists one tenant's problems (its monitors and environments). `{{$group}}` is the group (tenant) of the environment a run uses and `{{$environment}}` its name, so a `X-Tenant: {{$group}}` header or a `datasets/{{$group}}/users.csv` path serves every tenant from one request; type `{{$` to pick them.
+- Filtering the runs list by a group's name (*Acme*) lists every tenant's runs; a problem about a tenant carries it (`tenant`), the Problems panel has a **Tenant** select and `testpion problems --group Acme` lists one tenant's problems (its monitors and environments). `{{$group}}` is the group (tenant) of the environment a run uses and `{{$environment}}` its name, so a `X-Tenant: {{$group}}` header or a `datasets/{{$group}}/users.csv` path serves every tenant from one request; type `{{$` to pick them.
 
 ### Several tenants: nothing of one in another's response
 

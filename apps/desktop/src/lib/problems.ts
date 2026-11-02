@@ -25,6 +25,8 @@ export interface Problem {
   snoozed?: { until?: string; hash: string; at: string };
   /** The owners of what it is about (CODEOWNERS), when the repository names them: the team the problem is for. */
   owners?: string[];
+  /** The tenant (environment group) it is about, when it names one. */
+  tenant?: string;
   group: string;
   type: 'failure' | 'error' | 'warning';
   at?: string;

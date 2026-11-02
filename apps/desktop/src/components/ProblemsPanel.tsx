@@ -20,7 +20,13 @@ export function ProblemsPanel() {
   // several teams in one workspace: one team's problems, by the owners CODEOWNERS names (the select appears only when some problem has owners)
   const owners = useMemo(() => [...new Set(all.flatMap((p) => p.owners ?? []))].sort(), [all]);
   const [owner, setOwner] = useState('');
-  const problems = useMemo(() => (owner && owners.includes(owner) ? all.filter((p) => p.owners?.includes(owner)) : all), [all, owner, owners]);
+  // and one tenant's: the environment group a problem is about (a monitor's environment, an environment's token or secret)
+  const tenants = useMemo(() => [...new Set(all.map((p) => p.tenant).filter((t): t is string => !!t))].sort(), [all]);
+  const [tenant, setTenant] = useState('');
+  const problems = useMemo(
+    () => all.filter((p) => (!owner || !owners.includes(owner) || p.owners?.includes(owner)) && (!tenant || !tenants.includes(tenant) || p.tenant === tenant)),
+    [all, owner, owners, tenant, tenants],
+  );
   // the problems set aside on this computer: a line says how many, Show lists them greyed with Bring it back
   const [snoozed, setSnoozed] = useState<Problem[]>([]);
   const [showSnoozed, setShowSnoozed] = useState(false);
@@ -62,6 +68,16 @@ export function ProblemsPanel() {
             ))}
           </Select>
         )}
+        {tenants.length > 0 && (
+          <Select className="ml-2 h-6 py-0 text-xs" value={tenants.includes(tenant) ? tenant : ''} onChange={(e) => setTenant(e.target.value)} aria-label="Tenant" title="Only one tenant's problems (the environment group its monitor or environment is in)" data-problems-tenant>
+            <option value="">Every tenant</option>
+            {tenants.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        )}
         {/* the keys behind the ⓘ (the same hint as every output bar's): as text they were the first thing clipped in a narrow pane */}
         {snoozed.length > 0 && (
           <button type="button" className="ml-2 hover:text-fg" onClick={() => setShowSnoozed((v) => !v)} title="Problems you set aside on this computer; they come back when the time passes or they change" data-problems-snoozed={snoozed.length}>
@@ -76,7 +92,7 @@ export function ProblemsPanel() {
         {problems.length || (showSnoozed && snoozed.length) ? (
           <ProblemList problems={showSnoozed ? [...problems, ...snoozed] : problems} grouped />
         ) : (
-          <Empty icon={<CheckCircle2 size={22} />} title={owner && all.length ? `No problems of ${owner}` : 'No problems'}>
+          <Empty icon={<CheckCircle2 size={22} />} title={(owner || tenant) && all.length ? `No problems of ${owner || tenant}` : 'No problems'}>
             Monitors, runs, requests, certificates and workspace files are all fine.{snoozed.length ? ` ${plural(snoozed.length, 'problem')} set aside: Show above lists them.` : ''}
           </Empty>
         )}

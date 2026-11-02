@@ -36,6 +36,8 @@ export interface AttentionItem {
   message: string;
   /** The owners of the file that holds it (the repository's CODEOWNERS), when a rule names it: the team the problem is for. */
   owners?: string[];
+  /** The tenant (an environment group) it is about: the group of the environment its monitor runs in, or of the environment itself. */
+  tenant?: string;
   /**
    * What it is about, as an ItemRef (@testpion/shared): a monitor (with its failing run), a certificate's host, a run,
    * a request (collection id + request id), a flaky test's id. The app opens it with `openRef`.
@@ -163,17 +165,19 @@ export function problemsOwnedBy<T extends { owners?: string[] }>(items: T[], own
  * one of its environments (a token, a secret, a convention). Problems that name no environment (a request, a run, a
  * certificate) belong to no tenant and are left out.
  */
+/** The tenant of a problem: the environment group of the monitor's environment, or of the environment it names; none for the rest. */
+export function tenantOf(store: WorkspaceStore, items: Array<{ ref: ItemRef & { monitorId?: string; environmentId?: string } }>): Array<string | undefined> {
+  const envs = store.listEnvironments();
+  const groupOfEnv = (idOrName?: string) => (idOrName ? envs.find((e) => e.id === idOrName || e.name === idOrName)?.group?.trim() || undefined : undefined);
+  const monitorEnv = new Map(listMonitors(store).map((m) => [m.id, m.environment] as const));
+  return items.map((i) => (i.ref.kind === 'monitor' && i.ref.monitorId ? groupOfEnv(monitorEnv.get(i.ref.monitorId)) : i.ref.kind === 'environment' && i.ref.environmentId ? groupOfEnv(i.ref.environmentId) : undefined));
+}
+
 export function problemsOfGroup<T extends { ref: ItemRef & { monitorId?: string; environmentId?: string } }>(store: WorkspaceStore, items: T[], group: string): T[] {
   const want = group.trim().toLowerCase();
   if (!want) return items;
-  const envs = store.listEnvironments();
-  const groupOfEnv = (idOrName?: string) => (idOrName ? (envs.find((e) => e.id === idOrName || e.name === idOrName)?.group?.trim().toLowerCase() ?? '') : '');
-  const monitorEnv = new Map(listMonitors(store).map((m) => [m.id, m.environment] as const));
-  return items.filter((i) => {
-    if (i.ref.kind === 'monitor' && i.ref.monitorId) return groupOfEnv(monitorEnv.get(i.ref.monitorId)) === want;
-    if (i.ref.kind === 'environment' && i.ref.environmentId) return groupOfEnv(i.ref.environmentId) === want;
-    return false;
-  });
+  const tenants = tenantOf(store, items);
+  return items.filter((_, i) => (tenants[i] ?? '').toLowerCase() === want);
 }
 
 export async function workspaceAttention(store: WorkspaceStore, opts: { certDays?: number; flakyRuns?: number; tokenDays?: number; secrets?: SecretReader; /** Read secret values for the token check only (the app: its missing secrets are a banner of their own). */ tokenSecrets?: SecretReader } = {}): Promise<AttentionItem[]> {
@@ -293,6 +297,12 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
     out.push({ kind: 'convention', severity: 'medium', group: 'Team conventions', type: 'error', message: `${CONVENTIONS_FILE} can't be read: ${(e as Error).message}`, ref: { kind: 'environment', scope: 'workspace' } });
   }
   const rank = { high: 0, medium: 1, low: 2 };
+  // several tenants: the environment group a problem is about, so the Problems panel and `problems --group` read per tenant
+  try {
+    tenantOf(store, out).forEach((t, i) => t && (out[i]!.tenant = t));
+  } catch {
+    /* a courtesy: the rest of the list stands */
+  }
   // several teams in one workspace: a problem names the owners of the file it is about (CODEOWNERS), so a shared list reads per team
   const co = await workspaceCodeowners(store.root).catch(() => undefined);
   if (co)
