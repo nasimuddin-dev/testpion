@@ -3,7 +3,7 @@ import type { WorkspaceStore } from './workspace.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { secretKeys, type SecretStore } from './secrets.js';
-import { environmentsOfGroup } from '@testpion/shared';
+import { environmentLabel, environmentsOfGroup, matchEnvironment } from '@testpion/shared';
 
 /**
  * Set or remove plain (non-secret) variables of an environment from the CLI or an AI agent. Secret
@@ -14,13 +14,13 @@ export function findEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'> 
   if (typeof ref !== 'string') return undefined;
   // `cached`: the shared frozen list (nothing is read or parsed unless an environment file changed); the caller must not change what it gets
   const envs = (cached && store.environmentList ? store.environmentList() : store.listEnvironments()) as Environment[];
-  return envs.find((e) => e.id === ref) ?? envs.find((e) => e.name.toLowerCase() === ref.toLowerCase());
+  return matchEnvironment(envs, ref);
 }
 
 /** The environment, or a configuration error naming the ones there are (or saying why its file cannot be read). */
 export function requireEnvironment(store: Pick<WorkspaceStore, 'listEnvironments'> & Partial<Pick<WorkspaceStore, 'environmentList'>>, ref: string, cached = false): Environment {
   const env = findEnvironment(store, ref, cached);
-  if (!env) throw new ApsError('ConfigurationError', `No environment "${ref}". Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`);
+  if (!env) throw new ApsError('ConfigurationError', `No environment "${ref}". Available: ${store.listEnvironments().map((e) => environmentLabel(e)).join(', ') || 'none'}`);
   if (env.problem) throw brokenEnvironmentError(env);
   return env;
 }

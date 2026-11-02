@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { Check, ChevronDown, Copy, Download, KeyRound, ShieldCheck, TriangleAlert, X } from 'lucide-react';
-import { OUTPUT_FORMATS, outputSurface } from '@testpion/shared';
+import { OUTPUT_FORMATS, outputSurface, matchEnvironment } from '@testpion/shared';
 import { call } from '../../api';
 import { useApp } from '../../store';
 import { scopedKey } from '../../lib/ws-scope';
@@ -56,7 +56,7 @@ export function OutputDownload({ spec: given }: { spec: OutputSpec }) {
   // the active environment, unless the surface knows its own: its secret values are masked, production is said
   const activeEnv = useApp((s) => s.environment);
   const environments = useApp((s) => s.workspace?.environments);
-  const production = useMemo(() => !!(activeEnv && environments?.find((e) => e.name === activeEnv)?.isProduction), [activeEnv, environments]);
+  const production = useMemo(() => !!(activeEnv && matchEnvironment(environments ?? [], activeEnv)?.isProduction), [activeEnv, environments]);
   const spec = useMemo<OutputSpec>(() => ({ ...given, environment: given.environment ?? activeEnv, production: given.production ?? production }), [given, activeEnv, production]);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   useEffect(() => onRunningChange(rerender), []);

@@ -4,7 +4,7 @@
 
 ### Several tenants in one workspace: environment groups
 
-- An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it. A new tenant starts as a copy of one: **New tenant from Acme…** under the Group field, `testpion env duplicate-group Acme Globex` (names, flags and variables; secret values are not copied).
+- An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it. A new tenant starts as a copy of one: **New tenant from Acme…** under the Group field, `testpion env duplicate-group Acme Globex` (names, flags and variables; secret values are not copied). Two tenants may share a name (*Acme ▸ Staging*, *Globex ▸ Staging*): wherever an environment is named, the label tells them apart, and a bare name no longer picks one of them by chance.
 
 ### Smoother first capture
 

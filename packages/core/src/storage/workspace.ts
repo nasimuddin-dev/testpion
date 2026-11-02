@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import type { Collection, Environment, Library, McpServerConfig, ProviderConfig, Trace, Workspace } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
 import { ApsError } from '../errors.js';
+import { matchEnvironment } from '@testpion/shared';
 import { shortId, slugify } from '../util/ids.js';
 import { sha1Hex } from '../util/hash.js';
 import { onOwnWrite, writeJsonAsync, atomicWriteAsync, atomicWrite, deepFreeze, readJson, readJsonShared, relativeInside, readTextCached, samePath, writeDerived, writeDerivedAsync, writeJson, removeOwned } from './fsutil.js';
@@ -351,7 +352,7 @@ export class WorkspaceStore {
   /** The environment as getEnvironment answers it, shared and frozen (see the views above). */
   environmentView(idOrName: string): Environment | undefined {
     if (typeof idOrName !== 'string') return undefined;
-    return this.environmentList().find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
+    return matchEnvironment(this.environmentList(), idOrName);
   }
 
   /*
@@ -486,6 +487,9 @@ export class WorkspaceStore {
     const dir = this.path('environments');
     const slug = `${slugify(idOrName)}.json`;
     if (existsSync(join(dir, slug))) return `environments/${slug}`;
+    // a name or a label ("Acme ▸ Staging"): the environment it names, then its file by id
+    const named = this.getEnvironment(idOrName);
+    if (named && named.id !== idOrName) return this.environmentFileOf(named.id);
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
       try {
         const e = readJsonShared<Environment>(join(dir, f));
@@ -534,7 +538,7 @@ export class WorkspaceStore {
 
   getEnvironment(idOrName: string): Environment | undefined {
     if (typeof idOrName !== 'string') return undefined;
-    return this.listEnvironments().find((e) => e.id === idOrName || e.name.toLowerCase() === idOrName.toLowerCase());
+    return matchEnvironment(this.listEnvironments(), idOrName);
   }
 
   /** Secret variable values must already have been moved to the secret store — they are stripped here. */

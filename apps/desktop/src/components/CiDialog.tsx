@@ -1,3 +1,4 @@
+import { matchEnvironment } from '@testpion/shared';
 import { CodeBlock } from './CodeBlock';
 import { Copy, Download, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -68,7 +69,7 @@ export function CiDialog() {
   const [rag, setRag] = useState({ preset: '', min: '', baseline: '', maxCost: '', compat: '', repeatTarget: '', comment: true, nightly: false, cron: '0 3 * * *', sample: '', regression: true, maxDrop: '' });
   useEffect(() => void call<Array<{ path: string }>>('datasets.list').then((d) => setDatasets(d.map((x) => x.path)), () => setDatasets([])), []);
   const shellCapable = useShellCapable();
-  const production = !!environments.find((e) => e.name === environment)?.isProduction || (target.startsWith('file:') && flowRun === 'matrix' && environments.some((e) => matrix.includes(e.name) && e.isProduction));
+  const production = !!matchEnvironment(environments, environment)?.isProduction || (target.startsWith('file:') && flowRun === 'matrix' && environments.some((e) => matrix.includes(e.name) && e.isProduction));
   const [workspaceDir, setWorkspaceDir] = useState('.');
   const [openapi, setOpenapi] = useState('');
   const [suites, setSuites] = useState<string[]>([]);

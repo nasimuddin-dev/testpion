@@ -1,3 +1,4 @@
+import { matchEnvironment } from '@testpion/shared';
 import { call } from './api';
 import { promptText, toastError, useApp } from './store';
 import { openRef } from './lib/open-ref';
@@ -145,7 +146,7 @@ export async function runMenuCommand(cmd: MenuCommand): Promise<void> {
       case 'export-collection':
         return s.openIntent('collections', { export: 'postman' });
       case 'export-environment': {
-        const env = s.workspace?.environments.find((e) => e.name === s.environment);
+        const env = s.environment ? matchEnvironment(s.workspace?.environments ?? [], s.environment) : undefined;
         if (!env) return s.toast('Select an environment first (top bar), then export it.', 'error');
         const r = await call<SaveResult & { name: string }>('env.export', { id: env.id });
         if (!deliverSave(r)) return; // the save dialog was cancelled

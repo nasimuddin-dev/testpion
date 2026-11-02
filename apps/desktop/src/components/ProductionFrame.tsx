@@ -1,3 +1,4 @@
+import { matchEnvironment } from '@testpion/shared';
 import { useApp } from '../store';
 
 /**
@@ -6,7 +7,7 @@ import { useApp } from '../store';
  */
 export function ProductionFrame() {
   const color = useApp((s) => {
-    const env = s.environment ? s.workspace?.environments.find((e) => e.name === s.environment) : undefined;
+    const env = s.environment ? matchEnvironment(s.workspace?.environments ?? [], s.environment) : undefined;
     return env?.isProduction ? (env.color ?? 'var(--bad)') : undefined;
   });
   if (!color) return null;

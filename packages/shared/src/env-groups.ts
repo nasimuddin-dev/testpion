@@ -30,3 +30,24 @@ export function groupEnvironments<T extends GroupedEnvironment>(envs: T[]): Arra
 
 /** The environments of one group (its name as written, case-insensitively). */
 export const environmentsOfGroup = <T extends GroupedEnvironment>(envs: T[], group: string): T[] => envs.filter((e) => (e.group?.trim() ?? '').toLowerCase() === group.trim().toLowerCase());
+
+/**
+ * The environment a reference names, for every lookup by name: its id; else its label "Acme ▸ Staging" (case not mattering);
+ * else its bare name when one environment has it, or when exactly one of those that have it is in no group (two tenants may
+ * both have a Staging: a bare "Staging" then names the ungrouped one, or nothing, never the first by chance).
+ */
+export function matchEnvironment<T extends GroupedEnvironment & { id?: string }>(envs: readonly T[], ref: string): T | undefined {
+  if (typeof ref !== 'string') return undefined;
+  const byId = envs.find((e) => e.id !== undefined && e.id === ref);
+  if (byId) return byId;
+  const want = ref.trim().toLowerCase();
+  const byLabel = envs.find((e) => environmentLabel(e).toLowerCase() === want);
+  if (byLabel) return byLabel;
+  const named = envs.filter((e) => e.name.toLowerCase() === want);
+  if (named.length === 1) return named[0];
+  const ungrouped = named.filter((e) => !e.group?.trim());
+  return ungrouped.length === 1 ? ungrouped[0] : undefined;
+}
+
+/** Whether another environment has this one's name (then its label tells them apart). */
+export const nameIsShared = <T extends GroupedEnvironment>(envs: readonly T[], e: T): boolean => envs.some((x) => x !== e && x.name.toLowerCase() === e.name.toLowerCase());

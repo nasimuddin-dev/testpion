@@ -1,3 +1,4 @@
+import { matchEnvironment } from '@testpion/shared';
 import { Play, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import type { SecurityRunReport, SecurityStepVerdict } from '@testpion/core';
@@ -39,7 +40,7 @@ function Verdict({ v }: { v: SecurityStepVerdict }) {
  * consents to it). Nothing is run until the person presses Run.
  */
 export function SecurityRunDialog({ path, environment, onClose }: { path: string; environment?: string; onClose(): void }) {
-  const prod = useApp((s) => !!s.workspace?.environments.find((e) => e.name === environment)?.isProduction);
+  const prod = useApp((s) => !!(environment && matchEnvironment(s.workspace?.environments ?? [], environment)?.isProduction));
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<Report>();
   const [error, setError] = useState<string>();

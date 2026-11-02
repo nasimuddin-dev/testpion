@@ -1,5 +1,5 @@
 import { plural } from '../lib/format';
-import { environmentLabel } from '@testpion/shared';
+import { environmentLabel, matchEnvironment, nameIsShared } from '@testpion/shared';
 import { ChevronDown, KeyRound, TriangleAlert } from 'lucide-react';
 import { selectEnvironments, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
@@ -22,7 +22,7 @@ function Dot({ color, ring }: { color: string; ring?: boolean }) {
  * runner, monitors, Load, Evaluations, flows), the status bar and the pickers use it.
  */
 export function EnvBadge({ name, className }: { name?: string; className?: string }) {
-  const env = useApp((s) => (name ? s.workspace?.environments.find((e) => e.name === name) : undefined));
+  const env = useApp((s) => (name ? matchEnvironment(s.workspace?.environments ?? [], name) : undefined));
   return (
     <span
       className={cx('inline-flex items-center gap-1.5 min-w-0', className)}
@@ -58,14 +58,14 @@ export function EnvSelect({
   const controlled = !!onChange;
   const current = controlled ? value : active;
   const set = (name: string | undefined) => (onChange ? onChange(name) : useApp.getState().setEnvironment(name));
-  const envObj = envs.find((e) => e.name === current);
+  const envObj = current ? matchEnvironment(envs, current) : undefined;
   const items: MenuItem[] = [
     { label: 'No environment', icon: <Dot color="var(--line-strong)" />, onSelect: () => set(undefined) },
     ...envs.map((e) =>
       // a name from a hand-edited file is text here whatever it holds (an object would blank the window)
       e.problem
         ? { label: `${String(e.name)}  (cannot be read)`, icon: <TriangleAlert size={13} className="text-bad" />, danger: true, disabled: true, title: e.problem, onSelect: () => undefined }
-        : { label: `${environmentLabel({ name: String(e.name), group: e.group })}${e.isProduction ? '  (production)' : ''}`, icon: <Dot color={envColor(e)} ring={e.isProduction} />, onSelect: () => set(e.name) },
+        : { label: `${environmentLabel({ name: String(e.name), group: e.group })}${e.isProduction ? '  (production)' : ''}`, icon: <Dot color={envColor(e)} ring={e.isProduction} />, onSelect: () => set(nameIsShared(envs, e) ? environmentLabel({ name: String(e.name), group: e.group }) : e.name) },
     ),
     { label: 'Manage environments…', icon: <KeyRound size={14} />, separator: true, onSelect: () => void openRef({ kind: 'environment' }) },
   ];
