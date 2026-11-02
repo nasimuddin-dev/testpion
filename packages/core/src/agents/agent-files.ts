@@ -110,14 +110,23 @@ export function renderAgentsMd(f: AgentWorkspaceFacts, o: { checkTypes?: string[
     ['comments/', 'comments from the team on items (one file per item; `testpion item comment`, the MCP tool team_comments)'],
     ['runs/, traces/, reports/, .local/', "results and this computer's state: never committed (.gitignore)"],
   ];
+  // the team's conventions: an agent that creates or renames an item keeps them (what breaks one is listed under Needs attention)
+  const conventions = f.conventions?.length
+    ? `## Team conventions
+
+This team's \`conventions.yaml\` says (\`testpion workspace conventions\` lists what breaks a rule):
+
+${f.conventions.map((c) => `- ${mdName(c)}`).join('\n')}
+
+`
+    : '';
   return `${AGENT_BEGIN}
 <!-- Written by TestPion (testpion agents init, or Settings ▸ AI agents in the app). Edit outside the testpion markers: this part is replaced when it is written again. -->
 # TestPion workspace: ${mdName(f.name)}
 
 This folder is a [TestPion](https://testpion.dev) workspace: API requests, environments, tests, flows and evaluations as plain files. Prefer the TestPion CLI or its MCP tools to editing the JSON files by hand: they keep ids, references and secrets right.
 ${noteSection(f.note)}
-${commentsSection(f.openComments)}
-## What is here
+${commentsSection(f.openComments)}${conventions}## What is here
 
 | Folder | What it holds |
 |---|---|

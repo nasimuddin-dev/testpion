@@ -16,7 +16,7 @@
 
 ### Several teams: the team's conventions, checked
 
-- `conventions.yaml` next to `workspace.json` holds how the team names and files things (patterns for collection, request and environment names; every environment in a group; every collection owned in `CODEOWNERS`; every monitor with a webhook and an environment); what breaks a rule is a warning under Needs attention and in `testpion workspace conventions` (exit 1, for CI). `testpion workspace conventions --init` writes the file with every rule explained and off.
+- `conventions.yaml` next to `workspace.json` holds how the team names and files things (patterns for collection, request and environment names; every environment in a group; every collection owned in `CODEOWNERS`; every monitor with a webhook and an environment); what breaks a rule is a warning under Needs attention and in `testpion workspace conventions` (exit 1, for CI). `testpion workspace conventions --init` writes the file with every rule explained and off; the AGENTS.md for coding agents repeats the rules in words.
 
 ### Several teams: whose change it is
 

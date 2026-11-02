@@ -9,6 +9,7 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { openComments } from '../storage/comments.js';
+import { readConventions } from '../storage/conventions.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore, TestFileNode } from '../storage/workspace.js';
 import { exposedFlows } from '../runner/exposed-flows.js';
@@ -68,6 +69,8 @@ export interface AgentWorkspaceFacts {
   note?: string;
   /** How many comments the team left on items that are still open (comments/): read them before changing an item. */
   openComments?: number;
+  /** The team's conventions (conventions.yaml), in words, so an agent names and files things the team's way. */
+  conventions?: string[];
   collections: Array<{ name: string; requests: number }>;
   /** Names only, never a variable; `group` is the tenant (a customer, a deployment) the environment belongs to. */
   environments: Array<{ name: string; production: boolean; group?: string }>;
@@ -102,6 +105,26 @@ function safe<T>(f: () => T[]): T[] {
   }
 }
 
+/** The rules conventions.yaml turns on, one sentence each (none without the file or when it cannot be read). */
+function conventionsInWords(store: WorkspaceStore): string[] {
+  let c;
+  try {
+    c = readConventions(store);
+  } catch {
+    return [];
+  }
+  if (!c) return [];
+  const out: string[] = [];
+  if (c.collections?.name) out.push(`a collection's name matches /${c.collections.name}/`);
+  if (c.collections?.owner === 'required') out.push('every collection has an owner in CODEOWNERS');
+  if (c.requests?.name) out.push(`a request's name matches /${c.requests.name}/`);
+  if (c.environments?.name) out.push(`an environment's name matches /${c.environments.name}/`);
+  if (c.environments?.group === 'required') out.push('every environment is in a group (a tenant)');
+  if (c.monitors?.webhook === 'required') out.push('every monitor has an alert webhook');
+  if (c.monitors?.environment === 'required') out.push('every monitor says which environment (or group) it runs in');
+  return out;
+}
+
 const byName = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
 
 /** The facts of a live workspace an AGENTS.md describes, sorted so the same workspace always gives the same text. */
@@ -112,6 +135,7 @@ export function agentWorkspaceFacts(store: WorkspaceStore): AgentWorkspaceFacts 
     name: store.workspace.name,
     ...(store.workspace.description?.trim() ? { note: store.workspace.description.trim() } : {}),
     ...(safe(() => openComments(store)).length ? { openComments: safe(() => openComments(store)).length } : {}),
+    ...(conventionsInWords(store).length ? { conventions: conventionsInWords(store) } : {}),
     collections: safe(() => store.listCollections().filter((c) => !c.problem))
       .map((c) => ({ name: c.name, requests: requestCount(c.items ?? []) }))
       .sort((a, b) => byName(a.name, b.name)),

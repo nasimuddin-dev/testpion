@@ -103,6 +103,11 @@ describe('the content', () => {
       expect(grouped).toContain('Acme ▸ Staging');
       expect(grouped).toContain('A group (*Acme*) is a tenant');
       expect(md).not.toContain('is a tenant');
+      // the team's conventions, in words, when the workspace has them
+      const ruled = renderAgentsMd({ ...f, conventions: ['every collection has an owner in CODEOWNERS', "a request's name matches /^[A-Z]/"] }, { checkTypes: ['status'] });
+      expect(ruled).toContain('## Team conventions');
+      expect(ruled).toContain('- every collection has an owner in CODEOWNERS');
+      expect(md).not.toContain('## Team conventions');
       expect(md).not.toContain(s.root);
       expect(md).not.toContain(s.root.replace(/\\/g, '/'));
     } finally {
