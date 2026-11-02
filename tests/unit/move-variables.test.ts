@@ -9,6 +9,8 @@ describe('moving collection variables to environments', () => {
     const dir = mkdtempSync(join(tmpdir(), 'tp-move-'));
     const store = WorkspaceStore.create(dir, 'move');
     try {
+      // the workspace starts with a Development environment (id development): this test's Development is `dev`, so the default goes
+      store.deleteEnvironment('development');
       store.saveCollection({
         schemaVersion: '1.0',
         id: 'c',

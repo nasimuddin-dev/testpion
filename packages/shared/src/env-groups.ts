@@ -33,8 +33,8 @@ export const environmentsOfGroup = <T extends GroupedEnvironment>(envs: T[], gro
 
 /**
  * The environment a reference names, for every lookup by name: its id; else its label "Acme ▸ Staging" (case not mattering);
- * else its bare name when one environment has it, or when exactly one of those that have it is in no group (two tenants may
- * both have a Staging: a bare "Staging" then names the ungrouped one, or nothing, never the first by chance).
+ * else its bare name when one environment has it, or the first of those that have it and are in no group (two tenants may
+ * both have a Staging: a bare "Staging" then names the ungrouped one, or nothing, never a tenant's by chance).
  */
 export function matchEnvironment<T extends GroupedEnvironment & { id?: string }>(envs: readonly T[], ref: string): T | undefined {
   if (typeof ref !== 'string') return undefined;
@@ -45,8 +45,8 @@ export function matchEnvironment<T extends GroupedEnvironment & { id?: string }>
   if (byLabel) return byLabel;
   const named = envs.filter((e) => e.name.toLowerCase() === want);
   if (named.length === 1) return named[0];
-  const ungrouped = named.filter((e) => !e.group?.trim());
-  return ungrouped.length === 1 ? ungrouped[0] : undefined;
+  // several share the name: the ungrouped ones keep the old first-match rule; grouped ones (tenants) are never picked by chance
+  return named.find((e) => !e.group?.trim());
 }
 
 /** What to write to name this environment where a name is expected: its label when another environment has its name, else its name. */

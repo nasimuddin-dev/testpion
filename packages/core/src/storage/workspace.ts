@@ -487,13 +487,12 @@ export class WorkspaceStore {
     const dir = this.path('environments');
     const slug = `${slugify(idOrName)}.json`;
     if (existsSync(join(dir, slug))) return `environments/${slug}`;
-    // a name or a label ("Acme ▸ Staging"): the environment it names, then its file by id
-    const named = this.getEnvironment(idOrName);
-    if (named && named.id !== idOrName) return this.environmentFileOf(named.id);
+    // a name, or a label "Acme ▸ Staging" (two tenants may share a name): the files are read, never the list (callers that index refs count on it)
+    const [group, name] = idOrName.includes(' ▸ ') ? idOrName.split(' ▸ ', 2).map((x) => x.trim()) : [undefined, idOrName];
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
       try {
         const e = readJsonShared<Environment>(join(dir, f));
-        if (e.id === idOrName || e.name === idOrName) return `environments/${f}`;
+        if (e.id === idOrName || (e.name === name && (group === undefined || (e.group?.trim() ?? '').toLowerCase() === group!.toLowerCase()))) return `environments/${f}`;
       } catch {
         /* not an environment */
       }
