@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { userInfo } from 'node:os';
-import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, type ItemRef } from '@testpion/core';
+import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, tenantOf, type ItemRef } from '@testpion/core';
 import { EXIT, bold, dim, green, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** An item by its reference text (`request:<collection>/<request>`, `test:tests/smoke.yaml`, a testpion:// link …). */
@@ -114,8 +114,9 @@ export function registerCommentCommand(program: Command): void {
           return console.log(dim(`${info.label} is not kept in a file of the workspace: nobody owns it in CODEOWNERS.`));
         }
         const own = await ownershipOf(store.root, info.file);
-        if (o.json) return printJson({ item: ref, label: info.label, ...own });
-        console.log(`${bold(info.label)}  ${dim(own.file)}`);
+        const tenant = tenantOf(store, [{ ref: refArg(ref) }])[0];
+        if (o.json) return printJson({ item: ref, label: info.label, ...own, ...(tenant ? { tenant } : {}) });
+        console.log(`${bold(info.label)}  ${dim(own.file)}${tenant ? dim(`  tenant ${tenant}`) : ''}`);
         console.log(own.owners.length ? `Owned by ${own.owners.join(' ')} (CODEOWNERS)` : dim('No CODEOWNERS rule names its file.'));
         console.log(own.lastChange ? `Last changed by ${own.lastChange.author} on ${own.lastChange.date.slice(0, 10)}: ${own.lastChange.subject} (${own.lastChange.short})` : dim('Not committed yet.'));
       }),

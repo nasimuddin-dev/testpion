@@ -23,6 +23,17 @@ const steps = [
      const field = await __t.waitFor(() => document.querySelector('[data-env-group]'), 6000); if (!field) return 'NO FIELD';
      return 'row: ' + row.textContent.replace(/\s+/g, ' ').trim().slice(0, 30) + ' | field: ' + field.value;`,
   ),
+  // the Info panel of a grouped environment names its tenant (RPC ref.info carries `tenant`)
+  step(
+    'the-info-panel-names-the-tenant',
+    `const host = () => document.querySelector('[data-pinnable-panel="right"]');
+     const h = await __t.waitFor(host, 5000); if (!h) return 'NO HOST';
+     if (!h.querySelector('[data-context-info]')) h.querySelector('button[aria-expanded]')?.click();
+     const info = await __t.waitFor(() => h.querySelector('[data-context-info="environment"]'), 6000); if (!info) return 'NO INFO: ' + (h.querySelector('[data-context-info]')?.getAttribute('data-context-info') ?? 'none');
+     const t = await __t.waitFor(() => info.querySelector('[data-context-tenant]'), 6000);
+     const viaRpc = await window.aps.invoke('ref.info', { ref: { kind: 'environment', environmentId: 'e2e-acme-staging' } });
+     return 'panel: ' + (t ? t.textContent.trim() : 'none') + ' | rpc: ' + viaRpc.tenant;`,
+  ),
   // a new tenant: the editor of a grouped environment offers to copy the whole group; the copies keep names and variables
   step(
     'a-new-tenant-from-the-group',
@@ -40,5 +51,6 @@ const steps = [
 module.exports = withExpect(steps, {
   'grouped-environments-in-the-picker': /^picker: Acme ▸ Production {2}\(production\) \| Acme ▸ Staging$/,
   'the-list-and-the-editor-show-the-group': /^row: Acme ▸ Staging.* \| field: Acme$/,
+  'the-info-panel-names-the-tenant': /^panel: Tenant Acme \| rpc: Acme$/,
   'a-new-tenant-from-the-group': /^button: New tenant from Acme… \| copies: 2 \| globex: Production:0,Staging:1$/,
 });

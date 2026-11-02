@@ -24,6 +24,7 @@ import {
   workspaceExportFileName,
   exportPostmanEnvironment,
   CONTEXT_VARIABLES,
+  tenantOf,
   duplicateEnvironmentGroup,
   DYNAMIC_VARIABLES,
   variableUsages,
@@ -288,7 +289,9 @@ export function workspaceHandlers(be: Backend): Handlers {
         const variables = describeVariables(ctx.vars, (text ? templateVariables(text) : []).slice(0, 200), 200);
         // several teams in one workspace: who owns the file (CODEOWNERS) and who last changed it
         const ownership = info.file ? await ownershipOf(be.ws.root, info.file).catch(() => undefined) : undefined;
-        return { ...info, variables, ...(ownership ? { owners: ownership.owners, lastChange: ownership.lastChange } : {}) };
+        // several tenants: the environment group a monitor runs in, or an environment is in
+        const tenant = tenantOf(be.ws, [{ ref: r }])[0];
+        return { ...info, variables, ...(ownership ? { owners: ownership.owners, lastChange: ownership.lastChange } : {}), ...(tenant ? { tenant } : {}) };
       } finally {
         void ctx.dispose();
       }
