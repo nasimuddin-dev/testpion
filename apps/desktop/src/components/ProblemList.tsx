@@ -55,17 +55,18 @@ function problemActions(p: Problem): MenuItem[] {
  * severity, failure / error / warning, the message (a click opens what it names), its age, and its actions on the row's
  * ⋯ and right-click. `grouped` shows the groups' headings; `limit` the first n.
  */
-export function ProblemList({ problems, grouped, limit }: { problems: Problem[]; grouped?: boolean; limit?: number }) {
+/** `groupOf`: what a grouped list groups by (default the problem's kind group; the Problems panel offers the owner or the tenant). */
+export function ProblemList({ problems, grouped, limit, groupOf = (p) => p.group }: { problems: Problem[]; grouped?: boolean; limit?: number; groupOf?: (p: Problem) => string }) {
   const [menuFor, setMenuFor] = useState<string>();
   const shown = limit ? problems.slice(0, limit) : problems;
   // grouped: the groups in their most severe item's order
-  const list = grouped ? [...new Set(shown.map((p) => p.group))].flatMap((g) => shown.filter((p) => p.group === g)) : shown;
+  const list = grouped ? [...new Set(shown.map(groupOf))].flatMap((g) => shown.filter((p) => groupOf(p) === g)) : shown;
   const keys = problemKeys(list);
   return (
     <div role="list" aria-label="Problems" className="flex flex-col">
       {list.map((p, n) => (
         <Fragment key={keys[n]}>
-          {grouped && p.group !== list[n - 1]?.group && <SectionTitle size="sm" className="px-3 pt-2 pb-0.5">{p.group}</SectionTitle>}
+          {grouped && (n === 0 || groupOf(p) !== groupOf(list[n - 1]!)) && <SectionTitle size="sm" className="px-3 pt-2 pb-0.5">{groupOf(p)}</SectionTitle>}
           <div
             role="listitem"
             data-problem={p.kind}

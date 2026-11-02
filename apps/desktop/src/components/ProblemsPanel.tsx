@@ -8,7 +8,7 @@ import { ProblemList } from './ProblemList';
 import { OutputActions } from './output/OutputFrame';
 import { OutputHint } from './output/OutputToolbar';
 import type { OutputSpec } from './output/output-core';
-import { Bar, Empty, Select } from './ui';
+import { Bar, Empty, Segmented, Select } from './ui';
 
 const COLUMNS = ['severity', 'type', 'kind', 'group', 'message', 'at'] as const;
 /** A problem as a row of the exported list (its ref as JSON, for what it names). */
@@ -23,6 +23,9 @@ export function ProblemsPanel() {
   // and one tenant's: the environment group a problem is about (a monitor's environment, an environment's token or secret)
   const tenants = useMemo(() => [...new Set(all.map((p) => p.tenant).filter((t): t is string => !!t))].sort(), [all]);
   const [tenant, setTenant] = useState('');
+  // several teams or tenants: the list grouped by kind (as always), by owner, or by tenant
+  const [groupBy, setGroupBy] = useState<'kind' | 'owner' | 'tenant'>('kind');
+  const groupOf = (p: Problem) => (groupBy === 'owner' ? (p.owners?.length ? p.owners.join(' ') : 'No owner') : groupBy === 'tenant' ? (p.tenant ?? 'No tenant') : p.group);
   const problems = useMemo(
     () => all.filter((p) => (!owner || !owners.includes(owner) || p.owners?.includes(owner)) && (!tenant || !tenants.includes(tenant) || p.tenant === tenant)),
     [all, owner, owners, tenant, tenants],
@@ -58,6 +61,9 @@ export function ProblemsPanel() {
         <span>
           {plural(failures, 'failure')} · {plural(errors, 'error')} · {plural(problems.length - failures - errors, 'warning')}
         </span>
+        {(owners.length > 0 || tenants.length > 0) && (
+          <Segmented label="Group by" value={groupBy} onChange={setGroupBy} options={[{ value: 'kind' as const, label: 'By kind' }, ...(owners.length ? [{ value: 'owner' as const, label: 'By owner' }] : []), ...(tenants.length ? [{ value: 'tenant' as const, label: 'By tenant' }] : [])]} />
+        )}
         {owners.length > 0 && (
           <Select className="ml-2 h-6 py-0 text-xs" value={owners.includes(owner) ? owner : ''} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" title="Only one team's problems (the owners CODEOWNERS names)" data-problems-owner>
             <option value="">Every owner</option>
@@ -90,7 +96,7 @@ export function ProblemsPanel() {
       </Bar>
       <div className="flex-1 overflow-auto px-1 py-1" data-output="problems">
         {problems.length || (showSnoozed && snoozed.length) ? (
-          <ProblemList problems={showSnoozed ? [...problems, ...snoozed] : problems} grouped />
+          <ProblemList problems={showSnoozed ? [...problems, ...snoozed] : problems} grouped groupOf={groupOf} />
         ) : (
           <Empty icon={<CheckCircle2 size={22} />} title={(owner || tenant) && all.length ? `No problems of ${owner || tenant}` : 'No problems'}>
             Monitors, runs, requests, certificates and workspace files are all fine.{snoozed.length ? ` ${plural(snoozed.length, 'problem')} set aside: Show above lists them.` : ''}
