@@ -15,6 +15,7 @@ export * from './storage/workspace-lock.js';
 export * from './util/concurrency.js';
 // yaml loaded at first use (keeps it off the app's startup path): use these instead of importing 'yaml'
 export { parseYaml, stringifyYaml } from './util/lazy-yaml.js';
+export { warmLazyLibraries } from './util/lazy-warm.js';
 export * from './util/stats.js';
 export * from './util/page.js';
 export * from './util/redact.js';

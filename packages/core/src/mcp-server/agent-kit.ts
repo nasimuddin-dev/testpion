@@ -185,6 +185,10 @@ tests:
 Other types: \`graphql\` (\`endpoint\`, \`query\`, \`variables\`), \`grpc\` (\`target\`, \`method\`, \`message\`), \`websocket\` / \`socketio\` / \`mqtt\`, \`mcp\` (\`server\`, \`tool\`, \`arguments\`), \`llm\` (\`provider\`, \`model\`, \`prompt\`). Suites are \`*.suite.yaml\` (\`tests: [rest, graphql]\`, \`setup\`, \`teardown\`, \`concurrency\`, \`retries\`, \`environment\`).
 
 \`write_test_file\` checks a file (it must parse and use known check types) before saving it, and \`run_tests\` with \`paths\` runs it.
+
+## Teams and tenants
+
+Several teams may share this workspace: the repository's CODEOWNERS names who owns each file. \`item_info\` / \`resolve_ref\` carry \`owners\` and \`lastChange\`; \`what_needs_attention\` prefixes a problem with its owners and takes \`owner\` to keep one team's; \`team_comments\` rows carry the item's owners. Several tenants (customers, deployments) are environment groups: \`list_environments\` carries \`group\` ("Acme"); \`flow_env_matrix\` takes \`group:Acme\` to run in every environment of the group; \`save_monitor\` with \`environmentGroup\` makes one monitor per tenant from one definition (\`list_monitors\` shows a row per tenant, \`run_monitor\` on the definition runs every one); \`{{$group}}\` and \`{{$environment}}\` name the tenant inside a request. Never put one tenant's values in another's environment: the \`no-leak\` check with \`otherEnvironments: true\` fails a response that holds them.
 ${details}`;
 }
 

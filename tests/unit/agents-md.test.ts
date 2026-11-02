@@ -98,6 +98,11 @@ describe('the content', () => {
       expect(md).toMatch(/--allow-production/);
       expect(md).toMatch(/TESTPION_SECRET_<NAME>/);
       expect(md).toContain('`status`, `equals`');
+      // a tenant: the environment's group is shown with it, and the file says how to run for every tenant
+      const grouped = renderAgentsMd({ ...f, environments: [...f.environments, { name: 'Staging', production: false, group: 'Acme' }] }, { checkTypes: ['status'] });
+      expect(grouped).toContain('Acme ▸ Staging');
+      expect(grouped).toContain('A group (*Acme*) is a tenant');
+      expect(md).not.toContain('is a tenant');
       expect(md).not.toContain(s.root);
       expect(md).not.toContain(s.root.replace(/\\/g, '/'));
     } finally {

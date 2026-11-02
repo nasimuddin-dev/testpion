@@ -3,6 +3,8 @@ import { nodeRequire } from '../util/lazy-require.js';
 // the XML parser loads with the first WSDL import (see util/lazy-require.ts)
 let fxp: typeof import('fast-xml-parser') | undefined;
 const xmlParser = (): typeof import('fast-xml-parser') => (fxp ??= typeof require === 'function' ? require('fast-xml-parser') : nodeRequire('fast-xml-parser'));
+/** Load the XML parser now (lazy-warm.ts: before a capture needs it). */
+export const warmXmlParser = (): void => void xmlParser();
 import { ApsError } from '../errors.js';
 import type { Collection, CollectionFolder, KeyValue, SavedHttpRequest } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';

@@ -6,6 +6,14 @@
 
 - An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it. A new tenant starts as a copy of one: **New tenant from Acme…** under the Group field, `testpion env duplicate-group Acme Globex` (names, flags and variables; secret values are not copied).
 
+### Smoother first capture
+
+- The libraries that load on first use and are needed in the middle of work (YAML, JSONPath, XML) are loaded one per tick a moment after the window is up, so their first load never skips frames during a capture or a run.
+
+### Agents know about teams and tenants
+
+- `testpion_guide` explains owners and tenant groups to an agent (which tools carry `owners`, `group`, `environmentGroup`, `{{$group}}`); the AGENTS.md that `testpion agents init` writes shows *Acme ▸ Staging* and how to run a flow for every tenant; `list_environments` carries `group`.
+
 ### Several teams: the team's conventions, checked
 
 - `conventions.yaml` next to `workspace.json` holds how the team names and files things (patterns for collection, request and environment names; every environment in a group; every collection owned in `CODEOWNERS`; every monitor with a webhook and an environment); what breaks a rule is a warning under Needs attention and in `testpion workspace conventions` (exit 1, for CI). `testpion workspace conventions --init` writes the file with every rule explained and off.

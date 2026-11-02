@@ -8,7 +8,7 @@ import { LOCAL_USER } from '../backend/request-context.js';
 import { openLinksIn, queueOpenLink } from '../backend/open-links.js';
 import { canInstallInPlace, createUpdater } from './updater.js';
 import { installAppMenu, installTextContextMenu } from './app-menu.js';
-import { defaultAppDir, normalizeError, runMergeDriver, safeStorageCipher, textconvFile, type SafeStorageLike } from '@testpion/core';
+import { defaultAppDir, normalizeError, runMergeDriver, safeStorageCipher, textconvFile, warmLazyLibraries, type SafeStorageLike } from '@testpion/core';
 import { parseMcpMode, runMcpMode } from './mcp-mode.js';
 import { ptyHost } from './pty-host.js';
 import { crashMessage, onRendererCrash, type CrashRecord } from './crash-recovery.js';
@@ -412,6 +412,8 @@ function start(): void {
     clearTimeout(fallback);
     try {
       startBackend();
+      // the libraries a capture or a run needs first (YAML, JSONPath, XML) load now, one per tick, while the window is idle: a first load in the middle of a capture would skip frames
+      setTimeout(() => warmLazyLibraries(), 2500).unref?.();
     } catch (e) {
       backendFailed(e);
       failedToStart(e);

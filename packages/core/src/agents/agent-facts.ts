@@ -69,8 +69,8 @@ export interface AgentWorkspaceFacts {
   /** How many comments the team left on items that are still open (comments/): read them before changing an item. */
   openComments?: number;
   collections: Array<{ name: string; requests: number }>;
-  /** Names only, never a variable. */
-  environments: Array<{ name: string; production: boolean }>;
+  /** Names only, never a variable; `group` is the tenant (a customer, a deployment) the environment belongs to. */
+  environments: Array<{ name: string; production: boolean; group?: string }>;
   /** Test files under tests/ (paths inside it), suites included. */
   tests: string[];
   suites: string[];
@@ -115,7 +115,7 @@ export function agentWorkspaceFacts(store: WorkspaceStore): AgentWorkspaceFacts 
     collections: safe(() => store.listCollections().filter((c) => !c.problem))
       .map((c) => ({ name: c.name, requests: requestCount(c.items ?? []) }))
       .sort((a, b) => byName(a.name, b.name)),
-    environments: safe(() => store.listEnvironments().filter((e) => !e.problem)).map((e) => ({ name: e.name, production: !!e.isProduction })),
+    environments: safe(() => store.listEnvironments().filter((e) => !e.problem)).map((e) => ({ name: e.name, production: !!e.isProduction, ...(e.group?.trim() ? { group: e.group.trim() } : {}) })),
     tests: tests.filter((t) => !/\.suite\.(ya?ml|json)$/i.test(t)),
     suites: tests.filter((t) => /\.suite\.(ya?ml|json)$/i.test(t)),
     flows: safe(() => exposedFlows(store).filter((f) => !f.problem && f.tool))

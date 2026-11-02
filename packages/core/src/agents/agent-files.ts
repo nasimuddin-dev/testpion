@@ -133,11 +133,13 @@ ${list(
 ### Environments
 
 ${list(
-  f.environments.map((e) => `${mdName(e.name)}${e.production ? ' — **production**' : ''}`),
+  f.environments.map((e) => `${e.group ? `${mdName(e.group)} ▸ ` : ''}${mdName(e.name)}${e.production ? ' — **production**' : ''}`),
   30,
   'None yet.',
 )}
-### Tests and flows
+${f.environments.some((e) => e.group) ? `A group (*${mdName(f.environments.find((e) => e.group)!.group!)}*) is a tenant: run a flow in every environment of one with \`--env-matrix group:<name>\` (MCP \`flow_env_matrix\`), and \`{{$group}}\` names it inside a request.
+
+` : ''}### Tests and flows
 
 ${list([...f.suites.map((s) => `\`tests/${mdName(s)}\` (suite)`), ...f.tests.map((t) => `\`tests/${mdName(t)}\``)], 40, 'None yet: see "Add a test" below.')}${
     f.flows.length

@@ -108,7 +108,7 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
       name: 'list_environments',
       description: 'List environments and their variable names (values are not returned).',
       inputSchema: { type: 'object', properties: {} },
-      run: () => store.listEnvironments().map((e) => ({ name: e.name, production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret${secrets.get(secretKeys.envVar(e.id, v.key)) ? '' : ', no value here'})` : v.key)) })),
+      run: () => store.listEnvironments().map((e) => ({ name: e.name, ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret${secrets.get(secretKeys.envVar(e.id, v.key)) ? '' : ', no value here'})` : v.key)) })),
     },
     {
       name: 'collection_docs',
