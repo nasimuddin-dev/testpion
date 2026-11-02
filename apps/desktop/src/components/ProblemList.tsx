@@ -82,6 +82,11 @@ export function ProblemList({ problems, grouped, limit }: { problems: Problem[];
                 {TYPE_ICON[p.type]}
               </span>
               <span className="flex-1 min-w-0 truncate">{p.message}</span>
+              {p.tenant && (
+                <span className="text-xs text-muted shrink-0" title={`Tenant: ${p.tenant} (the environment group this is about)`} data-problem-tenant={p.tenant}>
+                  {p.tenant}
+                </span>
+              )}
               {p.at && <span className="text-xs text-muted shrink-0">{timeAgo(p.at)}</span>}
             </button>
             <RowMenu label={p.message} items={menuFor === keys[n] ? problemActions(p) : []} open={menuFor === keys[n]} onOpenChange={(o) => setMenuFor(o ? keys[n] : undefined)} />
