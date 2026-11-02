@@ -295,6 +295,9 @@ describe('a monitor for every tenant (an environment group) from one definition'
     expect(page.monitors.map((m) => m.name).sort()).toEqual(['Checkout · Acme ▸ Production', 'Checkout · Acme ▸ Staging']);
     expect(monitorsStatus(store).monitors.length).toBeGreaterThanOrEqual(page.monitors.length);
     expect(monitorsStatusHtml(page)).toContain('<h1>Monitors · acme</h1>');
+    // every tenant on one page: a heading per group; one tenant's page: none
+    expect(monitorsStatusHtml(monitorsStatus(store))).toMatch(/<h2 class="tenant">(No tenant|Acme)<\/h2>/);
+    expect(monitorsStatusHtml(page)).not.toContain('class="tenant"');
     expect(monitorsStatusMarkdown(page)).toMatch(/^# Monitors · acme — status/);
     expect(monitorsStatus(store, { group: 'Nobody' }).monitors).toEqual([]);
     expect(monitorsStatusHtml(monitorsStatus(store, { group: 'Nobody' }))).toContain('No monitor runs in an environment of Nobody.');

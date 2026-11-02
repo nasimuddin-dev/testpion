@@ -24,7 +24,7 @@
 
 ### Several teams: the alert names the owner; the status page names the tenant
 
-- A monitor's webhook text starts with the owners of what it runs (from `CODEOWNERS`), so a shared channel pages the right team; the status page says which environment (and tenant group) each monitor runs in, and `testpion monitor status --group Acme -o acme.html` writes one tenant's own page, `--owner @org/payments` one team's.
+- A monitor's webhook text starts with the owners of what it runs (from `CODEOWNERS`), so a shared channel pages the right team; the status page says which environment (and tenant group) each monitor runs in, the page of every monitor has a heading per tenant, and `testpion monitor status --group Acme -o acme.html` writes one tenant's own page, `--owner @org/payments` one team's.
 
 ### Several tenants: one monitor for every tenant
 

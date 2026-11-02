@@ -132,9 +132,13 @@ function lastLine(m: MonitorStatusRow): string {
 /** The status page: one HTML file, no script, light and dark with the viewer's system. */
 export function monitorsStatusHtml(s: MonitorsStatus): string {
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
-  const rows = s.monitors
+  // several tenants on one page: a heading per environment group (the ungrouped monitors first, under no heading); one group: no headings
+  const groups = [...new Set(s.monitors.map((m) => m.group?.trim() || ''))];
+  const sectioned = groups.length > 1 && !s.group;
+  const ordered = sectioned ? [...s.monitors].sort((a, b) => (a.group?.trim() || '').localeCompare(b.group?.trim() || '') || a.name.localeCompare(b.name)) : s.monitors;
+  const rows = ordered
     .map(
-      (m) => `<section class="mon ${m.state}${m.paused ? ' paused' : ''}">
+      (m, i) => `${sectioned && (m.group?.trim() || '') !== (ordered[i - 1]?.group?.trim() || '') ? `<h2 class="tenant">${esc(m.group?.trim() || 'No tenant')}</h2>` : ''}<section class="mon ${m.state}${m.paused ? ' paused' : ''}">
 <div class="head"><span class="dot"></span><h2>${esc(m.name)}</h2><span class="muted">${esc(m.target)}${m.environment ? ` · ${esc(environmentLabel({ name: m.environment, group: m.group }))}` : ''}</span><span class="state">${m.paused ? esc(m.schedule) : STATE_TEXT[m.state]}</span></div>
 <div class="days" aria-label="Uptime by day">${dayBlocks(m.daily)}</div>
 <div class="muted small">${s.days} days: ${esc(pct(m.uptime))} of ${plural(m.runs, 'run')} passed${m.paused ? '' : ` · ${esc(m.schedule)}`}${lastLine(m)}</div>
@@ -147,7 +151,7 @@ export function monitorsStatusHtml(s: MonitorsStatus): string {
 :root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--line:#d0d7de;--ok:#1a7f37;--bad:#cf222e;--warn:#9a6700;--none:#d0d7de;--card:#f6f8fa}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8d96a0;--line:#30363d;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--none:#30363d;--card:#161b22}}
 body{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--fg);margin:0;padding:32px 24px;max-width:860px;margin-inline:auto}
-h1{font-size:22px;margin:0 0 4px}.muted{color:var(--muted)}.small{font-size:13px}
+h1{font-size:22px;margin:0 0 4px}h2.tenant{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:22px 0 2px}.muted{color:var(--muted)}.small{font-size:13px}
 .overall{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:10px;margin:20px 0;font-weight:600;color:#fff;background:var(--ok)}
 .overall.degraded{background:var(--warn)}.overall.down{background:var(--bad)}.overall.none{background:var(--muted)}
 .mon{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:12px 0;background:var(--card)}
