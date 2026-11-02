@@ -1,5 +1,5 @@
 import { plural } from '../lib/format';
-import { environmentLabel, groupEnvironments } from '@testpion/shared';
+import { environmentLabel, environmentRef, groupEnvironments } from '@testpion/shared';
 import { FileSpreadsheet, Layers, Play, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { call } from '../api';
@@ -165,7 +165,8 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
               {usable.length ? (
                 // a group (a tenant) first: one tick for every environment of it
                 [...groupEnvironments(usable).filter((g) => g.group && g.environments.length > 1).map((g) => {
-                  const names = g.environments.map((e) => e.name);
+                  // a tenant's environment is named by its label when another tenant has the same name (two Stagings)
+                  const names = g.environments.map((e) => environmentRef(usable, e));
                   const all = names.every((n) => chosen.includes(n));
                   return (
                     <label key={`group:${g.group}`} className="flex items-center gap-2 px-2.5 py-1.5 text-sm border-b border-line/50 cursor-pointer hover:bg-hover font-medium">
@@ -174,10 +175,11 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
                     </label>
                   );
                 }), ...usable.map((e) => {
-                  const on = chosen.includes(e.name);
+                  const ref = environmentRef(usable, e);
+                  const on = chosen.includes(ref);
                   return (
-                    <label key={e.name} className={cx('flex items-center gap-2 px-2.5 py-1.5 text-sm border-b border-line/50 last:border-0 cursor-pointer hover:bg-hover', on && 'bg-accent/5')}>
-                      <input type="checkbox" checked={on} data-matrix-env={e.name} onChange={() => setChosen((c) => (on ? c.filter((x) => x !== e.name) : [...c, e.name]))} />
+                    <label key={e.id ?? ref} className={cx('flex items-center gap-2 px-2.5 py-1.5 text-sm border-b border-line/50 last:border-0 cursor-pointer hover:bg-hover', on && 'bg-accent/5')}>
+                      <input type="checkbox" checked={on} data-matrix-env={e.name} onChange={() => setChosen((c) => (on ? c.filter((x) => x !== ref) : [...c, ref]))} />
                       {environmentLabel(e)}
                     </label>
                   );
