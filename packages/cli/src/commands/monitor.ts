@@ -31,6 +31,7 @@ import {
   type WorkspaceStore,
   monitorTenants,
   listMonitorDefinitions,
+  monitorsStatusByOwner,
 } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
@@ -160,17 +161,18 @@ export function registerMonitorCommands(program: Command): void {
     .description('every monitor as a status page: state now, uptime over the period and a block per day. --format html is one page to host (no script, works offline), md a table for a wiki, json the data')
     .option('--days <n>', 'days of uptime (1 to 90)', '30')
     .option('--group <group>', 'one tenant only: the monitors that run in an environment of this group (a page per customer)')
+    .option('--owner <team>', 'one team only: the monitors whose collection or test file this CODEOWNERS owner owns (a page per team)')
     .option('-o, --out <file>', 'write the page (or table, or JSON) here; without it the table is printed')
     .option('--format <format>', 'html, md or json (default: from the file name, else html)')
     .requiredOption('-w, --workspace <nameOrPath>')
     .option(...JSON_OPTION)
-    .action((o: { days: string; group?: string; out?: string; format?: string; workspace: string; json?: boolean }) =>
+    .action((o: { days: string; group?: string; owner?: string; out?: string; format?: string; workspace: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store) => {
         if (o.out) {
-          const saved = await saveSurface({ store, surface: 'monitors.status', format: o.format ?? (/\.(md|json)$/i.test(o.out) ? o.out.replace(/^.*\./, '').toLowerCase() : 'html'), out: o.out, params: { days: Number(o.days) || 30, ...(o.group ? { group: o.group } : {}) } });
+          const saved = await saveSurface({ store, surface: 'monitors.status', format: o.format ?? (/\.(md|json)$/i.test(o.out) ? o.out.replace(/^.*\./, '').toLowerCase() : 'html'), out: o.out, params: { days: Number(o.days) || 30, ...(o.group ? { group: o.group } : {}), ...(o.owner ? { owner: o.owner } : {}) } });
           return o.json ? printJson(saved) : console.log(savedLine(saved));
         }
-        const status = monitorsStatus(store, { days: Number(o.days) || 30, group: o.group });
+        const status = o.owner ? await monitorsStatusByOwner(store, o.owner, { days: Number(o.days) || 30, group: o.group }) : monitorsStatus(store, { days: Number(o.days) || 30, group: o.group });
         if (o.json) return printJson(status);
         console.log(monitorsStatusMarkdown(status));
       }),

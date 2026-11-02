@@ -21,6 +21,7 @@ import {
   listMonitorDefinitions,
   monitorTenants,
   monitorsStatus,
+  monitorsStatusByOwner,
   monitorsStatusHtml,
   monitorsStatusMarkdown,
   monitorDaily,
@@ -297,6 +298,12 @@ describe('a monitor for every tenant (an environment group) from one definition'
     expect(monitorsStatusMarkdown(page)).toMatch(/^# Monitors · acme — status/);
     expect(monitorsStatus(store, { group: 'Nobody' }).monitors).toEqual([]);
     expect(monitorsStatusHtml(monitorsStatus(store, { group: 'Nobody' }))).toContain('No monitor runs in an environment of Nobody.');
+    // a team's own page: by the CODEOWNERS owner of the monitor's collection (none here: no CODEOWNERS)
+    const team = await monitorsStatusByOwner(store, '@org/payments');
+    expect(team.owner).toBe('@org/payments');
+    expect(team.monitors).toEqual([]);
+    expect(monitorsStatusHtml(team)).toContain('No monitor runs what @org/payments owns.');
+    expect(monitorsStatusMarkdown(team)).toMatch(/^# Monitors · @org\/payments — status/);
     // edited as the app sends it back (a tenant row): the definition changes, no second monitor appears
     saveMonitor(store, { ...tenants[0]!, everyMinutes: 10 });
     expect(listMonitorDefinitions(store).filter((m) => m.name === 'Checkout').map((m) => m.everyMinutes)).toEqual([10]);

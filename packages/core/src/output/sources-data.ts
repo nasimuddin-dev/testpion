@@ -10,7 +10,7 @@ import { describeGitChanges, changesMarkdown } from '../git/semantic.js';
 import { gitDiff, gitStatus } from '../git/git.js';
 import { listMonitors, monitorResults } from '../runner/monitors.js';
 import { workspaceReportHtml } from '../report/workspace-report.js';
-import { monitorsStatus, monitorsStatusHtml, monitorsStatusMarkdown } from '../report/monitors-status.js';
+import { monitorsStatus, monitorsStatusByOwner, monitorsStatusHtml, monitorsStatusMarkdown } from '../report/monitors-status.js';
 import { workspaceAttention } from '../storage/attention.js';
 import { buildMetricMatrix } from '../eval/rag/metric-matrix.js';
 import { ragMatrixCsv, ragMatrixHtml, ragMatrixJson } from '../eval/rag/matrix-export.js';
@@ -104,7 +104,7 @@ export async function dataSource(deps: OutputDeps, src: DataSource, format: Outp
     case 'workspace-report':
       return workspaceReportHtml(store, { days: Math.min(Math.max(Math.floor(src.days ?? 14) || 14, 1), 90), tzOffsetMin: src.tzOffsetMin, attention: await workspaceAttention(store) });
     case 'monitors-status': {
-      const status = monitorsStatus(store, { days: src.days, tzOffsetMin: src.tzOffsetMin, group: src.group });
+      const status = src.owner ? await monitorsStatusByOwner(store, src.owner, { days: src.days, tzOffsetMin: src.tzOffsetMin, group: src.group }) : monitorsStatus(store, { days: src.days, tzOffsetMin: src.tzOffsetMin, group: src.group });
       return format === 'json' ? json(status) : format === 'md' ? monitorsStatusMarkdown(status) : monitorsStatusHtml(status);
     }
     case 'git-diff': {

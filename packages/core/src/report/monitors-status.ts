@@ -6,7 +6,7 @@
 import { ENGINE_VERSION } from '../version.js';
 import { environmentLabel } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
-import { listMonitors, monitorDaily, monitorResults, monitorStatus, pausedFor, type Monitor, type MonitorDay, type MonitorResult } from '../runner/monitors.js';
+import { listMonitorDefinitions, listMonitors, monitorDaily, monitorOwners, monitorResults, monitorStatus, pausedFor, type Monitor, type MonitorDay, type MonitorResult } from '../runner/monitors.js';
 import { findSavedEvaluation } from '../runner/saved-evaluations.js';
 
 export interface MonitorStatusRow {
@@ -33,6 +33,8 @@ export interface MonitorsStatus {
   workspace: string;
   /** The page of one tenant (an environment group): only its monitors. */
   group?: string;
+  /** The page of one team (a CODEOWNERS owner): only the monitors whose collection or test file it owns. */
+  owner?: string;
   generatedAt: string;
   days: number;
   /** operational: every monitor that ran is up; degraded: some are down; down: every one that ran is down; none: no monitor ran. */
@@ -61,12 +63,12 @@ function targetOf(store: WorkspaceStore, m: Monitor): string {
 }
 
 /** The data of the status page (what `json` returns). */
-export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffsetMin?: number; now?: number; /** Only the monitors of this environment group (a tenant's own status page). */ group?: string } = {}): MonitorsStatus {
+export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffsetMin?: number; now?: number; /** Only the monitors of this environment group (a tenant's own status page). */ group?: string; /** Only these monitors (monitorsStatusByOwner decides by CODEOWNERS); the page then names the `owner`. */ only?: (m: Monitor) => boolean; owner?: string } = {}): MonitorsStatus {
   const now = o.now ?? Date.now();
   const days = Math.min(Math.max(Math.floor(o.days ?? 30) || 30, 1), 90);
   const want = o.group?.trim().toLowerCase();
   const monitors = listMonitors(store)
-    .filter((m) => !want || (m.environment ? store.getEnvironment(m.environment)?.group?.trim().toLowerCase() : '') === want)
+    .filter((m) => (!want || (m.environment ? store.getEnvironment(m.environment)?.group?.trim().toLowerCase() : '') === want) && (!o.only || o.only(m)))
     .map((m): MonitorStatusRow => {
       const st = monitorStatus(store, m, now);
       const last = monitorResults(store, m.id, 1)[0];
@@ -91,11 +93,20 @@ export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffs
   const up = monitors.filter((m) => m.state === 'up').length;
   const down = monitors.filter((m) => m.state === 'down').length;
   const overall = !up && !down ? 'none' : !down ? 'operational' : !up ? 'down' : 'degraded';
-  return { workspace: store.workspace.name, ...(o.group?.trim() ? { group: o.group.trim() } : {}), generatedAt: new Date(now).toISOString(), days, overall, up, down, paused: monitors.filter((m) => m.paused).length, monitors };
+  return { workspace: store.workspace.name, ...(o.group?.trim() ? { group: o.group.trim() } : {}), ...(o.owner?.trim() ? { owner: o.owner.trim() } : {}), generatedAt: new Date(now).toISOString(), days, overall, up, down, paused: monitors.filter((m) => m.paused).length, monitors };
 }
 
-/** "Shop API · Acme" for a tenant's page, else the workspace's name. */
-const titleOf = (s: MonitorsStatus) => (s.group ? `${s.workspace} · ${s.group}` : s.workspace);
+/** A team's own status page: the monitors whose collection or test file the owner owns in CODEOWNERS (the @ optional, case not mattering). */
+export async function monitorsStatusByOwner(store: WorkspaceStore, owner: string, o: { days?: number; tzOffsetMin?: number; now?: number; group?: string } = {}): Promise<MonitorsStatus> {
+  const want = owner.trim().replace(/^@/, '').toLowerCase();
+  const defs = listMonitorDefinitions(store);
+  const owned = new Set<string>();
+  for (const m of defs) if ((await monitorOwners(store, m)).some((x) => x.replace(/^@/, '').toLowerCase() === want)) owned.add(m.id);
+  return monitorsStatus(store, { ...o, owner, only: (m) => owned.has(m.tenant?.of ?? m.id) });
+}
+
+/** "Shop API · Acme" for a tenant's page, "Shop API · @org/payments" for a team's, else the workspace's name. */
+const titleOf = (s: MonitorsStatus) => [s.workspace, s.group, s.owner].filter(Boolean).join(' · ');
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const pct = (n?: number) => (n === undefined ? '—' : `${n}%`);
 const when = (iso: string) => iso.replace('T', ' ').slice(0, 16);
@@ -149,7 +160,7 @@ footer{margin-top:28px;font-size:12px;color:var(--muted)}
 <h1>${esc(titleOf(s))}</h1>
 <div class="muted">Status of ${plural(s.monitors.length, 'monitor')} · last ${s.days} days · ${esc(when(s.generatedAt))} UTC</div>
 <div class="overall ${s.overall}">${OVERALL_TEXT[s.overall]}${s.down ? ` · ${s.down} down` : ''}${s.paused ? ` · ${s.paused} paused` : ''}</div>
-${rows || (s.group ? `<p class="muted">No monitor runs in an environment of ${esc(s.group)}.</p>` : '<p class="muted">No monitors. Add one in TestPion (Monitors) or with <code>testpion monitor add</code>.</p>')}
+${rows || (s.owner ? `<p class="muted">No monitor runs what ${esc(s.owner)} owns.</p>` : s.group ? `<p class="muted">No monitor runs in an environment of ${esc(s.group)}.</p>` : '<p class="muted">No monitors. Add one in TestPion (Monitors) or with <code>testpion monitor add</code>.</p>')}
 <footer>Made by TestPion ${esc(ENGINE_VERSION)} from the monitors' runs on this computer. Days follow the clock of the computer that made the page.</footer>
 </body></html>
 `;

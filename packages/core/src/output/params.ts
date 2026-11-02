@@ -35,8 +35,9 @@ export interface OutputParams {
   staged?: boolean;
   /** workspace.report: days of activity. */
   days?: number;
-  /** monitors.status: one tenant (an environment group) only. */
+  /** monitors.status: one tenant (an environment group) only; one team (a CODEOWNERS owner) only. */
   group?: string;
+  owner?: string;
   /** A History entry whose saved response body is the output. */
   historyId?: string;
   /** rag.matrix: name the score columns as Ragas does. */
@@ -59,7 +60,7 @@ export const OUTPUT_PARAMS: Record<string, { params: Array<keyof OutputParams>; 
   'runs.overview': { params: ['query', 'limit'], hint: 'filters of the runs list' },
   'git.diff': { params: ['path', 'staged'], hint: 'one file, or all uncommitted changes' },
   'workspace.report': { params: ['days'], hint: 'days of activity (1 to 90, default 14)' },
-  'monitors.status': { params: ['days', 'group'], hint: 'days of uptime (1 to 90, default 30); group: one tenant (an environment group) only' },
+  'monitors.status': { params: ['days', 'group', 'owner'], hint: 'days of uptime (1 to 90, default 30); group: one tenant (an environment group) only; owner: one team (CODEOWNERS) only' },
   'response.body': { params: ['historyId'], required: ['historyId'], hint: 'a History entry id (`testpion history list`)' },
   'graphql.response': { params: ['historyId'], required: ['historyId'], hint: 'a History entry id (`testpion history list`)' },
 };
@@ -124,7 +125,7 @@ export function outputSourceFor(store: WorkspaceStore, surface: string, format: 
     case 'workspace.report':
       return { kind: 'workspace-report', days: p.days === undefined ? undefined : Number(p.days), tzOffsetMin: new Date().getTimezoneOffset() };
     case 'monitors.status':
-      return { kind: 'monitors-status', days: p.days === undefined ? undefined : Number(p.days), tzOffsetMin: new Date().getTimezoneOffset(), ...(p.group ? { group: String(p.group) } : {}) };
+      return { kind: 'monitors-status', days: p.days === undefined ? undefined : Number(p.days), tzOffsetMin: new Date().getTimezoneOffset(), ...(p.group ? { group: String(p.group) } : {}), ...(p.owner ? { owner: String(p.owner) } : {}) };
     case 'git.diff':
       return { kind: 'git-diff', path: p.path, staged: p.staged };
     default: {
