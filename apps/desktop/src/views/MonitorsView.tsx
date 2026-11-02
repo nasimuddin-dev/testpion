@@ -75,6 +75,8 @@ interface MonitorDraft {
 
 interface MonitorRow extends MonitorDraft {
   id: string;
+  /** A row of a grouped definition (one per environment of the group): which definition and which environment. */
+  tenant?: { of: string; environment: string };
   schedule: string;
   /** Off, or paused for a while (`pausedUntil` in the future, with `pauseReason`). */
   paused?: boolean;
@@ -257,7 +259,8 @@ export function MonitorsView() {
     await load();
   };
   /** At once, with Undo in the message (the same as the list's Delete). */
-  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: m.name, run: () => monitorOps.deleteItem(m.id), note: 'Its past runs stay in the Tests view' });
+  // a tenant row deletes the definition it comes from, so every tenant's row goes with it: the message says so
+  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name, run: () => monitorOps.deleteItem(m.id), note: m.tenant ? 'Every tenant of it went with it (one definition); its past runs stay in the Tests view' : 'Its past runs stay in the Tests view' });
   /** The open monitor's ⋯ (its breadcrumb): its menu as its row in the list has it (lib/node-menu.ts): edit, run, pause, rename, duplicate, Delete… with Undo. */
   const monitorMenu = (m: MonitorRow): MenuItem[] =>
     openItemMenu('monitor', {
