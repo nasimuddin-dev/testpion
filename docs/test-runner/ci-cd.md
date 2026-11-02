@@ -53,6 +53,7 @@ TestPion writes the pipeline file for you, like Postman's *Run in CI*. It works 
   testpion ci github -w . --run last                     # what the latest run ran, in its environment
   testpion ci github -w . --tests rest/checkout.yaml --data datasets/users.csv -e Staging --timeline-html
   testpion ci github -w . --tests rest/checkout.yaml --env-matrix Development Staging
+  testpion ci github -w . --tests rest/checkout.yaml --env-matrix group:Acme   # every environment of a tenant group
   testpion ci azure -w . --json          # .data: { provider, path, content, secrets, command, localCommand }
   testpion ci github -w . --suite regression --openapi api/openapi.yaml   # also check the spec on pull requests
   ```

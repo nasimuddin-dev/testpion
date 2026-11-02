@@ -27,7 +27,7 @@ export function AttentionCard() {
             className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline"
             title="Ask the AI assistant what to fix first (the items' messages and severities are sent)"
             onClick={() =>
-              startAi({ task: 'triage-attention', title: 'What to fix first', context: { items: items.map((i) => ({ severity: i.severity, kind: i.kind, message: i.message })) } })
+              startAi({ task: 'triage-attention', title: 'What to fix first', context: { items: items.map((i) => ({ severity: i.severity, kind: i.kind, message: i.message, ...(i.owners?.length ? { owners: i.owners } : {}), ...(i.tenant ? { tenant: i.tenant } : {}) })) } })
             }
           >
             <Sparkles size={12} /> What first?
