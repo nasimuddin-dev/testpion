@@ -1176,6 +1176,7 @@ testpion monitor pause "API health" --for 2h --why "deploy" -w my-workspace   # 
 testpion monitor resume "API health" -w my-workspace   # the schedule goes on now
 testpion monitor status -o status.html -w my-workspace   # every monitor as a status page to host (also -o status.md, --json; --days 30)
 testpion monitor status --group Acme -o acme.html -w my-workspace   # one tenant's status page: the monitors that run in an environment of the group
+testpion monitor list --group Acme -w my-workspace            # one tenant's monitors (--owner @org/payments: one team's)
 testpion monitor status --owner @org/payments -o payments.html -w my-workspace   # one team's: the monitors whose collection or test file it owns (CODEOWNERS)
 testpion monitor start -w my-workspace          # keep running them until Ctrl+C
 ```

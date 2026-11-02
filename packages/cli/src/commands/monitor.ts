@@ -73,13 +73,24 @@ export function registerMonitorCommands(program: Command): void {
 
   mon
     .command('list')
-    .description('monitors with their schedule, last result and next run')
+    .description('monitors with their schedule, last result and next run (a grouped monitor: one row per tenant)')
     .requiredOption('-w, --workspace <nameOrPath>')
+    .option('--group <group>', 'one tenant only: the monitors that run in an environment of this group')
+    .option('--owner <team>', 'one team only: the monitors whose collection or test file this CODEOWNERS owner owns')
     .option(...JSON_OPTION)
-    .action((o) =>
-      withWorkspace(o.workspace, (store) => {
-        const rows = listMonitors(store).map((m) => monitorStatus(store, m));
+    .action((o: { workspace: string; group?: string; owner?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store) => {
+        const want = o.group?.trim().toLowerCase();
+        let monitors = listMonitors(store).filter((m) => !want || (m.environment ? store.getEnvironment(m.environment)?.group?.trim().toLowerCase() : '') === want);
+        if (o.owner) {
+          const team = o.owner.trim().replace(/^@/, '').toLowerCase();
+          const owned: Monitor[] = [];
+          for (const m of monitors) if ((await monitorOwners(store, m)).some((x) => x.replace(/^@/, '').toLowerCase() === team)) owned.push(m);
+          monitors = owned;
+        }
+        const rows = monitors.map((m) => monitorStatus(store, m));
         if (o.json) return printJson(rows);
+        if (!rows.length && (o.group || o.owner)) return console.log(dim(`No monitor of ${o.group ?? o.owner}.`));
         if (!rows.length) return console.log(dim('No monitors. Add one with: testpion monitor add <name> --collection <name> (or --test-file <path>) --every 15m -w <workspace>'));
         for (const r of rows) console.log(`${bold(r.name)}  ${dim(target(store, r))}  ${dim(r.enabled ? r.schedule : 'paused')}  ${statusText(r.lastResult)}${r.nextRunAt ? dim(`  next ${r.nextRunAt}`) : ''}`);
       }),
