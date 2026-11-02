@@ -56,6 +56,12 @@ A question about a request, a test file, an evaluation or a monitor belongs next
 
 From the command line or an agent: `testpion item comment list request:<collectionId>:<requestId>`, `item comment add <item> "text"`, `item comment resolve <item> <id>` (`--reopen` undoes it), `item comment delete`, and `testpion item comment open --json` for every open comment of the workspace, newest first. An item is written `kind:id` (`request:<collectionId>:<requestId>`, `test:tests/smoke.yaml`, `saved:evaluations:<id>`, `monitor:<id>`) or as a `testpion://` link. An AI agent uses the MCP tool `team_comments` (`open` first, to read what the team asks; `add` to answer in the thread). Nothing is sent anywhere; a comment is as private as the repository.
 
+## Several tenants in one workspace
+
+::: v-pre
+When one team tests the same API for several customers or deployments (Acme's and Globex's instances of one product), a tenant is an environment **group**: give each tenant's environments the same group name and everything knows the tenant. The picker and the lists show *Acme ▸ Staging*; **New tenant from Acme…** copies a whole group for a new customer; a flow runs for every tenant at once (`--env-matrix group:Acme`); a monitor can run in **every environment of a group**, one row per tenant in the list, the status page and the alerts, from one definition; `testpion monitor status --group Acme` writes one tenant's status page; `{{$group}}` and `{{$environment}}` name the tenant inside a request; a problem about a tenant carries it (the Problems panel's **Tenant** select, `testpion problems --group Acme`); and the `no-leak` check with `otherEnvironments: true` fails a response that holds another tenant's values. Nothing of one tenant reaches another's run, result or export, and a change made for every tenant is made once. Details: [Groups](/api-testing/environments#groups-tenants-customers-deployments), [Monitors](/test-runner/monitors).
+:::
+
 ## When two people changed the same thing
 
 Different requests merge by themselves. If you both changed the same request, TestPion shows both versions side by side and you choose.

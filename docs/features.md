@@ -253,6 +253,7 @@ In git, flow files are compared by meaning like collections: steps added, remove
 
 - Workspaces are plain files made for git: the **Git** view lists changes by meaning (requests, and flows step by step), **Pull & push** merges collections request by request and pushes in one step (with a background fetch every 5 minutes and a count on the rail), conflicts are resolved request by request, and every open editor offers **Keep mine** / **Take the new version** after a pull.
 - `testpion git sync` and the `git_sync` MCP tool do the same.
+- Several teams in one workspace (owners from `CODEOWNERS` on items, problems, alerts and commits; team conventions as lint) and several tenants (environment groups: one request, one flow run, one monitor and one status page per tenant): [Work as a team](/getting-started/team).
 - Made for teams: **Invite a teammate…**, **Your team's changes** on Home, a **note for your team** under the workspace name, **comments for your team** next to any item (Info panel; `testpion item comment`), **secrets to fill in** after a clone and **Who are you?** for a computer that has never used git.
 - [Keep your workspace in git](/getting-started/git), [Work as a team](/getting-started/team)
 
