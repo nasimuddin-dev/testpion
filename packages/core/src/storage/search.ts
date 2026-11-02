@@ -1,6 +1,6 @@
 import { readdirSync, statSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { kindOfLibrary, type ItemRef } from '@testpion/shared';
+import { environmentLabel, kindOfLibrary, type ItemRef } from '@testpion/shared';
 import type { Collection, CollectionNode } from '../model/types.js';
 import { readJson } from './fsutil.js';
 import { normalizeCollection } from './normalize.js';
@@ -131,9 +131,9 @@ export class WorkspaceSearch {
   private definitionDocs(): IndexedDoc[] {
     const docs: IndexedDoc[] = this.collectionDocs();
     for (const e of this.store.listEnvironments()) {
-      docs.push({ hit: { kind: 'environment', id: e.id, title: e.name, subtitle: `Environment · ${e.variables.length} variable${e.variables.length === 1 ? '' : 's'}`, ref: { kind: 'environment', environmentId: e.id } }, text: `${e.name} environment` });
+      docs.push({ hit: { kind: 'environment', id: e.id, title: environmentLabel(e), subtitle: `Environment · ${e.variables.length} variable${e.variables.length === 1 ? '' : 's'}`, ref: { kind: 'environment', environmentId: e.id } }, text: `${e.name} ${e.group ?? ''} environment` });
       for (const v of e.variables)
-        docs.push({ hit: { kind: 'environment-variable', id: `${e.id}:${v.key}`, title: v.key, subtitle: `Variable in ${e.name}${v.secret ? ' (secret)' : ''}`, ref: { kind: 'variable', key: v.key, environmentId: e.id } }, text: `${v.key} ${v.secret ? '' : v.value}` });
+        docs.push({ hit: { kind: 'environment-variable', id: `${e.id}:${v.key}`, title: v.key, subtitle: `Variable in ${environmentLabel(e)}${v.secret ? ' (secret)' : ''}`, ref: { kind: 'variable', key: v.key, environmentId: e.id } }, text: `${v.key} ${v.secret ? '' : v.value}` });
     }
     for (const s of this.store.getMcpServers()) docs.push({ hit: { kind: 'mcp-server', id: s.id, title: s.name, subtitle: `MCP · ${s.transport}`, ref: { kind: 'mcp-server', serverId: s.id } }, text: `${s.name} ${'command' in s ? s.command : ''} ${'url' in s ? s.url : ''}` });
     for (const p of this.store.getProviders()) docs.push({ hit: { kind: 'provider', id: p.id, title: p.name, subtitle: `AI provider · ${p.kind}`, ref: { kind: 'provider', providerId: p.id } }, text: `${p.name} ${p.kind} ${p.defaultModel ?? ''}` });
