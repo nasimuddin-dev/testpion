@@ -41,7 +41,9 @@ export function matchEnvironment<T extends GroupedEnvironment & { id?: string }>
   const byId = envs.find((e) => e.id !== undefined && e.id === ref);
   if (byId) return byId;
   const want = ref.trim().toLowerCase();
-  const byLabel = envs.find((e) => environmentLabel(e).toLowerCase() === want);
+  // the label as a terminal types it too: "acme/staging", "Acme > Staging" (only after the id and the exact name failed)
+  const asLabel = want.replace(/\s*(?:▸|>|\/)\s*/, ' ▸ ');
+  const byLabel = envs.find((e) => environmentLabel(e).toLowerCase() === want) ?? envs.find((e) => environmentLabel(e).toLowerCase() === asLabel);
   if (byLabel) return byLabel;
   const named = envs.filter((e) => e.name.toLowerCase() === want);
   if (named.length === 1) return named[0];

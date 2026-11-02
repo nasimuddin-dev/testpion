@@ -12,6 +12,8 @@ describe('an environment by name when two tenants share one', () => {
   it('matches the id, the label "Group ▸ Name" (any case), a unique bare name, or the ungrouped one of a shared name; never the first by chance', () => {
     expect(matchEnvironment(envs, 'acme-staging')?.id).toBe('acme-staging');
     expect(matchEnvironment(envs, 'globex ▸ staging')?.id).toBe('globex-staging');
+    expect(matchEnvironment(envs, 'globex/staging')?.id).toBe('globex-staging');
+    expect(matchEnvironment(envs, 'Acme > QA')?.id).toBe('acme-qa');
     expect(matchEnvironment(envs, 'dev')?.id).toBe('dev');
     expect(matchEnvironment(envs, 'Staging')).toBeUndefined();
     expect(matchEnvironment(envs, 'QA')?.id).toBe('qa');
