@@ -1,3 +1,4 @@
+import { environmentRef } from '@testpion/shared';
 import { collectionMarkdown } from '../../report/collection-docs.js';
 import { collectionSavedItems } from '../../runner/collection-realtime.js';
 import { secretKeys } from '../../storage/secrets.js';
@@ -108,7 +109,7 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
       name: 'list_environments',
       description: 'List environments and their variable names (values are not returned).',
       inputSchema: { type: 'object', properties: {} },
-      run: () => store.listEnvironments().map((e) => ({ name: e.name, ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret${secrets.get(secretKeys.envVar(e.id, v.key)) ? '' : ', no value here'})` : v.key)) })),
+      run: () => store.listEnvironments().map((e, _i, all) => ({ name: e.name, label: environmentRef(all, e), ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret${secrets.get(secretKeys.envVar(e.id, v.key)) ? '' : ', no value here'})` : v.key)) })),
     },
     {
       name: 'collection_docs',
