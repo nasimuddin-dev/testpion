@@ -62,9 +62,9 @@ export function gitSetupHandlers(be: Backend): Handlers {
       return r;
     },
     /** A starter CODEOWNERS (the text, and whether it can be written here); `git.codeownersWrite` writes it, never over one that exists. */
-    'git.codeownersPlan': ({ owner }: { owner?: string }) => planCodeowners(ws(), { owner }),
-    'git.codeownersWrite': async ({ owner }: { owner?: string }) => {
-      const r = await writeCodeowners(ws(), { owner });
+    'git.codeownersPlan': ({ owner, perCollection }: { owner?: string; perCollection?: boolean }) => planCodeowners(ws(), { owner, perCollection }),
+    'git.codeownersWrite': async ({ owner, perCollection }: { owner?: string; perCollection?: boolean }) => {
+      const r = await writeCodeowners(ws(), { owner, perCollection });
       if (r.written) be.host.emit('data.changed', { method: 'git' });
       return r;
     },

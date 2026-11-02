@@ -406,6 +406,10 @@ describe('CODEOWNERS', () => {
       expect(plan.lines.map((l) => l.pattern)).toEqual(expect.arrayContaining(['/environments/', '/mcp-servers.json', '/providers.json', '/collections/', '/tests/']));
       expect(plan.text).toContain('# /environments/');
       expect(plan.text).toContain('@your-org/team');
+      // several teams: a line per collection file and per tests/ folder, after the kind folders (so they win)
+      const perCollection = await planCodeowners(r.ws, { perCollection: true });
+      expect(perCollection.lines.map((l) => l.pattern).filter((p) => /^\/collections\/.+\.json$/.test(p)).length).toBeGreaterThan(0);
+      expect(perCollection.lines.findIndex((l) => l.pattern === '/collections/')).toBeLessThan(perCollection.lines.findIndex((l) => /^\/collections\/.+\.json$/.test(l.pattern)));
       const owned = await planCodeowners(r.ws, { owner: '@acme/platform' });
       expect(owned.text).toMatch(/^\/environments\/\s+@acme\/platform$/m);
       const res = await writeCodeowners(r.ws, { owner: '@acme/platform' });

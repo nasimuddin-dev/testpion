@@ -4,7 +4,7 @@ import type { CodeownersPlan, CodeownersResult } from '@testpion/core';
 import { call } from '../api';
 import { toastError, useApp } from '../store';
 import { copyText } from '../lib/clipboard';
-import { Button, Busy, FooterHint, Input, Modal } from './ui';
+import { Button, Busy, FooterHint, Input, Modal, Toggle } from './ui';
 
 /**
  * A starter CODEOWNERS (release C of planning/git-everything.md §3): one line per kind folder of the workspace, so a team can
@@ -14,12 +14,14 @@ import { Button, Busy, FooterHint, Input, Modal } from './ui';
  */
 export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDone(): void }) {
   const [owner, setOwner] = useState('');
+  // several teams: a line per collection and per tests/ folder, so each team can own its own
+  const [perCollection, setPerCollection] = useState(false);
   const [plan, setPlan] = useState<CodeownersPlan>();
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => void call<CodeownersPlan>('git.codeownersPlan', { owner: owner.trim() || undefined }).then(setPlan, toastError), 150);
+    const t = setTimeout(() => void call<CodeownersPlan>('git.codeownersPlan', { owner: owner.trim() || undefined, perCollection }).then(setPlan, toastError), 150);
     return () => clearTimeout(t);
-  }, [owner]);
+  }, [owner, perCollection]);
   const blocked = plan?.existing
     ? `${plan.existing} exists: it is never overwritten. Copy the lines you want into it.`
     : plan?.insideRepository
@@ -28,7 +30,7 @@ export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDo
   const write = async () => {
     setBusy(true);
     try {
-      const r = await call<CodeownersResult>('git.codeownersWrite', { owner: owner.trim() || undefined });
+      const r = await call<CodeownersResult>('git.codeownersWrite', { owner: owner.trim() || undefined, perCollection });
       useApp.getState().toast(r.written ? `Wrote ${r.path}` : (r.reason ?? 'Nothing was written'), r.written ? 'success' : 'warning');
       if (r.written) {
         onDone();
@@ -76,6 +78,7 @@ export function GitCodeownersDialog({ onClose, onDone }: { onClose(): void; onDo
             Owner for every line (a user or team that has write access)
             <Input value={owner} placeholder="@your-org/platform  (leave empty to fill in later)" onChange={(e) => setOwner(e.target.value)} />
           </label>
+          <Toggle checked={perCollection} onChange={setPerCollection} label="One line per collection and per tests folder (several teams: each owns its own)" data-codeowners-per-collection="" />
           <pre className="rounded-md border border-line bg-panel p-2 text-xs font-mono overflow-auto max-h-72" aria-label="CODEOWNERS">
             {plan.text}
           </pre>

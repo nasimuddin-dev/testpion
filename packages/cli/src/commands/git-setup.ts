@@ -170,11 +170,12 @@ export function registerGitSetupCommands(git: Command): void {
         .command('codeowners')
         .description('a starter CODEOWNERS with a line per kind folder of the workspace (printed; --write puts it in .github/CODEOWNERS when the workspace is the repository; never overwrites)')
         .option('--owner <owner>', 'the owner for every line, e.g. @your-org/platform (default: lines are comments to fill in)')
+        .option('--per-collection', 'several teams: also one line per collection file and per folder of tests/, to give each team its own')
         .option('--write', 'write .github/CODEOWNERS'),
     ),
   ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
-      const r = await writeCodeowners(s.root, { owner: o.owner, dryRun: !o.write || !!o.dryRun });
+      const r = await writeCodeowners(s.root, { owner: o.owner, perCollection: !!o.perCollection, dryRun: !o.write || !!o.dryRun });
       out(o.json, r, () => {
         if (o.write) console.log(r.written ? green(`Wrote ${r.path}`) : yellow(r.reason ?? 'Nothing was written'));
         else console.log(r.text);

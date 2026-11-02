@@ -174,8 +174,8 @@ export interface RpcParamTypes {
   'git.allowSecret': RpcCommonParams & { finding: Record<string, unknown>; reason: string };
   'git.autoFetchSet': RpcCommonParams & { enabled: boolean };
   'git.clone': RpcCommonParams & { url: string; dest?: string; branch?: string };
-  'git.codeownersPlan': RpcCommonParams & { owner?: string };
-  'git.codeownersWrite': RpcCommonParams & { owner?: string };
+  'git.codeownersPlan': RpcCommonParams & { owner?: string; perCollection?: boolean };
+  'git.codeownersWrite': RpcCommonParams & { owner?: string; perCollection?: boolean };
   'git.commit': RpcCommonParams & { message: string; paths?: string[] };
   'git.deleteBranch': RpcCommonParams & { branch: string };
   'git.diff': RpcCommonParams & { path: string };

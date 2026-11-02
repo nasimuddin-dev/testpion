@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { liveKinds } from '@testpion/shared';
 import { atomicWrite, realPathOf } from '../storage/fsutil.js';
@@ -39,7 +39,7 @@ const SPECIAL: Array<{ path: string; what: string }> = [
 ];
 
 /** The CODEOWNERS for the workspace at `ws`: lines for the kind folders it has. */
-export async function planCodeowners(ws: string, o: { owner?: string } = {}): Promise<CodeownersPlan> {
+export async function planCodeowners(ws: string, o: { owner?: string; /** Several teams: one line per collection file and per top-level tests/ folder, so each team owns its own (the kind folders stay as the fallback). */ perCollection?: boolean } = {}): Promise<CodeownersPlan> {
   const real = realPathOf(ws);
   const repo = await repoRoot(ws);
   const base = repo ? toRepoPath(repo, ws, '.') : '.';
@@ -60,6 +60,21 @@ export async function planCodeowners(ws: string, o: { owner?: string } = {}): Pr
     if (st.layout === 'file-per-item' || st.layout === 'raw-document') add(`${st.dir}/`, k.plural);
     else if (st.layout === 'library') add('library/', 'Saved items (gRPC, WebSocket, prompts, load tests, evaluations, monitors)');
     else if (st.layout === 'single-file' || st.layout === 'items-in-file') add(st.file, k.plural);
+  }
+  // several teams in one workspace: a line per collection and per folder of tests/, after the kind folders (the last matching rule wins, so these refine them)
+  if (o.perCollection) {
+    const files = (dir: string, filter: (name: string) => boolean) => {
+      try {
+        return readdirSync(join(real, dir), { withFileTypes: true })
+          .filter((d) => filter(d.name) && (d.isFile() || d.isDirectory()))
+          .map((d) => (d.isDirectory() ? `${d.name}/` : d.name))
+          .sort();
+      } catch {
+        return [];
+      }
+    };
+    for (const f of files('collections', (n) => n.endsWith('.json'))) add(`collections/${f}`, `Collection ${f.replace(/\.json$/, '')}`);
+    for (const f of files('tests', (n) => !n.startsWith('.'))) if (f.endsWith('/')) add(`tests/${f}`, `Tests ${f.replace(/\/$/, '')}`);
   }
   const owner = o.owner?.trim();
   const width = Math.max(...entries.map((e) => e.pattern.length), 0) + 2;
@@ -85,7 +100,7 @@ export interface CodeownersResult extends CodeownersPlan {
 }
 
 /** Write the starter file, never over one that exists and never outside the workspace. */
-export async function writeCodeowners(ws: string, o: { owner?: string; dryRun?: boolean } = {}): Promise<CodeownersResult> {
+export async function writeCodeowners(ws: string, o: { owner?: string; perCollection?: boolean; dryRun?: boolean } = {}): Promise<CodeownersResult> {
   const plan = await planCodeowners(ws, o);
   const repo = await repoRoot(ws);
   if (!repo) return { ...plan, written: false, reason: 'The workspace is not in a git repository yet' };

@@ -257,6 +257,7 @@ testpion git fix --dry-run      # Fix git setup: the preview (add --json); witho
 testpion git large              # files over the size policy; --check the .ref files; --track f --lfs | --reference
 testpion git share-session "checkout bug"   # a masked copy in debugger/shared/ (unshare-session, shared-sessions)
 testpion git codeowners --owner @acme/platform --write   # a starter CODEOWNERS (never overwrites)
+testpion git codeowners --per-collection                 # several teams: also a line per collection and per tests/ folder, to give each team its own
 testpion git allow-secret <hash> --reason "public test key"   # allowlist one reviewed value (disallow-secret, allowed-secrets)
 testpion git history mcp-server:weather     # an unknown name is an error, not an empty list
 testpion git status             # branch, ahead / behind, changed files
