@@ -299,7 +299,10 @@ describe('a monitor for every tenant (an environment group) from one definition'
     const everyTenant = monitorsStatus(store);
     const groupsOnPage = new Set(everyTenant.monitors.map((m) => m.group ?? ''));
     expect(/<h2 class="tenant">/.test(monitorsStatusHtml(everyTenant))).toBe(groupsOnPage.size > 1);
-    expect(monitorsStatusHtml({ ...everyTenant, monitors: [...everyTenant.monitors, { ...everyTenant.monitors[0]!, id: 'x', name: 'Lone', group: undefined, environment: undefined }] })).toMatch(/<h2 class="tenant">No tenant<\/h2>/);
+    const mixed = monitorsStatusHtml({ ...everyTenant, monitors: [...everyTenant.monitors, { ...everyTenant.monitors[0]!, id: 'x', name: 'Lone', group: undefined, environment: undefined }] });
+    expect(mixed).toMatch(/<h2 class="tenant">Acme<\/h2>/);
+    expect(mixed).not.toContain('No tenant');
+    expect(mixed.indexOf('Lone')).toBeLessThan(mixed.indexOf('<h2 class="tenant">Acme</h2>'));
     expect(monitorsStatusHtml(page)).not.toContain('class="tenant"');
     expect(monitorsStatusMarkdown(page)).toMatch(/^# Monitors · acme — status/);
     expect(monitorsStatus(store, { group: 'Nobody' }).monitors).toEqual([]);

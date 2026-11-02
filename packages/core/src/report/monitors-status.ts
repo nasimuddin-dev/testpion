@@ -138,7 +138,7 @@ export function monitorsStatusHtml(s: MonitorsStatus): string {
   const ordered = sectioned ? [...s.monitors].sort((a, b) => (a.group?.trim() || '').localeCompare(b.group?.trim() || '') || a.name.localeCompare(b.name)) : s.monitors;
   const rows = ordered
     .map(
-      (m, i) => `${sectioned && (m.group?.trim() || '') !== (ordered[i - 1]?.group?.trim() || '') ? `<h2 class="tenant">${esc(m.group?.trim() || 'No tenant')}</h2>` : ''}<section class="mon ${m.state}${m.paused ? ' paused' : ''}">
+      (m, i) => `${sectioned && m.group?.trim() && m.group.trim() !== (ordered[i - 1]?.group?.trim() || '') ? `<h2 class="tenant">${esc(m.group.trim())}</h2>` : ''}<section class="mon ${m.state}${m.paused ? ' paused' : ''}">
 <div class="head"><span class="dot"></span><h2>${esc(m.name)}</h2><span class="muted">${esc(m.target)}${m.environment ? ` · ${esc(environmentLabel({ name: m.environment, group: m.group }))}` : ''}</span><span class="state">${m.paused ? esc(m.schedule) : STATE_TEXT[m.state]}</span></div>
 <div class="days" aria-label="Uptime by day">${dayBlocks(m.daily)}</div>
 <div class="muted small">${s.days} days: ${esc(pct(m.uptime))} of ${plural(m.runs, 'run')} passed${m.paused ? '' : ` · ${esc(m.schedule)}`}${lastLine(m)}</div>
