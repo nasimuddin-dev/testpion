@@ -2,7 +2,8 @@ import { userInfo } from 'node:os';
 import { toItemRef } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
 import { gitIdentity } from '../../git/git.js';
-import { addComment, listComments, openComments, resolveComment } from '../../storage/comments.js';
+import { addComment, listComments, resolveComment } from '../../storage/comments.js';
+import { openCommentsByOwner } from '../../storage/comment-owners.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { str, type Tool } from '../tool.js';
 
@@ -32,7 +33,7 @@ export function commentTools({ store }: { store: WorkspaceStore }): Tool[] {
       },
       run: async (a) => {
         const action = String(a.action);
-        if (action === 'open') return openComments(store);
+        if (action === 'open') return openCommentsByOwner(store, typeof a.owner === 'string' ? a.owner : undefined);
         const ref = refOf(a.ref);
         if (action === 'list') return listComments(store, ref);
         if (action === 'add') return addComment(store, ref, String(a.text ?? ''), await who());
