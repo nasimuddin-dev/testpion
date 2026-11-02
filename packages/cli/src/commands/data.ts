@@ -352,10 +352,10 @@ export function registerDataCommands(program: Command): void {
         const owned = o.owner ? problemsOwnedBy(listed, o.owner) : listed;
         const items = o.group ? problemsOfGroup(store, owned, o.group) : owned;
         if (o.json) printJson(items);
-        else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}`)].join('\n') : '✅ Nothing needs attention.');
+        else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}${i.tenant ? ` · ${i.tenant}` : ''}`)].join('\n') : '✅ Nothing needs attention.');
         else if (!items.length && (o.owner || o.group)) console.log(green(`Nothing of ${o.owner ?? o.group} needs attention.`));
         else if (!items.length) console.log(green(split.snoozed.length ? `Nothing needs attention (${split.snoozed.length} snoozed: --all shows them).` : 'Nothing needs attention.'));
-        else for (const i of items) console.log(`${i.severity === 'high' ? red('high  ') : i.severity === 'medium' ? yellow('medium') : dim('low   ')} ${dim(i.type.padEnd(7))} ${i.message}`);
+        else for (const i of items) console.log(`${i.severity === 'high' ? red('high  ') : i.severity === 'medium' ? yellow('medium') : dim('low   ')} ${dim(i.type.padEnd(7))} ${i.message}${i.tenant ? dim(`  · ${i.tenant}`) : ''}`);
         process.exitCode = items.some((i) => i.severity === 'high') ? EXIT.TEST_FAILURE : EXIT.SUCCESS;
       });
     });
