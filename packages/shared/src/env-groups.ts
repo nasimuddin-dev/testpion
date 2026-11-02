@@ -49,5 +49,8 @@ export function matchEnvironment<T extends GroupedEnvironment & { id?: string }>
   return ungrouped.length === 1 ? ungrouped[0] : undefined;
 }
 
+/** What to write to name this environment where a name is expected: its label when another environment has its name, else its name. */
+export const environmentRef = <T extends GroupedEnvironment>(envs: readonly T[], e: T): string => (nameIsShared(envs, e) ? environmentLabel(e) : e.name);
+
 /** Whether another environment has this one's name (then its label tells them apart). */
 export const nameIsShared = <T extends GroupedEnvironment>(envs: readonly T[], e: T): boolean => envs.some((x) => x !== e && x.name.toLowerCase() === e.name.toLowerCase());

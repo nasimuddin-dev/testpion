@@ -3,7 +3,7 @@ import type { WorkspaceStore } from './workspace.js';
 import { ApsError } from '../errors.js';
 import { slugify } from '../util/ids.js';
 import { secretKeys, type SecretStore } from './secrets.js';
-import { environmentLabel, environmentsOfGroup, matchEnvironment } from '@testpion/shared';
+import { environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment } from '@testpion/shared';
 
 /**
  * Set or remove plain (non-secret) variables of an environment from the CLI or an AI agent. Secret
@@ -159,10 +159,10 @@ export function expandEnvironmentGroups(store: Pick<WorkspaceStore, 'listEnviron
   for (const raw of refs) {
     const ref = raw.trim();
     if (!ref) continue;
-    const direct = envs.find((e) => e.name === ref || e.id === ref);
+    const direct = matchEnvironment(envs, ref);
     const groupName = ref.replace(/^group:/i, '');
     const group = direct ? [] : environmentsOfGroup(envs, groupName);
-    if (!direct && group.length) out.push(...group.map((e) => e.name));
+    if (!direct && group.length) out.push(...group.map((e) => environmentRef(envs, e)));
     else out.push(ref);
   }
   return [...new Set(out)];

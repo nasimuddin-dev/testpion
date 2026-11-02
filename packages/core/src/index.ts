@@ -97,7 +97,7 @@ export * from './storage/comments.js';
 export * from './storage/attention-snooze.js';
 export * from './storage/deprecations.js';
 export * from './git/owners.js';
-export { environmentLabel, groupEnvironments, environmentsOfGroup, matchEnvironment, nameIsShared, type GroupedEnvironment } from '@testpion/shared';
+export { environmentLabel, groupEnvironments, environmentsOfGroup, matchEnvironment, nameIsShared, environmentRef, type GroupedEnvironment } from '@testpion/shared';
 export * from './openapi/deprecated-calls.js';
 export { deprecationOf, type DeprecationInfo } from '@testpion/shared';
 export * from './mock/mock-state.js';

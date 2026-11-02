@@ -12,7 +12,7 @@ import { call, modKey, on } from './api';
 import { touchesFiles, type DataChangedEvent } from './lib/data-changed';
 import { openRef } from './lib/open-ref';
 import { LABEL } from './lib/vocabulary';
-import { plural, POSTMAN_WORDS } from '@testpion/shared';
+import { plural, POSTMAN_WORDS, environmentRef } from '@testpion/shared';
 import { toastError, useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
 import { watchOpenLinks } from './lib/open-ref';
@@ -511,7 +511,7 @@ export default function App() {
     cmds.push({ id: 'rail-all', label: 'Rail: Show every view', icon: createElement(Rows3, { size: 16 }), hint: 'View', run: () => void resetRail(true) });
     cmds.push({ id: 'rail-reset', label: 'Rail: Reset to the default views', icon: createElement(RotateCcw, { size: 16 }), hint: 'View', run: () => void resetRail() });
     for (const e of (workspace?.environments ?? []).filter((x) => !x.problem))
-      cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(e.name) });
+      cmds.push({ id: `env-${e.id}`, label: `Switch Environment: ${e.name}`, icon: <span className="block w-2.5 h-2.5 rounded-full" style={{ background: e.color ?? 'var(--ok)' }} />, run: () => s.setEnvironment(environmentRef(s.workspace?.environments ?? [], e)) });
     // Postman's words find the row they map to (shared/postman-words.ts)
     for (const c of cmds) {
       const aliases = POSTMAN_WORDS.filter((w) => w.paletteId === c.id).flatMap((w) => [w.theirs.toLowerCase(), ...w.aliases]);

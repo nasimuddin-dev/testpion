@@ -1,3 +1,4 @@
+import { environmentRef } from '@testpion/shared';
 import { envColor } from '../components/EnvSelect';
 import { Plus, ArrowLeftRight, Copy, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
 import { SecretRefsLine } from '../components/SecretRefsLine';
@@ -220,7 +221,7 @@ export function EnvironmentsView() {
     repo: inGit,
     on: {
       open: () => setSel(e.id),
-      makeActive: () => void useApp.getState().setEnvironment(e.name),
+      makeActive: () => void useApp.getState().setEnvironment(environmentRef(envs, e)),
       rename: () => setRenamingEnv(e.id),
       duplicate: () => void duplicateEnv(e),
       delete: () => void deleteEnv(e),

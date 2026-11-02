@@ -1,3 +1,4 @@
+import { environmentRef } from '@testpion/shared';
 import { envColor } from './EnvSelect';
 import { Check, History, KeyRound, Plus } from 'lucide-react';
 import { TreeBadge, treeKeys } from './TreeParts';
@@ -49,12 +50,12 @@ export function EnvironmentsPane() {
             nodeId={`env-pane:${e.id}`}
             label={e.name}
             active={e.name === env}
-            onClick={() => !e.problem && useApp.getState().setEnvironment(e.name)}
+            onClick={() => !e.problem && useApp.getState().setEnvironment(environmentRef(envs, e))}
             onOpen={() => void openRef({ kind: 'environment', environmentId: e.id })}
             ctx={() => ({
               ref: { kind: 'environment', environmentId: e.id },
               name: e.name,
-              on: { open: () => void openRef({ kind: 'environment', environmentId: e.id }), makeActive: () => useApp.getState().setEnvironment(e.name) },
+              on: { open: () => void openRef({ kind: 'environment', environmentId: e.id }), makeActive: () => useApp.getState().setEnvironment(environmentRef(envs, e)) },
               disabled: e.name === env ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
             })}
             className={cx('pl-3', e.name === env && 'text-accent')}

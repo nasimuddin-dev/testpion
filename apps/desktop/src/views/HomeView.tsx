@@ -31,7 +31,7 @@ import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
 import { RefLink, refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
-import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES } from '@testpion/shared';
+import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES, environmentRef } from '@testpion/shared';
 import { VIEW_NAME } from '../lib/ui-names';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
@@ -565,7 +565,7 @@ export function HomeView() {
                   key={e.id}
                   className={cx('w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left hover:bg-hover', e.problem && 'text-bad cursor-not-allowed')}
                   disabled={!!e.problem}
-                  onClick={() => useApp.getState().setEnvironment(e.name)}
+                  onClick={() => useApp.getState().setEnvironment(environmentRef(ws.environments, e))}
                   title={e.problem ? `This environment's file cannot be read: ${e.problem}` : 'Make this the active environment'}
                 >
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
