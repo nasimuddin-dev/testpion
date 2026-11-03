@@ -7,7 +7,6 @@ import { baseKind, fullCtx, nodeMenuGroups, type NodeKind } from './node-menu';
  */
 export const DOC_NODES: ReadonlyArray<[NodeKind, string]> = [
   ['collection', 'Collection'],
-  ['category', 'Protocol group (REST, SOAP …) of a collection'],
   ['folder', 'Folder of a collection'],
   ['request', 'Request (HTTP, SOAP, GraphQL)'],
   ['folder:grpc-call', 'Folder of gRPC calls or connections'],

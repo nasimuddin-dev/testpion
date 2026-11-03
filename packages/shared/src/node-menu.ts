@@ -14,7 +14,7 @@ export const MENU_GROUPS = ['create', 'open', 'tree', 'run', 'share', 'tools', '
 export type MenuGroup = (typeof MENU_GROUPS)[number];
 
 /** A node of a tree or list: an item kind, a section header, a folder of a kind, a protocol category, Favorites. */
-export type NodeKind = KindId | `section:${KindId}` | `folder:${KindId}` | 'category' | 'favorites';
+export type NodeKind = KindId | `section:${KindId}` | `folder:${KindId}` | 'favorites';
 
 /** The keys of the window's LABEL vocabulary (apps/desktop/src/lib/vocabulary.ts) a menu item can be labelled with. */
 export type MenuLabelKey =
@@ -151,9 +151,9 @@ export interface ActionDef {
 
 /* ------------------------------------------------------------------ node kinds */
 
-/** The item kind a node kind is about: a section's or folder's kind; a category's and Favorites' requests. */
+/** The item kind a node kind is about: a section's or folder's kind; Favorites' requests. */
 export function baseKind(kind: NodeKind): KindId {
-  if (kind === 'category' || kind === 'favorites') return 'request';
+  if (kind === 'favorites') return 'request';
   const i = kind.indexOf(':');
   return (i < 0 ? kind : kind.slice(i + 1)) as KindId;
 }
@@ -177,7 +177,6 @@ export const NODE_KINDS: readonly NodeKind[] = [
   ...liveKinds().map((k) => k.id),
   ...sectionNodeKinds().map((k) => `section:${k.id}` as const),
   ...folderNodeKinds().map((k) => `folder:${k.id}` as const),
-  'category',
   'favorites',
 ];
 
@@ -251,7 +250,6 @@ function computeCapabilities(kind: NodeKind): Capabilities {
       // a folder of a list exports the items in it (Export… opens the bundle dialog on them)
       export: base.export === true ? true : NA('its items do not export'),
     };
-  if (kind === 'category') return { ...all(NA('a group of one protocol’s requests in a collection')), container: true, run: true };
   return { ...all(NA('favorites gather requests from every collection')), container: true };
 }
 
@@ -261,7 +259,7 @@ function computeCapabilities(kind: NodeKind): Capabilities {
  * test file's folder is made by its path (New test file here), so a list's folder has no New folder of its own.
  */
 function hasFolders(kind: NodeKind): boolean {
-  if (kind === 'category' || kind === 'favorites' || isFolderNode(kind)) return false;
+  if (kind === 'favorites' || isFolderNode(kind)) return false;
   const f = KIND_INFO[baseKind(kind)].folders;
   return isSectionNode(kind) ? typeof f === 'object' : f === 'nodes';
 }
@@ -292,7 +290,7 @@ export const STANDARD_ACTIONS = [
   {
     id: 'run',
     group: 'run',
-    label: (_c, k) => (k === 'collection' || k === 'category' ? 'runCollection' : k === 'folder' || isFolderNode(k) ? 'runFolder' : k === 'monitor' ? 'runNow' : 'run'),
+    label: (_c, k) => (k === 'collection' ? 'runCollection' : k === 'folder' || isFolderNode(k) ? 'runFolder' : k === 'monitor' ? 'runNow' : 'run'),
     icon: 'play',
     cap: 'run',
   },

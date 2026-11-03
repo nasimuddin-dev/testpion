@@ -16,7 +16,8 @@
         "headers": [],
         "message": "{\n  \"type\": \"greeting\",\n  \"from\": \"{{appName}}\",\n  \"id\": \"{{$guid}}\"\n}",
         "mode": "websocket"
-      }
+      },
+      "folderId": "ws-fld-echo"
     },
     {
       "id": "ws-echo-org",
@@ -29,7 +30,8 @@
         "headers": [],
         "message": "Hello from TestPion",
         "mode": "websocket"
-      }
+      },
+      "folderId": "ws-fld-echo"
     },
     {
       "id": "mqtt-mosquitto",
@@ -50,7 +52,8 @@
             "qos": 0
           }
         ]
-      }
+      },
+      "folderId": "ws-fld-mqtt"
     },
     {
       "id": "ws-ifelse",
@@ -63,7 +66,8 @@
         "headers": [],
         "message": "Hello from TestPion",
         "mode": "websocket"
-      }
+      },
+      "folderId": "ws-fld-echo"
     },
     {
       "id": "mqtt-hivemq",
@@ -84,7 +88,8 @@
             "qos": 0
           }
         ]
-      }
+      },
+      "folderId": "ws-fld-mqtt"
     },
     {
       "id": "mqtt-emqx",
@@ -105,7 +110,8 @@
             "qos": 0
           }
         ]
-      }
+      },
+      "folderId": "ws-fld-mqtt"
     }
   ]
 }

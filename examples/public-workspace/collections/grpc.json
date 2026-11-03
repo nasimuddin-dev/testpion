@@ -4,5 +4,18 @@
   "name": "gRPC (grpcb.in)",
   "description": "gRPC calls against the public grpcb.in test server, in plain text and over TLS: unary and streaming calls, every field type, metadata and errors. The server describes itself through reflection, so no .proto file is needed. Open a call and press **Invoke**.",
   "variables": [],
-  "items": []
+  "items": [
+    {
+      "kind": "folder",
+      "id": "grpc-fld-plain",
+      "name": "grpcb.in",
+      "items": []
+    },
+    {
+      "kind": "folder",
+      "id": "grpc-fld-tls",
+      "name": "grpcb.in over TLS",
+      "items": []
+    }
+  ]
 }

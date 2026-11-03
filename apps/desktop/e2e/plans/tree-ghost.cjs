@@ -156,7 +156,6 @@ const steps = [
      for (const n of ['Ghost A', 'Ghost B']) { const b = colRow(n); if (b?.getAttribute('aria-expanded') === 'true') { await onScreen(b); await __t.real.click(b); await __t.sleep(200); } }
      const copies = [...aside().querySelectorAll('[data-tree-row][aria-expanded]')].filter((b) => b.querySelector('.truncate')?.textContent.trim() === 'Live streams (SSE)');
      for (const c of copies) { if (c.getAttribute('aria-expanded') === 'false') { await onScreen(c); await __t.real.click(c); } await __t.sleep(300); }
-     for (let i = 0; i < 6; i++) { const cat = [...aside().querySelectorAll('[data-node-id$=":cat:rest"] [aria-expanded="false"]')][0]; if (!cat) break; await onScreen(cat); await __t.real.click(cat); await __t.sleep(200); }
      const wiki = [...list().querySelectorAll('[data-node-id$=":sse-wikimedia"]')].map((n) => n.getAttribute('data-node-id'));
      return ok('examples') + ' | copies: ' + copies.length + ' | wikipedia rows: ' + wiki.length + ' unique: ' + (new Set(wiki).size === wiki.length);`,
   ),

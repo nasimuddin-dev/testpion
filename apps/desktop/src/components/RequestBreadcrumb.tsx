@@ -4,6 +4,17 @@ import { useCollectionTree } from '../lib/collections-store';
 import type { CollectionNode } from '../types';
 import { ItemBreadcrumb, type Crumb } from './ItemBreadcrumb';
 
+/** A folder of the collection by id (anywhere in it). */
+function findFolder(nodes: CollectionNode[], id: string): { id: string; name: string } | undefined {
+  for (const n of nodes)
+    if (n.kind === 'folder') {
+      if (n.id === id) return n;
+      const inner = findFolder(n.items, id);
+      if (inner) return inner;
+    }
+  return undefined;
+}
+
 /** The folders from a collection's top level down to a request (empty at the top level). */
 function folderPath(nodes: CollectionNode[], id: string): Array<{ id: string; name: string }> | undefined {
   for (const n of nodes) {
@@ -21,12 +32,14 @@ function folderPath(nodes: CollectionNode[], id: string): Array<{ id: string; na
  * editor (REST, GraphQL, gRPC, WebSocket); or that it isn't saved yet, with Save.
  * A collection request is found by `requestId`; a gRPC call or connection gives its `folder`.
  */
-export function RequestBreadcrumb({ collectionId, requestId, folder, name, dirty, onSave, actions }: { collectionId?: string; requestId?: string; folder?: string; name: string; dirty?: boolean; onSave?(): void; actions?: MenuItem[] }) {
+export function RequestBreadcrumb({ collectionId, requestId, folderId, folder, name, dirty, onSave, actions }: { collectionId?: string; requestId?: string; folderId?: string; folder?: string; name: string; dirty?: boolean; onSave?(): void; actions?: MenuItem[] }) {
   const collections = useCollectionTree();
   const c = collectionId ? collections.find((x) => x.id === collectionId) : undefined;
   // a saved gRPC call or connection names its folder (no id: a segment that only says where)
   const path: Crumb[] | undefined = c
     ? (requestId ? folderPath(c.items, requestId)?.map((f) => ({ label: f.name, reveal: { kind: 'folder' as const, collectionId: c.id, folderId: f.id } })) : undefined) ??
+      // a gRPC call or connection in a folder of the collection (any kind in any folder): that folder's path
+      (folderId && findFolder(c.items, folderId) ? [...(folderPath(c.items, folderId) ?? []), findFolder(c.items, folderId)!].map((f) => ({ label: f.name, reveal: { kind: 'folder' as const, collectionId: c.id, folderId: f.id } })) : undefined) ??
       (folder ? [{ label: folder }] : requestId ? undefined : [])
     : undefined;
   // the request's own actions (Save as test …), the same ⋯ as a row of the tree, at the line's end

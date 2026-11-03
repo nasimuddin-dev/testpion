@@ -1,8 +1,8 @@
 import type { Collection, CollectionFolder, CollectionNode, SavedHttpRequest } from '../types';
 import type { NodeMenuCtx } from './node-menu-actions';
-import { hasCategory, isEmptyFolder, matchIndex, requestCategory, countCategory, type RequestCategory } from './collection-filter';
+import { matchIndex } from './collection-filter';
 import { treeKey } from './tree-state';
-import { type CollectionCallLibrary, type KindId } from '@testpion/shared';
+import { interleave, type CollectionCallLibrary, type KindId } from '@testpion/shared';
 
 /**
  * The rows of the Collections tree (CollectionTree), as a pure function of the collections and what is open: the
@@ -19,12 +19,11 @@ export interface ExtraGroup {
   cat: CollectionCallLibrary;
   /** The item kind of its items (grpc-call, ws-connection): `collectionCallKind(cat)`. */
   kind: KindId;
-  items: Array<{ id: string; name: string; folder?: string; badge?: string }>;
+  /** `folderId` / `after`: its place among the collection's requests (core storage/collection-calls.ts); `folder`: the folder text of an older version. */
+  items: Array<{ id: string; name: string; folder?: string; folderId?: string; after?: string; badge?: string }>;
   onOpen(id: string): void;
   /** What its menu can do (lib/node-menu.ts builds the menu from it, only while open). */
   menu?(id: string): NodeMenuCtx;
-  /** What a folder's menu can do (rename it, delete it: its items move to the top level). */
-  folderMenu?(folder: string): NodeMenuCtx;
   /** Rename an item in place (F2, or Rename in its menu). */
   rename?(id: string): { editing: boolean; start(): void; done(name?: string): void };
 }
@@ -32,11 +31,9 @@ export interface ExtraGroup {
 /** One row of the tree as drawn. `key` is unique in the tree (scoped by collection); `id` is the row's `data-node-id`. */
 export type TreeRow =
   | { t: 'col'; key: string; c: Collection; open: boolean }
-  | { t: 'cat'; key: string; c: Collection; cat: RequestCategory; count: number; open: boolean }
-  | { t: 'folder'; key: string; c: Collection; n: CollectionFolder; depth: number; open: boolean }
+  | { t: 'folder'; key: string; c: Collection; n: CollectionFolder; depth: number; open: boolean; /** gRPC calls and connections inside (any kind in any folder). */ calls?: number }
   | { t: 'req'; key: string; c: Collection; n: Exclude<CollectionNode, CollectionFolder>; depth: number }
   | { t: 'example'; key: string; c: Collection; n: SavedHttpRequest; ex: { id: string; name: string; status: number }; depth: number }
-  | { t: 'xfolder'; key: string; folder: string; count: number; open: boolean; depth: number; g: ExtraGroup }
   | { t: 'xitem'; key: string; g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string }
   | { t: 'empty'; key: string; c: Collection };
 
@@ -46,10 +43,6 @@ export const scopedNodeId = (collectionId: string, nodeId: string) => treeKey(co
 /** The open/closed key of a folder, and of a request's examples (scoped; the keys of older versions are still read). */
 export const folderOpenKey = (collectionId: string, folderId: string) => scopedNodeId(collectionId, folderId);
 export const examplesOpenKey = (collectionId: string, requestId: string) => treeKey(scopedNodeId(collectionId, requestId), 'examples');
-/** The open/closed key of a collection's protocol category (REST, SOAP, GraphQL, gRPC, WebSocket). */
-export const categoryOpenKey = (collectionId: string, cat: RequestCategory) => treeKey(collectionId, 'cat', cat);
-/** The open/closed key of a folder of saved gRPC calls or connections shown under a collection. */
-export const extraFolderOpenKey = (collectionId: string | undefined, cat: CollectionCallLibrary, folder: string) => treeKey(collectionId ?? '', cat, 'folder', folder);
 /** Whether a scoped key is open: the scoped key wins; the unscoped key an older version saved is the fallback. */
 export const isOpenKey = (open: Record<string, boolean>, scoped: string, legacy: string): boolean | undefined => open[scoped] ?? open[legacy];
 
@@ -61,80 +54,69 @@ export interface TreeRowsInput {
   open: Record<string, boolean>;
   filter?: string;
   favoritesOnly?: boolean;
-  categorize?: boolean;
+  /** The explorer's tree: collections start folded, and their gRPC calls and connections (`extraGroups`) sit in their folders. */
+  explorer?: boolean;
   extraGroups?(c: Collection): ExtraGroup[];
 }
 
-/** Every row that shows (the open collections, categories and folders), in order. */
-export function buildTreeRows({ collections, open, filter, favoritesOnly = false, categorize = false, extraGroups }: TreeRowsInput): TreeRow[] {
+/** Every row that shows (the open collections and folders), in order. */
+export function buildTreeRows({ collections, open, filter, favoritesOnly = false, explorer = false, extraGroups }: TreeRowsInput): TreeRow[] {
   const f = filter?.trim().toLowerCase() || undefined;
   const out: TreeRow[] = [];
   // whether each node of the collection being added matches (one bottom-up pass per collection and query, cached)
   let matches: (n: CollectionNode) => boolean = () => true;
-  // in a category, a folder shows when it holds requests of that category (empty folders: the first category)
-  const inScope = (n: CollectionNode, scope?: { cat: RequestCategory; first: boolean }) =>
-    !scope || (n.kind === 'folder' ? hasCategory(n.items, scope.cat) || (scope.first && isEmptyFolder(n)) : requestCategory(n) === scope.cat);
   const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
-  const addNodes = (c: Collection, nodes: CollectionNode[], depth: number, scope?: { cat: RequestCategory; first: boolean }) => {
-    for (const n of nodes) {
-      if (!matches(n) || !inScope(n, scope)) continue;
-      const key = scopedNodeId(c.id, n.id);
-      if (n.kind === 'folder') {
-        const isOpen = isOpenKey(open, folderOpenKey(c.id, n.id), n.id) ?? !!f;
-        out.push({ t: 'folder', key, c, n, depth, open: isOpen });
-        if (isOpen) addNodes(c, n.items, depth + 1, scope);
-        continue;
-      }
-      out.push({ t: 'req', key, c, n, depth });
-      if (n.kind === 'http' && n.examples?.length && isOpenKey(open, examplesOpenKey(c.id, n.id), treeKey(n.id, 'examples')))
-        for (const ex of n.examples) out.push({ t: 'example', key: treeKey(key, 'ex', ex.id), c, n, ex, depth });
-    }
-  };
-  const addExtra = (g: ExtraGroup, depth: number, from?: string) => {
-    const shown = g.items.filter(extraShown);
-    const folders = [...new Set(shown.map((i) => i.folder ?? ''))].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
-    for (const folder of folders) {
-      // a folder of saved gRPC calls / connections: the same row as a collection's folders
-      const key = extraFolderOpenKey(from, g.cat, folder);
-      const isOpen = !!f || (open[key] ?? true);
-      const inside = shown.filter((i) => (i.folder ?? '') === folder);
-      if (folder) out.push({ t: 'xfolder', key, folder, count: inside.length, open: isOpen, depth, g });
-      if (isOpen || !folder) for (const i of inside) out.push({ t: 'xitem', key: treeKey(from ?? '', g.cat, i.id), g, i, depth: depth + (folder ? 1 : 0), from });
-    }
-  };
-  /** A collection's contents: grouped by category when it holds more than one kind of request. */
+  /**
+   * A collection's contents by its folders, every kind of request in them: the collection's requests in their order and
+   * its gRPC calls and connections at their place (`folderId`, `after`; a folder that is gone: the top level).
+   */
   const addContents = (c: Collection, extras: ExtraGroup[]) => {
-    if (!categorize) return addNodes(c, c.items, 1);
-    const cats = (['rest', 'soap', 'graphql'] as const).filter((k) => hasCategory(c.items, k));
-    if (!cats.length && c.items.some(isEmptyFolder)) cats.push('rest');
-    // the category level shows even for one kind, so every collection reads the same way
-    if (!cats.length && !extras.length) {
-      addNodes(c, c.items, 1);
-      return;
-    }
-    cats.forEach((cat, i) => {
-      const key = categoryOpenKey(c.id, cat);
-      const isOpen = !!f || (open[key] ?? true);
-      const scope = { cat, first: i === 0 };
-      if (f && !c.items.some((n) => matches(n) && inScope(n, scope))) return;
-      out.push({ t: 'cat', key, c, cat, count: countCategory(c.items, cat), open: isOpen });
-      if (isOpen) addNodes(c, c.items, 2, scope);
-    });
-    for (const g of extras) {
-      const key = categoryOpenKey(c.id, g.cat);
-      const isOpen = !!f || (open[key] ?? true);
-      if (f && !g.items.some(extraShown)) continue;
-      out.push({ t: 'cat', key, c, cat: g.cat, count: g.items.length, open: isOpen });
-      if (isOpen) addExtra(g, 2, c.id);
-    }
+    const parent = new Map<string, string | undefined>();
+    const walk = (nodes: CollectionNode[], up?: string) => {
+      for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), walk(n.items, n.id));
+    };
+    walk(c.items);
+    type Call = { id: string; name: string; after?: string; g: ExtraGroup; i: ExtraGroup['items'][number] };
+    const byFolder = new Map<string, Call[]>();
+    // the folders that hold a call the filter shows (and the folders around them)
+    const withCalls = new Set<string>();
+    for (const g of extras)
+      for (const i of g.items) {
+        const at = i.folderId && parent.has(i.folderId) ? i.folderId : '';
+        byFolder.set(at, [...(byFolder.get(at) ?? []), { id: i.id, name: i.name, after: i.after, g, i }]);
+        if (f && extraShown(i)) for (let up: string | undefined = at || undefined; up; up = parent.get(up)) withCalls.add(up);
+      }
+    const countCalls = (id: string): number => (byFolder.get(id)?.length ?? 0) + [...parent].filter(([, up]) => up === id).reduce((n, [child]) => n + countCalls(child), 0);
+    const add = (nodes: CollectionNode[], depth: number, folderId: string) => {
+      for (const x of interleave(nodes, byFolder.get(folderId) ?? [])) {
+        if ('call' in x) {
+          if (extraShown(x.call.i)) out.push({ t: 'xitem', key: treeKey(c.id, x.call.g.cat, x.call.id), g: x.call.g, i: x.call.i, depth, from: c.id });
+          continue;
+        }
+        const n = x.node;
+        if (!matches(n) && !(n.kind === 'folder' && withCalls.has(n.id))) continue;
+        const key = scopedNodeId(c.id, n.id);
+        if (n.kind === 'folder') {
+          const isOpen = isOpenKey(open, folderOpenKey(c.id, n.id), n.id) ?? !!f;
+          const calls = countCalls(n.id);
+          out.push({ t: 'folder', key, c, n, depth, open: isOpen, ...(calls ? { calls } : {}) });
+          if (isOpen) add(n.items, depth + 1, n.id);
+          continue;
+        }
+        out.push({ t: 'req', key, c, n, depth });
+        if (n.kind === 'http' && n.examples?.length && isOpenKey(open, examplesOpenKey(c.id, n.id), treeKey(n.id, 'examples')))
+          for (const ex of n.examples) out.push({ t: 'example', key: treeKey(key, 'ex', ex.id), c, n, ex, depth });
+      }
+    };
+    add(c.items, 1, '');
   };
   for (const c of collections) {
     matches = f || favoritesOnly ? matchIndex(c.items, f, favoritesOnly) : () => true;
-    const extras = (extraGroups?.(c) ?? []).filter((g) => g.items.length);
-    // grouped by category, collections start folded: the workspace lists them, expanding shows the categories
-    // a collection opens when the user opens it (or something is revealed in it), not because its request is open
-    const isOpen = categorize && f ? true : (open[c.id] ?? !categorize);
-    if (categorize && f && !c.items.some(matches) && !extras.some((g) => g.items.some(extraShown))) continue;
+    const extras = explorer ? (extraGroups?.(c) ?? []).filter((g) => g.items.length) : [];
+    // in the explorer, collections start folded: the workspace lists them; a collection opens when the user opens it (or
+    // something is revealed in it), not because its request is open
+    const isOpen = explorer && f ? true : (open[c.id] ?? !explorer);
+    if (explorer && f && !c.items.some(matches) && !extras.some((g) => g.items.some(extraShown))) continue;
     out.push({ t: 'col', key: c.id, c, open: isOpen });
     if (!isOpen) continue;
     addContents(c, extras);

@@ -25,8 +25,8 @@ const nodeRows = (rows: TreeRow[]) => rows.filter((r): r is Extract<TreeRow, { t
 describe('tree rows of collections that share node ids', () => {
   it('draws every row of both collections once, with unique keys and DOM ids', () => {
     const cols = shared();
-    for (const categorize of [false, true]) {
-      const rows = buildTreeRows({ collections: cols, open: allOpen(cols), categorize });
+    for (const explorer of [false, true]) {
+      const rows = buildTreeRows({ collections: cols, open: allOpen(cols), explorer });
       expect(new Set(keys(rows)).size).toBe(rows.length);
       const ids = nodeRows(rows).map((r) => r.key);
       expect(new Set(ids).size).toBe(ids.length);
@@ -77,19 +77,19 @@ describe('tree rows of collections that share node ids', () => {
       );
     const cols = [big('a'), big('b')];
     // the best of three: a real slowdown is slow every time, a one-off stall of a busy machine is not
-    let rows = buildTreeRows({ collections: cols, open: allOpen(cols), categorize: true });
+    let rows = buildTreeRows({ collections: cols, open: allOpen(cols), explorer: true });
     let built = Infinity;
     for (let i = 0; i < 3; i++) {
       const t = performance.now();
-      rows = buildTreeRows({ collections: cols, open: allOpen(cols), categorize: true });
+      rows = buildTreeRows({ collections: cols, open: allOpen(cols), explorer: true });
       built = Math.min(built, performance.now() - t);
     }
     expect(rows.length).toBeGreaterThan(9000);
     expect(new Set(keys(rows)).size).toBe(rows.length);
     expect(built).toBeLessThan(250);
-    const collapsed = buildTreeRows({ collections: cols, open: { ...allOpen(cols), [folderOpenKey('a', 'f3')]: false, b: false }, categorize: true });
+    const collapsed = buildTreeRows({ collections: cols, open: { ...allOpen(cols), [folderOpenKey('a', 'f3')]: false, b: false }, explorer: true });
     expect(new Set(keys(collapsed)).size).toBe(collapsed.length);
-    const filtered = buildTreeRows({ collections: cols, open: {}, filter: 'r1-1', categorize: true });
+    const filtered = buildTreeRows({ collections: cols, open: {}, filter: 'r1-1', explorer: true });
     expect(new Set(keys(filtered)).size).toBe(filtered.length);
     expect(nodeRows(filtered).some((r) => r.key === 'b:r1-1')).toBe(true);
   });
@@ -153,7 +153,7 @@ describe('virtual list window', () => {
 
   it('scrolling a tree of two collections sharing ids never draws a key twice', () => {
     const cols = shared();
-    const rows = buildTreeRows({ collections: cols, open: allOpen(cols), categorize: true });
+    const rows = buildTreeRows({ collections: cols, open: allOpen(cols), explorer: true });
     for (let top = 0; top < rows.length * 20; top += 7) {
       const w = listWindow({ count: rows.length, rowHeight: 20, scrollTop: top, height: 60, overscan: 1, keepIndex: 2 });
       const k = windowKeys(rows, w.indexes, treeRowKey);
@@ -170,6 +170,6 @@ describe('virtual list window', () => {
     const tree = src('CollectionTree.tsx') + src('CollectionTreeRows.tsx');
     // no row is named by its node id alone any more
     expect(tree).not.toMatch(/data-node-id=\{n\.id\}|data-rename-id=\{n\.id\}|menuFor === n\.id|keyOf=\{rowKey\}/);
-    expect((tree.match(/nodeId=|data-node-id=/g) ?? []).length).toBeGreaterThanOrEqual(7);
+    expect((tree.match(/nodeId=|data-node-id=/g) ?? []).length).toBeGreaterThanOrEqual(6);
   });
 });

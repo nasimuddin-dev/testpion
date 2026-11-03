@@ -1,11 +1,12 @@
-import { liveKinds } from '@testpion/shared';
+import { interleave, liveKinds } from '@testpion/shared';
 import type { Collection, CollectionNode, GrpcTest, KeyValue, LibraryItem, TestCase, WebSocketTest } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 
 /**
  * gRPC calls and WebSocket / Socket.IO / MQTT connections are saved in the workspace library
  * (library/grpc.json, library/websocket.json) and shown in a collection through their `collectionId`.
- * A collection run includes them: each becomes a test after the collection's HTTP and GraphQL requests.
+ * A collection run includes them: each becomes a test after the collection's HTTP and GraphQL requests, in the order the
+ * collection shows them (its folders, and each call's place among the requests of its folder).
  */
 
 /** A saved gRPC call, as the gRPC editor stores it. */
@@ -148,12 +149,21 @@ export function duplicateCollection(store: Pick<WorkspaceStore, 'getCollection' 
   const taken = new Set(store.listCollections().map((c) => c.name.toLowerCase()));
   let name = `${src.name} copy`;
   for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${src.name} copy ${i}`;
-  const renumber = (nodes: CollectionNode[]): CollectionNode[] => nodes.map((n) => (n.kind === 'folder' ? { ...n, id: newId(), items: renumber(n.items) } : { ...n, id: newId() }));
+  // old id → new id of every folder, request and call: a copied call keeps its folder and its place in the copy
+  const ids = new Map<string, string>();
+  const fresh = (old: string) => (ids.get(old) ?? (ids.set(old, newId()), ids.get(old)!));
+  const renumber = (nodes: CollectionNode[]): CollectionNode[] => nodes.map((n) => (n.kind === 'folder' ? { ...n, id: fresh(n.id), items: renumber(n.items) } : { ...n, id: fresh(n.id) }));
   const copy = store.saveCollection({ ...structuredClone(src), id: newId(), name, version: 0, items: renumber(structuredClone(src.items)) });
-  for (const kind of COLLECTION_ITEM_KINDS) {
-    const lib = store.getLibrary(kind);
+  const libs = COLLECTION_ITEM_KINDS.map((kind) => ({ kind, lib: store.getLibrary(kind) }));
+  for (const { lib } of libs) for (const i of lib.items) if (i.collectionId === id) fresh(i.id);
+  for (const { kind, lib } of libs) {
     const mine = lib.items.filter((i) => i.collectionId === id);
-    if (mine.length) store.saveLibrary(kind, { folders: lib.folders, items: [...lib.items, ...mine.map((i) => ({ ...structuredClone(i), id: newId(), collectionId: copy.id, updatedAt: new Date().toISOString() }))] });
+    const moved = (v?: string) => (v ? (ids.get(v) ?? v) : v);
+    if (mine.length)
+      store.saveLibrary(kind, {
+        folders: lib.folders,
+        items: [...lib.items, ...mine.map((i) => ({ ...structuredClone(i), id: ids.get(i.id)!, collectionId: copy.id, ...(i.folderId ? { folderId: moved(i.folderId) } : {}), ...(i.after ? { after: moved(i.after) } : {}), updatedAt: new Date().toISOString() }))],
+      });
   }
   return copy;
 }
@@ -162,11 +172,34 @@ export function duplicateCollection(store: Pick<WorkspaceStore, 'getCollection' 
  * The gRPC calls and connections shown in a collection, as tests (gRPC first, then connections; each in
  * folder and name order). With a selection, only the selected ones.
  */
-export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'>, collection: { id: string; name: string }, selection?: string[]): TestCase[] {
-  const pick = <T>(kind: string) =>
-    store
-      .getLibrary<T>(kind)
-      .items.filter((i) => i.collectionId === collection.id && (!selection?.length || selection.includes(i.id)))
-      .sort((a, b) => (a.folder ?? '').localeCompare(b.folder ?? '') || a.name.localeCompare(b.name));
-  return [...pick<SavedGrpcCall>('grpc').map((i) => savedGrpcCallToTest(i, collection.name)), ...pick<SavedConnection>('websocket').map((i) => savedConnectionToTest(i, collection.name))];
+export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'>, collection: { id: string; name: string; items?: CollectionNode[] }, selection?: string[]): TestCase[] {
+  type Call = { kind: 'grpc' | 'websocket'; item: LibraryItem<SavedGrpcCall | SavedConnection> };
+  const calls: Call[] = (['grpc', 'websocket'] as const).flatMap((kind) => store.getLibrary<SavedGrpcCall | SavedConnection>(kind).items.filter((i) => i.collectionId === collection.id).map((item) => ({ kind, item })));
+  // any kind of request in any folder: a call's folder (`folderId`) and its place there decide when it runs, and a
+  // selected folder takes the calls inside it (and inside its folders) too
+  const parent = new Map<string, string | undefined>();
+  const path = new Map<string, string>();
+  const walk = (nodes: CollectionNode[], up?: string) => {
+    for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), path.set(n.id, up ? `${path.get(up)} / ${n.name}` : n.name), walk(n.items, n.id));
+  };
+  walk(collection.items ?? []);
+  const folderOf = (c: Call) => (c.item.folderId && parent.has(c.item.folderId) ? c.item.folderId : '');
+  const selected = (c: Call) => {
+    if (!selection?.length || selection.includes(c.item.id)) return true;
+    for (let f: string | undefined = folderOf(c) || undefined; f; f = parent.get(f)) if (selection.includes(f)) return true;
+    return false;
+  };
+  const ordered: Call[] = [];
+  const byFolder = new Map<string, Call[]>();
+  for (const c of calls) byFolder.set(folderOf(c), [...(byFolder.get(folderOf(c)) ?? []), c]);
+  const visit = (nodes: CollectionNode[], folderId: string) => {
+    const here = byFolder.get(folderId) ?? [];
+    for (const x of interleave(nodes, here.map((c) => ({ id: c.item.id, name: c.item.name, after: c.item.after, c }))))
+      if ('call' in x) ordered.push(x.call.c);
+      else if (x.node.kind === 'folder') visit(x.node.items, x.node.id);
+  };
+  visit(collection.items ?? [], '');
+  // a test is named by the call's folder path in the collection (the text folder of an older version otherwise)
+  const named = (c: Call) => (folderOf(c) ? { ...c.item, folder: path.get(folderOf(c)) } : c.item);
+  return ordered.filter(selected).map((c) => (c.kind === 'grpc' ? savedGrpcCallToTest(named(c) as LibraryItem<SavedGrpcCall>, collection.name) : savedConnectionToTest(named(c) as LibraryItem<SavedConnection>, collection.name)));
 }

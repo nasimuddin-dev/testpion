@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Any kind of request in any folder
+
+- A collection folder holds REST, SOAP, GraphQL, gRPC and WebSocket / Socket.IO / MQTT / Kafka requests side by side; the Collections tree no longer splits a collection into one group per kind. A folder's **New request ▸** creates any kind in it, the save dialog of a gRPC call or connection offers the collection's folders, and dragging a call onto a folder moves it there. Runs of a folder include the calls inside it, in the order the tree shows. Workspaces from older versions are placed once on open: a call's own folder name becomes the collection folder of that name.
+
 ### Several tenants in one workspace: environment groups
 
 - An environment has a **Group** (a tenant, a customer, a deployment: *Acme*): the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; `testpion env list --json` carries `group`. A flow runs for every tenant at once: **Acme ▸ every environment** in Run in several environments, `--env-matrix group:Acme` in a terminal or CI. A name in the environment file, nothing more, so git carries it and the cloud version keeps it. A new tenant starts as a copy of one: **New tenant from Acme…** under the Group field, `testpion env duplicate-group Acme Globex` (names, flags and variables; secret values are not copied). Two tenants may share a name (*Acme ▸ Staging*, *Globex ▸ Staging*): wherever an environment is named, the label tells them apart, and a bare name no longer picks one of them by chance.

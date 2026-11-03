@@ -881,6 +881,10 @@ export interface LibraryItem<T = unknown> {
   folder?: string;
   /** The collection it's shown in (gRPC calls and WebSocket connections are saved outside collection files). */
   collectionId?: string;
+  /** Its folder in that collection (a gRPC call or connection next to the collection's requests); none: the collection's top level. */
+  folderId?: string;
+  /** The sibling it follows in that folder (a request, a folder or another call); none: after the collection's own requests. */
+  after?: string;
   data: T;
   updatedAt?: string;
 }

@@ -35,7 +35,7 @@ const steps = [
   step(
     'the-mock-tab-says-stateful-and-resets',
     `await __t.requests(); await __t.sleep(600);
-     await __t.expand('Stateful pets'); await __t.expand('REST'); const opened = await __t.open('List pets'); if (opened !== 'ok') return opened;
+     await __t.expand('Stateful pets'); const opened = await __t.open('List pets'); if (opened !== 'ok') return opened;
      // the collection's own page (Overview, Variables, Mock …): the collection crumb of the open request
      const crumb = [...document.querySelectorAll('nav[aria-label="Where this request is saved"] button')].find((x) => x.offsetParent); if (!crumb) return 'NO CRUMB'; crumb.click(); await __t.sleep(1500);
      const ok = await __t.tab('Mock'); await __t.sleep(800);

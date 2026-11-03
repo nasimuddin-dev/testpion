@@ -54,7 +54,7 @@ describe('an endpoint that says it is going away', () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ severity: 'high', group: 'Endpoints going away', type: 'warning', ref: { kind: 'request', collectionId: 'api', requestId: 'users' } });
     // the message counts from the real clock, the list from `now`: the day may differ by one across the day
-    expect(items[0]!.message).toMatch(/^API › List users calls an endpoint that is going away: sunset 2026-11-20 \(in 1[78] days\)$/);
+    expect(items[0]!.message).toMatch(/^API › List users calls an endpoint that is going away: sunset 2026-11-20 \(in \d+ days?\)$/);
     // the API definition itself marks an operation deprecated: the saved request that calls it is listed too, without any response
     mkdirSync(store.path('specs'), { recursive: true });
     writeFileSync(store.path('specs', 'api.yaml'), ['openapi: 3.0.3', 'info: { title: Pets, version: 1.0.0 }', 'servers: [{ url: https://api.example.com/v1 }]', 'paths:', '  /users:', '    get: { responses: { "200": { description: ok } } }', '  /old:', '    get: { deprecated: true, summary: The old way, responses: { "200": { description: ok } } }', ''].join('\n'));

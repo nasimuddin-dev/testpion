@@ -1,6 +1,7 @@
 import { environmentRef } from '@testpion/shared';
 import { collectionMarkdown } from '../../report/collection-docs.js';
 import { collectionSavedItems } from '../../runner/collection-realtime.js';
+import { callFolderPath, collectionFolders } from '../../storage/collection-calls.js';
 import { secretKeys } from '../../storage/secrets.js';
 import { collectionTiming } from '../../storage/collection-timing.js';
 import { str } from '../tool.js';
@@ -36,6 +37,8 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
       run: (a) => {
         const c = findCollection(a.collection);
         const saved = collectionSavedItems(store, c.id);
+        // a call's folder: its folder in the collection (any kind of request in any folder)
+        const folders = collectionFolders(c);
         return [
           ...flatten(c.items).map(({ node, folder }) => ({
             id: node.id,
@@ -47,11 +50,11 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
           })),
           ...(saved?.grpc ?? []).map((i) => {
             const d = i.data as { target?: string; method?: string };
-            return { id: i.id, name: i.name, kind: 'grpc', target: d.target, method: d.method, folder: i.folder };
+            return { id: i.id, name: i.name, kind: 'grpc', target: d.target, method: d.method, folder: callFolderPath(c, i, folders) };
           }),
           ...(saved?.websocket ?? []).map((i) => {
             const d = i.data as { url?: string; mode?: string };
-            return { id: i.id, name: i.name, kind: 'websocket', mode: d.mode ?? 'websocket', url: d.url ? redactor.redactString(d.url) : undefined, folder: i.folder };
+            return { id: i.id, name: i.name, kind: 'websocket', mode: d.mode ?? 'websocket', url: d.url ? redactor.redactString(d.url) : undefined, folder: callFolderPath(c, i, folders) };
           }),
         ];
       },

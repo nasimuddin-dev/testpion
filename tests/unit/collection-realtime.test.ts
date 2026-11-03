@@ -34,6 +34,16 @@ describe('collection runs include gRPC calls and connections', () => {
     expect(ws).toMatchObject({ mode: 'websocket', send: [], protocols: ['a', 'b'] });
   });
 
+  it('any kind in any folder: a call runs at its place in its folder, named by the folder path, and a selected folder takes its calls', () => {
+    const items = { grpc: [{ id: 'g-refund', name: 'Refund', collectionId: 'shop', folderId: 'refunds', after: 'r-list', data: { target: 'x:1', method: 'a.B/C' } }, { id: 'g-top', name: 'Health', collectionId: 'shop', data: { target: 'x:1', method: 'a.B/C' } }], websocket: [{ id: 'w-feed', name: 'Feed', collectionId: 'shop', folderId: 'pay', data: { url: 'ws://x' } }] } as Record<string, unknown[]>;
+    const store = { getLibrary: (kind: string) => ({ folders: [], items: items[kind] ?? [] }) } as never;
+    const col = { id: 'shop', name: 'Shop', items: [{ kind: 'folder', id: 'pay', name: 'Payments', items: [{ kind: 'folder', id: 'refunds', name: 'Refunds', items: [{ kind: 'http', id: 'r-list', name: 'List', request: { method: 'GET', url: '/' } }] }] }] } as never;
+    const all = collectionRealtimeTests(store, col);
+    expect(all.map((t) => [t.id, t.name])).toEqual([['g-refund', 'Payments / Refunds / Refund'], ['w-feed', 'Payments / Feed'], ['g-top', 'Health']]);
+    expect(collectionRealtimeTests(store, col, ['pay']).map((t) => t.id)).toEqual(['g-refund', 'w-feed']);
+    expect(collectionRealtimeTests(store, col, ['refunds']).map((t) => t.id)).toEqual(['g-refund']);
+  });
+
   it('runs a collection: its request, then its gRPC call and its connection', async () => {
     // HTTP, gRPC and WebSocket servers
     const http = createServer((_req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}'));
@@ -54,7 +64,8 @@ describe('collection runs include gRPC calls and connections', () => {
     await be.invoke('lib.save', { kind: 'grpc', library: { folders: [], items: [{ id: 'g1', name: 'Say hi', collectionId: 'shop', data: { target: `127.0.0.1:${grpcPort}`, method: 'demo.Greeter/Say', message: '{"name":"ada"}', metadata: [], protoFiles: [{ name: 'demo.proto', text: PROTO }] } }, { id: 'g2', name: 'Elsewhere', collectionId: 'other', data: { target: 'x:1', method: 'a.B/C' } }] } });
     await be.invoke('lib.save', { kind: 'websocket', library: { folders: [], items: [{ id: 'w1', name: 'Echo', collectionId: 'shop', data: { url: `ws://127.0.0.1:${(wss.address() as AddressInfo).port}`, message: 'ping', headers: [] } }] } });
 
-    expect(collectionRealtimeTests(be.ws, col).map((t) => t.id)).toEqual(['g1', 'w1']);
+    // the calls at the collection's top level, after its requests, by name (the order the tree shows)
+    expect(collectionRealtimeTests(be.ws, col).map((t) => t.id)).toEqual(['w1', 'g1']);
     expect(collectionRealtimeTests(be.ws, col, ['w1']).map((t) => t.id)).toEqual(['w1']);
 
     const { runId } = (await be.invoke('col.run', { collectionId: 'shop' })) as { runId: string };
@@ -67,8 +78,8 @@ describe('collection runs include gRPC calls and connections', () => {
     const results = (await be.invoke('runs.results', { runId })) as { items: Array<{ name: string; status: string; output?: unknown }> };
     expect(results.items.map((r) => [r.name, r.status])).toEqual([
       ['Health', 'passed'],
-      ['Say hi', 'passed'],
       ['Echo', 'passed'],
+      ['Say hi', 'passed'],
     ]);
   }, 30_000);
 });

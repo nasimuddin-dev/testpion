@@ -4,5 +4,18 @@
   "name": "WebSocket & MQTT",
   "description": "Live connections: WebSocket echo servers and a public MQTT broker. Open one, press **Connect**, then send a message.",
   "variables": [],
-  "items": []
+  "items": [
+    {
+      "kind": "folder",
+      "id": "ws-fld-echo",
+      "name": "Echo servers",
+      "items": []
+    },
+    {
+      "kind": "folder",
+      "id": "ws-fld-mqtt",
+      "name": "MQTT brokers",
+      "items": []
+    }
+  ]
 }

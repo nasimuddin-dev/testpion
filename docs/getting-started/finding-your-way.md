@@ -186,7 +186,6 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | Node | create | open | tree | run | share | tools | git | edit | danger |
 |---|---|---|---|---|---|---|---|---|---|
 | Collection | New …, New folder…, Import here… |  | Expand all <kbd>*</kbd>, Collapse all | Run collection | Copy link, Export ▸ | Monitor on a schedule…, Run in CI…, Create test file from collection…, AI ▸, Settings, runner & docs, Convert scripts to tp.* | Git | Rename <kbd>F2</kbd>, Duplicate | Delete… <kbd>Del</kbd> |
-| Protocol group (REST, SOAP …) of a collection | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run collection |  |  |  |  |  |
 | Folder of a collection | New …, New folder…, Import here… |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Copy link, Export… | Monitor on a schedule…, Run in CI…, Create test file from folder…, AI ▸, Edit folder (scripts, variables, auth) | Git | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
 | Request (HTTP, SOAP, GraphQL) |  | Open <kbd>Enter</kbd>, Open in new tab |  |  | Copy link, Copy as ▸, Export… | Monitor on a schedule…, Save as test…, Suggest checks with AI… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to…, Add to favorites | Delete… <kbd>Del</kbd> |
 | Folder of gRPC calls or connections |  |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |

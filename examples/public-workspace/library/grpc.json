@@ -18,7 +18,8 @@
         "protoFiles": [],
         "tls": false,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-plain"
     },
     {
       "id": "grpc-hello-stream",
@@ -33,7 +34,8 @@
         "protoFiles": [],
         "tls": false,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-plain"
     },
     {
       "id": "grpc-sum",
@@ -48,7 +50,8 @@
         "protoFiles": [],
         "tls": false,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-plain"
     },
     {
       "id": "grpc-tls-hello",
@@ -63,7 +66,8 @@
         "protoFiles": [],
         "tls": true,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-tls"
     },
     {
       "id": "grpc-bin-dummy",
@@ -78,7 +82,8 @@
         "protoFiles": [],
         "tls": true,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-tls"
     },
     {
       "id": "grpc-bin-headers",
@@ -99,7 +104,8 @@
         "protoFiles": [],
         "tls": true,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-tls"
     },
     {
       "id": "grpc-bin-error",
@@ -114,7 +120,8 @@
         "protoFiles": [],
         "tls": true,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-tls"
     },
     {
       "id": "grpc-concat",
@@ -129,7 +136,8 @@
         "protoFiles": [],
         "tls": true,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-tls"
     },
     {
       "id": "grpc-dummy-stream",
@@ -144,7 +152,8 @@
         "protoFiles": [],
         "tls": true,
         "timeoutMs": 30000
-      }
+      },
+      "folderId": "grpc-fld-tls"
     }
   ]
 }

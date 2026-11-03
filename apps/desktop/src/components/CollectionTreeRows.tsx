@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronRight, Plus, Star } from 'lucide-react';
 import { memo, type DragEvent, type RefObject } from 'react';
-import { savedItemRef, type NodeKind } from '@testpion/shared';
+import { savedItemRef } from '@testpion/shared';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { categoryCounts, type RequestCategory } from '../lib/collection-filter';
@@ -49,8 +49,6 @@ export interface RowContext {
   requestMenu(c: Collection, n: Exclude<CollectionNode, CollectionFolder>): NodeMenuCtx;
   folderMenu(c: Collection, n: CollectionFolder): NodeMenuCtx;
   collectionMenu(c: Collection): NodeMenuCtx;
-  categoryMenu(c: Collection, cat: RequestCategory, key: string): NodeMenuCtx;
-  extraFolderMenu(r: Extract<TreeRow, { t: 'xfolder' }>): NodeMenuCtx;
   newRequest(c: Collection): void;
   newRequestLabel?: string;
 }
@@ -134,7 +132,7 @@ export const RequestRow = memo(function RequestRow({
 });
 
 /** A folder of a collection: its chevron, its name, a dot when it has scripts or variables, and how many requests it holds. */
-export const FolderRow = memo(function FolderRow({ c, n, depth, open, renaming, dropMode, ctx }: { c: Collection; n: CollectionFolder; depth: number; open: boolean; renaming: boolean; dropMode?: DropMode; ctx: Ctx }) {
+export const FolderRow = memo(function FolderRow({ c, n, depth, open, calls = 0, renaming, dropMode, ctx }: { c: Collection; n: CollectionFolder; depth: number; open: boolean; calls?: number; renaming: boolean; dropMode?: DropMode; ctx: Ctx }) {
   const x = () => ctx.current;
   const sid = scopedNodeId(c.id, n.id);
   const dropOf = () => x().dropProps(c, sid, 'into', { folderId: n.id });
@@ -162,37 +160,13 @@ export const FolderRow = memo(function FolderRow({ c, n, depth, open, renaming, 
       <span className="truncate">{n.name}</span>
       {(n.preRequestScript || n.testScript || n.variables?.length || (n as { logic?: true }).logic) && <StatusDot tone="accent" label="Has folder scripts or variables" />}
       <span className="ml-auto pl-1">
-        <CountPill n={counts.rest + counts.soap + counts.graphql} />
+        <CountPill n={counts.rest + counts.soap + counts.graphql + calls} />
       </span>
     </TreeRowShell>
   );
 });
 
 /** A protocol category of a collection (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT): create here, fold, run the collection. */
-export const CategoryRow = memo(function CategoryRow({ c, cat, count, open, id, dropMode, ctx }: { c: Collection; cat: RequestCategory; count: number; open: boolean; id: string; dropMode?: DropMode; ctx: Ctx }) {
-  const x = () => ctx.current;
-  const droppable = cat === 'rest' || cat === 'soap' || cat === 'graphql';
-  const dropOf = () => x().dropProps(c, `${c.id}:${cat}`, 'into', {});
-  return (
-    <TreeRowShell
-      kind="category"
-      nodeId={id}
-      label={CATEGORY_META[cat].label}
-      depth={1}
-      expanded={open}
-      ctx={() => x().categoryMenu(c, cat, id)}
-      onClick={() => x().toggle(id, open)}
-      drop={droppable ? { onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode } : undefined}
-      style={{ paddingLeft: 20 }}
-    >
-      {open ? OPEN_ICON : CLOSED_ICON}
-      <TreeBadge label={CATEGORY_META[cat].badge} className={CATEGORY_META[cat].cls} />
-      <span className="truncate font-medium">{CATEGORY_META[cat].label}</span>
-      <CountPill n={count} />
-    </TreeRowShell>
-  );
-});
-
 /** A collection: its name, how many of its sent requests fail now, and its id when another collection has its name. */
 export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dropMode, failing, sent, duplicate, ctx }: { c: Collection; open: boolean; renaming: boolean; dropMode?: DropMode; failing?: number; sent?: number; duplicate: boolean; ctx: Ctx }) {
   const x = () => ctx.current;
@@ -228,31 +202,6 @@ export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dr
           {c.id}
         </span>
       )}
-    </TreeRowShell>
-  );
-});
-
-/** A folder of saved gRPC calls / connections: the same row (and menu) as a collection's folders. */
-export const ExtraFolderRow = memo(function ExtraFolderRow({ r, ctx }: { r: Extract<TreeRow, { t: 'xfolder' }>; ctx: Ctx }) {
-  const x = () => ctx.current;
-  return (
-    <TreeRowShell
-      kind={`folder:${r.g.kind}` as NodeKind}
-      nodeId={r.key}
-      label={r.folder}
-      depth={r.depth}
-      expanded={r.open}
-      ctx={() => x().extraFolderMenu(r)}
-      onClick={() => x().toggle(r.key, r.open)}
-      style={indent(r.depth)}
-      git={{ folder: r.g.kind, name: r.folder }}
-    >
-      {r.open ? OPEN_ICON : CLOSED_ICON}
-      {FOLDER_ICON}
-      <span className="truncate">{r.folder}</span>
-      <span className="ml-auto pl-1">
-        <CountPill n={r.count} />
-      </span>
     </TreeRowShell>
   );
 });

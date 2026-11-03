@@ -1,4 +1,4 @@
-import { EncryptedFileSecretStore, acquireWorkspaceLock, lockMessage, normalizeError, sweepWorkspaceAsync, type WorkspaceLock, type WorkspaceStore } from '@testpion/core';
+import { EncryptedFileSecretStore, acquireWorkspaceLock, lockMessage, normalizeError, placeCollectionCalls, sweepWorkspaceAsync, type WorkspaceLock, type WorkspaceStore } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 /**
@@ -163,6 +163,17 @@ export const workspaceLockedBy = (be: Backend): string | undefined => lockedBy.g
 /** Leftovers of crashes and cut-short runs are removed shortly after a workspace opens (never on the way in: opening stays fast). */
 export function scheduleSweep(be: Backend, store: WorkspaceStore, afterMs = 5000): void {
   holdWorkspaceLock(be, store); // an open workspace is announced to other TestPions; told when it already is
+  // any kind of request in any folder: gRPC calls and connections an older version kept in folders of their own get the
+  // collection folder of that path, once (core storage/collection-calls.ts)
+  try {
+    const placed = placeCollectionCalls(store);
+    if (placed) {
+      be.logger.info(`Placed ${placed} gRPC call(s) and connection(s) in their collection folders`);
+      be.host.emit('data.changed', { method: 'write', kinds: ['collections', 'library'] });
+    }
+  } catch (e) {
+    be.logger.warn(`Could not place gRPC calls and connections in their collection folders: ${(e as Error).message}`);
+  }
   const t = setTimeout(() => {
     if (be.store !== store) return;
     // asynchronous and in slices of a few milliseconds: the window's calls are served between them (housekeeping-async.ts)

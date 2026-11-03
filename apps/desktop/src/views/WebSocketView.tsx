@@ -130,7 +130,9 @@ export function WebSocketView() {
   const current = saved.lib.items.find((i) => i.id === savedId);
   // New ▸ WebSocket in a collection: the connection is saved into that collection
   const [collectionId, setCollectionId] = useSticky<string | undefined>(`ws:collection:${docId ?? 'main'}`, undefined);
-  const saveDialog = useSaveInCollection(saved.lib.items, 'Save connection');
+  // … and into the folder it was created in (any kind of request in any folder)
+  const [folderId, setFolderId] = useSticky<string | undefined>(`ws:folder:${docId ?? 'main'}`, undefined);
+  const saveDialog = useSaveInCollection('Save connection');
   const dirty = !!current && JSON.stringify(current.data) !== JSON.stringify(persistable(d));
   // the saved connection changed on disk (a pull, another editor): follow it, or ask when it has unsaved edits (WF-15)
   useExternalChange<Draft>({
@@ -152,23 +154,24 @@ export function WebSocketView() {
   };
   // global search → open a saved connection
   useIntent('websocket', (p) => {
-    if (p?.collectionId && !p.savedId) setCollectionId(p.collectionId as string);
+    if (p?.collectionId && !p.savedId) (setCollectionId(p.collectionId as string), setFolderId(p.folderId as string | undefined));
     if (p?.savedId) void open(p.savedId);
     // a connection from History: its address in a new tab
     const r = p?.request as { url?: string } | undefined;
     if (!p?.savedId && typeof r?.url === 'string') (setSavedId(undefined), setD({ ...docDrafts.load(), url: r.url }));
   });
-  const save = async (asNew = false, folder?: string) => {
+  const save = async (asNew = false) => {
     if (current && !asNew) {
       await saved.put({ ...current, data: persistable(d) });
       useApp.getState().toast(`Saved "${current.name}"`, 'success');
       return;
     }
     // every saved request belongs to a collection: the same dialog as a REST request's asks which (and its folder)
-    const to = await saveDialog.ask({ name: tabTitle || hostOf(d.url), collectionId, folder });
+    const to = await saveDialog.ask({ name: tabTitle || hostOf(d.url), collectionId, folderId });
     if (!to) return;
     setCollectionId(to.collectionId);
-    setSavedId(await saved.put({ name: to.name, folder: to.folder, collectionId: to.collectionId, data: persistable(d) }));
+    setFolderId(to.folderId);
+    setSavedId(await saved.put({ name: to.name, collectionId: to.collectionId, ...(to.folderId ? { folderId: to.folderId } : {}), data: persistable(d) }));
   };
   // Ctrl+S saves this tab's connection (asks for a name the first time)
   useSaveShortcut('websocket', () => void save());
@@ -354,7 +357,7 @@ export function WebSocketView() {
   useSingleEditorTab('websocket', { title, badge: d.mode === 'kafka' ? 'KAFKA' : d.mode === 'mqtt' ? 'MQTT' : d.mode === 'socketio' ? 'SIO' : 'WS', badgeClass: 'kind-ws', item: savedId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
   return (
     <div className="h-full flex flex-col min-w-0">
-      <RequestBreadcrumb collectionId={current?.collectionId ?? collectionId} folder={current?.folder} name={title} onSave={() => void save()} actions={[saveAsTestMenuItem(saveTest)]} />
+      <RequestBreadcrumb collectionId={current?.collectionId ?? collectionId} folderId={current ? current.folderId : folderId} folder={current?.folder} name={title} onSave={() => void save()} actions={[saveAsTestMenuItem(saveTest)]} />
       <div className="flex items-center gap-2 p-2 border-b border-line">
         <Badge tone={status === 'open' ? 'ok' : status === 'connecting' ? 'warn' : 'default'}>{status}</Badge>
         <Segmented

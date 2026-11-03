@@ -86,6 +86,9 @@ interface SavedItem {
   folder?: string;
   /** The collection it's in (gRPC calls and connections are kept in the workspace library, each in a collection). */
   collectionId?: string;
+  /** Its folder of that collection and the sibling it follows (any kind of request in any folder). */
+  folderId?: string;
+  after?: string;
   badge?: string;
 }
 
@@ -366,7 +369,8 @@ export function Explorer() {
     });
   };
   /** Move a saved gRPC call / connection to another collection. */
-  const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId } : i)));
+  const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string, place: { folderId?: string; after?: string } = {}) =>
+    editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId, folderId: place.folderId, after: place.after } : i)));
   /** Copy a saved gRPC call as a grpcurl command, or a connection's URL ({{variables}} resolved). */
   const copySaved = async (kind: 'grpc' | 'websocket', id: string) => {
     try {
@@ -393,25 +397,6 @@ export function Explorer() {
     }
   };
   /** A folder of saved gRPC calls or connections: rename it, or delete it (its items move to the top level, Undo puts them back). */
-  const savedFolderMenu = (kind: 'grpc' | 'websocket', folder: string): NodeMenuCtx => ({
-    name: folder,
-    on: {
-      rename: async () => {
-        const to = (await promptText(LABEL.renameFolder, { message: 'Folder name', value: folder, okLabel: 'Rename' }))?.trim();
-        if (to && to !== folder) await editLibrary(kind, (items) => items.map((i) => (i.folder === folder ? { ...i, folder: to } : i)));
-      },
-      delete: () => {
-        const was = new Set<string>();
-        void deleteWithUndo({
-          kind: 'folder',
-          name: folder,
-          note: `Its ${kind === 'grpc' ? 'gRPC calls' : 'connections'} moved to the top level`,
-          run: () => editLibrary(kind, (items) => items.map((i) => (i.folder === folder ? (was.add(i.id), { ...i, folder: undefined }) : i))),
-          undo: () => editLibrary(kind, (items) => items.map((i) => (was.has(i.id) && !i.folder ? { ...i, folder } : i))),
-        });
-      },
-    },
-  });
   const renameSaved = (kind: 'grpc' | 'websocket', id: string): RowRename => renamer(id, id, (name) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, name } : i))));
   /** The menu of a gRPC call or connection: the same groups as a request's (open, copy, test file, rename, duplicate, move, delete). */
   const savedMenu = (kind: 'grpc' | 'websocket', item: SavedItem): NodeMenuCtx => {
@@ -425,7 +410,7 @@ export function Explorer() {
         ...(kind === 'grpc' ? { copyGrpcurl: () => void copySaved(kind, item.id) } : { copyUrl: () => void copySaved(kind, item.id) }),
         testFile: () => void saveAsTest({ ref, name: item.name }),
         rename: () => setRenaming(item.id),
-        duplicate: () => void editLibrary(kind, (items) => items.flatMap((i) => (i.id === item.id ? [i, { ...i, id: uid('lib-'), name: `${i.name} copy`, updatedAt: new Date().toISOString() }] : [i]))),
+        duplicate: () => void editLibrary(kind, (items) => items.flatMap((i) => (i.id === item.id ? [i, { ...i, id: uid('lib-'), name: `${i.name} copy`, after: i.id, updatedAt: new Date().toISOString() }] : [i]))),
         move: collections.filter((c) => c.id !== item.collectionId).map((c) => ({ label: c.name, onSelect: () => void moveItem(kind, item.id, c.id) })),
         delete: () => {
           // the whole saved item (its request and settings) and its place, to put it back as it was
@@ -623,8 +608,8 @@ export function Explorer() {
   };
 
   // the tree is memoized: its saved items change only with these lists (or a rename in place); menus read the latest
-  const savedLatest = useRef({ savedMenu, renameSaved, savedFolderMenu });
-  savedLatest.current = { savedMenu, renameSaved, savedFolderMenu };
+  const savedLatest = useRef({ savedMenu, renameSaved });
+  savedLatest.current = { savedMenu, renameSaved };
   const extraGroups = useCallback(
     (c: Collection): ExtraGroup[] => [
       {
@@ -638,7 +623,6 @@ export function Explorer() {
             grpc.find((i) => i.id === id)!,
           ),
         rename: (id) => savedLatest.current.renameSaved('grpc', id),
-        folderMenu: (folder) => savedLatest.current.savedFolderMenu('grpc', folder),
       },
       {
         cat: 'websocket',
@@ -651,22 +635,22 @@ export function Explorer() {
             sockets.find((i) => i.id === id)!,
           ),
         rename: (id) => savedLatest.current.renameSaved('websocket', id),
-        folderMenu: (folder) => savedLatest.current.savedFolderMenu('websocket', folder),
       },
     ],
     // (not `renaming`: the tree shows the renamed item by its `extraRenaming` prop; rename() reads savedLatest)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [grpcByCollection, socketsByCollection, grpc, sockets],
   );
-  const newOfCategory = (c: Collection, cat: RequestCategory) => {
-    if (isCollectionCallLibrary(cat)) return intent(cat, { newDoc: true, collectionId: c.id });
+  // any kind of request in any folder: a gRPC call or connection is saved into the folder it was created in
+  const newOfCategory = (c: Collection, cat: RequestCategory, folderId?: string) => {
+    if (isCollectionCallLibrary(cat)) return intent(cat, { newDoc: true, collectionId: c.id, ...(folderId ? { folderId } : {}) });
     const node = newNode(cat)!;
-    void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, undefined, node) })).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: cat === 'graphql' ? 'graphql' : 'http' }));
+    void editCollection(c, (c) => ({ ...c, items: addToFolder(c.items, folderId, node) })).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: cat === 'graphql' ? 'graphql' : 'http' }));
   };
   // the same functions on every render, so the memoized tree re-renders only when what it shows changed
   const treeCallbacks = useStableCallbacks({
     onNewOfCategory: newOfCategory,
-    onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string) => void moveItem(kind, id, to),
+    onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string, place?: { folderId?: string; after?: string }) => void moveItem(kind, id, to, place),
     onOpen: (c: Collection, n: CollectionNode, o?: { preview?: boolean }) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, o?.preview ? { preview: true } : {}),
     onChange: (c: Collection) => void saveCollection(c),
     onRun: (c: Collection, folderId?: string) => intent('collections', { collectionId: c.id, run: true, folderId }),
@@ -772,7 +756,7 @@ export function Explorer() {
               // a collection whose file cannot be read stays listed (in red, with why), never silently gone
               collections={allCollections}
               filter={shownFilter}
-              categorize
+              explorer
               extraGroups={extraGroups}
               extraRenaming={renaming}
               collapseAll={collapseAll}

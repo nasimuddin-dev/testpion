@@ -73,7 +73,7 @@ Each received message is `{ topic, key, partition, offset, headers, data }`, wit
 
 ## Saved connections
 
-Saved connections (URL, subprotocols, handshake headers and the message) belong to a [collection](./collections.md) and are listed in the Collections explorer under the collection's **WebSocket & MQTT** category, in their folders:
+Saved connections (URL, subprotocols, handshake headers and the message) belong to a [collection](./collections.md) and are listed in the Collections explorer in their collection folders, next to the folders' other requests of any kind:
 
 - **Save** stores the current connection, or saves the changes to the one you opened (*Save\**). A new connection asks for its name, collection (or a new one) and folder: every saved connection is in a collection. An unsaved tab connects and sends all the same.
 - Click a connection in the explorer to open it. Its `⋯` / right-click menu has **Open**, **Save as test…**, **Copy URL**, **Rename**, **Duplicate**, **Move to** (another collection) and **Delete…**; drag it onto another collection to move it there.

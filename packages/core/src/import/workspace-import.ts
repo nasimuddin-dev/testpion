@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
+import { placeCollectionCalls } from '../storage/collection-calls.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId, slugify } from '../util/ids.js';
 import { ApsError } from '../errors.js';
@@ -131,7 +132,7 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
       const it = raw as LibraryItem;
       const id = it.id && !taken.has(it.id) ? it.id : shortId('lib-');
       taken.add(id);
-      added.push({ id, name: it.name, folder: typeof it.folder === 'string' ? it.folder : undefined, collectionId, data: it.data, updatedAt: new Date().toISOString() });
+      added.push({ id, name: it.name, folder: typeof it.folder === 'string' ? it.folder : undefined, collectionId, ...(typeof it.folderId === 'string' ? { folderId: it.folderId } : {}), ...(typeof it.after === 'string' ? { after: it.after } : {}), data: it.data, updatedAt: new Date().toISOString() });
     }
     if (!added.length) continue;
     store.saveLibrary(kind, { folders: lib.folders, items: [...lib.items, ...added] });
@@ -220,6 +221,8 @@ export function importIntoWorkspace(
     // a TestPion collection file (or an Insomnia export) can carry the collection's gRPC calls and connections
     const saved = r.format === 'aps-collection' ? savedItemsOf(text) : r.savedItems;
     if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id, made.library);
+    // any kind of request in any folder: calls that came with a folder path (Insomnia, Bruno, an older export) go into that collection folder
+    if (out.savedItems) placeCollectionCalls(store);
     const warnings = scriptCompatibility(collection, (name) => store.readScriptPackage(name) !== undefined);
     if (warnings.length) out.scriptWarnings = warnings;
     if (r.notes?.length) out.notes = [...r.notes, ...(out.notes ?? [])];

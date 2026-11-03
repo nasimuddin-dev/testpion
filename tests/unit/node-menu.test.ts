@@ -157,7 +157,6 @@ describe('node menus', () => {
   it('section, folder and category nodes are generated from their kind', () => {
     expect(baseKind('section:mcp-server')).toBe('mcp-server');
     expect(baseKind('folder:spec')).toBe('spec');
-    expect(baseKind('category')).toBe('request');
     // New folder only where the kind has folders
     expect(flat('section:mcp-server').map((i) => i.label)).toContain(LABEL.newFolder);
     expect(flat('section:environment').map((i) => i.label)).not.toContain(LABEL.newFolder);
@@ -217,7 +216,7 @@ describe('node menus', () => {
       for (const [i, g] of shape.groups.entries()) expect(g.actions.map((a) => `${LABEL[a.label]}${a.submenu ? ' ▸' : ''}`), `${kind} ${g.group}`).toEqual(groups[i]!.items.filter((it) => it.label !== 'New …').map((it) => `${it.label}${it.items ? ' ▸' : ''}`));
       expect(shape.creates, kind).toBe(nodeMenuGroups(kind, fullCtx(kind))[0]!.items.some((i) => i.label === 'New …'));
     }
-    expect(nodeMenusOf('request').map((n) => n.node)).toEqual(['request', 'category', 'favorites']);
+    expect(nodeMenusOf('request').map((n) => n.node)).toEqual(['request', 'favorites']);
     expect(nodeMenusOf('mcp-server').map((n) => n.node)).toEqual(['mcp-server', 'section:mcp-server', 'folder:mcp-server']);
   });
 

@@ -9,6 +9,7 @@ import { VirtualList } from './ui';
 import { focusRow } from './TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
+import { AT_START, interleave } from '@testpion/shared';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
@@ -17,7 +18,7 @@ import { plural, uid } from '../lib/format';
 import { FolderEditor } from './FolderEditor';
 import { useGitRepo } from '../lib/git';
 import { fullCollection } from '../lib/collections-store';
-import { matchIndex, requestCategory, type RequestCategory } from '../lib/collection-filter';
+import { matchIndex, type RequestCategory } from '../lib/collection-filter';
 
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
@@ -28,8 +29,8 @@ import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
 import { openExportBundle } from '../lib/transfer';
 import { deferDrop, useDragSession } from '../lib/drag-ref';
-import { buildTreeRows, categoryOpenKey, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
-import { CATEGORY_META, CategoryRow, CollectionRow, EmptyRow, ExampleRow, ExtraFolderRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
+import { buildTreeRows, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
+import { CATEGORY_META, CollectionRow, EmptyRow, ExampleRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
 import { useOpenRequestId } from './open-request-id';
 
 // THE badge lives in TreeParts; the panels that drew a method badge through this module keep their import
@@ -64,7 +65,6 @@ function useCollectionsHealth(): Record<string, { sent: number; failing: number 
 const DRAW_ALL = 300;
 /** Rows drawn above and below the visible ones in a big tree. */
 const OVERSCAN = 25;
-const CATEGORIES: RequestCategory[] = ['rest', 'soap', 'graphql', 'grpc', 'websocket'];
 
 /** The open/closed keys of every folder in these nodes (a collection's or a folder's), for Expand all / Collapse all. */
 const folderKeysOf = (collectionId: string, nodes: CollectionNode[], keys: string[] = []): string[] => {
@@ -89,7 +89,7 @@ export const CollectionTree = memo(function CollectionTree({
   favoritesOnly = false,
   onMoved,
   newRequestLabel,
-  categorize = false,
+  explorer = false,
   extraGroups,
   extraRenaming,
   onNewOfCategory,
@@ -117,16 +117,16 @@ export const CollectionTree = memo(function CollectionTree({
   onMoved?(ids: string[], fromCollectionId: string, toCollectionId: string): void;
   /** Label of the "New request" menu entry (e.g. "New GraphQL request"). */
   newRequestLabel?: string;
-  /** Group each collection's requests by what they are (REST, SOAP, GraphQL, gRPC, WebSocket). */
-  categorize?: boolean;
+  /** The explorer's tree: collections start folded, and their gRPC calls and connections (`extraGroups`) are shown. */
+  explorer?: boolean;
   /** A collection's gRPC calls and WebSocket connections (saved outside the collection file). */
   extraGroups?(c: Collection): ExtraGroup[];
   /** The saved gRPC call or connection being renamed in place (its id): the view keeps that state. */
   extraRenaming?: string;
   /** Create a request of this category in a collection (the + of a category, the collection menu). */
-  onNewOfCategory?(c: Collection, cat: RequestCategory): void;
+  onNewOfCategory?(c: Collection, cat: RequestCategory, folderId?: string): void;
   /** A saved gRPC call or connection was dropped on a collection. */
-  onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string): void;
+  onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string, place?: { folderId?: string; after?: string }): void;
   /** Changes (1, 2 …) fold every collection and folder. */
   collapseAll?: number;
   /** Changes (1, 2 …) unfold every collection, category and folder (the explorer's Expand all). */
@@ -270,15 +270,33 @@ export const CollectionTree = memo(function CollectionTree({
         setDropAt(undefined);
         try {
           const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string; from?: string };
-          if (d.from !== c.id) deferDrop(() => onDropSaved!(d.kind, d.id, c.id));
+          deferDrop(() => onDropSaved!(d.kind, d.id, c.id, {}));
         } catch {
           /* not ours */
         }
       },
     };
   };
+  /** A gRPC call or connection dropped on a folder (inside it, at its end) or on a request (just before it): its place in the folder view. */
+  const savedPlace = (c: Collection, place: { beforeId?: string; folderId?: string }): { folderId?: string; after?: string } => {
+    if (!place.beforeId) return { folderId: place.folderId };
+    const folders = folderIdsTo(c.items, place.beforeId) ?? [];
+    const folderId = folders[folders.length - 1];
+    const siblings = folderId ? ((findNode(c.items, folderId) as CollectionFolder | undefined)?.items ?? []) : c.items;
+    const calls = (extraGroups?.(c) ?? []).flatMap((g) => g.items.filter((i) => (i.folderId ?? '') === (folderId ?? '')));
+    const order = interleave(siblings, calls).map((x) => ('node' in x ? x.node.id : x.call.id));
+    const at = order.indexOf(place.beforeId);
+    return { folderId, after: at > 0 ? order[at - 1] : AT_START };
+  };
+  const isSavedDrag = (e: React.DragEvent) => !!onDropSaved && explorer && e.dataTransfer.types.includes(SAVED_ITEM_MIME);
   const dropProps = (c: Collection, id: string, mode: DropMode, place: { beforeId?: string; folderId?: string }) => ({
     onDragOver: (e: React.DragEvent) => {
+      if (isSavedDrag(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropAt?.id !== id || dropAt.mode !== mode) setDropAt({ id, mode });
+        return;
+      }
       if (!canDrop(place)) return;
       e.preventDefault();
       e.stopPropagation();
@@ -288,6 +306,16 @@ export const CollectionTree = memo(function CollectionTree({
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      if (isSavedDrag(e)) {
+        setDropAt(undefined);
+        try {
+          const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string };
+          if (d.id !== place.beforeId) deferDrop(() => onDropSaved!(d.kind, d.id, c.id, savedPlace(c, place)));
+        } catch {
+          /* not ours */
+        }
+        return;
+      }
       drop(c, place);
     },
   });
@@ -351,13 +379,13 @@ export const CollectionTree = memo(function CollectionTree({
     setOpen((o) => ({ ...o, [id]: !shown }));
   };
   /**
-   * The keys of everything inside a collection (its categories, folders and saved-item folders) or inside one folder,
+   * The keys of everything inside a collection (its folders) or inside one folder,
    * with the container's own: Expand all and Collapse all set them all in one change of the tree state.
    */
   const subtreeKeys = (c: Collection, folder?: CollectionFolder): string[] => {
     if (folder) return [folderOpenKey(c.id, folder.id), ...folderKeysOf(c.id, folder.items)];
-    const keys = [c.id, ...folderKeysOf(c.id, c.items), ...CATEGORIES.map((cat) => categoryOpenKey(c.id, cat))];
-    // folders of saved gRPC calls and connections, and anything else remembered under this collection
+    const keys = [c.id, ...folderKeysOf(c.id, c.items)];
+    // anything else remembered under this collection
     for (const k of Object.keys(open)) if (k.startsWith(treeKey(c.id, ''))) keys.push(k);
     return keys;
   };
@@ -383,8 +411,6 @@ export const CollectionTree = memo(function CollectionTree({
   }, [expandAll]);
   /** Expand or collapse everything inside a collection or one folder: the container itself opens or closes with it. */
   const setSubtree = (c: Collection, folder: CollectionFolder | undefined, shown: boolean) => setTreeSubtree('collections', subtreeKeys(c, folder), shown);
-  /** Open or close one protocol category of a collection, and every folder in the collection with it. */
-  const setCategory = (c: Collection, key: string, shown: boolean) => setTreeSubtree('collections', [key, ...folderKeysOf(c.id, c.items)], shown);
   const newFolderIn = (c: Collection, folderId?: string) => async () => {
     const name = await promptText('New folder', { message: 'Folder name', okLabel: 'Create' });
     if (name) change(c, (c) => ({ ...c, items: addToFolder(c.items, folderId, { kind: 'folder', id: uid('fld-'), name, items: [] } as CollectionFolder) }));
@@ -432,7 +458,11 @@ export const CollectionTree = memo(function CollectionTree({
       ref,
       name: n.name,
       repo: canHistory,
-      create: [{ label: newRequestLabel ?? 'New HTTP request', icon: <FilePlus2 size={14} />, onSelect: () => newRequest(c, n.id) }],
+      // any kind of request in any folder: New request ▸ GraphQL, SOAP, gRPC, WebSocket … into this folder
+      create: [
+        { label: newRequestLabel ?? 'New HTTP request', icon: <FilePlus2 size={14} />, onSelect: () => newRequest(c, n.id) },
+        ...(onNewOfCategory ? [{ label: LABEL.newRequest, icon: <FilePlus2 size={14} />, onSelect: () => undefined, items: (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat, n.id) })) }] : []),
+      ],
       on: {
         newFolder: newFolderIn(c, n.id),
         expandAll: () => setSubtree(c, n, true),
@@ -475,28 +505,18 @@ export const CollectionTree = memo(function CollectionTree({
       },
     };
   };
-  /** A category's menu: the same menu as every other row (right-click or ⋯): create here, fold, run the collection. */
-  const categoryMenu = (c: Collection, cat: RequestCategory, key: string): NodeMenuCtx => ({
-    create: onNewOfCategory ? [{ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) }] : [],
-    on: { expandAll: () => setCategory(c, key, true), collapseAll: () => setCategory(c, key, false), ...(onRun ? { run: () => onRun(c) } : {}) },
-  });
-  /** The menu of a folder of saved gRPC calls / connections: the view's (rename, delete), with fold and unfold. */
-  const extraFolderMenu = (r: Extract<TreeRow, { t: 'xfolder' }>): NodeMenuCtx => {
-    const own = r.g.folderMenu?.(r.folder);
-    return { name: r.folder, ...own, on: { ...own?.on, expandAll: () => setOpen((o) => ({ ...o, [r.key]: true })), collapseAll: () => setOpen((o) => ({ ...o, [r.key]: false })) } };
-  };
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
   const f = filter?.trim().toLowerCase();
 
   // every row that shows (the open collections, categories and folders), in order: a list of thousands is cheap to
   // build; only the rows on screen are drawn
-  const rows = useMemo(() => buildTreeRows({ collections, open, filter, favoritesOnly, categorize, extraGroups }), [collections, open, filter, favoritesOnly, categorize, extraGroups]);
+  const rows = useMemo(() => buildTreeRows({ collections, open, filter, favoritesOnly, explorer, extraGroups }), [collections, open, filter, favoritesOnly, explorer, extraGroups]);
   // nothing to show for the filter (or no favourites): say so (the same matches the rows were built from, cached)
   const nothingMatches = useMemo(() => {
     if (!f && !favoritesOnly) return false;
     const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
-    return !collections.some((c) => c.items.some(matchIndex(c.items, filter, favoritesOnly)) || (categorize && (extraGroups?.(c) ?? []).some((g) => g.items.some(extraShown))));
-  }, [collections, filter, f, favoritesOnly, categorize, extraGroups]);
+    return !collections.some((c) => c.items.some(matchIndex(c.items, filter, favoritesOnly)) || (explorer && (extraGroups?.(c) ?? []).some((g) => g.items.some(extraShown))));
+  }, [collections, filter, f, favoritesOnly, explorer, extraGroups]);
   // two collections with one name (an import done twice): their rows show their ids
   const duplicateNames = useMemo(() => {
     const seen = new Set<string>();
@@ -517,12 +537,18 @@ export const CollectionTree = memo(function CollectionTree({
     lastReveal.current = revealKey;
     if (!opened) return;
     for (const c of collections) {
+      // a gRPC call or connection in the folder view: the folders on its way to its own folder
+      const call = explorer ? (extraGroups?.(c) ?? []).flatMap((g) => g.items).find((i) => i.id === target) : undefined;
+      if (call) {
+        const to = call.folderId ? folderIdsTo(c.items, call.folderId) : undefined;
+        const keys = [c.id, ...(to ? [...to, call.folderId!] : []).map((id) => folderOpenKey(c.id, id))];
+        setOpen((o) => (keys.every((k) => o[k] !== false) ? o : { ...o, ...Object.fromEntries(keys.map((k) => [k, true])) }));
+        break;
+      }
       // the collection itself (a breadcrumb's first segment): open it
       const folders = c.id === target ? [] : folderIdsTo(c.items, target);
       if (!folders) continue;
-      const node = c.id === target ? undefined : findNode(c.items, target);
-      const cat = node && node.kind !== 'folder' ? requestCategory(node) : undefined;
-      const keys = [c.id, ...(cat && categorize ? [categoryOpenKey(c.id, cat)] : []), ...folders.map((id) => folderOpenKey(c.id, id))];
+      const keys = [c.id, ...folders.map((id) => folderOpenKey(c.id, id))];
       setOpen((o) => (keys.every((k) => o[k] !== false) ? o : { ...o, ...Object.fromEntries(keys.map((k) => [k, true])) }));
       break;
     }
@@ -551,8 +577,6 @@ export const CollectionTree = memo(function CollectionTree({
     requestMenu,
     folderMenu,
     collectionMenu,
-    categoryMenu,
-    extraFolderMenu,
     newRequest,
     newRequestLabel,
   };
@@ -566,12 +590,8 @@ export const CollectionTree = memo(function CollectionTree({
     switch (r.t) {
       case 'col':
         return <CollectionRow c={r.c} open={r.open} renaming={renaming === r.c.id} dropMode={dropModeOf(r.c.id)} failing={health[r.c.id]?.failing} sent={health[r.c.id]?.sent} duplicate={duplicateNames.has(r.c.name)} ctx={ctx} />;
-      case 'cat':
-        return <CategoryRow c={r.c} cat={r.cat} count={r.count} open={r.open} id={r.key} dropMode={dropModeOf(treeKey(r.c.id, r.cat))} ctx={ctx} />;
       case 'folder':
-        return <FolderRow c={r.c} n={r.n} depth={r.depth} open={r.open} renaming={renaming === r.key} dropMode={dropModeOf(r.key)} ctx={ctx} />;
-      case 'xfolder':
-        return <ExtraFolderRow r={r} ctx={ctx} />;
+        return <FolderRow c={r.c} n={r.n} depth={r.depth} open={r.open} calls={r.calls} renaming={renaming === r.key} dropMode={dropModeOf(r.key)} ctx={ctx} />;
       case 'xitem':
         return <ExtraItemRow g={r.g} i={r.i} depth={r.depth} from={r.from} id={r.key} active={activeRequestId === r.i.id} renaming={extraRenaming === r.i.id} ctx={ctx} />;
       case 'req':

@@ -154,7 +154,7 @@ describe('every row of a versioned kind says what it is for git', () => {
         if (base === 'test') drawn.add('flow');
       }
     // the saved calls and connections under a collection are drawn by one row component from the group's `kind` (a computed kind)
-    if (/git=\{\{ folder: r\.g\.kind/.test(readFileSync(join(src, 'components/CollectionTreeRows.tsx'), 'utf8'))) for (const lib of COLLECTION_CALL_LIBRARIES) drawn.add(collectionCallKind(lib));
+    if (/git=\{savedItemRef\(g\.cat, i\.id\)\}/.test(readFileSync(join(src, 'components/CollectionTreeRows.tsx'), 'utf8'))) for (const lib of COLLECTION_CALL_LIBRARIES) drawn.add(collectionCallKind(lib));
     // kinds the window lists as no row of their own (a proto is picked in its gRPC call, a mock named by its MCP server, the Debugger
     // rules are a panel, the workspace file is Environments ▸ Workspace variables, a package is edited in a dialog) draw their mark with
     // the same <GitMark> from the place that shows them: the file and the target it names.

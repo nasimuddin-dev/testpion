@@ -79,8 +79,7 @@ const steps = [
   step('open-explorer', `await __t.requests(); const c = await __t.waitFor(() => node('httpbin'), 3000); return c ? 'ok' : 'NO ROW httpbin';`),
   // the Collections tree
   step('collection', `return await both(node('httpbin'));`),
-  step('category', `await unfold(node('httpbin')); return await both(await __t.waitFor(() => node('httpbin:cat:rest'), 2000));`),
-  step('folder', `return await both(await __t.waitFor(() => node('httpbin:hb-basics'), 2000));`),
+  step('folder', `await unfold(node('httpbin')); return await both(await __t.waitFor(() => node('httpbin:hb-basics'), 2000));`),
   step('request-http', `await unfold(node('httpbin:hb-basics')); return await both(await __t.waitFor(() => node('httpbin:hb-headers'), 2000));`),
   step(
     'request-soap',
@@ -90,9 +89,9 @@ const steps = [
     'request-graphql',
     `await unfold(node('graphql-public')); const f = await __t.waitFor(() => byName('graphql-public:', 'Countries'), 2000); await unfold(f); return await both(await __t.waitFor(() => byName('graphql-public:', 'Country by code'), 2000));`,
   ),
-  step('grpc-folder', `await unfold(node('grpc')); return await both(await __t.waitFor(() => node('grpc:grpc:folder:grpcb.in'), 2000));`),
-  step('grpc-call', `return await both(await __t.waitFor(() => node('grpc:grpc:grpc-hello'), 2000));`),
-  step('ws-connection', `await unfold(node('realtime')); return await both(await __t.waitFor(() => node('realtime:websocket:ws-postman-echo'), 2000));`),
+  step('grpc-folder', `await unfold(node('grpc')); return await both(await __t.waitFor(() => node('grpc:grpc-fld-plain'), 2000));`),
+  step('grpc-call', `await unfold(node('grpc:grpc-fld-plain')); return await both(await __t.waitFor(() => node('grpc:grpc:grpc-hello'), 2000));`),
+  step('ws-connection', `await unfold(node('realtime')); await unfold(await __t.waitFor(() => node('realtime:ws-fld-echo'), 2000)); return await both(await __t.waitFor(() => node('realtime:websocket:ws-postman-echo'), 2000));`),
   // the explorer's sections
   step('favorites-section', `return await both(node('section:favorites'));`),
   step('favorite', `return await both(await __t.waitFor(() => node('favorites:fav-httpbin:hb-headers'), 2000));`),
@@ -214,14 +213,13 @@ module.exports = withExpect(
     collection: X(
       'New HTTP request | New request | New folder… | Import here… ‖ Expand all | Collapse all ‖ Run collection ‖ Copy link | Export ‖ Monitor on a schedule… | Run in CI… | Create test file from collection… | AI | Settings, runner & docs | Convert scripts to tp.* ‖ Rename | Duplicate ‖ Delete…',
     ),
-    category: X('New HTTP request ‖ Expand all | Collapse all ‖ Run collection'),
     folder: X(
-      'New HTTP request | New folder… | Import here… ‖ Expand all | Collapse all ‖ Run folder ‖ Copy link | Export… ‖ Monitor on a schedule… | Run in CI… | Create test file from folder… | AI | Edit folder (scripts, variables, auth) ‖ Rename | Duplicate | Move to… ‖ Delete…',
+      'New HTTP request | New request | New folder… | Import here… ‖ Expand all | Collapse all ‖ Run folder ‖ Copy link | Export… ‖ Monitor on a schedule… | Run in CI… | Create test file from folder… | AI | Edit folder (scripts, variables, auth) ‖ Rename | Duplicate | Move to… ‖ Delete…',
     ),
     'request-http': X('Open | Open in new tab ‖ Copy link | Copy as | Export… ‖ Monitor on a schedule… | Save as test… | Suggest checks with AI… ‖ Rename | Duplicate | Move to… | Remove from favorites ‖ Delete…'),
     'request-soap': X('Open | Open in new tab ‖ Copy link | Copy as | Export… ‖ Monitor on a schedule… | Save as test… | Suggest checks with AI… ‖ Rename | Duplicate | Move to… | Add to favorites ‖ Delete…'),
     'request-graphql': X('Open | Open in new tab ‖ Copy link | Export… ‖ Monitor on a schedule… | Save as test… | Suggest checks with AI… ‖ Rename | Duplicate | Move to… | Add to favorites ‖ Delete…'),
-    'grpc-folder': X('Expand all | Collapse all ‖ Export… ‖ Rename folder ‖ Delete folder…'),
+    'grpc-folder': X('New HTTP request | New request | New folder… | Import here… ‖ Expand all | Collapse all ‖ Run folder ‖ Copy link | Export… ‖ Monitor on a schedule… | Run in CI… | Create test file from folder… | AI | Edit folder (scripts, variables, auth) ‖ Rename | Duplicate | Move to… ‖ Delete…'),
     'grpc-call': X('Open | Open in new tab ‖ Copy link | Copy as grpcurl | Export… ‖ Save as test… ‖ Rename | Duplicate | Move to collection ‖ Delete…'),
     'ws-connection': X('Open | Open in new tab ‖ Copy link | Copy URL | Export… ‖ Save as test… ‖ Rename | Duplicate | Move to collection ‖ Delete…'),
     'favorites-section': X('Expand all | Collapse all'),
