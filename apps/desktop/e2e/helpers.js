@@ -78,7 +78,7 @@ window.__t = (() => {
       item?.click(); await sleep(1500);
       return item ? 'ok' : `NO MENU ITEM ${label}`;
     },
-    // open an item anywhere in the explorer (collapsed collections, categories, API definitions): filter, click, clear
+    // open an item anywhere in the explorer (collapsed collections and folders, API definitions): filter, click, clear
     find: async (text) => {
       const f = document.querySelector('aside input[placeholder^="Filter"]');
       if (!f) return `NO FILTER`;

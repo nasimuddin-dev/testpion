@@ -1,5 +1,4 @@
 import type { CollectionNode } from '../types';
-import { isCollectionCallLibrary } from '@testpion/shared';
 
 /** Whether a tree node belongs in the current text/favorites view. */
 export function matchesCollectionNode(node: CollectionNode, filter = '', favoritesOnly = false): boolean {
@@ -17,7 +16,7 @@ const matchCache = new WeakMap<CollectionNode[], MatchIndex>();
 /**
  * The matcher of a collection's nodes for a filter: whether every node (and, bottom-up, every folder: any child) matches,
  * computed once per (items array, query, favorites only) and cached per array (node lists are immutable: every change
- * makes new arrays). The tree asked this of each node up to five times per keystroke (the rows, the category scope, the
+ * makes new arrays). The tree asks this of each node several times per keystroke (the rows, the
  * collection's "anything to show" check, the "nothing matches" note), lower-casing names each time.
  */
 export function matchIndex(nodes: CollectionNode[], filter = '', favoritesOnly = false): (node: CollectionNode) => boolean {
@@ -49,7 +48,7 @@ export function matchIndex(nodes: CollectionNode[], filter = '', favoritesOnly =
   return (node) => hit.get(node) ?? false;
 }
 
-/** What a saved request is, for the explorer's categories (gRPC and WebSocket items live in libraries). */
+/** What kind a saved request is: its badge, its New request menu entry (gRPC and WebSocket items live in libraries). */
 export type RequestCategory = 'rest' | 'soap' | 'graphql' | 'grpc' | 'websocket';
 
 /** SOAP is an HTTP request with an XML envelope or a SOAPAction header. */
@@ -87,19 +86,4 @@ export function categoryCounts(nodes: CollectionNode[]): Record<CollectionCatego
     countsCache.set(nodes, counts);
   }
   return counts;
-}
-
-/** Whether these nodes hold a request of this category (anywhere in their folders). */
-export function hasCategory(nodes: CollectionNode[], cat: RequestCategory): boolean {
-  return countCategory(nodes, cat) > 0;
-}
-
-/** Requests of this category in these nodes. */
-export function countCategory(nodes: CollectionNode[], cat: RequestCategory): number {
-  return isCollectionCallLibrary(cat) ? 0 : categoryCounts(nodes)[cat];
-}
-
-/** Folders with no requests at all (they show under the collection's first category). */
-export function isEmptyFolder(node: CollectionNode): boolean {
-  return node.kind === 'folder' && node.items.every(isEmptyFolder);
 }

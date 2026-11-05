@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, callFolderId, callFolderPath, collectionFolders, duplicateCollection, interleave, placeCollectionCalls } from '../../packages/core/src/index.js';
+import { WorkspaceStore, callFolderPath, collectionFolders, duplicateCollection, interleave, placeCollectionCalls } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-calls-'));
 const stores: WorkspaceStore[] = [];
@@ -55,9 +55,6 @@ describe('any kind of request in any folder', () => {
     expect(store.getLibrary('websocket').items[0]!.folderId).toBe(byPath.get('Live'));
     // a second time: nothing to do
     expect(placeCollectionCalls(store)).toBe(0);
-    // a folder that was deleted: the call shows at the top level
-    expect(callFolderId(c, { folderId: 'pay' })).toBe('pay');
-    expect(callFolderId(c, { folderId: 'deleted' })).toBeUndefined();
     expect(callFolderPath(c, grpc.get('g-refund')!)).toBe('Payments / Refunds');
     expect(callFolderPath(c, { folder: 'Old text' })).toBe('Old text');
     // a copy of the collection: the copied calls sit in the copied folders, after the copied siblings

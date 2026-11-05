@@ -12,14 +12,14 @@ import { Button, cx, StatusDot } from './ui';
 import { plural } from '../lib/format';
 
 /*
- * The rows of the Collections tree (CollectionTree draws them through a VirtualList): a collection, a protocol
- * category, a folder, a request, a saved example, a folder of saved gRPC calls or connections and such an item. Every
+ * The rows of the Collections tree (CollectionTree draws them through a VirtualList): a collection, a folder, a
+ * request, a saved example, and a saved gRPC call or connection. Every
  * row is the one row (TreeRowShell) with the one menu (lib/node-menu.ts). Each is memoized: a tab switch, a keystroke
  * in the filter or a drag re-renders only the rows whose own props changed (active, renaming, drop target, git mark …).
  * Everything a row calls comes through `ctx`, a ref the tree keeps current, so handlers are never stale.
  */
 
-/** How each category of request looks in the tree. */
+/** How each kind of request is named and badged (the New request menu, a call's badge). */
 export const CATEGORY_META: Record<RequestCategory, { label: string; badge: string; cls: string }> = {
   rest: { label: 'REST', badge: 'HTTP', cls: 'text-ok' },
   soap: { label: 'SOAP', badge: 'SOAP', cls: KIND_COLOR.soap },
@@ -166,7 +166,6 @@ export const FolderRow = memo(function FolderRow({ c, n, depth, open, calls = 0,
   );
 });
 
-/** A protocol category of a collection (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT): create here, fold, run the collection. */
 /** A collection: its name, how many of its sent requests fail now, and its id when another collection has its name. */
 export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dropMode, failing, sent, duplicate, ctx }: { c: Collection; open: boolean; renaming: boolean; dropMode?: DropMode; failing?: number; sent?: number; duplicate: boolean; ctx: Ctx }) {
   const x = () => ctx.current;

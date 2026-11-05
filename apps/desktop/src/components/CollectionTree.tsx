@@ -73,7 +73,7 @@ const folderKeysOf = (collectionId: string, nodes: CollectionNode[], keys: strin
 };
 
 /**
- * Tree of collections → categories → folders → requests (with saved gRPC calls and connections), flattened to the rows
+ * Tree of collections → folders → requests of every kind (saved gRPC calls and connections among them), flattened to the rows
  * that show and drawn through a VirtualList; every row is the one row (TreeRowShell, CollectionTreeRows) with the one
  * menu (lib/node-menu.ts).
  */
@@ -126,7 +126,7 @@ export const CollectionTree = memo(function CollectionTree({
   extraGroups?(c: Collection): ExtraGroup[];
   /** The saved gRPC call or connection being renamed in place (its id): the view keeps that state. */
   extraRenaming?: string;
-  /** Create a request of this category in a collection (the + of a category, the collection menu). */
+  /** Create a request of this kind in a collection or one of its folders (New request ▸ in their menus). */
   onNewOfCategory?(c: Collection, cat: RequestCategory, folderId?: string): void;
   /** A saved gRPC call or connection was dropped on a collection. */
   onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string, place?: { folderId?: string; after?: string }): void;
@@ -140,7 +140,7 @@ export const CollectionTree = memo(function CollectionTree({
   onFolderCallsCopy?(collectionId: string, ids: ReadonlyMap<string, string>): void;
   /** Changes (1, 2 …) fold every collection and folder. */
   collapseAll?: number;
-  /** Changes (1, 2 …) unfold every collection, category and folder (the explorer's Expand all). */
+  /** Changes (1, 2 …) unfold every collection and folder (the explorer's Expand all). */
   expandAll?: number;
   /** Changes whenever something is opened: the open request is revealed again (even if it was already open). */
   revealKey?: number;
@@ -394,9 +394,9 @@ export const CollectionTree = memo(function CollectionTree({
       toastError(e, "Couldn't convert the scripts");
     }
   };
-  // which collections, categories and folders are open: the workspace's tree state (lib/tree-state)
+  // which collections and folders are open: the workspace's tree state (lib/tree-state)
   const [open, setOpen] = useTreeOpen('collections');
-  // flips what is shown: an item open by default (a category, the collection of the open request) closes on the first click
+  // flips what is shown: an item open by default (the collection of the open request) closes on the first click
   const toggle = (id: string, shown: boolean) => {
     setOpen((o) => ({ ...o, [id]: !shown }));
   };
@@ -413,7 +413,7 @@ export const CollectionTree = memo(function CollectionTree({
   };
   useEffect(() => {
     if (!collapseAll) return;
-    // every folder and category closed, and every collection (some are open by default)
+    // every folder closed, and every collection (some are open by default)
     setOpen((o) => {
       const next: Record<string, boolean> = Object.fromEntries(Object.keys(o).map((k) => [k, false]));
       for (const c of collections) next[c.id] = false;
@@ -547,7 +547,7 @@ export const CollectionTree = memo(function CollectionTree({
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
   const f = filter?.trim().toLowerCase();
 
-  // every row that shows (the open collections, categories and folders), in order: a list of thousands is cheap to
+  // every row that shows (the open collections and folders), in order: a list of thousands is cheap to
   // build; only the rows on screen are drawn
   const rows = useMemo(() => buildTreeRows({ collections, open, filter, favoritesOnly, explorer, extraGroups }), [collections, open, filter, favoritesOnly, explorer, extraGroups]);
   // nothing to show for the filter (or no favourites): say so (the same matches the rows were built from, cached)
@@ -564,7 +564,7 @@ export const CollectionTree = memo(function CollectionTree({
     return twice;
   }, [collections]);
 
-  // reveal the open request: when something was opened (search, history, a link), open its collection, category and
+  // reveal the open request: when something was opened (search, history, a link), open its collection and
   // folders, even ones folded by hand, and scroll its row into view. Switching or closing tabs leaves the tree as it is.
   // (a target named before the tree mounted — Reveal in sidebar from another view — is revealed at once)
   const lastReveal = useRef(revealId ? undefined : revealKey);

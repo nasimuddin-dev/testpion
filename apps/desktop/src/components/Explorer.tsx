@@ -40,7 +40,7 @@ import { treeKey } from '../lib/tree-state';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
- * expanding one shows what it holds by category (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT). MCP servers,
+ * expanding one shows its folders, with requests of every kind in them (REST, SOAP, GraphQL, gRPC, WebSocket & MQTT). MCP servers,
  * API definitions and datasets belong to the whole workspace and follow the collections. Environments, monitors,
  * AI prompts, evaluations and load tests live in their own views. Every header, folder and row is a node of its kind
  * with the one menu (lib/node-menu.ts) on the one row (TreeRowShell).
@@ -98,7 +98,7 @@ const SOAP_ENVELOPE = `<?xml version="1.0" encoding="utf-8"?>
   </soap:Body>
 </soap:Envelope>`;
 
-/** A new request of this category as a collection node (gRPC and WebSocket open their editors instead). */
+/** A new request of this kind as a collection node (gRPC and WebSocket open their editors instead). */
 function newNode(cat: RequestCategory): CollectionNode | undefined {
   if (cat === 'rest') return { kind: 'http', id: uid('req-'), name: 'New request', request: { method: 'GET', url: '{{baseUrl}}/' }, assertions: [] };
   if (cat === 'soap')

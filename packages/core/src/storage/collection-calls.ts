@@ -16,9 +16,6 @@ import type { Collection, CollectionFolder, CollectionNode, LibraryItem } from '
 import { slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
 
-/** The fields that place a gRPC call or connection in its collection. */
-export type CallPlace = Pick<LibraryItem, 'collectionId' | 'folderId' | 'after'>;
-
 /** The folders of a collection by id, with their path of names from the top ("Payments / Refunds"). */
 export function collectionFolders(c: Pick<Collection, 'items'>): Map<string, { folder: CollectionFolder; path: string[] }> {
   const out = new Map<string, { folder: CollectionFolder; path: string[] }>();
@@ -37,11 +34,6 @@ export function collectionFolders(c: Pick<Collection, 'items'>): Map<string, { f
 export function callFolderPath(c: Pick<Collection, 'items'>, item: Pick<LibraryItem, 'folderId' | 'folder'>, folders = collectionFolders(c)): string | undefined {
   const f = item.folderId ? folders.get(item.folderId) : undefined;
   return f ? f.path.join(' / ') : item.folder?.trim() || undefined;
-}
-
-/** The folder a call sits in, when the collection still has it (a deleted folder: the collection's top level). */
-export function callFolderId(c: Pick<Collection, 'items'>, item: Pick<LibraryItem, 'folderId'>, folders = collectionFolders(c)): string | undefined {
-  return item.folderId && folders.has(item.folderId) ? item.folderId : undefined;
 }
 
 /** The folder a path of names leads to, when the collection has it (names compared without case). */
