@@ -1,6 +1,7 @@
 import { interleave, liveKinds } from '@testpion/shared';
 import type { Collection, CollectionNode, GrpcTest, KeyValue, LibraryItem, TestCase, WebSocketTest } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { folderByPath, textFolderPath } from '../storage/collection-calls.js';
 
 /**
  * gRPC calls and WebSocket / Socket.IO / MQTT connections are saved in the workspace library
@@ -183,7 +184,8 @@ export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'
     for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), path.set(n.id, up ? `${path.get(up)} / ${n.name}` : n.name), walk(n.items, n.id));
   };
   walk(collection.items ?? []);
-  const folderOf = (c: Call) => (c.item.folderId && parent.has(c.item.folderId) ? c.item.folderId : '');
+  // (a call of an older version names its folder as text: the collection folder of that path, when there is one)
+  const folderOf = (c: Call) => (c.item.folderId ? (parent.has(c.item.folderId) ? c.item.folderId : '') : (folderByPath({ items: collection.items ?? [] }, textFolderPath(c.item.folder))?.id ?? ''));
   const selected = (c: Call) => {
     if (!selection?.length || selection.includes(c.item.id)) return true;
     for (let f: string | undefined = folderOf(c) || undefined; f; f = parent.get(f)) if (selection.includes(f)) return true;

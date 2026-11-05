@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
+import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -487,7 +487,10 @@ export function collectionsHandlers(be: Backend): Handlers {
         return { ...(await saveText(be, name, [{ name: 'OpenAPI', extensions: ['yaml', 'yml'] }], text, 'application/yaml')), name, notes: [] as string[] };
       }
       // a TestPion collection file carries its gRPC calls and connections too (Postman's format can't)
-      const savedItems = collectionSavedItems(be.ws, c.id);
+      // each call with its folder as a path of names too: another workspace may give the folders new ids on import
+      const saved = collectionSavedItems(be.ws, c.id);
+      const folders = collectionFolders(c);
+      const savedItems = saved && (Object.fromEntries(Object.entries(saved).map(([k, list]) => [k, (list ?? []).map((i) => ({ ...i, folder: callFolderPath(c, i, folders)?.split(' / ').join('/') }))])) as typeof saved);
       const { collection, notes } =
         format === 'postman'
           ? exportPostmanCollection(c)

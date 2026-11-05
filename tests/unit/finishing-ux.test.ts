@@ -201,7 +201,7 @@ describe('every drag has a menu equivalent', () => {
     expect(env).toMatch(/moveDown: \(\) => void move\(e\.id/);
     expect(read('apps/desktop/src/components/CollectionTree.tsx')).toMatch(/move: \(\) => setMoving\(\{ c, n \}\)/);
     expect(read('apps/desktop/src/components/FolderList.tsx')).toMatch(/move: moveToFolderItem/);
-    expect(read('apps/desktop/src/components/Explorer.tsx')).toMatch(/move: collections\.filter/);
+    expect(read('apps/desktop/src/components/Explorer.tsx')).toMatch(/move: collections\.map/);
   });
 });
 

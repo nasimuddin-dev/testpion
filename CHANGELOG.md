@@ -4,7 +4,8 @@
 
 ### Any kind of request in any folder
 
-- A collection folder holds REST, SOAP, GraphQL, gRPC and WebSocket / Socket.IO / MQTT / Kafka requests side by side; the Collections tree no longer splits a collection into one group per kind. A folder's **New request ▸** creates any kind in it, the save dialog of a gRPC call or connection offers the collection's folders, and dragging a call onto a folder moves it there. Runs of a folder include the calls inside it, in the order the tree shows. Workspaces from older versions are placed once on open: a call's own folder name becomes the collection folder of that name.
+- A collection folder holds REST, SOAP, GraphQL, gRPC and WebSocket / Socket.IO / MQTT / Kafka requests side by side; the Collections tree no longer splits a collection into one group per kind. A folder's **New request ▸** creates any kind in it, the save dialog of a gRPC call or connection offers the collection's folders, and dragging a call onto a folder moves it there. Runs of a folder include the calls inside it, in the order the tree shows. Workspaces from older versions are placed once on open: a call's own folder name becomes the collection folder of that name (with the same folder id on every computer, so git has nothing to merge).
+- A folder's gRPC calls and connections follow it: deleted with it (Undo brings them back), moved with it to another collection, copied by Duplicate. A call's **Move to collection ▸** lists every collection's folders; the runner's dialog lists a folder's calls; an exported collection keeps each call's folder through an import; a call dropped just before the request that follows it stays in place.
 
 ### Several tenants in one workspace: environment groups
 

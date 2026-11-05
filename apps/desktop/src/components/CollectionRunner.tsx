@@ -62,8 +62,8 @@ function findName(nodes: CollectionNode[], id: string): string | undefined {
 export function CollectionRunner({ collection, folderId, onFolderChange, dataPath }: { collection: Collection; folderId?: string; onFolderChange(id?: string): void; /** A workspace dataset (its path) chosen before the runner opened: it is the run's data. */ dataPath?: string }) {
   const activeEnv = useApp((s) => s.environment);
   const [environment, setEnvironment] = useState(activeEnv ?? '');
-  // the collection's gRPC calls and connections run after its requests (not in a folder run)
-  const [realtime, setRealtime] = useState<RunnableRequest[]>([]);
+  // the collection's gRPC calls and connections run after its requests; a folder's run takes the calls inside it
+  const [realtime, setRealtime] = useState<Array<RunnableRequest & { folderId?: string }>>([]);
   useEffect(() => {
     let live = true;
     const kinds = [
@@ -80,6 +80,7 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
             .map((it) => ({
               id: it.id,
               name: it.name,
+              folderId: it.folderId,
               path: it.folder ? [it.folder] : [],
               kind: kinds[i]![0],
               method:
@@ -98,7 +99,23 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
       live = false;
     };
   }, [collection.id]);
-  const requests = useMemo(() => [...flatten(collection.items, [], folderId), ...(folderId ? [] : realtime)], [collection.items, folderId, realtime]);
+  const requests = useMemo(() => {
+    // every folder's path of names, and the folders inside the one being run
+    const paths = new Map<string, string[]>();
+    const inside = new Set<string>();
+    const walk = (nodes: CollectionNode[], path: string[], inScope: boolean) => {
+      for (const n of nodes)
+        if (n.kind === 'folder') {
+          const here = inScope || n.id === folderId;
+          paths.set(n.id, [...path, n.name]);
+          if (here) inside.add(n.id);
+          walk(n.items, [...path, n.name], here);
+        }
+    };
+    walk(collection.items, [], false);
+    const calls = realtime.filter((r) => !folderId || (!!r.folderId && inside.has(r.folderId))).map(({ folderId: at, ...r }) => ({ ...r, path: at && paths.has(at) ? paths.get(at)! : r.path }));
+    return [...flatten(collection.items, [], folderId), ...calls];
+  }, [collection.items, folderId, realtime]);
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   /** Narrows the list (by name, folder or method); Select all / Deselect all act on what it shows. */
   const [reqFilter, setReqFilter] = useState('');

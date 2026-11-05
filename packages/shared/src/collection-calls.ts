@@ -38,3 +38,37 @@ export function interleave<N extends { id: string }, I extends { id: string; nam
   for (const c of calls) addCall(c);
   return out;
 }
+
+/** A gRPC call or connection as the library keeps it, as far as its place goes. */
+export interface PlacedCall {
+  id: string;
+  collectionId?: string;
+  folderId?: string;
+  after?: string;
+}
+
+/** The calls of a collection that sit in one of these folders (a folder and the folders inside it). */
+export const callsInFolders = <I extends PlacedCall>(items: readonly I[], collectionId: string, folderIds: ReadonlySet<string>): I[] =>
+  items.filter((i) => i.collectionId === collectionId && !!i.folderId && folderIds.has(i.folderId));
+
+/**
+ * Folders moved to another collection take their calls with them: the calls in `folderIds` now belong to `to`, in the
+ * same folders (`renamed`: the folders and requests that got a new id on the way).
+ */
+export function moveCallsWithFolders<I extends PlacedCall>(items: readonly I[], o: { from: string; to: string; folderIds: ReadonlySet<string>; renamed?: ReadonlyMap<string, string> }): I[] {
+  const now = (id?: string) => (id ? (o.renamed?.get(id) ?? id) : id);
+  return items.map((i) => (i.collectionId === o.from && i.folderId && o.folderIds.has(i.folderId) ? { ...i, collectionId: o.to, folderId: now(i.folderId), ...(i.after ? { after: now(i.after) } : {}) } : i));
+}
+
+/**
+ * Folders copied (Duplicate): a copy of every call inside them, in the copied folders, after the copied siblings.
+ * `ids`: old id → new id of every copied folder and request; `newId` names the copied calls.
+ */
+export function copyCallsWithFolders<I extends PlacedCall>(items: readonly I[], o: { collectionId: string; ids: ReadonlyMap<string, string>; newId(): string; to?: string }): I[] {
+  const mine = items.filter((i) => i.collectionId === o.collectionId && !!i.folderId && o.ids.has(i.folderId));
+  if (!mine.length) return [...items];
+  const all = new Map(o.ids);
+  for (const i of mine) all.set(i.id, o.newId());
+  const now = (id?: string) => (id ? (all.get(id) ?? id) : id);
+  return [...items, ...mine.map((i) => ({ ...i, id: all.get(i.id)!, collectionId: o.to ?? o.collectionId, folderId: now(i.folderId), ...(i.after ? { after: now(i.after) } : {}) }))];
+}

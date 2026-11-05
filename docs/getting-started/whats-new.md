@@ -41,6 +41,10 @@ The options added in 0.56, 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48,
 ### Mock servers that remember {#whats-new-mock-stateful}
 - **Stateful** on a mock server (the Mock tab, `testpion mock … --stateful`): `POST /pets` creates a record with a new id, `GET /pets` lists it, `GET /pets/3` returns it, PUT and PATCH change it, DELETE removes it, for as long as the mock runs. The list example seeds the state; **Reset state** forgets it. See [Mock servers](/api-testing/mock-servers).
 
+### Any kind of request in any folder {#whats-new-any-kind}
+
+- **One folder, every kind.** A collection folder holds REST, SOAP, GraphQL, gRPC and WebSocket / Socket.IO / MQTT / Kafka requests side by side, each with its badge; the sidebar no longer splits a collection into one group per kind. A folder's **New request ▸** creates any kind in it, saving a gRPC call or a connection offers the collection's folders, and dragging one onto a folder moves it there. A folder's calls follow it when it is deleted (with Undo), moved or duplicated, and running a folder runs them too. Workspaces from earlier versions are arranged once on open. See [Collections](/api-testing/collections).
+
 ### Small things {#whats-new-small-056}
 - The OpenAPI lint notes a parameter without a description and an operation that documents no failure. Every button, input and dialog has a name for a screen reader (a plan keeps it so). Navigation names are in Title Case and read from one file, so a renamed view is one edit.
 

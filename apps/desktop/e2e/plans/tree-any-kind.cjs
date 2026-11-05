@@ -66,6 +66,46 @@ const steps = [
      const row = await __t.waitFor(() => node('e2e-mixed:grpc:e2e-pay-grpc'), 4000);
      return 'folded before: ' + folded + ' | shown after: ' + !!row;`,
   ),
+  // dropped just before the request that already follows it, a call stays where it is (it is not placed after itself)
+  step(
+    'a-call-dropped-before-its-next-request-stays-in-place',
+    `${H}
+     await unfold('e2e-mixed:e2e-pay');
+     const to = await __t.waitFor(() => node('e2e-mixed:e2e-gql'), 4000); if (!to) return 'NO ROW';
+     const dt = new DataTransfer(); dt.setData('application/x-testpion-saved-item', JSON.stringify({ kind: 'grpc', id: 'e2e-pay-grpc', from: 'e2e-mixed' }));
+     to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+     to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+     await __t.sleep(1200);
+     const saved = (await window.aps.invoke('lib.get', { kind: 'grpc' })).items.find((i) => i.id === 'e2e-pay-grpc');
+     const rows = shown(); const at = (id) => rows.indexOf(id);
+     return 'after: ' + saved?.after + ' | between: ' + (at('e2e-mixed:e2e-list') < at('e2e-mixed:grpc:e2e-pay-grpc') && at('e2e-mixed:grpc:e2e-pay-grpc') < at('e2e-mixed:e2e-gql'));`,
+  ),
+  // a folder's calls follow it: Duplicate copies them into the copy; Delete takes them along, and Undo brings them back
+  step(
+    'duplicating-a-folder-copies-its-calls',
+    `${H}
+     const menuItem = async (row, label) => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 200 })); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === label), 3000); if (!it) { await __t.esc(); return false; } it.click(); return true; };
+     if (!(await menuItem(node('e2e-mixed:e2e-pay'), 'Duplicate'))) return 'NO DUPLICATE';
+     const copy = await __t.waitFor(async () => { const c = await window.aps.invoke('col.get', { id: 'e2e-mixed' }); return c.items.find((n) => n.name === 'Payments copy') || null; }, 5000); if (!copy) return 'NO COPY';
+     window.__copyFolderId = copy.id;
+     const calls = await __t.waitFor(async () => { const l = (await window.aps.invoke('lib.get', { kind: 'grpc' })).items.filter((i) => i.folderId === copy.id); return l.length ? l : null; }, 5000);
+     return 'copied calls: ' + (calls ?? []).map((i) => i.name + ' after ' + (copy.items.some((n) => n.id === i.after) ? 'the copied request' : i.after)).join(', ');`,
+  ),
+  step(
+    'deleting-a-folder-takes-its-calls-and-undo-brings-them-back',
+    `${H}
+     const menuItem = async (row, label) => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 200 })); const it = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim() === label), 3000); if (!it) { await __t.esc(); return false; } it.click(); return true; };
+     const inCopy = async () => (await window.aps.invoke('lib.get', { kind: 'grpc' })).items.filter((i) => i.folderId === window.__copyFolderId).length;
+     const row = await __t.waitFor(() => node('e2e-mixed:' + window.__copyFolderId), 4000); if (!row) return 'NO COPY ROW';
+     if (!(await menuItem(row, 'Delete…'))) return 'NO DELETE';
+     await __t.waitFor(async () => ((await inCopy()) === 0) || null, 5000);
+     const afterDelete = await inCopy();
+     const undo = await __t.waitFor(() => [...document.querySelectorAll('button')].find((b) => b.offsetParent && b.textContent.trim() === 'Undo'), 4000); if (!undo) return 'NO UNDO | calls left: ' + afterDelete;
+     undo.click();
+     await __t.waitFor(async () => ((await inCopy()) === 1) || null, 5000);
+     const folderBack = (await window.aps.invoke('col.get', { id: 'e2e-mixed' })).items.some((n) => n.id === window.__copyFolderId);
+     return 'calls after delete: ' + afterDelete + ' | after undo: ' + (await inCopy()) + ' | folder back: ' + folderBack;`,
+  ),
   step(
     'clean-up',
     `await window.aps.invoke('lib.save', { kind: 'grpc', library: { folders: [], items: [] } }); await window.aps.invoke('lib.save', { kind: 'websocket', library: { folders: [], items: [] } });
@@ -79,5 +119,8 @@ module.exports = withExpect(steps, {
   'new-request-in-a-folder-offers-every-kind': /^kinds: .*New GraphQL request.*New SOAP request.*New gRPC request.*New WebSocket & MQTT request/,
   'a-call-dropped-on-a-folder-moves-into-it': /^folder: e2e-other \| rows: .*e2e-mixed:e2e-other, e2e-mixed:websocket:e2e-feed$/,
   'opening-a-call-reveals-it-in-its-folder': /^folded before: true \| shown after: true$/,
+  'a-call-dropped-before-its-next-request-stays-in-place': /^after: e2e-list \| between: true$/,
+  'duplicating-a-folder-copies-its-calls': /^copied calls: Pay over gRPC after the copied request$/,
+  'deleting-a-folder-takes-its-calls-and-undo-brings-them-back': /^calls after delete: 0 \| after undo: 1 \| folder back: true$/,
   'clean-up': /^done$/,
 });

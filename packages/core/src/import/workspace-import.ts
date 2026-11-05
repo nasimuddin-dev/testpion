@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
-import { placeCollectionCalls } from '../storage/collection-calls.js';
+import { collectionFolders, placeCollectionCalls } from '../storage/collection-calls.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId, slugify } from '../util/ids.js';
 import { ApsError } from '../errors.js';
@@ -118,7 +118,7 @@ function savedItemsOf(text: string): unknown {
   }
 }
 
-function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: string, made?: Created['library']): Record<string, number> | undefined {
+function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: string, made?: Created['library'], folderIds?: ReadonlySet<string>): Record<string, number> | undefined {
   if (!saved || typeof saved !== 'object') return undefined;
   const counts: Record<string, number> = {};
   for (const kind of COLLECTION_ITEM_KINDS) {
@@ -132,7 +132,8 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
       const it = raw as LibraryItem;
       const id = it.id && !taken.has(it.id) ? it.id : shortId('lib-');
       taken.add(id);
-      added.push({ id, name: it.name, folder: typeof it.folder === 'string' ? it.folder : undefined, collectionId, ...(typeof it.folderId === 'string' ? { folderId: it.folderId } : {}), ...(typeof it.after === 'string' ? { after: it.after } : {}), data: it.data, updatedAt: new Date().toISOString() });
+      added.push({ id, name: it.name, folder: typeof it.folder === 'string' ? it.folder : undefined, collectionId, // (a folder id the imported collection does not have, its folders renumbered on the way in: the call is placed by its folder's path instead)
+        ...(typeof it.folderId === 'string' && (!folderIds || folderIds.has(it.folderId)) ? { folderId: it.folderId } : {}), ...(typeof it.after === 'string' ? { after: it.after } : {}), data: it.data, updatedAt: new Date().toISOString() });
     }
     if (!added.length) continue;
     store.saveLibrary(kind, { folders: lib.folders, items: [...lib.items, ...added] });
@@ -220,7 +221,7 @@ export function importIntoWorkspace(
     out.collection = saveOne(collection);
     // a TestPion collection file (or an Insomnia export) can carry the collection's gRPC calls and connections
     const saved = r.format === 'aps-collection' ? savedItemsOf(text) : r.savedItems;
-    if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id, made.library);
+    if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id, made.library, new Set(collectionFolders(out.collection).keys()));
     // any kind of request in any folder: calls that came with a folder path (Insomnia, Bruno, an older export) go into that collection folder
     if (out.savedItems) placeCollectionCalls(store);
     const warnings = scriptCompatibility(collection, (name) => store.readScriptPackage(name) !== undefined);

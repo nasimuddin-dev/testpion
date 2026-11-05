@@ -11,9 +11,9 @@
  * and keeps the text for an older app that still reads it.
  */
 import { COLLECTION_CALL_LIBRARIES, type CollectionCallLibrary } from '@testpion/shared';
-export { interleave } from '@testpion/shared';
+export { interleave, callsInFolders, moveCallsWithFolders, copyCallsWithFolders } from '@testpion/shared';
 import type { Collection, CollectionFolder, CollectionNode, LibraryItem } from '../model/types.js';
-import { shortId } from '../util/ids.js';
+import { slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
 
 /** The fields that place a gRPC call or connection in its collection. */
@@ -44,18 +44,46 @@ export function callFolderId(c: Pick<Collection, 'items'>, item: Pick<LibraryIte
   return item.folderId && folders.has(item.folderId) ? item.folderId : undefined;
 }
 
-/** The folder of this path in the collection's items, made when missing (`made` counts the new ones). */
-function folderOfPath(items: CollectionNode[], path: string[], made: { n: number }): { items: CollectionNode[]; id: string } {
+/** The folder a path of names leads to, when the collection has it (names compared without case). */
+export function folderByPath(c: Pick<Collection, 'items'>, path: string[]): CollectionFolder | undefined {
+  let nodes = c.items ?? [];
+  let found: CollectionFolder | undefined;
+  for (const name of path) {
+    found = nodes.find((n): n is CollectionFolder => n.kind === 'folder' && n.name.trim().toLowerCase() === name.trim().toLowerCase());
+    if (!found) return undefined;
+    nodes = found.items;
+  }
+  return found;
+}
+
+/** A text folder of an older version as a path of names ("Payments/Refunds"). */
+export const textFolderPath = (text?: string): string[] =>
+  (text ?? '')
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+/**
+ * The folder of this path in the collection's items, made when missing (`made` counts the new ones). A new folder's id
+ * comes from the collection and the path, not from chance: two people who open the same older workspace make the same
+ * folder, so git has nothing to merge (`taken`: every id in use; a clash gets -2, -3 …, the same on every computer).
+ */
+function folderOfPath(items: CollectionNode[], path: string[], made: { n: number }, scope: { collectionId: string; taken: Set<string>; done?: string[] }): { items: CollectionNode[]; id: string } {
   const [head, ...rest] = path;
+  const done = [...(scope.done ?? []), head!];
   const at = items.findIndex((n) => n.kind === 'folder' && n.name.trim().toLowerCase() === head!.toLowerCase());
   let folder = at >= 0 ? (items[at] as CollectionFolder) : undefined;
   if (!folder) {
-    folder = { kind: 'folder', id: shortId('fld-'), name: head!, items: [] };
+    const base = `fld-${slugify(`${scope.collectionId} ${done.join(' ')}`) || 'folder'}`;
+    let id = base;
+    for (let n = 2; scope.taken.has(id); n++) id = `${base}-${n}`;
+    scope.taken.add(id);
+    folder = { kind: 'folder', id, name: head!, items: [] };
     made.n++;
   }
   let id = folder.id;
   if (rest.length) {
-    const inner = folderOfPath(folder.items, rest, made);
+    const inner = folderOfPath(folder.items, rest, made, { ...scope, done });
     folder = { ...folder, items: inner.items };
     id = inner.id;
   }
@@ -77,6 +105,7 @@ export function placeCollectionCalls(store: WorkspaceStore, libraries: readonly 
     let changed = false;
     const items = lib.items.map((it) => {
       const text = it.folder?.trim();
+      // (a folderId whose folder is gone is not placed again: the person deleted or moved that folder)
       if (!it.collectionId || it.folderId || !text) return it;
       let c = collections.get(it.collectionId);
       if (!c) {
@@ -88,13 +117,15 @@ export function placeCollectionCalls(store: WorkspaceStore, libraries: readonly 
         if ((c as { problem?: string }).problem) return it;
         collections.set(c.id, c);
       }
-      const path = text
-        .split('/')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const path = textFolderPath(text);
       if (!path.length) return it;
       const made = { n: 0 };
-      const placed = folderOfPath(c.items, path, made);
+      const taken = new Set<string>();
+      const ids = (nodes: CollectionNode[]) => {
+        for (const n of nodes) (taken.add(n.id), n.kind === 'folder' && ids(n.items));
+      };
+      ids(c.items);
+      const placed = folderOfPath(c.items, path, made, { collectionId: c.id, taken });
       if (made.n) {
         collections.set(c.id, { ...c, items: placed.items });
         changedCollections.add(c.id);

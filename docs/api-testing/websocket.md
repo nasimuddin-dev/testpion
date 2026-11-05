@@ -76,7 +76,7 @@ Each received message is `{ topic, key, partition, offset, headers, data }`, wit
 Saved connections (URL, subprotocols, handshake headers and the message) belong to a [collection](./collections.md) and are listed in the Collections explorer in their collection folders, next to the folders' other requests of any kind:
 
 - **Save** stores the current connection, or saves the changes to the one you opened (*Save\**). A new connection asks for its name, collection (or a new one) and folder: every saved connection is in a collection. An unsaved tab connects and sends all the same.
-- Click a connection in the explorer to open it. Its `⋯` / right-click menu has **Open**, **Save as test…**, **Copy URL**, **Rename**, **Duplicate**, **Move to** (another collection) and **Delete…**; drag it onto another collection to move it there.
+- Click a connection in the explorer to open it. Its `⋯` / right-click menu has **Open**, **Save as test…**, **Copy URL**, **Rename**, **Duplicate**, **Move to collection ▸** (a collection's top level or one of its folders) and **Delete…**; drag it onto a folder or another collection to move it there.
 - A new connection: the explorer's **+** ▸ **WebSocket, Socket.IO, MQTT or Kafka**, or **New WebSocket & MQTT request** in a collection's **⋯** menu (it is saved in that collection).
 
 **Saved messages:** above the message editor, **Save message** keeps the current message under a name (for Socket.IO, with its event), and the list next to it puts one back in the editor to send again. They are saved with the connection, so a connection can carry the handful of messages you send to it (subscribe, ping, unsubscribe …).

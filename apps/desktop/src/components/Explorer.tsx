@@ -35,7 +35,7 @@ import { startFlowGenerate } from './ai/flow-generate';
 import { generateSpecTests } from './ApiPreviewPanel';
 import { useAreaMenu } from './AreaMenu';
 import { EmptyHint, FolderedRows, folderKey, folderNames, ItemRow, moveToFolderSubmenu, newFolderIn, Section, useOpenSections, type FolderOps, type RowRename } from './ExplorerParts';
-import { collectionCallKind, isCollectionCallLibrary } from '@testpion/shared';
+import { callsInFolders, collectionCallKind, copyCallsWithFolders, isCollectionCallLibrary, moveCallsWithFolders } from '@testpion/shared';
 import { treeKey } from '../lib/tree-state';
 
 /**
@@ -397,6 +397,40 @@ export function Explorer() {
     }
   };
   /** A folder of saved gRPC calls or connections: rename it, or delete it (its items move to the top level, Undo puts them back). */
+  /**
+   * A collection folder's gRPC calls and connections follow it (they are kept outside the collection file): deleted with
+   * it (and put back by Undo), moved with it to another collection, copied with it.
+   */
+  const folderCalls = {
+    remove: async (collectionId: string, folderIds: string[]) => {
+      const inside = new Set(folderIds);
+      const removed: Array<{ kind: 'grpc' | 'websocket'; items: Array<LibraryItem<unknown>> }> = [];
+      for (const kind of ['grpc', 'websocket'] as const) {
+        const here = callsInFolders(kind === 'grpc' ? grpc : sockets, collectionId, inside);
+        if (!here.length) continue;
+        const ids = new Set(here.map((i) => i.id));
+        closeTabsFor([...ids]);
+        await editLibrary(kind, (items) => {
+          removed.push({ kind, items: items.filter((i) => ids.has(i.id)) });
+          return items.filter((i) => !ids.has(i.id));
+        });
+      }
+      if (!removed.length) return undefined;
+      return async () => {
+        for (const r of removed) await editLibrary(r.kind, (items) => [...items, ...r.items.filter((x) => !items.some((i) => i.id === x.id))]);
+      };
+    },
+    move: (from: string, to: string, folderIds: string[], renamed: ReadonlyMap<string, string>) => {
+      const inside = new Set(folderIds);
+      for (const kind of ['grpc', 'websocket'] as const) if (callsInFolders(kind === 'grpc' ? grpc : sockets, from, inside).length) void editLibrary(kind, (items) => moveCallsWithFolders(items, { from, to, folderIds: inside, renamed }));
+    },
+    copy: (collectionId: string, ids: ReadonlyMap<string, string>) => {
+      const inside = new Set(ids.keys());
+      for (const kind of ['grpc', 'websocket'] as const)
+        if (callsInFolders(kind === 'grpc' ? grpc : sockets, collectionId, inside).length)
+          void editLibrary(kind, (items) => copyCallsWithFolders(items, { collectionId, ids, newId: () => uid('lib-') }).map((i) => (items.includes(i) ? i : { ...i, updatedAt: new Date().toISOString() })));
+    },
+  };
   const renameSaved = (kind: 'grpc' | 'websocket', id: string): RowRename => renamer(id, id, (name) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, name } : i))));
   /** The menu of a gRPC call or connection: the same groups as a request's (open, copy, test file, rename, duplicate, move, delete). */
   const savedMenu = (kind: 'grpc' | 'websocket', item: SavedItem): NodeMenuCtx => {
@@ -411,7 +445,18 @@ export function Explorer() {
         testFile: () => void saveAsTest({ ref, name: item.name }),
         rename: () => setRenaming(item.id),
         duplicate: () => void editLibrary(kind, (items) => items.flatMap((i) => (i.id === item.id ? [i, { ...i, id: uid('lib-'), name: `${i.name} copy`, after: i.id, updatedAt: new Date().toISOString() }] : [i]))),
-        move: collections.filter((c) => c.id !== item.collectionId).map((c) => ({ label: c.name, onSelect: () => void moveItem(kind, item.id, c.id) })),
+        // Move to ▸ a collection ▸ its top level or one of its folders (any kind of request in any folder)
+        move: collections.map((c) => {
+          const folders: Array<{ id: string; path: string }> = [];
+          const walk = (nodes: CollectionNode[], prefix: string) => {
+            for (const n of nodes) if (n.kind === 'folder') (folders.push({ id: n.id, path: prefix + n.name }), walk(n.items, `${prefix}${n.name} / `));
+          };
+          walk(c.items, '');
+          const top = { label: 'Top level', onSelect: () => void moveItem(kind, item.id, c.id) };
+          return folders.length
+            ? { label: c.name, onSelect: () => undefined, items: [top, ...folders.filter((f) => !(c.id === item.collectionId && f.id === item.folderId)).map((f) => ({ label: f.path, onSelect: () => void moveItem(kind, item.id, c.id, { folderId: f.id }) }))] }
+            : { label: c.name, onSelect: top.onSelect };
+        }),
         delete: () => {
           // the whole saved item (its request and settings) and its place, to put it back as it was
           let removed: { item: LibraryItem<unknown>; at: number } | undefined;
@@ -651,6 +696,9 @@ export function Explorer() {
   const treeCallbacks = useStableCallbacks({
     onNewOfCategory: newOfCategory,
     onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string, place?: { folderId?: string; after?: string }) => void moveItem(kind, id, to, place),
+    onFolderCallsRemove: folderCalls.remove,
+    onFolderCallsMove: folderCalls.move,
+    onFolderCallsCopy: folderCalls.copy,
     onOpen: (c: Collection, n: CollectionNode, o?: { preview?: boolean }) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, o?.preview ? { preview: true } : {}),
     onChange: (c: Collection) => void saveCollection(c),
     onRun: (c: Collection, folderId?: string) => intent('collections', { collectionId: c.id, run: true, folderId }),
