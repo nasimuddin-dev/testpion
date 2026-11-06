@@ -95,6 +95,20 @@ export const WRITE_COMMANDS = new Set([
   'git undo',
   'settings set',
   'settings reset',
+  // the writers the review of 2026-11 found outside the contract: evaluations, reviews, trust, storage, agent files
+  'eval trust',
+  'eval baseline',
+  'eval review-add',
+  'eval version-save',
+  'eval version-use',
+  'storage',
+  'workspace trust forget',
+  'agents-md',
+  'history review',
+  'rag metric example',
+  'rag trust-db',
+  'rag label document',
+  'rag calibrate',
 ]);
 
 /**
@@ -102,6 +116,18 @@ export const WRITE_COMMANDS = new Set([
  * an open workspace (workspace-guard.ts) and --force are not theirs.
  */
 const NO_LOCK_CHECK = new Set(['workspace create', 'workspace rename', 'workspace delete', 'workspace export']);
+
+/**
+ * Writers that only read unless an option says otherwise (`storage` shows sizes; with --delete-runs-older-than it
+ * deletes): the lock of an open workspace is checked only when they write, so reading works while the app is open.
+ */
+const WRITES_ONLY_WHEN: Record<string, (o: Record<string, unknown>) => boolean> = {
+  storage: (o) => o.deleteRunsOlderThan !== undefined,
+  'history review': (o) => !!(o.good || o.bad || o.clear) || o.note !== undefined,
+  'rag trust-db': (o) => !o.list,
+  'rag calibrate': (o) => o.apply === true,
+  'agents-md': (o) => !o.stdout,
+};
 
 /** The commands that call the user's AI model: each takes `--max-cost <usd>`, refused before anything is sent when one call could cost more. */
 export const AI_COMMANDS = new Set(['ai run', 'ai triage', 'ai script', 'ai attempt-fix', 'generate tests', 'tidy', 'flow generate', 'security generate', 'openapi drift', 'search', 'rag generate-dataset', 'rag draft-references', 'rag author']);
@@ -143,7 +169,8 @@ export function applyCliContract(program: Command): void {
       { ...o, json: NO_ENVELOPE.has(path) ? false : o.json, jsonl: o.jsonl === true || (JSON_MEANS_JSONL.has(path) && o.json === true) },
       [action, action.parent].some((c) => !!c && (hasOption(c, '--json') || hasOption(c, '--jsonl'))),
     );
-    if (WRITE_COMMANDS.has(path) && !NO_LOCK_CHECK.has(path)) refuseWhenOpenElsewhere(o as Record<string, unknown>); // another TestPion has this workspace open (workspace-guard.ts)
+    // another TestPion has this workspace open (workspace-guard.ts)
+    if (WRITE_COMMANDS.has(path) && !NO_LOCK_CHECK.has(path) && (WRITES_ONLY_WHEN[path]?.(o as Record<string, unknown>) ?? true)) refuseWhenOpenElsewhere(o as Record<string, unknown>);
     // one AI call may not cost more than --max-cost
     if (AI_COMMANDS.has(path) && typeof (o as { maxCost?: unknown }).maxCost === 'string') {
       const cap = Number((o as { maxCost: string }).maxCost);
@@ -153,13 +180,13 @@ export function applyCliContract(program: Command): void {
     // a command that runs git prints its plan and does not run
     const run = async () => {
       if (o.dryRun === true && PLAN_ONLY[path]) {
-        const plan = await planFor(path, o.workspace, o as Record<string, unknown>, action.processedArgs.map(String));
+        const plan = await planFor(path, o.workspace, o as Record<string, unknown>, action.processedArgs.map((x) => (x === undefined || x === null ? '' : String(x))));
         if (plan) throw new PlanOnly(plan);
       }
       // the generic dry run (a command with its own handles --dry-run itself)
       if (o.dryRun === true && genericDryRun.has(path)) startDryRun();
       // a command that deletes or overwrites asks, or refuses without --yes (confirm.ts)
-      await confirmBeforeRun(path, action, o as Record<string, unknown>, action.processedArgs.map(String));
+      await confirmBeforeRun(path, action, o as Record<string, unknown>, action.processedArgs.map((x) => (x === undefined || x === null ? '' : String(x))));
     };
     return run();
   });

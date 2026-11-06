@@ -40,6 +40,13 @@ export const PLAN_ONLY: Record<string, Planner> = {
   },
   'git resolve': async (o, a) => ({ would: `settle the conflicted file ${JSON.stringify(a[0] ?? '')} with ${o.ours ? '"ours"' : o.theirs ? '"theirs"' : 'the sides you chose'}; the other side's changes in it are dropped` }),
   'git switch': async (o, a) => ({ would: `${o.create ? 'create the branch ' : 'switch to the branch '}${JSON.stringify(a[0] ?? '')}` }),
+  // shown without options it only reads; with them it sets the repository's own user.name / user.email
+  'git identity': async (o) => ({
+    would: o.name || o.email ? `set ${[o.name ? `user.name ${JSON.stringify(String(o.name))}` : '', o.email ? `user.email ${JSON.stringify(String(o.email))}` : ''].filter(Boolean).join(' and ')} in this repository's config (never the global one)` : 'show the name and e-mail git uses (nothing changes)',
+  }),
+  'git conflicts': async (o, a) => ({
+    would: o.resolve ? `settle ${a[0] ? `the conflicted file ${JSON.stringify(a[0])}` : 'every conflicted file'} with "${String(o.resolve)}"; the other side's changes in it are dropped` : 'list the conflicted files (nothing changes)',
+  }),
   'git stash apply': async (_o, a) => ({ would: `put stash ${a[0] ?? '0'} back into the workspace files` }),
   'git stash pop': async (_o, a) => ({ would: `put stash ${a[0] ?? '0'} back into the workspace files and remove it from the list` }),
   'git stash drop': async (_o, a) => ({ would: `remove stash ${a[0] ?? '0'} for good` }),

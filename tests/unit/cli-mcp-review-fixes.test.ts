@@ -64,10 +64,7 @@ const RUNS = new Set([
  * Commands that change something the workspace or this computer keeps and are not in the contract yet (no --dry-run, no
  * lock check). The list may only get shorter: a command leaves it by joining WRITE_COMMANDS.
  */
-const WRITES_OUTSIDE_THE_CONTRACT = new Set([
-  'eval trust', 'eval baseline', 'eval review-add', 'eval version-save', 'eval version-use', 'storage', 'workspace trust forget', 'git identity', 'git conflicts', 'agents-md',
-  'history review', 'rag metric example', 'rag trust-db', 'rag label document', 'rag calibrate',
-]);
+const WRITES_OUTSIDE_THE_CONTRACT = new Set<string>([]);
 
 describe('the CLI contract names every command that writes', () => {
   const program = buildProgram();
@@ -83,7 +80,7 @@ describe('the CLI contract names every command that writes', () => {
     expect(listed.filter((p) => !paths.has(p))).toEqual([]);
     expect(listed.filter((p) => WRITE_COMMANDS.has(p))).toEqual([]);
     expect(new Set(listed).size).toBe(listed.length);
-    expect(WRITES_OUTSIDE_THE_CONTRACT.size).toBeLessThanOrEqual(15);
+    expect(WRITES_OUTSIDE_THE_CONTRACT.size).toBe(0);
   });
 
   it('the writers the review found are in it: --dry-run, and --force past the lock of an open workspace', () => {
@@ -108,6 +105,17 @@ describe('the CLI contract names every command that writes', () => {
     const init = cliRun(['workspace', 'conventions', '--init', '-w', ws, '--dry-run']);
     expect(init.status, init.out + init.err).toBe(0);
     expect(existsSync(join(ws, 'conventions.yaml'))).toBe(false);
+  });
+
+  it('the writers that joined the contract: --dry-run of agents-md writes nothing; git identity and conflicts print a plan', () => {
+    const agents = cliRun(['agents-md', '-w', ws, '--dry-run']);
+    expect(agents.status, agents.out + agents.err).toBe(0);
+    expect(agents.out).toMatch(/AGENTS\.md/);
+    expect(existsSync(join(ws, 'AGENTS.md'))).toBe(false);
+    const identity = cliRun(['git', 'identity', '--name', 'Ana', '--email', 'ana@example.com', '-w', ws, '--dry-run']);
+    expect(identity.out).toMatch(/user\.name \\"Ana\\" and user\.email \\"ana@example\.com\\"/);
+    const conflicts = cliRun(['git', 'conflicts', '--resolve', 'ours', '-w', ws, '--dry-run']);
+    expect(conflicts.out).toMatch(/every conflicted file with \\"ours\\"/);
   });
 });
 
