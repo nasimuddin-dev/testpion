@@ -4,7 +4,7 @@ import { exportMoreFormat, MORE_EXPORT_FORMATS } from './export-more.js';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
-import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef } from '@testpion/core';
+import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef, collectionOwners, ownedBy } from '@testpion/core';
 import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, warnUnknownGroup, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
@@ -238,22 +238,26 @@ export function registerDataCommands(program: Command): void {
     });
   program
     .command('collections')
-    .description('list the collections of a workspace: requests, gRPC calls and connections in each')
+    .description('list the collections of a workspace: requests, gRPC calls and connections in each, and their owners (CODEOWNERS)')
+    .option('--owner <team>', "only the collections this team or person owns in CODEOWNERS (@org/payments, or payments)")
     .option(...WORKSPACE_OPTION)
     .option(...JSON_OPTION)
-    .action((o: { workspace?: string; json?: boolean }) => {
-      return withWorkspace(o.workspace, (store) => {
+    .action((o: { owner?: string; workspace?: string; json?: boolean }) => {
+      return withWorkspace(o.workspace, async (store) => {
         const all = store.listCollections();
         if (!o.json) warnProblems(all, 'collection');
+        const owners = await collectionOwners(store, all.map((c) => c.id));
+        if (o.owner && !Object.keys(owners).length) throw new CliError('--owner reads CODEOWNERS, and this workspace has none (or it names no collection file)', EXIT.CONFIG_ERROR);
         const rows = all
-          .filter((c) => !c.problem)
+          .filter((c) => !c.problem && (!o.owner || ownedBy(owners[c.id], o.owner)))
           .map((c) => {
             const saved = collectionSavedItems(store, c.id);
-            return { id: c.id, name: c.name, requests: collectionRequests(c).length, grpcCalls: saved?.grpc?.length ?? 0, connections: saved?.websocket?.length ?? 0 };
+            return { id: c.id, name: c.name, requests: collectionRequests(c).length, grpcCalls: saved?.grpc?.length ?? 0, connections: saved?.websocket?.length ?? 0, ...(owners[c.id] ? { owners: owners[c.id] } : {}) };
           });
-        if (o.json) return printJson([...rows, ...all.filter((c) => c.problem).map((c) => ({ id: c.id, name: c.name, problem: c.problem }))]);
-        if (!rows.length) return console.log(dim('No collections. Create one in the app, or import one: testpion import <file>'));
-        for (const r of rows) console.log(`${r.name}  ${dim(r.id)}  ${[`${r.requests} request${r.requests === 1 ? '' : 's'}`, r.grpcCalls ? `${r.grpcCalls} gRPC` : '', r.connections ? `${r.connections} connection${r.connections === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}`);
+        if (o.json) return printJson([...rows, ...(o.owner ? [] : all.filter((c) => c.problem).map((c) => ({ id: c.id, name: c.name, problem: c.problem })))]);
+        if (!rows.length) return console.log(dim(o.owner ? `No collection is owned by ${o.owner} in CODEOWNERS.` : 'No collections. Create one in the app, or import one: testpion import <file>'));
+        for (const r of rows)
+          console.log(`${r.name}  ${dim(r.id)}  ${[`${r.requests} request${r.requests === 1 ? '' : 's'}`, r.grpcCalls ? `${r.grpcCalls} gRPC` : '', r.connections ? `${r.connections} connection${r.connections === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')}${r.owners ? `  ${dim(r.owners.join(' '))}` : ''}`);
       });
     });
   program

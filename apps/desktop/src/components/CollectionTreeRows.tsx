@@ -167,7 +167,28 @@ export const FolderRow = memo(function FolderRow({ c, n, depth, open, calls = 0,
 });
 
 /** A collection: its name, how many of its sent requests fail now, and its id when another collection has its name. */
-export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dropMode, failing, sent, duplicate, ctx }: { c: Collection; open: boolean; renaming: boolean; dropMode?: DropMode; failing?: number; sent?: number; duplicate: boolean; ctx: Ctx }) {
+export const CollectionRow = memo(function CollectionRow({
+  c,
+  open,
+  renaming,
+  dropMode,
+  failing,
+  sent,
+  duplicate,
+  owners,
+  ctx,
+}: {
+  c: Collection;
+  open: boolean;
+  renaming: boolean;
+  dropMode?: DropMode;
+  failing?: number;
+  sent?: number;
+  duplicate: boolean;
+  /** The team(s) CODEOWNERS names for its file, shown after its name (several teams in one workspace). */
+  owners?: string[];
+  ctx: Ctx;
+}) {
   const x = () => ctx.current;
   const dropOf = () => x().collectionDrop(c);
   return (
@@ -201,6 +222,11 @@ export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dr
           {c.id}
         </span>
       )}
+      {owners?.length ? (
+        <span className="ml-auto text-2xs text-muted font-normal truncate shrink min-w-0 max-w-[45%]" title={`Owned by ${owners.join(', ')} (CODEOWNERS). Type ${owners[0]} in the filter to see only this team's collections.`} data-collection-owners="">
+          {owners.join(' ')}
+        </span>
+      ) : null}
     </TreeRowShell>
   );
 });

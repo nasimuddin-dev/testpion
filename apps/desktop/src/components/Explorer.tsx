@@ -36,7 +36,7 @@ import { startFlowGenerate } from './ai/flow-generate';
 import { generateSpecTests } from './ApiPreviewPanel';
 import { useAreaMenu } from './AreaMenu';
 import { EmptyHint, FolderedRows, folderKey, folderNames, ItemRow, moveToFolderSubmenu, newFolderIn, Section, useOpenSections, type FolderOps, type RowRename } from './ExplorerParts';
-import { isCollectionCallLibrary } from '@testpion/shared';
+import { isCollectionCallLibrary, ownedBy } from '@testpion/shared';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
@@ -241,6 +241,22 @@ export function Explorer() {
     };
   }, [load]);
 
+  // several teams in one workspace: each collection's owners from CODEOWNERS (none without one), read again when the list changes
+  const [owners, setOwners] = useState<Record<string, string[]>>({});
+  const collectionIds = allCollections.map((c) => c.id).join('\n');
+  useEffect(() => {
+    let live = true;
+    void call<Record<string, string[]>>('col.owners').then(
+      (o) => live && setOwners(o),
+      () => live && setOwners({}),
+    );
+    return () => {
+      live = false;
+    };
+  }, [collectionIds]);
+  // "@payments" in the filter: the collections that team owns, whole (the other sections filter by the text as usual)
+  const team = /^@\S+$/.test(shownFilter.trim()) && Object.keys(owners).length ? shownFilter.trim() : undefined;
+  const treeCollections = useMemo(() => (team ? allCollections.filter((c) => ownedBy(owners[c.id], team)) : allCollections), [team, allCollections, owners]);
   const f = shownFilter.trim().toLowerCase();
   const match = (...t: Array<string | undefined>) => !f || t.some((x) => x?.toLowerCase().includes(f));
   const shownServers = servers.filter((s) => match(s.name, s.transport));
@@ -617,8 +633,9 @@ export function Explorer() {
           <div className="pb-2 border-b border-line/60">
             <CollectionTree
               // a collection whose file cannot be read stays listed (in red, with why), never silently gone
-              collections={allCollections}
-              filter={shownFilter}
+              collections={treeCollections}
+              filter={team ? '' : shownFilter}
+              owners={owners}
               explorer
               {...calls.tree}
               collapseAll={collapseAll}

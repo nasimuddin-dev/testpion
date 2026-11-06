@@ -102,8 +102,11 @@ export const CollectionTree = memo(function CollectionTree({
   expandAll,
   revealKey,
   revealId,
+  owners,
 }: {
   collections: Collection[];
+  /** The owners of each collection from CODEOWNERS, by id: shown on its row. */
+  owners?: Record<string, string[]>;
   /** Open a request; `preview`: a single click (a preview tab, WF-19), double-click opens it for good. */
   onOpen(c: Collection, node: CollectionNode, o?: { preview?: boolean }): void;
   /**
@@ -681,7 +684,7 @@ export const CollectionTree = memo(function CollectionTree({
   const renderRow = (r: TreeRow) => {
     switch (r.t) {
       case 'col':
-        return <CollectionRow c={r.c} open={r.open} renaming={renaming === r.c.id} dropMode={dropModeOf(r.c.id)} failing={health[r.c.id]?.failing} sent={health[r.c.id]?.sent} duplicate={duplicateNames.has(r.c.name)} ctx={ctx} />;
+        return <CollectionRow c={r.c} open={r.open} renaming={renaming === r.c.id} dropMode={dropModeOf(r.c.id)} failing={health[r.c.id]?.failing} sent={health[r.c.id]?.sent} duplicate={duplicateNames.has(r.c.name)} owners={owners?.[r.c.id]} ctx={ctx} />;
       case 'folder':
         return <FolderRow c={r.c} n={r.n} depth={r.depth} open={r.open} calls={r.calls} renaming={renaming === r.key} dropMode={dropModeOf(r.key)} ctx={ctx} />;
       case 'xitem':

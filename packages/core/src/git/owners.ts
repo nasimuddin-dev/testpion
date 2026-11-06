@@ -105,6 +105,31 @@ export async function workspaceCodeowners(ws: string): Promise<{ repo: string; r
   }
 }
 
+/**
+ * The owners of each collection (from CODEOWNERS, by the collection's file), by collection id: what the Collections tree
+ * shows on a collection and filters by (`@payments`), and `testpion collections --owner`. Empty without a CODEOWNERS;
+ * a collection no rule names is left out.
+ */
+export async function collectionOwners(store: { root: string; collectionFileOf(id: string): string }, ids: string[]): Promise<Record<string, string[]>> {
+  const co = await workspaceCodeowners(store.root).catch(() => undefined);
+  if (!co) return {};
+  const out: Record<string, string[]> = {};
+  for (const id of ids) {
+    let file: string;
+    try {
+      file = store.collectionFileOf(id);
+    } catch {
+      continue;
+    }
+    const owners = ownersOf(co.rules, toRepoPath(co.repo, store.root, file));
+    if (owners.length) out[id] = owners;
+  }
+  return out;
+}
+
+/** Whether a typed team names one of these owners (shared with the window). */
+export { ownedBy } from '@testpion/shared';
+
 export interface Ownership {
   /** The workspace file the owners are read for. */
   file: string;

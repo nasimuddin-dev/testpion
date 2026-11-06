@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ownersOf, ownershipOf, parseCodeowners, workspaceCodeowners } from '../../packages/core/src/index.js';
+import { collectionOwners, ownedBy, ownersOf, ownershipOf, parseCodeowners, workspaceCodeowners } from '../../packages/core/src/index.js';
 import { makeRepo, type TestRepo } from '../helpers-git';
 
 describe('owners of an item (CODEOWNERS and the last change)', () => {
@@ -114,6 +114,19 @@ describe('owners of an item (CODEOWNERS and the last change)', () => {
       expect(o.lastChange?.author).toBeTruthy();
       const none = await ownershipOf(r.ws, 'tests/nothing.yaml');
       expect(none).toEqual({ file: 'tests/nothing.yaml', owners: [] });
+    });
+
+    it("each collection's owners by id (the tree's tag and @team filter); a team is matched by its whole name or its last part", async () => {
+      writeFileSync(join(r.repo, '.github', 'CODEOWNERS'), '/collections/ @org/api\n/collections/owned.json @org/payments @ana\n');
+      const ids = r.store.listCollections().map((c) => c.id);
+      const owners = await collectionOwners(r.store, ids);
+      expect(owners.owned).toEqual(['@org/payments', '@ana']);
+      for (const id of ids.filter((x) => x !== 'owned')) expect(owners[id], id).toEqual(['@org/api']);
+      expect(ownedBy(owners.owned, '@payments')).toBe(true);
+      expect(ownedBy(owners.owned, 'org/payments')).toBe(true);
+      expect(ownedBy(owners.owned, '@ANA')).toBe(true);
+      expect(ownedBy(owners.owned, '@pay')).toBe(false);
+      expect(ownedBy(undefined, '@payments')).toBe(false);
     });
   });
 });

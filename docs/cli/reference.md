@@ -381,7 +381,8 @@ The console of a running app, the Debugger session and what only the window hold
 What a workspace holds, for scripts and AI agents (`--json`), the same as the `list_collections` and `list_requests` MCP tools:
 
 ```bash
-testpion collections                     # each collection: requests, gRPC calls, connections
+testpion collections                     # each collection: requests, gRPC calls, connections, owners (CODEOWNERS)
+testpion collections --owner @org/payments   # only the collections that team owns (or --owner payments)
 testpion doctor -w my-workspace          # Node.js, SQLite, secrets, proxy, certificates, workspace files (exit 1 on errors)
 testpion runs prune --dry-run --json    # delete runs beyond the retention (newest 500, none older than 90 days; --keep, --days)
 testpion diagnostics --json              # for a bug report: versions, settings without secrets, the last 500 log records, workspace size (masked)

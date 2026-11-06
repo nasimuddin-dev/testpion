@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported } from '@testpion/core';
+import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported, collectionOwners } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -48,6 +48,8 @@ export function collectionsHandlers(be: Backend): Handlers {
   };
   return {
     'col.list': () => be.ws.listCollections({ etag: true }),
+    /** The owners of each collection from CODEOWNERS, by id (none without a CODEOWNERS): the tree's team tag and its @team filter. */
+    'col.owners': () => collectionOwners(be.ws, be.ws.listCollections().map((c) => c.id)),
     /** Every collection as a tree (ids, names, methods, folders; no bodies, headers or scripts): what the explorer lists. */
     'col.tree': ({ ids }: { ids?: string[] } = {}) =>
       ids
