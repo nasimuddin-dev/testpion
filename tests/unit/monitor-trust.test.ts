@@ -47,6 +47,19 @@ describe('a monitor runs on its schedule only where it was allowed', () => {
     expect(monitorApproved(be, monitor())).toBe(false);
   });
 
+  it("a grouped monitor's own row pauses and resumes every tenant (the list's parent row)", async () => {
+    await be.invoke('env.save', { env: { id: 'pt-a', name: 'A', group: 'PauseCo', variables: [] } });
+    await be.invoke('env.save', { env: { id: 'pt-b', name: 'B', group: 'PauseCo', variables: [] } });
+    const def = (await be.invoke('monitor.save', { monitor: { name: 'Grouped', collectionId: 'api', everyMinutes: 5, enabled: true, environmentGroup: 'PauseCo' } })) as Row & { tenant?: { of: string } };
+    const of = def.tenant?.of ?? def.id.split('@')[0]!;
+    const tenants = async () => ((await rows()) as Array<Row & { tenant?: { of: string }; paused?: boolean }>).filter((m) => m.tenant?.of === of);
+    expect((await tenants()).map((m) => m.paused)).toEqual([false, false]);
+    await be.invoke('monitor.pause', { id: of });
+    expect((await tenants()).map((m) => m.paused)).toEqual([true, true]);
+    await be.invoke('monitor.resume', { id: of });
+    expect((await tenants()).map((m) => m.paused)).toEqual([false, false]);
+  });
+
   it('one saved in the app is allowed, and what a row shows is not saved with it', async () => {
     const saved = (await be.invoke('monitor.save', { monitor: { name: 'Mine', collectionId: 'api', everyMinutes: 5, enabled: true } })) as Row;
     expect(saved.needsApproval).toBeUndefined();

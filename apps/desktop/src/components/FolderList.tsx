@@ -89,6 +89,7 @@ export function FolderList({
   addLabel,
   ops,
   itemActions,
+  parentActions,
   itemNoun = 'item',
   empty,
 }: {
@@ -109,6 +110,8 @@ export function FolderList({
   ops: FolderListOps;
   /** The kind's own actions for an item (Run, Pause …): handlers by action id, and why one can't run now. */
   itemActions?(id: string): Pick<NodeMenuCtx, 'on' | 'disabled'>;
+  /** A parent row's own actions (`FolderListItem.parent`), over its first part's: what acts on every part (Run them all …). */
+  parentActions?(parentId: string, partIds: string[]): Pick<NodeMenuCtx, 'on' | 'disabled'>;
   itemNoun?: string;
   empty?: ReactNode;
 }) {
@@ -234,7 +237,11 @@ export function FolderList({
           tall={!!p.subtitle}
           expanded={open}
           onClick={() => setOpened((o) => ({ ...o, [key]: !open }))}
-          ctx={() => ({ ...itemCtx(parts[0]!), name: p.name })}
+          ctx={() => {
+            const base = itemCtx(parts[0]!);
+            const own = parentActions?.(p.id, parts.map((x) => x.id));
+            return { ...base, name: p.name, on: { ...base.on, ...own?.on }, disabled: { ...base.disabled, ...own?.disabled } };
+          }}
           // the parts are kept in one file with their parent: its mark is theirs
           git={refOf(parts[0]!.id)}
           className="pl-9"

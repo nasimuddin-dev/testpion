@@ -410,6 +410,20 @@ export function MonitorsView() {
                     disabled: busy.includes(id) || m.running ? { run: 'It is running now' } : {},
                   };
                 }}
+                // a grouped monitor's row: Run runs every tenant, Pause and Resume act on the monitor (so on every tenant)
+                parentActions={(of, ids) => {
+                  const parts = rows.filter((x) => ids.includes(x.id));
+                  const paused = parts.every((x) => x.paused);
+                  return {
+                    on: {
+                      run: () => void (async () => {
+                        for (const m of parts) await run(m);
+                      })(),
+                      ...(paused ? { resume: () => void attempt(() => call('monitor.resume', { id: of })).then(load) } : { pause: () => void attempt(() => call('monitor.pause', { id: of })).then(load) }),
+                    },
+                    disabled: parts.some((x) => busy.includes(x.id) || x.running) ? { run: 'A tenant is running now' } : {},
+                  };
+                }}
                 ops={monitorOps}
                 empty={
                   <Empty
