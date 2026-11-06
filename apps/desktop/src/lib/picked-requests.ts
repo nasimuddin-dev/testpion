@@ -18,7 +18,8 @@ export interface Picked {
  */
 export function pickRequest(current: Picked | undefined, collectionId: string, id: string, how: 'toggle' | 'range', order: readonly string[]): Picked | undefined {
   if (!current || current.collectionId !== collectionId) return { collectionId, ids: [id], anchor: id };
-  const inOrder = (ids: Set<string>) => order.filter((x) => ids.has(x));
+  // in the order shown; a picked one that is hidden now (a closed folder, a filter) stays picked, after them
+  const inOrder = (ids: Set<string>) => [...order.filter((x) => ids.has(x)), ...[...ids].filter((x) => !order.includes(x))];
   if (how === 'toggle') {
     const ids = new Set(current.ids);
     if (ids.has(id)) ids.delete(id);

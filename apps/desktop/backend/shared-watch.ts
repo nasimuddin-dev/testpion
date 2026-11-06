@@ -27,6 +27,8 @@ export function watchSharedEnvironments(be: Backend): void {
     }
   };
   const timer = setInterval(look, EVERY_MS);
-  // never keeps the process alive (the CLI and tests end when their work does)
+  // never keeps the process alive (the CLI and tests end when their work does), and stops with the backend (dispose
+  // clears `deferred`, and clearTimeout stops an interval in Node)
   timer.unref?.();
+  be.deferred.push(timer);
 }

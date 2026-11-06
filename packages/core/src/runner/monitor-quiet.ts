@@ -3,7 +3,7 @@
  * it) and how long it lasts, e.g. every Sunday at 02:00 for two hours, when a deploy or a backup makes the API fail on
  * purpose. No scheduled run starts inside it, so no alert pages anyone; Run now still works.
  */
-import { cronProblem, describeCron, nextCronTime } from '@testpion/shared';
+import { cronProblem, describeCron, nextCronTime, parseCron } from '@testpion/shared';
 
 export interface QuietWindow {
   /** When it starts: a cron expression ("0 2 * * 0": Sundays at 02:00). */
@@ -27,10 +27,15 @@ export function quietProblem(q: QuietWindow): string | undefined {
 export function quietUntil(q: QuietWindow | undefined, now = Date.now()): number | undefined {
   if (!q || quietProblem(q)) return undefined;
   const span = q.minutes * 60_000;
-  // the starts of the window in the last `minutes` (and the minute before): the latest one that has begun
-  let start: number | undefined;
-  for (let t = nextCronTime(q.cron, now - span - 60_000); t && t.getTime() <= now; t = nextCronTime(q.cron, t)) start = t.getTime();
-  return start !== undefined && now < start + span ? start + span : undefined;
+  const s = parseCron(q.cron);
+  // the starts of the window in the last `minutes` (and the minute before): the latest one that has begun; windows that
+  // overlap (every 5 minutes for an hour) make one long quiet time, until the last of them ends
+  let end: number | undefined;
+  for (let t = nextCronTime(s, now - span - 60_000), n = 0; t && t.getTime() <= now && n < 2000; t = nextCronTime(s, t), n++) end = t.getTime() + span;
+  if (end === undefined || now >= end) return undefined;
+  // a window that starts again before this one ends goes on (at most a day further)
+  for (let t = nextCronTime(s, now), n = 0; t && t.getTime() < end && n < 1440; t = nextCronTime(s, t), n++) end = Math.max(end, t.getTime() + span);
+  return end;
 }
 
 /** The window in words: "quiet at 02:00 on Sunday for 2 hours (deploy)". */

@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { cronProblem, describeCron, environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment, nextCronTime } from '@testpion/shared';
+import { cronProblem, describeCron, environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment, nextCronTime, parseCron } from '@testpion/shared';
 import { ownershipOf } from '../git/owners.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { appendBoundedLine } from '../util/jsonl-append.js';
@@ -530,9 +530,10 @@ export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Dat
     try {
       // never run: a time of the schedule in the last 10 minutes is due (`monitor run --due` from a system cron every 5 minutes finds it)
       const after = Number.isFinite(ran) && ran <= now ? ran : now - 10 * 60_000;
-      let t = nextCronTime(m.cron, after);
-      // a time inside the maintenance window is skipped, not run when the window ends
-      for (let i = 0; t && m.quiet && quietUntil(m.quiet, t.getTime()) !== undefined && i < 1000; i++) t = nextCronTime(m.cron, t);
+      const s = parseCron(m.cron);
+      let t = nextCronTime(s, after);
+      // a time inside the maintenance window is skipped, not run when the window ends: the next one after its end
+      for (let i = 0, end: number | undefined; t && m.quiet && (end = quietUntil(m.quiet, t.getTime())) !== undefined && i < 50; i++) t = nextCronTime(s, end - 1);
       return t?.getTime() ?? Number.POSITIVE_INFINITY;
     } catch {
       return Number.POSITIVE_INFINITY; // a schedule that cannot be read never runs (validateMonitor refuses to save one)

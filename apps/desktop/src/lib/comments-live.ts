@@ -32,6 +32,8 @@ function start(): () => void {
     offs = [
       on('comments.changed', () => void refresh()),
       on('workspace.changedOnDisk', () => void refresh()),
+      // a pull made in the app
+      on('git.changed', () => void refresh()),
       // another workspace: its own counts
       useApp.subscribe((s, prev) => void (s.workspace?.id !== prev.workspace?.id && refresh())),
     ];

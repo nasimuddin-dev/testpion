@@ -357,7 +357,9 @@ export function workspaceHandlers(be: Backend): Handlers {
     'env.save': async ({ env, secrets }: { env: Environment; secrets?: Record<string, string> }) => {
       // a shared environment (another workspace's folder): its file is changed there; the secret values typed here are this
       // computer's and are kept (the answer says so with `secretsOnly`)
-      const shared = be.ws.environmentList().find((e) => e.id === env.id && e.shared);
+      // (one of the workspace's own with that id wins over a shared one, and saves as usual)
+      const list = be.ws.environmentList();
+      const shared = list.some((e) => e.id === env.id && !e.shared) ? undefined : list.find((e) => e.id === env.id && e.shared);
       if (shared) {
         if (shared.problem) throw new ApsError('ValidationError', `"${shared.name}" is shared from ${shared.shared} and cannot be read here: ${shared.problem}`);
         if (env.name !== shared.name || (env.group ?? '') !== (shared.group ?? '')) throw new ApsError('ValidationError', `"${shared.name}" is shared from ${shared.shared}: rename it there`);

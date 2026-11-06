@@ -23,7 +23,7 @@ export interface RunningItem {
 export function runningItems(be: Backend): RunningItem[] {
   const out: RunningItem[] = [];
   // runs in progress (a collection run, a test run, an evaluation): stopped as their own Stop does
-  for (const [id, r] of be.runs) if (!r.done) out.push({ kind: 'run', id, label: 'Run in progress', detail: id });
+  for (const [id, r] of be.runs) if (!r.done && !r.ctrl.signal.aborted && (!r.store || r.store === be.store)) out.push({ kind: 'run', id, label: 'Run in progress', detail: id });
   const collectionName = (id: string) => {
     try {
       return be.ws.listCollections().find((c) => c.id === id)?.name ?? id;

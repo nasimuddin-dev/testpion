@@ -70,6 +70,12 @@ function webhookUrl(store: WorkspaceStore, m: Monitor): string {
   }
 }
 
+/** Paused with no end (until `monitor resume`): itself, or the monitor of every tenant it is a tenant of. */
+function pausedUntilResumed(store: WorkspaceStore, m: Monitor): boolean {
+  const def = m.tenant ? listMonitorDefinitions(store).find((d) => d.id === m.tenant!.of) : m;
+  return !!def && !def.enabled;
+}
+
 /** The monitor named, or (`group`) every monitor running in an environment of that group: a tenant's, for its deploy. */
 function monitorsOf(store: WorkspaceStore, ref: string | undefined, group: string | undefined): Monitor[] {
   if (ref && group) throw new CliError('Name a monitor or give --group, not both', EXIT.CONFIG_ERROR);
@@ -227,7 +233,8 @@ export function registerMonitorCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .action((ref: string | undefined, o: { group?: string; for?: string; until?: string; why?: string; workspace: string }) =>
       withWorkspace(o.workspace, (store) => {
-        const targets = monitorsOf(store, ref, o.group);
+        // with --group: a monitor already paused until resumed stays so (a timed pause would wake it when the time ends)
+        const targets = monitorsOf(store, ref, o.group).filter((m) => !o.group || !pausedUntilResumed(store, m));
         const paused: Array<{ paused: string; id: string; pausedUntil?: string; pauseReason?: string; schedule: string }> = [];
         for (const m of targets) {
           let saved;
@@ -253,7 +260,10 @@ export function registerMonitorCommands(program: Command): void {
     .requiredOption('-w, --workspace <nameOrPath>')
     .action((ref: string | undefined, o: { group?: string; workspace: string }) =>
       withWorkspace(o.workspace, (store) => {
-        const resumed = monitorsOf(store, ref, o.group).map((m) => {
+        // with --group: a tenant resumes its own pause only (a monitor of every tenant paused as a whole stays paused for the others)
+        const resumed = monitorsOf(store, ref, o.group)
+          .filter((m) => !o.group || !m.tenant || !!listMonitorDefinitions(store).find((d) => d.id === m.tenant!.of)?.pausedTenants?.[m.tenant.environmentId ?? ''])
+          .map((m) => {
           const saved = resumeMonitor(store, m.id);
           return { resumed: m.name, id: m.id, schedule: monitorScheduleText(saved) };
         });

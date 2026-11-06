@@ -67,7 +67,7 @@ export function monitorHandlers(be: Backend): Handlers {
       const of = (monitor as Monitor).tenant?.of ?? id.split('@')[0]!;
       const before = listMonitorDefinitions(be.ws).find((m) => m.id === of);
       // what a row shows and no monitor has (its last result, its schedule in words …) is not saved with it
-      for (const k of ['lastResult', 'running', 'schedule', 'nextRunAt', 'due', 'recent', 'uptime7d', 'needsApproval', 'paused']) delete (monitor as Record<string, unknown>)[k];
+      for (const k of ['lastResult', 'running', 'schedule', 'nextRunAt', 'due', 'recent', 'uptime7d', 'needsApproval', 'paused', 'quietUntil']) delete (monitor as Record<string, unknown>)[k];
       const saved = saveMonitor(be.ws, { ...monitor, id, ...monitorConsent(be.ws, monitor, before, allowProduction === true) });
       approveMonitor(be, saved); // saved here, by this person: its schedule runs on this computer
       return status(findMonitor(be.ws, id.includes('@') ? id : saved.id));

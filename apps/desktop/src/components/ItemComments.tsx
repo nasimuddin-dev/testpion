@@ -1,6 +1,6 @@
 import { Check, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ItemRef } from '@testpion/shared';
+import { MENTION, type ItemRef } from '@testpion/shared';
 import { call, on } from '../api';
 import { useSticky } from '../lib/sticky';
 import { timeAgo } from '../lib/format';
@@ -28,12 +28,14 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
   useEffect(() => {
     void call<typeof people>('comments.people').then(setPeople, () => setPeople([]));
   }, []);
-  const typing = /(?:^|[\s(,;:])@([\w./-]*)$/.exec(text.slice(0, caret))?.[1];
+  // (the caret of this item's box: another item's draft starts at its end)
+  useEffect(() => setCaret(text.length), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const typing = /(?:^|[\s(,;:])@([\p{L}\p{N}_./-]*)$/u.exec(text.slice(0, caret))?.[1];
   const suggestions =
     typing === undefined ? [] : people.filter((p) => !typing || p.handle.toLowerCase().includes(typing.toLowerCase()) || p.label.toLowerCase().includes(typing.toLowerCase())).slice(0, 6);
   /** Put `@handle ` in place of the @word being typed, and the caret after it. */
   const mention = (handle: string) => {
-    const before = text.slice(0, caret).replace(/@[\w./-]*$/, `@${handle} `);
+    const before = text.slice(0, caret).replace(/@[\p{L}\p{N}_./-]*$/u, `@${handle} `);
     const next = before + text.slice(caret);
     setText(next);
     setCaret(before.length);
@@ -123,7 +125,8 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           aria-label="New comment"
           onKeyDown={(e) => {
             // Tab takes the first suggestion of the @word being typed
-            if (e.key === 'Tab' && suggestions.length) return void (e.preventDefault(), mention(suggestions[0]!.handle));
+            // (a bare @ leaves Tab to move on: only a started name takes it)
+            if (e.key === 'Tab' && !e.shiftKey && typing && suggestions.length) return void (e.preventDefault(), mention(suggestions[0]!.handle));
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim() && !busy) void add();
           }}
           data-comment-text
@@ -159,14 +162,18 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
 
 /** A comment's text with its @mentions (`@Ana`, `@org/payments`) stand out, as the people they name read them. */
 function withMentions(text: string): ReactNode {
-  const parts = text.split(/((?:^|(?<=[\s(,;:]))@[A-Za-z0-9][\w.-]*(?:\/[\w.-]+)?)/);
-  return parts.map((p, i) =>
-    i % 2 ? (
-      <span key={i} className="text-accent font-medium" data-mention="">
-        {p}
-      </span>
-    ) : (
-      p
-    ),
-  );
+  const out: ReactNode[] = [];
+  let at = 0;
+  for (const m of text.matchAll(MENTION)) {
+    const start = m.index! + m[1]!.length;
+    out.push(text.slice(at, start));
+    out.push(
+      <span key={start} className="text-accent font-medium" data-mention="">
+        @{m[2]}
+      </span>,
+    );
+    at = start + 1 + m[2]!.length;
+  }
+  out.push(text.slice(at));
+  return out;
 }

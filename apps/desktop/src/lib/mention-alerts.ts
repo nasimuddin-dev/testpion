@@ -60,11 +60,14 @@ export function watchMentions(): () => void {
   });
   // a change from disk (a pull, another editor): the new ones are announced
   const offDisk = on('workspace.changedOnDisk', () => void check(true));
+  // a pull, a merge or a switch made in the app (the watcher leaves those to git): the same
+  const offGit = on('git.changed', () => void check(true));
   // a comment written in this app (by you): noted, never announced later
   const offOwn = on('comments.changed', () => void check(false));
   return () => {
     offOpen();
     offDisk();
+    offGit();
     offOwn();
   };
 }

@@ -4,11 +4,14 @@
  * address in the text is not a mention.
  */
 
+/** An @mention after a space or the start: letters of any script, digits, `_ . -`, and `/` for a team (`@org/payments`). Group 2 is the name. */
+export const MENTION = /(^|[\s(,;:])@([\p{L}\p{N}][\p{L}\p{N}_.-]*(?:\/[\p{L}\p{N}_.-]+)?)/gu;
+
 /** The names mentioned in a text, in order, each once (as written, without the @). */
 export function mentionsIn(text: string): string[] {
   const out: string[] = [];
-  for (const m of text.matchAll(/(?:^|[\s(,;:])@([A-Za-z0-9][\w.-]*(?:\/[\w.-]+)?)/g)) {
-    const name = m[1]!.replace(/[.-]+$/, '');
+  for (const m of text.matchAll(MENTION)) {
+    const name = m[2]!.replace(/[.-]+$/, '');
     if (name && !out.some((x) => x.toLowerCase() === name.toLowerCase())) out.push(name);
   }
   return out;

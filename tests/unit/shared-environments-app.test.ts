@@ -37,6 +37,10 @@ describe('shared environments in the app', () => {
     // a rename (F2, the tab) is refused: it is renamed where it lives
     await expect(be.invoke('env.save', { env: { id: 'platform-prod', name: 'Renamed here', variables: [] } })).rejects.toThrow(/rename it there/);
 
+    // an environment of this workspace with a shared one's id (a copy of that workspace) is this workspace's: it saves as usual
+    writeFileSync(be.ws.path('environments', 'platform-prod.json'), JSON.stringify({ id: 'platform-prod', name: 'Mine', variables: [] }));
+    expect(((await be.invoke('env.list', {})) as Array<{ id: string; name: string; shared?: string }>).find((e) => e.id === 'platform-prod' && !e.shared)?.name).toBe('Mine');
+    await be.invoke('env.save', { env: { id: 'platform-prod', name: 'Mine again', variables: [] } });
     const removed = (await be.invoke('ws.shareRemove', { path: rel })) as { shared: unknown[]; environments: unknown[] };
     expect(removed).toEqual({ shared: [], environments: [] });
     await expect(be.invoke('ws.shareAdd', { path: '../nowhere-at-all' })).rejects.toThrow(/is not a workspace|has no environments folder/);

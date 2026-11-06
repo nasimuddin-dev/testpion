@@ -14,6 +14,9 @@ describe('mentions in comments', () => {
     expect(mentionsIn('@Ana can you check this? cc @org/payments, and @ana again.')).toEqual(['Ana', 'org/payments']);
     expect(mentionsIn('write to ana@example.com')).toEqual([]);
     expect(mentionsIn('(@ana.lee) and @bob.')).toEqual(['ana.lee', 'bob']);
+    // any script: a name the repository's history suggests is matched as it is written
+    expect(mentionsIn('@JoséGarcía and @ŁukaszNowak, cc @李雷')).toEqual(['JoséGarcía', 'ŁukaszNowak', '李雷']);
+    expect(mentionsPerson(['JoséGarcía'], { name: 'José García' })).toBe(true);
   });
 
   it('names a person by git name, first name or the e-mail before the @ (a no-reply login too)', () => {

@@ -724,7 +724,16 @@ export function TestsView() {
   const testsArea = useAreaMenu('section:test', testsMenu, 'Tests');
   // what the tree's rows call, through one ref that is always current (the tree and its rows are memoized)
   // several test files picked (Ctrl/⌘+click, Shift+click) to run together; Esc lets go
-  const [picked, setPicked] = useState<Picked>();
+  const [pickedRaw, setPicked] = useState<Picked>();
+  // what is still there (a picked file deleted or renamed is no longer picked)
+  const picked = useMemo(() => {
+    if (!pickedRaw) return undefined;
+    const files = new Set<string>();
+    const walk = (nodes: typeof tree) => nodes.forEach((n) => (n.kind === 'dir' ? walk(n.children ?? []) : files.add(n.path)));
+    walk(tree);
+    const ids = pickedRaw.ids.filter((p) => files.has(p));
+    return ids.length ? { ...pickedRaw, ids } : undefined;
+  }, [pickedRaw, tree]);
   const pickedSet = useMemo(() => new Set(picked?.ids ?? []), [picked]);
   const host = useRef<TestsHost>(null!);
   host.current = {

@@ -84,7 +84,7 @@ export const TestFileTree = memo(function TestFileTree({ tree, filter, open, fil
   const rowHeight = 2 * useApp((s) => s.settings?.fontSize ?? 14);
   // the files as shown, for a Shift+click range
   const order = useRef<string[]>([]);
-  order.current = rows.filter((r) => r.n.kind !== 'dir').map((r) => r.n.path);
+  order.current = rows.filter((r) => r.n.kind !== 'dir' && host.current.isTestFile(r.n.name)).map((r) => r.n.path);
   const pick = useCallback((path: string, how: 'toggle' | 'range') => host.current.pick(path, how, order.current), [host]);
   if (filter && !rows.length) return <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p>;
   return (

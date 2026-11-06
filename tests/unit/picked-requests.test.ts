@@ -23,9 +23,11 @@ describe('picking requests in the tree', () => {
     expect(pickRequest(pickRequest(p, 'shop', 'd', 'range', order), 'shop', 'e', 'range', order)).toEqual({ collectionId: 'shop', ids: ['b', 'c', 'd', 'e'], anchor: 'b' });
   });
 
-  it('another collection starts over; a range to a request that is not shown keeps what was picked', () => {
+  it('another collection starts over; one picked that is hidden now (a closed folder, a filter) stays picked', () => {
     const p = pickRequest(undefined, 'shop', 'b', 'toggle', order);
     expect(pickRequest(p, 'users', 'x', 'toggle', ['x', 'y'])).toEqual({ collectionId: 'users', ids: ['x'], anchor: 'x' });
-    expect(pickRequest(p, 'shop', 'z', 'range', order)?.ids).toEqual(['b']);
+    // b's folder closed: only d and e are shown; picking d keeps b
+    expect(pickRequest(p, 'shop', 'd', 'toggle', ['d', 'e'])?.ids).toEqual(['d', 'b']);
+    expect(pickRequest(p, 'shop', 'z', 'range', order)?.ids).toEqual(['b', 'z']);
   });
 });

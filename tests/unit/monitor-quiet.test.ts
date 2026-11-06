@@ -66,3 +66,15 @@ describe('maintenance windows', () => {
     }
   });
 });
+
+describe('a window that comes back often (what the review found)', () => {
+  it('every minute for a day is one long quiet time, and asking about it is quick', async () => {
+    const { nextRunAt, parseSchedule } = await import('../../packages/core/src/index.js');
+    const q = { cron: '* * * * *', minutes: 1440 };
+    const t0 = performance.now();
+    expect(quietUntil(q, at(2026, 11, 8, 12, 0))).toBeGreaterThan(at(2026, 11, 9, 11, 0));
+    const m = { id: 'm', name: 'Busy', collectionId: 'c', ...parseSchedule('*/5 * * * *'), quiet: q, enabled: true } as Monitor;
+    nextRunAt(m, { startedAt: new Date(at(2026, 11, 8, 11, 55)).toISOString() } as never, at(2026, 11, 8, 12, 0));
+    expect(performance.now() - t0).toBeLessThan(1500);
+  });
+});
