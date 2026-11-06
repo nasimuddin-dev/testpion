@@ -6,6 +6,7 @@
 import { ENGINE_VERSION } from '../version.js';
 import { environmentLabel } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
+import { quietUntil } from '../runner/monitor-quiet.js';
 import { listMonitorDefinitions, listMonitors, monitorDaily, monitorOwners, monitorResults, monitorStatus, pausedFor, type Monitor, type MonitorDay, type MonitorResult } from '../runner/monitors.js';
 import { findSavedEvaluation } from '../runner/saved-evaluations.js';
 
@@ -82,7 +83,8 @@ export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffs
         // the environment's own name and its group apart (a tenant's `environment` may be its label "Acme ▸ Staging")
         ...(m.environment ? { environment: store.getEnvironment(m.environment)?.name ?? m.environment, ...(store.getEnvironment(m.environment)?.group ? { group: store.getEnvironment(m.environment)!.group } : {}) } : {}),
         schedule: st.schedule,
-        paused: !m.enabled || pausedFor(m, now),
+        // in its maintenance window: shown like a pause, with until when (its schedule text says so)
+        paused: !m.enabled || pausedFor(m, now) || quietUntil(m.quiet, now) !== undefined,
         state: !last ? 'unknown' : last.status === 'passed' ? 'up' : 'down',
         ...(last ? { last: { status: last.status, startedAt: last.startedAt, p95Ms: last.p95Ms, passed: last.passed, total: last.total, reason: last.reason } } : {}),
         ...(runs ? { uptime: Math.round((passed / runs) * 1000) / 10 } : {}),
