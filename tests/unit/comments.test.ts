@@ -88,4 +88,24 @@ describe('comments for your team', () => {
     const [c] = describeFile(`comments/${commentFileOf(req)}`, undefined, '{}', 'added');
     expect(c).toMatchObject({ title: 'Comments for the team', change: 'added', kind: 'other' });
   });
+
+  it('a reply sits under the comment it answers, is settled and deleted with it, and Undo puts both back', () => {
+    const item: ItemRef = { kind: 'test', path: 'tests/replies.yaml' };
+    const q = addComment(store, item, 'Who owns this?', 'Ana');
+    const r1 = addComment(store, item, 'Payments does.', 'Bo', { replyTo: q.id });
+    // a reply to a reply answers the same first comment
+    const r2 = addComment(store, item, 'Thanks!', 'Ana', { replyTo: r1.id });
+    expect([r1.replyTo, r2.replyTo]).toEqual([q.id, q.id]);
+    expect(() => addComment(store, item, 'x', 'Ana', { replyTo: 'c-nope' })).toThrow(/No comment c-nope on this item to reply to/);
+    const openIds = () => openComments(store).filter((c) => c.ref.kind === 'test' && c.ref.path === 'tests/replies.yaml').map((c) => c.id);
+    expect(openIds().sort()).toEqual([q.id, r1.id, r2.id].sort());
+    resolveComment(store, item, q.id, 'Ana');
+    expect(openIds()).toEqual([]);
+    resolveComment(store, item, q.id, 'Ana', false);
+    const removed = deleteComment(store, item, q.id);
+    expect(removed.map((c) => c.id)).toEqual([q.id, r1.id, r2.id]);
+    expect(listComments(store, item)).toEqual([]);
+    for (const c of removed) restoreComment(store, item, c);
+    expect(listComments(store, item).map((c) => c.id)).toEqual([q.id, r1.id, r2.id]);
+  });
 });

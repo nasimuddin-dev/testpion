@@ -79,7 +79,7 @@ export interface RpcParamTypes {
   'col.tree': RpcCommonParams & { ids?: string[] };
   'col.uploadDataFile': RpcCommonParams & { name: string; text: string };
   'col.variableFlow': RpcCommonParams & { collectionId: string };
-  'comments.add': RpcCommonParams & { ref: unknown; text: string };
+  'comments.add': RpcCommonParams & { ref: unknown; text: string; replyTo?: string };
   'comments.counts': RpcCommonParams;
   'comments.delete': RpcCommonParams & { ref: unknown; id: string };
   'comments.list': RpcCommonParams & { ref: unknown };

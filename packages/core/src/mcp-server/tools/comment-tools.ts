@@ -29,7 +29,7 @@ export function commentTools({ store, readOnly }: { store: WorkspaceStore; readO
     {
       name: 'team_comments',
       write: !readOnly,
-      description: `Comments the team leaves on an item (a request, a test file, an evaluation, a monitor …), kept under comments/ and carried by git. \`action\` open: every open comment of the workspace, newest first, with its \`ref\`; list: the thread of \`ref\`${readOnly ? '.' : '; add: `text` on `ref`, signed with the git identity; resolve: comment `id` of `ref` settled.'}`,
+      description: `Comments the team leaves on an item (a request, a test file, an evaluation, a monitor …), kept under comments/ and carried by git. \`action\` open: every open comment of the workspace, newest first, with its \`ref\`; list: the thread of \`ref\`${readOnly ? '.' : '; add: `text` on `ref`, signed with the git identity (with \`id\`: a reply to that comment); resolve: comment `id` of `ref` settled.'}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -55,7 +55,7 @@ export function commentTools({ store, readOnly }: { store: WorkspaceStore; readO
         if (action === 'open') return openCommentsByOwner(store, typeof a.owner === 'string' ? a.owner : undefined);
         if (action === 'list') return listComments(store, refOf(a.ref));
         if (readOnly && (action === 'add' || action === 'resolve')) throw new ApsError('ValidationError', 'This server is read-only: it cannot add or resolve a comment');
-        if (action === 'add') return addComment(store, existing(a.ref), String(a.text ?? ''), await who());
+        if (action === 'add') return addComment(store, existing(a.ref), String(a.text ?? ''), await who(), { replyTo: typeof a.id === 'string' && a.id ? a.id : undefined });
         if (action === 'resolve') return resolveComment(store, refOf(a.ref), String(a.id ?? ''), await who());
         throw new ApsError('ValidationError', `action is ${readOnly ? 'open or list' : 'open, list, add or resolve'}`);
       },

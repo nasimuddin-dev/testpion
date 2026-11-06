@@ -50,7 +50,11 @@ export function registerCommentCommand(program: Command): void {
         const comments = listComments(store, refArg(item));
         if (o.json) return printJson({ item, comments });
         if (!comments.length) return console.log(dim('No comments. Add one with `testpion item comment add <item> "text"`.'));
-        for (const c of comments) console.log(line(c));
+        // a reply under the comment it answers
+        for (const c of comments.filter((x) => !x.replyTo)) {
+          console.log(line(c));
+          for (const r of comments.filter((x) => x.replyTo === c.id)) console.log(line(r).replace(/^/gm, '    '));
+        }
       }),
     );
 
@@ -59,15 +63,16 @@ export function registerCommentCommand(program: Command): void {
     .description('add a comment, signed with your git identity (else this computer’s user name)')
     .argument('<item>', 'the item (see `item comment list`)')
     .argument('<text>', 'the comment; "-" reads it from standard input')
+    .option('--reply-to <id>', 'a reply to this comment (from `item comment list`): shown under it, settled with it')
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
-    .action(async (item: string, text: string, o: { workspace?: string; json?: boolean }) =>
+    .action(async (item: string, text: string, o: { replyTo?: string; workspace?: string; json?: boolean }) =>
       inWorkspace(o.workspace, async (store) => {
         const ref = existingRef(store, item);
         const body = text === '-' ? await new Promise<string>((r) => { let s = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', (d) => (s += d)); process.stdin.on('end', () => r(s)); }) : text;
         let c;
         try {
-          c = addComment(store, ref, body, await who(store.root));
+          c = addComment(store, ref, body, await who(store.root), { replyTo: o.replyTo });
         } catch (e) {
           throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
         }
@@ -107,7 +112,7 @@ export function registerCommentCommand(program: Command): void {
     .action(async (item: string, id: string, o: { workspace?: string; json?: boolean }) =>
       inWorkspace(o.workspace, (store) => {
         try {
-          deleteComment(store, refArg(item), id);
+          deleteComment(store, refArg(item), id); // (with its replies)
         } catch (e) {
           throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
         }

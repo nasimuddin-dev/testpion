@@ -1,4 +1,4 @@
-import { Check, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
+import { Check, MessageSquare, Reply, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MENTION, type ItemRef } from '@testpion/shared';
 import { call, on } from '../api';
@@ -9,7 +9,7 @@ import { deleteWithUndo } from '../lib/undo-delete';
 import { Button, EmptyNote, IconButton, SectionTitle, Textarea, cx } from './ui';
 import { SuggestList, suggestKey } from './SuggestInput';
 
-type Comment = { id: string; by: string; at: string; text: string; resolvedAt?: string; resolvedBy?: string };
+type Comment = { id: string; by: string; at: string; text: string; resolvedAt?: string; resolvedBy?: string; replyTo?: string };
 
 /**
  * Comments for your team on the open item (the Info panel): the thread, oldest first, settled ones greyed; a box to add one.
@@ -77,9 +77,61 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
       setBusy(false);
     }
   };
-  const add = () => run(() => call('comments.add', { ref, text }).then(() => setText('')));
-  const open = (comments ?? []).filter((c) => !c.resolvedAt);
-  const settled = (comments ?? []).filter((c) => c.resolvedAt);
+  // a reply answers a thread's first comment: the box says which, × makes it a comment of its own again
+  const [replyTo, setReplyTo] = useState<Comment>();
+  useEffect(() => setReplyTo(undefined), [key]);
+  const add = () => run(() => call('comments.add', { ref, text, ...(replyTo ? { replyTo: replyTo.id } : {}) }).then(() => (setText(''), setReplyTo(undefined))));
+  const roots = (comments ?? []).filter((c) => !c.replyTo);
+  const repliesOf = (id: string) => (comments ?? []).filter((c) => c.replyTo === id);
+  const open = roots.filter((c) => !c.resolvedAt);
+  const settled = roots.filter((c) => c.resolvedAt);
+  /** One comment: who, when, its text, and its actions (a reply: delete only; it is settled with its thread). */
+  const row = (c: Comment, parent?: Comment) => (
+    <div className={cx('group flex flex-col gap-0.5 min-w-0 rounded border border-line px-2 py-1.5', (c.resolvedAt || parent?.resolvedAt) && 'opacity-60')} data-comment={c.resolvedAt || parent?.resolvedAt ? 'settled' : 'open'}>
+      <div className="flex items-center gap-2 text-xs min-w-0">
+        <span className="font-semibold truncate">{c.by}</span>
+        <span className="text-muted shrink-0" title={c.at}>
+          {timeAgo(c.at)}
+        </span>
+        <span className="ml-auto inline-flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+          {!parent && !c.resolvedAt && (
+            <IconButton size="sm" label={`Reply to ${c.by}`} onClick={() => (setReplyTo(c), box.current?.focus())} data-comment-reply-button>
+              <Reply />
+            </IconButton>
+          )}
+          {!parent && (
+            <IconButton size="sm" label={c.resolvedAt ? 'Open this comment again' : 'Mark as settled'} disabled={busy} reason="Wait for the last change to save" onClick={() => void run(() => call('comments.resolve', { ref, id: c.id, resolved: !c.resolvedAt }))} data-comment-resolve>
+              {c.resolvedAt ? <RotateCcw /> : <Check />}
+            </IconButton>
+          )}
+          <IconButton
+            size="sm"
+            label={parent ? 'Delete this reply' : 'Delete this comment'}
+            disabled={busy}
+            reason="Wait for the last change to save"
+            onClick={() => {
+              let removed: Comment[] = [c];
+              void run(() =>
+                deleteWithUndo({
+                  what: parent ? 'the reply' : repliesOf(c.id).length ? `the comment and its ${repliesOf(c.id).length === 1 ? 'reply' : 'replies'}` : 'the comment',
+                  run: () => call<{ removed?: Comment[] }>('comments.delete', { ref, id: c.id }).then((r) => void (removed = r.removed ?? removed)),
+                  undo: async () => {
+                    for (const x of removed) await call('comments.restore', { ref, comment: x });
+                    await load();
+                  },
+                }),
+              );
+            }}
+            data-comment-delete
+          >
+            <Trash2 />
+          </IconButton>
+        </span>
+      </div>
+      <div className="text-sm whitespace-pre-wrap break-words">{withMentions(c.text)}</div>
+      {c.resolvedAt && <div className="text-2xs text-muted">Settled by {c.resolvedBy} {timeAgo(c.resolvedAt)}</div>}
+    </div>
+  );
   return (
     <section data-item-comments={comments ? open.length : 'loading'}>
       <SectionTitle>
@@ -93,23 +145,14 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
       {comments && comments.length > 0 && (
         <ul className="flex flex-col gap-2" data-comment-list>
           {[...open, ...(showSettled ? settled : [])].map((c) => (
-            <li key={c.id} className={cx('group flex flex-col gap-0.5 min-w-0 rounded border border-line px-2 py-1.5', c.resolvedAt && 'opacity-60')} data-comment={c.resolvedAt ? 'settled' : 'open'}>
-              <div className="flex items-center gap-2 text-xs min-w-0">
-                <span className="font-semibold truncate">{c.by}</span>
-                <span className="text-muted shrink-0" title={c.at}>
-                  {timeAgo(c.at)}
-                </span>
-                <span className="ml-auto inline-flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                  <IconButton size="sm" label={c.resolvedAt ? 'Open this comment again' : 'Mark as settled'} disabled={busy} reason="Wait for the last change to save" onClick={() => void run(() => call('comments.resolve', { ref, id: c.id, resolved: !c.resolvedAt }))} data-comment-resolve>
-                    {c.resolvedAt ? <RotateCcw /> : <Check />}
-                  </IconButton>
-                  <IconButton size="sm" label="Delete this comment" disabled={busy} reason="Wait for the last change to save" onClick={() => void run(() => deleteWithUndo({ what: 'the comment', run: () => call('comments.delete', { ref, id: c.id }), undo: () => call('comments.restore', { ref, comment: c }).then(load) }))} data-comment-delete>
-                    <Trash2 />
-                  </IconButton>
-                </span>
-              </div>
-              <div className="text-sm whitespace-pre-wrap break-words">{withMentions(c.text)}</div>
-              {c.resolvedAt && <div className="text-2xs text-muted">Settled by {c.resolvedBy} {timeAgo(c.resolvedAt)}</div>}
+            <li key={c.id} className="flex flex-col gap-1 min-w-0">
+              {row(c)}
+              {/* its replies, under it (settled with it) */}
+              {repliesOf(c.id).map((r) => (
+                <div key={r.id} className="ml-4" data-comment-reply={c.id}>
+                  {row(r, c)}
+                </div>
+              ))}
             </li>
           ))}
         </ul>
@@ -120,6 +163,17 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
         </button>
       )}
       <div className="mt-2 flex flex-col gap-1.5">
+        {replyTo && (
+          <div className="flex items-center gap-1 text-xs text-muted min-w-0" data-comment-replying={replyTo.id}>
+            <Reply size={12} className="shrink-0" />
+            <span className="truncate">
+              Replying to {replyTo.by}: {replyTo.text}
+            </span>
+            <IconButton size="sm" label="Not a reply" onClick={() => setReplyTo(undefined)}>
+              <X />
+            </IconButton>
+          </div>
+        )}
         <Textarea
           ref={box}
           value={text}
@@ -128,7 +182,7 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           rows={2}
           autoGrow
           maxRows={8}
-          placeholder="Ask or note something for your team…"
+          placeholder={replyTo ? `Reply to ${replyTo.by}…` : 'Ask or note something for your team…'}
           aria-label="New comment"
           role="combobox"
           aria-expanded={listed}

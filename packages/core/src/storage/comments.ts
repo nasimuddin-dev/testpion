@@ -25,6 +25,8 @@ export interface ItemComment {
   /** Set when someone marked it as settled. */
   resolvedAt?: string;
   resolvedBy?: string;
+  /** A reply: the id of the comment it answers (always a thread's first comment). It is shown under it, settled and deleted with it. */
+  replyTo?: string;
 }
 
 export interface ItemCommentThread {
@@ -89,13 +91,19 @@ export function listComments(store: Store, ref: ItemRef): ItemComment[] {
   return readThread(store, ref, { lenient: true }).comments;
 }
 
-/** Add a comment; returns it. */
-export function addComment(store: Store, ref: ItemRef, text: string, by: string): ItemComment {
+/** Add a comment (with `replyTo`, a reply to that comment; a reply to a reply answers the same first comment); returns it. */
+export function addComment(store: Store, ref: ItemRef, text: string, by: string, o: { replyTo?: string } = {}): ItemComment {
   const body = text.trim();
   if (!body) throw new ApsError('ValidationError', 'The comment is empty');
   if (body.length > COMMENT_LIMIT) throw new ApsError('ValidationError', `The comment is ${body.length - COMMENT_LIMIT} characters too long (at most ${COMMENT_LIMIT})`, { suggestions: ['Keep it to the point; a long explanation belongs in the item’s description.'] });
   const t = readThread(store, ref);
-  const c: ItemComment = { id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, by: by.trim() || 'someone', at: new Date().toISOString(), text: body };
+  let replyTo: string | undefined;
+  if (o.replyTo) {
+    const parent = t.comments.find((x) => x.id === o.replyTo);
+    if (!parent) throw new ApsError('ValidationError', `No comment ${o.replyTo} on this item to reply to`, { suggestions: ['`testpion item comment list <item>` (or team_comments list) shows the ids.'] });
+    replyTo = parent.replyTo ?? parent.id;
+  }
+  const c: ItemComment = { id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, by: by.trim() || 'someone', at: new Date().toISOString(), text: body, ...(replyTo ? { replyTo } : {}) };
   t.comments.push(c);
   writeThread(store, t);
   return c;
@@ -117,12 +125,14 @@ export function resolveComment(store: Store, ref: ItemRef, id: string, by: strin
   return c;
 }
 
-/** Remove a comment for good. */
-export function deleteComment(store: Store, ref: ItemRef, id: string): void {
+/** Remove a comment for good, with its replies; returns what was removed (Undo puts each back). */
+export function deleteComment(store: Store, ref: ItemRef, id: string): ItemComment[] {
   const t = readThread(store, ref);
   if (!t.comments.some((x) => x.id === id)) throw new ApsError('ValidationError', `No comment ${id} on this item`);
-  t.comments = t.comments.filter((x) => x.id !== id);
+  const removed = t.comments.filter((x) => x.id === id || x.replyTo === id);
+  t.comments = t.comments.filter((x) => !removed.includes(x));
   writeThread(store, t);
+  return removed;
 }
 
 /** Put a deleted comment back as it was (Undo in the app). */
@@ -153,7 +163,9 @@ export function openComments(store: Store): OpenComment[] {
     if (!raw || typeof raw !== 'object') continue;
     const ref = toItemRef(raw.ref);
     if (!ref || !Array.isArray(raw.comments)) continue;
-    for (const c of raw.comments) if (c && typeof c.text === 'string' && !c.resolvedAt) out.push({ ...c, ref });
+    // a reply is open while the comment it answers is (settling a thread settles its replies)
+    const settled = new Set(raw.comments.filter((c) => c?.resolvedAt).map((c) => c.id));
+    for (const c of raw.comments) if (c && typeof c.text === 'string' && !c.resolvedAt && !(c.replyTo && settled.has(c.replyTo))) out.push({ ...c, ref });
   }
   return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }

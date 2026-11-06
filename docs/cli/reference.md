@@ -1117,6 +1117,7 @@ Comments for your team on an item, kept in the workspace under `comments/` (one 
 ```bash
 testpion item comment list request:payments:create-invoice          # the thread, oldest first (--json: { item, comments })
 testpion item comment add request:payments:create-invoice "Why does this send X-Trace twice?"   # signed with your git name; "-" reads stdin
+testpion item comment add request:payments:create-invoice "The gateway adds one." --reply-to c-m4k2-ab12c   # a reply, under that comment
 testpion item comment resolve request:payments:create-invoice c-abc  # mark it settled (--reopen undoes it)
 testpion item comment delete request:payments:create-invoice c-abc
 testpion item comment open --json                                   # every open comment of the workspace, newest first, each with its ref (--markdown: a list to post)

@@ -438,7 +438,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'ref.resolve': { ref: 'x' },
   'ref.info': { ref: 'x', environment: 's?' },
   'comments.list': { ref: 'x' },
-  'comments.add': { ref: 'x', text: 's' },
+  'comments.add': { ref: 'x', text: 's', replyTo: 's?' },
   'comments.resolve': { ref: 'x', id: 's', resolved: 'b?' },
   'comments.delete': { ref: 'x', id: 's' },
   'comments.restore': { ref: 'x', comment: 'o' },

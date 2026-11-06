@@ -16,9 +16,10 @@ export function commentsHandlers(be: Backend): Handlers {
   const who = async () => (await gitIdentity(be.ws.root).catch(() => ({ name: undefined }))).name || userInfo().username || 'someone';
   return {
     'comments.list': ({ ref }: { ref: unknown }) => listComments(be.ws, refOf(ref)),
-    'comments.add': async ({ ref, text }: { ref: unknown; text: string }) => changed(addComment(be.ws, refOf(ref), text, await who())),
+    'comments.add': async ({ ref, text, replyTo }: { ref: unknown; text: string; replyTo?: string }) => changed(addComment(be.ws, refOf(ref), text, await who(), { replyTo })),
     'comments.resolve': async ({ ref, id, resolved }: { ref: unknown; id: string; resolved?: boolean }) => changed(resolveComment(be.ws, refOf(ref), id, await who(), resolved !== false)),
-    'comments.delete': ({ ref, id }: { ref: unknown; id: string }) => (deleteComment(be.ws, refOf(ref), id), changed({ deleted: id })),
+    // (with its replies: `removed` is what Undo puts back)
+    'comments.delete': ({ ref, id }: { ref: unknown; id: string }) => changed({ deleted: id, removed: deleteComment(be.ws, refOf(ref), id) }),
     'comments.restore': ({ ref, comment }: { ref: unknown; comment: Parameters<typeof restoreComment>[2] }) => changed(restoreComment(be.ws, refOf(ref), comment)),
     /** Every open comment with its item's owners (CODEOWNERS); `owner` keeps one team's. */
     // `forYou` on the comments that @mention this person (the git identity); `forMe` keeps those only
