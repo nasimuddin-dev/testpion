@@ -25,6 +25,7 @@
 
 ### Monitors: set times, and one row for a monitor of every tenant
 
+- `testpion monitor pause --group Acme --for 30m` (and `monitor resume --group Acme`) pauses every monitor running in an environment of a tenant, for its deploy.
 - A maintenance window on a monitor (a cron start, a length and why: `--maintenance "0 2 * * 0" --maintenance-for 2h`, the editor's **Maintenance window**, `save_monitor` `quiet`): no scheduled run starts inside it, and the monitor says *in its maintenance window until 04:00*.
 - A monitor that runs in every environment of a group is one row in the Monitors list (the worst dot of its tenants, *2 of 3 passing*), its tenants folded under it and named by their environment.
 - A monitor runs on a cron schedule (minute hour day month weekday, in the local time of the computer that runs it) instead of every N minutes: the editor's **at set times (cron)** says the schedule in words and its next three runs as it is typed; `testpion monitor add … --every "0 9 * * 1-5"` and MCP `save_monitor` `every` take a schedule as well as an interval; lists, the status page and `flow_deploy_status` say it in words ("at 09:00 on weekdays"). A time missed while nothing ran the schedule runs once when it starts again.

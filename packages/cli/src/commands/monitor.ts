@@ -14,6 +14,7 @@ import {
   isDue,
   lastMonitorResult,
   listMonitors,
+  matchEnvironment,
   monitorDaily,
   monitorRequestStats,
   monitorResults,
@@ -67,6 +68,21 @@ function webhookUrl(store: WorkspaceStore, m: Monitor): string {
   } finally {
     void ctx.dispose();
   }
+}
+
+/** The monitor named, or (`group`) every monitor running in an environment of that group: a tenant's, for its deploy. */
+function monitorsOf(store: WorkspaceStore, ref: string | undefined, group: string | undefined): Monitor[] {
+  if (ref && group) throw new CliError('Name a monitor or give --group, not both', EXIT.CONFIG_ERROR);
+  if (!group) {
+    if (!ref) throw new CliError('Name the monitor (or give --group <group> for every monitor of a tenant)', EXIT.CONFIG_ERROR);
+    return [findMonitor(store, ref)];
+  }
+  warnUnknownGroup(store, group);
+  const want = group.trim().toLowerCase();
+  const envs = store.listEnvironments();
+  const of = listMonitors(store).filter((m) => !!m.environment && (matchEnvironment(envs, m.environment)?.group?.trim().toLowerCase() ?? '') === want);
+  if (!of.length) throw new CliError(`No monitor runs in an environment of the group "${group}"`, EXIT.CONFIG_ERROR);
+  return of;
 }
 
 export function registerMonitorCommands(program: Command): void {
@@ -202,36 +218,48 @@ export function registerMonitorCommands(program: Command): void {
 
   mon
     .command('pause')
-    .description('pause a monitor: for a while (--for 2h, --until <time>: it runs again by itself when the time comes), else until `monitor resume`; --why is shown with it while it waits')
-    .argument('<nameOrId>')
+    .description('pause a monitor: for a while (--for 2h, --until <time>: it runs again by itself when the time comes), else until `monitor resume`; --why is shown with it while it waits. --group pauses every monitor that runs in an environment of a tenant (its deploy)')
+    .argument('[nameOrId]')
+    .option('--group <group>', 'instead of one monitor: every monitor running in an environment of this group (a tenant each; a monitor of every tenant pauses for this tenant only)')
     .option('--for <duration>', 'how long: 30m, 2h, 1d')
     .option('--until <time>', 'an ISO time, e.g. 2026-11-02T09:00')
     .option('--why <reason>', 'why it waits (a deploy, a maintenance window)')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .action((ref: string, o: { for?: string; until?: string; why?: string; workspace: string }) =>
+    .action((ref: string | undefined, o: { group?: string; for?: string; until?: string; why?: string; workspace: string }) =>
       withWorkspace(o.workspace, (store) => {
-        const m = findMonitor(store, ref);
-        let saved;
-        try {
-          saved = pauseMonitor(store, m.id, { minutes: o.for !== undefined ? parsePauseFor(o.for) : undefined, until: o.until, reason: o.why });
-        } catch (e) {
-          throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+        const targets = monitorsOf(store, ref, o.group);
+        const paused: Array<{ paused: string; id: string; pausedUntil?: string; pauseReason?: string; schedule: string }> = [];
+        for (const m of targets) {
+          let saved;
+          try {
+            saved = pauseMonitor(store, m.id, { minutes: o.for !== undefined ? parsePauseFor(o.for) : undefined, until: o.until, reason: o.why });
+          } catch (e) {
+            throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+          }
+          const st = monitorStatus(store, findMonitor(store, m.id));
+          paused.push({ paused: m.name, id: m.id, pausedUntil: saved.pausedUntil, pauseReason: saved.pauseReason, schedule: st.schedule });
         }
-        const st = monitorStatus(store, saved);
-        respond({ paused: saved.name, id: saved.id, pausedUntil: saved.pausedUntil, pauseReason: saved.pauseReason, schedule: st.schedule }, () => console.log(yellow(`"${saved.name}" ${st.schedule}`)));
+        respond(o.group ? { group: o.group, monitors: paused } : paused[0], () => {
+          for (const p of paused) console.log(yellow(`"${p.paused}" ${p.schedule}`));
+        });
       }),
     );
 
   mon
     .command('resume')
-    .description('the schedule goes on now (ends a pause of either kind)')
-    .argument('<nameOrId>')
+    .description('the schedule goes on now (ends a pause of either kind); --group resumes every monitor running in an environment of a tenant')
+    .argument('[nameOrId]')
+    .option('--group <group>', 'instead of one monitor: every monitor running in an environment of this group')
     .requiredOption('-w, --workspace <nameOrPath>')
-    .action((ref: string, o: { workspace: string }) =>
+    .action((ref: string | undefined, o: { group?: string; workspace: string }) =>
       withWorkspace(o.workspace, (store) => {
-        const m = findMonitor(store, ref);
-        const saved = resumeMonitor(store, m.id);
-        respond({ resumed: saved.name, id: saved.id, schedule: monitorScheduleText(saved) }, () => console.log(green(`"${saved.name}" runs ${monitorScheduleText(saved)} again`)));
+        const resumed = monitorsOf(store, ref, o.group).map((m) => {
+          const saved = resumeMonitor(store, m.id);
+          return { resumed: m.name, id: m.id, schedule: monitorScheduleText(saved) };
+        });
+        respond(o.group ? { group: o.group, monitors: resumed } : resumed[0], () => {
+          for (const r of resumed) console.log(green(`"${r.resumed}" runs ${r.schedule} again`));
+        });
       }),
     );
 
