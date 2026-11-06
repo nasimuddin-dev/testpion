@@ -114,7 +114,7 @@ export function collectionRequestToTest(collection: Collection, ref: CollectionR
   };
   if (ref.node.kind === 'graphql') {
     const r = ref.node.request;
-    return { ...base, ...scripts, type: 'graphql', endpoint: r.endpoint, query: r.query, graphqlVariables: r.variables, operationName: r.operationName, headers: withInheritedHeaders(r.headers, inheritedHeaders(collection, ref.folders)), auth: ref.auth ?? r.auth };
+    return { ...base, ...scripts, type: 'graphql', endpoint: r.endpoint, query: r.query, graphqlVariables: r.variables, operationName: r.operationName, headers: withInheritedHeaders(r.headers, inheritedHeaders(collection, ref.folders)), auth: ref.auth ?? r.auth, ...(r.persistedQueries ? { persistedQueries: true } : {}) };
   }
   return { ...base, ...scripts, type: 'http', request: withFolderDefaults({ ...ref.node.request, auth: ref.auth ?? { type: 'none' } }, collection, ref.folders) };
 }
