@@ -243,6 +243,7 @@ export function Explorer() {
 
   // several teams in one workspace: each collection's owners from CODEOWNERS (none without one), read again when the list changes
   const [owners, setOwners] = useState<Record<string, string[]>>({});
+  const [ownersRead, setOwnersRead] = useState(0);
   const collectionIds = allCollections.map((c) => c.id).join('\n');
   useEffect(() => {
     let live = true;
@@ -253,7 +254,7 @@ export function Explorer() {
     return () => {
       live = false;
     };
-  }, [collectionIds]);
+  }, [collectionIds, ownersRead]);
   // "@payments" in the filter: the collections that team owns, whole (the other sections filter by the text as usual)
   const team = /^@\S+$/.test(shownFilter.trim()) && Object.keys(owners).length ? shownFilter.trim() : undefined;
   const treeCollections = useMemo(() => (team ? allCollections.filter((c) => ownedBy(owners[c.id], team)) : allCollections), [team, allCollections, owners]);
@@ -583,7 +584,7 @@ export function Explorer() {
         <IconButton size="md" label="Export a collection or the workspace" onClick={() => setExporting(true)}>
           <Download />
         </IconButton>
-        <IconButton size="md" label="Refresh" onClick={() => (void load(), void calls.reload())}>
+        <IconButton size="md" label="Refresh" onClick={() => (void load(), void calls.reload(), setOwnersRead((n) => n + 1))}>
           <RefreshCw />
         </IconButton>
         <IconButton size="md" label="Hide the sidebar (Ctrl+B)" onClick={() => useApp.getState().toggleExplorer(false)}>
