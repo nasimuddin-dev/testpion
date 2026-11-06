@@ -48,7 +48,7 @@ When several teams share one workspace, the repository's `CODEOWNERS` (TestPion 
 
 **A repository per team.** Teams that keep separate repositories can still use one set of environments: `testpion workspace share --add ../platform-shared` reads the environments of another workspace's folder (a sibling checkout or a git submodule) read-only, listed after your own with a **shared** badge. See [Shared from another workspace](/api-testing/environments#shared).
 
-**Mention someone.** Write `@Ana` (a git name without its spaces, its first word, or the part of the e-mail before the @) or a team (`@org/payments`) in a comment: it shows highlighted, and on the computer of the person it names it comes first under **Your team is asking** on Home, marked **For you**, and when one arrives with a pull a message says who mentioned you, with the item one click away. `testpion item comment open --for-me` lists the comments that mention you (`--team @org/payments` adds a team's), and `--json` carries `mentions` and `forYou`.
+**Mention someone.** Type `@` in a comment and pick from the people of the repository's history and the teams of `CODEOWNERS` (**Tab** takes the first), or write `@Ana` (a git name without its spaces, its first word, or the part of the e-mail before the @) or a team (`@org/payments`) in a comment: it shows highlighted, and on the computer of the person it names it comes first under **Your team is asking** on Home, marked **For you**, and when one arrives with a pull a message says who mentioned you, with the item one click away. `testpion item comment open --for-me` lists the comments that mention you (`--team @org/payments` adds a team's), and `--json` carries `mentions` and `forYou`.
 
 ## Team conventions
 

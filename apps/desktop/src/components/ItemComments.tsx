@@ -21,6 +21,24 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
   // active environment changes, and the comment must still be there when the item is shown again
   const [text, setText] = useSticky(`comment-draft:${key}`, '');
   const [busy, setBusy] = useState(false);
+  // @mentions: who can be named (the repository's people, CODEOWNERS teams), read once; the @word before the caret
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [caret, setCaret] = useState(0);
+  const [people, setPeople] = useState<Array<{ handle: string; label: string; kind: 'person' | 'team' }>>([]);
+  useEffect(() => {
+    void call<typeof people>('comments.people').then(setPeople, () => setPeople([]));
+  }, []);
+  const typing = /(?:^|[\s(,;:])@([\w./-]*)$/.exec(text.slice(0, caret))?.[1];
+  const suggestions =
+    typing === undefined ? [] : people.filter((p) => !typing || p.handle.toLowerCase().includes(typing.toLowerCase()) || p.label.toLowerCase().includes(typing.toLowerCase())).slice(0, 6);
+  /** Put `@handle ` in place of the @word being typed, and the caret after it. */
+  const mention = (handle: string) => {
+    const before = text.slice(0, caret).replace(/@[\w./-]*$/, `@${handle} `);
+    const next = before + text.slice(caret);
+    setText(next);
+    setCaret(before.length);
+    requestAnimationFrame(() => box.current?.setSelectionRange(before.length, before.length));
+  };
   // (a ref too: two key presses in a row arrive before `busy` is drawn)
   const working = useRef(false);
   const [showSettled, setShowSettled] = useState(false);
@@ -94,18 +112,40 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
       )}
       <div className="mt-2 flex flex-col gap-1.5">
         <Textarea
+          ref={box}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => (setText(e.target.value), setCaret(e.target.selectionStart ?? e.target.value.length))}
+          onSelect={(e) => setCaret((e.target as HTMLTextAreaElement).selectionStart ?? text.length)}
           rows={2}
           autoGrow
           maxRows={8}
           placeholder="Ask or note something for your team…"
           aria-label="New comment"
           onKeyDown={(e) => {
+            // Tab takes the first suggestion of the @word being typed
+            if (e.key === 'Tab' && suggestions.length) return void (e.preventDefault(), mention(suggestions[0]!.handle));
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim() && !busy) void add();
           }}
           data-comment-text
         />
+        {suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-1" role="listbox" aria-label="Mention" data-mention-suggestions={suggestions.length}>
+            {suggestions.map((s) => (
+              <button
+                key={s.handle}
+                type="button"
+                role="option"
+                aria-selected={false}
+                className="rounded border border-line px-1.5 py-0.5 text-xs hover:bg-hover"
+                title={s.kind === 'team' ? 'A team of CODEOWNERS' : 'Someone of the repository’s history (Tab takes the first)'}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => mention(s.handle)}
+              >
+                {s.kind === 'team' ? s.label : `@${s.handle} · ${s.label}`}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <Button size="sm" variant="primary" disabled={busy || !text.trim()} title={text.trim() ? 'Add the comment (Ctrl+Enter)' : 'Type the comment first'} onClick={() => void add()} data-comment-add>
             Add comment

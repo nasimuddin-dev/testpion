@@ -45,3 +45,23 @@ describe('mentions in comments', () => {
     }
   });
 });
+
+describe('who a comment can mention', () => {
+  it('the people of the repository history and the teams of CODEOWNERS, each once', async () => {
+    const { makeRepo } = await import('../helpers-git');
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const { mentionCandidates } = await import('../../packages/core/src/index.js');
+    const r = await makeRepo();
+    try {
+      r.write('notes.txt', 'one');
+      await r.commit('First');
+      mkdirSync(join(r.repo, '.github'), { recursive: true });
+      writeFileSync(join(r.repo, '.github', 'CODEOWNERS'), '* @org/api\n/collections/ @org/payments @org/api\n');
+      const people = await mentionCandidates({ root: r.ws });
+      expect(people.filter((p) => p.kind === 'person').map((p) => [p.handle, p.label])).toEqual([['Tester', 'Tester']]);
+      expect(people.filter((p) => p.kind === 'team').map((p) => p.label)).toEqual(['@org/api', '@org/payments']);
+    } finally {
+      r.cleanup();
+    }
+  });
+});

@@ -1,6 +1,6 @@
 /** RPC handlers: comments for your team on an item (storage/comments.ts), signed with the git identity. */
 import { userInfo } from 'node:os';
-import { ApsError, addComment, deleteComment, gitIdentity, listComments, openCommentCounts, openCommentsByOwner, resolveComment, restoreComment, toItemRef } from '@testpion/core';
+import { ApsError, mentionCandidates, addComment, deleteComment, gitIdentity, listComments, openCommentCounts, openCommentsByOwner, resolveComment, restoreComment, toItemRef } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export function commentsHandlers(be: Backend): Handlers {
@@ -27,5 +27,7 @@ export function commentsHandlers(be: Backend): Handlers {
       return forMe ? all.filter((c) => c.forYou) : all;
     },
     'comments.counts': () => openCommentCounts(be.ws),
+    /** Who a comment can @mention: the people of the repository's history and the teams of CODEOWNERS. */
+    'comments.people': () => mentionCandidates(be.ws),
   };
 }
