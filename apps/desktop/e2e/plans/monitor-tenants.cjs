@@ -20,11 +20,11 @@ const steps = [
     `await __t.view('Monitors'); await __t.sleep(900);
      // the monitor's own row, folded: its tenants' rows sit under it, named by their environment
      const parent = await __t.waitFor(() => [...document.querySelectorAll('[data-list-parent]')].find((p) => p.offsetParent && /Tenant mon/.test(p.textContent)), 8000); if (!parent) return 'NO PARENT ROW';
-     const partNames = () => [...parent.querySelectorAll('[role=group] [data-tree-row]')].filter((r) => r.offsetParent).map((r) => r.querySelector('.truncate')?.textContent.trim());
+     const partNames = () => [...parent.querySelectorAll(':scope > [role=group] [data-tree-row]')].filter((r) => r.offsetParent).map((r) => r.querySelector('.truncate')?.textContent.trim());
      const folded = partNames().length;
      const head = parent.querySelector('[data-tree-row]'); await __t.real.click(head); await __t.sleep(600);
      const names = partNames();
-     const row = [...parent.querySelectorAll('[role=group] [data-tree-row]')].find((r) => r.offsetParent); if (!row) return 'NO TENANT ROW';
+     const row = [...parent.querySelectorAll(':scope > [role=group] [data-tree-row]')].find((r) => r.offsetParent); if (!row) return 'NO TENANT ROW';
      await __t.real.click(row); await __t.sleep(800);
      const edit = await __t.waitFor(() => [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Edit'), 5000); if (!edit) return 'NO EDIT BUTTON';
      await __t.real.click(edit);

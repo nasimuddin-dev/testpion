@@ -13,12 +13,14 @@ const steps = [
       const seg = document.querySelector('[data-running]'); if (!seg) return 'NO SEGMENT';
       seg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); seg.click();
       const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Mock server of /.test(m.textContent.trim())), 5000);
-      const says = await __t.waitFor(() => (/1 more running/.test(seg.textContent) ? seg.textContent.trim() : null), 3000);
-      if (!item) return 'NO MOCK IN THE LIST | segment: ' + seg.textContent.trim();
+      // an open menu renders its button anew (closed, it is only the button): look the segment up each time
+      const segNow = () => document.querySelector('[data-running]')?.textContent.trim() ?? '';
+      const says = await __t.waitFor(() => (/1 more running/.test(segNow()) ? segNow() : null), 3000);
+      if (!item) return 'NO MOCK IN THE LIST | segment: ' + segNow();
       const named = item.textContent.includes(window.__runningCol);
       item.click(); await __t.sleep(800);
       const after = (await window.aps.invoke('app.running')).filter((i) => i.kind === 'mock').length;
-      return 'segment: ' + (says ? 'says 1 more running' : 'NO COUNT: ' + seg.textContent.trim()) + ' | listed by name: ' + named + ' | mocks after Stop: ' + after;
+      return 'segment: ' + (says ? 'says 1 more running' : 'NO COUNT: ' + segNow()) + ' | listed by name: ' + named + ' | mocks after Stop: ' + after;
     })()`,
   ],
 ];

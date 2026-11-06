@@ -410,7 +410,13 @@ export function Tabs<T extends string>({
   );
 }
 
-export function Badge({ children, tone = 'default', title, className }: { children: ReactNode; tone?: 'default' | 'ok' | 'bad' | 'warn' | 'accent' | 'judge'; title?: string; className?: string }) {
+export function Badge({
+  children,
+  tone = 'default',
+  title,
+  className,
+  ...data
+}: { children: ReactNode; tone?: 'default' | 'ok' | 'bad' | 'warn' | 'accent' | 'judge'; title?: string; className?: string } & Record<`data-${string}`, string | boolean | undefined>) {
   const tones = {
     default: 'bg-panel2 text-muted border-line',
     ok: 'text-ok border-ok/25 bg-ok/10',
@@ -420,7 +426,7 @@ export function Badge({ children, tone = 'default', title, className }: { childr
     judge: 'text-judge border-judge/25 bg-judge/10',
   };
   return (
-    <span title={title} className={cx('inline-flex items-center gap-1 rounded-full px-2 text-2xs leading-5 border font-medium whitespace-nowrap tabular-nums', tones[tone], className)}>
+    <span title={title} className={cx('inline-flex items-center gap-1 rounded-full px-2 text-2xs leading-5 border font-medium whitespace-nowrap tabular-nums', tones[tone], className)} {...data}>
       {children}
     </span>
   );

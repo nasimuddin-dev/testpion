@@ -325,7 +325,10 @@ export function HomeView() {
   // opened, a run or a monitor check finished, a request sent), not on every visit (8 calls each time)
   useEffect(() => {
     load();
-    const offs = [on('data.changed', () => void (stale.current = true)), on('run.finished', () => void (stale.current = true)), on('monitor.result', () => void (stale.current = true))];
+    const offs = [on('data.changed', () => void (stale.current = true)), on('run.finished', () => void (stale.current = true)), on('monitor.result', () => void (stale.current = true)), 
+      // a comment added or resolved while Home is shown (from an item's panel in a split, the CLI, an agent): shown now
+      on('comments.changed', () => void (useApp.getState().view === 'home' ? load() : (stale.current = true))),
+    ];
     const unsub = useApp.subscribe((s, p) => {
       if (s.view !== 'home' || p.view === 'home') return;
       if (stale.current) return load();
