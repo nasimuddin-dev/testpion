@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkedSource, removeItem, renameVariable, sharedDirs, WorkspaceStore } from '../../packages/core/src/index.js';
 import { runCliSync, tempDir } from '../helpers.js';
@@ -78,5 +78,13 @@ describe('environments shared from another workspace', () => {
     expect(JSON.parse(list.out).data.find((e: { name: string }) => e.name === 'Shared staging')).toMatchObject({ shared: 'platform-shared' });
     const wrong = cli(['workspace', 'share', '--add', '../platform-shared', '--kinds', 'collections', '-w', ws]);
     expect(wrong.status).toBe(2);
+    // a folder with specs/ too: both kinds by default, and its API definitions listed by the path commands take
+    mkdirSync(join(tmp.dir, 'platform-shared', 'specs'), { recursive: true });
+    writeFileSync(join(tmp.dir, 'platform-shared', 'specs', 'platform.yaml'), 'openapi: 3.0.3\ninfo: { title: P, version: "1" }\npaths: {}\n');
+    const both = cli(['workspace', 'share', '--add', '../platform-shared', '-w', ws]);
+    expect(both.status, both.out + both.err).toBe(0);
+    expect(JSON.parse(both.out).data).toMatchObject({ shared: [{ path: '../platform-shared', kinds: ['environments', 'specs'] }], specs: ['../platform-shared/specs/platform.yaml'] });
+    const envOnly = cli(['workspace', 'share', '--add', '../platform-shared', '--kinds', 'environments', '-w', ws]);
+    expect(JSON.parse(envOnly.out).data).toMatchObject({ shared: [{ kinds: ['environments'] }], specs: [] });
   });
 });
