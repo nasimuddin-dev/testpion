@@ -6,6 +6,7 @@
 
 - A comment's **Reply** puts the answer under it (`testpion item comment add <item> "text" --reply-to <id>`, RPC `comments.add { replyTo }`, MCP `team_comments` add with `id`); settling a comment settles its replies, deleting it deletes them (Undo puts them back), and a reply to your comment is **For you**.
 - The author of a comment can change it (the pencil, `testpion item comment edit <item> <id> "text"`, `team_comments` edit); it then says *edited*.
+- An AI task on an item takes what the team still asks about it into account: the open comments' text goes with the item (never who wrote them).
 - **All N** on Home's *Your team is asking* lists every open comment, with **For you** and team chips.
 - **Settings ▸ Git ▸ Your teams**: a comment that mentions one of your teams is for you (`git.teams`; `item comment open --for-me` uses it).
 - Deleting the last comment of an item no longer shows *changed outside TestPion*.

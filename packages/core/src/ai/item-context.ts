@@ -13,6 +13,7 @@ import { historyResponse } from '../storage/history-compare.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { runResults } from '../runner/run-results.js';
 import { finishedRun } from '../runner/result-source.js';
+import { listComments } from '../storage/comments.js';
 import type { StoredResponse } from './verify.js';
 
 interface ItemContext {
@@ -74,8 +75,18 @@ const readText = (file: string) => {
   return readFileSync(file, 'utf8');
 };
 
-/** The context of a workspace item for an AI task (see the module comment). */
+/**
+ * The context of a workspace item for an AI task (see the module comment), with what the team still asks about it: its
+ * open comments' text (at most 10, newest last; never who wrote them), so an answer can take them into account.
+ */
 export async function contextOfItem(store: WorkspaceStore, value: unknown): Promise<ItemContext> {
+  const out = await contextOfItemOnly(store, value);
+  const ref = toItemRef(value) as ItemRef | undefined;
+  const asked = ref ? listComments(store, ref).filter((c) => !c.resolvedAt).slice(-10) : [];
+  return asked.length ? { ...out, context: { ...out.context, teamComments: asked.map((c) => c.text) } } : out;
+}
+
+async function contextOfItemOnly(store: WorkspaceStore, value: unknown): Promise<ItemContext> {
   const ref = toItemRef(value) as ItemRef | undefined;
   if (!ref)
     throw new ApsError('ValidationError', 'That is not an item reference', {

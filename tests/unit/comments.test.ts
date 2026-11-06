@@ -126,4 +126,19 @@ describe('comments for your team', () => {
     expect(() => editComment(store, item, c.id, 'Mine now', 'Bo')).toThrow(/Only Ana Lee can change this comment/);
     expect(() => editComment(store, item, c.id, '  ', 'Ana Lee')).toThrow(/empty/);
   });
+
+  it('an AI task on an item sees the open comments of the team (their text, never who wrote them)', async () => {
+    const { contextOfItem } = await import('../../packages/core/src/index.js');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(store.path('specs'), { recursive: true });
+    writeFileSync(store.path('specs', 'pets.yaml'), 'openapi: 3.0.3\ninfo: { title: Pets, version: "1" }\npaths: {}\n');
+    const item: ItemRef = { kind: 'spec', path: 'specs/pets.yaml' };
+    expect((await contextOfItem(store, item)).context).not.toHaveProperty('teamComments');
+    addComment(store, item, 'Is /pets paged?', 'Ana Lee');
+    const settled = addComment(store, item, 'Old question', 'Bo');
+    resolveComment(store, item, settled.id, 'Bo');
+    const ctx = (await contextOfItem(store, item)).context;
+    expect(ctx.teamComments).toEqual(['Is /pets paged?']);
+    expect(JSON.stringify(ctx)).not.toContain('Ana Lee');
+  });
 });
