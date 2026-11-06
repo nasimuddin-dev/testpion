@@ -103,6 +103,12 @@ export const RequestRow = memo(function RequestRow({
       // every click on a request opens its own tab (Enter is a click on the button, so it opens too); with Ctrl/⌘ or
       // Shift it is picked with others instead
       onClick={(e) => (e.ctrlKey || e.metaKey ? x().pick(c, n, 'toggle') : e.shiftKey ? x().pick(c, n, 'range') : x().onOpen(c, n))}
+      // the keyboard picks too: Ctrl/⌘+Space toggles this request, Shift+Space adds the range to it
+      onKeyDown={(e) => {
+        if (e.key !== ' ' || !(e.ctrlKey || e.metaKey || e.shiftKey)) return;
+        e.preventDefault();
+        x().pick(c, n, e.shiftKey ? 'range' : 'toggle');
+      }}
       rename={renaming ? { value: n.name, label: 'Request name', done: (name) => x().finishRename(c, n.id, name) } : undefined}
       drag={[{ kind: 'request', collectionId: c.id, requestId: n.id }]}
       onDragStart={() => x().dragStart(c, n)}

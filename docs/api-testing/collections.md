@@ -57,7 +57,7 @@ A saved gRPC call or connection has the same groups: **Open**, **Open in new tab
 
 ## Pick several requests
 
-**Ctrl+click** (**⌘+click** on a Mac) requests in the tree to pick them; **Shift+click** picks every request between the last one and this one. A bar above the tree then says how many are picked and offers **Run** (one run of just those, in the order the tree shows them, in the active environment), **Move to…** (a folder of the same collection, or its top level), **Delete** (one **Undo** brings them all back) and **×** (or **Esc**) to let go. Picking in another collection starts over there; a plain click still opens a request.
+**Ctrl+click** (**⌘+click** on a Mac) requests in the tree to pick them; **Shift+click** picks every request between the last one and this one. From the keyboard: **Ctrl+Space** (**⌘+Space**) on a focused request picks or drops it, **Shift+Space** picks the range. A bar above the tree then says how many are picked and offers **Run** (one run of just those, in the order the tree shows them, in the active environment), **Move to…** (a folder of the same collection, or its top level), **Delete** (one **Undo** brings them all back) and **×** (or **Esc**) to let go. Picking in another collection starts over there; a plain click still opens a request.
 
 ## Tidy up
 
