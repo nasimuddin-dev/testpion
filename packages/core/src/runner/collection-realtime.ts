@@ -21,6 +21,8 @@ export interface SavedGrpcCall {
   message?: string;
   metadata?: KeyValue[];
   tls?: boolean;
+  /** gRPC-Web instead of gRPC. */
+  web?: boolean;
   protoFiles?: Array<{ name: string; text: string }>;
   descriptorSet?: string;
 }
@@ -74,6 +76,7 @@ export function savedGrpcCallToTest(item: LibraryItem<SavedGrpcCall>, collection
     message: parseJson(d.message),
     metadata: d.metadata,
     tls: d.tls,
+    ...(d.web ? { web: true } : {}),
     protos: [],
     protoFiles: d.protoFiles?.length ? d.protoFiles : undefined,
     descriptorSet: d.protoFiles?.length ? undefined : d.descriptorSet,

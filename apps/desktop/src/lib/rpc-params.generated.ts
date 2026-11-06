@@ -226,7 +226,7 @@ export interface RpcParamTypes {
   'grpc.grpcurl': RpcCommonParams & { target: string; method: string; message?: string; metadata?: unknown[]; protoFiles?: string[] };
   'grpc.parseGrpcurl': RpcCommonParams & { text: string };
   'grpc.reflect': RpcCommonParams & { target: string; metadata?: unknown[]; tlsOptions?: Record<string, unknown> };
-  'grpc.send': RpcCommonParams & { target: string; method?: string; metadata?: unknown[]; tlsOptions?: Record<string, unknown> };
+  'grpc.send': RpcCommonParams & { target: string; method?: string; metadata?: unknown[]; tlsOptions?: Record<string, unknown>; web?: boolean };
   'history.compare': RpcCommonParams & { before: string; after: string };
   'history.delete': RpcCommonParams & { id: string };
   'history.exportHar': RpcCommonParams & { query?: string; kind?: string; limit?: number };

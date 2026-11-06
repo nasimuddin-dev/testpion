@@ -116,10 +116,12 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
           message: { description: 'Request message as a JSON object (a list of messages for client-streaming methods)' },
           metadata: { type: 'object', additionalProperties: { type: 'string' }, description: 'Metadata (headers)' },
           environment: str('Environment name'),
+          web: { type: 'boolean', description: 'gRPC-Web over HTTP/1.1 (target an http(s) URL; needs protos)' },
         },
       },
       run: async (a) => {
         const protoFiles = ((a.protos as string[]) ?? []).map((name) => ({ name, text: readFileSync(store.safePath(String(name)), 'utf8') }));
+        if (a.web === true && !protoFiles.length) throw new ApsError('ValidationError', 'A gRPC-Web call needs the protos: server reflection works over gRPC only');
         const environment = checkEnvironment(a.environment);
         return withEngine({ store, secrets, settings }, { environment }, async (ctx) => {
           const r = ctx.vars.resolveDeep({ target: String(a.target ?? ''), message: a.message ?? {}, metadata: Object.entries((a.metadata as Record<string, string>) ?? {}).map(([key, value]) => ({ key, value })) });
@@ -129,7 +131,7 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
           if (!a.method) return describeRoot(grpcRoot({ protoFiles, descriptorSet })).map((m) => ({ method: m.name, clientStreaming: m.clientStreaming, serverStreaming: m.serverStreaming, example: m.example }));
           if (!r.target) throw new ApsError('ValidationError', 'Give the server address (target)');
           assertProductionStep(ctx.services.production, { action: `gRPC ${String(a.method)}`, changesData: !isGrpcReadMethod(String(a.method)) });
-          const out = await executeGrpc({ target: r.target, method: String(a.method), message: JSON.stringify(r.message), metadata: r.metadata, protoFiles, descriptorSet, timeoutMs: settings.defaultTimeoutMs }, { redactor: ctx.redactor });
+          const out = await executeGrpc({ target: r.target, method: String(a.method), message: JSON.stringify(r.message), metadata: r.metadata, protoFiles, descriptorSet, timeoutMs: settings.defaultTimeoutMs, ...(a.web === true ? { web: true } : {}) }, { redactor: ctx.redactor });
           const body = (v: unknown) => clip(ctx.redactor.redactString(JSON.stringify(v)));
           return {
             code: out.code,

@@ -65,6 +65,8 @@ const drafts = persisted('grpc', {
   metadata: [] as KeyValue[],
   protoFiles: [] as ProtoFile[],
   tls: false,
+  /** gRPC-Web (HTTP/1.1 through Envoy or a grpc-web proxy) instead of gRPC. */
+  web: false,
   timeoutMs: 30000,
   /** Public certificates (PEM or {{variables}}); the private key is never saved here. */
   ca: undefined as string | undefined,
@@ -260,7 +262,7 @@ export function GrpcView() {
     setError(undefined);
     setSelected(undefined);
     try {
-      const r = await call<GrpcResult>('grpc.send', { id, target: d.target, method: d.method, message: d.message, metadata: d.metadata, ...(d.descriptorSet ? { descriptorSet: d.descriptorSet } : { protoFiles: d.protoFiles }), tls: d.tls || undefined, tlsOptions, timeoutMs: d.timeoutMs, environment: env });
+      const r = await call<GrpcResult>('grpc.send', { id, target: d.target, method: d.method, message: d.message, metadata: d.metadata, ...(d.descriptorSet ? { descriptorSet: d.descriptorSet } : { protoFiles: d.protoFiles }), tls: d.tls || undefined, web: d.web || undefined, tlsOptions, timeoutMs: d.timeoutMs, environment: env });
       setResult(r);
       setResTab('response');
       if (r.unresolved?.length) useApp.getState().toast(`Unresolved variables: ${r.unresolved.join(', ')}`, 'error');
@@ -331,7 +333,7 @@ export function GrpcView() {
     } catch {
       /* kept as text */
     }
-    void saveAsTestFile(`${d.method.split('/').pop() ?? 'gRPC call'} works`, { kind: 'grpc', target: d.target, method: d.method, message, metadata: d.metadata, tls: d.tls });
+    void saveAsTestFile(`${d.method.split('/').pop() ?? 'gRPC call'} works`, { kind: 'grpc', target: d.target, method: d.method, message, metadata: d.metadata, tls: d.tls, ...(d.web ? { web: true } : {}) });
   };
   const [tabTitle, setTabTitle] = useSticky<string | undefined>(`grpc:title:${docId ?? 'main'}`, undefined, { persist: true });
   // a new tab is "New gRPC request" (the save dialog suggests the method's name)
@@ -533,6 +535,9 @@ export function GrpcView() {
               <div className="p-3 flex flex-col gap-3 max-w-md">
                 <label className="text-sm flex items-center gap-2">
                   <input type="checkbox" checked={d.tls} onChange={(e) => set({ tls: e.target.checked })} /> Use TLS (also on with a grpcs:// address)
+                </label>
+                <label className="text-sm flex items-center gap-2" title="As a browser calls it: one HTTP/1.1 POST per call, through Envoy's grpc_web filter or a grpc-web proxy. Unary and server-streaming methods; the address may be an http(s):// URL with a path. Needs the .proto files (server reflection works over gRPC only).">
+                  <input type="checkbox" checked={!!d.web} onChange={(e) => set({ web: e.target.checked })} data-grpc-web /> gRPC-Web (HTTP/1.1, through Envoy or a grpc-web proxy)
                 </label>
                 <Field label="Deadline (ms)">
                   <Input type="number" value={d.timeoutMs} onChange={(e) => set({ timeoutMs: Number(e.target.value) || 30000 })} />

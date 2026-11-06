@@ -314,6 +314,7 @@ export interface GrpcTest extends TestBase {
   /** A FileDescriptorSet (base64) from an earlier server reflection; used when there are no .proto files. */
   descriptorSet?: string;
   tls?: boolean;
+  web?: boolean; // gRPC-Web (HTTP/1.1, grpc-web.ts) instead of gRPC
 }
 
 /**

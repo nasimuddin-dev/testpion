@@ -60,6 +60,7 @@ Every value supports `{{variables}}` from the active environment, including the 
 ## Settings
 
 - **Use TLS**: on for `grpcs://` addresses; turn it on for a TLS server given as `host:port`.
+- **gRPC-Web**: call the service as a browser does, over HTTP/1.1 through Envoy's `grpc_web` filter, a grpc-web proxy or a server that speaks it (ASP.NET Core, Connect). The address may be an `http(s)://` URL with a path (`https://api.example.com/grpc`); the same `.proto` files and message JSON are used, and the status, metadata and trailers are read from the answer (a status in the HTTP headers too). Unary and server-streaming methods (gRPC-Web has no client streaming); it needs the `.proto` files, since server reflection works over gRPC only. In a test: `web: true`; MCP `grpc_call { web: true }`.
 - **Deadline**: how long the call may take (default 30 s). A call that runs out returns `DEADLINE_EXCEEDED`.
 - **Certificates**: a **CA certificate** for servers with a private CA, and a **client certificate** and **private key** for mutual TLS (PEM text, **Load…** a file, or a `{{variable}}`). The private key is never saved with the draft: keep it in a [secret environment variable](./environments.md#secrets) and enter `{{clientKey}}`, or paste it for the current session. IP addresses work with TLS too; the certificate is checked against the IP.
 

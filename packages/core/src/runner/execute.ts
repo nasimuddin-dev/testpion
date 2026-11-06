@@ -566,7 +566,7 @@ async function runGrpc(test: GrpcTest, scope: VariableScope, svc: ExecServices, 
   const s = span.child(`grpc ${r.method}`, 'grpc', { input: { message: r.message } });
   try {
     const out = await executeGrpc(
-      { target: r.target, method: r.method, message: r.message === undefined ? undefined : JSON.stringify(r.message), metadata: r.metadata, protoFiles, descriptorSet, tls: test.tls, timeoutMs: test.timeoutMs ?? svc.defaultTimeoutMs },
+      { target: r.target, method: r.method, message: r.message === undefined ? undefined : JSON.stringify(r.message), metadata: r.metadata, protoFiles, descriptorSet, tls: test.tls, ...(test.web ? { web: true } : {}), timeoutMs: test.timeoutMs ?? svc.defaultTimeoutMs },
       { signal, redactor: svc.redactor },
     );
     const body = out.messages ? out.messages.map((m) => m.data) : (out.response ?? null);

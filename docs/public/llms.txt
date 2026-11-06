@@ -230,7 +230,7 @@ Key facts for agents, by topic:
 - [GraphQL overview](https://nasimuddin-dev.github.io/testpion/graphql/overview)
 - [GraphQL mock server](https://nasimuddin-dev.github.io/testpion/graphql/mocking): `testpion mock-graphql --schema schema.graphql` serves fake, typed, deterministic data for any valid query
 - [GraphQL testing](https://nasimuddin-dev.github.io/testpion/graphql/testing)
-- [gRPC](https://nasimuddin-dev.github.io/testpion/api-testing/grpc): call gRPC services from .proto files or server reflection (unary and streaming), metadata, TLS, deadlines; `type: grpc` tests with `grpc-status`; `testpion grpc`; MCP tool `grpc_call`
+- [gRPC](https://nasimuddin-dev.github.io/testpion/api-testing/grpc): call gRPC services from .proto files or server reflection (unary and streaming), metadata, TLS, deadlines, and gRPC-Web over HTTP/1.1 (`web: true` on a call or a `type: grpc` test, `grpc_call { web }`; an http(s) URL target; unary and server-streaming; protos needed); `type: grpc` tests with `grpc-status`; `testpion grpc`; MCP tool `grpc_call`
 - [MCP overview](https://nasimuddin-dev.github.io/testpion/mcp/overview): test MCP servers (stdio, Streamable HTTP, SSE)
 - [MCP tools](https://nasimuddin-dev.github.io/testpion/mcp/tools)
 - [MCP mock server](https://nasimuddin-dev.github.io/testpion/mcp/mocking): fake MCP servers from `*.mcp-mock.yaml` (or recorded from a real server with Save as mock); `testpion mock-mcp <file>` serves one over stdio or `--http` for agents

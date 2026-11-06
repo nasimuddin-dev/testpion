@@ -289,7 +289,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'grpc.grpcurl': { target: 's', method: 's', message: 's?', metadata: 'a?', protoFiles: 'sa?' },
   'grpc.parseGrpcurl': { text: 's' },
   'grpc.reflect': { target: 's', metadata: 'a?', tlsOptions: 'o?' },
-  'grpc.send': { target: 's', method: 's?', metadata: 'a?', tlsOptions: 'o?' },
+  'grpc.send': { target: 's', method: 's?', metadata: 'a?', tlsOptions: 'o?', web: 'b?' },
   'history.compare': { before: 's', after: 's' },
   'history.delete': { id: 's' },
   'history.exportHar': { query: 's?', kind: 's?', limit: 'n?' },

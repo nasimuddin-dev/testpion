@@ -9,6 +9,7 @@ import type { KeyValue } from '../../model/types.js';
 import { assertUrlAllowed } from '../../net/policy.js';
 import type { Redactor } from '../../util/redact.js';
 import { grpcJs, protobufLib, protoLoaderLib, rootFromDescriptorSet } from './grpc-libs.js';
+import { executeGrpcWebCall } from './grpc-web.js';
 
 export { grpcJs, protobufLib, protoLoaderLib };
 
@@ -200,6 +201,8 @@ export interface GrpcRequestSpec {
   tlsOptions?: GrpcTlsOptions;
   /** Deadline in ms (default 30 s). */
   timeoutMs?: number;
+  /** gRPC-Web (HTTP/1.1, as a browser calls it through Envoy or a grpc-web proxy) instead of gRPC: unary and server-streaming methods. */
+  web?: boolean;
 }
 
 export interface GrpcTlsOptions {
@@ -284,6 +287,20 @@ function parseMessage(text: string | undefined, what: string): unknown {
 }
 
 /** The method a request names (found in its protos), a client for its service and the request's metadata. */
+/** A call over gRPC-Web (grpc-web.ts): the method from the protos, the target as an http(s) base (a path prefix kept). */
+async function grpcWebOf(spec: GrpcRequestSpec, address: string, tls: boolean, opts: { signal?: AbortSignal; redactor?: Redactor; onMessage?: (data: unknown, atMs: number) => void }) {
+  const root = grpcRoot(spec);
+  const name = spec.method.replace(/^\//, '');
+  const info = describeRoot(root).find((m) => m.name === name || `${m.service.split('.').pop()}/${m.method}` === name);
+  if (!info) throw new ApsError('ValidationError', `Method "${spec.method}" is not in the proto files`);
+  const method = root.lookupService(info.service).methods[info.method]!;
+  method.resolve();
+  const baseUrl = /^https?:\/\//i.test(spec.target.trim()) ? spec.target.trim() : `${tls ? 'https' : 'http'}://${address}`;
+  const metadata = (spec.metadata ?? []).filter((h) => h.enabled !== false && h.key).map((h) => [h.key.toLowerCase(), h.value] as [string, string]);
+  const r = await executeGrpcWebCall({ method, service: info.service, baseUrl, message: parseMessage(spec.message, 'request message'), metadata, timeoutMs: spec.timeoutMs ?? 30_000, ...opts });
+  return { ...r, method: info.name };
+}
+
 function methodClient(spec: GrpcRequestSpec, address: string, tls: boolean): { info: GrpcMethodInfo; client: grpc.Client; md: grpc.Metadata } {
   const root = grpcRoot(spec);
   const methods = describeRoot(root);
@@ -339,9 +356,16 @@ export async function prepareGrpcCall(spec: GrpcRequestSpec): Promise<{ method: 
 export async function executeGrpc(spec: GrpcRequestSpec, opts: { signal?: AbortSignal; redactor?: Redactor; onMessage?: (data: unknown, atMs: number) => void } = {}): Promise<GrpcResponseData> {
   const t0 = performance.now();
   const ms = () => Math.round((performance.now() - t0) * 100) / 100;
+  // gRPC-Web: an http(s) URL, a path prefix allowed (https://api.example.com/grpc)
+  if (spec.web && /^https?:\/\//i.test(spec.target.trim())) {
+    const url = new URL(spec.target.trim());
+    await assertUrlAllowed(url);
+    return { ...(await grpcWebOf(spec, url.host, url.protocol === 'https:', opts)), target: url.host };
+  }
   const { address, tls: tlsFromTarget } = parseGrpcTarget(spec.target, spec.tls);
   const tls = tlsFromTarget || !!spec.tlsOptions?.ca || !!spec.tlsOptions?.cert;
   await assertUrlAllowed(new URL(`${tls ? 'https' : 'http'}://${address}`));
+  if (spec.web) return { ...(await grpcWebOf(spec, address, tls, opts)), target: address };
 
   const { info, client, md } = methodClient(spec, address, tls);
   const callOpts: grpc.CallOptions = { deadline: new Date(Date.now() + (spec.timeoutMs ?? 30_000)) };

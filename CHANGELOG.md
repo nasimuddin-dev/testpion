@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### gRPC-Web
+
+- A gRPC call can go over **gRPC-Web** (Settings ▸ gRPC-Web, `web: true` in a test, `grpc_call { web: true }`): HTTP/1.1 through Envoy's `grpc_web` filter or a grpc-web proxy, the address an `http(s)://` URL (a path allowed), the same protos and message JSON; unary and server-streaming methods, the status read from the trailers or the headers.
+
 ### Comments: replies, changes, the full list
 
 - A comment's **Reply** puts the answer under it (`testpion item comment add <item> "text" --reply-to <id>`, RPC `comments.add { replyTo }`, MCP `team_comments` add with `id`); settling a comment settles its replies, deleting it deletes them (Undo puts them back), and a reply to your comment is **For you**.
