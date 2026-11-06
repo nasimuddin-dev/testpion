@@ -29,6 +29,7 @@ import {
 import type { Backend, Handlers } from '../backend.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { debuggerSpeedHandlers } from './debugger-speed.js';
+import { approveRules, changesTraffic, rulesApproved } from '../debugger-rules-trust.js';
 import { newDebuggerState, type DebuggerState } from './debugger-state.js';
 
 export interface PendingBreakpoint {
@@ -107,18 +108,25 @@ export function rulesOf(be: Backend, state: DebuggerState): DebuggerRulesFile {
   }
   state.rules = rules ?? emptyRulesFile();
   if (!Object.keys(state.rules.profiles).length) state.rules.profiles.Default = defaultRules();
+  // the file is shared through git: its rules that change traffic act only once allowed on this computer
+  state.rulesApproved = rulesApproved(be, state.rules);
   return state.rules;
 }
 
+/** The rules the proxy applies: the active profile's, without the ones that change traffic while they wait for approval. */
 export const activeRules = (be: Backend, state: DebuggerState): DebuggerRule[] => {
   const f = rulesOf(be, state);
-  return f.profiles[f.active] ?? [];
+  const rules = f.profiles[f.active] ?? [];
+  return state.rulesApproved ? rules : rules.filter((r) => !changesTraffic(r));
 };
 
 /** The rules file written without holding the thread (a busy file is waited for with timers, see atomicWriteAsync). */
 export async function saveRules(be: Backend, state: DebuggerState) {
   const f = rulesOf(be, state);
   await atomicWriteAsync(be.ws.path(RULES_FILE), stableText(debuggerRulesFileValue(f)));
+  // changed here while allowed: what was saved stays allowed (rules that came from elsewhere keep waiting until allowed)
+  if (state.rulesApproved) approveRules(be, f);
+  else state.rulesApproved = rulesApproved(be, f);
   be.host.emit('debug.rules', { active: f.active, count: (f.profiles[f.active] ?? []).filter((r) => r.enabled).length });
 }
 
@@ -216,11 +224,20 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       filterPresets: f.filterPresets ?? [],
       // how many requests each rule acted on in this capture
       hits: state.proxy?.ruleHits() ?? {},
+      // rules that change traffic came with a pull or a clone (or were changed outside this app): they wait for "Allow on this computer"
+      ...(state.rulesApproved ? {} : { needsApproval: true, waiting: rules.filter((r) => r.enabled && changesTraffic(r)).length }),
     };
   };
   return {
     ...debuggerSpeedHandlers(be, state),
     'debug.rules': () => list(),
+    /** "Allow on this computer": the rules as they are now change traffic here (debugger-rules-trust.ts). */
+    'debug.approveRules': () => {
+      approveRules(be, file());
+      state.rulesApproved = true;
+      be.host.emit('debug.rules', { active: file().active, count: activeRules(be, state).filter((r) => r.enabled).length });
+      return list();
+    },
     'debug.resetRuleHits': () => {
       state.proxy?.resetRuleHits();
       return list();

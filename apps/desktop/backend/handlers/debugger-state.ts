@@ -58,6 +58,8 @@ export interface DebuggerState {
   dirty?: boolean;
   /** The rules file (handlers/debugger-rules.ts), read once; the proxy asks for the active profile's rules on every request. */
   rules?: DebuggerRulesFile;
+  /** The rules of the file that change traffic may act here (debugger-rules-trust.ts); false: they wait for "Allow on this computer". */
+  rulesApproved?: boolean;
   /** Listing is paused (Pause in the capture bar): the proxy keeps forwarding and rules keep acting, but nothing new is listed. */
   paused?: boolean;
   /** Exchanges held at a breakpoint, waiting for the window. */

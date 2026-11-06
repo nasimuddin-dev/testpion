@@ -6,7 +6,7 @@ import { deleteWithUndo } from '../../lib/undo-delete';
 import { useDoc } from '../../lib/docs';
 import { Button, cx, Empty, type EmptyAction, Field, FilterInput, IconButton, Input, Menu, type MenuItem, Segmented, Select } from '../ui';
 import { SCRIPT_TEMPLATE } from './RuleScriptFields';
-import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
+import { RulesApproval, type Rule, type RuleColumn, type RuleCondition, type RuleKind, type RuleOperator, type RulesState } from '../DebuggerRules';
 import { plural } from '../../lib/format';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');
@@ -99,6 +99,11 @@ export function RuleList({
     : (add.items ?? []).filter((i) => i.onSelect).map((i) => ({ label: String(i.label), icon: <Plus size={13} />, onClick: () => void i.onSelect!() }));
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-rule-list={kinds.join(',')}>
+      {state?.needsApproval && kinds.some((k) => k !== 'ignore' && k !== 'only' && k !== 'highlight') && (
+        <div className="p-2 border-b border-line">
+          <RulesApproval state={state} onChange={onChange} />
+        </div>
+      )}
       <div className="flex items-center gap-1 p-2 border-b border-line">
         <FilterInput className="flex-1" placeholder="Filter rules" label="Filter rules" value={find} onChange={setFind} />
         <IconButton size="md" label="Reset hits: count the hits from zero" onClick={() => act(call<RulesState>('debug.resetRuleHits'))}>

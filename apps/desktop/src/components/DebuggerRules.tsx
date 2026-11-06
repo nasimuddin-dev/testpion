@@ -5,7 +5,7 @@ import { promptText, toastError, attempt, useApp } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
 import { LABEL } from '../lib/vocabulary';
 import { deleteRuleWithUndo } from './debugger/DockRules';
-import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
+import { Badge, Busy, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
 import { GitMark } from './GitMark';
 import { CompareView, type Compared } from './ResponseHistory';
 import { ScriptFields, SCRIPT_TEMPLATE } from './debugger/RuleScriptFields';
@@ -67,6 +67,32 @@ export interface RulesState {
   filterPresets: Array<{ name: string; filter: Record<string, unknown> }>;
   /** How many requests each rule acted on in this capture, by rule id. */
   hits?: Record<string, number>;
+  /** The rules that change traffic came with a pull or a clone (or changed outside this app): they wait for "Allow on this computer". */
+  needsApproval?: boolean;
+  /** How many of the active profile's rules (switched on) wait. */
+  waiting?: number;
+}
+
+/**
+ * The rules file is shared through git: rules that change traffic (reply, redirect, remap, modify, fault, script…) that
+ * came from elsewhere do not act on this computer until allowed. One notice, in the Rules tab and in each rule panel.
+ */
+export function RulesApproval({ state, onChange }: { state?: RulesState; onChange(s: RulesState): void }) {
+  if (!state?.needsApproval) return null;
+  return (
+    <Callout
+      tone="warn"
+      data-rules-need-approval=""
+      action={
+        <Button size="sm" onClick={() => void attempt(async () => onChange(await call<RulesState>('debug.approveRules')))}>
+          Allow on this computer
+        </Button>
+      }
+    >
+      {state.waiting ? `${state.waiting} rule${state.waiting === 1 ? '' : 's'} that change traffic` : 'Rules that change traffic'} came with a pull or a clone, or were changed outside this app: they do not act on this
+      computer until you allow them. Check where they send and what they change first. Filters and highlights work without it.
+    </Callout>
+  );
 }
 export interface HeldBreakpoint {
   id: string;
@@ -168,6 +194,7 @@ export function RulesPanel({ state, onChange, host }: { state?: RulesState; onCh
   };
   return (
     <div className="flex-1 min-h-0 overflow-auto p-4 grid gap-4 content-start max-w-5xl">
+      <RulesApproval state={state} onChange={onChange} />
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm text-muted">Profile</span>
         <GitMark to={{ kind: 'git-file', path: 'debugger/rules.json' }} />

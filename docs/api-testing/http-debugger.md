@@ -226,6 +226,7 @@ The **Rules** tab is what the proxy does to matching traffic, in the order liste
 - The bar above the traffic says how many rules are active and when an exchange is held at a breakpoint.
 
 - Rules live in **profiles** (Offline, Slow network, Mock payments…) switched as one; the profiles are saved in the workspace's `debugger/rules.json`, committed with it, so a team shares them.
+- **Rules from a teammate wait for you.** Rules that change traffic (reply, redirect, remap, modify, fault, frame, script, breakpoints) that arrive with a pull or a clone, or were changed outside the app, do not act on your computer until you choose **Allow on this computer** in the Rules tab (or in a rule panel): look at where they send and what they change first. Filters, capture only and highlights act without asking. The answer is kept on this computer, never in the workspace; a pulled change to a rule that changes traffic asks again. Rules you add or change in the app while they are allowed stay allowed. `testpion debugger capture --rules …` in a terminal uses the file it is given.
 - The **Presets** menu next to the filters saves and recalls filter presets (the text, host, method, status and Bookmarked; not the chips).
 - **Compare** on an exchange, then a click on another, shows the two side by side: status, headers, body.
 

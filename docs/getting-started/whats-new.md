@@ -52,6 +52,8 @@ The options added in 0.56, 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48,
 - The OpenAPI lint notes a parameter without a description and an operation that documents no failure. Every button, input and dialog has a name for a screen reader (a plan keeps it so). Navigation names are in Title Case and read from one file, so a renamed view is one edit.
 - Two tenants with an environment of the same name are never mixed up: the active environment, a tenant's monitor and the values scripts set are kept per environment, **No environment** stays chosen, and a run that names an environment that is gone (or a name two tenants share) stops with an error instead of running without one.
 - Switching workspace stops what served the old one: its mock servers, recorder, open connections and Debugger rules.
+- Debugger rules that change traffic and came with a pull or a clone wait for **Allow on this computer** before they act; filters and highlights act at once.
+- `flow_runs` (MCP) and `testpion flow runs --cursor` page through older runs; `run_monitor` checks the environment a suite names.
 - A suite's teardown runs after `--bail`; a monitor on a suite runs its setup and teardown; deleting a collection takes its gRPC calls and connections to **Recently deleted** with it, on every computer.
 
 ## What's new in 0.55: traffic you can shape, and AI quality in one place {#whats-new-in-0-55}
