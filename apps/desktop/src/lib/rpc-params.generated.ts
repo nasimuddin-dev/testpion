@@ -282,6 +282,7 @@ export interface RpcParamTypes {
   'openapi.outline': RpcCommonParams & { path?: string; text?: string };
   'openapi.replaceSpec': RpcCommonParams & { kept: string; original: string };
   'openapi.spec.delete': RpcCommonParams & { path: string };
+  'openapi.spec.duplicate': RpcCommonParams & { path: string };
   'openapi.spec.rename': RpcCommonParams & { path: string; to: string };
   'openapi.spec.save': RpcCommonParams & { path: string; text: string };
   'output.cancel': RpcCommonParams & { jobId: string };
@@ -439,4 +440,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 422;
+export const RPC_METHOD_COUNT = 423;

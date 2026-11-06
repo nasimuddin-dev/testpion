@@ -415,7 +415,7 @@ const KINDS: readonly ItemKindInfo[] = [
     sample: 'specs/petstore.yaml',
     capabilities: {
       ...FILE_ITEM,
-      duplicate: { planned: '0.58' },
+      duplicate: true,
       move: true,
       trash: true,
       'test-file': { na: 'tests come from an API definition with Generate tests…' },

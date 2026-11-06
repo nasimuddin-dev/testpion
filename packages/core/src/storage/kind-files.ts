@@ -8,7 +8,8 @@ import { dirname, posix } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from './workspace.js';
-import { renameOwned } from './fsutil.js';
+import { copyOwned, renameOwned } from './fsutil.js';
+import { sharedSpecFile } from './shared-sources.js';
 
 /** Names Windows reserves for devices (with any extension). */
 const RESERVED = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$)(\.|$)/i;
@@ -71,6 +72,27 @@ export function renameSpecFile(store: WorkspaceStore, rel: string, to: string): 
   if (existsSync(target)) throw new ApsError('ValidationError', `${dest} exists already`, { suggestions: ['Choose another name.'] });
   renameOwned(src, target);
   moveFolderEntry(store, 'spec-folders', from, dest);
+  return dest;
+}
+
+/**
+ * A copy of an API definition in specs/: one of the workspace's beside it (`a-copy.yaml`, `a-copy-2.yaml` …), or one a
+ * shared folder gives (`../platform-shared/specs/a.yaml`) as the workspace's own `specs/a.yaml` (`a-2.yaml` …), to change.
+ * Returns the new path; its virtual folder goes with an own one.
+ */
+export function duplicateSpecFile(store: WorkspaceStore, rel: string): string {
+  const shared = sharedSpecFile(store, rel);
+  const from = shared ? undefined : checkKindPath(rel, 'specs');
+  const src = shared ?? store.safePath(from!);
+  if (!existsSync(src)) throw new ApsError('ConfigurationError', `No API definition ${rel}`, { suggestions: [] });
+  const ext = posix.extname(rel);
+  const base = posix.basename(rel, ext);
+  const dir = from ? posix.dirname(from) : 'specs';
+  const first = shared ? `${dir}/${base}${ext}` : `${dir}/${base}-copy${ext}`;
+  let dest = first;
+  for (let i = 2; existsSync(store.safePath(dest)); i++) dest = shared ? `${dir}/${base}-${i}${ext}` : `${dir}/${base}-copy-${i}${ext}`;
+  copyOwned(src, store.safePath(dest));
+  if (from) copyFolderEntry(store, 'spec-folders', from, dest);
   return dest;
 }
 

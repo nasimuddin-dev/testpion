@@ -60,6 +60,11 @@ describe('API definitions shared from another workspace', () => {
 
   it('is never written here, and nothing else outside the workspace is read through it', async () => {
     await expect(be.invoke('openapi.spec.save', { path, text: 'changed' })).rejects.toThrow(/shared from platform-shared: change it there/);
+    // Duplicate: a copy of this workspace's own (to change); an own one gets a -copy beside it
+    expect(await be.invoke('openapi.spec.duplicate', { path })).toEqual({ path: 'specs/platform.yaml' });
+    expect(await be.invoke('openapi.spec.duplicate', { path })).toEqual({ path: 'specs/platform-2.yaml' });
+    expect(await be.invoke('openapi.spec.duplicate', { path: 'specs/platform.yaml' })).toEqual({ path: 'specs/platform-copy.yaml' });
+    expect(readFileSync(be.ws.path('specs', 'platform-copy.yaml'), 'utf8')).toBe(SPEC);
     expect(readFileSync(join(other, 'specs', 'platform.yaml'), 'utf8')).toBe(SPEC);
     // a file of the other workspace outside its specs/, or a path climbing out of specs/: refused
     for (const p of [`${rel}/secret.yaml`, `${rel}/specs/../secret.yaml`, `${rel}/workspace.json`]) {

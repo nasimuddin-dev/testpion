@@ -197,7 +197,7 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | MCP server |  | Open <kbd>Enter</kbd>, Open in new tab |  | Connect, Disconnect | Copy link, Copy MCP config, Export… | Settings… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | API definitions section | New …, New folder…, Import… | Open API definitions | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
 | Folder of API definitions | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path, Export… | Generate tests…, Generate integration flows…, AI ▸ | Git | Rename <kbd>F2</kbd>, Move to folder ▸ | Delete… <kbd>Del</kbd> |
+| API definition |  | Open <kbd>Enter</kbd>, Reveal file |  | Lint, API coverage, Compare versions | Copy link, Copy path, Export… | Generate tests…, Generate integration flows…, AI ▸ | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |
 | Datasets section | New …, New folder…, Import…, Generate test data… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  |  |  |
 | Folder of datasets | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Dataset |  | Open <kbd>Enter</kbd>, Reveal file, Preview |  | Run a collection with it | Copy link, Copy path, Export… | Use in a test | Git | Rename <kbd>F2</kbd>, Duplicate, Move to folder ▸ | Delete… <kbd>Del</kbd> |

@@ -1,5 +1,5 @@
 /** RPC handlers: the item-kind registry, and what node menus do to the files of a kind (REG-5, MENU-2). */
-import { ApsError, describeKinds, folderOfWorkspaceFile, removeItem, renameSpecFile, restoreItem } from '@testpion/core';
+import { ApsError, describeKinds, folderOfWorkspaceFile, removeItem, renameSpecFile, duplicateSpecFile, restoreItem } from '@testpion/core';
 import { KIND_INFO } from '@testpion/shared';
 import type { Backend, Handlers } from '../backend.js';
 
@@ -31,6 +31,8 @@ export function kindHandlers(be: Backend): Handlers {
     /** Rename an API definition in specs/ (its virtual folder goes with it); never overwrites. */
     'openapi.spec.rename': ({ path, to }: { path: string; to: string }) => ({ path: renameSpecFile(be.ws, path, to) }),
     /** Delete an API definition: to Recently deleted (Undo restores it, in its folder), through the kind's `ops` facet. */
+    // a copy beside it, or one a shared folder gives as this workspace's own (to change)
+    'openapi.spec.duplicate': ({ path }: { path: string }) => ({ path: duplicateSpecFile(be.ws, path) }),
     'openapi.spec.delete': ({ path }: { path: string }) => ({ trashId: removeItem(be.ws, { kind: 'spec', path }).trashId }),
   };
 }

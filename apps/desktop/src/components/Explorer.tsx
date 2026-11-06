@@ -448,6 +448,14 @@ export function Explorer() {
         generateSpecTests: () => startFlowGenerate({ mode: 'spec', spec: path }),
         driftReport: () => startAiAnalysis({ kind: 'drift', spec: path }),
         rename: () => setRenaming(path),
+        // a copy beside it; for a shared one, a copy of this workspace's own (to change)
+        duplicate: () =>
+          void call<{ path: string }>('openapi.spec.duplicate', { path })
+            .then(async (r) => {
+              await load(false, SPECS);
+              void openRef({ kind: 'spec', path: r.path });
+            })
+            .catch(toastError),
         move: moveToFolderSubmenu(specOps, specFolders.items, path, folder),
         delete: () => {
           let trashId: string | undefined;
@@ -479,7 +487,7 @@ export function Explorer() {
             }
           : {}),
         // from another workspace's folder: changed there
-        ...(from ? Object.fromEntries(['rename', 'move', 'delete'].map((k) => [k, `Shared from ${from}: change it there`])) : {}),
+        ...(from ? Object.fromEntries(['rename', 'move', 'delete'].map((k) => [k, `Shared from ${from}: change it there, or Duplicate it into this workspace`])) : {}),
       },
     };
   };
