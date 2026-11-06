@@ -48,6 +48,7 @@ The options added in 0.56, 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48,
 
 ### Any kind of request in any folder {#whats-new-any-kind}
 
+- **What runs now.** The status bar's MCP segment says how many other things the app keeps running (mock servers, the recorder, the Debugger, open connections, subscriptions); a click lists each, with Stop.
 - **Pick several requests.** Ctrl/⌘+click and Shift+click in the Collections tree, then **Run**, **Move to…** or **Delete** them together (one Undo).
 - **One folder, every kind.** A collection folder holds REST, SOAP, GraphQL, gRPC and WebSocket / Socket.IO / MQTT / Kafka requests side by side, each with its badge; the sidebar no longer splits a collection into one group per kind. A folder's **New request ▸** creates any kind in it, saving a gRPC call or a connection offers the collection's folders, and dragging one onto a folder moves it there. A folder's calls follow it when it is deleted (with Undo), moved or duplicated, and running a folder runs them too. Workspaces from earlier versions are arranged once on open. See [Collections](/api-testing/collections).
 - **A run follows the tree.** **Run collection** runs a folder's gRPC calls and connections where the tree shows them, between its requests (not after all of them), with the folder's variables and scripts, and with the headers and auth (bearer, basic, API key in a header) of the collection and its folders: as gRPC metadata, or with a WebSocket or Socket.IO handshake.

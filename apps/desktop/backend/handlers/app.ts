@@ -23,9 +23,11 @@ import { RPC_VERSION } from '@testpion/shared';
 import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Backend, Handlers } from '../backend.js';
+import { runningHandlers } from './running.js';
 
 export function appHandlers(be: Backend): Handlers {
   return {
+    ...runningHandlers(be),
     'app.info': () => ({
       version: ENGINE_VERSION,
       /** The version of the RPC contract (parameters and answers of the methods): a window checks it when it connects. */

@@ -330,6 +330,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'monitor.run': { id: 's' },
   'monitor.approve': { id: 's' },
   'col.owners': {},
+  'app.running': {},
+  'app.stopRunning': { kind: 's', id: 's' },
   'debug.approveRules': {},
   'ws.shared': {},
   'ws.shareAdd': { path: 'p?' },

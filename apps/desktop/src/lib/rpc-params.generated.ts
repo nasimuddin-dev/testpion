@@ -41,6 +41,8 @@ export interface RpcParamTypes {
   'ai.tidyImport': RpcCommonParams & { collectionId: string; flow?: boolean; source?: string; hint?: string; privacy?: string; dryRun?: boolean; noAi?: boolean };
   'ai.undoProposal': RpcCommonParams & { id: string };
   'app.openExternal': RpcCommonParams & { url: string };
+  'app.running': RpcCommonParams;
+  'app.stopRunning': RpcCommonParams & { kind: string; id: string };
   'assistant.ask': RpcCommonParams & { task: string; question?: string; context?: unknown; history?: unknown[] };
   'asyncapi.outline': RpcCommonParams & { path?: string; text?: string };
   'attention.snooze': RpcCommonParams & { item: Record<string, unknown>; minutes?: number };
@@ -433,4 +435,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 416;
+export const RPC_METHOD_COUNT = 418;

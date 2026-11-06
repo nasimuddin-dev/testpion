@@ -40,6 +40,7 @@ import wordmarkUrl from '../../build/wordmark-nav.png';
 import wordmarkLightUrl from '../../build/wordmark-nav-light.png';
 import markUrl from '../../build/icons/64x64.png';
 import { ConsolePanel } from './ConsolePanel';
+import { RunningSegment } from './RunningSegment';
 import { refIcon } from './RefLink';
 import { openRef } from '../lib/open-ref';
 import { rankPalette } from '../lib/palette-rank';
@@ -222,9 +223,7 @@ export function StatusBar() {
   return (
     <footer className="h-7 shrink-0 border-t border-line bg-chrome flex items-center gap-4 px-3 text-xs text-muted">
       <EnvSelect variant="status" />
-      <span className="flex items-center gap-1" title="Connected MCP servers">
-        <Plug size={12} /> {mcp} MCP connected
-      </span>
+      <RunningSegment mcp={mcp} />
       <GitSegment />
       <DebuggerSegment />
       <span className="flex items-center gap-1.5">
