@@ -86,33 +86,56 @@ export function nextCronTime(expression: string | CronSchedule, after: Date | nu
   if (timeZone) return nextCronTimeIn(s, from, timeZone);
   // the next whole minute (offsets are whole minutes, so a minute on the clock is a minute of absolute time)
   let d = new Date(Math.floor(from / 60_000) * 60_000 + 60_000);
+  /**
+   * The clocks went forward between two instants of the same day (02:00 is 03:00, or 02:00 is 02:30): a time of the
+   * schedule in the wall minutes they skipped runs right after the gap, as cron does.
+   */
+  const skippedRuns = (a: Date, b: Date) => {
+    if (b.getTime() <= from) return false;
+    if (b.getDate() !== a.getDate()) return skippedStart(b);
+    const wallA = a.getHours() * 60 + a.getMinutes();
+    const wallB = b.getHours() * 60 + b.getMinutes();
+    for (let m = wallA + (b.getTime() - a.getTime()) / 60_000; m < wallB; m++) if (s.hours.has(Math.floor(m / 60)) && s.minutes.has(m % 60)) return true;
+    return false;
+  };
+  /** A day whose midnight the clocks skipped (Santiago: 00:00 is 01:00): a time of the schedule before its first minute runs then. */
+  const skippedStart = (x: Date) => {
+    const wall = x.getHours() * 60 + x.getMinutes();
+    if (!wall || x.getTime() <= from || !s.months.has(x.getMonth() + 1) || !dayMatches(s, x)) return false;
+    for (let m = 0; m < wall; m++) if (s.hours.has(Math.floor(m / 60)) && s.minutes.has(m % 60)) return true;
+    return false;
+  };
   const limit = d.getTime() + 5 * 366 * 86_400_000;
   while (d.getTime() <= limit) {
     if (!s.months.has(d.getMonth() + 1)) {
       d.setMonth(d.getMonth() + 1, 1);
       d.setHours(0, 0, 0, 0);
+      if (skippedStart(d)) return d;
       continue;
     }
     if (!dayMatches(s, d)) {
       d.setDate(d.getDate() + 1);
       d.setHours(0, 0, 0, 0);
+      if (skippedStart(d)) return d;
       continue;
     }
     // hours and minutes step on absolute time: when the clocks go back, the repeated hour is not a step back in time
     if (!s.hours.has(d.getHours())) {
       const next = new Date(d.getTime() + (60 - d.getMinutes()) * 60_000);
-      // the clocks went forward (02:00 is 03:00): a time of the hour that never came runs right after the gap, as cron does
-      const skipped = next.getDate() === d.getDate() && next.getHours() > d.getHours() + 1;
-      if (skipped && next.getTime() > from) for (let h = d.getHours() + 1; h < next.getHours(); h++) if (s.hours.has(h)) return next;
+      if (skippedRuns(d, next)) return next;
       d = next;
       continue;
     }
     if (!s.minutes.has(d.getMinutes())) {
-      d = new Date(d.getTime() + 60_000);
+      const next = new Date(d.getTime() + 60_000);
+      if (skippedRuns(d, next)) return next;
+      d = next;
       continue;
     }
     if (d.getTime() > from) return d;
-    d = new Date(d.getTime() + 60_000);
+    const next = new Date(d.getTime() + 60_000);
+    if (skippedRuns(d, next)) return next;
+    d = next;
   }
   return undefined;
 }
