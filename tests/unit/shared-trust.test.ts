@@ -58,4 +58,13 @@ describe('shared entries that came with a pull', () => {
     expect(added.waiting).toEqual([]);
     expect(added.environments.map((e) => e.name)).toEqual(['Pulled staging']);
   });
+
+  it('Undo of removing an entry that waited puts it back waiting', async () => {
+    be.ws.updateWorkspace({ shared: [{ path: rel, kinds: ['specs'] }] });
+    expect(((await be.invoke('ws.shared', {})) as Shared).waiting).toHaveLength(1);
+    await be.invoke('ws.shareRemove', { path: rel });
+    const back = (await be.invoke('ws.shareAdd', { path: rel, kinds: ['specs'], waiting: true })) as Shared;
+    expect(back.waiting.map((w) => w.path)).toEqual([rel]);
+    expect(back.specs).toEqual([]);
+  });
 });

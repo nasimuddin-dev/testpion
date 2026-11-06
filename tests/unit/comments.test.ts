@@ -107,5 +107,14 @@ describe('comments for your team', () => {
     expect(listComments(store, item)).toEqual([]);
     for (const c of removed) restoreComment(store, item, c);
     expect(listComments(store, item).map((c) => c.id)).toEqual([q.id, r1.id, r2.id]);
+    // no reply into a settled thread (it would be hidden from everyone)
+    resolveComment(store, item, q.id, 'Ana');
+    expect(() => addComment(store, item, 'late', 'Bo', { replyTo: q.id })).toThrow(/is settled: open it again to reply/);
+    resolveComment(store, item, q.id, 'Ana', false);
+    // a reply put back after its comment went: a comment of its own (never hidden)
+    const [gone] = deleteComment(store, item, r1.id);
+    deleteComment(store, item, q.id);
+    expect(restoreComment(store, item, gone!)).not.toHaveProperty('replyTo');
+    expect(openComments(store).some((c) => c.id === r1.id && !c.replyTo)).toBe(true);
   });
 });

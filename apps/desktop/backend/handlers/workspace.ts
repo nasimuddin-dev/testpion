@@ -54,7 +54,7 @@ import {
   type RefResolution,
   importFileFilters,
   setWorkspaceNote, ownershipOf, checkedSource, sharedSpecs, SHAREABLE_KINDS } from '@testpion/core';
-import { allowShared, sharedWaiting } from '../shared-trust.js';
+import { allowShared, sharedWaiting, trustShared } from '../shared-trust.js';
 import type { Backend, Handlers } from '../backend.js';
 import { currentOwner } from '../current-owner.js';
 import { workspaceLockedBy } from '../backend-health.js';
@@ -139,7 +139,8 @@ export function workspaceHandlers(be: Backend): Handlers {
      * Read another workspace's environments and API definitions: `path` relative to this workspace, or picked in a folder
      * dialog (undefined: closed). `kinds` defaults to each shareable folder it has.
      */
-    'ws.shareAdd': async ({ path, kinds }: { path?: string; kinds?: string[] } = {}) => {
+    // `waiting`: put back as it was before a remove (Undo of an entry that waited stays waiting)
+    'ws.shareAdd': async ({ path, kinds, waiting }: { path?: string; kinds?: string[]; waiting?: boolean } = {}) => {
       let rel = path;
       if (rel === undefined) {
         const picked = await be.host.openDialog?.({ directory: true });
@@ -150,7 +151,7 @@ export function workspaceHandlers(be: Backend): Handlers {
       const source = checkedSource(be.ws.root, rel, kinds?.length ? kinds : has.length ? has : ['environments']);
       const same = (a: string) => samePath(resolve(be.ws.root, a), resolve(be.ws.root, source.path));
       be.ws.updateWorkspace({ shared: [...(be.ws.workspace.shared ?? []).filter((s) => !same(s.path)), source] });
-      allowShared(be, be.ws, [source]); // added here, by this person: read on this computer
+      if (!waiting) allowShared(be, be.ws, [source]); // added here, by this person: read on this computer
       return sharedOf(be);
     },
     /** Only the entries that wait for "Allow on this computer" (cheap: asked whenever data changes). */
@@ -258,6 +259,7 @@ export function workspaceHandlers(be: Backend): Handlers {
       // any workspace can be exported; one that isn't open is read without opening it in the app
       const p = ref ? be.manager.resolve(ref) : undefined;
       const other = p && be.store && !samePath(p, be.store.root) ? WorkspaceStore.open(p) : undefined; // the open one by any name is read as it is open
+      if (other) trustShared(be, other); // its `shared` entries too: only those allowed on this computer are read
       try {
         const store = other ?? be.ws;
         if (legacy) {

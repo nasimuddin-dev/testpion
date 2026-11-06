@@ -49,7 +49,8 @@ export function OpenCommentsDialog({ comments, onClose }: { comments: OwnedComme
       <div className="grid gap-2" data-open-comments={shown.length}>
         <FilterChips label="Show" value={on} options={options} onChange={setOn} className="pb-1" />
         {shown.length ? (
-          <div className="max-h-[60vh] overflow-auto divide-y divide-line/60">
+          // opening an item from the list closes it (the item opens in the window, not behind the dialog)
+          <div className="max-h-[60vh] overflow-auto divide-y divide-line/60" onClick={(e) => (e.target as HTMLElement).closest('a, button, [role=link]') && onClose()}>
             {shown.map((c) => (
               <OpenCommentRow key={c.id} c={c} />
             ))}

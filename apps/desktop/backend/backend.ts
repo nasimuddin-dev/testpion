@@ -427,6 +427,7 @@ export class Backend {
   openStore(path: string): void {
     // the new workspace opens first: when it is refused (not a TestPion folder) the open one stays as it was
     const next = WorkspaceStore.open(path);
+    trustShared(this, next); // before anything reads it: workspace.json `shared` entries are read once allowed on this computer
     const another = !!this.store && !samePath(this.store.root, next.root);
     if (another) this.terminals?.dispose('workspace'); // the same folder by another name keeps them
     void closeStoreAfterRuns(this, this.store);
@@ -442,7 +443,6 @@ export class Backend {
     if (this.settings.lastWorkspace !== this.store.root) this.settings = this.manager.saveSettings({ ...this.settings, lastWorkspace: this.store.root });
     this.logger.info(`Opened workspace ${this.store.workspace.name}`, { migrations: this.store.migrationsApplied });
     reportMetaProblem(this, this.store);
-    trustShared(this, this.store); // workspace.json `shared` entries are read once allowed on this computer
     this.store.onWarn = (m) => this.logger.warn(m);
     for (const m of this.store.warnings) this.logger.warn(m);
     scheduleSweep(this, this.store);

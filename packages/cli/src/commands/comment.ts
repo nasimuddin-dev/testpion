@@ -51,7 +51,8 @@ export function registerCommentCommand(program: Command): void {
         if (o.json) return printJson({ item, comments });
         if (!comments.length) return console.log(dim('No comments. Add one with `testpion item comment add <item> "text"`.'));
         // a reply under the comment it answers
-        for (const c of comments.filter((x) => !x.replyTo)) {
+        const ids = new Set(comments.map((x) => x.id));
+        for (const c of comments.filter((x) => !x.replyTo || !ids.has(x.replyTo))) {
           console.log(line(c));
           for (const r of comments.filter((x) => x.replyTo === c.id)) console.log(line(r).replace(/^/gm, '    '));
         }

@@ -24,9 +24,9 @@ const entryKey = (e: Entry) => `${String(e.path).replace(/\\/g, '/').replace(/\/
 // read once per backend (the environment list asks on every call); only this app writes the file
 const cache = new WeakMap<Backend, TrustFile>();
 
-function read(be: Backend): TrustFile {
+function read(be: Backend, fresh = false): TrustFile {
   const hit = cache.get(be);
-  if (hit) return hit;
+  if (hit && !fresh) return hit;
   let t: TrustFile = {};
   try {
     const v = JSON.parse(readFileSync(fileOf(be), 'utf8')) as unknown;
@@ -40,9 +40,14 @@ function read(be: Backend): TrustFile {
 
 function write(be: Backend, t: TrustFile): void {
   cache.set(be, t);
-  const f = fileOf(be);
-  if (!existsSync(dirname(f))) mkdirSync(dirname(f), { recursive: true });
-  writeFileSync(f, JSON.stringify(t, null, 2));
+  // kept in memory for this run either way: a folder that cannot be written only means the next start asks again
+  try {
+    const f = fileOf(be);
+    if (!existsSync(dirname(f))) mkdirSync(dirname(f), { recursive: true });
+    writeFileSync(f, JSON.stringify(t, null, 2));
+  } catch (e) {
+    be.logger.warn(`Could not keep what was allowed for shared folders: ${(e as Error).message}`);
+  }
 }
 
 /** Whether this entry of this workspace is read on this computer. */
@@ -52,7 +57,8 @@ export function sharedAllowed(be: Backend, root: string, e: Entry): boolean {
 
 /** Allow these entries here (added in this app, or "Allow on this computer"); entries no longer in workspace.json are forgotten. */
 export function allowShared(be: Backend, store: Pick<WorkspaceStore, 'root' | 'workspace'>, entries: Entry[]): void {
-  const t = read(be);
+  // the file as it is now (another window of the app may have allowed something since this one read it)
+  const t = read(be, true);
   const now = new Set((store.workspace.shared ?? []).map(entryKey));
   t[rootKey(store.root)] = [...new Set([...(t[rootKey(store.root)] ?? []).filter((k) => now.has(k)), ...entries.map(entryKey)])];
   write(be, t);

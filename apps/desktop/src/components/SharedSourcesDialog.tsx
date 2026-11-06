@@ -74,13 +74,15 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
   // at once, with Undo (the entry comes back as it was, with its kinds)
   const remove = (s: { path: string; kinds: string[] }) =>
     void attempt(async () => {
+      // one that waited for Allow comes back waiting: Undo never allows it
+      const waited = !!state?.waiting?.some((w) => w.path === s.path);
       setState(await call<SharedSources>('ws.shareRemove', { path: s.path }));
       onChanged();
       useApp.getState().toast(`Stopped reading from ${s.path}`, 'info', {
         label: 'Undo',
         onClick: () =>
           void attempt(async () => {
-            const back = await call<SharedSources | undefined>('ws.shareAdd', { path: s.path, kinds: s.kinds });
+            const back = await call<SharedSources | undefined>('ws.shareAdd', { path: s.path, kinds: s.kinds, ...(waited ? { waiting: true } : {}) });
             if (back) setState(back);
             onChanged();
           }),
@@ -124,7 +126,7 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
                 Browse…
               </Button>
             )}
-            <Button variant="primary" icon={<Plus size={13} />} disabled={!path.trim()} reason="Type the folder first, or Browse…\" onClick={() => void add(path)}>
+            <Button variant="primary" icon={<Plus size={13} />} disabled={!path.trim()} reason="Type the folder first, or Browse…" onClick={() => void add(path)}>
               Add
             </Button>
           </div>

@@ -102,6 +102,8 @@ export function addComment(store: Store, ref: ItemRef, text: string, by: string,
     const parent = t.comments.find((x) => x.id === o.replyTo);
     if (!parent) throw new ApsError('ValidationError', `No comment ${o.replyTo} on this item to reply to`, { suggestions: ['`testpion item comment list <item>` (or team_comments list) shows the ids.'] });
     replyTo = parent.replyTo ?? parent.id;
+    // a reply in a settled thread would be hidden from everyone: open the thread again first
+    if (t.comments.find((x) => x.id === replyTo)?.resolvedAt) throw new ApsError('ValidationError', `The comment ${replyTo} is settled: open it again to reply`, { suggestions: ['`testpion item comment resolve <item> <id> --reopen`, then reply.'] });
   }
   const c: ItemComment = { id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, by: by.trim() || 'someone', at: new Date().toISOString(), text: body, ...(replyTo ? { replyTo } : {}) };
   t.comments.push(c);
@@ -139,10 +141,12 @@ export function deleteComment(store: Store, ref: ItemRef, id: string): ItemComme
 export function restoreComment(store: Store, ref: ItemRef, comment: ItemComment): ItemComment {
   if (!comment || typeof comment.text !== 'string' || !comment.id) throw new ApsError('ValidationError', 'Not a comment');
   const t = readThread(store, ref);
-  if (!t.comments.some((x) => x.id === comment.id)) t.comments.push(comment);
+  // a reply whose comment is gone since (deleted after it) comes back as a comment of its own
+  const back = comment.replyTo && !t.comments.some((x) => x.id === comment.replyTo) ? (({ replyTo: _r, ...rest }) => (void _r, rest))(comment) : comment;
+  if (!t.comments.some((x) => x.id === comment.id)) t.comments.push(back);
   t.comments.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
   writeThread(store, t);
-  return comment;
+  return back;
 }
 
 /** Every comment of the workspace that is still open, newest first (the list a person or an agent works through). */

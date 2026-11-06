@@ -81,8 +81,14 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
   const [replyTo, setReplyTo] = useState<Comment>();
   useEffect(() => setReplyTo(undefined), [key]);
   const add = () => run(() => call('comments.add', { ref, text, ...(replyTo ? { replyTo: replyTo.id } : {}) }).then(() => (setText(''), setReplyTo(undefined))));
-  const roots = (comments ?? []).filter((c) => !c.replyTo);
+  // (a reply whose comment is gone, after a merge, is shown as a comment of its own: never hidden)
+  const ids = new Set((comments ?? []).map((c) => c.id));
+  const roots = (comments ?? []).filter((c) => !c.replyTo || !ids.has(c.replyTo));
   const repliesOf = (id: string) => (comments ?? []).filter((c) => c.replyTo === id);
+  // the comment being answered deleted or settled meanwhile (a pull, another window): no longer a reply
+  useEffect(() => {
+    if (replyTo && comments && !comments.some((c) => c.id === replyTo.id && !c.resolvedAt)) setReplyTo(undefined);
+  }, [comments, replyTo]);
   const open = roots.filter((c) => !c.resolvedAt);
   const settled = roots.filter((c) => c.resolvedAt);
   /** One comment: who, when, its text, and its actions (a reply: delete only; it is settled with its thread). */
@@ -191,8 +197,8 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           aria-activedescendant={listed ? `${listId}-${Math.min(active, suggestions.length - 1)}` : undefined}
           onKeyDown={(e) => {
             // the suggestions of the @word being typed, as every list of suggestions (↑ ↓, Enter or Tab, Esc); a bare @
-            // leaves the keys alone: only a started name opens the list
-            if (listed && suggestKey(e, { count: suggestions.length, index: active, setIndex: setActive, take: (i) => mention(suggestions[i]!.handle), close: () => setClosedAt(caret) })) return;
+            // shows them but leaves the keys to the box (Enter is a new line, Tab moves on) until a name is started
+            if (listed && typing && suggestKey(e, { count: suggestions.length, index: active, setIndex: setActive, take: (i) => mention(suggestions[i]!.handle), close: () => setClosedAt(caret) })) return;
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim() && !busy) void add();
           }}
           data-comment-text
