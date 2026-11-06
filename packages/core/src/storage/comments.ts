@@ -4,11 +4,11 @@
  * (two people commenting on different items never conflict), so with git they travel to the team; nothing leaves the
  * computer otherwise. The app’s Info panel, `testpion item comment` and the RPC all go through here.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { itemRefIdentity, toItemRef, type ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
-import { readJson, writeJson } from './fsutil.js';
+import { readJson, removeOwned, writeJson } from './fsutil.js';
 import { sha256Hex } from '../util/hash.js';
 import type { WorkspaceStore } from './workspace.js';
 
@@ -79,7 +79,7 @@ function readThread(store: Store, ref: ItemRef, o: { lenient?: boolean } = {}): 
 function writeThread(store: Store, t: ItemCommentThread): void {
   const f = fileOf(store, t.ref);
   if (!t.comments.length) {
-    if (existsSync(f)) rmSync(f, { force: true });
+    if (existsSync(f)) removeOwned(f); // the app's own change: the watcher does not report it as made outside
     return;
   }
   mkdirSync(join(store.root, COMMENTS_DIR), { recursive: true });
