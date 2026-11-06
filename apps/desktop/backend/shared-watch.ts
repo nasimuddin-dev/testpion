@@ -5,10 +5,19 @@
  * workspace shares something); a change is announced as the watcher announces one (`data.changed`, kind environments or specs).
  */
 import { environmentFilesSignature, sharedDirs } from '@testpion/core';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Backend } from './backend.js';
 
 const EVERY_MS = 5_000;
+
+/** A folder and its folders, `depth` levels down (never through a link). */
+function subdirs(dir: string, depth: number): string[] {
+  const out = [dir];
+  if (depth > 0)
+    for (const e of existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []) if (e.isDirectory()) out.push(...subdirs(join(dir, e.name), depth - 1));
+  return out;
+}
 const started = new WeakSet<Backend>();
 
 export function watchSharedEnvironments(be: Backend): void {
@@ -28,7 +37,8 @@ export function watchSharedEnvironments(be: Backend): void {
       const paths: string[] = [];
       for (const [kind, files] of KINDS) {
         // (a shared specs/ folder's asyncapi/ too: the API definitions list shows those)
-        const dirs = sharedDirs(be.ws.sharedView, be.ws.root, kind).flatMap((s) => (kind === 'specs' ? [s.dir, join(s.dir, 'asyncapi')] : [s.dir]));
+        // (a shared specs/ folder's asyncapi/ too; datasets/ to the depth its list reads)
+        const dirs = sharedDirs(be.ws.sharedView, be.ws.root, kind).flatMap((s) => (kind === 'specs' ? [s.dir, join(s.dir, 'asyncapi')] : kind === 'datasets' ? subdirs(s.dir, 3) : [s.dir]));
         sig[kind] = dirs.length ? environmentFilesSignature(dirs, files) : '';
         // a workspace opened (or switched): what is there now is the start, not a change
         if (last?.root === be.ws.root && last.sig[kind] !== sig[kind]) changed.push(kind), paths.push(...dirs);

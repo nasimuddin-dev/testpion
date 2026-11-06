@@ -125,6 +125,8 @@ describe('comments for your team', () => {
     expect(listComments(store, item)[0]!.editedAt).toBeTruthy();
     expect(() => editComment(store, item, c.id, 'Mine now', 'Bo')).toThrow(/Only Ana Lee can change this comment/);
     expect(() => editComment(store, item, c.id, '  ', 'Ana Lee')).toThrow(/empty/);
+    resolveComment(store, item, c.id, 'Bo');
+    expect(() => editComment(store, item, c.id, 'Too late', 'Ana Lee')).toThrow(/settled: open it again to change it/);
   });
 
   it('an AI task on an item sees the open comments of the team (their text, never who wrote them)', async () => {
@@ -133,12 +135,15 @@ describe('comments for your team', () => {
     mkdirSync(store.path('specs'), { recursive: true });
     writeFileSync(store.path('specs', 'pets.yaml'), 'openapi: 3.0.3\ninfo: { title: Pets, version: "1" }\npaths: {}\n');
     const item: ItemRef = { kind: 'spec', path: 'specs/pets.yaml' };
-    expect((await contextOfItem(store, item)).context).not.toHaveProperty('teamComments');
+    expect((await contextOfItem(store, item, { teamComments: true })).context).not.toHaveProperty('teamComments');
     addComment(store, item, 'Is /pets paged?', 'Ana Lee');
     const settled = addComment(store, item, 'Old question', 'Bo');
+    addComment(store, item, 'Answered long ago', 'Cy', { replyTo: settled.id });
     resolveComment(store, item, settled.id, 'Bo');
-    const ctx = (await contextOfItem(store, item)).context;
-    expect(ctx.teamComments).toEqual(['Is /pets paged?']);
+    const ctx = (await contextOfItem(store, item, { teamComments: true })).context;
+    expect(ctx.teamComments).toEqual(['Is /pets paged?']); // a reply of a settled thread is not asked any more
     expect(JSON.stringify(ctx)).not.toContain('Ana Lee');
+    // evaluations and judges read the item without them: their prompts do not change with a comment
+    expect((await contextOfItem(store, item)).context).not.toHaveProperty('teamComments');
   });
 });

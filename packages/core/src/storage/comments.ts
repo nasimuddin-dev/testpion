@@ -125,6 +125,8 @@ export function editComment(store: Store, ref: ItemRef, id: string, text: string
   const c = t.comments.find((x) => x.id === id);
   if (!c) throw new ApsError('ValidationError', `No comment ${id} on this item`);
   if (!sameAuthor(c.by, by)) throw new ApsError('ValidationError', `Only ${c.by} can change this comment: reply to it instead`);
+  // a settled thread is closed: open it again to change what it says
+  if (c.resolvedAt || (c.replyTo && t.comments.find((x) => x.id === c.replyTo)?.resolvedAt)) throw new ApsError('ValidationError', 'The comment is settled: open it again to change it');
   if (c.text !== body) {
     c.text = body;
     c.editedAt = new Date().toISOString();

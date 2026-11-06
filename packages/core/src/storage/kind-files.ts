@@ -87,7 +87,8 @@ export function duplicateSpecFile(store: WorkspaceStore, rel: string): string {
   if (!existsSync(src)) throw new ApsError('ConfigurationError', `No API definition ${rel}`, { suggestions: [] });
   const ext = posix.extname(rel);
   const base = posix.basename(rel, ext);
-  const dir = from ? posix.dirname(from) : 'specs';
+  // (a shared AsyncAPI definition goes to specs/asyncapi/, where they are read)
+  const dir = from ? posix.dirname(from) : posix.basename(posix.dirname(rel)) === 'asyncapi' ? 'specs/asyncapi' : 'specs';
   const first = shared ? `${dir}/${base}${ext}` : `${dir}/${base}-copy${ext}`;
   let dest = first;
   for (let i = 2; existsSync(store.safePath(dest)); i++) dest = shared ? `${dir}/${base}-${i}${ext}` : `${dir}/${base}-copy-${i}${ext}`;

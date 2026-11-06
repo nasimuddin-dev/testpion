@@ -165,7 +165,7 @@ export function DatasetView() {
           </Button>
         )}
       </div>
-      {file?.shared && <SharedNote className="m-2" from={file.shared}>Tests and collection runs read it as one of this workspace&apos;s; Duplicate (its menu) makes a copy of your own to change.</SharedNote>}
+      {file?.shared && <SharedNote className="m-2" from={file.shared}>Collection runs read it as one of this workspace&apos;s (a test file names it by its path from the test file); Duplicate (its menu) makes a copy of your own to change.</SharedNote>}
       <Tabs label="Dataset"
         value={tab}
         onChange={setTab}

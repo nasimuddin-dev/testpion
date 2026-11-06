@@ -13,12 +13,20 @@ export function commentsHandlers(be: Backend): Handlers {
   /** Who signs: the git identity's name, else this computer's user name. */
   /** The rows' marks and Home read the counts again. */
   const changed = <T,>(r: T): T => (be.host.emit('comments.changed', {}), r);
-  const who = async () => (await gitIdentity(be.ws.root).catch(() => ({ name: undefined }))).name || userInfo().username || 'someone';
+  // the git identity, read at most every 30 s per workspace (each item's comments ask when they open)
+  let identity: { root: string; at: number; name: string } | undefined;
+  const who = async () => {
+    if (identity && identity.root === be.ws.root && Date.now() - identity.at < 30_000) return identity.name;
+    const name = (await gitIdentity(be.ws.root).catch(() => ({ name: undefined }))).name || userInfo().username || 'someone';
+    identity = { root: be.ws.root, at: Date.now(), name };
+    return name;
+  };
   return {
     // `mine`: written by this person (the git identity): its author can change it
     'comments.list': async ({ ref }: { ref: unknown }) => {
       const me = await who();
-      return listComments(be.ws, refOf(ref)).map((c) => (sameAuthor(c.by, me) ? { ...c, mine: true } : c));
+      // (always this computer's answer: a `mine` written in a pulled file is not taken)
+      return listComments(be.ws, refOf(ref)).map(({ mine: _m, ...c }: ReturnType<typeof listComments>[number] & { mine?: unknown }) => (void _m, sameAuthor(c.by, me) ? { ...c, mine: true } : c));
     },
     'comments.edit': async ({ ref, id, text }: { ref: unknown; id: string; text: string }) => changed(editComment(be.ws, refOf(ref), id, text, await who())),
     'comments.add': async ({ ref, text, replyTo }: { ref: unknown; text: string; replyTo?: string }) => changed(addComment(be.ws, refOf(ref), text, await who(), { replyTo })),

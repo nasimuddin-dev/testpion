@@ -76,13 +76,18 @@ const readText = (file: string) => {
 };
 
 /**
- * The context of a workspace item for an AI task (see the module comment), with what the team still asks about it: its
- * open comments' text (at most 10, newest last; never who wrote them), so an answer can take them into account.
+ * The context of a workspace item for an AI task (see the module comment). With `teamComments` (an AI task the person
+ * runs on the item), what the team still asks about it too: its open comments' text (at most 10, newest last; a reply of
+ * a settled thread is not open; never who wrote them). Evaluations and judges leave it out: their prompts stay the same
+ * whoever comments.
  */
-export async function contextOfItem(store: WorkspaceStore, value: unknown): Promise<ItemContext> {
+export async function contextOfItem(store: WorkspaceStore, value: unknown, o: { teamComments?: boolean } = {}): Promise<ItemContext> {
   const out = await contextOfItemOnly(store, value);
-  const ref = toItemRef(value) as ItemRef | undefined;
-  const asked = ref ? listComments(store, ref).filter((c) => !c.resolvedAt).slice(-10) : [];
+  const ref = o.teamComments ? (toItemRef(value) as ItemRef | undefined) : undefined;
+  if (!ref) return out;
+  const all = listComments(store, ref);
+  const settled = new Set(all.filter((c) => c.resolvedAt).map((c) => c.id));
+  const asked = all.filter((c) => !c.resolvedAt && !(c.replyTo && settled.has(c.replyTo))).slice(-10);
   return asked.length ? { ...out, context: { ...out.context, teamComments: asked.map((c) => c.text) } } : out;
 }
 

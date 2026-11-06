@@ -65,6 +65,10 @@ describe('API definitions shared from another workspace', () => {
     expect(await be.invoke('openapi.spec.duplicate', { path })).toEqual({ path: 'specs/platform-2.yaml' });
     expect(await be.invoke('openapi.spec.duplicate', { path: 'specs/platform.yaml' })).toEqual({ path: 'specs/platform-copy.yaml' });
     expect(readFileSync(be.ws.path('specs', 'platform-copy.yaml'), 'utf8')).toBe(SPEC);
+    // a shared AsyncAPI definition is copied where AsyncAPI definitions are read
+    mkdirSync(join(other, 'specs', 'asyncapi'), { recursive: true });
+    writeFileSync(join(other, 'specs', 'asyncapi', 'events.yaml'), 'asyncapi: 3.0.0\ninfo: { title: E, version: "1" }\n');
+    expect(await be.invoke('openapi.spec.duplicate', { path: `${rel}/specs/asyncapi/events.yaml` })).toEqual({ path: 'specs/asyncapi/events.yaml' });
     expect(readFileSync(join(other, 'specs', 'platform.yaml'), 'utf8')).toBe(SPEC);
     // a file of the other workspace outside its specs/, or a path climbing out of specs/: refused
     for (const p of [`${rel}/secret.yaml`, `${rel}/specs/../secret.yaml`, `${rel}/workspace.json`]) {
