@@ -46,6 +46,11 @@ describe('datasets shared from another workspace', () => {
       await expect(be.invoke('datasets.preview', { name: p })).rejects.toThrow(/No shared dataset/);
       await expect(be.invoke('datasets.open', { name: p })).rejects.toThrow();
     }
+    // Duplicate makes a copy of this workspace's own, to change
+    const copy = (await be.invoke('datasets.duplicate', { name })) as { name: string };
+    expect(copy.name).toBe('people.csv');
+    expect(readFileSync(be.ws.path('datasets', 'people.csv'), 'utf8')).toBe(CSV);
+    expect(((await be.invoke('datasets.duplicate', { name })) as { name: string }).name).toBe('people-2.csv');
     await be.invoke('ws.shareRemove', { path: rel });
     expect(((await be.invoke('datasets.list', {})) as Array<{ name: string }>).some((d) => d.name === name)).toBe(false);
   });

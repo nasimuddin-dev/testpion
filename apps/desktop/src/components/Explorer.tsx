@@ -500,7 +500,8 @@ export function Explorer() {
       delete: () => void deleteDataset(d),
     },
     // from another workspace's folder: changed there
-    disabled: d.shared ? Object.fromEntries(['rename', 'duplicate', 'move', 'delete'].map((k) => [k, `Shared from ${d.shared}: change it there`])) : {},
+    // (Duplicate makes a copy of this workspace's own, to change)
+    disabled: d.shared ? Object.fromEntries(['rename', 'move', 'delete'].map((k) => [k, `Shared from ${d.shared}: change it there, or Duplicate it into this workspace`])) : {},
   });
   /** A favorite is a request: the request's menu (no variant), with what the explorer can do from here. */
   const favoriteMenu = (c: Collection, n: Extract<CollectionNode, { kind: 'http' | 'graphql' }>): NodeMenuCtx => {

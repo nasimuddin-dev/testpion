@@ -354,6 +354,15 @@ export function collectionsHandlers(be: Backend): Handlers {
     },
     /** A copy of a dataset beside it: name-copy.csv (name-copy-2.csv …). */
     'datasets.duplicate': ({ name }: { name: string }) => {
+      // one a shared folder gives: a copy of this workspace's own, in datasets/ (people.csv, people-2.csv …), to change
+      const shared = String(name ?? '').trim().startsWith('../') ? sharedDataFile(be.ws, String(name).trim()) : undefined;
+      if (shared) {
+        const m = /^(.*?)(\.[^.]+)?$/.exec(basename(shared))!;
+        const dest = newDatasetPath(m[1]!, (m[2] ?? '.csv').slice(1));
+        copyOwned(shared, dest);
+        be.host.emit('data.changed', { kind: 'datasets' });
+        return { name: datasetName(dest), path: dest };
+      }
       const file = datasetFile(name);
       if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
       const m = /^(.*?)(\.[^./]+)?$/.exec(file)!;
