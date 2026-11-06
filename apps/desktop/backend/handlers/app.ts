@@ -24,8 +24,11 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Backend, Handlers } from '../backend.js';
 import { runningHandlers } from './running.js';
+import { watchSharedEnvironments } from '../shared-watch.js';
 
 export function appHandlers(be: Backend): Handlers {
+  // environments of other workspaces' folders: a change there refreshes the window too
+  watchSharedEnvironments(be);
   return {
     ...runningHandlers(be),
     'app.info': () => ({
