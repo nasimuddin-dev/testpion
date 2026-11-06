@@ -306,15 +306,17 @@ export function findMonitor(store: WorkspaceStore, ref: string): Monitor {
 /** Check a monitor definition against the workspace (collection, selection, environment, interval). */
 export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> & MonitorData): void {
   if (!m.name?.trim()) throw invalid('A monitor needs a name');
+  // the zone first: the schedule and the window are read in it
+  if (m.timezone !== undefined) {
+    const problem = timeZoneProblem(m.timezone);
+    if (problem) throw invalid(problem);
+  }
   if (m.quiet !== undefined) {
     const problem = quietProblem(m.quiet);
     if (problem) throw invalid(problem);
     if (!nextCronTime(m.quiet.cron, Date.now(), m.timezone)) throw invalid(`The maintenance window "${m.quiet.cron}" never comes (no such date)`);
   }
-  if (m.timezone !== undefined) {
-    const problem = timeZoneProblem(m.timezone);
-    if (problem) throw invalid(problem);
-  }
+
   if (m.cron !== undefined) {
     const problem = cronProblem(m.cron);
     if (problem) throw invalid(`The schedule "${m.cron}": ${problem}`);

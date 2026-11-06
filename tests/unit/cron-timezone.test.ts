@@ -23,6 +23,20 @@ describe('cron in a time zone', () => {
     expect(iso(nextCronTime('30 2 * * *', Date.parse('2027-03-28T01:00:00Z'), 'Europe/Berlin'))).toBe('2027-03-29T00:30');
   });
 
+  it('every kind of gap runs when the clocks jump, and a repeated hour runs once', () => {
+    const at = (cron: string, after: string, zone: string) => iso(nextCronTime(cron, Date.parse(after), zone));
+    // midnight skipped (Santiago, 2026-09-06 00:00 → 01:00): 00:30 runs at the jump
+    expect(at('30 0 * * *', '2026-09-05T12:00:00Z', 'America/Santiago')).toBe('2026-09-06T04:00');
+    // a 30-minute gap (Lord Howe, 2026-10-04 02:00 → 02:30)
+    expect(at('0 2 * * *', '2026-10-03T00:00:00Z', 'Australia/Lord_Howe')).toBe('2026-10-03T15:30');
+    // a gap inside the schedule's hours (New York 2026-03-08: 01:30, then 02:30 at 03:00)
+    expect(at('30 1,2 * * *', '2026-03-08T06:00:00Z', 'America/New_York')).toBe('2026-03-08T06:30');
+    expect(at('30 1,2 * * *', '2026-03-08T06:30:00Z', 'America/New_York')).toBe('2026-03-08T07:00');
+    // the clocks go back (New York 2026-11-01): 01:30 runs once, the first one
+    expect(at('30 1 * * *', '2026-11-01T00:00:00Z', 'America/New_York')).toBe('2026-11-01T05:30');
+    expect(at('30 1 * * *', '2026-11-01T05:30:00Z', 'America/New_York')).toBe('2026-11-02T06:30');
+  });
+
   it('says what is not a zone, and is quick', () => {
     expect(timeZoneProblem('Mars/Base')).toMatch(/not a time zone/);
     expect(timeZoneProblem('Asia/Kolkata')).toBeUndefined();

@@ -31,6 +31,8 @@ beforeAll(async () => {
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
       if (req.url === '/plain/hi.Hello/Say') return void (res.writeHead(404, { 'content-type': 'text/html' }), res.end('<h1>no</h1>'));
+      if (req.url === '/empty/hi.Hello/Say') return void (res.writeHead(200, { 'content-type': 'application/grpc-web+proto' }), res.end());
+      if (req.url === '/badmsg/hi.Hello/Say') return void (res.writeHead(200, { 'content-type': 'application/grpc-web+proto', 'grpc-status': '13', 'grpc-message': 'bad %ZZ 100%' }), res.end());
       const [frame] = grpcWebFrames(Buffer.concat(chunks));
       const trailer = (status: number, message = '') => grpcWebFrame(0x80, Buffer.from(`grpc-status: ${status}\r\ngrpc-message: ${encodeURIComponent(message)}\r\nx-served-by: test\r\n`));
       res.setHeader('content-type', 'application/grpc-web+proto');
@@ -44,6 +46,8 @@ beforeAll(async () => {
       }
       if (req.url === '/hi.Hello/Count') {
         const m = T('hi.CountRequest').decode(frame!.bytes) as unknown as { upTo: number };
+        // 99: two messages, then the stream never ends
+        if (m.upTo === 99) return void (res.write(Buffer.concat([1, 2].map((n) => grpcWebFrame(0, T('hi.Num').encode({ n }).finish())))), req.socket.on('close', () => res.end()));
         const frames = Array.from({ length: m.upTo }, (_, i) =>
           grpcWebFrame(
             0,
@@ -92,5 +96,24 @@ describe('gRPC-Web', () => {
     expect(await executeGrpc({ target: base, web: true, method: 'hi.Hello/Fail', protoFiles: PROTO })).toMatchObject({ code: 7, codeName: 'PERMISSION_DENIED', details: 'not for you' });
     await expect(executeGrpc({ target: `${base}/plain`, web: true, method: 'hi.Hello/Say', protoFiles: PROTO })).rejects.toThrow(/HTTP 404 .*instead of gRPC-Web/);
     expect(() => grpcWebFrames(Buffer.from([0, 0, 0, 0, 9, 1, 2]))).toThrow(/middle of a message/);
+    // no status at all is not OK; a malformed grpc-message is shown as it came
+    expect(await executeGrpc({ target: `${base}/empty`, web: true, method: 'hi.Hello/Say', protoFiles: PROTO })).toMatchObject({ code: 2, codeName: 'UNKNOWN' });
+    expect(await executeGrpc({ target: `${base}/badmsg`, web: true, method: 'hi.Hello/Say', protoFiles: PROTO })).toMatchObject({ code: 13, details: 'bad %ZZ 100%' });
+    await expect(executeGrpc({ target: base, web: true, method: 'hi.Hello/Say', protoFiles: PROTO, metadata: [{ key: 'bad name', value: 'x', enabled: true }] })).rejects.toThrow(
+      /cannot be sent as an HTTP header/,
+    );
+  });
+
+  it('a stream shows its messages as they come; Stop and the deadline keep them', async () => {
+    const live: unknown[] = [];
+    const ctrl = new AbortController();
+    const p = executeGrpc(
+      { target: base, web: true, method: 'hi.Hello/Count', message: '{"upTo":99}', protoFiles: PROTO },
+      { signal: ctrl.signal, onMessage: (d) => (live.push(d), live.length === 2 && ctrl.abort()) },
+    );
+    expect(await p).toMatchObject({ codeName: 'CANCELLED', streamStopped: true, messages: [{ data: { n: 1 } }, { data: { n: 2 } }] });
+    const late = await executeGrpc({ target: base, web: true, method: 'hi.Hello/Count', message: '{"upTo":99}', protoFiles: PROTO, timeoutMs: 800 });
+    expect(late).toMatchObject({ codeName: 'DEADLINE_EXCEEDED' });
+    expect(late.messages).toHaveLength(2);
   });
 });

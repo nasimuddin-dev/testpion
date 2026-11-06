@@ -10,6 +10,7 @@ import { assertUrlAllowed } from '../../net/policy.js';
 import type { Redactor } from '../../util/redact.js';
 import { grpcJs, protobufLib, protoLoaderLib, rootFromDescriptorSet } from './grpc-libs.js';
 import { executeGrpcWebCall } from './grpc-web.js';
+import { makeDispatcher } from '../../net/proxy.js';
 
 export { grpcJs, protobufLib, protoLoaderLib };
 
@@ -297,7 +298,15 @@ async function grpcWebOf(spec: GrpcRequestSpec, address: string, tls: boolean, o
   method.resolve();
   const baseUrl = /^https?:\/\//i.test(spec.target.trim()) ? spec.target.trim() : `${tls ? 'https' : 'http'}://${address}`;
   const metadata = (spec.metadata ?? []).filter((h) => h.enabled !== false && h.key).map((h) => [h.key.toLowerCase(), h.value] as [string, string]);
-  const r = await executeGrpcWebCall({ method, service: info.service, baseUrl, message: parseMessage(spec.message, 'request message'), metadata, timeoutMs: spec.timeoutMs ?? 30_000, ...opts });
+  // the call's own certificates (a private CA, a client certificate for mutual TLS), as the gRPC path uses them
+  const t = spec.tlsOptions;
+  const dispatcher = t && (t.ca || t.cert || t.key) ? makeDispatcher({ ...(t.ca ? { ca: t.ca } : {}), ...(t.cert ? { cert: t.cert } : {}), ...(t.key ? { key: t.key } : {}) }) : undefined;
+  let r;
+  try {
+    r = await executeGrpcWebCall({ method, service: info.service, baseUrl, message: parseMessage(spec.message, 'request message'), metadata, timeoutMs: spec.timeoutMs ?? 30_000, dispatcher, ...opts });
+  } finally {
+    void dispatcher?.close().catch(() => undefined);
+  }
   return { ...r, method: info.name };
 }
 

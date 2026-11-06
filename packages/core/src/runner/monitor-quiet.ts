@@ -3,7 +3,7 @@
  * it) and how long it lasts, e.g. every Sunday at 02:00 for two hours, when a deploy or a backup makes the API fail on
  * purpose. No scheduled run starts inside it, so no alert pages anyone; Run now still works.
  */
-import { cronProblem, describeCron, nextCronTime, parseCron } from '@testpion/shared';
+import { cronProblem, describeCron, nextCronTime, parseCron, timeZoneProblem } from '@testpion/shared';
 
 export interface QuietWindow {
   /** When it starts: a cron expression ("0 2 * * 0": Sundays at 02:00). */
@@ -26,6 +26,8 @@ export function quietProblem(q: QuietWindow): string | undefined {
 /** The end of the window `now` is in (ms), or undefined when it is in none; `timeZone`: the monitor's (its cron is that zone's clock). */
 export function quietUntil(q: QuietWindow | undefined, now = Date.now(), timeZone?: string): number | undefined {
   if (!q || quietProblem(q)) return undefined;
+  // (a zone written by hand that is not one: no window, rather than a scheduler that stops)
+  if (timeZone && timeZoneProblem(timeZone)) return undefined;
   const span = q.minutes * 60_000;
   const s = parseCron(q.cron);
   // the starts of the window in the last `minutes` (and the minute before): the latest one that has begun; windows that
