@@ -153,7 +153,7 @@ Give an environment a **Group** (*Acme*, *Globex*) when one workspace tests the 
 
 ## Shared from another workspace {#shared}
 
-A team with a repository of its own can use the environments another workspace keeps (a platform team's *Staging* and *Production*) without copying them. Name the other workspace's folder, relative to yours, in `workspace.json`, or from the terminal:
+A team with a repository of its own can use the environments another workspace keeps (a platform team's *Staging* and *Production*) without copying them. In the Environments list, open the section menu (right-click **Environments**) and choose **Environments from another workspace…**: browse to the folder or type it, relative to yours. From the terminal, or in `workspace.json`:
 
 ```bash
 testpion workspace share --add ../platform-shared            # a sibling checkout or a git submodule

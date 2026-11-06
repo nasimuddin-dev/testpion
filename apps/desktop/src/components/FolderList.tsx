@@ -235,6 +235,8 @@ export function FolderList({
           expanded={open}
           onClick={() => setOpened((o) => ({ ...o, [key]: !open }))}
           ctx={() => ({ ...itemCtx(parts[0]!), name: p.name })}
+          // the parts are kept in one file with their parent: its mark is theirs
+          git={refOf(parts[0]!.id)}
           className="pl-9"
         >
           <span className="flex-1 min-w-0">

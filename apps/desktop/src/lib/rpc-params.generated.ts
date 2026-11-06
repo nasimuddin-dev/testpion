@@ -65,6 +65,7 @@ export interface RpcParamTypes {
   'col.getMany': RpcCommonParams & { ids: string[] };
   'col.import': RpcCommonParams & { text: string; fileName?: string; keepPm?: boolean };
   'col.importBrunoFolder': RpcCommonParams & { name?: string; files: unknown[] };
+  'col.owners': RpcCommonParams;
   'col.previewDataFile': RpcCommonParams & { path: string; query?: string };
   'col.replace': RpcCommonParams & { collectionId: string; find: string; replace: string; fields?: unknown[] };
   'col.run': RpcCommonParams & { collectionId: string; selection?: string[]; dataPath?: string; dataQuery?: string; iterations?: number; delayMs?: number; name?: string };
@@ -93,6 +94,7 @@ export interface RpcParamTypes {
   'datasets.saveCsv': RpcCommonParams & { name: string; text: string };
   'datasets.write': RpcCommonParams & { name: string; text: string };
   'debug.annotate': RpcCommonParams & { ids: string[]; note?: string; mark?: string };
+  'debug.approveRules': RpcCommonParams;
   'debug.autoBreakpoint': RpcCommonParams & { mode: string };
   'debug.bodyView': RpcCommonParams & { id: string; view: string; side?: string };
   'debug.certificate': RpcCommonParams & { action?: string };
@@ -424,8 +426,11 @@ export interface RpcParamTypes {
   'ws.rename': RpcCommonParams & { ref: string; name: string };
   'ws.revealFile': RpcCommonParams & { path: string };
   'ws.search': RpcCommonParams & { query: string };
+  'ws.shareAdd': RpcCommonParams & { path?: string };
+  'ws.shareRemove': RpcCommonParams & { path: string };
+  'ws.shared': RpcCommonParams;
   'ws.update': RpcCommonParams & { name?: string; description?: string; variables?: unknown[] };
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 411;
+export const RPC_METHOD_COUNT = 416;

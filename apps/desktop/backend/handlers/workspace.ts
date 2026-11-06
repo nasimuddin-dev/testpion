@@ -2,7 +2,7 @@
 import { describeVariables } from '../var-descriptions.js';
 import { commentsHandlers } from './comments.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import {
   ApsError,
   listTrash,
@@ -53,13 +53,21 @@ import {
   samePath,
   type RefResolution,
   importFileFilters,
-  setWorkspaceNote, ownershipOf } from '@testpion/core';
+  setWorkspaceNote, ownershipOf, checkedSource } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { currentOwner } from '../current-owner.js';
 import { workspaceLockedBy } from '../backend-health.js';
 import { takeOpenLinks } from '../open-links.js';
 import { isExamplesWorkspace } from '../backend-examples.js';
 import { saveText } from './save-text.js';
+
+/** What the workspace reads from other workspaces' folders, and the environments it gives (the dialog and `testpion workspace share`). */
+function sharedOf(be: Backend) {
+  return {
+    shared: be.ws.workspace.shared ?? [],
+    environments: be.ws.listEnvironments().filter((e) => e.shared).map((e) => ({ name: e.name, from: e.shared!, ...(e.problem ? { problem: e.problem } : {}) })),
+  };
+}
 
 export function workspaceHandlers(be: Backend): Handlers {
   /** A new workspace was made from an export: open it and say what it skipped and which values are needed. */
@@ -121,6 +129,26 @@ export function workspaceHandlers(be: Backend): Handlers {
     },
     /** Make the open workspace git-ready (.gitignore, .gitattributes, git-friendly collection files); safe to repeat. */
     'ws.gitReady': () => makeGitReady(be.ws),
+    /** Environments read from other workspaces' folders (workspace.json `shared`), as `testpion workspace share` lists them. */
+    'ws.shared': () => sharedOf(be),
+    /** Read another workspace's environments: `path` relative to this workspace, or picked in a folder dialog (undefined: closed). */
+    'ws.shareAdd': async ({ path }: { path?: string } = {}) => {
+      let rel = path;
+      if (rel === undefined) {
+        const picked = await be.host.openDialog?.({ directory: true });
+        if (!picked) return undefined;
+        rel = relative(be.ws.root, picked).split(sep).join('/') || '.';
+      }
+      const source = checkedSource(be.ws.root, rel, ['environments']);
+      const same = (a: string) => resolve(be.ws.root, a) === resolve(be.ws.root, source.path);
+      be.ws.updateWorkspace({ shared: [...(be.ws.workspace.shared ?? []).filter((s) => !same(s.path)), source] });
+      return sharedOf(be);
+    },
+    'ws.shareRemove': ({ path }: { path: string }) => {
+      const kept = (be.ws.workspace.shared ?? []).filter((s) => resolve(be.ws.root, s.path) !== resolve(be.ws.root, path));
+      be.ws.updateWorkspace({ shared: kept.length ? kept : undefined });
+      return sharedOf(be);
+    },
     /** What this start added to the user's examples workspace from a newer app version (told once). */
     'ws.examplesAdded': () => {
       const added = be.examplesAdded;

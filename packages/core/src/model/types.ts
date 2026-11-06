@@ -38,10 +38,7 @@ export interface HttpSettings {
   clientCert?: { certPath: string; keyPath: string; caPath?: string; passphrase?: string };
   /** Maximum number of body bytes kept in memory for preview. The full body is streamed to disk. */
   maxPreviewBytes?: number;
-  /**
-   * Retry a failed attempt this many times (0–5): network errors, timeouts, 429 and 5xx for safe methods;
-   * POST and PATCH only when the connection failed (the server may have acted otherwise).
-   */
+  /** Retry a failed attempt this many times (0–5): network errors, timeouts, 429 and 5xx for safe methods; POST and PATCH only when the connection failed (the server may have acted otherwise). */
   retries?: number;
   /** First wait between attempts in ms (doubles each time, max 10 s; Retry-After wins). Default 500. */
   retryDelayMs?: number;
@@ -310,10 +307,7 @@ export interface GrpcTest extends TestBase {
   /** Request message; a list of messages for client-streaming methods. */
   message?: unknown;
   metadata?: KeyValue[];
-  /**
-   * .proto files (workspace paths); imports resolve by path, e.g. `import "vet/v1/common.proto"` finds
-   * `protos/vet/v1/common.proto`. Empty: the server is asked through gRPC server reflection.
-   */
+  /** .proto files (workspace paths); imports resolve by path, e.g. `import "vet/v1/common.proto"` finds `protos/vet/v1/common.proto`. Empty: the server is asked through gRPC server reflection. */
   protos: string[];
   /** .proto files given inline (a gRPC call saved in the app keeps its files); used instead of `protos`. */
   protoFiles?: Array<{ name: string; text: string }>;
@@ -623,8 +617,7 @@ export interface Workspace {
   variables: KeyValue[];
   createdAt: string;
   updatedAt: string;
-  /** Folders of other workspaces this one reads from, read-only (storage/shared-sources.ts): `[{ path: "../platform-shared", kinds: ["environments"] }]`. */
-  shared?: Array<{ path: string; kinds: Array<'environments'> }>;
+  shared?: Array<{ path: string; kinds: Array<'environments'> }>; // other workspaces' folders read here, read-only (storage/shared-sources.ts)
 }
 
 export interface EnvironmentVariable {
@@ -650,9 +643,8 @@ export interface Environment {
   order?: number;
   /** Set on a listed environment whose file cannot be read (invalid JSON): why. It has no variables then; never saved. */
   problem?: string;
-  /** Listed from another workspace's folder (workspace.json `shared`): that folder's name. Never saved here. */
+  /** From another workspace's folder (workspace.json `shared`): that folder's name; changed there (`readOnly`), never saved here. */
   shared?: string;
-  /** With `shared`: changed where it lives, not in this workspace. */
   readOnly?: boolean;
 }
 

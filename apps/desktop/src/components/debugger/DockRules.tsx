@@ -6,7 +6,8 @@ import { deleteWithUndo } from '../../lib/undo-delete';
 import { useDoc } from '../../lib/docs';
 import { Button, cx, Empty, type EmptyAction, Field, FilterInput, IconButton, Input, Menu, type MenuItem, Segmented, Select } from '../ui';
 import { SCRIPT_TEMPLATE } from './RuleScriptFields';
-import { RulesApproval, type Rule, type RuleColumn, type RuleCondition, type RuleKind, type RuleOperator, type RulesState } from '../DebuggerRules';
+import type { Rule, RuleColumn, RuleCondition, RuleKind, RuleOperator, RulesState } from '../DebuggerRules';
+import { RulesApproval } from './RulesApproval';
 import { plural } from '../../lib/format';
 
 const toast = (m: string) => useApp.getState().toast(m, 'success');

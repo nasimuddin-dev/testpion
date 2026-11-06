@@ -1,6 +1,7 @@
 import { environmentRef } from '@testpion/shared';
 import { envColor } from '../components/EnvSelect';
-import { Plus, ArrowLeftRight, Copy, Grid3x3, Download, FileJson, FileText, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
+import { Plus, ArrowLeftRight, Copy, Grid3x3, Download, FileJson, FileText, FolderInput, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
+import { SharedSourcesDialog } from '../components/SharedSourcesDialog';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGitRepo } from '../lib/git';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -45,6 +46,7 @@ export function EnvironmentsView() {
   const [comparing, setComparing] = useState(false);
   const [matrix, setMatrix] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
   /** Export the selected environment (secret values are never exported). */
   const exportEnv = async (format: 'postman' | 'dotenv') => {
     if (!draft) return;
@@ -291,7 +293,14 @@ export function EnvironmentsView() {
                 label="Environments"
                 header
                 className="mx-0 pl-3 shrink-0"
-                ctx={() => ({ create: [{ label: 'New environment', icon: <Plus size={14} />, onSelect: () => void newEnvironment() }], on: { recentlyDeleted: () => setTrashOpen(true) } })}
+                ctx={() => ({
+                  create: [
+                    { label: 'New environment', icon: <Plus size={14} />, onSelect: () => void newEnvironment() },
+                    // the environments another workspace keeps (a sibling checkout or a submodule), read-only
+                    { label: 'Environments from another workspace…', icon: <FolderInput size={14} />, onSelect: () => setSharing(true) },
+                  ],
+                  on: { recentlyDeleted: () => setTrashOpen(true) },
+                })}
               >
                 <span className="text-xs font-semibold truncate">Environments</span>
                 {envs.length > 0 && <CountPill n={envs.length} />}
@@ -570,6 +579,7 @@ export function EnvironmentsView() {
         )}
       </div>
       {trashOpen && <TrashDialog kinds={['environment']} onClose={() => setTrashOpen(false)} onRestored={(r) => void load().then(() => setSel(r.id))} />}
+      {sharing && <SharedSourcesDialog onClose={() => setSharing(false)} onChanged={() => void load()} />}
       {comparing && sel && <EnvCompare environments={envs} initialLeft={sel} onClose={() => setComparing(false)} />}
       {matrix && <EnvMatrix onClose={() => setMatrix(false)} />}
     </div>

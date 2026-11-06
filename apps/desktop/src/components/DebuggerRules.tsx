@@ -5,7 +5,8 @@ import { promptText, toastError, attempt, useApp } from '../store';
 import { confirmDelete } from '../lib/undo-delete';
 import { LABEL } from '../lib/vocabulary';
 import { deleteRuleWithUndo } from './debugger/DockRules';
-import { Badge, Busy, Button, Callout, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
+import { RulesApproval } from './debugger/RulesApproval';
+import { Badge, Busy, Button, cx, Empty, Field, IconButton, Input, Menu, type MenuItem, Modal, SectionTitle, Select, Textarea, Toggle } from './ui';
 import { GitMark } from './GitMark';
 import { CompareView, type Compared } from './ResponseHistory';
 import { ScriptFields, SCRIPT_TEMPLATE } from './debugger/RuleScriptFields';
@@ -73,27 +74,6 @@ export interface RulesState {
   waiting?: number;
 }
 
-/**
- * The rules file is shared through git: rules that change traffic (reply, redirect, remap, modify, fault, script…) that
- * came from elsewhere do not act on this computer until allowed. One notice, in the Rules tab and in each rule panel.
- */
-export function RulesApproval({ state, onChange }: { state?: RulesState; onChange(s: RulesState): void }) {
-  if (!state?.needsApproval) return null;
-  return (
-    <Callout
-      tone="warn"
-      data-rules-need-approval=""
-      action={
-        <Button size="sm" onClick={() => void attempt(async () => onChange(await call<RulesState>('debug.approveRules')))}>
-          Allow on this computer
-        </Button>
-      }
-    >
-      {state.waiting ? `${state.waiting} rule${state.waiting === 1 ? '' : 's'} that change traffic` : 'Rules that change traffic'} came with a pull or a clone, or were changed outside this app: they do not act on this
-      computer until you allow them. Check where they send and what they change first. Filters and highlights work without it.
-    </Callout>
-  );
-}
 export interface HeldBreakpoint {
   id: string;
   phase: 'request' | 'response';
