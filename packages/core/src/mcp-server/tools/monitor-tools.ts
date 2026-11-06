@@ -1,7 +1,7 @@
 import { createEngineContext } from '../../engine.js';
 import type { TestResult } from '../../model/types.js';
 import { monitorRequestStats } from '../../runner/monitor-requests.js';
-import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorStatus, monitorTenants } from '../../runner/monitors.js';
+import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorRunEnvironment, monitorStatus, monitorTenants } from '../../runner/monitors.js';
 import type { RunEvent } from '../../runner/runner.js';
 import { str, limitArg } from '../tool.js';
 import type { Tool } from '../tool.js';
@@ -49,8 +49,9 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
         // a grouped definition (one monitor per environment of a group): every tenant runs, and the answer is one result per tenant
         const tenants = monitorTenants(store, findMonitor(store, String(a.monitor)));
         const def = tenants[0]?.tenant ? findMonitor(store, tenants[0].tenant.of) : undefined;
-        // every environment is checked before the first run: a refusal for the third tenant must not lose the first two
-        for (const m of tenants) checkEnvironment(m.environment);
+        // every environment is checked before the first run: a refusal for the third tenant must not lose the first two.
+        // A monitor on a suite that names no environment runs in the suite's: that one is checked (production, unknown).
+        for (const m of tenants) checkEnvironment(await monitorRunEnvironment(store, m));
         const out = [];
         for (const m of tenants) {
           const failures: TestResult[] = [];

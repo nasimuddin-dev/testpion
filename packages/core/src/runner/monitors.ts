@@ -699,6 +699,16 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
   return r;
 }
 
+/**
+ * The environment a monitor runs in: its own, or (a monitor on a suite that names none) the suite's `environment:`.
+ * What a host checks before a run (unknown, production) must be this one, not only the monitor's own.
+ */
+export async function monitorRunEnvironment(store: WorkspaceStore, monitor: Pick<Monitor, 'environment' | 'testFile'>): Promise<string | undefined> {
+  if (monitor.environment || !monitor.testFile) return monitor.environment;
+  const abs = monitorTestPath(store, monitor.testFile);
+  return isSuiteFile(abs) && existsSync(abs) ? (await loadSuite(abs)).environment : undefined;
+}
+
 /** A monitor's test file (or suite) run with the test runner, like `testpion test`: steps in order, traces of failures. */
 async function runMonitorTestFile(o: ExecuteMonitorOptions, runId: string): Promise<RunSummary> {
   const { store, monitor } = o;
