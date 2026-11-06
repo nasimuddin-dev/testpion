@@ -1,6 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { CheckConfig } from '../types';
-import { Button, cx, IconButton, Select } from './ui';
+import { Button, cx, IconButton, ListInput, Select } from './ui';
 import { CHECK_DEFS, CHECK_GROUP_LABEL, type CheckDef } from '../lib/check-defs';
 
 function parseExpected(s: string): unknown {
@@ -58,12 +58,7 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
               </Select>
             )}
             {def.fields.includes('values') && (
-              <input
-                className="field h-7 min-h-7 mono flex-1 min-w-32"
-                placeholder="canary values, comma separated (built-in detectors always on)"
-                value={((c.values as string[]) ?? []).join(', ')}
-                onChange={(e) => set(i, { values: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-              />
+              <ListInput className="h-7 min-h-7 mono flex-1 min-w-32" placeholder="canary values, comma separated (built-in detectors always on)" aria-label="Canary values" value={(c.values as string[]) ?? []} onValue={(values) => set(i, { values })} />
             )}
             {def.fields.includes('criteria') && (
               <input className="field h-7 min-h-7 flex-1 min-w-48" placeholder="Grading rule, e.g. The answer is polite and correct" value={String(c.criteria ?? '')} onChange={(e) => set(i, { criteria: e.target.value })} />
@@ -103,12 +98,13 @@ export function AssertionEditor({ checks, onChange, groups }: { checks: CheckCon
                   <option value="shape">same shape</option>
                   <option value="values">same values</option>
                 </Select>
-                <input
-                  className="field h-7 min-h-7 mono flex-1 min-w-40"
+                <ListInput
+                  className="h-7 min-h-7 mono flex-1 min-w-40"
                   placeholder="ignore, e.g. $.id, $..updatedAt, $.items[*].price"
                   title="Paths not compared: [*] any index, * any key, $.. any depth"
-                  value={((c.ignore as string[]) ?? []).join(', ')}
-                  onChange={(e) => set(i, { ignore: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                  aria-label="Paths not compared"
+                  value={(c.ignore as string[]) ?? []}
+                  onValue={(ignore) => set(i, { ignore })}
                 />
                 <span className="text-xs text-muted" title={c.expected === undefined ? '' : JSON.stringify(c.expected, null, 2).slice(0, 2000)}>
                   {c.expected === undefined ? 'no snapshot yet' : `snapshot ${(JSON.stringify(c.expected).length / 1024).toFixed(1)} KB`}
