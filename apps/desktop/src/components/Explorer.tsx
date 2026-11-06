@@ -788,6 +788,7 @@ export function Explorer() {
           })}
         >
           <>
+            <SharedWaitingNotice onAllowed={() => void load(false, DATASETS)} />
             <FolderedRows
               section="datasets"
               kind="folder:dataset"
