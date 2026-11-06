@@ -1172,6 +1172,8 @@ testpion monitor add "Checkout flow" --test-file flows/checkout.yaml --every 15m
 testpion monitor add "Checkout" --collection "Shop API" --every 15m --env-group Acme -w my-workspace   # one monitor per environment of the group (a tenant each), from one definition
 testpion monitor add "API health" --collection "My API" --every 5m --max-p95 800 -w my-workspace   # also fail when p95 > 800 ms
 testpion monitor add "API health" --collection "My API" --every 1h --min-cert-days 21 -w my-workspace   # and when a certificate expires within 21 days
+testpion monitor add "Morning check" --collection "My API" --every "0 9 * * 1-5" -w my-workspace   # at set times: 09:00 on weekdays (cron, local time)
+testpion monitor add "API health" --collection "My API" --every 15m --maintenance "0 2 * * 0" --maintenance-for 2h --maintenance-reason deploy -w my-workspace   # no run in that window (--no-maintenance removes it)
 testpion monitor run --due -w my-workspace      # for cron; exit 1 if a run failed
 testpion monitor uptime "API health" -w my-workspace --days 90   # uptime per day, like a status page
 testpion monitor requests "API health" -w my-workspace          # each request over the latest runs: median / p95, failures
