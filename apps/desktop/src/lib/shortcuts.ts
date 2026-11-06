@@ -110,6 +110,7 @@ function rows(views: string[]): Array<{ title: string; rows: Row[] }> {
         { fixed: ['Shift+F10', 'Menu key'], text: 'Open the focused row’s menu (the same as its ⋯ and its right-click)' },
         { fixed: ['*'], text: 'Expand everything inside the focused collection, folder or section' },
         { fixed: ['a … z'], text: 'Jump to the next row whose name starts with what you type' },
+        { fixed: ['Ctrl+Space', 'Ctrl+click'], text: 'Pick a request with others, to run, move or delete them together (Shift+Space or Shift+click: a range; Esc lets go)' },
       ],
     },
     {
