@@ -48,9 +48,11 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
       run: async (a) => {
         // a grouped definition (one monitor per environment of a group): every tenant runs, and the answer is one result per tenant
         const tenants = monitorTenants(store, findMonitor(store, String(a.monitor)));
+        const def = tenants[0]?.tenant ? findMonitor(store, tenants[0].tenant.of) : undefined;
+        // every environment is checked before the first run: a refusal for the third tenant must not lose the first two
+        for (const m of tenants) checkEnvironment(m.environment);
         const out = [];
         for (const m of tenants) {
-          checkEnvironment(m.environment);
           const failures: TestResult[] = [];
           const r = await executeMonitor({
             store,
@@ -61,7 +63,10 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
           });
           out.push({ ...r, name: m.name, environment: m.environment ?? null, failures: failures.slice(0, 50).map(summarizeResult) });
         }
-        return out.length === 1 ? out[0] : out;
+        if (!def) return out[0];
+        // a grouped definition: one answer of the same shape, the worst status, and each tenant's own result in `tenants`
+        const status = out.some((r) => r.status === 'error') ? 'error' : out.some((r) => r.status === 'failed') ? 'failed' : 'passed';
+        return { monitorId: def.id, name: def.name, environment: null, status, total: out.reduce((n, r) => n + r.total, 0), passed: out.reduce((n, r) => n + r.passed, 0), failed: out.reduce((n, r) => n + r.failed, 0), errors: out.reduce((n, r) => n + r.errors, 0), failures: out.flatMap((r) => r.failures).slice(0, 50), tenants: out };
       },
     },
   ];

@@ -9,6 +9,7 @@ import {
   WorkspaceManager,
   WorkspaceStore,
   createEngineContext,
+  environmentsOfGroup,
   isWorkspaceDir,
   formatBytes,
   importDocument,
@@ -30,6 +31,16 @@ import {
 import type { Command } from 'commander';
 import { noteWarning } from './output.js';
 import { dryRunWorkspace } from './dry-run.js';
+
+/** A `--group` filter that names no environment group gets a warning with the groups there are (an empty list alone reads as "nothing in that tenant"). */
+export function warnUnknownGroup(store: WorkspaceStore, group: string | undefined): void {
+  if (!group?.trim()) return;
+  const envs = store.listEnvironments();
+  if (environmentsOfGroup(envs, group).length) return;
+  const w = `No environment group "${group}". Groups: ${[...new Set(envs.map((e) => e.group?.trim()).filter(Boolean))].join(', ') || 'none'}`;
+  console.error(yellow(`warning: ${w}`));
+  noteWarning(w);
+}
 
 /** One warning line per collection or environment whose file cannot be read (they are listed, never dropped silently). */
 export function warnProblems(items: Array<{ name: string; problem?: string }>, what: 'collection' | 'environment'): void {

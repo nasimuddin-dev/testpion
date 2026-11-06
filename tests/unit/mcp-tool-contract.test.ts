@@ -269,7 +269,8 @@ describe('confirmation codes (clients that cannot be asked)', () => {
     await sendBudgeted.close();
   });
   const del = { collection: 'No such collection', request: 'No such request' };
-  const reached = (r: Awaited<ReturnType<Client['callTool']>>) => !(r.structuredContent as { confirmationRequired?: boolean } | undefined)?.confirmationRequired;
+  const reached = (r: Awaited<ReturnType<Client['callTool']>>) =>
+    !(r.structuredContent as { confirmationRequired?: boolean } | undefined)?.confirmationRequired && !(r._meta?.confirmation as { confirmationRequired?: boolean } | undefined)?.confirmationRequired;
 
   it('confirm: true does nothing; the code goes to the person, not to the agent; the code works once, for the same arguments only', async () => {
     const first = await coded.callTool({ name: 'delete_request', arguments: { ...del, confirm: true } });
@@ -294,7 +295,11 @@ describe('confirmation codes (clients that cannot be asked)', () => {
     const args = { collection: 'Veterinary API', request: 'No such request' };
     for (let i = 0; i < 2; i++) expect(reached(await sendBudgeted.callTool({ name: 'send_request', arguments: args })), `call ${i + 1}`).toBe(true);
     const third = await sendBudgeted.callTool({ name: 'send_request', arguments: args });
-    expect(third.structuredContent).toMatchObject({ confirmationRequired: true, wouldDo: expect.stringMatching(/already made 2 calls that send requests/) });
+    // send_request declares an output schema, which this answer is not: an error result, the answer in the text and in _meta.confirmation
+    expect(third.isError).toBe(true);
+    expect(third.structuredContent).toBeUndefined();
+    expect(third._meta?.confirmation).toMatchObject({ confirmationRequired: true, wouldDo: expect.stringMatching(/already made 2 calls that send requests/) });
+    expect(JSON.parse(texts(third)[0]!)).toMatchObject({ confirmationRequired: true, changed: false });
     // without codes the old way still works: confirm: true lets another block through
     expect(reached(await sendBudgeted.callTool({ name: 'send_request', arguments: { ...args, confirm: true } }))).toBe(true);
     expect(reached(await sendBudgeted.callTool({ name: 'send_request', arguments: args }))).toBe(true);

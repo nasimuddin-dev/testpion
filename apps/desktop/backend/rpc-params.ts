@@ -328,6 +328,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'monitor.requests': { id: 's', runs: 'n?' },
   'monitor.results': { id: 's', limit: 'n?' },
   'monitor.run': { id: 's' },
+  'monitor.approve': { id: 's' },
   'monitor.pause': { id: 's', minutes: 'n?', until: 's?', reason: 's?' },
   'monitor.resume': { id: 's' },
   'monitor.save': { monitor: 'o' },

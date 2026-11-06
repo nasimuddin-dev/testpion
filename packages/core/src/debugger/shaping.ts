@@ -7,6 +7,7 @@ import type { Http2ServerResponse } from 'node:http2';
 import { BoundedMap } from '../util/collections.js';
 import { compileUserRegex, safeReplace } from '../util/safe-regex.js';
 import type { RedirectSpec, ReplySpec, TextReplace } from './rules.js';
+import { safeDecode } from './http-util.js';
 
 /**
  * Traffic shaping for the HTTP Debugger's rules (FG-4, FG-6, FG-7): where a redirected or remapped request goes, the path
@@ -145,7 +146,7 @@ export async function localReply(root: string | undefined, reply: ReplySpec, url
   if (!root) return say(502, 'TestPion map local: this capture has no workspace folder to read files from');
   let rel = reply.file ?? '';
   if (!rel && reply.folder) {
-    let path = decodeURIComponent(url.pathname);
+    let path = safeDecode(url.pathname); // a path that is not valid percent-encoding (/%zz) names the file as written
     if (reply.stripPrefix && path.startsWith(reply.stripPrefix)) path = path.slice(reply.stripPrefix.length);
     path = path.replace(/^\/+/, '');
     rel = join(reply.folder, path || 'index.html').replace(/\\/g, '/');

@@ -1,12 +1,27 @@
 import type { Command } from 'commander';
 import { userInfo } from 'node:os';
-import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, tenantOf, type ItemRef } from '@testpion/core';
+import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, resolveItemRef, tenantOf, type ItemRef, type WorkspaceStore } from '@testpion/core';
 import { EXIT, bold, dim, green, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** An item by its reference text (`request:<collection>/<request>`, `test:tests/smoke.yaml`, a testpion:// link …). */
 function refArg(text: string): ItemRef {
   const ref = parseItemRef(text);
   if (!ref) throw new CliError(`"${text}" is not an item reference. Examples: request:<collectionId>:<requestId>, test:tests/smoke.yaml, saved:evaluations:<id>, monitor:<id>.`, EXIT.CONFIG_ERROR);
+  return ref;
+}
+
+/** Comments and owners are kept in a workspace: without one (the scratch workspace a command gets outside any) there is nothing to read and nowhere to keep a comment. */
+const inWorkspace = <T>(ref: string | undefined, fn: (store: WorkspaceStore) => T | Promise<T>): Promise<T> =>
+  withWorkspace(ref, (store, ephemeral) => {
+    if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+    return fn(store);
+  });
+
+/** The item a new comment is for: it has to be there (a comment on a mistyped ref would never be seen). */
+function existingRef(store: WorkspaceStore, text: string): ItemRef {
+  const ref = refArg(text);
+  const r = resolveItemRef(store, ref);
+  if (!r.ok) throw Object.assign(new CliError(`${r.message}: no comment was added.`, EXIT.CONFIG_ERROR), { hint: 'Refs look like request:<collectionId>:<requestId> or test:tests/smoke.yaml; `testpion collections --json` and `testpion requests <collection> --json` list the ids.' });
   return ref;
 }
 
@@ -31,7 +46,7 @@ export function registerCommentCommand(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
     .action(async (item: string, o: { workspace?: string; json?: boolean }) =>
-      withWorkspace(o.workspace, (store) => {
+      inWorkspace(o.workspace, (store) => {
         const comments = listComments(store, refArg(item));
         if (o.json) return printJson({ item, comments });
         if (!comments.length) return console.log(dim('No comments. Add one with `testpion item comment add <item> "text"`.'));
@@ -47,11 +62,12 @@ export function registerCommentCommand(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
     .action(async (item: string, text: string, o: { workspace?: string; json?: boolean }) =>
-      withWorkspace(o.workspace, async (store) => {
+      inWorkspace(o.workspace, async (store) => {
+        const ref = existingRef(store, item);
         const body = text === '-' ? await new Promise<string>((r) => { let s = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', (d) => (s += d)); process.stdin.on('end', () => r(s)); }) : text;
         let c;
         try {
-          c = addComment(store, refArg(item), body, await who(store.root));
+          c = addComment(store, ref, body, await who(store.root));
         } catch (e) {
           throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
         }
@@ -69,7 +85,7 @@ export function registerCommentCommand(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
     .action(async (item: string, id: string, o: { reopen?: boolean; workspace?: string; json?: boolean }) =>
-      withWorkspace(o.workspace, async (store) => {
+      inWorkspace(o.workspace, async (store) => {
         let c;
         try {
           c = resolveComment(store, refArg(item), id, await who(store.root), !o.reopen);
@@ -89,7 +105,7 @@ export function registerCommentCommand(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
     .action(async (item: string, id: string, o: { workspace?: string; json?: boolean }) =>
-      withWorkspace(o.workspace, (store) => {
+      inWorkspace(o.workspace, (store) => {
         try {
           deleteComment(store, refArg(item), id);
         } catch (e) {
@@ -107,7 +123,7 @@ export function registerCommentCommand(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option(...JSON_RESULT_OPTION)
     .action(async (ref: string, o: { workspace?: string; json?: boolean }) =>
-      withWorkspace(o.workspace, async (store) => {
+      inWorkspace(o.workspace, async (store) => {
         const info = itemInfo(store, refArg(ref));
         if (!info.file) {
           if (o.json) return printJson({ item: ref, label: info.label, file: null, owners: [] });
@@ -130,7 +146,7 @@ export function registerCommentCommand(program: Command): void {
     .option('--owner <team>', 'only the comments on items this team owns (as CODEOWNERS names it; the @ is optional)')
     .option(...JSON_RESULT_OPTION)
     .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean; owner?: string }) =>
-      withWorkspace(o.workspace, async (store) => {
+      inWorkspace(o.workspace, async (store) => {
         const open = await openCommentsByOwner(store, o.owner);
         if (o.json) return printJson({ open });
         if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}** on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');

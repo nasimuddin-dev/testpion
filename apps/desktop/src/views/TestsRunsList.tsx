@@ -15,6 +15,7 @@ import { copyText } from '../lib/clipboard';
 import { saveRunReport } from '../components/output/run-specs';
 import { timeAgo } from '../lib/format';
 import { copyRunCommand, runInCi } from '../lib/run-ci';
+import { environmentOf } from '../lib/active-environment';
 
 /** The Tests view's list of runs: each row the `run` kind's node on the one row (TreeRowShell), with the one menu (lib/node-menu.ts). */
 export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onRunAll }: { runs: RunRow[]; active?: string; onSelect(id: string): void; onOverview?(): void; onRerunFailed?(id: string): void; onRunAll(): void }) {
@@ -23,7 +24,7 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
   const [failedOnly, setFailedOnly] = useState(false);
   // the environment's group (a tenant) matches too: typing Acme lists every tenant run
   const envs = useApp(selectEnvironments);
-  const groupOf = (name?: string) => (name ? ((envs.find((e) => e.name === name) as { group?: string } | undefined)?.group ?? '') : '');
+  const groupOf = (name?: string) => (name ? (environmentOf(envs, name)?.group ?? '') : '');
   const q = query.toLowerCase();
   const shown = runs.filter((r) => (!failedOnly || r.failed + r.errors > 0) && (!q || `${r.name} ${r.environment ?? ''} ${groupOf(r.environment)}`.toLowerCase().includes(q)));
   const clearFilter = () => {

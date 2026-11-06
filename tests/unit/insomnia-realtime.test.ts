@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, importIntoWorkspace } from '../../packages/core/src/index.js';
+import { WorkspaceStore, collectionFolders, importIntoWorkspace } from '../../packages/core/src/index.js';
 
 // Insomnia 4 exports hold gRPC requests (with .proto files) and WebSocket requests next to HTTP ones: an import
 // brings them in as the collection's gRPC calls and connections.
@@ -32,9 +32,12 @@ describe('Insomnia import: gRPC and WebSocket requests', () => {
     expect(r.savedItems).toEqual({ grpc: 1, websocket: 1 });
     const id = r.collection!.id;
     const [call] = store.getLibrary('grpc').items;
-    expect(call).toMatchObject({ name: 'Say hi', folder: 'Realtime', collectionId: id, data: { target: '{{grpcHost}}', method: 'demo.Greeter/Say', message: '{"name":"ada"}', tls: true, metadata: [{ key: 'x-key', value: '{{key}}', enabled: true }], protoFiles: [{ name: 'greeter.proto', text: PROTO }] } });
+    // their Insomnia folder is a folder of the collection (the folder text has placed them and is gone)
+    const realtime = [...collectionFolders(store.getCollection(id))].find(([, f]) => f.path.join('/') === 'Realtime')![0];
+    expect([call!.folderId, call!.folder]).toEqual([realtime, undefined]);
+    expect(call).toMatchObject({ name: 'Say hi', collectionId: id, data: { target: '{{grpcHost}}', method: 'demo.Greeter/Say', message: '{"name":"ada"}', tls: true, metadata: [{ key: 'x-key', value: '{{key}}', enabled: true }], protoFiles: [{ name: 'greeter.proto', text: PROTO }] } });
     const [conn] = store.getLibrary('websocket').items;
-    expect(conn).toMatchObject({ name: 'Echo', folder: 'Realtime', collectionId: id, data: { url: 'wss://echo.example', mode: 'websocket', message: '{"type":"ping"}', headers: [{ key: 'Authorization', value: 'Bearer {{token}}', enabled: false }] } });
+    expect(conn).toMatchObject({ name: 'Echo', folderId: realtime, collectionId: id, data: { url: 'wss://echo.example', mode: 'websocket', message: '{"type":"ping"}', headers: [{ key: 'Authorization', value: 'Bearer {{token}}', enabled: false }] } });
     store.close();
   });
 });

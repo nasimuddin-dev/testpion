@@ -13,6 +13,7 @@ import { ProposalReview } from './ProposalReview';
 import { AiBusyLine, AiErrorPanel, AiHintField, AiPrimaryButton, AiPrivacyRow, AiRunFooter, AiTitle, applyProposalItems, initialPrivacy, proposalReviewProps, skippedNote, useAiEstimate, useAiRun } from './ai-run';
 import { plural } from '../../lib/format';
 import { SecurityRunDialog } from './SecurityRunDialog';
+import { environmentOf } from '../../lib/active-environment';
 
 type Mode = 'collection' | 'describe' | 'spec' | 'security';
 
@@ -65,7 +66,7 @@ export function FlowGenerateDialog({ request, onClose }: { request: FlowGenerate
   const [includeWrite, setIncludeWrite] = useState(false);
   const [includeDelete, setIncludeDelete] = useState(false);
   const [written, setWritten] = useState<{ path: string }>();
-  const prod = useApp((s) => !!s.workspace?.environments.find((e) => e.name === env)?.isProduction);
+  const prod = useApp((s) => !!environmentOf(s.workspace?.environments, env)?.isProduction);
   const [collectionId, setCollectionId] = useState(request.source?.collectionId);
   const [folderId, setFolderId] = useState(request.source?.folderId ?? '');
   const [description, setDescription] = useState('');

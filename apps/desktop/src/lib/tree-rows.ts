@@ -34,7 +34,7 @@ export type TreeRow =
   | { t: 'folder'; key: string; c: Collection; n: CollectionFolder; depth: number; open: boolean; /** gRPC calls and connections inside (any kind in any folder). */ calls?: number }
   | { t: 'req'; key: string; c: Collection; n: Exclude<CollectionNode, CollectionFolder>; depth: number }
   | { t: 'example'; key: string; c: Collection; n: SavedHttpRequest; ex: { id: string; name: string; status: number }; depth: number }
-  | { t: 'xitem'; key: string; g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string }
+  | { t: 'xitem'; key: string; c: Collection; g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string }
   | { t: 'empty'; key: string; c: Collection };
 
 /** A node of a collection, named so that no other collection's node has the same name: `<collection id>:<node id>`. */
@@ -54,10 +54,18 @@ export interface TreeRowsInput {
   open: Record<string, boolean>;
   filter?: string;
   favoritesOnly?: boolean;
-  /** The explorer's tree: collections start folded, and their gRPC calls and connections (`extraGroups`) sit in their folders. */
+  /** The explorer's tree: collections start folded. */
   explorer?: boolean;
+  /** A collection's gRPC calls and connections: they sit in its folders, among its requests. */
   extraGroups?(c: Collection): ExtraGroup[];
 }
+
+/**
+ * Whether a gRPC call or connection shows for a filter (`f`: trimmed, lower case). A call cannot be a favourite
+ * (favourites are saved requests), so the favourites-only tree shows none, as it shows no request that is not one.
+ */
+export const callShown = (i: ExtraGroup['items'][number], f: string | undefined, favoritesOnly = false): boolean =>
+  !favoritesOnly && (!f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f));
 
 /** Every row that shows (the open collections and folders), in order. */
 export function buildTreeRows({ collections, open, filter, favoritesOnly = false, explorer = false, extraGroups }: TreeRowsInput): TreeRow[] {
@@ -65,54 +73,77 @@ export function buildTreeRows({ collections, open, filter, favoritesOnly = false
   const out: TreeRow[] = [];
   // whether each node of the collection being added matches (one bottom-up pass per collection and query, cached)
   let matches: (n: CollectionNode) => boolean = () => true;
-  const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
+  const extraShown = (i: ExtraGroup['items'][number]) => callShown(i, f, favoritesOnly);
   /**
    * A collection's contents by its folders, every kind of request in them: the collection's requests in their order and
    * its gRPC calls and connections at their place (`folderId`, `after`; a folder that is gone: the top level).
    */
   const addContents = (c: Collection, extras: ExtraGroup[]) => {
-    const parent = new Map<string, string | undefined>();
-    const walk = (nodes: CollectionNode[], up?: string) => {
-      for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), walk(n.items, n.id));
-    };
-    walk(c.items);
     type Call = { id: string; name: string; after?: string; g: ExtraGroup; i: ExtraGroup['items'][number] };
-    const byFolder = new Map<string, Call[]>();
+    // all of this only when the collection has calls: a collection of requests alone is drawn from its nodes as they are
+    let byFolder: Map<string, Call[]> | undefined;
+    // how many calls each folder holds, the folders inside it included
+    const counts = new Map<string, number>();
     // the folders that hold a call the filter shows (and the folders around them)
     const withCalls = new Set<string>();
-    for (const g of extras)
-      for (const i of g.items) {
-        const at = i.folderId && parent.has(i.folderId) ? i.folderId : '';
-        byFolder.set(at, [...(byFolder.get(at) ?? []), { id: i.id, name: i.name, after: i.after, g, i }]);
-        if (f && extraShown(i)) for (let up: string | undefined = at || undefined; up; up = parent.get(up)) withCalls.add(up);
+    if (extras.length) {
+      // every folder's parent, and the folders in the order they are met (a folder before the folders inside it)
+      const parent = new Map<string, string | undefined>();
+      const folders: string[] = [];
+      const walk = (nodes: CollectionNode[], up?: string) => {
+        for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), folders.push(n.id), walk(n.items, n.id));
+      };
+      walk(c.items);
+      byFolder = new Map();
+      for (const g of extras)
+        for (const i of g.items) {
+          const at = i.folderId && parent.has(i.folderId) ? i.folderId : '';
+          const call = { id: i.id, name: i.name, after: i.after, g, i };
+          const list = byFolder.get(at);
+          if (list) list.push(call);
+          else byFolder.set(at, [call]);
+          if (f && extraShown(i)) for (let up: string | undefined = at || undefined; up && !withCalls.has(up); up = parent.get(up)) withCalls.add(up);
+        }
+      // bottom-up in one pass: backwards, every folder is met after the folders inside it and adds its count to its parent's
+      for (let k = folders.length - 1; k >= 0; k--) {
+        const id = folders[k]!;
+        const n = (counts.get(id) ?? 0) + (byFolder.get(id)?.length ?? 0);
+        if (!n) continue;
+        counts.set(id, n);
+        const up = parent.get(id);
+        if (up) counts.set(up, (counts.get(up) ?? 0) + n);
       }
-    const countCalls = (id: string): number => (byFolder.get(id)?.length ?? 0) + [...parent].filter(([, up]) => up === id).reduce((n, [child]) => n + countCalls(child), 0);
+    }
+    const addNode = (n: CollectionNode, depth: number) => {
+      if (!matches(n) && !(n.kind === 'folder' && withCalls.has(n.id))) return;
+      const key = scopedNodeId(c.id, n.id);
+      if (n.kind === 'folder') {
+        const isOpen = isOpenKey(open, folderOpenKey(c.id, n.id), n.id) ?? !!f;
+        const calls = counts.get(n.id);
+        out.push({ t: 'folder', key, c, n, depth, open: isOpen, ...(calls ? { calls } : {}) });
+        if (isOpen) add(n.items, depth + 1, n.id);
+        return;
+      }
+      out.push({ t: 'req', key, c, n, depth });
+      if (n.kind === 'http' && n.examples?.length && isOpenKey(open, examplesOpenKey(c.id, n.id), treeKey(n.id, 'examples')))
+        for (const ex of n.examples) out.push({ t: 'example', key: treeKey(key, 'ex', ex.id), c, n, ex, depth });
+    };
     const add = (nodes: CollectionNode[], depth: number, folderId: string) => {
-      for (const x of interleave(nodes, byFolder.get(folderId) ?? [])) {
-        if ('call' in x) {
-          if (extraShown(x.call.i)) out.push({ t: 'xitem', key: treeKey(c.id, x.call.g.cat, x.call.id), g: x.call.g, i: x.call.i, depth, from: c.id });
-          continue;
-        }
-        const n = x.node;
-        if (!matches(n) && !(n.kind === 'folder' && withCalls.has(n.id))) continue;
-        const key = scopedNodeId(c.id, n.id);
-        if (n.kind === 'folder') {
-          const isOpen = isOpenKey(open, folderOpenKey(c.id, n.id), n.id) ?? !!f;
-          const calls = countCalls(n.id);
-          out.push({ t: 'folder', key, c, n, depth, open: isOpen, ...(calls ? { calls } : {}) });
-          if (isOpen) add(n.items, depth + 1, n.id);
-          continue;
-        }
-        out.push({ t: 'req', key, c, n, depth });
-        if (n.kind === 'http' && n.examples?.length && isOpenKey(open, examplesOpenKey(c.id, n.id), treeKey(n.id, 'examples')))
-          for (const ex of n.examples) out.push({ t: 'example', key: treeKey(key, 'ex', ex.id), c, n, ex, depth });
+      const calls = byFolder?.get(folderId);
+      if (!calls) {
+        for (const n of nodes) addNode(n, depth);
+        return;
+      }
+      for (const x of interleave(nodes, calls)) {
+        if ('node' in x) addNode(x.node, depth);
+        else if (extraShown(x.call.i)) out.push({ t: 'xitem', key: treeKey(c.id, x.call.g.cat, x.call.id), c, g: x.call.g, i: x.call.i, depth, from: c.id });
       }
     };
     add(c.items, 1, '');
   };
   for (const c of collections) {
     matches = f || favoritesOnly ? matchIndex(c.items, f, favoritesOnly) : () => true;
-    const extras = explorer ? (extraGroups?.(c) ?? []).filter((g) => g.items.length) : [];
+    const extras = (extraGroups?.(c) ?? []).filter((g) => g.items.length);
     // in the explorer, collections start folded: the workspace lists them; a collection opens when the user opens it (or
     // something is revealed in it), not because its request is open
     const isOpen = explorer && f ? true : (open[c.id] ?? !explorer);

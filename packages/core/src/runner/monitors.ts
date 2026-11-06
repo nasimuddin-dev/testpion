@@ -1,9 +1,9 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { environmentLabel, environmentsOfGroup } from '@testpion/shared';
+import { environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment } from '@testpion/shared';
 import { ownershipOf } from '../git/owners.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { appendBoundedLine } from '../util/jsonl-append.js';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import type { LibraryItem, RunSummary } from '../model/types.js';
 import type { ExecServices } from './execute.js';
 import { ApsError } from '../errors.js';
@@ -22,6 +22,7 @@ import { runMonitorEvaluation, type MonitorRagInfo } from './monitor-rag.js';
 import { runMonitorPromptEvaluation } from './monitor-prompt.js';
 import { resolveMetric } from '../eval/rag/metric-registry.js';
 import { netFetch } from '../net/proxy.js';
+import { prefetchEnvironmentSecrets } from '../vars/external-secrets.js';
 
 /**
  * Monitors: a collection (or some of its folders / requests) run on a schedule, like Postman monitors.
@@ -92,6 +93,10 @@ interface MonitorData {
    * app asked; the CLI took --allow-production). Hosts derive it when saving, never from what a caller sends.
    */
   allowProduction?: boolean;
+  /** On a grouped definition: the production environments (ids) of its group that this consent was given for, one by one. */
+  allowProductionFor?: string[];
+  /** On a grouped definition: the tenants (environment ids) that wait on their own, until a time or until resumed. */
+  pausedTenants?: Record<string, { until?: string; reason?: string }>;
 }
 
 /** Whether a result changes the monitor's state (first failure, or passing again after failing). */
@@ -172,7 +177,7 @@ export interface Monitor extends MonitorData {
   name: string;
   folder?: string;
   /** On a monitor made from a grouped definition: which definition and which environment (listMonitors). */
-  tenant?: { of: string; environment: string };
+  tenant?: { of: string; environment: string; environmentId?: string };
 }
 
 export interface MonitorResult {
@@ -236,13 +241,27 @@ const TENANT_SEP = '@';
 /** The monitors a definition stands for: itself, or one per environment of its group (a tenant each); none when the group is empty. */
 export function monitorTenants(store: WorkspaceStore, m: Monitor): Monitor[] {
   if (!m.environmentGroup || m.tenant) return [m];
-  return environmentsOfGroup(store.listEnvironments().filter((e) => !e.problem), m.environmentGroup).map((e) => ({
+  const envs = store.listEnvironments().filter((e) => !e.problem);
+  // each tenant by its environment's id: two tenants may both have a "Staging", and a bare name would then name neither
+  return environmentsOfGroup(envs, m.environmentGroup).map((e) => ({
     ...m,
     id: `${m.id}${TENANT_SEP}${e.id}`,
     name: `${m.name} · ${environmentLabel(e)}`,
-    environment: e.name,
-    tenant: { of: m.id, environment: e.name },
+    environment: environmentRef(envs, e),
+    tenant: { of: m.id, environment: environmentRef(envs, e), environmentId: e.id },
+    // a pause of this tenant alone (see pauseMonitor)
+    ...tenantPause(m, e.id),
+    // consent given for this environment alone (see saveMonitor)
+    allowProduction: !!m.allowProduction || !!m.allowProductionFor?.includes(e.id),
   }));
+}
+
+/** A tenant's own pause over its definition's: the later time wins; a definition that is off stays off. */
+function tenantPause(m: Monitor, envId: string): Partial<Pick<Monitor, 'enabled' | 'pausedUntil' | 'pauseReason'>> {
+  const own = m.pausedTenants?.[envId];
+  if (!own || !m.enabled) return {};
+  if (!own.until) return { enabled: false, pausedUntil: undefined, pauseReason: own.reason };
+  return m.pausedUntil && Date.parse(m.pausedUntil) >= Date.parse(own.until) ? {} : { pausedUntil: own.until, pauseReason: own.reason };
 }
 
 /** Every monitor that runs: a grouped definition appears once per environment of its group (see monitorTenants). */
@@ -321,12 +340,51 @@ function monitorTestPath(store: WorkspaceStore, file: string): string {
   return abs;
 }
 
+/**
+ * The production consent a monitor is saved with. `given`: the person just allowed it (the app asked, the CLI took
+ * --allow-production). Otherwise the consent given before stays for the same production environment, and nothing else:
+ * one environment (`allowProduction`), or, for a grouped definition, each production environment of the group by id
+ * (`allowProductionFor`), so consent for one tenant's production never covers another's.
+ */
+export function monitorConsent(store: WorkspaceStore, m: Pick<Monitor, 'environment' | 'environmentGroup'>, before: Monitor | undefined, given: boolean): Pick<Monitor, 'allowProduction' | 'allowProductionFor'> {
+  const envs = store.listEnvironments().filter((e) => !e.problem);
+  if (m.environmentGroup?.trim()) {
+    const production = environmentsOfGroup(envs, m.environmentGroup).filter((e) => e.isProduction).map((e) => e.id);
+    const kept = before?.environmentGroup?.trim().toLowerCase() === m.environmentGroup.trim().toLowerCase() ? (before.allowProductionFor ?? []) : [];
+    const ids = given ? production : production.filter((id) => kept.includes(id));
+    return { allowProduction: undefined, allowProductionFor: ids.length ? ids : undefined };
+  }
+  const env = m.environment ? matchEnvironment(envs, m.environment) : undefined;
+  const same = !!before?.allowProduction && !before.environmentGroup && !!before.environment && matchEnvironment(envs, before.environment)?.id === env?.id;
+  return { allowProduction: (!!env?.isProduction && (given || same)) || undefined, allowProductionFor: undefined };
+}
+
+/** The production environments a monitor would run in that have no consent yet (what a host asks about before saving it). */
+export function monitorConsentPending(store: WorkspaceStore, m: Pick<Monitor, 'environment' | 'environmentGroup'>, before: Monitor | undefined): string[] {
+  const envs = store.listEnvironments().filter((e) => !e.problem);
+  const kept = monitorConsent(store, m, before, false);
+  if (m.environmentGroup?.trim()) return environmentsOfGroup(envs, m.environmentGroup).filter((e) => e.isProduction && !kept.allowProductionFor?.includes(e.id)).map((e) => environmentRef(envs, e));
+  const env = m.environment ? matchEnvironment(envs, m.environment) : undefined;
+  return env?.isProduction && !kept.allowProduction ? [environmentRef(envs, env)] : [];
+}
+
 /** Add or replace a monitor (by id). */
 export function saveMonitor(store: WorkspaceStore, m: Monitor): Monitor {
   // a tenant of a grouped definition saved (edited in the app): the definition is what changes
-  if (m.tenant || (typeof m.id === 'string' && m.id.includes(TENANT_SEP))) m = { ...m, id: m.tenant?.of ?? m.id.slice(0, m.id.indexOf(TENANT_SEP)), name: m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name, tenant: undefined };
+  // (its own pause and consent are the definition's `pausedTenants` / `allowProductionFor`: what the row shows of them is not written back)
+  if (m.tenant || (typeof m.id === 'string' && m.id.includes(TENANT_SEP))) {
+    const of = m.tenant?.of ?? m.id.slice(0, m.id.indexOf(TENANT_SEP));
+    const def = listMonitorDefinitions(store).find((d) => d.id === of);
+    const row = def ? monitorTenants(store, def).find((t) => t.id === m.id) : undefined;
+    // the row's name is "<definition> · <environment>": only that ending is the row's own, the rest is what the person typed
+    const ending = def && row ? row.name.slice(def.name.length) : '';
+    const name = ending && m.name.endsWith(ending) ? m.name.slice(0, -ending.length) : m.tenant && !def ? m.name.replace(/ · [^·]*$/, '') : m.name;
+    m = { ...m, id: of, name, tenant: undefined, ...(def ? { enabled: def.enabled, pausedUntil: def.pausedUntil, pauseReason: def.pauseReason, allowProduction: def.allowProduction } : {}) };
+  }
   if (m.environmentGroup?.trim()) m = { ...m, environmentGroup: m.environmentGroup.trim(), environment: undefined };
-  else if (m.environmentGroup !== undefined) m = { ...m, environmentGroup: undefined };
+  else m = { ...m, environmentGroup: undefined, allowProductionFor: undefined, pausedTenants: undefined };
+  if (m.pausedTenants && !Object.keys(m.pausedTenants).length) m = { ...m, pausedTenants: undefined };
+  if (m.allowProductionFor && !m.allowProductionFor.length) m = { ...m, allowProductionFor: undefined };
   // one target: an empty collection or file is no target
   if (m.testFile !== undefined) m = { ...m, testFile: m.testFile.trim() ? monitorTestFile(m.testFile) : undefined };
   if (!m.collectionId) m = { ...m, collectionId: undefined };
@@ -476,16 +534,36 @@ export function parsePauseFor(text: string | number): number {
 export function pauseMonitor(store: WorkspaceStore, id: string, o: { minutes?: number; until?: string; reason?: string } = {}, now = Date.now()): Monitor {
   const m = findMonitor(store, id);
   const reason = o.reason?.trim() || undefined;
-  if (o.until === undefined && o.minutes === undefined) return saveMonitor(store, { ...m, enabled: false, pausedUntil: undefined, pauseReason: reason });
-  const until = o.until !== undefined ? Date.parse(o.until) : now + o.minutes! * 60_000;
-  if (!Number.isFinite(until)) throw new ApsError('ValidationError', `"${o.until}" is not a time`);
-  if (until <= now) throw new ApsError('ValidationError', 'The time to pause until is in the past');
-  return saveMonitor(store, { ...m, enabled: true, pausedUntil: new Date(until).toISOString(), pauseReason: reason });
+  const forever = o.until === undefined && o.minutes === undefined;
+  const until = forever ? NaN : o.until !== undefined ? Date.parse(o.until) : now + o.minutes! * 60_000;
+  if (!forever && !Number.isFinite(until)) throw new ApsError('ValidationError', `"${o.until}" is not a time`);
+  if (!forever && until <= now) throw new ApsError('ValidationError', 'The time to pause until is in the past');
+  const iso = forever ? undefined : new Date(until).toISOString();
+  // one tenant of a grouped definition waits on its own: the others keep their schedule
+  if (m.tenant) return tenantPaused(store, m, { until: iso, reason });
+  if (forever) return saveMonitor(store, { ...m, enabled: false, pausedUntil: undefined, pauseReason: reason });
+  return saveMonitor(store, { ...m, enabled: true, pausedUntil: iso, pauseReason: reason });
+}
+
+/** Set or end (no `pause`) the pause of one tenant; returns the tenant as it is listed now. */
+function tenantPaused(store: WorkspaceStore, tenant: Monitor, pause?: { until?: string; reason?: string }): Monitor {
+  const def = listMonitorDefinitions(store).find((d) => d.id === tenant.tenant!.of)!;
+  const envId = tenant.tenant!.environmentId ?? tenant.id.slice(tenant.id.indexOf(TENANT_SEP) + 1);
+  const { [envId]: _was, ...others } = def.pausedTenants ?? {};
+  saveMonitor(store, { ...def, pausedTenants: pause ? { ...others, [envId]: pause } : others });
+  return findMonitor(store, tenant.id);
 }
 
 /** The schedule goes on now: a pause of either kind ends. */
 export function resumeMonitor(store: WorkspaceStore, id: string): Monitor {
   const m = findMonitor(store, id);
+  // a tenant resumed: its own pause ends; with none of its own, it waits because its definition does, and that one resumes
+  if (m.tenant) {
+    const def = listMonitorDefinitions(store).find((d) => d.id === m.tenant!.of)!;
+    if (def.pausedTenants?.[m.tenant.environmentId ?? '']) return tenantPaused(store, m);
+    saveMonitor(store, { ...def, enabled: true, pausedUntil: undefined, pauseReason: undefined });
+    return findMonitor(store, m.id);
+  }
   return saveMonitor(store, { ...m, enabled: true, pausedUntil: undefined, pauseReason: undefined });
 }
 
@@ -508,6 +586,8 @@ interface ExecuteMonitorOptions {
   /** Engine services for the monitor's environment and collection (the host creates them, e.g. createEngineContext). */
   context(opts: { environment?: string; collectionId?: string }): { services: ExecServices; dispose(): Promise<void> };
   trigger?: MonitorResult['trigger'];
+  /** How the environment's secret manager references are read (the CLI trusts the workspace it was pointed at). */
+  secretReads?: { trustAll?: boolean };
   signal?: AbortSignal;
   onEvent?(e: RunEvent): void;
   onTrace?(trace: Parameters<WorkspaceStore['saveTrace']>[0], runId: string): void;
@@ -518,7 +598,10 @@ interface ExecuteMonitorOptions {
  * is appended to the monitor's results. A run that can't start (missing collection …) is recorded as
  * status "error" instead of throwing, so a scheduler keeps going.
  */
-export function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorResult> {
+export async function executeMonitor(o: ExecuteMonitorOptions): Promise<MonitorResult> {
+  // its environment's secret manager references (op://, vault:// …) are read first: a scheduled run names no environment
+  // in a command or a call, so nothing else reads them, and an unread one would go out as an empty credential
+  if (o.monitor.environment) await prefetchEnvironmentSecrets(o.store, o.monitor.environment, o.secretReads).catch(() => undefined);
   // saved with consent, it may change its production environment (on its schedule too); otherwise the caller's consent counts
   return allowProductionFor(!!o.monitor.allowProduction || productionAllowed(), () => runMonitorOnce(o));
 }
@@ -535,8 +618,10 @@ async function runMonitorOnce(o: ExecuteMonitorOptions): Promise<MonitorResult> 
   let gated = false;
   let rag: MonitorRagInfo | undefined;
   // a prompt or agent evaluation is run as cases (pass or fail); a bot with sources is scored by metrics (see monitor-rag.ts)
-  const promptEvaluation = !!monitor.evaluation && findSavedEvaluation(store, monitor.evaluation).type !== 'rag';
+  let promptEvaluation = false;
   try {
+    // (inside the try: an evaluation that was deleted or renamed is a result "error", not a throw on every tick)
+    promptEvaluation = !!monitor.evaluation && findSavedEvaluation(store, monitor.evaluation).type !== 'rag';
     if (monitor.evaluation && promptEvaluation) {
       const r = await runMonitorPromptEvaluation(o);
       summary = r.summary;
@@ -621,13 +706,24 @@ async function runMonitorTestFile(o: ExecuteMonitorOptions, runId: string): Prom
   const suite = isSuiteFile(abs) ? await loadSuite(abs) : undefined;
   const dir = store.runDir(runId);
   mkdirSync(dir, { recursive: true });
-  const ctx = o.context({ environment: monitor.environment ?? suite?.environment });
+  const environment = monitor.environment ?? suite?.environment;
+  if (!monitor.environment && environment) await prefetchEnvironmentSecrets(store, environment, o.secretReads).catch(() => undefined);
+  // a suite's setup and teardown files run here as they do under `testpion test`
+  const listed = async (files?: string[]) => {
+    const out = [];
+    for (const f of files ?? []) for await (const t of loadTestsFromFile(isAbsolute(f) ? f : resolve(dirname(abs), f))) out.push(t);
+    return out;
+  };
+  const ctx = o.context({ environment });
   try {
     return await runTests({
       name: `${MONITOR_RUN_PREFIX}${monitor.name}`,
       runId,
       tests: suite ? streamTests(suite.tests, dirname(abs), suite.tags?.length ? { tags: suite.tags } : undefined) : loadTestsFromFile(abs),
+      ...(suite?.setup?.length ? { setup: await listed(suite.setup) } : {}),
+      ...(suite?.teardown?.length ? { teardown: await listed(suite.teardown) } : {}),
       concurrency: suite?.concurrency ?? 1,
+      ...(suite?.timeoutMs !== undefined ? { timeoutMs: suite.timeoutMs } : {}),
       ...(suite?.retries !== undefined ? { retries: suite.retries } : {}),
       services: ctx.services,
       signal: o.signal,
@@ -635,7 +731,7 @@ async function runMonitorTestFile(o: ExecuteMonitorOptions, runId: string): Prom
       resultsFile: join(dir, 'results.jsonl'),
       traceMode: 'failures',
       ...(o.onTrace ? { onTrace: (t: Parameters<WorkspaceStore['saveTrace']>[0]) => o.onTrace!(t, runId) } : { onTraceBatch: (batch: Array<{ trace: Parameters<WorkspaceStore['saveTrace']>[0] }>) => store.saveTraces(batch.map((b) => ({ trace: b.trace, kind: 'test', runId }))) }),
-      environment: monitor.environment ?? suite?.environment,
+      environment,
       onEvent: o.onEvent,
     });
   } finally {
@@ -718,10 +814,12 @@ export class MonitorScheduler {
         const previous = this.o.last(m.id);
         if (!isDue(m, previous, now)) continue;
         try {
+          // the results before this run, read before it: the run records its own result, which is not one of them
+          const before = m.webhook ? (this.o.recent ? this.o.recent(m.id, alertAfterOf(m)) : previous ? [previous] : []) : [];
           const r = await this.o.run(m);
           ran++;
           this.o.onResult?.(m, r, previous);
-          if (m.webhook && monitorAlert(m, r, this.o.recent ? this.o.recent(m.id, alertAfterOf(m)) : previous ? [previous] : [])) {
+          if (m.webhook && monitorAlert(m, r, before.filter((x) => x.runId !== r.runId))) {
             const url = this.o.resolve ? this.o.resolve(m, m.webhook) : m.webhook;
             const sent = await notifyMonitorWebhook(url, { ...m, owners: this.o.owners ? await this.o.owners(m) : [] }, r);
             this.o.onWebhook?.(m, sent);

@@ -12,6 +12,7 @@ import { collectionOf, useVarPopover, VARS_CHANGED } from '../lib/var-popover';
 import { Button, cx, useDebounced } from './ui';
 import { copyText } from '../lib/clipboard';
 import { AlsoAddTo, type AlsoAdd } from './AlsoAddTo';
+import { environmentOf } from '../lib/active-environment';
 
 
 /**
@@ -242,7 +243,7 @@ export function VarPopover({ name, info, environment, collectionId, x, y, onClos
     setBusy(true);
     try {
       const r = await call<{ environment: string; also: Array<{ environment: string; added: string[] }> }>('vars.setInEnvironment', { environment, name, value: draft, ...(!defined && also.to.length ? { alsoIn: also.to, copy: also.copy } : {}) });
-      const envId = useApp.getState().workspace?.environments.find((e) => e.name === r.environment)?.id;
+      const envId = environmentOf(useApp.getState().workspace?.environments, r.environment)?.id;
       const more = (r.also ?? []).filter((x) => x.added.length).map((x) => x.environment);
       useApp.getState().toast(`${defined ? 'Updated' : 'Added'} {{${name}}} in ${r.environment}${more.length ? ` and ${more.join(', ')}` : ''}`, 'success', { ref: { kind: 'variable', key: name, environmentId: envId } });
       if (more.length) void useApp.getState().refreshWorkspace();

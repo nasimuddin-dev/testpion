@@ -201,7 +201,8 @@ describe('every drag has a menu equivalent', () => {
     expect(env).toMatch(/moveDown: \(\) => void move\(e\.id/);
     expect(read('apps/desktop/src/components/CollectionTree.tsx')).toMatch(/move: \(\) => setMoving\(\{ c, n \}\)/);
     expect(read('apps/desktop/src/components/FolderList.tsx')).toMatch(/move: moveToFolderItem/);
-    expect(read('apps/desktop/src/components/Explorer.tsx')).toMatch(/move: collections\.map/);
+    // (the menu of a gRPC call or connection: the one owner of those lists, for every tree of collections)
+    expect(read('apps/desktop/src/lib/use-collection-calls.ts')).toMatch(/move: collections\.map/);
   });
 });
 

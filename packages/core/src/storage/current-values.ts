@@ -46,10 +46,51 @@ export class CurrentValues {
     const prefix = `${scope}/${owner}/`;
     for (const id of this.data.secretKeys) {
       if (!id.startsWith(prefix)) continue;
-      const v = this.secrets.get(this.secretName(id));
+      const v = this.moving.get(id) ?? this.secrets.get(this.secretName(id));
       if (v !== undefined) b[id.slice(prefix.length)] = v;
     }
     return b;
+  }
+
+  /** The keys of one scope/owner whose values are kept encrypted (a host masks these, whatever the key is called). */
+  secretKeysOf(scope: ScriptScope, owner = ''): Set<string> {
+    const prefix = `${scope}/${owner}/`;
+    return new Set(this.data.secretKeys.filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length)));
+  }
+
+  /** Secret values on their way to a new owner (moveOwner): read from here until the secret store has them. */
+  private moving = new Map<string, string>();
+
+  /**
+   * The values kept for one owner now belong to another (an environment's values were kept by its name and are kept by
+   * its id: two tenants may both have a "Staging"). What the new owner already has wins. Returns whether anything moved.
+   */
+  moveOwner(scope: Exclude<ScriptScope, 'globals'>, from: string, to: string): boolean {
+    if (from === to) return false;
+    const map = scope === 'environment' ? this.data.environment : this.data.collectionVariables;
+    const prefix = `${scope}/${from}/`;
+    const secret = this.data.secretKeys.filter((id) => id.startsWith(prefix));
+    if (!map[from] && !secret.length) return false;
+    map[to] = { ...(map[from] ?? {}), ...(map[to] ?? {}) };
+    delete map[from];
+    for (const id of secret) {
+      const next = `${scope}/${to}/${id.slice(prefix.length)}`;
+      const v = this.secrets.get(this.secretName(id));
+      this.data.secretKeys = this.data.secretKeys.filter((k) => k !== id);
+      if (v === undefined || this.data.secretKeys.includes(next)) {
+        void this.secrets.delete(this.secretName(id)).catch(() => undefined);
+        continue;
+      }
+      this.data.secretKeys.push(next);
+      this.moving.set(next, v);
+      void this.secrets
+        .set(this.secretName(next), v)
+        .then(() => this.secrets.delete(this.secretName(id)))
+        .catch(() => undefined)
+        .finally(() => this.moving.delete(next));
+    }
+    this.save(false);
+    return true;
   }
 
   private dirty = false;
@@ -95,9 +136,10 @@ export class CurrentValues {
 
   /** Remove current values (all, or for one environment / collection). */
   async reset(scope?: ScriptScope, owner?: string): Promise<void> {
-    const drop = (id: string) => (!scope || id.startsWith(`${scope}/${owner ?? ''}`)) && this.secrets.delete(this.secretName(id)).catch(() => undefined);
-    for (const id of this.data.secretKeys) await drop(id);
-    this.data.secretKeys = scope ? this.data.secretKeys.filter((id) => !id.startsWith(`${scope}/${owner ?? ''}`)) : [];
+    // (with the slash: "Staging" is not the start of "Staging EU")
+    const mine = (id: string) => !scope || id.startsWith(`${scope}/${owner ?? ''}/`);
+    for (const id of this.data.secretKeys) if (mine(id)) await this.secrets.delete(this.secretName(id)).catch(() => undefined);
+    this.data.secretKeys = scope ? this.data.secretKeys.filter((id) => !mine(id)) : [];
     if (!scope) Object.assign(this.data, { environment: {}, globals: {}, collectionVariables: {} });
     else if (scope === 'globals') this.data.globals = {};
     else delete (scope === 'environment' ? this.data.environment : this.data.collectionVariables)[owner ?? ''];

@@ -62,9 +62,14 @@ export function createUpstream(o: { trustedCa(): string[] | undefined; insecure(
     if (!hit || hit.base !== base) caLists.set(gw, (hit = { base, list: [...(base ?? rootCertificates), ...gw.extraCa] }));
     return hit.list;
   };
-  /** A device on the network must not reach this computer through the gateway either (the gateway cannot be asked what a name points at). */
+  /**
+   * A device on the network must not reach this computer: an address written out (127.0.0.1, [::1], a link-local one) is never
+   * looked up, so guardedLookup does not see it, and the gateway cannot be asked what a name points at. Other names are checked
+   * when they are resolved (guardedLookup).
+   */
   const refuseThisComputer = (host: string) => {
-    if (/^localhost$/i.test(host) || isLocalOnlyAddress(host.replace(/^\[|\]$/g, ''))) throw new ApsError('AuthorizationError', `${host} is this computer`);
+    const h = host.replace(/^\[|\]$/g, '');
+    if (/^localhost$|\.localhost$/i.test(h) || (isIP(h) !== 0 && isLocalOnlyAddress(h))) throw new ApsError('AuthorizationError', `${host} is this computer`);
   };
   const agentFor = (key: string, ca: string[] | undefined, make: () => HttpsAgent): HttpsAgent => {
     const hit = agents.get(key);
@@ -113,7 +118,7 @@ export function createUpstream(o: { trustedCa(): string[] | undefined; insecure(
         const secure = target.protocol === 'https:';
         const p = gw?.proxyFor(target);
         const cert = secure ? gw?.clientCertFor(`${target.hostname}:${target.port || 443}`) : undefined;
-        if (p) if (remote) refuseThisComputer(target.hostname);
+        if (remote) refuseThisComputer(target.hostname);
         if (!p && !cert && !gw?.extraCa.length) return { ...(remote ? { lookup: guardedLookup } : {}), ...(secure ? plain(remote) : remote ? { agent: remoteHttp } : {}) };
         const ca = caFor(gw);
         if (!secure) {
@@ -132,8 +137,8 @@ export function createUpstream(o: { trustedCa(): string[] | undefined; insecure(
         const p = gw?.proxyFor(target);
         const cert = secure ? gw?.clientCertFor(`${target.hostname}:${target.port || 443}`) : undefined;
         const tlsOptions = secure ? { ca: caFor(gw), rejectUnauthorized: !o.insecure(), ALPNProtocols: ['h2'], ...certOptions(cert) } : {};
-        if (!p) return { ...(remote ? { lookup: guardedLookup } : {}), ...tlsOptions };
         if (remote) refuseThisComputer(target.hostname);
+        if (!p) return { ...(remote ? { lookup: guardedLookup } : {}), ...tlsOptions };
         if (!secure) throw new ApsError('ConfigurationError', 'HTTP/2 without TLS cannot go through the gateway', { suggestions: ['Add the host to the gateway bypass list (Capture ▸ Connections).'] });
         const host = target.hostname.replace(/^\[|\]$/g, '');
         return {
@@ -156,16 +161,14 @@ export function createUpstream(o: { trustedCa(): string[] | undefined; insecure(
       /** An opaque tunnel (HTTPS that is not decrypted) to host:port; `ready(headBytes)` once connected, headBytes being what the gateway's answer took. */
       connect(to: { host: string; port: number }, remote: boolean, ready: (headBytes: number) => void): Socket {
         const p = o.gateway()?.proxyFor(new URL(`https://${to.host.includes(':') ? `[${to.host}]` : to.host}:${to.port}`));
-        if (p) {
-          try {
-            if (remote) refuseThisComputer(to.host);
-          } catch (err) {
-            const refused = new Socket();
-            queueMicrotask(() => refused.destroy(err as Error)); // reported as the connection's error, like any other
-            return refused;
-          }
-          return connectViaProxy(p, to.host, to.port, ready);
+        try {
+          if (remote) refuseThisComputer(to.host);
+        } catch (err) {
+          const refused = new Socket();
+          queueMicrotask(() => refused.destroy(err as Error)); // reported as the connection's error, like any other
+          return refused;
         }
+        if (p) return connectViaProxy(p, to.host, to.port, ready);
         return tcpConnect({ port: to.port, host: to.host, ...(remote ? { lookup: guardedLookup } : {}) }, () => ready(0));
       },
       destroy() {

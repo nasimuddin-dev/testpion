@@ -5,7 +5,7 @@
  */
 import { editFlowFile } from '../../runner/flow-edit.js';
 import { flowDeployStatus } from '../../runner/flow-deploy.js';
-import { listMonitorDefinitions, listMonitors, monitorStatus, parseEvery, saveMonitor } from '../../runner/monitors.js';
+import { listMonitorDefinitions, listMonitors, monitorConsent, monitorStatus, parseEvery, saveMonitor } from '../../runner/monitors.js';
 import { findCollection } from '../../storage/env-edit.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { ApsError } from '../../errors.js';
@@ -89,18 +89,20 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
         const existing = listMonitorDefinitions(store).find((m) => m.name.toLowerCase() === name.toLowerCase());
         // production consent is the monitor's (given in the app or with --allow-production), never this call's: a
         // replacement keeps it while it runs in the same production environment
-        const environment = a.environment ? String(a.environment) : undefined;
-        const keepConsent = !!existing?.allowProduction && existing.environment === environment && !!(environment && store.getEnvironment(environment)?.isProduction);
+        const environmentGroup = a.environmentGroup ? String(a.environmentGroup) : existing?.environmentGroup && !a.environment ? existing.environmentGroup : undefined;
+        // what the tool does not set stays as it was: the limits, the alert threshold and a pause are the monitor's, not this call's
+        const kept = existing ? { alertAfter: existing.alertAfter, maxP95Ms: existing.maxP95Ms, minCertDays: existing.minCertDays, iterations: existing.iterations, bail: existing.bail, pausedUntil: existing.pausedUntil, pauseReason: existing.pauseReason, pausedTenants: existing.pausedTenants } : {};
         const m = saveMonitor(store, {
+          ...kept,
           id: existing?.id ?? shortId('mon-'),
           name,
           ...(collection ? { collectionId: collection.id, ...(Array.isArray(a.selection) && a.selection.length ? { selection: a.selection.map(String) } : {}) } : hasEvaluation ? { evaluation: String(a.evaluation), ...(typeof a.limit === 'number' ? { limit: a.limit } : {}), ...(a.gates && typeof a.gates === 'object' ? { gates: Object.fromEntries(Object.entries(a.gates as Record<string, unknown>).map(([k, v]) => [k, Number(v)])) } : {}), ...(typeof a.judgeSample === 'number' ? { judgeSample: a.judgeSample } : {}), ...(typeof a.judgeBudgetUsdPerDay === 'number' ? { judgeBudgetUsdPerDay: a.judgeBudgetUsdPerDay } : {}), ...(a.rotate === true ? { rotate: true } : {}), ...(typeof a.maxCostUsd === 'number' ? { maxCostUsd: a.maxCostUsd } : {}), ...(a.baseline ? { baseline: String(a.baseline) } : {}), ...(typeof a.maxDrop === 'number' ? { maxDrop: a.maxDrop } : {}) } : { testFile: String(a.testFile) }),
           everyMinutes: parseEvery(a.every as string | number),
           enabled: a.enabled !== false,
           ...(a.environment ? { environment: String(a.environment) } : {}),
-          ...(a.environmentGroup ? { environmentGroup: String(a.environmentGroup) } : existing?.environmentGroup && !a.environment ? { environmentGroup: existing.environmentGroup } : {}),
+          ...(environmentGroup ? { environmentGroup } : {}),
           ...(a.webhook ? { webhook: String(a.webhook) } : existing?.webhook ? { webhook: existing.webhook } : {}),
-          ...(keepConsent ? { allowProduction: true } : {}),
+          ...monitorConsent(store, { environment: a.environment ? String(a.environment) : undefined, environmentGroup }, existing, false),
         });
         return monitorStatus(store, m);
       },

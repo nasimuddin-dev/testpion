@@ -4,7 +4,7 @@
  * latest response failed, flaky tests. Names and counts only. The app's Problems panel (WF-03), Home's "Needs
  * attention", `what_needs_attention` and `testpion problems` are this one list.
  */
-import { decodeJwt, type ItemRef } from '@testpion/shared';
+import { decodeJwt, matchEnvironment, type ItemRef } from '@testpion/shared';
 import type { WorkspaceStore } from './workspace.js';
 import { listCertificates } from './certificates.js';
 import { listDeprecations } from './deprecations.js';
@@ -52,7 +52,7 @@ export function secretsAttention(store: WorkspaceStore, secrets: SecretReader): 
   const envs = store.listEnvironments();
   for (const name of new Set(miss.items.map((i) => i.environment ?? ''))) {
     const keys = miss.items.filter((i) => (i.environment ?? '') === name).map((i) => i.key);
-    const env = name ? envs.find((e) => e.name === name) : undefined;
+    const env = name ? matchEnvironment(envs, name) : undefined;
     out.push({
       kind: 'file',
       severity: 'medium',
@@ -168,7 +168,7 @@ export function problemsOwnedBy<T extends { owners?: string[] }>(items: T[], own
 /** The tenant of a problem: the environment group of the monitor's environment, or of the environment it names; none for the rest. */
 export function tenantOf(store: WorkspaceStore, items: Array<{ ref: ItemRef & { monitorId?: string; environmentId?: string } }>): Array<string | undefined> {
   const envs = store.listEnvironments();
-  const groupOfEnv = (idOrName?: string) => (idOrName ? envs.find((e) => e.id === idOrName || e.name === idOrName)?.group?.trim() || undefined : undefined);
+  const groupOfEnv = (ref?: string) => (ref ? matchEnvironment(envs, ref)?.group?.trim() || undefined : undefined);
   const monitorEnv = new Map(listMonitors(store).map((m) => [m.id, m.environment] as const));
   return items.map((i) => (i.ref.kind === 'monitor' && i.ref.monitorId ? groupOfEnv(monitorEnv.get(i.ref.monitorId)) : i.ref.kind === 'environment' && i.ref.environmentId ? groupOfEnv(i.ref.environmentId) : undefined));
 }

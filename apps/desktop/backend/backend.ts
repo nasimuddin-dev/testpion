@@ -118,7 +118,7 @@ import { debuggerFlowHandlers } from './handlers/debugger-flow.js';
 import { debuggerReverseHandlers } from './handlers/debugger-reverse.js';
 import { terminalHandlers, createTerminals, type TerminalHost, type TerminalManager } from './handlers/terminal.js';
 import { flowDeployHandlers, stopFlowWebhooks } from './handlers/flow-deploy.js';
-import { flowScaleHandlers, cancelScaleRuns } from './handlers/flow-scale.js';
+import { flowScaleHandlers } from './handlers/flow-scale.js';
 import { evalMatrixHandlers } from './handlers/eval-matrix.js';
 import { ragHandlers } from './handlers/rag.js';
 import { ragMetricHandlers } from './handlers/rag-metrics.js';
@@ -129,7 +129,10 @@ import { importHandlers } from './handlers/import.js';
 import { bundleHandlers } from './handlers/bundle.js';
 import { installExamples, updateExamples } from './backend-examples.js';
 import { checkRpcParams, guardHandler, hostPathsOf } from './rpc-params.js';
-import { forgetProductionSessions, guardProduction } from './production-guard.js';
+import { guardProduction } from './production-guard.js';
+import { closeWorkspaceSessions } from './workspace-sessions.js';
+import { adoptCurrentValues } from './current-owner.js';
+import { monitorApproved } from './monitor-trust.js';
 import { VizPages } from './viz-pages.js';
 import { OwnWrites, type OwnWriteBatch } from './own-writes.js';
 import { consoleFromResult, consoleProtocol, pushConsole, type ConsoleEntry } from './console-log.js';
@@ -302,7 +305,7 @@ export class Backend {
     this.bootstrapWorkspace();
     this.monitorScheduler = new MonitorScheduler({
       // read on every tick, so a workspace switch or an edited monitor applies right away
-      list: () => (this.store ? listMonitors(this.store).filter((m) => !this.runningMonitors.has(m.id)) : []),
+      list: () => (this.store ? listMonitors(this.store).filter((m) => !this.runningMonitors.has(m.id) && monitorApproved(this, m)) : []),
       last: (id) => lastMonitorResult(this.ws, id), recent: (id, n) => recentMonitorResults(this, id, n), owners: (m) => monitorOwners(this.ws, m),
       run: (m) => this.net.run(() => withScriptRunner(this.scripts, () => runMonitorNow(this, m, 'schedule'))),
       onResult: (monitor, result, previous) => this.host.emit('monitor.result', { monitor, result, previous }),
@@ -423,21 +426,15 @@ export class Backend {
   openStore(path: string): void {
     // the new workspace opens first: when it is refused (not a TestPion folder) the open one stays as it was
     const next = WorkspaceStore.open(path);
-    if (this.store && !samePath(this.store.root, next.root)) this.terminals?.dispose('workspace'); // the same folder by another name keeps them
+    const another = !!this.store && !samePath(this.store.root, next.root);
+    if (another) this.terminals?.dispose('workspace'); // the same folder by another name keeps them
     void closeStoreAfterRuns(this, this.store);
-    for (const s of this.mcpSessions.values()) void s.close();
-    this.mcpSessions.clear();
-    forgetProductionSessions(this);
-    for (const m of this.mocks.values()) void m.close();
-    this.mocks.clear();
-    void this.gqlMock?.close();
-    this.gqlMock = undefined;
-    void stopFlowWebhooks(this); // it served the old workspace's flows
-    cancelScaleRuns(this); // data runs and matrices of the old workspace
+    closeWorkspaceSessions(this, another);
     this.store = next;
     this.watchStore(this.store.root);
     this.currentValues?.flush();
     this.currentValues = new CurrentValues(join(this.host.appDir, 'current-values', `${this.store.id}.json`), this.secrets, this.store.id);
+    adoptCurrentValues(this.currentValues, this.store);
     void this.cookieStore?.flush().catch(() => undefined);
     this.cookieStore = new CookieJarStore(this.secrets, this.store.id);
     this.search = new WorkspaceSearch(this.store);
@@ -632,7 +629,8 @@ export class Backend {
     // Postman-style current values: set by scripts, kept on this machine, override stored values
     const cv = this.currentValues;
     if (cv) {
-      const envName = ctx.environment?.name;
+      // kept by the environment's id: two tenants may both have a "Staging", and one's token must never reach the other's host
+      const envName = ctx.environment?.id;
       cv.apply(ctx.vars, { environment: envName, collectionId: opts.collectionId }, ctx.redactor);
       const secretEnvKeys = new Set(ctx.environment?.variables.filter((v) => v.secret).map((v) => v.key));
       ctx.services.persistVariable = (scope, key, value) => {

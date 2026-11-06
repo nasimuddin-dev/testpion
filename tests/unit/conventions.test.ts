@@ -49,6 +49,10 @@ describe('team conventions (conventions.yaml)', () => {
     writeFileSync(r.store.path(CONVENTIONS_FILE), 'collections:\n  name: "(["\n');
     expect(() => readConventions(r.store)).toThrow(/not a regular expression/);
     expect((await workspaceAttention(r.store)).filter((a) => a.kind === 'convention')).toEqual([expect.objectContaining({ type: 'error', message: expect.stringMatching(/conventions\.yaml can't be read/) })]);
+    // a pattern that could hold the app for minutes on a short name is refused when the file is read, and by a check given it directly
+    writeFileSync(r.store.path(CONVENTIONS_FILE), 'requests:\n  name: "^(a+)+$"\n');
+    expect(() => readConventions(r.store)).toThrow(/requests\.name is refused: it repeats a group/);
+    await expect(conventionFindings(r.store, { requests: { name: '^(a+)+$' } })).rejects.toThrow(/requests\.name in conventions\.yaml is refused/);
     rmSync(r.store.path(CONVENTIONS_FILE));
     expect(readFileSync(r.ws + '/CODEOWNERS', 'utf8')).toContain('@org/payments');
   });

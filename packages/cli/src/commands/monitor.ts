@@ -25,6 +25,7 @@ import {
   pauseMonitor,
   resumeMonitor,
   saveMonitor,
+  monitorConsent,
   shortId,
   type Monitor,
   type MonitorResult,
@@ -33,7 +34,7 @@ import {
   listMonitorDefinitions,
   monitorsStatusByOwner,
 } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, withWorkspace, warnUnknownGroup, cliContext, requireCollection, JSON_OPTION } from '../shared.js';
 import { addOutputOptions, saveSurface, savedLine } from '../output-save.js';
 import { resolveSelection } from '../run.js';
 import { parseGates } from '@testpion/core';
@@ -44,7 +45,7 @@ const statusText = (r?: MonitorResult) =>
   !r ? dim('never ran') : r.status === 'passed' ? green(`passed ${r.passed}/${r.total}`) : r.status === 'failed' ? red(r.reason && !(r.failed + r.errors) ? (r.reason.startsWith('p95') ? `too slow: ${r.reason}` : r.reason) : `failed ${r.failed + r.errors}/${r.total}`) : red(`error: ${r.error}`);
 
 function runner(store: WorkspaceStore) {
-  return (m: Monitor, trigger: MonitorResult['trigger']) => executeMonitor({ store, monitor: m, trigger, context: (o) => cliContext(store, o.environment, { collectionId: o.collectionId }) });
+  return (m: Monitor, trigger: MonitorResult['trigger']) => executeMonitor({ store, monitor: m, trigger, secretReads: { trustAll: true }, context: (o) => cliContext(store, o.environment, { collectionId: o.collectionId }) });
 }
 
 /** What a monitor runs, for lists: the collection's name or tests/<file>. */
@@ -80,6 +81,7 @@ export function registerMonitorCommands(program: Command): void {
     .option(...JSON_OPTION)
     .action((o: { workspace: string; group?: string; owner?: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store) => {
+        warnUnknownGroup(store, o.group);
         const want = o.group?.trim().toLowerCase();
         let monitors = listMonitors(store).filter((m) => !want || (m.environment ? store.getEnvironment(m.environment)?.group?.trim().toLowerCase() : '') === want);
         if (o.owner) {
@@ -137,7 +139,8 @@ export function registerMonitorCommands(program: Command): void {
           name,
           ...(collection ? { collectionId: collection.id, selection: resolveSelection(collection, o.folder) } : o.ragEvaluation ? { evaluation: String(o.ragEvaluation), ...(o.limit ? { limit: Number(o.limit) } : {}), ...(o.gate?.length ? { gates: parseGates(o.gate) } : {}), ...(o.judgeSample ? { judgeSample: Number(o.judgeSample) } : {}), ...(o.judgeBudget ? { judgeBudgetUsdPerDay: Number(o.judgeBudget) } : {}), ...(o.rotate ? { rotate: true } : {}), ...(o.maxCost ? { maxCostUsd: Number(o.maxCost) } : {}), ...(o.baseline ? { baseline: String(o.baseline) } : {}), ...(o.maxDrop ? { maxDrop: Number(o.maxDrop) } : {}) } : { testFile: String(o.testFile) }),
           environment: o.environment,
-          environmentGroup: o.envGroup ? String(o.envGroup) : existing?.environmentGroup,
+          // an environment named for an existing grouped monitor: it runs there from now on, no longer once per tenant
+          environmentGroup: o.envGroup ? String(o.envGroup) : o.environment ? undefined : existing?.environmentGroup,
           everyMinutes: parseEvery(o.every),
           enabled: !o.paused,
           iterations: o.iterationCount ? Number(o.iterationCount) : undefined,
@@ -147,7 +150,8 @@ export function registerMonitorCommands(program: Command): void {
           maxP95Ms: o.maxP95 !== undefined ? Number(o.maxP95) : existing?.maxP95Ms,
           minCertDays: o.minCertDays !== undefined ? Number(o.minCertDays) : existing?.minCertDays,
           // a production environment: data changes on its schedule only with --allow-production (kept while the environment is)
-          allowProduction: (!!o.environment && !!store.getEnvironment(String(o.environment))?.isProduction && (o.allowProduction === true || (!!existing?.allowProduction && existing.environment === o.environment))) || undefined,
+          // (for --env-group: each production environment of the group, by id)
+          ...monitorConsent(store, { environment: o.environment, environmentGroup: o.envGroup ? String(o.envGroup) : o.environment ? undefined : existing?.environmentGroup }, existing, o.allowProduction === true),
         });
         if (o.json) printJson(m);
         else console.log(green(`${existing ? 'Updated' : 'Added'} monitor "${m.name}": ${target(store, m)}, ${m.enabled ? formatEvery(m.everyMinutes) : 'paused'}`));
@@ -179,6 +183,7 @@ export function registerMonitorCommands(program: Command): void {
     .option(...JSON_OPTION)
     .action((o: { days: string; group?: string; owner?: string; out?: string; format?: string; workspace: string; json?: boolean }) =>
       withWorkspace(o.workspace, async (store) => {
+        warnUnknownGroup(store, o.group);
         if (o.out) {
           const saved = await saveSurface({ store, surface: 'monitors.status', format: o.format ?? (/\.(md|json)$/i.test(o.out) ? o.out.replace(/^.*\./, '').toLowerCase() : 'html'), out: o.out, params: { days: Number(o.days) || 30, ...(o.group ? { group: o.group } : {}), ...(o.owner ? { owner: o.owner } : {}) } });
           return o.json ? printJson(saved) : console.log(savedLine(saved));

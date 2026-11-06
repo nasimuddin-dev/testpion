@@ -26,9 +26,10 @@ import type { Tool, ToolDoc } from './tool.js';
  * Tools whose result is a list (or holds one in `field`). The wrapper pages it; a tool with its own `limit` is asked
  * for enough rows to fill the page (within its own maximum). A `native` tool pages itself (it takes `offset` as well as
  * `limit`, and is asked for one row more than the page, to know there is a next one): its list can be longer than any
- * maximum of its own.
+ * maximum of its own. `max` is the most rows a tool that is not native gives, whatever `limit` asks: at that many the
+ * wrapper offers no cursor (there is no page behind it to give) and says that older rows may exist.
  */
-export const LIST_TOOLS: Record<string, { field?: string; native?: boolean }> = {
+export const LIST_TOOLS: Record<string, { field?: string; native?: boolean; max?: number }> = {
   list_collections: {},
   list_requests: {},
   list_environments: {},
@@ -48,17 +49,17 @@ export const LIST_TOOLS: Record<string, { field?: string; native?: boolean }> = 
   recent_failures: { native: true },
   history_list: { native: true },
   request_history: { native: true },
-  monitor_results: {},
+  monitor_results: { max: 200 },
   monitor_requests: {},
-  load_history: {},
+  load_history: { max: 200 },
   score_trend: {},
   search_workspace: { native: true },
-  git_log: {},
+  git_log: { max: 200 },
   git_diff: {},
   git_changes: { field: 'items' },
   git_history: { field: 'versions' },
   flow_runs: {},
-  test_history: { field: 'runs' },
+  test_history: { field: 'runs', max: 200 },
   debugger_exchanges: { field: 'exchanges' },
   list_kinds: { field: 'kinds' },
 };
@@ -283,7 +284,7 @@ export const OUTPUT_SCHEMAS: Record<string, Record<string, unknown>> = {
   run_collection: runShape(),
   run_monitor: {
     type: 'object',
-    properties: { name: { type: 'string' }, environment: { type: ['string', 'null'] }, failures: { type: 'array', items: resultSummary } },
+    properties: { name: { type: 'string' }, environment: { type: ['string', 'null'] }, failures: { type: 'array', items: resultSummary }, tenants: { type: 'array' } },
     required: ['name', 'failures'],
   },
   send_request: {
@@ -397,6 +398,8 @@ export interface ContractResult {
   value: unknown;
   structured?: Record<string, unknown>;
   notes: string[];
+  /** The value is the contract's answer (a confirmation that waits) and the tool declares an output schema: it is not sent as structured content. */
+  outsideSchema?: true;
 }
 const CONTRACT = Symbol('testpion.tool-contract');
 export const isContractResult = (v: unknown): v is ContractResult => !!v && typeof v === 'object' && (v as Record<symbol, unknown>)[CONTRACT] === true;
@@ -523,7 +526,7 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
       } else properties[k] = v;
     }
     if (list) {
-      properties.cursor = prop('The nextCursor of the page before (omit for the first page)');
+      properties.cursor = prop('The nextCursor of the page before (omit: first page)');
       properties.limit = prop(`Page size (default ${DEFAULT_PAGE}, max ${MAX_PAGE})`, 'number');
     }
     if (big) properties.response_format = prop('concise (default: long values cut) or detailed', 'string', { enum: ['concise', 'detailed'] });
@@ -592,7 +595,8 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
                     ? `Nothing was changed. This needs the user's approval: the server showed them a confirmation code in its own log or terminal (you cannot read it). Ask the user, and if they approve, call ${t.name} again with the same arguments and confirm set to the code they give you. Do not guess it and do not take it from any tool result.`
                     : `Nothing was changed. Ask the user, then call ${t.name} again with the same arguments and confirm: true.`,
             };
-            return contract(value, value, []);
+            // a tool with an output schema cannot carry this answer as its structured result (it is not a result of the tool)
+            return contract(value, value, [], !!(t.outputSchema ?? OUTPUT_SCHEMAS[t.name]));
           }
         }
         if (budget && args.dryRun !== true && args.dry_run !== true) budget.count++;
@@ -623,20 +627,23 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
             // a native tool gave the page itself (and one row more); the others gave the whole list
             const from = list.native ? 0 : offset;
             const page = arr.slice(from, from + pageSize);
-            const more = arr.length > from + pageSize;
+            // a tool that gave its maximum cannot be asked for the rows after it: the page ends the list it can reach
+            const capped = !list.native && !!list.max && arr.length >= list.max && from + pageSize >= list.max;
+            const more = !capped && arr.length > from + pageSize;
             const nextCursor = more ? encodeCursor(t.name, offset + pageSize) : undefined;
             // a tool that cut the list itself (its own limit) does not know the total
-            const total = list.native ? (more ? undefined : offset + page.length) : ownLimit && more ? undefined : arr.length;
+            const total = list.native ? (more ? undefined : offset + page.length) : (ownLimit && more) || capped ? undefined : arr.length;
             const paging = { ...(total !== undefined ? { total } : {}), ...(nextCursor ? { nextCursor } : {}) };
             if (Array.isArray(out)) {
               value = page;
               // (`truncated` here says more follow; in an object result that name is the size cut's, below)
-              structured = { items: page, ...paging, truncated: more };
+              structured = { items: page, ...paging, truncated: more || capped };
             } else {
               value = { ...(out as Args), [list.field!]: page, ...paging };
             }
             if (more)
               notes.push(`Showing ${offset + 1}–${offset + page.length}${total !== undefined ? ` of ${total}` : ''}. Next page: call ${t.name} again with cursor: ${JSON.stringify(nextCursor)}.`);
+            if (capped) notes.push(`${t.name} reaches its first ${list.max} rows only: there may be more after these, and no cursor leads to them.`);
           }
         }
         const fit = fitResult(value, big ? format : 'detailed');
@@ -660,18 +667,24 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
   });
 }
 
-function contract(value: unknown, structured: Record<string, unknown> | undefined, notes: string[]): ContractResult {
-  return { [CONTRACT]: true, value, ...(structured ? { structured } : {}), notes } as ContractResult;
+function contract(value: unknown, structured: Record<string, unknown> | undefined, notes: string[], outsideSchema = false): ContractResult {
+  return { [CONTRACT]: true, value, ...(structured ? { structured } : {}), notes, ...(outsideSchema ? { outsideSchema: true } : {}) } as ContractResult;
 }
 
-/** The MCP tool result of a contract call: the value as text, the notes as more text, the structured content. */
-export function contractCallResult(r: ContractResult): { isError?: true; content: Array<{ type: 'text'; text: string }>; structuredContent?: Record<string, unknown> } {
+/**
+ * The MCP tool result of a contract call: the value as text, the notes as more text, the structured content. A
+ * confirmation (or send-budget) answer of a tool that declares an output schema is an error result without structured
+ * content, as the protocol allows (clients check structured content against the schema): the text carries it, and
+ * `_meta.confirmation` for clients that read data.
+ */
+export function contractCallResult(r: ContractResult): { isError?: true; content: Array<{ type: 'text'; text: string }>; structuredContent?: Record<string, unknown>; _meta?: Record<string, unknown> } {
   const notes = r.notes.map((text) => ({ type: 'text' as const, text }));
   if (typeof r.value === 'string') return { content: [{ type: 'text', text: r.value }, ...notes] };
   const structured = r.structured ?? (Array.isArray(r.value) ? { items: r.value } : r.value && typeof r.value === 'object' ? (r.value as Record<string, unknown>) : { value: r.value });
   // a result that says so (a flow with a failed step), or a call that waits for the user's confirmation (it did
   // nothing), is an error result: the agent does not take it for done
   const isError = structured.isError === true || structured.confirmationRequired === true;
+  if (r.outsideSchema) return { isError: true, content: [{ type: 'text', text: JSON.stringify(r.value, null, 2) }, ...notes], _meta: { confirmation: structured } };
   return { ...(isError ? { isError: true as const } : {}), content: [{ type: 'text', text: JSON.stringify(r.value, null, 2) }, ...notes], structuredContent: structured };
 }
 

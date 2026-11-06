@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkspaceStore, addComment, commentFileOf, deleteComment, listComments, openCommentCounts, openComments, resolveComment, restoreComment, COMMENT_LIMIT, describeFile, type ItemRef } from '../../packages/core/src/index.js';
@@ -53,6 +53,25 @@ describe('comments for your team', () => {
     expect(listComments(store, test)).toEqual([]);
     expect(existsSync(store.path('comments', commentFileOf(test)))).toBe(false);
     expect(() => deleteComment(store, test, 'nope')).toThrow(/No comment/);
+  });
+
+  it('a thread file that cannot be read (git conflict markers) is left out with a warning: the other comments are still listed', () => {
+    const broken: ItemRef = { kind: 'request', collectionId: 'payments', requestId: 'conflicted' };
+    addComment(store, broken, 'Mine', 'Ana');
+    const file = store.path('comments', commentFileOf(broken));
+    const conflict = '<<<<<<< HEAD\n{"comments":[]}\n=======\n{"comments":[{}]}\n>>>>>>> theirs\n';
+    writeFileSync(file, conflict);
+    const before = store.warnings.length;
+    const open = openComments(store);
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.some((c) => c.text === 'Mine')).toBe(false);
+    expect(Object.keys(openCommentCounts(store))).toEqual(['request|payments|create-invoice']);
+    expect(listComments(store, broken)).toEqual([]);
+    expect(store.warnings.slice(before).join('\n')).toMatch(/The comments in comments\/request-payments-conflicted\.[0-9a-f]{8}\.json are left out: it has unresolved git merge conflict markers/);
+    // a change is refused instead of replacing the file, which stays as it is for the person to resolve
+    expect(() => addComment(store, broken, 'Again', 'Ana')).toThrow(/cannot be read/);
+    expect(readFileSync(file, 'utf8')).toBe(conflict);
+    rmSync(file);
   });
 
   it('a deleted comment can be put back as it was (Undo), in its place by time', () => {

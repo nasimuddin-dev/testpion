@@ -35,6 +35,10 @@ A monitor on an environment marked as [production](/api-testing/environments#pro
 
 **Run now** runs it immediately. **Pause** stops the schedule until you resume it; **Pause ▸ For 1 hour / For 4 hours / Until tomorrow 09:00** pauses it for a while, with why (*deploy*), and the schedule goes on by itself when the time comes: the monitor says *paused until 14:30 (deploy)* meanwhile. From a pipeline: `testpion monitor pause <name> --for 2h --why "deploy"` (or `--until <time>`) and `testpion monitor resume <name>`; `monitor list --json` carries `paused`, `pausedUntil` and `pauseReason`.
 
+**A monitor that came from a teammate.** Monitors are saved in the workspace and shared through git. One that arrives with a pull or a clone, or that was changed outside the app, shows **waits for you** in the list and does not run on its schedule on your computer until you open it and choose **Allow on this computer**: look at what it runs, in which environment, how often and where its alert goes. The answer is kept on this computer (never in the workspace) and is for the monitor as it is: a pulled change to its target, environment, schedule, webhook or production consent asks again. A monitor you create or save in the app is allowed already, and **Run now** always works. `testpion monitor start` in a terminal runs every enabled monitor of the workspace it is pointed at.
+
+**One tenant of a group.** On a monitor that runs in every environment of a group, each tenant has its own row. **Pause** on a row pauses that tenant only (the others keep their schedule); **Edit**, **Rename**, **Duplicate** and **Delete** act on the monitor itself, for every tenant. Consent to change data in production is kept for each production environment of the group: a new production environment in the group asks again.
+
 When a monitor starts failing, or passes again, TestPion shows a notification.
 
 ::: v-pre

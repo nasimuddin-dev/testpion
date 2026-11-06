@@ -1,19 +1,25 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { ApsError } from '../errors.js';
-import type { McpServerConfig } from '../model/types.js';
+import type { LibraryItem, McpServerConfig } from '../model/types.js';
 import { shortId, slugify } from '../util/ids.js';
 import type { WorkspaceStore } from './workspace.js';
-import { readJson, renameOwned, writeJson } from './fsutil.js';
+import { readJson, removeOwned, renameOwned, writeJson } from './fsutil.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
 import { KIND_INFO, kindsWith, type KindId } from '@testpion/shared';
 
 /**
  * Recently deleted collections, environments, datasets, API definitions (specs/) and MCP servers. Deleting moves the
  * item to the workspace's `trash/` folder (never committed: it holds its own `.gitignore`), from where it can be
- * restored for 30 days. Secret values stay in the secret store, so a restored environment still has them. A deleted
- * collection's gRPC calls and connections stay in the library, hidden, and come back with it; purged, they are deleted
- * with it. An MCP server keeps its id and its place in the list; an API definition its path.
+ * restored for 30 days. Secret values stay in the secret store, so a restored environment still has them. An MCP
+ * server keeps its id and its place in the list; an API definition its path.
+ *
+ * A deleted collection's gRPC calls and connections (kept in library/grpc.json and library/websocket.json) travel in its
+ * trash entry (`trashedCalls`): they leave the libraries with the collection, come back with it (under its new id when
+ * it gets one), and are gone when the entry is purged. The trash is per computer, so nothing of a deleted collection may
+ * stay in the committed files: a call left there would look like one without a collection on every other computer and
+ * be adopted into a new collection (loose-requests.ts). An entry made by an older version has no `trashedCalls`: its
+ * calls are still in the libraries, hidden, and are handled as before (re-pointed on restore, deleted on purge).
  */
 /** The kinds whose `trash` capability is true in the item-kind registry (each needs a KindDef below). */
 type TrashKind = Extract<KindId, 'collection' | 'environment' | 'dataset' | 'spec' | 'mcp-server'>;
@@ -41,25 +47,123 @@ interface KindDef {
   restore(store: WorkspaceStore, path: string, name: string): { id: string; name: string };
 }
 
-/** A saved JSON item's id and name; one with the same id or name again gets a new id and "(restored)". */
-function unclash<T extends { id: string; name: string }>(data: T, existing: Array<{ id: string; name: string }>): T {
-  const clash = existing.some((x) => x.id === data.id || x.name.toLowerCase() === String(data.name).toLowerCase());
-  return clash ? { ...data, id: `${slugify(String(data.name))}-${shortId().slice(-4)}`, name: `${data.name} (restored)` } : data;
+/**
+ * A saved JSON item's id and name when it is put back. Its id is what the rest of the workspace knows it by (an
+ * environment's secrets, a collection's history and monitors), so it changes only when it must: when an item with that
+ * id (or `idTaken`: a file that would hold it) is there again. A name that is taken again gets "(restored)" after it
+ * ("(restored 2)" … when that is taken too); the two are told apart, so a name clash never costs the id.
+ */
+function unclash<T extends { id: string; name: string }>(data: T, existing: Array<{ id: string; name: string }>, idTaken: (id: string) => boolean = () => false): T {
+  const hasId = (id: string) => existing.some((x) => x.id === id) || idTaken(id);
+  const names = new Set(existing.map((x) => String(x.name).toLowerCase()));
+  let { id, name } = data;
+  if (names.has(String(name).toLowerCase())) {
+    name = `${data.name} (restored)`;
+    for (let n = 2; names.has(name.toLowerCase()); n++) name = `${data.name} (restored ${n})`;
+  }
+  while (hasId(id)) id = `${slugify(String(data.name)) || 'item'}-${shortId().slice(-4)}`;
+  return id === data.id && name === data.name ? data : { ...data, id, name };
 }
 
-/** A file put back in its folder, as name-restored.ext when the name is taken again. */
+/** A file put back in its folder; when the name is taken again as name-restored.ext, then name-restored-2.ext … (never over a file). */
 function restoreFile(path: string, dir: string, rel: string): string {
-  let dest = join(dir, ...rel.split('/'));
-  if (existsSync(dest)) dest = dest.replace(/(\.[^./\\]+)?$/, '-restored$1');
+  const wanted = join(dir, ...rel.split('/'));
+  let dest = wanted;
+  for (let n = 1; existsSync(dest); n++) dest = wanted.replace(/(\.[^./\\]+)?$/, `-restored${n > 1 ? `-${n}` : ''}$1`);
   mkdirSync(join(dest, '..'), { recursive: true });
   renameOwned(path, dest);
   return dest;
 }
 
+/** The gRPC calls and connections a trashed collection carries, by library. */
+type TrashedCalls = Partial<Record<CollectionItemKind, LibraryItem[]>>;
+type CollectionItemKind = (typeof COLLECTION_ITEM_KINDS)[number];
+const callsOf = (data: Record<string, unknown>): TrashedCalls | undefined => (data.trashedCalls && typeof data.trashedCalls === 'object' ? (data.trashedCalls as TrashedCalls) : undefined);
+
 const count = (data: Record<string, unknown>): number => {
   const walk = (nodes: unknown): number => (Array.isArray(nodes) ? nodes.reduce<number>((n, x) => n + ((x as { kind?: string }).kind === 'folder' ? walk((x as { items?: unknown }).items) : 1), 0) : 0);
-  return walk(data.items);
+  const calls = Object.values(callsOf(data) ?? {}).reduce((n, items) => n + (Array.isArray(items) ? items.length : 0), 0);
+  return walk(data.items) + calls;
 };
+
+/**
+ * A collection file on its way to the trash takes its gRPC calls and connections along: the entry at `dest` is the
+ * collection with its calls (`trashedCalls`, written even when it has none: that is how an entry says its calls are
+ * not in the libraries), the libraries are saved without them, and the collection file is removed last, so a failure
+ * on the way leaves the collection where it was. False when the calls cannot be taken (a file that is not a readable
+ * collection, a library that cannot be read, a caller without the libraries): the file is then moved as it is.
+ */
+function trashCollectionWithCalls(store: WorkspaceStore, file: string, dest: string): boolean {
+  if (typeof store.getLibrary !== 'function') return false;
+  let data: Record<string, unknown>;
+  const libs: Array<{ kind: CollectionItemKind; lib: ReturnType<WorkspaceStore['getLibrary']> }> = [];
+  try {
+    data = readJson<Record<string, unknown>>(file);
+    if (!data || typeof data !== 'object' || typeof data.id !== 'string' || !data.id) return false;
+    // a second file with the id of a collection that stays (a copy made by hand, a stray the template update merges): the calls are the other one's
+    const named = store.path('collections', `${slugify(data.id)}.json`);
+    if (resolve(named) !== resolve(file) && existsSync(named)) return false;
+    for (const kind of COLLECTION_ITEM_KINDS) libs.push({ kind, lib: store.getLibrary(kind) });
+  } catch {
+    return false;
+  }
+  const id = data.id as string;
+  const trashedCalls: TrashedCalls = {};
+  for (const { kind, lib } of libs) {
+    const mine = (lib.items as LibraryItem[]).filter((i) => i.collectionId === id);
+    if (mine.length) trashedCalls[kind] = mine;
+  }
+  writeJson(dest, { ...data, trashedCalls });
+  const saved: typeof libs = [];
+  try {
+    for (const l of libs) {
+      if (!trashedCalls[l.kind]) continue;
+      store.saveLibrary(l.kind, { folders: l.lib.folders, items: (l.lib.items as LibraryItem[]).filter((i) => i.collectionId !== id) });
+      saved.push(l);
+    }
+    removeOwned(file);
+  } catch (e) {
+    // nothing half done: the libraries as they were, no entry
+    for (const l of saved)
+      try {
+        store.saveLibrary(l.kind, { folders: l.lib.folders, items: l.lib.items });
+      } catch {
+        /* the entry is removed below only when every library is back */
+      }
+    rmSync(dest, { force: true });
+    throw e;
+  }
+  return true;
+}
+
+/**
+ * A restored collection's calls go back into the libraries, in that collection (`collectionId`: its id now; `was`: the
+ * id it was deleted with). A call whose id another call has taken since gets a new one. A call that is in the library
+ * again as it was deleted (same id, still naming the deleted collection, which no live collection is: a window that
+ * saved the library from an older copy) is that call: the restored one takes its place instead of standing beside it.
+ */
+function putBackCalls(store: WorkspaceStore, calls: TrashedCalls, collectionId: string, was: string, wasLive: boolean): void {
+  const back = COLLECTION_ITEM_KINDS.map((kind) => ({ kind, items: (Array.isArray(calls[kind]) ? calls[kind]! : []).filter((i) => i && typeof i === 'object' && typeof i.id === 'string') })).filter((b) => b.items.length);
+  if (!back.length) return;
+  const libs = new Map(back.map((b) => [b.kind, store.getLibrary<unknown>(b.kind)]));
+  // new ids first, for both libraries: a call that follows a renamed one (`after`) follows it under its new id
+  const renamed = new Map<string, string>();
+  const replaced = new Set<string>();
+  for (const b of back) {
+    const there = new Map((libs.get(b.kind)!.items as LibraryItem[]).map((i) => [i.id, i]));
+    for (const i of b.items) {
+      const twin = there.get(i.id);
+      if (!twin) continue;
+      if (!wasLive && twin.collectionId === was) replaced.add(`${b.kind}/${i.id}`);
+      else renamed.set(i.id, shortId('lib-'));
+    }
+  }
+  for (const b of back) {
+    const lib = libs.get(b.kind)!;
+    const items = b.items.map((i) => ({ ...i, id: renamed.get(i.id) ?? i.id, collectionId, ...(i.after && renamed.has(i.after) ? { after: renamed.get(i.after)! } : {}) }));
+    store.saveLibrary(b.kind, { folders: lib.folders, items: [...(lib.items as LibraryItem[]).filter((i) => !replaced.has(`${b.kind}/${i.id}`)), ...items] });
+  }
+}
 
 /** A spec's path inside specs/ as one file name (`asyncapi/x.yaml` → `asyncapi%2Fx.yaml`), and back (never out of specs/). */
 const specEntryName = (rel: string) => encodeURIComponent(rel.replace(/^specs\//, ''));
@@ -83,13 +187,17 @@ const KINDS: Record<TrashKind, KindDef> = {
       return { itemId: String(data.id ?? name), name: String(data.name ?? name), size: count(data) };
     },
     restore: (store, path) => {
-      const data = readJson<{ id: string; name: string } & Record<string, unknown>>(path);
+      const { trashedCalls: _calls, ...data } = readJson<{ id: string; name: string } & Record<string, unknown>>(path);
+      const calls = callsOf({ trashedCalls: _calls });
       const existing = store.listCollections().map((c) => ({ id: c.id, name: c.name }));
-      const item = unclash(data, existing);
+      // (a file named after the id that holds another collection would be replaced by the save: the id counts as taken)
+      const item = unclash(data, existing, (id) => existsSync(store.path('collections', `${slugify(id)}.json`)));
       store.saveCollection(item as never);
-      // restored under a new id (its name or id is taken again): its gRPC calls and connections follow it,
-      // unless a live collection has the old id (then they can't be told apart and stay where they are)
-      if (item.id !== data.id && !existing.some((x) => x.id === data.id))
+      // its gRPC calls and connections come back with it, in the collection as it is called now
+      if (calls) putBackCalls(store, calls, item.id, data.id, existing.some((x) => x.id === data.id));
+      // an entry of an older version: its calls stayed in the libraries. Restored under a new id (its id is taken again),
+      // they follow it, unless a live collection has the old id (then they can't be told apart and stay where they are)
+      else if (item.id !== data.id && !existing.some((x) => x.id === data.id))
         for (const k of COLLECTION_ITEM_KINDS) {
           const lib = store.getLibrary(k);
           if (lib.items.some((i) => i.collectionId === data.id)) store.saveLibrary(k, { folders: lib.folders, items: lib.items.map((i) => (i.collectionId === data.id ? { ...i, collectionId: item.id } : i)) });
@@ -106,7 +214,8 @@ const KINDS: Record<TrashKind, KindDef> = {
       return { itemId: String(data.id ?? name), name: String(data.name ?? name), size: Array.isArray(data.variables) ? data.variables.length : 0 };
     },
     restore: (store, path) => {
-      const item = unclash(readJson<{ id: string; name: string } & Record<string, unknown>>(path), store.listEnvironments());
+      // the id stays whenever it can: the environment's secret values are kept under it
+      const item = unclash(readJson<{ id: string; name: string } & Record<string, unknown>>(path), store.listEnvironments(), (id) => existsSync(store.path('environments', `${slugify(id)}.json`)));
       store.saveEnvironment(item as never);
       rmSync(path, { force: true });
       return { id: item.id, name: item.name };
@@ -187,8 +296,14 @@ function ensureTrashDir(store: WorkspaceStore, kind: TrashKind): string {
 /** Move a workspace file (collections/x.json, environments/x.json, datasets/x.csv) into the trash; the entry id, or undefined when there was no file. */
 export function moveToTrash(store: WorkspaceStore, kind: TrashKind, file: string, entryName = basename(file)): string | undefined {
   if (!existsSync(file)) return undefined;
-  const name = `${Date.now()}--${entryName}`;
-  renameOwned(file, join(ensureTrashDir(store, kind), name));
+  const dir = ensureTrashDir(store, kind);
+  // (two items of one name deleted in the same millisecond: the second entry never replaces the first)
+  let at = Date.now();
+  while (existsSync(join(dir, `${at}--${entryName}`))) at++;
+  const name = `${at}--${entryName}`;
+  const dest = join(dir, name);
+  // a collection takes its gRPC calls and connections along (see the top of this file)
+  if (kind !== 'collection' || !trashCollectionWithCalls(store, file, dest)) renameOwned(file, dest);
   return `${kind}/${name}`;
 }
 
@@ -216,20 +331,34 @@ export function trashMcpServer(store: WorkspaceStore, serverId: string): { trash
   return { trashId: `mcp-server/${name}`, server };
 }
 
-/** The id a trashed collection file had (undefined for an unreadable file). */
-function trashedCollectionId(path: string): string | undefined {
+/**
+ * The id of a trashed collection whose calls are still in the libraries (an entry of an older version); undefined for
+ * an entry that carries its calls (nothing of it is in the libraries) and for an unreadable file.
+ */
+function legacyCollectionId(path: string): string | undefined {
   try {
-    const id = readJson<{ id?: unknown }>(path).id;
-    return typeof id === 'string' ? id : undefined;
+    const data = readJson<Record<string, unknown>>(path);
+    return typeof data.id === 'string' && !callsOf(data) ? data.id : undefined;
   } catch {
     return undefined;
   }
 }
 
-/** A collection is gone for good: delete its gRPC calls and connections too (unless a live collection has its id again). */
+/**
+ * Collections of older entries are gone for good: delete their gRPC calls and connections from the libraries too.
+ * Not those of an id a live collection has again, nor of an id another older entry still in the trash has (two
+ * deleted collections with one id: the calls go with the last of them).
+ */
 function dropCollectionItems(store: WorkspaceStore, collectionIds: Array<string | undefined>): void {
-  const live = new Set(store.listCollections().map((c) => c.id));
-  const gone = new Set(collectionIds.filter((id): id is string => !!id && !live.has(id)));
+  if (!collectionIds.some(Boolean)) return;
+  const kept = new Set(store.listCollections().map((c) => c.id));
+  const dir = trashDir(store, 'collection');
+  if (existsSync(dir))
+    for (const f of readdirSync(dir)) {
+      const id = legacyCollectionId(join(dir, f));
+      if (id) kept.add(id);
+    }
+  const gone = new Set(collectionIds.filter((id): id is string => !!id && !kept.has(id)));
   if (!gone.size) return;
   for (const kind of COLLECTION_ITEM_KINDS) {
     const lib = store.getLibrary(kind);
@@ -252,7 +381,7 @@ export function expireTrash(store: WorkspaceStore, now = Date.now()): number {
       if (!m || !KINDS[kind].entry.exec(m[2]!)) continue;
       if (now - Number(m[1]) <= TRASH_DAYS * 86_400_000) continue;
       const path = join(dir, f);
-      const gone = kind === 'collection' ? trashedCollectionId(path) : undefined;
+      const gone = kind === 'collection' ? legacyCollectionId(path) : undefined;
       rmSync(path, { recursive: true, force: true });
       if (gone) dropCollectionItems(store, [gone]);
       n++;
@@ -295,9 +424,11 @@ function entryPath(store: WorkspaceStore, id: string): { kind: TrashKind; path: 
 }
 
 /**
- * Put a deleted item back. If the workspace has an item with the same id or name again, the restored one gets a new id
- * and "(restored)" after its name, so nothing is overwritten. A dataset or an API definition goes back to its folder (as
- * name-restored.ext when the name is taken again); an MCP server to its place in the list.
+ * Put a deleted item back. Nothing is overwritten: if the workspace has an item with the same name again, the restored
+ * one gets "(restored)" after its name and keeps its id; only when its id is taken again does it get a new one (and
+ * keeps its name when that is free). A
+ * dataset or an API definition goes back to its folder (as name-restored.ext, name-restored-2.ext … when the name is
+ * taken again); an MCP server to its place in the list.
  */
 export function restoreFromTrash(store: WorkspaceStore, id: string): { kind: TrashKind; id: string; name: string } {
   const { kind, path, name } = entryPath(store, id);
@@ -308,14 +439,15 @@ export function restoreFromTrash(store: WorkspaceStore, id: string): { kind: Tra
 export function purgeTrash(store: WorkspaceStore, id?: string): number {
   if (id) {
     const { kind, path } = entryPath(store, id);
-    const gone = kind === 'collection' ? trashedCollectionId(path) : undefined;
+    // (an entry that carries its calls takes them with it; only an older entry's calls are in the libraries)
+    const gone = kind === 'collection' ? legacyCollectionId(path) : undefined;
     rmSync(path, { force: true });
     dropCollectionItems(store, [gone]);
     return 1;
   }
   const items = listTrash(store);
   const dir = trashDir(store, 'collection');
-  const gone = existsSync(dir) ? readdirSync(dir).map((f) => trashedCollectionId(join(dir, f))) : [];
+  const gone = existsSync(dir) ? readdirSync(dir).map((f) => legacyCollectionId(join(dir, f))) : [];
   for (const kind of TRASH_KINDS) rmSync(trashDir(store, kind), { recursive: true, force: true });
   dropCollectionItems(store, gone);
   return items.length;

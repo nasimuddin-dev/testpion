@@ -79,7 +79,8 @@ export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffs
         id: m.id,
         name: m.name,
         target: targetOf(store, m),
-        ...(m.environment ? { environment: m.environment, ...(store.getEnvironment(m.environment)?.group ? { group: store.getEnvironment(m.environment)!.group } : {}) } : {}),
+        // the environment's own name and its group apart (a tenant's `environment` may be its label "Acme ▸ Staging")
+        ...(m.environment ? { environment: store.getEnvironment(m.environment)?.name ?? m.environment, ...(store.getEnvironment(m.environment)?.group ? { group: store.getEnvironment(m.environment)!.group } : {}) } : {}),
         schedule: st.schedule,
         paused: !m.enabled || pausedFor(m, now),
         state: !last ? 'unknown' : last.status === 'passed' ? 'up' : 'down',

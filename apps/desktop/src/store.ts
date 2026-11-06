@@ -14,6 +14,7 @@ import { setDraftScope } from './lib/ws-scope';
 import { mayLeave } from './lib/leave-guard';
 import { offerUndo, UNDO_MS } from './lib/undo';
 import { normalizeEnvironment } from './lib/environments-store';
+import { environmentRef, matchEnvironment } from '@testpion/shared';
 import { refOpenLabel, type ItemRef } from '@testpion/shared';
 import { aiHidden, setAiHiddenSource, withoutAiLaunch } from './lib/ai-visible';
 
@@ -291,6 +292,45 @@ function toastButton(a: ToastAction): { label: string; onClick(): void } {
   return { label: a.label ?? refOpenLabel(a.ref), onClick: () => void import('./lib/open-ref').then((m) => m.openRef(a.ref, { newTab: a.newTab })) };
 }
 
+/**
+ * The active environment of a workspace, kept on this computer: what names it (its name, or its label when two tenants
+ * share the name) and its id, so a rename or a new namesake does not lose it. '' is "No environment", chosen on purpose.
+ */
+function rememberEnvironment(workspaceId: string, ref: string | undefined, id: string | undefined): void {
+  try {
+    localStorage.setItem(`aps.env.${workspaceId}`, ref ?? '');
+    if (id) localStorage.setItem(`aps.envid.${workspaceId}`, id);
+    else localStorage.removeItem(`aps.envid.${workspaceId}`);
+  } catch {
+    /* storage is off: the choice lasts for this window */
+  }
+}
+
+/**
+ * The environment that is active after the workspace was read again. `current`: what this window has now (undefined:
+ * none, or another workspace). The one chosen before stays, found by its id, then by what names it; "No environment"
+ * stays none; only a workspace where nothing was ever chosen starts on its first environment. A chosen environment that
+ * is gone leaves none: never another one by chance (it could be another tenant's, or production).
+ */
+function chosenEnvironment<T extends { id: string; name: string; group?: string }>(workspaceId: string, usable: T[], current: string | undefined): T | undefined {
+  let stored: string | null = null;
+  let storedId: string | null = null;
+  try {
+    stored = localStorage.getItem(`aps.env.${workspaceId}`);
+    storedId = localStorage.getItem(`aps.envid.${workspaceId}`);
+  } catch {
+    /* storage is off */
+  }
+  const ref = current ?? stored;
+  if (ref === null) return usable[0];
+  if (ref === '') return undefined;
+  // the id is the stored choice's: it counts while this window still shows that choice
+  const byId = storedId && (current === undefined || current === stored) ? usable.find((e) => e.id === storedId) : undefined;
+  const env = byId ?? matchEnvironment(usable, ref);
+  if (env) rememberEnvironment(workspaceId, environmentRef(usable, env), env.id);
+  return env;
+}
+
 const NO_ENVIRONMENTS: WorkspaceCurrent['environments'] = [];
 /** The open workspace's environments, for `useApp(selectEnvironments)`: the same empty list while none is open (a new [] per read would re-render forever). */
 export const selectEnvironments = (s: { workspace?: WorkspaceCurrent }): WorkspaceCurrent['environments'] => s.workspace?.environments ?? NO_ENVIRONMENTS;
@@ -471,19 +511,18 @@ export const useApp = create<AppState>((set, get) => ({
     const raw = await call<WorkspaceCurrent>('ws.current');
     // environment files are hand-edited and merged: every one has a text name and a list of variables here
     const ws = raw && { ...raw, environments: (raw.environments ?? []).map(normalizeEnvironment) };
-    const stored = ws ? localStorage.getItem(`aps.env.${ws.id}`) : null;
     // an environment whose file cannot be read is never the active one
     const usable = ws?.environments.filter((e) => !e.problem) ?? [];
-    const env = usable.find((e) => e.name === (get().environment ?? stored)) ?? usable[0];
+    const env = ws ? chosenEnvironment(ws.id, usable, ws.id === get().workspace?.id ? get().environment : undefined) : undefined;
     if (ws?.id !== get().workspace?.id) {
       // another workspace: its own tabs, drafts and documents (lib/ws-scope), switched before its views mount; Back,
       // Forward and a pending "open this" point at the old workspace's items
       setDraftScope(ws?.id);
       const view = get().view;
-      set({ workspace: ws, environment: env?.name, nav: { back: [], forward: [], current: { view } }, intent: undefined });
+      set({ workspace: ws, environment: env && environmentRef(usable, env), nav: { back: [], forward: [], current: { view } }, intent: undefined });
       return;
     }
-    set({ workspace: ws, environment: env?.name });
+    set({ workspace: ws, environment: env && environmentRef(usable, env) });
   },
   saveSettings: async (s) => {
     const saved = await call<AppSettings>('settings.save', s);
@@ -491,7 +530,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setEnvironment: (name) => {
     const ws = get().workspace;
-    if (ws && name) localStorage.setItem(`aps.env.${ws.id}`, name);
+    if (ws) rememberEnvironment(ws.id, name, name ? matchEnvironment(ws.environments, name)?.id : undefined);
     set({ environment: name });
   },
 }));

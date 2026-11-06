@@ -170,8 +170,12 @@ export function productionStep(test: TestCase, scope: VariableScope): { action: 
       const method = scope.resolve(test.request.method || 'GET').toUpperCase();
       return { action: `${method} "${test.name}"`, changesData: isDataChangingMethod(method) };
     }
-    case 'graphql':
-      return { action: `GraphQL mutation "${test.name}"`, changesData: isGraphQLMutation(detectOperation(test.query, test.operationName).type, test.query) };
+    case 'graphql': {
+      // the query as it is sent: one that comes from a variable or a data row ("{{doc}}") is a mutation when its text is
+      const query = scope.resolve(test.query ?? '');
+      const operationName = test.operationName ? scope.resolve(test.operationName) : test.operationName;
+      return { action: `GraphQL mutation "${test.name}"`, changesData: isGraphQLMutation(detectOperation(query, operationName).type, query) };
+    }
     case 'grpc':
       return { action: `gRPC ${test.method}`, changesData: !isGrpcReadMethod(test.method) };
     case 'websocket':
@@ -908,6 +912,8 @@ async function runAgentTest(test: AgentTest, scope: VariableScope, svc: ExecServ
         source: 'mcp',
         server: session.config.name,
         invoke: async (args, sig) => {
+          // a tool the model calls changes data like an `mcp` step's does, unless its server marks it read-only
+          if (svc.production && !(t as { annotations?: { readOnlyHint?: boolean } }).annotations?.readOnlyHint) assertProductionStep(svc.production, { action: `MCP tool ${t.name} (called by the agent of "${test.name}")`, changesData: true });
           const r = await session.callTool(t.name, args, { signal: sig });
           const { text, body } = mcpResultBody(r);
           return { text: text || JSON.stringify(body), isError: r.isError };

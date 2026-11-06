@@ -105,7 +105,7 @@ export function gitSetupTools({ store, redactor }: { store: WorkspaceStore; reda
       inputSchema: { type: 'object', properties: { environment: str('The environment whose secret variables would keep the values (default: the first)') } },
       run: async (a) => {
         const envs = store.listEnvironments();
-        const env = a.environment ? envs.find((e) => e.id === String(a.environment) || e.name === String(a.environment)) : envs[0];
+        const env = a.environment ? store.getEnvironment(String(a.environment)) : envs[0];
         if (!env) throw new ApsError('ValidationError', a.environment ? `No environment "${String(a.environment)}"` : 'The workspace has no environment to keep secret variables in');
         const scan = await scanStagedSecrets(store.root);
         const files = [...new Set([...scan.blocking, ...scan.confirm].map((f) => f.file))];

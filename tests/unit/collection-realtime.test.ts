@@ -82,4 +82,51 @@ describe('collection runs include gRPC calls and connections', () => {
       ['Say hi', 'passed'],
     ]);
   }, 30_000);
+
+  it('a call in a folder runs where the tree shows it, between the requests, with the variables of its folders', async () => {
+    const http = createServer((_req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}'));
+    await new Promise<void>((r) => http.listen(0, '127.0.0.1', r));
+    closers.push(() => new Promise((r) => http.close(r)));
+    const wss = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+    await new Promise((r) => wss.once('listening', r));
+    wss.on('connection', (s) => s.on('message', (d) => s.send(`echo:${d}`)));
+    closers.push(() => wss.close());
+    const url = `http://127.0.0.1:${(http.address() as AddressInfo).port}`;
+    const request = (id: string, name: string) => ({ kind: 'http', id, name, request: { method: 'GET', url: `${url}/${id}` }, assertions: [{ type: 'status', expected: 200 }] });
+    const col = {
+      schemaVersion: '1.0',
+      id: 'orders',
+      name: 'Orders',
+      version: 0,
+      variables: [],
+      updatedAt: '',
+      items: [
+        // the folder's variable is the connection's address: without it the call cannot connect
+        { kind: 'folder', id: 'live', name: 'Live', variables: [{ key: 'feed', value: `ws://127.0.0.1:${(wss.address() as AddressInfo).port}` }], items: [request('login', 'Login'), request('logout', 'Logout')] },
+        request('last', 'Last'),
+      ],
+    };
+    await be.invoke('col.save', col);
+    await be.invoke('lib.save', { kind: 'websocket', library: { folders: [], items: [{ id: 'feed', name: 'Feed', collectionId: 'orders', folderId: 'live', after: 'login', data: { url: '{{feed}}', message: 'ping', headers: [] } }] } });
+    const [test] = collectionRealtimeTests(be.ws, col as never);
+    expect(test).toMatchObject({ id: 'feed', name: 'Live / Feed', variables: { feed: expect.stringMatching(/^ws:/) }, runAfter: 'login' });
+    const { runId } = (await be.invoke('col.run', { collectionId: 'orders' })) as { runId: string };
+    let summary: { total: number; passed: number } | null = null;
+    for (let i = 0; i < 100 && !summary; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      summary = (await be.invoke('runs.summary', { runId })) as typeof summary;
+    }
+    expect(summary).toMatchObject({ total: 4, passed: 4 });
+    const results = (await be.invoke('runs.results', { runId })) as { items: Array<{ name: string; status: string }> };
+    expect(results.items.map((r) => r.name)).toEqual(['Live / Login', 'Live / Feed', 'Live / Logout', 'Last']);
+    // only the folder's second request selected: the call follows a request that is not in the run, so it runs first
+    const picked = (await be.invoke('col.run', { collectionId: 'orders', selection: ['logout', 'feed'] })) as { runId: string };
+    let done: { total: number } | null = null;
+    for (let i = 0; i < 100 && !done; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      done = (await be.invoke('runs.summary', { runId: picked.runId })) as typeof done;
+    }
+    const some = (await be.invoke('runs.results', { runId: picked.runId })) as { items: Array<{ name: string }> };
+    expect(some.items.map((r) => r.name)).toEqual(['Live / Feed', 'Live / Logout']);
+  }, 30_000);
 });

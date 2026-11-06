@@ -34,8 +34,9 @@ export async function moveCollectionVariablesToEnvironments(
   const notMoved = wanted.filter((k) => isSecret(k) && !canStoreSecrets);
   const keys = wanted.filter((k) => !notMoved.includes(k));
   const envs: Environment[] = o.environments.map((ref) => {
-    const r = ref.toLowerCase();
-    const e = store.listEnvironments().find((x) => x.id.toLowerCase() === r) ?? store.listEnvironments().find((x) => x.name.toLowerCase() === r);
+    // by id, by label ("Acme ▸ Staging") or by a name only one environment has: never a tenant's by chance
+    const all = store.listEnvironments();
+    const e = all.find((x) => x.id.toLowerCase() === ref.toLowerCase()) ?? store.getEnvironment(ref);
     if (!e) throw new ApsError('ValidationError', `No environment "${ref}"`);
     if (e.problem) throw new ApsError('ConfigurationError', `Environment "${e.name}" is broken: ${e.problem}`);
     return store.getEnvironment(e.id)!;

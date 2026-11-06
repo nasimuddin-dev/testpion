@@ -6,6 +6,7 @@ import { asError, call } from '../api';
 import { selectEnvironments, useApp, attempt } from '../store';
 import { finishSave, type SaveResult } from '../lib/files';
 import { Button, Field, Input, Modal, Select, Tabs } from './ui';
+import { EnvSelect } from './EnvSelect';
 import { useCollectionTree } from '../lib/collections-store';
 import { usePersisted } from '../lib/sticky';
 import { useLibrary } from '../lib/library';
@@ -211,15 +212,7 @@ export function CiDialog() {
             </Select>
           </Field>
           <Field label="Environment">
-            <Select value={environment} onChange={(e) => setEnvironment(e.target.value)}>
-              <option value="">None</option>
-              {environments.map((e) => (
-                <option key={e.id} value={e.name} disabled={!!e.problem} title={e.problem}>
-                  {e.name}
-                  {e.problem ? '  (cannot be read)' : ''}
-                </option>
-              ))}
-            </Select>
+            <EnvSelect value={environment || undefined} onChange={(name) => setEnvironment(name ?? '')} />
           </Field>
           <Field label="Workspace folder in the repository">
             <Input className="mono" value={workspaceDir} onChange={(e) => setWorkspaceDir(e.target.value)} placeholder="." />

@@ -259,6 +259,7 @@ export interface RpcParamTypes {
   'mock.resetState': RpcCommonParams & { collectionId: string };
   'mock.start': RpcCommonParams & { collectionId: string; port?: number; delayMs?: number; fallbackUrl?: string; stateful?: boolean };
   'mock.state': RpcCommonParams & { collectionId: string };
+  'monitor.approve': RpcCommonParams & { id: string };
   'monitor.daily': RpcCommonParams & { id: string; days?: number; tzOffsetMin?: number };
   'monitor.pause': RpcCommonParams & { id: string; minutes?: number; until?: string; reason?: string };
   'monitor.requests': RpcCommonParams & { id: string; runs?: number };
@@ -427,4 +428,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 410;
+export const RPC_METHOD_COUNT = 411;

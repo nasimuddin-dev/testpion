@@ -66,10 +66,17 @@ const attention = new WeakMap<WorkspaceStore, { key: string; value: Promise<Atte
 export function cachedAttention(ws: WorkspaceStore, secrets?: SecretReader): Promise<AttentionItem[]> {
   const mark = historyMark(ws);
   const latestRun = ws.meta.listRuns({ limit: 1 }).items[0];
-  const files = [ws.path('collections'), ws.path('environments'), ws.path('library'), ws.path('runs', 'monitors')].map(filesSignature);
-  const certificates = statSync(ws.path('runs', 'certificates.json'), { throwIfNoEntry: false });
-  const day = new Date().toISOString().slice(0, 10);
-  const key = JSON.stringify([mark.total, mark.latestId, latestRun?.id, files, certificates ? `${certificates.size}:${certificates.mtimeMs}` : '', day]);
+  const files = [ws.path('collections'), ws.path('environments'), ws.path('library'), ws.path('runs', 'monitors'), ws.path('specs')].map(filesSignature);
+  // single files the list is made from too: the team's conventions, the deprecations seen, the certificates, and
+  // CODEOWNERS (who a problem is for), where GitHub reads it in the workspace folder or the folders above it
+  const up = [ws.root, join(ws.root, '..'), join(ws.root, '..', '..'), join(ws.root, '..', '..', '..')];
+  const single = [ws.path('conventions.yaml'), ws.path('runs', 'deprecations.json'), ws.path('runs', 'certificates.json'), ...up.flatMap((d) => ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'].map((f) => join(d, f)))].map((f) => {
+    const st = statSync(f, { throwIfNoEntry: false });
+    return st ? `${st.size}:${st.mtimeMs}` : '';
+  });
+  // by the hour: a token that expires today is told the hour it does, not the day after
+  const hour = new Date().toISOString().slice(0, 13);
+  const key = JSON.stringify([mark.total, mark.latestId, latestRun?.id, files, single, hour]);
   const known = attention.get(ws);
   if (known?.key === key) return known.value;
   const value = workspaceAttention(ws, { tokenSecrets: secrets });

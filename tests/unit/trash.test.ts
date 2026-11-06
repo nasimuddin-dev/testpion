@@ -58,6 +58,67 @@ describe('recently deleted', () => {
   });
 });
 
+describe('restoring: the id changes only when it must', () => {
+  const fresh = (name: string) => WorkspaceStore.create(join(dir, name), name);
+
+  it('an environment whose name is taken again keeps its id (its secrets are kept under it) and is only renamed', () => {
+    const s = fresh('env-name');
+    try {
+      s.saveEnvironment({ id: 'staging', name: 'Staging', variables: [{ key: 'token', value: '', enabled: true, secret: true }] });
+      s.deleteEnvironment('staging');
+      s.saveEnvironment({ id: 'staging-eu', name: 'Staging', variables: [] });
+      s.saveEnvironment({ id: 'other', name: 'Staging (restored)', variables: [] });
+      const r = restoreFromTrash(s, listTrash(s)[0]!.id);
+      expect(r).toEqual({ kind: 'environment', id: 'staging', name: 'Staging (restored 2)' });
+      expect(s.listEnvironments().find((e) => e.id === 'staging')!.variables.map((v) => v.key)).toEqual(['token']);
+    } finally {
+      s.close();
+    }
+  });
+
+  it('a collection whose id is taken again gets a new id and keeps its name; one whose file is taken never replaces that file', () => {
+    const s = fresh('col-id');
+    try {
+      s.saveCollection(collection('api', 'My API'));
+      s.deleteCollection('api');
+      s.saveCollection(collection('api', 'Another'));
+      const r = restoreFromTrash(s, listTrash(s)[0]!.id);
+      expect(r.id).not.toBe('api');
+      expect(r.name).toBe('My API');
+      expect(s.getCollection('api').name).toBe('Another');
+
+      // collections/billing.json holds a collection with another id: restoring "billing" must not write over it
+      s.saveCollection(collection('billing', 'Billing'));
+      s.deleteCollection('billing');
+      writeFileSync(s.path('collections', 'billing.json'), JSON.stringify({ schemaVersion: '1.0', id: 'invoices', name: 'Invoices', variables: [], items: [] }));
+      const b = restoreFromTrash(s, listTrash(s)[0]!.id);
+      expect(b.id).not.toBe('billing');
+      expect(JSON.parse(readFileSync(s.path('collections', 'billing.json'), 'utf8')).id).toBe('invoices');
+      expect(s.getCollection(b.id).name).toBe('Billing');
+    } finally {
+      s.close();
+    }
+  });
+
+  it('a file whose name is taken again goes back as -restored, then -restored-2 …, never over a restored file', () => {
+    const s = fresh('files');
+    try {
+      mkdirSync(s.path('specs'), { recursive: true });
+      const file = s.path('specs', 'pets.yaml');
+      const ids: string[] = [];
+      for (const text of ['one', 'two', 'three']) {
+        writeFileSync(file, text);
+        ids.push(trashSpec(s, 'specs/pets.yaml'));
+      }
+      writeFileSync(file, 'live');
+      expect(ids.map((id) => restoreFromTrash(s, id).id)).toEqual(['specs/pets-restored.yaml', 'specs/pets-restored-2.yaml', 'specs/pets-restored-3.yaml']);
+      expect(['pets.yaml', 'pets-restored.yaml', 'pets-restored-2.yaml', 'pets-restored-3.yaml'].map((f) => readFileSync(s.path('specs', f), 'utf8'))).toEqual(['live', 'one', 'two', 'three']);
+    } finally {
+      s.close();
+    }
+  });
+});
+
 describe('recently deleted: API definitions and MCP servers (EX-G6)', () => {
   it('an MCP server goes to the trash and comes back with its id, config and place in the list', () => {
     const servers = [

@@ -13,6 +13,53 @@ export const forH2Out = (h: Record<string, string | string[] | number | undefine
 export const isH2 = (res: ServerResponse): boolean => 'stream' in res && !!(res as unknown as Http2ServerResponse).stream;
 export const textLike = (ct: string | undefined) => !ct || /json|text|xml|javascript|html|form|yaml|graphql|csv|urlencoded/i.test(ct);
 
+/** Percent-decoding of text the other side sent (a path, a gRPC message): text that is not valid percent-encoding stays as it came. */
+export const safeDecode = (text: string): string => {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+};
+
+interface RelaySource {
+  pause(): unknown;
+  resume(): unknown;
+}
+interface RelaySink {
+  write(chunk: Buffer): unknown;
+  on(event: 'drain' | 'close', listener: () => void): unknown;
+  destroyed?: boolean;
+}
+
+/**
+ * Writes the chunks of `from` to `to` and makes the source wait while the destination is full: when write() says so the source is
+ * paused until 'drain'. Without it a large body going to a slow reader (a slow client, a Network speed) was queued whole in memory.
+ * A destination that closed takes nothing more: the source runs on to its end, as before, and what it sends is dropped.
+ * `onWait` hears when the wait starts and ends (the source's idle timeout must not count the time it was made to wait).
+ */
+export function relayWriter(from: RelaySource, to: RelaySink, onWait?: (waiting: boolean) => void): (chunk: Buffer) => void {
+  let waiting = false;
+  let closed = false;
+  const go = () => {
+    if (!waiting) return;
+    waiting = false;
+    onWait?.(false);
+    from.resume();
+  };
+  to.on('drain', go);
+  to.on('close', () => {
+    closed = true;
+    go();
+  });
+  return (chunk) => {
+    if (to.write(chunk) !== false || waiting || closed || to.destroyed) return;
+    waiting = true;
+    from.pause();
+    onWait?.(true);
+  };
+}
+
 /**
  * The most a request or response body is held in memory so that rules and breakpoints can change it. A body over it is not held:
  * what has arrived is sent on and the rest follows as it comes (rules that change the body, and body breakpoints, do not apply to it).

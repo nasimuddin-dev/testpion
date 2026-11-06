@@ -9,6 +9,8 @@ import {
   monitorRequestStats,
   monitorResults,
   monitorTenants,
+  monitorConsent,
+  listMonitorDefinitions,
   monitorStatus,
   notifyMonitorWebhook,
   saveMonitor,
@@ -16,6 +18,7 @@ import {
   type Monitor,
   type MonitorResult, pauseMonitor, resumeMonitor } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { approveMonitor, monitorApproved } from '../monitor-trust.js';
 
 /** Run a monitor with the app's secrets and current values; the result is sent to the renderer too. */
 export async function runMonitorNow(be: Backend, m: Monitor, trigger: MonitorResult['trigger']): Promise<MonitorResult> {
@@ -35,6 +38,13 @@ export async function runMonitorNow(be: Backend, m: Monitor, trigger: MonitorRes
 export { monitorOwners } from '@testpion/core';
 export const recentMonitorResults = (be: Backend, id: string, n: number) => monitorResults(be.ws, id, n);
 
+function keepingApproval(be: Backend, id: string, change: () => Monitor): Monitor {
+  const was = monitorApproved(be, findMonitor(be.ws, id));
+  const m = change();
+  if (was) approveMonitor(be, m);
+  return m;
+}
+
 export function monitorHandlers(be: Backend): Handlers {
   // `recent`: results of the latest runs, oldest first, for the small strips in lists
   // `uptime7d`: share of the last 7 days' runs that passed (absent when nothing ran)
@@ -42,7 +52,8 @@ export function monitorHandlers(be: Backend): Handlers {
     const days = monitorDaily(be.ws, m.id, 7);
     const runs = days.reduce((n, d) => n + d.runs, 0);
     const passed = days.reduce((n, d) => n + d.passed, 0);
-    return { ...monitorStatus(be.ws, m), running: be.runningMonitors.has(m.id), recent: monitorResults(be.ws, m.id, 20).map((r) => r.status).reverse(), ...(runs ? { uptime7d: Math.round((passed / runs) * 1000) / 10 } : {}) };
+    // `needsApproval`: it came with a pull or a clone (or changed outside this app) and waits for this person's yes before its schedule runs here
+    return { ...monitorStatus(be.ws, m), ...(m.enabled && !monitorApproved(be, m) ? { needsApproval: true } : {}), running: be.runningMonitors.has(m.id), recent: monitorResults(be.ws, m.id, 20).map((r) => r.status).reverse(), ...(runs ? { uptime7d: Math.round((passed / runs) * 1000) / 10 } : {}) };
   };
   return {
     'monitor.list': () => listMonitors(be.ws).map(status),
@@ -52,15 +63,26 @@ export function monitorHandlers(be: Backend): Handlers {
      */
     'monitor.save': ({ monitor, allowProduction }: { monitor: Omit<Monitor, 'id'> & { id?: string }; allowProduction?: boolean }) => {
       const id = monitor.id || shortId('mon-');
-      const before = listMonitors(be.ws).find((m) => m.id === id);
-      const production = !!monitor.environment && !!be.ws.getEnvironment(monitor.environment)?.isProduction;
-      const consent = production && (allowProduction === true || (!!before?.allowProduction && before.environment === monitor.environment));
-      return status(saveMonitor(be.ws, { ...monitor, id, allowProduction: consent || undefined }));
+      // (a tenant row of a grouped definition saves the definition: its consent is per production environment of the group)
+      const of = (monitor as Monitor).tenant?.of ?? id.split('@')[0]!;
+      const before = listMonitorDefinitions(be.ws).find((m) => m.id === of);
+      // what a row shows and no monitor has (its last result, its schedule in words …) is not saved with it
+      for (const k of ['lastResult', 'running', 'schedule', 'nextRunAt', 'due', 'recent', 'uptime7d', 'needsApproval', 'paused']) delete (monitor as Record<string, unknown>)[k];
+      const saved = saveMonitor(be.ws, { ...monitor, id, ...monitorConsent(be.ws, monitor, before, allowProduction === true) });
+      approveMonitor(be, saved); // saved here, by this person: its schedule runs on this computer
+      return status(findMonitor(be.ws, id.includes('@') ? id : saved.id));
+    },
+    /** "Allow on this computer": a monitor that came with a pull or a clone runs on its schedule from now on. */
+    'monitor.approve': ({ id }: { id: string }) => {
+      const m = findMonitor(be.ws, id);
+      approveMonitor(be, m);
+      return status(m);
     },
     'monitor.delete': ({ id }: { id: string }) => deleteMonitor(be.ws, id),
     // a pause for a while (a deploy): the schedule goes on by itself when the time comes
-    'monitor.pause': ({ id, minutes, until, reason }: { id: string; minutes?: number; until?: string; reason?: string }) => status(pauseMonitor(be.ws, id, { minutes, until, reason })),
-    'monitor.resume': ({ id }: { id: string }) => status(resumeMonitor(be.ws, id)),
+    // (a pause or a resume changes what was approved here: an approved monitor stays approved, one that waits still waits)
+    'monitor.pause': ({ id, minutes, until, reason }: { id: string; minutes?: number; until?: string; reason?: string }) => status(keepingApproval(be, id, () => pauseMonitor(be.ws, id, { minutes, until, reason }))),
+    'monitor.resume': ({ id }: { id: string }) => status(keepingApproval(be, id, () => resumeMonitor(be.ws, id))),
     /** Post a sample "failed" alert to a webhook, to check it before relying on it. */
     'monitor.testWebhook': async ({ webhook, environment, name }: { webhook: string; environment?: string; name?: string }) => {
       const ctx = be.context({ environment });

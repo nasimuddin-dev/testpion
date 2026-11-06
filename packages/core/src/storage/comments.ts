@@ -37,7 +37,14 @@ export interface OpenComment extends ItemComment {
   ref: ItemRef;
 }
 
-type Store = Pick<WorkspaceStore, 'root'>;
+/** The workspace the comments are in; `warn` (the store's) is told of a thread file that cannot be read. */
+type Store = Pick<WorkspaceStore, 'root'> & { warn?(message: string): void };
+
+/** A thread file that cannot be read (git conflict markers, a hand edit gone wrong): said once as a warning, the file is left as it is. */
+function skipBroken(store: Store, file: string, e: unknown): void {
+  const why = (e as { details?: { problem?: string } }).details?.problem ?? (e as Error).message;
+  store.warn?.(`The comments in ${COMMENTS_DIR}/${file} are left out: ${why}`);
+}
 
 /** The file of an item's thread: the ref's identity (its required ids: any ref of the item finds it), made safe for every file system (a short hash keeps two refs apart). */
 export function commentFileOf(ref: ItemRef): string {
@@ -48,10 +55,22 @@ export function commentFileOf(ref: ItemRef): string {
 
 const fileOf = (store: Store, ref: ItemRef) => join(store.root, COMMENTS_DIR, commentFileOf(ref));
 
-function readThread(store: Store, ref: ItemRef): ItemCommentThread {
+/**
+ * The thread of an item. A file that cannot be read fails a change (adding to it would replace what is in the file); a
+ * reader (`lenient`) gets no comments and a warning instead, so one broken file never empties a panel with an error.
+ */
+function readThread(store: Store, ref: ItemRef, o: { lenient?: boolean } = {}): ItemCommentThread {
   const f = fileOf(store, ref);
   if (!existsSync(f)) return { ref, comments: [] };
-  const raw = readJson<Partial<ItemCommentThread>>(f, {});
+  let raw: Partial<ItemCommentThread> | null;
+  try {
+    raw = readJson<Partial<ItemCommentThread>>(f, {});
+  } catch (e) {
+    if (!o.lenient) throw e;
+    skipBroken(store, commentFileOf(ref), e);
+    return { ref, comments: [] };
+  }
+  if (!raw || typeof raw !== 'object') return { ref, comments: [] };
   return { ref, comments: Array.isArray(raw.comments) ? raw.comments.filter((c) => c && typeof c.text === 'string') : [] };
 }
 
@@ -67,7 +86,7 @@ function writeThread(store: Store, t: ItemCommentThread): void {
 
 /** The comments on one item, oldest first. */
 export function listComments(store: Store, ref: ItemRef): ItemComment[] {
-  return readThread(store, ref).comments;
+  return readThread(store, ref, { lenient: true }).comments;
 }
 
 /** Add a comment; returns it. */
@@ -123,7 +142,15 @@ export function openComments(store: Store): OpenComment[] {
   const out: OpenComment[] = [];
   for (const f of readdirSync(dir)) {
     if (!f.endsWith('.json')) continue;
-    const raw = readJson<Partial<ItemCommentThread>>(join(dir, f), {});
+    // each file on its own: one that cannot be read (git conflict markers) is left out with a warning, the others are listed
+    let raw: Partial<ItemCommentThread> | null;
+    try {
+      raw = readJson<Partial<ItemCommentThread>>(join(dir, f), {});
+    } catch (e) {
+      skipBroken(store, f, e);
+      continue;
+    }
+    if (!raw || typeof raw !== 'object') continue;
     const ref = toItemRef(raw.ref);
     if (!ref || !Array.isArray(raw.comments)) continue;
     for (const c of raw.comments) if (c && typeof c.text === 'string' && !c.resolvedAt) out.push({ ...c, ref });

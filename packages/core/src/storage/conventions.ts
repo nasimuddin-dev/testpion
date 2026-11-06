@@ -12,6 +12,7 @@ import { listMonitorDefinitions } from '../runner/monitors.js';
 import { parseYamlShared } from '../util/lazy-yaml.js';
 import { toRepoPath } from '../git/git.js';
 import { ownersOf, workspaceCodeowners } from '../git/owners.js';
+import { compileUserRegex, safeTest, unsafeRegexReason } from '../util/safe-regex.js';
 import { atomicWrite } from './fsutil.js';
 import type { WorkspaceStore } from './workspace.js';
 
@@ -65,6 +66,9 @@ export function readConventions(store: WorkspaceStore): Conventions | undefined 
     const p = (c[section] as { name?: unknown } | undefined)?.name;
     if (p !== undefined) {
       if (typeof p !== 'string') throw new Error(`${section}.name must be a pattern (a string)`);
+      // the file comes with the repository (anyone on the team can change it): a pattern that could hold the app for minutes is refused here
+      const unsafe = unsafeRegexReason(p);
+      if (unsafe) throw new Error(`${section}.${key} is refused: ${unsafe}`);
       try {
         new RegExp(p);
       } catch {
@@ -82,26 +86,41 @@ export function initConventions(store: WorkspaceStore): boolean {
   return true;
 }
 
-const matches = (pattern: string | undefined, name: string) => !pattern || new RegExp(pattern).test(name);
+/**
+ * A name pattern compiled once for a whole check (not once per collection, request and environment), through the guard
+ * for expressions people type (util/safe-regex.ts): a refused shape throws with its reason, a slow one runs with a
+ * deadline. A name the pattern could not be run on in time is not reported: nothing is known about it.
+ */
+function nameCheck(pattern: string | undefined, rule: string): (name: string) => boolean {
+  if (!pattern) return () => true;
+  const re = compileUserRegex(pattern, '', `${rule} in ${CONVENTIONS_FILE}`);
+  return (name) => {
+    const r = safeTest(re, name);
+    return r.matched || !!r.timedOut;
+  };
+}
 
 /** What breaks the team's conventions; nothing without the file. */
 export async function conventionFindings(store: WorkspaceStore, conventions = readConventions(store)): Promise<ConventionFinding[]> {
   if (!conventions) return [];
   const out: ConventionFinding[] = [];
+  const collectionName = nameCheck(conventions.collections?.name, 'collections.name');
+  const requestName = nameCheck(conventions.requests?.name, 'requests.name');
+  const environmentName = nameCheck(conventions.environments?.name, 'environments.name');
   const collections = store.listCollections().filter((c) => !c.problem);
   const needOwner = conventions.collections?.owner === 'required';
   const co = needOwner ? await workspaceCodeowners(store.root).catch(() => undefined) : undefined;
   for (const c of collections) {
-    if (!matches(conventions.collections?.name, c.name)) out.push({ rule: 'collections.name', message: `Collection "${c.name}" does not match the team's pattern ${conventions.collections!.name}`, ref: { kind: 'collection', collectionId: c.id } });
+    if (!collectionName(c.name)) out.push({ rule: 'collections.name', message: `Collection "${c.name}" does not match the team's pattern ${conventions.collections!.name}`, ref: { kind: 'collection', collectionId: c.id } });
     if (needOwner) {
       const owners = co ? ownersOf(co.rules, toRepoPath(co.repo, store.root, store.collectionFileOf(c.id))) : [];
       if (!owners.length) out.push({ rule: 'collections.owner', message: `Collection "${c.name}" has no owner in CODEOWNERS`, ref: { kind: 'collection', collectionId: c.id } });
     }
     if (conventions.requests?.name)
-      for (const r of collectionRequests(c)) if (!matches(conventions.requests.name, r.name)) out.push({ rule: 'requests.name', message: `Request "${[c.name, ...r.path, r.name].join(' › ')}" does not match the team's pattern ${conventions.requests.name}`, ref: { kind: 'request', collectionId: c.id, requestId: r.id } });
+      for (const r of collectionRequests(c)) if (!requestName(r.name)) out.push({ rule: 'requests.name', message: `Request "${[c.name, ...r.path, r.name].join(' › ')}" does not match the team's pattern ${conventions.requests.name}`, ref: { kind: 'request', collectionId: c.id, requestId: r.id } });
   }
   for (const e of store.listEnvironments().filter((e) => !e.problem)) {
-    if (!matches(conventions.environments?.name, e.name)) out.push({ rule: 'environments.name', message: `Environment "${e.name}" does not match the team's pattern ${conventions.environments!.name}`, ref: { kind: 'environment', environmentId: e.id } });
+    if (!environmentName(e.name)) out.push({ rule: 'environments.name', message: `Environment "${e.name}" does not match the team's pattern ${conventions.environments!.name}`, ref: { kind: 'environment', environmentId: e.id } });
     if (conventions.environments?.group === 'required' && !e.group?.trim()) out.push({ rule: 'environments.group', message: `Environment "${e.name}" is in no group (a tenant, a customer, a deployment)`, ref: { kind: 'environment', environmentId: e.id } });
   }
   for (const m of listMonitorDefinitions(store)) {

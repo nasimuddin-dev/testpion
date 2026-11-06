@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { requireScriptTool, convertScriptText, convertCollectionScriptsFrom, WorkspaceManager, formatDuration, ciConfig, ciTargetOfRun, finishedRun, compareEnvironments, environmentMatrix, compareRequestAcrossEnvironments, collectionRequests, type CiProvider, convertCollectionScripts, Redactor, collectionMarkdown, collectionHtml, exportPostmanCollection, exportPostmanEnvironment, collectionToBru, type Environment, diffOpenApi, lintOpenApi, OPENAPI_LINT_RULES, type OpenApiLintSeverity, type OpenApiLintResult, workspaceApiCoverage, apiCoverageMarkdown, securityLint, collectionSecurityFindings, type SecurityFinding, listSpecs, unusedVariables, definedVariableNames, findEnvironment, setEnvironmentVariables, addVariablesToEnvironments, unsetEnvironmentVariables, variableFlow, collectionToOpenApiText, variableUsages, renameVariable, collectionSavedItems, listWorkspaceDatasets, appendDatasetRow, readWorkspaceDataset, workspaceReportHtml, collectionVariableFlow, loadHistory, workspaceStorage, deleteRunsBefore, pruneRuns, retentionOf, listCertificates, workspaceAttention, decodeJwt, describeExpiry, recordCertificate, checkCertificate, splitSnoozed, copyVariableToEnvironment, problemsOwnedBy, problemsOfGroup, duplicateEnvironmentGroup, environmentsOfGroup, environmentRef } from '@testpion/core';
-import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
+import { EXIT, green, red, yellow, dim, bold, CliError, printJson, respond, findWorkspaceUp, withWorkspace, warnProblems, warnUnknownGroup, cliSecrets, cliContext, requireCollection, requireEnvironment, loadCollectionRef, readDefinition, WORKSPACE_OPTION, groupOptions, JSON_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 import { requireInteractive } from '../contract.js';
 import { addPaging, pagedList, reportPage } from '../paging.js';
 import { runBundleExport, wantsBundleExport } from './bundle.js';
@@ -351,6 +351,7 @@ export function registerDataCommands(program: Command): void {
         const listed: Array<(typeof all)[number] & { key?: string; snoozed?: true }> = o.all ? all.map((i) => ({ ...i, key: split.snoozed.find((x) => x.message === i.message)?.key, snoozed: split.snoozed.some((x) => x.message === i.message) || undefined })) : split.shown;
         const owned = o.owner ? problemsOwnedBy(listed, o.owner) : listed;
         const items = o.group ? problemsOfGroup(store, owned, o.group) : owned;
+        warnUnknownGroup(store, o.group);
         if (o.json) printJson(items);
         else if (o.markdown) console.log(items.length ? ['**Needs attention**', ...items.map((i) => `- ${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟠' : '⚪'} ${i.message}${i.tenant ? ` · ${i.tenant}` : ''}`)].join('\n') : '✅ Nothing needs attention.');
         else if (!items.length && (o.owner || o.group)) console.log(green(`Nothing of ${o.owner ?? o.group} needs attention.`));
@@ -936,10 +937,13 @@ export function registerDataCommands(program: Command): void {
     .option(...JSON_OPTION)
     .action((o) => {
       return withWorkspace(o.workspace, (store) => {
-        const all = o.group ? environmentsOfGroup(store.listEnvironments(), String(o.group)) : store.listEnvironments();
+        const everything = store.listEnvironments();
+        const all = o.group ? environmentsOfGroup(everything, String(o.group)) : everything;
+        warnUnknownGroup(store, o.group);
         const page = pagedList(all, o);
-        // `label` is what to write wherever an environment is named ("Acme ▸ Staging" when the name is shared by another tenant)
-        const envs = page.items.map((e) => ({ id: e.id, name: e.name, label: environmentRef(all, e), ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
+        // `label` is what to write wherever an environment is named ("Acme ▸ Staging" when the name is shared by another tenant,
+        // also one that --group left out of this list)
+        const envs = page.items.map((e) => ({ id: e.id, name: e.name, label: environmentRef(everything, e), ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
         if (o.json) printJson(envs);
         else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.group ? dim(`${e.group} ▸ `) : ''}${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
         if (!o.json) warnProblems(all, 'environment');
@@ -995,7 +999,7 @@ export function registerDataCommands(program: Command): void {
           throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
         }
         if (o.json) return printJson(r);
-        console.log(green(`${r.replaced ? 'Replaced' : 'Added'} ${key} in ${r.to} from ${r.from}${r.secret ? (r.secretCopied ? ' (secret value copied)' : ' (secret: enter its value there)') : ''}`));
+        console.log(green(`${r.replaced ? 'Replaced' : 'Added'} ${key} in ${r.to} from ${r.from}${r.secret ? (r.secretCopied ? ' (secret value copied)' : ' (secret: its value is not copied; set it in the app or provide it as a TESTPION_SECRET_* environment variable)') : ''}`));
       }),
     );
   envCmd

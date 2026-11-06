@@ -6,8 +6,8 @@ import { folderByPath, textFolderPath } from '../storage/collection-calls.js';
 /**
  * gRPC calls and WebSocket / Socket.IO / MQTT connections are saved in the workspace library
  * (library/grpc.json, library/websocket.json) and shown in a collection through their `collectionId`.
- * A collection run includes them: each becomes a test after the collection's HTTP and GraphQL requests, in the order the
- * collection shows them (its folders, and each call's place among the requests of its folder).
+ * A collection run includes them: each becomes a test that runs where the collection shows it, after the request it
+ * follows there (`runAfter`), with the variables of the folders around it.
  */
 
 /** A saved gRPC call, as the gRPC editor stores it. */
@@ -180,8 +180,9 @@ export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'
   // selected folder takes the calls inside it (and inside its folders) too
   const parent = new Map<string, string | undefined>();
   const path = new Map<string, string>();
+  const folders = new Map<string, Extract<CollectionNode, { kind: 'folder' }>>();
   const walk = (nodes: CollectionNode[], up?: string) => {
-    for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), path.set(n.id, up ? `${path.get(up)} / ${n.name}` : n.name), walk(n.items, n.id));
+    for (const n of nodes) if (n.kind === 'folder') (parent.set(n.id, up), folders.set(n.id, n), path.set(n.id, up ? `${path.get(up)} / ${n.name}` : n.name), walk(n.items, n.id));
   };
   walk(collection.items ?? []);
   // (a call of an older version names its folder as text: the collection folder of that path, when there is one)
@@ -192,16 +193,37 @@ export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'
     return false;
   };
   const ordered: Call[] = [];
+  /** The request each call follows in the collection's order, top to bottom ('' before the first one): where a run sends it. */
+  const follows = new Map<Call, string>();
+  let lastRequest = '';
   const byFolder = new Map<string, Call[]>();
-  for (const c of calls) byFolder.set(folderOf(c), [...(byFolder.get(folderOf(c)) ?? []), c]);
+  for (const c of calls) {
+    const at = folderOf(c);
+    const list = byFolder.get(at);
+    if (list) list.push(c);
+    else byFolder.set(at, [c]);
+  }
   const visit = (nodes: CollectionNode[], folderId: string) => {
     const here = byFolder.get(folderId) ?? [];
     for (const x of interleave(nodes, here.map((c) => ({ id: c.item.id, name: c.item.name, after: c.item.after, c }))))
-      if ('call' in x) ordered.push(x.call.c);
+      if ('call' in x) (ordered.push(x.call.c), follows.set(x.call.c, lastRequest));
       else if (x.node.kind === 'folder') visit(x.node.items, x.node.id);
+      else lastRequest = x.node.id;
   };
   visit(collection.items ?? [], '');
   // a test is named by the call's folder path in the collection (the text folder of an older version otherwise)
   const named = (c: Call) => (folderOf(c) ? { ...c.item, folder: path.get(folderOf(c)) } : c.item);
-  return ordered.filter(selected).map((c) => (c.kind === 'grpc' ? savedGrpcCallToTest(named(c) as LibraryItem<SavedGrpcCall>, collection.name) : savedConnectionToTest(named(c) as LibraryItem<SavedConnection>, collection.name)));
+  // the variables of the folders around a call are its own, as they are a request's (inner folders win)
+  const variablesOf = (c: Call): Record<string, string> | undefined => {
+    const chain: string[] = [];
+    for (let f: string | undefined = folderOf(c) || undefined; f; f = parent.get(f)) chain.unshift(f);
+    const out: Record<string, string> = {};
+    for (const id of chain) for (const v of folders.get(id)?.variables ?? []) if (v.key && v.enabled !== false) out[v.key] = v.value ?? '';
+    return Object.keys(out).length ? out : undefined;
+  };
+  return ordered.filter(selected).map((c) => {
+    const test: TestCase = c.kind === 'grpc' ? savedGrpcCallToTest(named(c) as LibraryItem<SavedGrpcCall>, collection.name) : savedConnectionToTest(named(c) as LibraryItem<SavedConnection>, collection.name);
+    const variables = variablesOf(c);
+    return Object.assign({ ...test, ...(variables ? { variables } : {}) }, { runAfter: follows.get(c) ?? '' }) as TestCase;
+  });
 }

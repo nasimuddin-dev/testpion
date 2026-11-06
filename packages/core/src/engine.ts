@@ -13,7 +13,7 @@ import type { ExecServices } from './runner/execute.js';
 import type { WorkspaceStore } from './storage/workspace.js';
 import { recordCertificate } from './storage/certificates.js';
 import { recordDeprecation } from './storage/deprecations.js';
-import { deprecationOf } from '@testpion/shared';
+import { deprecationOf, environmentLabel } from '@testpion/shared';
 import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
 import { productionAllowed } from './net/production-guard.js';
@@ -25,6 +25,7 @@ import { scriptTrustFor, TRUST_SCRIPTS_ENV, type ScriptTrust } from './scripts/s
 import { APP_CLAUDE_ID, APP_CLAUDE_SECRET, appClaudeProvider } from './ai/app-provider.js';
 import type { NetConfig } from './net/proxy.js';
 import type { ScriptRunner } from './scripts/script-runner.js';
+import { ApsError } from './errors.js';
 
 export interface ContextOptions {
   store: WorkspaceStore;
@@ -121,6 +122,9 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
   ]);
   // read-only views (parsed once per change of the file): the context only looks at the environment and the collection
   const environment = opts.environment ? store.environmentView(opts.environment) : undefined;
+  // an environment that was named and is not there (deleted, renamed, or a name two tenants share) is an error: going on
+  // without one would send requests with unresolved variables and without the production guard
+  if (opts.environment && !environment) throw new ApsError('ConfigurationError', `No environment "${opts.environment}"`, { why: store.listEnvironments().filter((e) => e.name.toLowerCase() === String(opts.environment).trim().toLowerCase()).length > 1 ? 'Several environments have this name: name one by its group ("Acme ▸ Staging").' : 'It was deleted or renamed, or its file cannot be read.', suggestions: ['Choose an environment that exists, or none.'] });
   // built-in: the environment's name and its group (a tenant), so one request or dataset path serves every tenant ({{$group}}/users.csv)
   vars.setScope('environment', environment ? [{ key: '$environment', value: environment.name }, { key: '$group', value: environment.group ?? '' }, ...environmentVariables(environment, opts.secrets, store.root)] : []);
   let collection: Collection | undefined;
@@ -190,11 +194,12 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
       const own = new Set((environment?.variables ?? []).map((v) => String(v.value ?? '')));
       const out: Array<{ environment: string; key: string; value: string }> = [];
       for (const e of store.listEnvironments())
-        if (!e.problem && e.name !== environment?.name)
+        // (by id: another tenant's environment of the same name is another environment, the very one this check is for)
+        if (!e.problem && e.id !== environment?.id)
           for (const v of e.variables) {
             if (v.enabled === false) continue;
             const value = v.secret ? (opts.secrets.get(secretKeys.envVar(e.id, v.key)) ?? '') : String(v.value ?? '');
-            if (value.length >= 6 && !own.has(value)) out.push({ environment: e.name, key: v.key, value });
+            if (value.length >= 6 && !own.has(value)) out.push({ environment: environmentLabel(e), key: v.key, value });
           }
       return out;
     },

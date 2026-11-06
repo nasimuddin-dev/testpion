@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Collection, CollectionNode, Environment, LibraryItem } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
-import { collectionFolders, placeCollectionCalls } from '../storage/collection-calls.js';
+import { collectionFolders, folderByPath, placeCollectionCalls } from '../storage/collection-calls.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { shortId, slugify } from '../util/ids.js';
 import { ApsError } from '../errors.js';
@@ -118,8 +118,31 @@ function savedItemsOf(text: string): unknown {
   }
 }
 
-function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: string, made?: Created['library'], folderIds?: ReadonlySet<string>): Record<string, number> | undefined {
+/** The folders of a TestPion collection file as it was exported, by the ids they have in the file. */
+function sourceFoldersOf(text: string): ReturnType<typeof collectionFolders> | undefined {
+  try {
+    const items = (JSON.parse(text) as { items?: unknown }).items;
+    return Array.isArray(items) ? collectionFolders({ items: items as CollectionNode[] }) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `collection`: the imported collection as it was saved. A call keeps its folder: by `folderId` when the collection has
+ * that folder, else (its folders got new ids on the way in) the folder with the same path of names as in the file
+ * (`sourceFolders`), else by its folder text, which `placeCollectionCalls` turns into a folder afterwards.
+ */
+function restoreSavedItems(store: WorkspaceStore, saved: unknown, collection: Collection, made?: Created['library'], sourceFolders?: ReturnType<typeof collectionFolders>): Record<string, number> | undefined {
   if (!saved || typeof saved !== 'object') return undefined;
+  const collectionId = collection.id;
+  const folderIds = new Set(collectionFolders(collection).keys());
+  const folderIdOf = (it: LibraryItem): string | undefined => {
+    if (typeof it.folderId !== 'string') return undefined;
+    if (folderIds.has(it.folderId)) return it.folderId;
+    const path = sourceFolders?.get(it.folderId)?.path;
+    return path ? folderByPath(collection, path)?.id : undefined;
+  };
   const counts: Record<string, number> = {};
   for (const kind of COLLECTION_ITEM_KINDS) {
     const items = (saved as Record<string, unknown>)[kind];
@@ -132,8 +155,9 @@ function restoreSavedItems(store: WorkspaceStore, saved: unknown, collectionId: 
       const it = raw as LibraryItem;
       const id = it.id && !taken.has(it.id) ? it.id : shortId('lib-');
       taken.add(id);
-      added.push({ id, name: it.name, folder: typeof it.folder === 'string' ? it.folder : undefined, collectionId, // (a folder id the imported collection does not have, its folders renumbered on the way in: the call is placed by its folder's path instead)
-        ...(typeof it.folderId === 'string' && (!folderIds || folderIds.has(it.folderId)) ? { folderId: it.folderId } : {}), ...(typeof it.after === 'string' ? { after: it.after } : {}), data: it.data, updatedAt: new Date().toISOString() });
+      const folderId = folderIdOf(it);
+      // (the folder text is kept only for a call that has no folder yet: it is what places it)
+      added.push({ id, name: it.name, ...(folderId ? { folderId } : typeof it.folder === 'string' ? { folder: it.folder } : {}), collectionId, ...(typeof it.after === 'string' ? { after: it.after } : {}), data: it.data, updatedAt: new Date().toISOString() });
     }
     if (!added.length) continue;
     store.saveLibrary(kind, { folders: lib.folders, items: [...lib.items, ...added] });
@@ -177,6 +201,14 @@ export function importIntoWorkspace(
   const out: WorkspaceImportResult = { format: r.format, ...(r.scripts ? { scripts: r.scripts } : {}), report };
   const made: Created = { collections: [], environments: [], specs: [], flows: [], library: [], secrets: [], updated: [], envUpdated: [], globals: [], cookies: [] };
   const taken = new Set(store.listCollections().map((c) => c.id));
+  // gRPC calls and connections that name a collection the workspace does not have (a collection in Recently deleted,
+  // deleted by an older version, left its calls in the library): a new collection with that id would show them as its own
+  for (const kind of COLLECTION_ITEM_KINDS)
+    try {
+      for (const i of store.getLibrary(kind).items) if (i.collectionId) taken.add(i.collectionId);
+    } catch {
+      /* an unreadable library: nothing of it is known */
+    }
   const saveOne = (c: Collection): Collection => {
     // a re-import of the same source updates the collection that came from it, item by item
     if (opts.update) {
@@ -198,8 +230,7 @@ export function importIntoWorkspace(
   let collection = r.collection;
   const specs = plannedSpecs(r, text);
   if (collection && (r.format === 'openapi' || r.format === 'swagger')) {
-    const rel = keepSpec(store, specs[0]!.stem, specs[0]!.suffix, text, opts.specs, out);
-    made.specs.push(rel);
+    const rel = keepSpec(store, specs[0]!.stem, specs[0]!.suffix, text, opts.specs, out, made);
     if (opts.contractChecks !== false) {
       let added = 0;
       const withCheck = (nodes: CollectionNode[]): CollectionNode[] =>
@@ -214,16 +245,23 @@ export function importIntoWorkspace(
     }
   }
   // an AsyncAPI document is kept for the asyncapi check and tests-from-spec (in specs/asyncapi/, apart from the OpenAPI ones)
-  if (collection && r.format === 'asyncapi') made.specs.push(keepSpec(store, specs[0]!.stem, specs[0]!.suffix, text, opts.specs, out));
+  if (collection && r.format === 'asyncapi') keepSpec(store, specs[0]!.stem, specs[0]!.suffix, text, opts.specs, out, made);
   // a GraphQL schema (SDL) or a design document is kept in specs/ (graphql: specs/graphql/<name>.graphql)
-  if (r.specFile) made.specs.push(keepSpec(store, specs.at(-1)!.stem, specs.at(-1)!.suffix, r.specFile.text, opts.specs, out));
+  if (r.specFile) keepSpec(store, specs.at(-1)!.stem, specs.at(-1)!.suffix, r.specFile.text, opts.specs, out, made);
   if (collection) {
     out.collection = saveOne(collection);
     // a TestPion collection file (or an Insomnia export) can carry the collection's gRPC calls and connections
     const saved = r.format === 'aps-collection' ? savedItemsOf(text) : r.savedItems;
-    if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection.id, made.library, new Set(collectionFolders(out.collection).keys()));
-    // any kind of request in any folder: calls that came with a folder path (Insomnia, Bruno, an older export) go into that collection folder
-    if (out.savedItems) placeCollectionCalls(store);
+    if (saved) out.savedItems = restoreSavedItems(store, saved, out.collection, made.library, r.format === 'aps-collection' ? sourceFoldersOf(text) : undefined);
+    // any kind of request in any folder: calls that came with a folder path (Insomnia, Bruno, an older export) go into that
+    // folder of the imported collection (only its calls: the rest of the workspace is not this import's to change)
+    if (out.savedItems && placeCollectionCalls(store, { collectionId: out.collection.id })) {
+      // folders made for them saved the collection once more: the receipt keeps the version it has now (Undo compares
+      // with it and would refuse with "was edited after the import"), and the caller gets the collection as it is
+      const placed = store.getCollection(out.collection.id);
+      for (const m of [...made.collections, ...(made.updated ?? [])]) if (m.id === placed.id) m.version = placed.version;
+      out.collection = placed;
+    }
     const warnings = scriptCompatibility(collection, (name) => store.readScriptPackage(name) !== undefined);
     if (warnings.length) out.scriptWarnings = warnings;
     if (r.notes?.length) out.notes = [...r.notes, ...(out.notes ?? [])];
@@ -244,8 +282,10 @@ export function importIntoWorkspace(
       const add = e.variables.filter((v) => !have.has(v.key));
       updatedEnvs.add(e.id);
       if (!add.length) continue;
-      made.envUpdated!.push({ id: ex.id, name: ex.name, before: JSON.parse(JSON.stringify(ex)) as Environment });
-      store.saveEnvironment({ ...ex, variables: [...ex.variables, ...add] });
+      const savedEnv = store.saveEnvironment({ ...ex, variables: [...ex.variables, ...add] });
+      // what was added, as it was written (a secret's value is not in the file): Undo takes back exactly these, and only while they are unchanged
+      const addedKeys = new Set(add.map((v) => v.key));
+      made.envUpdated!.push({ id: ex.id, name: ex.name, before: JSON.parse(JSON.stringify(ex)) as Environment, added: savedEnv.variables.filter((v) => addedKeys.has(v.key)).map((v) => ({ key: v.key, value: String(v.value ?? '') })) });
       (out.notes ??= []).push(`Environment "${ex.name}": ${add.length} variable${add.length === 1 ? '' : 's'} added (${add.map((v) => v.key).slice(0, 5).join(', ')}${add.length > 5 ? ' …' : ''}); its values are kept`);
     }
   }
@@ -285,8 +325,11 @@ export type SpecConflict = 'keep-both' | 'replace';
  * EX-G3: keep an imported API definition at `<stem><suffix>` without ever overwriting another document. The same text
  * there already is reused; a different one is kept and the import goes to `<stem>-2<suffix>` (-3 …), unless `replace`:
  * then the old document goes to Recently deleted (undoable) first. Notes say which happened.
+ * `made` (the receipt) gets the path only when this import wrote the file: a document that was there already (the same
+ * text, kept by an earlier import whose contract checks name it) is not this import's to take back. A replaced
+ * document's trash entry is kept there too, so Undo puts it back.
  */
-function keepSpec(store: WorkspaceStore, stem: string, suffix: string, text: string, mode: SpecConflict = 'keep-both', out: WorkspaceImportResult): string {
+function keepSpec(store: WorkspaceStore, stem: string, suffix: string, text: string, mode: SpecConflict = 'keep-both', out: WorkspaceImportResult, made?: Created): string {
   const wanted = `${stem}${suffix}`;
   const same = (rel: string) => {
     try {
@@ -299,6 +342,7 @@ function keepSpec(store: WorkspaceStore, stem: string, suffix: string, text: str
   if (existsSync(store.safePath(wanted)) && !same(wanted)) {
     if (mode === 'replace') {
       out.specReplaced = { path: wanted, trashId: trashSpec(store, wanted) };
+      (made && (made.specsReplaced ??= []))?.push(out.specReplaced);
       (out.notes ??= []).push(`Replaced ${wanted}; the earlier document is in Recently deleted (restorable for 30 days).`);
     } else {
       for (let i = 2; existsSync(store.safePath(rel)) && !same(rel); i++) rel = `${stem}-${i}${suffix}`;
@@ -312,6 +356,7 @@ function keepSpec(store: WorkspaceStore, stem: string, suffix: string, text: str
     const file = store.safePath(rel);
     mkdirSync(dirname(file), { recursive: true });
     atomicWrite(file, text);
+    if (made && !made.specs.includes(rel)) made.specs.push(rel);
   }
   out.specPath = rel;
   return rel;

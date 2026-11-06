@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import { deliverSave, generateFlows, type SaveResult } from '../lib/files';
 import { exportWorkspace } from '../lib/workspace-export';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCollectionCalls } from '../lib/use-collection-calls';
 import { call } from '../api';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
@@ -85,6 +86,10 @@ export function CollectionsView() {
   const draft = entry?.draft;
   const setDraft = editDraft;
   const dirty = !!entry && changedFields(entry.base, entry.draft).length > 0;
+  // the collections' gRPC calls and connections, for the Requests tab's tree (the one owner of those lists, as in the explorer)
+  const calls = useCollectionCalls(cols);
+  // (the same list while the collection is the same: the memoized tree is not drawn again on every render)
+  const shownInTree = useMemo(() => (draft ? [draft] : []), [draft]);
   const [tab, setTab] = useState<'overview' | 'requests' | 'variables' | 'headers' | 'auth' | 'scripts' | 'settings' | 'docs' | 'run' | 'mock'>('requests');
   const [runFolder, setRunFolder] = useState<string>();
   // a dataset chosen before the collection (the sidebar's "Run a collection with it"): the runner starts with it
@@ -209,8 +214,10 @@ export function CollectionsView() {
       trash: true,
       focus: `collection:${c.id}`,
       run: async () => {
+        // the tabs of its requests, and of its gRPC calls and connections (read before it is gone)
+        const tabs = [...c.items.flatMap(subtreeIds), ...calls.idsIn(c.id)];
         await call('col.delete', { id: c.id });
-        closeTabsFor(c.items.flatMap(subtreeIds));
+        closeTabsFor(tabs);
         setSel((s) => (s === c.id ? undefined : s));
         await load();
       },
@@ -452,7 +459,9 @@ export function CollectionsView() {
                 {tab === 'requests' && (
                   <div className="p-2">
                     <CollectionTree
-                      collections={[draft]}
+                      collections={shownInTree}
+                      // its gRPC calls and connections in its folders, and what follows a folder: the same as in the explorer
+                      {...calls.tree}
                       onOpen={open}
                       onChange={saveItems}
                       onRun={(_, folderId) => {

@@ -26,7 +26,7 @@ import { formatCost, formatMs, timeAgo, plural } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { useEvalEstimate, type CostDraft } from '../lib/eval-estimate';
-import { Badge, Button, cx, Empty, Field, Input, Menu, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
 import { NoOpenItems } from '../components/LibraryTabStrip';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
@@ -73,10 +73,16 @@ interface MonitorDraft {
   folder?: string;
 }
 
+const NEEDS_APPROVAL = 'This monitor came with a pull or a clone, or was changed outside this app: its schedule does not run on this computer until you allow it';
+/** The monitor's own name: a tenant's row is "<monitor> · <environment>". */
+const definitionName = (m: { name: string; tenant?: unknown }) => (m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name);
+
 interface MonitorRow extends MonitorDraft {
   id: string;
   /** A row of a grouped definition (one per environment of the group): which definition and which environment. */
   tenant?: { of: string; environment: string };
+  /** It came with a pull or a clone (or changed outside this app): its schedule waits for "Allow on this computer". */
+  needsApproval?: boolean;
   schedule: string;
   /** Off, or paused for a while (`pausedUntil` in the future, with `pauseReason`). */
   paused?: boolean;
@@ -260,7 +266,7 @@ export function MonitorsView() {
   };
   /** At once, with Undo in the message (the same as the list's Delete). */
   // a tenant row deletes the definition it comes from, so every tenant's row goes with it: the message says so
-  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: m.tenant ? m.name.replace(/ · [^·]*$/, '') : m.name, run: () => monitorOps.deleteItem(m.id), note: m.tenant ? 'Every tenant of it went with it (one definition); its past runs stay in the Tests view' : 'Its past runs stay in the Tests view' });
+  const remove = (m: MonitorRow) => deleteWithUndo({ kind: 'monitor', name: definitionName(m), run: () => monitorOps.deleteItem(m.id), note: m.tenant ? 'Every tenant of it went with it (one definition); its past runs stay in the Tests view' : 'Its past runs stay in the Tests view' });
   /** The open monitor's ⋯ (its breadcrumb): its menu as its row in the list has it (lib/node-menu.ts): edit, run, pause, rename, duplicate, Delete… with Undo. */
   const monitorMenu = (m: MonitorRow): MenuItem[] =>
     openItemMenu('monitor', {
@@ -271,8 +277,10 @@ export function MonitorsView() {
         run: () => void run(m),
         ...(m.enabled ? { pause: () => void toggle(m) } : { resume: () => void toggle(m) }),
         rename: async () => {
-          const name = (await promptText('Rename monitor', { message: 'Monitor name', value: m.name, okLabel: 'Rename' }))?.trim();
-          if (name && name !== m.name) await update(m.id, { name });
+          // (a tenant's row is named "<monitor> · <environment>": the monitor's own name is what is renamed, for every tenant)
+          const own = definitionName(m);
+          const name = (await promptText('Rename monitor', { message: m.tenant ? 'Monitor name (the same monitor runs for every environment of its group)' : 'Monitor name', value: own, okLabel: 'Rename' }))?.trim();
+          if (name && name !== own) await update(m.id, { name: m.tenant ? `${name}${m.name.slice(own.length)}` : name });
         },
         duplicate: () => void monitorOps.duplicateItem?.(m.id),
         delete: () => void remove(m),
@@ -328,8 +336,9 @@ export function MonitorsView() {
     duplicateItem: async (id) => {
       const m = rows.find((x) => x.id === id);
       if (!m) return;
-      const { id: _id, lastResult: _r, running: _x, schedule: _s, nextRunAt: _n, due: _d, ...data } = m;
-      const copy = await call<MonitorRow>('monitor.save', { monitor: { ...data, name: `${m.name} copy` } });
+      // a tenant's row: the copy is of the monitor it comes from (every environment of the group), under the monitor's own name
+      const { id: _id, lastResult: _r, running: _x, schedule: _s, nextRunAt: _n, due: _d, tenant, ...data } = m;
+      const copy = await call<MonitorRow>('monitor.save', { monitor: { ...data, ...(tenant ? { environment: undefined } : {}), name: `${definitionName(m)} copy` } });
       await load();
       setSel(copy.id);
     },
@@ -367,7 +376,7 @@ export function MonitorsView() {
                   name: m.name,
                   folder: m.folder,
                   icon: <StatusDot className="block" tone={m.running ? 'accent' : !m.lastResult ? 'muted' : m.lastResult.status === 'passed' ? 'ok' : 'bad'} pulse={m.running} />,
-                  badge: !m.paused ? <RecentRuns statuses={m.recent ?? []} /> : <Badge title={m.pausedUntil ? m.schedule : undefined}>paused</Badge>,
+                  badge: m.needsApproval ? <Badge tone="warn" title={NEEDS_APPROVAL}>waits for you</Badge> : !m.paused ? <RecentRuns statuses={m.recent ?? []} /> : <Badge title={m.pausedUntil ? m.schedule : undefined}>paused</Badge>,
                   subtitle: `${targetName(m)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
                 }))}
                 itemActions={(id) => {
@@ -449,6 +458,7 @@ export function MonitorsView() {
             onEdit={() => setEditing(current)}
             onToggle={() => void toggle(current)}
             onPause={(minutes) => void pauseFor(current, minutes)}
+            onApprove={() => void attempt(async () => void (await call('monitor.approve', { id: current.id }))).then(load)}
             menu={monitorMenu(current)}
           />
         ) : (
@@ -498,6 +508,8 @@ function MonitorDetail(p: {
   onToggle(): void;
   /** Pause for a while (minutes, or until tomorrow 09:00), with why. */
   onPause(minutes: number | 'tomorrow'): void;
+  /** "Allow on this computer": its schedule runs here from now on. */
+  onApprove(): void;
   /** The monitor's ⋯ (lib/node-menu.ts builds it): rename, duplicate, Delete… with Undo, as its row in the list. */
   menu: MenuItem[];
 }) {
@@ -586,6 +598,11 @@ function MonitorDetail(p: {
           </>
         }
       />
+      {m.needsApproval && (
+        <Callout tone="warn" data-monitor-needs-approval="" action={<Button size="sm" onClick={p.onApprove}>Allow on this computer</Button>}>
+          {NEEDS_APPROVAL}. Check what it runs, where and how often first. Run now works without it.
+        </Callout>
+      )}
 
       <MetricGrid compact>
         <Metric label="Last result" value={statusLabel(last)} tone={last ? (last.status === 'passed' ? 'ok' : 'bad') : undefined} sub={last ? (last.reason ?? timeAgo(last.startedAt)) : undefined} />

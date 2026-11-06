@@ -30,7 +30,7 @@ import { currentNet } from '../net/proxy.js';
 import { applyRequestScripts, applyResponseScripts } from './script-rules.js';
 import { applyHeaderEdits, decideRequest, highlightRuleForResponse, ruleMatches, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
-import { forH2, forH2Out, holdBody, isH2, textLike, withoutPseudo } from './http-util.js';
+import { forH2, forH2Out, holdBody, isH2, relayWriter, safeDecode, textLike, withoutPseudo } from './http-util.js';
 import { decodeBody, dropConnection, hangRequest, localReply, redirectTarget, rewriteBody, writeCutResponse } from './shaping.js';
 import { Pacer, pacedBody, type NetworkSpeed } from './network-speed.js';
 import { createFrameRelay, frameBreaker, frameDecider, responseHead } from './ws-relay.js';
@@ -217,10 +217,27 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     contexts.set(leaf.cert, made);
     return made;
   };
-  /** Where a request on this socket goes: the absolute URL of a proxy request, or the decrypted tunnel's origin plus the path. */
+  /**
+   * Where a request on this socket goes: the absolute URL of a proxy request, or the tunnel's origin plus the path. Inside a
+   * tunnel only the path and the query of the request line count: an absolute URL there (`GET http://127.0.0.1:8080/ HTTP/1.1`)
+   * or a path that starts with `//` must not send the request to another host than the one the tunnel was opened (and checked) for.
+   */
   const targetOf = (req: IncomingMessage | Http2ServerRequest, origin?: TunnelOrigin): URL => {
-    if (origin) return new URL(req.url ?? '/', `${origin.scheme}://${origin.host}:${origin.port}`);
-    return new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    if (!origin) return new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    let path = req.url || '/';
+    if (!path.startsWith('/')) {
+      try {
+        const abs = new URL(path);
+        path = `${abs.pathname}${abs.search}`;
+      } catch {
+        /* not a URL (`*`): taken as a path */
+      }
+      if (!path.startsWith('/')) path = `/${path}`;
+    }
+    const base = new URL(`${origin.scheme}://${origin.host}:${origin.port}`);
+    const target = new URL(`${base.origin}${path}`);
+    if (target.host !== base.host) throw new Error('The request names another host than its tunnel');
+    return target;
   };
 
   /** LAN mode: who may use the proxy, and what a client that is not this computer may reach through it. */
@@ -229,7 +246,33 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
 
   /** Every connection to the proxy, so close() ends them all (tunnels, upgrades and injected TLS sockets included). */
   const sockets = new Set<Duplex>();
-  const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => void handle(req, res, tlsOrigins.get(req.socket)));
+  /** The exchange a response (or an upgraded socket) answers, for the error of a request that failed on the way. */
+  const answering = new WeakMap<object, DebuggerExchange>();
+  /** What went wrong, in the exchange (when it is listed, the list is told). */
+  const failExchange = (e: DebuggerExchange | undefined, why: string) => {
+    if (!e || e.durationMs !== undefined) return;
+    e.error = why;
+    e.open = undefined;
+    e.durationMs = Date.now() - Date.parse(e.startedAt);
+    if (recorded.has(e)) record(e, 'response');
+  };
+  const refusalOf = (err: unknown) => ({ status: (err as Error)?.name === 'AuthorizationError' ? 403 : 502, why: (err as Error)?.message || 'The request failed' });
+  /**
+   * handle(), with its failures answered: an error on the way (a host a device on the network may not reach, a rule's script,
+   * headers that cannot be sent on) used to reject a promise nobody waited for, and the program waited for an answer that never came.
+   */
+  const answer = (req: IncomingMessage | Http2ServerRequest, res: ServerResponse, origin?: TunnelOrigin) =>
+    void handle(req, res, origin).catch((err: unknown) => {
+      const { status, why } = refusalOf(err);
+      failExchange(answering.get(res), why);
+      try {
+        if (!res.headersSent) res.writeHead(status, { 'content-type': 'text/plain' }).end(`TestPion debugger: ${why}`);
+        else if (!res.writableEnded) res.end();
+      } catch {
+        req.socket?.destroy(); // the response cannot be written any more
+      }
+    });
+  const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => answer(req, res, tlsOrigins.get(req.socket)));
 
   /** One request, from HTTP/1.1 (the proxy, or a tunnel) or HTTP/2 (a tunnel): captured, ruled, forwarded. */
   async function handle(req: IncomingMessage | Http2ServerRequest, res: ServerResponse, origin?: TunnelOrigin) {
@@ -275,6 +318,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
     if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
+    answering.set(res, e);
     const speed = opts.speed?.();
     if (speed) shapes.set(e, speed);
     // gRPC: forwarded over HTTP/2 as it streams (messages both ways, then trailers); rules may ignore or highlight it
@@ -487,12 +531,15 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (h['grpc-status'] === undefined) return;
       capture.status = Number(h['grpc-status']);
       capture.statusName = GRPC_STATUS[capture.status] ?? String(capture.status);
-      if (h['grpc-message']) capture.message = decodeURIComponent(String(h['grpc-message']));
+      if (h['grpc-message']) capture.message = safeDecode(String(h['grpc-message']));
     };
+    // both ways the side that sends waits while the side that reads is full (a large stream is not queued in memory)
+    const toServer = relayWriter(req, up);
+    const toClient = relayWriter(up, res);
     req.on('data', (c: Buffer) => {
       e.requestBodyBytes += c.length;
       fromClient.push(c);
-      up.write(c);
+      toServer(c);
     });
     req.on('end', () => up.end());
     req.on('error', () => up.close());
@@ -515,7 +562,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     up.on('data', (c: Buffer) => {
       e.responseBodyBytes += c.length;
       fromServer.push(c);
-      res.write(c);
+      toClient(c);
     });
     up.on('trailers', (t) => {
       e.trailers = flattenHeaders(withoutPseudo(t as Record<string, string>) as IncomingMessage['headers']);
@@ -535,6 +582,11 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       if (!up.closed) up.close(h2c.NGHTTP2_CANCEL);
     });
   }
+
+  /** How long a server may stay silent before the exchange ends with an error. */
+  const UPSTREAM_IDLE_MS = 60_000;
+  /** While the server is made to wait for the program to read, its silence is ours: the idle timeout is off until it may send again. */
+  const idleWhileWaiting = (ures: IncomingMessage) => (waiting: boolean) => void ures.socket?.setTimeout(waiting ? 0 : UPSTREAM_IDLE_MS);
 
   /** Send the request on and stream (or hold and edit) the response back. */
   function forward(
@@ -559,7 +611,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
     const hold = !!(decision?.hold || breakpoint);
     const secure = target.protocol === 'https:';
     const sni = keepHost && !isIP(e.host.replace(/:\d+$/, '')) ? { servername: e.host.replace(/:\d+$/, '') } : {};
-    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: 60_000, ...sni, ...upstream.options(target, h, remoteExchanges.has(e)) }, async (ures) => {
+    const answered = async (ures: IncomingMessage) => {
       e.sendMs ??= Date.now() - t0;
       e.waitMs = Date.now() - t0;
       e.status = ures.statusCode;
@@ -574,7 +626,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         res.writeHead(ures.statusCode ?? 502, isH2(res) ? forH2(ures.headers) : ures.headers);
         // Network speed: the response goes to the program through a pacer
         const pacer = speed ? new Pacer(speed.downKbps) : undefined;
-        const sink: { write(c: Buffer): unknown; end(): unknown } = pacer ?? res;
+        const sink: Pacer | ServerResponse = pacer ?? res;
         if (pacer) {
           pacer.pipe(res);
           res.once('close', () => pacer.destroy());
@@ -595,6 +647,8 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
           e.open = true;
           if (listed) record(e, 'response');
         }
+        // the server waits while the program (or the pacer) is full: a large download to a slow reader is not queued in memory
+        const toClient = relayWriter(ures, sink, idleWhileWaiting(ures));
         ures.on('data', (c: Buffer) => {
           e.responseBodyBytes += c.length;
           if ((keep || keepBin) && kept < maxBody) {
@@ -602,7 +656,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
             kept += Math.min(c.length, maxBody - kept);
           }
           events?.push(c);
-          sink.write(c);
+          toClient(c);
         });
         ures.on('end', () => {
           sink.end();
@@ -629,9 +683,10 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         e.responseBodyBytes = heldResponse.bytes;
         e.responseBodyTruncated = true;
         for (const c of heldResponse.chunks) res.write(c);
+        const toClient = relayWriter(ures, res, idleWhileWaiting(ures));
         ures.on('data', (c: Buffer) => {
           e.responseBodyBytes += c.length;
-          res.write(c);
+          toClient(c);
         });
         ures.on('end', () => {
           res.end();
@@ -699,23 +754,31 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
         return;
       } else res.writeHead(e.status ?? 502, head).end(outBody);
       done();
-    });
+    };
     const done = () => {
       if (e.durationMs !== undefined) return;
       e.durationMs = Date.now() - t0;
       if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
     };
-    // the request's 60 s timeout only emitted an event nobody listened to: a stalled upstream never ended the exchange
-    up.on('timeout', () => up.destroy(Object.assign(new Error('The server did not answer within 60 s'), { code: 'ETIMEDOUT' })));
-    up.on('error', (err: NodeJS.ErrnoException) => {
+    const failed = (err: NodeJS.ErrnoException) => {
       e.error = err.code === 'ENOTFOUND' ? `Unknown host ${target.hostname}` : err.message;
       e.durationMs = Date.now() - t0;
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
       res.end(`TestPion debugger: ${e.error}`);
       if (decision) responseHighlight(e);
       if (listed) record(e, 'response');
+    };
+    // an error while the answer is handled (a rule's script, a header that cannot be sent on) ends the exchange like an upstream error
+    const up = (secure ? httpsRequest : httpRequest)(target, { method, headers: h, timeout: UPSTREAM_IDLE_MS, ...sni, ...upstream.options(target, h, remoteExchanges.has(e)) }, (ures) => {
+      answered(ures).catch((err: Error) => {
+        ures.destroy();
+        if (e.durationMs === undefined) failed(err);
+      });
     });
+    // the request's 60 s timeout only emitted an event nobody listened to: a stalled upstream never ended the exchange
+    up.on('timeout', () => up.destroy(Object.assign(new Error('The server did not answer within 60 s'), { code: 'ETIMEDOUT' })));
+    up.on('error', failed);
     up.on('socket', (sock) => {
       const at = () => (e.serverAddress = sock.remoteAddress ? `${sock.remoteAddress}:${sock.remotePort}` : undefined);
       if (sock.remoteAddress) at();
@@ -732,7 +795,14 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
   }
 
   // WebSocket: the upgrade goes to the server; both directions are read frame by frame on the way
-  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => void onUpgrade(req, socket, head));
+  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    onUpgrade(req, socket, head).catch((err: unknown) => {
+      // refused or failed before the server was asked: the program gets an answer, not a connection that stays open
+      const { status, why } = refusalOf(err);
+      failExchange(answering.get(socket), why);
+      if (!socket.destroyed) socket.end(`HTTP/1.1 ${status === 403 ? '403 Forbidden' : '502 Bad Gateway'}\r\nContent-Length: 0\r\n\r\n`);
+    });
+  });
   async function onUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer) {
     const t0 = Date.now();
     let target: URL;
@@ -764,6 +834,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       ...(origin?.scheme === 'https' ? { tls: true } : {}),
     };
     if (origin ? origin.remote : pairingSecret && !isOwnAddress(req.socket?.remoteAddress)) remoteExchanges.add(e);
+    answering.set(socket, e);
     void application(e.clientPort).then((a) => {
       setApp(e, a);
     });
@@ -847,7 +918,9 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
 
   // HTTPS: an opaque tunnel, listed by host; or, with decryption on, TLS to the program with a certificate for the
   // host signed by the TestPion root, and its requests captured like plain ones
-  server.on('connect', (req: IncomingMessage, socket: Socket, head: Buffer) => void onConnect(req, socket, head));
+  server.on('connect', (req: IncomingMessage, socket: Socket, head: Buffer) => {
+    onConnect(req, socket, head).catch(() => socket.destroy());
+  });
   async function onConnect(req: IncomingMessage, socket: Socket, head: Buffer) {
     const t0 = Date.now();
     const [host, portText] = (req.url ?? '').split(':');
@@ -891,9 +964,15 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       const isTls = first?.[0] === 0x16;
       const isH2c = !!first && first.subarray(0, 14).toString('latin1') === 'PRI * HTTP/2.0';
       const isH1 = !!first && /^[A-Z]{3,10} \S+ HTTP\/1\.[01]\r?\n/.test(first.subarray(0, 512).toString('latin1'));
-      if (isTls && decrypt) return readTunnel('https');
-      if (isH2c || isH1) return readTunnel('http', isH2c);
-      opaque();
+      // decide() runs from the socket's events: an error here (no certificate can be made for the name) would be an uncaught one
+      try {
+        if (isTls && decrypt) return readTunnel('https');
+        if (isH2c || isH1) return readTunnel('http', isH2c);
+        opaque();
+      } catch (err) {
+        failExchange(e, (err as Error).message);
+        socket.destroy();
+      }
     };
     const onFirst = (c: Buffer) => decide(c);
     const quiet = setTimeout(() => decide(), 400);
@@ -929,7 +1008,7 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       /** HTTP/2 on this stream: a server of its own, so every request knows the tunnel it came on. */
       const speakH2 = (stream: Duplex) => {
         const h2 = createH2Server();
-        h2.on('request', (req: Http2ServerRequest, res: Http2ServerResponse) => void handle(req, res as unknown as ServerResponse, origin));
+        h2.on('request', (req: Http2ServerRequest, res: Http2ServerResponse) => answer(req, res as unknown as ServerResponse, origin));
         h2.on('sessionError', () => undefined);
         sockets.add(stream);
         stream.on('close', () => sockets.delete(stream));

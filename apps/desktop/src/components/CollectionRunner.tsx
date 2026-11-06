@@ -14,7 +14,9 @@ import { RefLink } from './RefLink';
 import { KIND_COLOR, TreeBadge } from './TreeParts';
 import { EnvBadge, EnvSelect } from './EnvSelect';
 import { runCiMenuItems } from '../lib/run-ci';
-import { isCollectionCallLibrary } from '@testpion/shared';
+import { interleave, isCollectionCallLibrary } from '@testpion/shared';
+import { sharedCall } from '../lib/shared-call';
+import { touchesFiles, type DataChangedEvent } from '../lib/data-changed';
 
 interface RunnableRequest {
   id: string;
@@ -35,12 +37,36 @@ interface DataFile {
   query?: string;
 }
 
-function flatten(nodes: CollectionNode[], path: string[] = [], scope?: string, inScope = !scope): RunnableRequest[] {
-  return nodes.flatMap((n) => {
-    if (n.kind === 'folder') return flatten(n.items, [...path, n.name], scope, inScope || n.id === scope);
-    if (!inScope && n.id !== scope) return [];
-    return [{ id: n.id, name: n.name, method: n.kind === 'http' ? n.request.method : 'GQL', path, kind: n.kind }];
-  });
+/**
+ * What a run of the collection (or of `scope`: one of its folders, or one request) sends, in the order the tree shows
+ * it and the engine runs it: every folder's requests with its gRPC calls and connections at their place among them
+ * (shared `interleave`; a call whose folder is gone sits at the top level).
+ */
+function runnableRequests(items: CollectionNode[], calls: ReadonlyArray<RunnableRequest & { folderId?: string; after?: string }>, scope?: string): RunnableRequest[] {
+  const folders = new Set<string>();
+  const find = (nodes: CollectionNode[]) => {
+    for (const n of nodes) if (n.kind === 'folder') (folders.add(n.id), find(n.items));
+  };
+  if (calls.length) find(items);
+  const byFolder = new Map<string, Array<RunnableRequest & { folderId?: string; after?: string }>>();
+  for (const c of calls) {
+    const at = c.folderId && folders.has(c.folderId) ? c.folderId : '';
+    const list = byFolder.get(at);
+    if (list) list.push(c);
+    else byFolder.set(at, [c]);
+  }
+  const out: RunnableRequest[] = [];
+  const walk = (nodes: CollectionNode[], path: string[], at: string, inScope: boolean) => {
+    for (const x of interleave(nodes, byFolder.get(at) ?? [])) {
+      if ('call' in x) {
+        // (at the top level: the folder text an older version kept, if any)
+        if (inScope) out.push({ id: x.call.id, name: x.call.name, method: x.call.method, kind: x.call.kind, path: at ? path : x.call.path });
+      } else if (x.node.kind === 'folder') walk(x.node.items, [...path, x.node.name], x.node.id, inScope || x.node.id === scope);
+      else if (inScope || x.node.id === scope) out.push({ id: x.node.id, name: x.node.name, method: x.node.kind === 'http' ? x.node.request.method : 'GQL', path, kind: x.node.kind });
+    }
+  };
+  walk(items, [], '', !scope);
+  return out;
 }
 
 function findName(nodes: CollectionNode[], id: string): string | undefined {
@@ -62,25 +88,27 @@ function findName(nodes: CollectionNode[], id: string): string | undefined {
 export function CollectionRunner({ collection, folderId, onFolderChange, dataPath }: { collection: Collection; folderId?: string; onFolderChange(id?: string): void; /** A workspace dataset (its path) chosen before the runner opened: it is the run's data. */ dataPath?: string }) {
   const activeEnv = useApp((s) => s.environment);
   const [environment, setEnvironment] = useState(activeEnv ?? '');
-  // the collection's gRPC calls and connections run after its requests; a folder's run takes the calls inside it
-  const [realtime, setRealtime] = useState<Array<RunnableRequest & { folderId?: string }>>([]);
+  // the collection's gRPC calls and connections run where the tree shows them, among the requests of their folder; a
+  // folder's run takes the calls inside it
+  const [realtime, setRealtime] = useState<Array<RunnableRequest & { folderId?: string; after?: string }>>([]);
   useEffect(() => {
     let live = true;
     const kinds = [
       ['grpc', 'gRPC'],
       ['websocket', 'WS'],
     ] as const;
-    void Promise.all(kinds.map(([kind]) => call<Library<{ mode?: string }>>('lib.get', { kind }).catch(() => ({ folders: [], items: [] }) as Library<{ mode?: string }>))).then((libs) => {
+    const load = () =>
+      void Promise.all(kinds.map(([kind]) => sharedCall<Library<{ mode?: string }>>('lib.get', { kind }).catch(() => ({ folders: [], items: [] }) as Library<{ mode?: string }>))).then((libs) => {
       if (!live) return;
       setRealtime(
         libs.flatMap((lib, i) =>
           lib.items
             .filter((it) => it.collectionId === collection.id)
-            .sort((a, b) => (a.folder ?? '').localeCompare(b.folder ?? '') || a.name.localeCompare(b.name))
             .map((it) => ({
               id: it.id,
               name: it.name,
               folderId: it.folderId,
+              after: it.after,
               path: it.folder ? [it.folder] : [],
               kind: kinds[i]![0],
               method:
@@ -94,28 +122,17 @@ export function CollectionRunner({ collection, folderId, onFolderChange, dataPat
             })),
         ),
       );
-    });
+      });
+    load();
+    // a call or connection saved, moved, renamed or deleted (here, in another view, on disk): the list is read again,
+    // so the run never names one that is gone
+    const off = on<DataChangedEvent>('data.changed', (e) => touchesFiles(e, ['library']) && load());
     return () => {
       live = false;
+      off();
     };
   }, [collection.id]);
-  const requests = useMemo(() => {
-    // every folder's path of names, and the folders inside the one being run
-    const paths = new Map<string, string[]>();
-    const inside = new Set<string>();
-    const walk = (nodes: CollectionNode[], path: string[], inScope: boolean) => {
-      for (const n of nodes)
-        if (n.kind === 'folder') {
-          const here = inScope || n.id === folderId;
-          paths.set(n.id, [...path, n.name]);
-          if (here) inside.add(n.id);
-          walk(n.items, [...path, n.name], here);
-        }
-    };
-    walk(collection.items, [], false);
-    const calls = realtime.filter((r) => !folderId || (!!r.folderId && inside.has(r.folderId))).map(({ folderId: at, ...r }) => ({ ...r, path: at && paths.has(at) ? paths.get(at)! : r.path }));
-    return [...flatten(collection.items, [], folderId), ...calls];
-  }, [collection.items, folderId, realtime]);
+  const requests = useMemo(() => runnableRequests(collection.items, realtime, folderId), [collection.items, folderId, realtime]);
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   /** Narrows the list (by name, folder or method); Select all / Deselect all act on what it shows. */
   const [reqFilter, setReqFilter] = useState('');

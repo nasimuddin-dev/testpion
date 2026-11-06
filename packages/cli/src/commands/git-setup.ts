@@ -231,7 +231,7 @@ export function registerGitSetupCommands(git: Command): void {
       .requiredOption('-e, --environment <name>', 'the environment whose secret variables would keep the values'),
   ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
-      const env = s.listEnvironments().find((e) => e.id === o.environment || e.name === o.environment);
+      const env = s.getEnvironment(String(o.environment));
       if (!env) throw new CliError(`No environment "${o.environment}"`, EXIT.CONFIG_ERROR);
       const scan = await scanStagedSecrets(s.root);
       const files = [...new Set([...scan.blocking, ...scan.confirm].map((f) => f.file))];

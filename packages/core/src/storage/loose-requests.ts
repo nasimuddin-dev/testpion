@@ -3,7 +3,7 @@ import { ApsError } from '../errors.js';
 import type { Collection, LibraryItem } from '../model/types.js';
 import { SCHEMA_VERSION } from '../model/types.js';
 import { COLLECTION_ITEM_KINDS } from '../runner/collection-realtime.js';
-import { shortId, slugify } from '../util/ids.js';
+import { slugify } from '../util/ids.js';
 import { listTrash } from './trash.js';
 import type { WorkspaceStore } from './workspace.js';
 
@@ -27,8 +27,12 @@ export interface AdoptedRequests {
 /**
  * Put every gRPC call and connection that isn't in a collection into one: grouped by their folder, each group goes
  * into a collection named after the folder (an existing collection with exactly that name, else a new one) and
- * leaves the folder; items without a folder go into "gRPC calls" or "Connections". An item whose collection is in
- * the trash is left alone (it comes back with the collection); one whose collection is gone for good is adopted.
+ * leaves the folder; items without a folder go into "gRPC calls" or "Connections". An item whose collection is gone
+ * for good is adopted. A collection deleted to the trash takes its items with it (trash.ts), so none of them is seen
+ * here; only a trash entry of an older version left them in the library: those are left alone (they come back with
+ * the collection).
+ * A new collection's id comes from its name, not from chance (`-2`, `-3` … when the id is taken): two people who open
+ * the same older workspace make the same collection file and the same library, so git has nothing to merge.
  * Idempotent: a second call moves nothing and writes nothing.
  */
 export function adoptLooseRequests(store: WorkspaceStore): AdoptedRequests {
@@ -54,12 +58,19 @@ export function adoptLooseRequests(store: WorkspaceStore): AdoptedRequests {
   const loose = libs.flatMap(({ kind, lib }) => lib.items.filter(isLoose).map((item) => ({ kind, item, group: item.folder?.trim() || LOOSE_DEFAULT_COLLECTION[kind] })));
   if (!loose.length) return out;
 
+  // ids a new collection may not take: the collections' (and their files'), and the ids the items that stay name (the
+  // collection of an older trash entry: its hidden items would show up in the new one)
+  const looseItems = new Set(loose.map((l) => l.item));
+  const takenIds = new Set<string>([...live, ...libs.flatMap(({ lib }) => lib.items.filter((i) => !looseItems.has(i) && i.collectionId).map((i) => i.collectionId!))]);
   const target = new Map<string, string>();
   for (const group of [...new Set(loose.map((l) => l.group))]) {
     const existing = collections.find((c) => c.name === group);
     let id = existing?.id;
     if (!id) {
-      id = `${slugify(group) || 'collection'}-${shortId().slice(-4)}`;
+      const base = slugify(group) || 'collection';
+      id = base;
+      for (let n = 2; takenIds.has(id) || existsSync(fileOf(id)); n++) id = `${base}-${n}`;
+      takenIds.add(id);
       const c: Collection = { schemaVersion: SCHEMA_VERSION, id, name: group, version: 0, variables: [], items: [], updatedAt: new Date().toISOString() };
       store.saveCollection(c);
     }

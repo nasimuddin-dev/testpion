@@ -1,13 +1,14 @@
 import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { call, on } from '../api';
 import { sharedCall } from '../lib/shared-call';
 import { touchesFiles, type DataChangedEvent, type FileKind } from '../lib/data-changed';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
-import { deleteMcpServerWithUndo, deleteWithUndo, putBack, restoreDeleted } from '../lib/undo-delete';
-import type { Collection, CollectionNode, Library, LibraryItem, McpServerConfig } from '../types';
+import { deleteMcpServerWithUndo, deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
+import type { Collection, CollectionNode, Library, McpServerConfig } from '../types';
 import { plural, uid } from '../lib/format';
-import { addToFolder, CollectionTree, duplicateNode, mapNodes, type ExtraGroup } from './CollectionTree';
+import { addToFolder, CollectionTree, duplicateNode, mapNodes } from './CollectionTree';
+import { useCollectionCalls } from '../lib/use-collection-calls';
 import { openRef, revealInSidebar } from '../lib/open-ref';
 import { scopedNodeId } from '../lib/tree-rows';
 import type { RequestCategory } from '../lib/collection-filter';
@@ -35,8 +36,7 @@ import { startFlowGenerate } from './ai/flow-generate';
 import { generateSpecTests } from './ApiPreviewPanel';
 import { useAreaMenu } from './AreaMenu';
 import { EmptyHint, FolderedRows, folderKey, folderNames, ItemRow, moveToFolderSubmenu, newFolderIn, Section, useOpenSections, type FolderOps, type RowRename } from './ExplorerParts';
-import { callsInFolders, collectionCallKind, copyCallsWithFolders, isCollectionCallLibrary, moveCallsWithFolders } from '@testpion/shared';
-import { treeKey } from '../lib/tree-state';
+import { isCollectionCallLibrary } from '@testpion/shared';
 
 /**
  * The Collections explorer: the one sidebar of the request editors. The workspace lists its collections;
@@ -46,7 +46,6 @@ import { treeKey } from '../lib/tree-state';
  * with the one menu (lib/node-menu.ts) on the one row (TreeRowShell).
  */
 
-const NONE: SavedItem[] = [];
 /** The reveal key of an intent: its nonce, unless it asks not to unfold the tree (opened from the explorer itself). */
 const revealKeyOf = (i: { nonce: number; payload?: unknown } | undefined) => (i && !(i.payload as { noReveal?: boolean } | undefined)?.noReveal ? i.nonce : undefined);
 
@@ -73,25 +72,6 @@ interface DatasetRow {
   rows?: number;
   tables?: string[];
 }
-/** Saved items by the collection they're shown in. */
-function groupByCollection(items: SavedItem[]): Map<string, SavedItem[]> {
-  const map = new Map<string, SavedItem[]>();
-  for (const i of items) if (i.collectionId) map.set(i.collectionId, [...(map.get(i.collectionId) ?? []), i]);
-  return map;
-}
-
-interface SavedItem {
-  id: string;
-  name: string;
-  folder?: string;
-  /** The collection it's in (gRPC calls and connections are kept in the workspace library, each in a collection). */
-  collectionId?: string;
-  /** Its folder of that collection and the sibling it follows (any kind of request in any folder). */
-  folderId?: string;
-  after?: string;
-  badge?: string;
-}
-
 const SOAP_ENVELOPE = `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Body>
@@ -199,8 +179,8 @@ export function Explorer() {
     collections.forEach((c) => walk(c, c.items));
     return out;
   }, [collections]);
-  const [grpc, setGrpc] = useState<SavedItem[]>([]);
-  const [sockets, setSockets] = useState<SavedItem[]>([]);
+  // the collections' gRPC calls and connections: their rows, menus and what follows a folder (the one owner, shared with a collection's Requests tab)
+  const calls = useCollectionCalls(allCollections);
   const [servers, setServers] = useState<Array<McpServerConfig & { connected?: boolean }>>([]);
   const [specs, setSpecs] = useState<string[]>([]);
   const [datasets, setDatasets] = useState<DatasetRow[]>([]);
@@ -211,18 +191,16 @@ export function Explorer() {
   const [datasetFolders, setDatasetFolders] = useState<Library<unknown>>({ folders: [], items: [] });
 
   /**
-   * The explorer's own lists, or the part of them that changed (`what`: the saved gRPC calls and connections and
-   * every folder library, the MCP servers, the API definitions, the datasets); the collections too when asked (on a
-   * change the shared list refreshes them itself).
+   * The explorer's own lists, or the part of them that changed (`what`: every folder library, the MCP servers, the API
+   * definitions, the datasets); the collections too when asked (on a change the shared list refreshes them itself).
+   * The saved gRPC calls and connections are read by their owner (useCollectionCalls).
    */
   const load = useCallback(async (withCollections = true, what: ReadonlySet<ListPart> = ALL_PARTS) => {
     const quiet = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     const empty: Library<unknown> = { folders: [], items: [] };
     const lib = (kind: string, when: ListPart) => (what.has(when) ? quiet(sharedCall<Library<unknown>>('lib.get', { kind }), empty) : undefined);
-    const [, g, w, s, sp, mf, sf, ds, df] = await Promise.all([
+    const [, s, sp, mf, sf, ds, df] = await Promise.all([
       withCollections ? refreshCollections() : undefined,
-      lib('grpc', 'library'),
-      lib('websocket', 'library'),
       what.has('mcp') ? quiet(call<Array<McpServerConfig & { connected?: boolean }>>('mcp.servers'), []) : undefined,
       what.has('specs') ? quiet(call<string[]>('openapi.specs', { includeAsync: true }), []) : undefined,
       lib('mcp-folders', 'library'),
@@ -230,9 +208,6 @@ export function Explorer() {
       what.has('datasets') ? quiet(call<DatasetRow[]>('datasets.list'), []) : undefined,
       lib('dataset-folders', 'library'),
     ]);
-    if (g) setGrpc(g.items.map(({ data: _, ...i }) => i));
-    const wsBadge = (d: unknown) => ((d as { mode?: string })?.mode === 'kafka' ? 'KAFKA' : (d as { mode?: string })?.mode === 'mqtt' ? 'MQTT' : (d as { mode?: string })?.mode === 'socketio' ? 'SIO' : 'WS');
-    if (w) setSockets(w.items.map(({ data, ...i }) => ({ ...i, badge: wsBadge(data) })));
     if (s) setServers(s);
     if (sp) setSpecs(sp);
     if (mf) setMcpFolders(mf.folders);
@@ -266,8 +241,6 @@ export function Explorer() {
     };
   }, [load]);
 
-  const grpcByCollection = useMemo(() => groupByCollection(grpc), [grpc]);
-  const socketsByCollection = useMemo(() => groupByCollection(sockets), [sockets]);
   const f = shownFilter.trim().toLowerCase();
   const match = (...t: Array<string | undefined>) => !f || t.some((x) => x?.toLowerCase().includes(f));
   const shownServers = servers.filter((s) => match(s.name, s.transport));
@@ -276,12 +249,9 @@ export function Explorer() {
   const shownDatasets = datasets.filter((d) => match(d.name, d.format));
 
   const intent = useApp.getState().openIntent;
-  const saveCollection = async (c: Collection) => {
-    await attempt(async () => {
-      await call('col.save', c);
-      // the saved collection is read back by the shared list (its data.changed); the explorer's other lists did not change
-    });
-  };
+  /** Save a collection; a failure is shown (the one error toast). Resolves whether it was saved. */
+  // (the saved collection is read back by the shared list (its data.changed); the explorer's other lists did not change)
+  const saveCollection = (c: Collection): Promise<boolean> => attempt(() => call('col.save', c));
   /** Change a collection the tree shows (an outline): the change applies to the whole collection. */
   const editCollection = async (c: Collection, f: (whole: Collection) => Collection) => {
     await attempt(async () => {
@@ -348,7 +318,7 @@ export function Explorer() {
       run: () => datasetAction(() => call('datasets.delete', { name: d.name })),
       undo: () => datasetAction(() => restoreDeleted('dataset', d.name)),
     });
-  /** The server, saved gRPC call, connection, API definition or dataset being renamed in place. */
+  /** The server, API definition or dataset being renamed in place (a gRPC call or connection: useCollectionCalls). */
   const [renaming, setRenaming] = useState<string>();
   /** Rename in place: the row's field, then `apply` (an RPC), then the keyboard back on the row. */
   const renamer = (id: string, nodeId: string, apply: (name: string) => unknown): RowRename => ({
@@ -360,124 +330,6 @@ export function Explorer() {
       focusRow(nodeId);
     },
   });
-  /** Change a saved gRPC call / connection list (move, rename, duplicate, delete): the one place that loads, edits and saves it. */
-  const editLibrary = async (kind: 'grpc' | 'websocket', fn: (items: Array<LibraryItem<unknown>>) => Array<LibraryItem<unknown>>) => {
-    await attempt(async () => {
-      const lib = await call<Library<unknown>>('lib.get', { kind });
-      await call('lib.save', { kind, library: { etag: lib.etag, folders: lib.folders, items: fn(lib.items) } });
-      await load(false, LIBRARY);
-    });
-  };
-  /** Move a saved gRPC call / connection to another collection. */
-  const moveItem = (kind: 'grpc' | 'websocket', id: string, collectionId: string, place: { folderId?: string; after?: string } = {}) =>
-    editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, collectionId, folderId: place.folderId, after: place.after } : i)));
-  /** Copy a saved gRPC call as a grpcurl command, or a connection's URL ({{variables}} resolved). */
-  const copySaved = async (kind: 'grpc' | 'websocket', id: string) => {
-    try {
-      const it = (await call<Library<Record<string, any>>>('lib.get', { kind })).items.find((i) => i.id === id);
-      if (!it) return;
-      const env = useApp.getState().environment;
-      const d = it.data;
-      const text =
-        kind === 'grpc'
-          ? await call<string>('grpc.grpcurl', {
-              target: d.target,
-              method: d.method,
-              message: d.message,
-              metadata: d.metadata,
-              tls: d.tls,
-              protoFiles: d.descriptorSet ? [] : (d.protoFiles ?? []).map((f: { name: string }) => f.name),
-              timeoutMs: d.timeoutMs,
-              environment: env,
-            })
-          : String(d.url ?? '');
-      await copyText(text, kind === 'grpc' ? 'as grpcurl' : 'the URL');
-    } catch (e) {
-      toastError(e);
-    }
-  };
-  /** A folder of saved gRPC calls or connections: rename it, or delete it (its items move to the top level, Undo puts them back). */
-  /**
-   * A collection folder's gRPC calls and connections follow it (they are kept outside the collection file): deleted with
-   * it (and put back by Undo), moved with it to another collection, copied with it.
-   */
-  const folderCalls = {
-    remove: async (collectionId: string, folderIds: string[]) => {
-      const inside = new Set(folderIds);
-      const removed: Array<{ kind: 'grpc' | 'websocket'; items: Array<LibraryItem<unknown>> }> = [];
-      for (const kind of ['grpc', 'websocket'] as const) {
-        const here = callsInFolders(kind === 'grpc' ? grpc : sockets, collectionId, inside);
-        if (!here.length) continue;
-        const ids = new Set(here.map((i) => i.id));
-        closeTabsFor([...ids]);
-        await editLibrary(kind, (items) => {
-          removed.push({ kind, items: items.filter((i) => ids.has(i.id)) });
-          return items.filter((i) => !ids.has(i.id));
-        });
-      }
-      if (!removed.length) return undefined;
-      return async () => {
-        for (const r of removed) await editLibrary(r.kind, (items) => [...items, ...r.items.filter((x) => !items.some((i) => i.id === x.id))]);
-      };
-    },
-    move: (from: string, to: string, folderIds: string[], renamed: ReadonlyMap<string, string>) => {
-      const inside = new Set(folderIds);
-      for (const kind of ['grpc', 'websocket'] as const) if (callsInFolders(kind === 'grpc' ? grpc : sockets, from, inside).length) void editLibrary(kind, (items) => moveCallsWithFolders(items, { from, to, folderIds: inside, renamed }));
-    },
-    copy: (collectionId: string, ids: ReadonlyMap<string, string>) => {
-      const inside = new Set(ids.keys());
-      for (const kind of ['grpc', 'websocket'] as const)
-        if (callsInFolders(kind === 'grpc' ? grpc : sockets, collectionId, inside).length)
-          void editLibrary(kind, (items) => copyCallsWithFolders(items, { collectionId, ids, newId: () => uid('lib-') }).map((i) => (items.includes(i) ? i : { ...i, updatedAt: new Date().toISOString() })));
-    },
-  };
-  const renameSaved = (kind: 'grpc' | 'websocket', id: string): RowRename => renamer(id, id, (name) => editLibrary(kind, (items) => items.map((i) => (i.id === id ? { ...i, name } : i))));
-  /** The menu of a gRPC call or connection: the same groups as a request's (open, copy, test file, rename, duplicate, move, delete). */
-  const savedMenu = (kind: 'grpc' | 'websocket', item: SavedItem): NodeMenuCtx => {
-    const ref = { kind: 'saved' as const, library: kind, itemId: item.id };
-    return {
-      ref,
-      name: item.name,
-      on: {
-        open: () => void openRef(ref),
-        openNewTab: () => void openRef(ref, { newTab: true }),
-        ...(kind === 'grpc' ? { copyGrpcurl: () => void copySaved(kind, item.id) } : { copyUrl: () => void copySaved(kind, item.id) }),
-        testFile: () => void saveAsTest({ ref, name: item.name }),
-        rename: () => setRenaming(item.id),
-        duplicate: () => void editLibrary(kind, (items) => items.flatMap((i) => (i.id === item.id ? [i, { ...i, id: uid('lib-'), name: `${i.name} copy`, after: i.id, updatedAt: new Date().toISOString() }] : [i]))),
-        // Move to ▸ a collection ▸ its top level or one of its folders (any kind of request in any folder)
-        move: collections.map((c) => {
-          const folders: Array<{ id: string; path: string }> = [];
-          const walk = (nodes: CollectionNode[], prefix: string) => {
-            for (const n of nodes) if (n.kind === 'folder') (folders.push({ id: n.id, path: prefix + n.name }), walk(n.items, `${prefix}${n.name} / `));
-          };
-          walk(c.items, '');
-          const top = { label: 'Top level', onSelect: () => void moveItem(kind, item.id, c.id) };
-          return folders.length
-            ? { label: c.name, onSelect: () => undefined, items: [top, ...folders.filter((f) => !(c.id === item.collectionId && f.id === item.folderId)).map((f) => ({ label: f.path, onSelect: () => void moveItem(kind, item.id, c.id, { folderId: f.id }) }))] }
-            : { label: c.name, onSelect: top.onSelect };
-        }),
-        delete: () => {
-          // the whole saved item (its request and settings) and its place, to put it back as it was
-          let removed: { item: LibraryItem<unknown>; at: number } | undefined;
-          void deleteWithUndo({
-            kind: collectionCallKind(kind),
-            name: item.name,
-            focus: treeKey(item.collectionId ?? '', kind, item.id),
-            run: async () => {
-              closeTabsFor([item.id]);
-              await editLibrary(kind, (items) => {
-                const at = items.findIndex((i) => i.id === item.id);
-                if (at >= 0) removed = { item: items[at]!, at };
-                return items.filter((i) => i.id !== item.id);
-              });
-            },
-            undo: () => removed && editLibrary(kind, (items) => putBack(items, removed!.item, removed!.at)),
-          });
-        },
-      },
-    };
-  };
   /** Change the MCP server list (rename, duplicate, move to a folder). */
   const editServers = async (fn: (list: McpServerConfig[]) => McpServerConfig[]) => {
     await attempt(async () => {
@@ -652,40 +504,6 @@ export function Explorer() {
     };
   };
 
-  // the tree is memoized: its saved items change only with these lists (or a rename in place); menus read the latest
-  const savedLatest = useRef({ savedMenu, renameSaved });
-  savedLatest.current = { savedMenu, renameSaved };
-  const extraGroups = useCallback(
-    (c: Collection): ExtraGroup[] => [
-      {
-        cat: 'grpc',
-        kind: collectionCallKind('grpc'),
-        items: grpcByCollection.get(c.id) ?? NONE,
-        onOpen: (id) => void openRef({ kind: 'saved', library: 'grpc', itemId: id }),
-        menu: (id) =>
-          savedLatest.current.savedMenu(
-            'grpc',
-            grpc.find((i) => i.id === id)!,
-          ),
-        rename: (id) => savedLatest.current.renameSaved('grpc', id),
-      },
-      {
-        cat: 'websocket',
-        kind: collectionCallKind('websocket'),
-        items: socketsByCollection.get(c.id) ?? NONE,
-        onOpen: (id) => void openRef({ kind: 'saved', library: 'websocket', itemId: id }),
-        menu: (id) =>
-          savedLatest.current.savedMenu(
-            'websocket',
-            sockets.find((i) => i.id === id)!,
-          ),
-        rename: (id) => savedLatest.current.renameSaved('websocket', id),
-      },
-    ],
-    // (not `renaming`: the tree shows the renamed item by its `extraRenaming` prop; rename() reads savedLatest)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [grpcByCollection, socketsByCollection, grpc, sockets],
-  );
   // any kind of request in any folder: a gRPC call or connection is saved into the folder it was created in
   const newOfCategory = (c: Collection, cat: RequestCategory, folderId?: string) => {
     if (isCollectionCallLibrary(cat)) return intent(cat, { newDoc: true, collectionId: c.id, ...(folderId ? { folderId } : {}) });
@@ -695,16 +513,13 @@ export function Explorer() {
   // the same functions on every render, so the memoized tree re-renders only when what it shows changed
   const treeCallbacks = useStableCallbacks({
     onNewOfCategory: newOfCategory,
-    onDropSaved: (kind: 'grpc' | 'websocket', id: string, to: string, place?: { folderId?: string; after?: string }) => void moveItem(kind, id, to, place),
-    onFolderCallsRemove: folderCalls.remove,
-    onFolderCallsMove: folderCalls.move,
-    onFolderCallsCopy: folderCalls.copy,
     onOpen: (c: Collection, n: CollectionNode, o?: { preview?: boolean }) => void openRef({ kind: 'request', collectionId: c.id, requestId: n.id }, o?.preview ? { preview: true } : {}),
-    onChange: (c: Collection) => void saveCollection(c),
+    // (the tree waits for it and shows a failure: a move to another collection takes the request out of the first only once it is saved in the second)
+    onChange: (c: Collection) => call('col.save', c),
     onRun: (c: Collection, folderId?: string) => intent('collections', { collectionId: c.id, run: true, folderId }),
     onNewRequest: (c: Collection, folderId?: string) => {
       const node = newNode('rest')!;
-      void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then(() => openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: 'http' }));
+      void saveCollection({ ...c, items: addToFolder(c.items, folderId, node) }).then((saved) => saved && openRef({ kind: 'request', collectionId: c.id, requestId: node.id, protocol: 'http' }));
     },
     onSettings: (c: Collection) => void openRef({ kind: 'collection', collectionId: c.id }),
     onExport: (c: Collection) => (setExportFor(c.id), setExporting(true)),
@@ -752,7 +567,7 @@ export function Explorer() {
         <IconButton size="md" label="Export a collection or the workspace" onClick={() => setExporting(true)}>
           <Download />
         </IconButton>
-        <IconButton size="md" label="Refresh" onClick={() => void load()}>
+        <IconButton size="md" label="Refresh" onClick={() => (void load(), void calls.reload())}>
           <RefreshCw />
         </IconButton>
         <IconButton size="md" label="Hide the sidebar (Ctrl+B)" onClick={() => useApp.getState().toggleExplorer(false)}>
@@ -805,8 +620,7 @@ export function Explorer() {
               collections={allCollections}
               filter={shownFilter}
               explorer
-              extraGroups={extraGroups}
-              extraRenaming={renaming}
+              {...calls.tree}
               collapseAll={collapseAll}
               expandAll={expandAll}
               revealKey={revealKey}

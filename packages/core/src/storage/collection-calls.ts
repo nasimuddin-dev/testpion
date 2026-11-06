@@ -7,8 +7,12 @@
  * these two fields; the item's data never moves, so its ref (`saved/grpc/<id>`), its history and its tests stay the same.
  *
  * Older versions kept a call's folder as text of its own (`folder: "Payments/Refunds"`), apart from the collection's
- * folders. `placeCollectionCalls` turns such a text into the collection folder of that path (made when missing), once,
- * and keeps the text for an older app that still reads it.
+ * folders. `placeCollectionCalls` turns such a text into the collection folder of that path (made when missing), once:
+ * the text is removed when the call is placed. A text that stays is a call that still has to be placed, and nothing
+ * else: a call that kept its text next to `folderId` would go back into its old folder at the next start after someone
+ * moved it to the collection's top level (a move only clears `folderId`), and a run would still count it in that folder.
+ * An app older than collection folders for calls shows a placed call without its folder; an exported collection's
+ * calls name their folder by `folderId` (the importer finds the folder by its path in the file when the ids change).
  */
 import { COLLECTION_CALL_LIBRARIES, type CollectionCallLibrary } from '@testpion/shared';
 export { interleave, callsInFolders, moveCallsWithFolders, copyCallsWithFolders } from '@testpion/shared';
@@ -85,20 +89,31 @@ function folderOfPath(items: CollectionNode[], path: string[], made: { n: number
 
 /**
  * Give every gRPC call and connection that has a text folder but no collection folder the collection folder of that path
- * (made when the collection has none). Writes the collections and libraries that changed; returns how many calls moved.
- * A collection that cannot be read is left alone.
+ * (made when the collection has none), and take the text away: it has done its work (see the top of this file). A call
+ * that has both (placed by an earlier version, which kept the text) only loses the text. Returns how many calls moved.
+ * `collectionId`: only the calls of that collection (an import places what it brought, not the whole workspace).
+ * The collections are saved before the libraries: a failed save then leaves calls that are still to be placed, never
+ * calls that point at folders no collection has. A collection that cannot be read is left alone.
  */
-export function placeCollectionCalls(store: WorkspaceStore, libraries: readonly CollectionCallLibrary[] = COLLECTION_CALL_LIBRARIES): number {
+export function placeCollectionCalls(store: WorkspaceStore, o: { libraries?: readonly CollectionCallLibrary[]; collectionId?: string } = {}): number {
   const collections = new Map<string, Collection>();
   const changedCollections = new Set<string>();
+  const changedLibraries: Array<{ library: CollectionCallLibrary; folders: string[]; items: LibraryItem[] }> = [];
   let moved = 0;
-  for (const library of libraries) {
+  for (const library of o.libraries ?? COLLECTION_CALL_LIBRARIES) {
     const lib = store.getLibrary(library);
     let changed = false;
-    const items = lib.items.map((it) => {
+    const items = (lib.items as LibraryItem[]).map((it) => {
+      if (!it.collectionId || (o.collectionId !== undefined && it.collectionId !== o.collectionId)) return it;
       const text = it.folder?.trim();
-      // (a folderId whose folder is gone is not placed again: the person deleted or moved that folder)
-      if (!it.collectionId || it.folderId || !text) return it;
+      // placed already (a folderId whose folder is gone is not placed again: the person deleted or moved that folder): the text of an earlier version goes
+      if (it.folderId) {
+        if (it.folder === undefined) return it;
+        changed = true;
+        const { folder: _text, ...placedItem } = it;
+        return placedItem;
+      }
+      if (!text) return it;
       let c = collections.get(it.collectionId);
       if (!c) {
         try {
@@ -124,10 +139,12 @@ export function placeCollectionCalls(store: WorkspaceStore, libraries: readonly 
       }
       changed = true;
       moved++;
-      return { ...it, folderId: placed.id };
+      const { folder: _text, ...rest } = it;
+      return { ...rest, folderId: placed.id };
     });
-    if (changed) store.saveLibrary(library, { folders: lib.folders, items });
+    if (changed) changedLibraries.push({ library, folders: lib.folders, items });
   }
   for (const id of changedCollections) store.saveCollection(collections.get(id)!);
+  for (const l of changedLibraries) store.saveLibrary(l.library, { folders: l.folders, items: l.items });
   return moved;
 }

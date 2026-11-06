@@ -33,6 +33,7 @@ import { RefLink, refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
 import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES, environmentRef } from '@testpion/shared';
 import { VIEW_NAME } from '../lib/ui-names';
+import { environmentOf, isActiveEnvironment } from '../lib/active-environment';
 
 /** The newest history entry and the count: whether requests were sent since Home last loaded. */
 const historyMark = (r: { items: Array<{ id: string }>; total: number }) => `${r.total}|${r.items[0]?.id ?? ''}`;
@@ -388,7 +389,7 @@ export function HomeView() {
           )}
           {env && (
             <p className="relative mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-bg/70 px-3 py-1 text-xs text-muted">
-              <span className="w-2 h-2 rounded-full" style={{ background: ws?.environments.find((e) => e.name === env)?.color ?? 'var(--ok)' }} />
+              <span className="w-2 h-2 rounded-full" style={{ background: environmentOf(ws?.environments, env)?.color ?? 'var(--ok)' }} />
               Active environment: <span className="text-fg font-medium">{env}</span>
             </p>
           )}
@@ -571,7 +572,7 @@ export function HomeView() {
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
                   <span className="truncate flex-1">{e.name}</span>
                   {e.isProduction && <Badge tone="bad">prod</Badge>}
-                  {e.name === env && <Badge tone="accent">active</Badge>}
+                  {isActiveEnvironment(ws?.environments, e, env) && <Badge tone="accent">active</Badge>}
                 </button>
               ))
             ) : (

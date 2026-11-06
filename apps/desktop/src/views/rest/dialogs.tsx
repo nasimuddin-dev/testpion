@@ -41,7 +41,7 @@ export function SaveModal({
   const canSave = !!name.trim() && (creating ? !!newCollection.trim() : !!cid);
   const submit = async () => {
     if (!canSave || busy) return;
-    if (!creating) return (rememberSaveCollection(cid), onSave(cid, name.trim(), folder || undefined));
+    if (!creating) return (rememberSaveCollection(cid), onSave(cid, name.trim(), folderIn || undefined));
     setBusy(true);
     try {
       const id = uid('col-');
@@ -62,6 +62,9 @@ export function SaveModal({
     if (c) walk(c.items, '');
     return out;
   }, [c, folderNames]);
+  // the folder asked for (the one remembered from the last save, or the item's own) only while it is a folder of the
+  // chosen collection: a folder of another collection, or one that is gone, saves into the collection's top level
+  const folderIn = folders.some((f) => f.id === folder) ? folder : '';
   return (
     <Modal
       title={title}
@@ -99,7 +102,7 @@ export function SaveModal({
         </Field>
         {!creating && folders.length > 0 && (
           <Field label="Folder">
-            <Select value={folder} onChange={(e) => setFolder(e.target.value)}>
+            <Select value={folderIn} onChange={(e) => setFolder(e.target.value)}>
               <option value="">(collection root)</option>
               <NamedOptions items={folders} />
             </Select>

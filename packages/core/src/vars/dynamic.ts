@@ -134,6 +134,12 @@ export function dynamicValue(name: string): string | number | boolean | undefine
   const g = GENERATORS[name] ?? MORE_GENERATORS[name];
   if (g) return g[1]();
   const range = /^\$randomInt\((-?\d+)\s*,\s*(-?\d+)\)$/.exec(name);
-  if (range) return int(Number(range[1]), Number(range[2]));
+  if (range) {
+    // either order, and a span the generator can take: {{$randomInt(10,1)}} is a number from 1 to 10, never a thrown RangeError
+    const [a, b] = [Number(range[1]), Number(range[2])];
+    const [min, max] = a <= b ? [a, b] : [b, a];
+    if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || max - min >= 2 ** 47) return undefined;
+    return int(min, max);
+  }
   return undefined;
 }

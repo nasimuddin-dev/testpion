@@ -197,6 +197,18 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
     if (!indexByName.has(r.name)) indexByName.set(r.name, i);
   });
   const find = (target: string) => indexById.get(target) ?? indexByName.get(target) ?? -1;
+  // any kind of request in any folder: a gRPC call or a connection runs where the collection shows it, right after the
+  // request it follows there (`runAfter`; '' or none: before the first request). When that request is not part of this
+  // run (a selection), it follows the nearest request before it that is.
+  const order = refs.length ? collectionRequests(collection).map((r) => r.id) : [];
+  const callsAfter = new Map<string, TestCase[]>();
+  for (const t of realtime) {
+    let at = (t as { runAfter?: string }).runAfter ?? '';
+    for (let k = order.indexOf(at); at && !indexById.has(at); ) at = k > 0 ? order[--k]! : '';
+    const list = callsAfter.get(at);
+    if (list) list.push(t);
+    else callsAfter.set(at, [t]);
+  }
 
   const tests = async function* (): AsyncGenerator<TestCase> {
     let first = true;
@@ -205,6 +217,23 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
       const seen = new Map<string, number>();
       let i = 0;
       let steps = 0;
+      /** Run the calls placed after a request (or before the first one); false: the run stopped. */
+      const calls = async function* (after: string): AsyncGenerator<TestCase, boolean> {
+        for (const t of callsAfter.get(after) ?? []) {
+          if (stopped || opts.signal?.aborted) return false;
+          if (++steps > maxSteps) throw new ApsError('ValidationError', `Stopped iteration ${it + 1}: more than ${maxSteps} requests — check for a setNextRequest loop`);
+          if (!first && delayMs > 0) await sleep(delayMs, opts.signal).catch(() => undefined);
+          first = false;
+          const n = (seen.get(t.id!) ?? 0) + 1;
+          seen.set(t.id!, n);
+          const id = `${t.id}@${it + 1}${n > 1 ? `#${n}` : ''}`;
+          const done = waitFor(id);
+          yield { ...t, id, name: iterations > 1 ? `#${it + 1} ${t.name}` : t.name, variables: row ? { ...(t.variables ?? {}), ...row } : t.variables };
+          if (!(await done)) return false;
+        }
+        return true;
+      };
+      if (!(yield* calls(''))) return;
       while (i < refs.length) {
         if (stopped || opts.signal?.aborted) return;
         if (++steps > maxSteps) throw new ApsError('ValidationError', `Stopped iteration ${it + 1}: more than ${maxSteps} requests — check for a setNextRequest loop`);
@@ -219,22 +248,13 @@ export async function runCollection(opts: CollectionRunOptions): Promise<RunSumm
         yield collectionRequestToTest(collection, ref, { id, name: iterations > 1 ? `#${it + 1} ${label}` : label, data: row });
         const result = await done;
         if (!result) return;
+        if (!(yield* calls(ref.id))) return;
         const next = result.metadata?.nextRequest;
         if (next === null) break; // setNextRequest(null): end this iteration
         if (typeof next === 'string') {
           const j = find(next);
           i = j >= 0 ? j : refs.length; // unknown name ends the iteration, like Postman
         } else i++;
-      }
-      // then the collection's gRPC calls and connections, in order
-      for (const t of realtime) {
-        if (stopped || opts.signal?.aborted) return;
-        if (!first && delayMs > 0) await sleep(delayMs, opts.signal).catch(() => undefined);
-        first = false;
-        const id = `${t.id}@${it + 1}`;
-        const done = waitFor(id);
-        yield { ...t, id, name: iterations > 1 ? `#${it + 1} ${t.name}` : t.name, variables: row ? { ...(t.variables ?? {}), ...row } : t.variables };
-        if (!(await done)) return;
       }
     }
   };

@@ -9,7 +9,7 @@ import { VirtualList } from './ui';
 import { focusRow } from './TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
-import { AT_START, interleave } from '@testpion/shared';
+import { dropBefore, followersOf } from '../lib/call-places';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
@@ -29,7 +29,7 @@ import { saveAsTest } from '../lib/save-test';
 import { openRef } from '../lib/open-ref';
 import { openExportBundle } from '../lib/transfer';
 import { deferDrop, useDragSession } from '../lib/drag-ref';
-import { buildTreeRows, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
+import { buildTreeRows, callShown, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 import { CATEGORY_META, CollectionRow, EmptyRow, ExampleRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
 import { useOpenRequestId } from './open-request-id';
 
@@ -73,7 +73,7 @@ const folderKeysOf = (collectionId: string, nodes: CollectionNode[], keys: strin
 };
 
 /**
- * Tree of collections → folders → requests of every kind (saved gRPC calls and connections among them), flattened to the rows
+ * Tree of collections → folders → requests of every kind (saved gRPC calls and connections among them, when `extraGroups` gives them), flattened to the rows
  * that show and drawn through a VirtualList; every row is the one row (TreeRowShell, CollectionTreeRows) with the one
  * menu (lib/node-menu.ts).
  */
@@ -94,6 +94,7 @@ export const CollectionTree = memo(function CollectionTree({
   extraRenaming,
   onNewOfCategory,
   onDropSaved,
+  onCallsAfter,
   onFolderCallsRemove,
   onFolderCallsMove,
   onFolderCallsCopy,
@@ -105,7 +106,12 @@ export const CollectionTree = memo(function CollectionTree({
   collections: Collection[];
   /** Open a request; `preview`: a single click (a preview tab, WF-19), double-click opens it for good. */
   onOpen(c: Collection, node: CollectionNode, o?: { preview?: boolean }): void;
-  onChange(c: Collection): void;
+  /**
+   * Save a changed collection. A promise is waited for where the next step depends on it (a move to another collection
+   * takes the request out of the first only once it is saved in the second); it rejects when the collection was not
+   * saved, and the tree shows why.
+   */
+  onChange(c: Collection): void | Promise<unknown>;
   onNewRequest(c: Collection, folderId?: string): void;
   /** Open the Collection Runner for a collection or one of its folders. */
   onRun?(c: Collection, folderId?: string): void;
@@ -120,24 +126,35 @@ export const CollectionTree = memo(function CollectionTree({
   onMoved?(ids: string[], fromCollectionId: string, toCollectionId: string): void;
   /** Label of the "New request" menu entry (e.g. "New GraphQL request"). */
   newRequestLabel?: string;
-  /** The explorer's tree: collections start folded, and their gRPC calls and connections (`extraGroups`) are shown. */
+  /** The explorer's tree: collections start folded. */
   explorer?: boolean;
-  /** A collection's gRPC calls and WebSocket connections (saved outside the collection file). */
+  /**
+   * A collection's gRPC calls and WebSocket connections (saved outside the collection file), shown in its folders. These
+   * props come from the one owner of those lists, for every tree: `{...useCollectionCalls(collections).tree}`.
+   */
   extraGroups?(c: Collection): ExtraGroup[];
-  /** The saved gRPC call or connection being renamed in place (its id): the view keeps that state. */
+  /** The saved gRPC call or connection being renamed in place (its id): the owner of the lists keeps that state. */
   extraRenaming?: string;
   /** Create a request of this kind in a collection or one of its folders (New request ▸ in their menus). */
   onNewOfCategory?(c: Collection, cat: RequestCategory, folderId?: string): void;
-  /** A saved gRPC call or connection was dropped on a collection. */
-  onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string, place?: { folderId?: string; after?: string }): void;
+  /**
+   * A saved gRPC call or connection was dropped on a collection, on a folder, or before a request or another call
+   * (`after`: the sibling it follows now; `others`: the calls around it that follow something else now).
+   */
+  onDropSaved?(kind: 'grpc' | 'websocket', id: string, collectionId: string, place?: { folderId?: string; after?: string; others?: ReadonlyMap<string, string> }): void | Promise<unknown>;
+  /**
+   * Calls follow another sibling now (call id → what it follows): the request or folder they followed was deleted or
+   * moved away, or one was dropped among them. The answer puts them back as they were (Undo).
+   */
+  onCallsAfter?(after: ReadonlyMap<string, string>): Promise<(() => Promise<unknown>) | undefined>;
   /**
    * A folder's gRPC calls and connections follow it (they are kept outside the collection file): deleted with it (the
    * answer puts them back, for Undo), moved with it to another collection (`renamed`: ids that changed on the way), and
    * copied with it (`ids`: old id → new id of every copied folder and request).
    */
   onFolderCallsRemove?(collectionId: string, folderIds: string[]): Promise<(() => Promise<unknown>) | undefined>;
-  onFolderCallsMove?(from: string, to: string, folderIds: string[], renamed: ReadonlyMap<string, string>): void;
-  onFolderCallsCopy?(collectionId: string, ids: ReadonlyMap<string, string>): void;
+  onFolderCallsMove?(from: string, to: string, folderIds: string[], renamed: ReadonlyMap<string, string>): void | Promise<unknown>;
+  onFolderCallsCopy?(collectionId: string, ids: ReadonlyMap<string, string>): void | Promise<unknown>;
   /** Changes (1, 2 …) fold every collection and folder. */
   collapseAll?: number;
   /** Changes (1, 2 …) unfold every collection and folder (the explorer's Expand all). */
@@ -152,11 +169,24 @@ export const CollectionTree = memo(function CollectionTree({
    * Change a collection: the list may be outlines (col.tree, no bodies or scripts), so the change is applied to the
    * whole collection, read first; `onChange` always gets a whole collection.
    */
+  /** Save a collection; rejects when it could not be saved (for a step that shows the failure itself). */
+  const saveNow = async (c: Collection): Promise<void> => {
+    await onChange(c);
+  };
+  /**
+   * Save a collection and say whether it was saved. Every save of the tree goes through here or `saveNow`, so a save
+   * that fails is always shown, once.
+   */
+  const save = (c: Collection): Promise<boolean> => attempt(() => saveNow(c));
   const change = (c: Collection, f: (whole: Collection) => Collection | undefined) =>
     void fullCollection(c).then((whole) => {
       const next = f(whole);
-      if (next) onChange(next);
+      if (next) void save(next);
     }, toastError);
+  /** A collection's gRPC calls and connections (every kind, in every folder). */
+  const callsOf = (c: Collection) => (extraGroups?.(c) ?? []).flatMap((g) => g.items);
+  /** Calls follow other siblings now; nothing to do when none changes. The answer puts them back (Undo). */
+  const callsAfter = async (after: ReadonlyMap<string, string>) => (after.size ? await onCallsAfter?.(after) : undefined);
   /** "New request": the callback builds on the collection's items, so it gets the whole collection. */
   const newRequest = (c: Collection, folderId?: string) => void fullCollection(c).then((whole) => onNewRequest(whole, folderId), toastError);
   /** The node as the whole collection has it (with its body, headers and scripts). */
@@ -187,7 +217,8 @@ export const CollectionTree = memo(function CollectionTree({
       trash: true,
       focus: c.id,
       run: async () => {
-        closeTabsFor(c.items.flatMap(subtreeIds));
+        // the tabs of its requests, and of its gRPC calls and connections
+        closeTabsFor([...c.items.flatMap(subtreeIds), ...callsOf(c).map((i) => i.id)]);
         await call('col.delete', { id: c.id });
       },
       undo: () => restoreDeleted('collection', c.id),
@@ -196,6 +227,9 @@ export const CollectionTree = memo(function CollectionTree({
   /** Delete a request or folder at once, with Undo in the message (lib/undo.ts: puts the collection back as it was). */
   const deleteNode = (c: Collection, n: CollectionNode) => {
     let putCallsBack: (() => Promise<unknown>) | undefined;
+    let followAgain: (() => Promise<unknown>) | undefined;
+    // the calls that follow it in its folder follow what it followed (read now, while it is still in its place)
+    const followers = followersOf(c, callsOf(c), n.id);
     return fullCollection(c).then(
       (whole) =>
         deleteWithUndo({
@@ -205,13 +239,16 @@ export const CollectionTree = memo(function CollectionTree({
           run: async () => {
             // its tabs (and those of everything in a deleted folder) close too
             closeTabsFor(subtreeIds(n));
+            // (a save that fails stops here: nothing else is touched, and the message is the error, not "Deleted")
+            await saveNow({ ...whole, items: mapNodes(whole.items, (x) => (x.id === n.id ? null : x)) });
             // a folder's gRPC calls and connections go with it, and come back with Undo
             if (n.kind === 'folder') putCallsBack = await onFolderCallsRemove?.(c.id, subtreeIds(n));
-            onChange({ ...whole, items: mapNodes(whole.items, (x) => (x.id === n.id ? null : x)) });
+            followAgain = await callsAfter(followers);
           },
           undo: async () => {
-            onChange(whole);
+            await saveNow(whole);
             await putCallsBack?.();
+            await followAgain?.();
           },
         }),
       toastError,
@@ -228,30 +265,50 @@ export const CollectionTree = memo(function CollectionTree({
   /** A node arriving from another collection: fresh ids for those another collection already has (B-01). */
   const arriving = <T extends CollectionNode>(n: T, from: Collection, to: Collection) => {
     const r = moveIntoCollection(n, nodeIdsExcept([...collections.filter((x) => x.id !== to.id), to], from.id));
-    // tabs of a request whose id changed close (they would name a request that is gone); the others follow it
-    if (r.renamed.size) closeTabsFor([...r.renamed.keys()]);
     return { node: r.node, kept: subtreeIds(n).filter((id) => !r.renamed.has(id)), renamed: r.renamed };
+  };
+  /**
+   * A request or folder moves to another collection, one step after the other: saved in the new collection first, and
+   * taken out of the old one only once that worked (a save that fails leaves a copy at most, never loses the request;
+   * its error is shown and nothing else follows). Then its tabs follow it, the calls that followed it in its old folder
+   * follow what it followed (`after`, with the calls around its new place), and a folder's calls move with it.
+   * Resolves whether it moved.
+   */
+  const moveAcross = async (from: Collection, without: Collection, to: Collection, n: CollectionNode, moved: { kept: string[]; renamed: ReadonlyMap<string, string> }, after: ReadonlyMap<string, string>): Promise<boolean> => {
+    if (!(await save(to)) || !(await save(without))) return false;
+    // tabs of a request whose id changed close (they would name a request that is gone); the others follow it
+    if (moved.renamed.size) closeTabsFor([...moved.renamed.keys()]);
+    onMoved?.(moved.kept, from.id, to.id);
+    await callsAfter(after);
+    // a folder's gRPC calls and connections move with it
+    if (n.kind === 'folder') await onFolderCallsMove?.(from.id, to.id, subtreeIds(n), moved.renamed);
+    return true;
   };
   const drop = (to: Collection, place: { beforeId?: string; folderId?: string }) => {
     const d = drag;
     endDrag();
     if (!d || !canDrop(place)) return;
+    // the calls that follow it in its folder follow what it followed (read now, while it is still in its place)
+    const followers = followersOf(d.c, callsOf(d.c), d.n.id);
     // after the drop event: the drag loop has ended before anything re-renders or opens (menus-uniform P0-1)
-    deferDrop(() =>
-      void Promise.all([fullCollection(d.c), to.id === d.c.id ? undefined : fullCollection(to)]).then(([from, other]) => {
-        const n = wholeNode(from, d.n);
-        const without = mapNodes(from.items, (x) => (x.id === n.id ? null : x));
-        const insert = (items: CollectionNode[], m: CollectionNode) => (place.beforeId ? insertBefore(items, place.beforeId, m) : addToFolder(items, place.folderId, m));
-        if (!other) onChange({ ...from, items: insert(without, n) });
-        else {
-          const { node, kept, renamed } = arriving(n, from, other);
-          onChange({ ...other, items: insert(other.items, node) });
-          onChange({ ...from, items: without });
-          onMoved?.(kept, from.id, other.id);
-          // a folder's gRPC calls and connections move with it
-          if (n.kind === 'folder') onFolderCallsMove?.(from.id, other.id, subtreeIds(n), renamed);
-        }
-      }, toastError),
+    deferDrop(
+      () =>
+        void (async () => {
+          const [from, other] = await Promise.all([fullCollection(d.c), to.id === d.c.id ? undefined : fullCollection(to)]);
+          const n = wholeNode(from, d.n);
+          const without = mapNodes(from.items, (x) => (x.id === n.id ? null : x));
+          const arrived = other ? arriving(n, from, other) : undefined;
+          const node = arrived?.node ?? n;
+          // dropped before a gRPC call or connection: among the folder's requests where the call is shown, and the
+          // calls from there on follow it
+          const atCall = place.beforeId && callsOf(to).some((i) => i.id === place.beforeId) ? dropBefore(to, callsOf(to), { id: node.id, node: true }, place.beforeId) : undefined;
+          const insert = (items: CollectionNode[], m: CollectionNode) =>
+            atCall ? (atCall.beforeNode ? insertBefore(items, atCall.beforeNode, m) : addToFolder(items, atCall.folderId, m)) : place.beforeId ? insertBefore(items, place.beforeId, m) : addToFolder(items, place.folderId, m);
+          const after = new Map([...followers, ...(atCall?.after ?? [])]);
+          if (!other) {
+            if (await save({ ...from, items: insert(without, n) })) await callsAfter(after);
+          } else await moveAcross(from, { ...from, items: without }, { ...other, items: insert(other.items, node) }, n, arrived!, after);
+        })().catch(toastError),
     );
   };
   /** The drag of a row, set a frame after dragstart (the row must not re-render inside it), and cleared once. */
@@ -290,26 +347,22 @@ export const CollectionTree = memo(function CollectionTree({
         setDropAt(undefined);
         try {
           const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string; from?: string };
-          deferDrop(() => onDropSaved!(d.kind, d.id, c.id, {}));
+          deferDrop(() => void onDropSaved!(d.kind, d.id, c.id, {}));
         } catch {
           /* not ours */
         }
       },
     };
   };
-  /** A gRPC call or connection dropped on a folder (inside it, at its end) or on a request (just before it): its place in the folder view. */
-  const savedPlace = (c: Collection, place: { beforeId?: string; folderId?: string }, dragged: string): { folderId?: string; after?: string } => {
-    if (!place.beforeId) return { folderId: place.folderId };
-    const folders = folderIdsTo(c.items, place.beforeId) ?? [];
-    const folderId = folders[folders.length - 1];
-    const siblings = folderId ? ((findNode(c.items, folderId) as CollectionFolder | undefined)?.items ?? []) : c.items;
-    // (without the dragged call itself: dropped before the request that follows it, it would be placed after itself)
-    const calls = (extraGroups?.(c) ?? []).flatMap((g) => g.items.filter((i) => i.id !== dragged && (i.folderId ?? '') === (folderId ?? '')));
-    const order = interleave(siblings, calls).map((x) => ('node' in x ? x.node.id : x.call.id));
-    const at = order.indexOf(place.beforeId);
-    return { folderId, after: at > 0 ? order[at - 1] : AT_START };
+  /**
+   * A gRPC call or connection dropped on a folder (inside it, at its end) or just before a request, a folder or another
+   * call: its place in the folder, and the calls around it that follow something else now (so the order shown stays).
+   */
+  const savedPlace = (c: Collection, place: { beforeId?: string; folderId?: string }, dragged: string): { folderId?: string; after?: string; others?: ReadonlyMap<string, string> } => {
+    const at = place.beforeId ? dropBefore(c, callsOf(c), { id: dragged }, place.beforeId) : undefined;
+    return at ? { folderId: at.folderId, after: at.after.get(dragged), others: at.after } : { folderId: place.folderId };
   };
-  const isSavedDrag = (e: React.DragEvent) => !!onDropSaved && explorer && e.dataTransfer.types.includes(SAVED_ITEM_MIME);
+  const isSavedDrag = (e: React.DragEvent) => !!onDropSaved && e.dataTransfer.types.includes(SAVED_ITEM_MIME);
   const dropProps = (c: Collection, id: string, mode: DropMode, place: { beforeId?: string; folderId?: string }) => ({
     onDragOver: (e: React.DragEvent) => {
       if (isSavedDrag(e)) {
@@ -331,7 +384,7 @@ export const CollectionTree = memo(function CollectionTree({
         setDropAt(undefined);
         try {
           const d = JSON.parse(e.dataTransfer.getData(SAVED_ITEM_MIME)) as { kind: 'grpc' | 'websocket'; id: string };
-          if (d.id !== place.beforeId) deferDrop(() => onDropSaved!(d.kind, d.id, c.id, savedPlace(c, place, d.id)));
+          if (d.id !== place.beforeId) deferDrop(() => void onDropSaved!(d.kind, d.id, c.id, savedPlace(c, place, d.id)));
         } catch {
           /* not ours */
         }
@@ -342,24 +395,25 @@ export const CollectionTree = memo(function CollectionTree({
   });
   const move = (fromShown: Collection, shown: CollectionNode, toShown: Collection, folderId: string | undefined) => {
     setMoving(undefined);
-    void Promise.all([fullCollection(fromShown), toShown.id === fromShown.id ? undefined : fullCollection(toShown)]).then(([from, other]) => {
+    // the calls that follow it in its folder follow what it followed (read now, while it is still in its place)
+    const followers = followersOf(fromShown, callsOf(fromShown), shown.id);
+    void (async () => {
+      const [from, other] = await Promise.all([fullCollection(fromShown), toShown.id === fromShown.id ? undefined : fullCollection(toShown)]);
       const shownNode = wholeNode(from, shown);
       const to = other ?? from;
       const without = { ...from, items: mapNodes(from.items, (x) => (x.id === shownNode.id ? null : x)) };
       let n = shownNode;
-      if (!other) onChange({ ...without, items: addToFolder(without.items, folderId, n) });
-      else {
+      if (!other) {
+        if (!(await save({ ...without, items: addToFolder(without.items, folderId, n) }))) return;
+        await callsAfter(followers);
+        onMoved?.(subtreeIds(n), from.id, to.id);
+      } else {
         const moved = arriving(shownNode, from, other);
         n = moved.node;
-        // add to the new collection first: a failed save then leaves a copy rather than losing the request
-        onChange({ ...other, items: addToFolder(other.items, folderId, n) });
-        onChange(without);
-        onMoved?.(moved.kept, from.id, to.id);
-        if (shownNode.kind === 'folder') onFolderCallsMove?.(from.id, to.id, subtreeIds(shownNode), moved.renamed);
+        if (!(await moveAcross(from, without, { ...other, items: addToFolder(other.items, folderId, n) }, shownNode, moved, followers))) return;
       }
-      if (!other) onMoved?.(subtreeIds(n), from.id, to.id);
       useApp.getState().toast(`Moved "${n.name}" to ${to.name}${folderId ? ` › ${findNode(to.items, folderId)?.name ?? ''}` : ''}`, 'success', { ref: n.kind === 'folder' ? { kind: 'folder', collectionId: to.id, folderId: n.id } : { kind: 'request', collectionId: to.id, requestId: n.id } });
-    }, toastError);
+    })().catch(toastError);
   };
   /** Rewrite the collection's scripts between Postman's pm.* and TestPion's tp.* (both always work). */
   const convertScripts = async (c: Collection, to: 'tp' | 'pm') => {
@@ -388,7 +442,7 @@ export const CollectionTree = memo(function CollectionTree({
         tone: 'question',
       });
       if (!ok) return;
-      onChange(r.collection);
+      if (!(await save(r.collection))) return;
       useApp.getState().toast(`Converted ${plural(r.changed, 'script')} to ${to}.*`, 'success');
     } catch (e) {
       toastError(e, "Couldn't convert the scripts");
@@ -511,7 +565,7 @@ export const CollectionTree = memo(function CollectionTree({
               return copy;
             });
             // (here, once the whole collection is read and the copy has its ids)
-            if (ids.size) onFolderCallsCopy?.(whole.id, ids);
+            if (ids.size) void onFolderCallsCopy?.(whole.id, ids);
             return { ...whole, items };
           });
         },
@@ -553,9 +607,8 @@ export const CollectionTree = memo(function CollectionTree({
   // nothing to show for the filter (or no favourites): say so (the same matches the rows were built from, cached)
   const nothingMatches = useMemo(() => {
     if (!f && !favoritesOnly) return false;
-    const extraShown = (i: ExtraGroup['items'][number]) => !f || i.name.toLowerCase().includes(f) || !!i.folder?.toLowerCase().includes(f);
-    return !collections.some((c) => c.items.some(matchIndex(c.items, filter, favoritesOnly)) || (explorer && (extraGroups?.(c) ?? []).some((g) => g.items.some(extraShown))));
-  }, [collections, filter, f, favoritesOnly, explorer, extraGroups]);
+    return !collections.some((c) => c.items.some(matchIndex(c.items, filter, favoritesOnly)) || (extraGroups?.(c) ?? []).some((g) => g.items.some((i) => callShown(i, f || undefined, favoritesOnly))));
+  }, [collections, filter, f, favoritesOnly, extraGroups]);
   // two collections with one name (an import done twice): their rows show their ids
   const duplicateNames = useMemo(() => {
     const seen = new Set<string>();
@@ -577,7 +630,7 @@ export const CollectionTree = memo(function CollectionTree({
     if (!opened) return;
     for (const c of collections) {
       // a gRPC call or connection in the folder view: the folders on its way to its own folder
-      const call = explorer ? (extraGroups?.(c) ?? []).flatMap((g) => g.items).find((i) => i.id === target) : undefined;
+      const call = callsOf(c).find((i) => i.id === target);
       if (call) {
         const to = call.folderId ? folderIdsTo(c.items, call.folderId) : undefined;
         const keys = [c.id, ...(to ? [...to, call.folderId!] : []).map((id) => folderOpenKey(c.id, id))];
@@ -632,7 +685,7 @@ export const CollectionTree = memo(function CollectionTree({
       case 'folder':
         return <FolderRow c={r.c} n={r.n} depth={r.depth} open={r.open} calls={r.calls} renaming={renaming === r.key} dropMode={dropModeOf(r.key)} ctx={ctx} />;
       case 'xitem':
-        return <ExtraItemRow g={r.g} i={r.i} depth={r.depth} from={r.from} id={r.key} active={activeRequestId === r.i.id} renaming={extraRenaming === r.i.id} ctx={ctx} />;
+        return <ExtraItemRow c={r.c} g={r.g} i={r.i} depth={r.depth} from={r.from} id={r.key} active={activeRequestId === r.i.id} renaming={extraRenaming === r.i.id} dropMode={dropModeOf(r.key)} ctx={ctx} />;
       case 'req':
         return (
           <RequestRow
@@ -659,7 +712,7 @@ export const CollectionTree = memo(function CollectionTree({
         <FolderEditor
           folder={editing.folder}
           onClose={() => setEditing(undefined)}
-          onSave={(folder) => onChange({ ...editing.c, items: mapNodes(editing.c.items, (x) => (x.id === folder.id && x.kind === 'folder' ? { ...folder, items: x.items } : x)) })}
+          onSave={(folder) => void save({ ...editing.c, items: mapNodes(editing.c.items, (x) => (x.id === folder.id && x.kind === 'folder' ? { ...folder, items: x.items } : x)) })}
         />
       )}
       {moving && <MoveDialog node={moving.n} from={moving.c} collections={collections} onClose={() => setMoving(undefined)} onMove={(to, folderId) => move(moving.c, moving.n, to, folderId)} />}

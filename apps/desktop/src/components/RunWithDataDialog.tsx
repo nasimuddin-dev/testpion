@@ -6,6 +6,7 @@ import { call } from '../api';
 import { selectEnvironments, toastError, useApp } from '../store';
 import { hasNativeDialogs, pickTextFile } from '../lib/files';
 import { Button, Field, Input, Modal, Segmented, Select, Toggle, cx } from './ui';
+import { EnvSelect } from './EnvSelect';
 
 interface DataFile {
   path: string;
@@ -141,14 +142,7 @@ export function RunWithDataDialog({ file, initial = 'data', onClose, onStarted }
             )}
             <div className="grid grid-cols-3 gap-2">
               <Field label="Environment">
-                <Select aria-label="Environment" value={environment} onChange={(e) => setEnvironment(e.target.value)}>
-                  <option value="">No environment</option>
-                  {usable.map((e) => (
-                    <option key={e.name} value={e.name}>
-                      {e.name}
-                    </option>
-                  ))}
-                </Select>
+                <EnvSelect value={environment || undefined} onChange={(name) => setEnvironment(name ?? '')} />
               </Field>
               <Field label="Rows at once">
                 <Input type="number" min={1} max={32} aria-label="Rows at once" value={concurrency} onChange={(e) => setConcurrency(e.target.value)} />

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { jsonPretty, markdownTable, objectsToCsv, outputFileName } from '@testpion/shared';
 import { plural } from '../lib/format';
 import { useProblems, type Problem } from '../lib/problems';
+import { useSticky } from '../lib/sticky';
 import { call } from '../api';
 import { ProblemList } from './ProblemList';
 import { OutputActions } from './output/OutputFrame';
@@ -19,17 +20,19 @@ export function ProblemsPanel() {
   const all = useProblems();
   // several teams in one workspace: one team's problems, by the owners CODEOWNERS names (the select appears only when some problem has owners)
   const owners = useMemo(() => [...new Set(all.flatMap((p) => p.owners ?? []))].sort(), [all]);
-  const [owner, setOwner] = useState('');
+  // (the choices are kept for the workspace while the app runs: the bottom panel unmounts this when it closes or shows another tab)
+  const [pickedOwner, setOwner] = useSticky('problems:owner', '');
   // and one tenant's: the environment group a problem is about (a monitor's environment, an environment's token or secret)
   const tenants = useMemo(() => [...new Set(all.map((p) => p.tenant).filter((t): t is string => !!t))].sort(), [all]);
-  const [tenant, setTenant] = useState('');
+  const [pickedTenant, setTenant] = useSticky('problems:tenant', '');
   // several teams or tenants: the list grouped by kind (as always), by owner, or by tenant
-  const [groupBy, setGroupBy] = useState<'kind' | 'owner' | 'tenant'>('kind');
+  const [pickedGroupBy, setGroupBy] = useSticky<'kind' | 'owner' | 'tenant'>('problems:groupBy', 'kind');
+  // what is in effect: a choice only while it is on offer (the last problem of an owner or a tenant can go away)
+  const owner = owners.includes(pickedOwner) ? pickedOwner : '';
+  const tenant = tenants.includes(pickedTenant) ? pickedTenant : '';
+  const groupBy = (pickedGroupBy === 'owner' && !owners.length) || (pickedGroupBy === 'tenant' && !tenants.length) ? 'kind' : pickedGroupBy;
   const groupOf = (p: Problem) => (groupBy === 'owner' ? (p.owners?.length ? p.owners.join(' ') : 'No owner') : groupBy === 'tenant' ? (p.tenant ?? 'No tenant') : p.group);
-  const problems = useMemo(
-    () => all.filter((p) => (!owner || !owners.includes(owner) || p.owners?.includes(owner)) && (!tenant || !tenants.includes(tenant) || p.tenant === tenant)),
-    [all, owner, owners, tenant, tenants],
-  );
+  const problems = useMemo(() => all.filter((p) => (!owner || p.owners?.includes(owner)) && (!tenant || p.tenant === tenant)), [all, owner, tenant]);
   // the problems set aside on this computer: a line says how many, Show lists them greyed with Bring it back
   const [snoozed, setSnoozed] = useState<Problem[]>([]);
   const [showSnoozed, setShowSnoozed] = useState(false);
@@ -65,7 +68,7 @@ export function ProblemsPanel() {
           <Segmented label="Group by" value={groupBy} onChange={setGroupBy} options={[{ value: 'kind' as const, label: 'By kind' }, ...(owners.length ? [{ value: 'owner' as const, label: 'By owner' }] : []), ...(tenants.length ? [{ value: 'tenant' as const, label: 'By tenant' }] : [])]} />
         )}
         {owners.length > 0 && (
-          <Select className="ml-2 h-6 py-0 text-xs" value={owners.includes(owner) ? owner : ''} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" title="Only one team's problems (the owners CODEOWNERS names)" data-problems-owner>
+          <Select className="ml-2 h-6 py-0 text-xs" value={owner} onChange={(e) => setOwner(e.target.value)} aria-label="Owner" title="Only one team's problems (the owners CODEOWNERS names)" data-problems-owner>
             <option value="">Every owner</option>
             {owners.map((o) => (
               <option key={o} value={o}>
@@ -75,7 +78,7 @@ export function ProblemsPanel() {
           </Select>
         )}
         {tenants.length > 0 && (
-          <Select className="ml-2 h-6 py-0 text-xs" value={tenants.includes(tenant) ? tenant : ''} onChange={(e) => setTenant(e.target.value)} aria-label="Tenant" title="Only one tenant's problems (the environment group its monitor or environment is in)" data-problems-tenant>
+          <Select className="ml-2 h-6 py-0 text-xs" value={tenant} onChange={(e) => setTenant(e.target.value)} aria-label="Tenant" title="Only one tenant's problems (the environment group its monitor or environment is in)" data-problems-tenant>
             <option value="">Every tenant</option>
             {tenants.map((t) => (
               <option key={t} value={t}>
@@ -98,7 +101,7 @@ export function ProblemsPanel() {
         {problems.length || (showSnoozed && snoozed.length) ? (
           <ProblemList problems={showSnoozed ? [...problems, ...snoozed] : problems} grouped groupOf={groupOf} />
         ) : (
-          <Empty icon={<CheckCircle2 size={22} />} title={(owner || tenant) && all.length ? `No problems of ${owner || tenant}` : 'No problems'}>
+          <Empty icon={<CheckCircle2 size={22} />} title={(owner || tenant) && all.length ? `No problems of ${[owner, tenant && `tenant ${tenant}`].filter(Boolean).join(' in ')}` : 'No problems'}>
             Monitors, runs, requests, certificates and workspace files are all fine.{snoozed.length ? ` ${plural(snoozed.length, 'problem')} set aside: Show above lists them.` : ''}
           </Empty>
         )}

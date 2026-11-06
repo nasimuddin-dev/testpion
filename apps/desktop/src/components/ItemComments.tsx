@@ -1,7 +1,8 @@
 import { Check, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ItemRef } from '@testpion/shared';
-import { call } from '../api';
+import { call, on } from '../api';
+import { useSticky } from '../lib/sticky';
 import { timeAgo } from '../lib/format';
 import { toastError } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
@@ -16,17 +17,28 @@ type Comment = { id: string; by: string; at: string; text: string; resolvedAt?: 
 export function ItemComments({ ref }: { ref: ItemRef }) {
   const key = JSON.stringify(ref);
   const [comments, setComments] = useState<Comment[]>();
-  const [text, setText] = useState('');
+  // what is being typed is kept per item (in memory, per workspace): the panel unmounts this when the tab or the
+  // active environment changes, and the comment must still be there when the item is shown again
+  const [text, setText] = useSticky(`comment-draft:${key}`, '');
   const [busy, setBusy] = useState(false);
+  // (a ref too: two key presses in a row arrive before `busy` is drawn)
+  const working = useRef(false);
   const [showSettled, setShowSettled] = useState(false);
-  const load = () => call<Comment[]>('comments.list', { ref }).then(setComments, () => setComments([]));
+  // the item shown now: an answer for another item (a slow read, then a tab switch) is dropped
+  const shown = useRef(key);
+  shown.current = key;
+  const load = () => call<Comment[]>('comments.list', { ref }).then((list) => shown.current === key && setComments(list), () => shown.current === key && setComments([]));
   useEffect(() => {
     setComments(undefined);
-    setText('');
     void load();
+    // a comment added, settled or deleted elsewhere (another window, an agent, the CLI, a pull): the thread is read again
+    const offs = [on('comments.changed', () => void load()), on('workspace.changedOnDisk', () => void load())];
+    return () => offs.forEach((off) => off());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   const run = async (fn: () => Promise<unknown>) => {
+    if (working.current) return;
+    working.current = true;
     setBusy(true);
     try {
       await fn();
@@ -34,6 +46,7 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
     } catch (e) {
       toastError(e);
     } finally {
+      working.current = false;
       setBusy(false);
     }
   };
@@ -89,7 +102,7 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           placeholder="Ask or note something for your team…"
           aria-label="New comment"
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim()) void add();
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim() && !busy) void add();
           }}
           data-comment-text
         />

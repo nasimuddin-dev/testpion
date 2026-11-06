@@ -34,9 +34,12 @@ describe('sharing a collection with its gRPC calls and connections', () => {
     const copy = (be.ws.listCollections() as Array<Record<string, unknown>>).find((c) => c.name === 'Shop copy')!;
     expect(copy.savedItems).toBeUndefined();
     const grpc = be.ws.getLibrary('grpc').items;
-    expect(grpc.filter((i) => i.collectionId === copy.id)).toEqual([expect.objectContaining({ name: 'Say hi', folder: 'greeter', data: { target: 'x:1', method: 'a.B/C' } })]);
+    // the copy's call sits in the collection folder its folder text names (the text placed it and is gone)
+    expect(grpc.filter((i) => i.collectionId === copy.id)).toEqual([expect.objectContaining({ name: 'Say hi', folderId: 'fld-shop-copy-greeter', data: { target: 'x:1', method: 'a.B/C' } })]);
+    expect(grpc.find((i) => i.collectionId === copy.id)!.folder).toBeUndefined();
     expect(grpc.find((i) => i.collectionId === copy.id)!.id).not.toBe('g1');
-    expect(grpc.find((i) => i.id === 'g1')!.collectionId).toBe('shop');
+    // the import placed its own calls only: the original is as it was
+    expect(grpc.find((i) => i.id === 'g1')).toMatchObject({ collectionId: 'shop', folder: 'greeter' });
     expect(be.ws.getLibrary('websocket').items.filter((i) => i.collectionId === copy.id)).toHaveLength(1);
   });
 });

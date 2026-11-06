@@ -42,6 +42,57 @@ export interface PendingBreakpoint {
 const RULES_FILE = 'debugger/rules.json';
 const BREAKPOINT_WAIT_MS = 120_000;
 
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const textOrAbsent = (v: unknown) => v === undefined || typeof v === 'string';
+
+/** Why a rule read from the file cannot be used, in words; undefined: it can. The parts the proxy reads on every request have the type it expects. */
+function loadedRuleProblem(r: unknown): string | undefined {
+  if (!isObject(r)) return 'a rule is an object';
+  const m = r.match;
+  if (!isObject(m)) return 'a rule needs what it matches (match)';
+  for (const k of ['host', 'url', 'method', 'application']) if (!textOrAbsent(m[k])) return `match.${k} is text`;
+  if (m.where !== undefined && !(isObject(m.where) && typeof m.where.column === 'string' && typeof m.where.op === 'string' && typeof m.where.value === 'string' && textOrAbsent(m.where.value2)))
+    return 'match.where needs a column, an operator and a value';
+  for (const k of ['requestHeaders', 'responseHeaders'])
+    if (r[k] !== undefined && !(Array.isArray(r[k]) && (r[k] as unknown[]).every((h) => isObject(h) && typeof h.name === 'string' && textOrAbsent(h.value)))) return `${k} is a list of header edits`;
+  for (const k of ['requestBody', 'responseBody', 'color']) if (!textOrAbsent(r[k])) return `${k} is text`;
+  for (const k of ['reply', 'redirect', 'remap', 'fault', 'frame', 'script', 'style']) if (r[k] !== undefined && !isObject(r[k])) return `${k} is an object`;
+  return undefined;
+}
+
+/**
+ * What debugger/rules.json holds, checked: the file is committed and shared, so it may be hand-edited, merged badly or written by
+ * another tool. A profile that is not a list and a rule that the rule check (cleanRule) refuses are left out, with a warning each,
+ * rather than failing on every request the proxy forwards. undefined: the file has no profiles at all.
+ */
+export function checkedRulesFile(raw: unknown, warn: (message: string) => void): DebuggerRulesFile | undefined {
+  if (!isObject(raw) || !isObject(raw.profiles)) return undefined;
+  const profiles: Record<string, DebuggerRule[]> = {};
+  for (const [name, list] of Object.entries(raw.profiles)) {
+    if (!Array.isArray(list) || name === '__proto__') {
+      warn(`the profile "${name}" is not a list of rules: left out`);
+      continue;
+    }
+    const kept: DebuggerRule[] = [];
+    list.forEach((r: unknown, i) => {
+      try {
+        const problem = loadedRuleProblem(r);
+        if (problem) throw new Error(problem);
+        // fields this version does not know stay in the file; the id, the name and the switch are made whole
+        kept.push({ ...(r as DebuggerRule), ...cleanRule(r as DebuggerRule) });
+      } catch (e) {
+        warn(`rule ${i + 1} of the profile "${name}" is left out: ${(e as Error).message}`);
+      }
+    });
+    profiles[name] = kept;
+  }
+  const names = Object.keys(profiles);
+  if (!names.length) return undefined;
+  const presets = Array.isArray(raw.filterPresets) ? raw.filterPresets.filter((p): p is { name: string; filter: Record<string, unknown> } => isObject(p) && typeof p.name === 'string' && isObject(p.filter)) : undefined;
+  if (raw.filterPresets !== undefined && presets?.length !== (raw.filterPresets as unknown[]).length) warn('filter presets that are not a name with a filter are left out');
+  return { active: typeof raw.active === 'string' && Object.hasOwn(profiles, raw.active) ? raw.active : names[0]!, profiles, ...(presets ? { filterPresets: presets } : {}) };
+}
+
 /** The rules file of the workspace, read once and kept on the state (the proxy asks for the active rules on every request). */
 export function rulesOf(be: Backend, state: DebuggerState): DebuggerRulesFile {
   if (state.rules) return state.rules;
@@ -49,9 +100,7 @@ export function rulesOf(be: Backend, state: DebuggerState): DebuggerRulesFile {
   let rules: DebuggerRulesFile | undefined;
   if (existsSync(file)) {
     try {
-      const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DebuggerRulesFile>;
-      if (raw && typeof raw === 'object' && raw.profiles && typeof raw.profiles === 'object')
-        rules = { active: raw.active && raw.profiles[raw.active] ? raw.active : (Object.keys(raw.profiles)[0] ?? 'Default'), profiles: raw.profiles, filterPresets: raw.filterPresets };
+      rules = checkedRulesFile(JSON.parse(readFileSync(file, 'utf8')), (m) => be.logger.warn(`debugger/rules.json: ${m}`));
     } catch (e) {
       be.logger.warn(`debugger/rules.json could not be read: ${(e as Error).message}`);
     }

@@ -11,6 +11,7 @@ import { CountPill, TreeHeader, treeKeys } from './TreeParts';
 import { Button, cx, Empty, Split } from './ui';
 import { refreshEnvironments } from '../lib/environments-store';
 import { plural } from '../lib/format';
+import { environmentOf } from '../lib/active-environment';
 
 /** How many variables a collection has (the outline counts them). */
 const varCount = (c: CollectionOutline) => c.variableCount ?? c.variables?.length ?? 0;
@@ -74,7 +75,7 @@ export function CollectionVariablesPane({ initial }: { initial?: string }) {
   const copyToEnvironment = async () => {
     const name = useApp.getState().environment;
     if (!name) return useApp.getState().toast('Choose an environment in the top bar first: the variables are copied into it.', 'error');
-    const env = (await refreshEnvironments()).find((e) => e.name === name);
+    const env = environmentOf(await refreshEnvironments(), name);
     if (!env) return;
     const have = new Set(env.variables.map((v) => v.key));
     const add = rows.filter((r) => r.key && !have.has(r.key));

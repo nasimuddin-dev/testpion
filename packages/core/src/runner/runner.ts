@@ -547,7 +547,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     );
   };
 
-  const exec = async (t: TestCase) => {
+  const exec = async (t: TestCase, sig: AbortSignal = signal) => {
     const id = t.id ?? t.name;
     if (t.skip) return record(skippedResult(t, 'marked skip'));
     /** Skipped because its branch was not taken: the steps after it skip too, unless another of their dependencies ran. */
@@ -585,7 +585,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
         const now = Date.now();
         const at = Math.max(now, nextPaced);
         nextPaced = at + t.paceMs;
-        if (at > now) await sleep(at - now, signal);
+        if (at > now) await sleep(at - now, sig);
       }
       if (opts.pauseBefore) {
         // the step waits here (nothing of it has started: no timeout runs while the run is paused)
@@ -597,7 +597,7 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
           throw new ApsError('CancelledError', 'Run stopped at a breakpoint');
         }
       }
-      const { result, trace, response } = await runOne(t);
+      const { result, trace, response } = await runOne(t, sig);
       if (response) remember(id, response);
       const raw = tracker.raw();
       const vars = tracker.recorded(opts.services.redactor, raw);
@@ -697,11 +697,16 @@ export async function runTests(opts: RunOptions): Promise<RunSummary> {
     await Promise.allSettled(inflight);
     await Promise.allSettled(finallyRuns);
     cancelled = signal.aborted && (stopped || (opts.signal?.aborted ?? false));
-    // teardown always runs (not cancellable by bail, but honours user cancellation)
+    // teardown always runs (not cancellable by bail, but honours user cancellation): its own signal, which only the
+    // caller's cancel ends (the run's own is already aborted after a bail, and a step under it would be skipped)
+    const down = new AbortController();
+    const stopDown = () => down.abort();
+    opts.signal?.addEventListener('abort', stopDown, { once: true });
     for (const t of opts.teardown ?? []) {
       if (opts.signal?.aborted) break;
-      await exec({ ...t, name: `[teardown] ${t.name}` }).catch(() => undefined);
+      await exec({ ...t, name: `[teardown] ${t.name}` }, down.signal).catch(() => undefined);
     }
+    opts.signal?.removeEventListener('abort', stopDown);
     opts.signal?.removeEventListener('abort', onAbort);
     try {
       await flushTraces();

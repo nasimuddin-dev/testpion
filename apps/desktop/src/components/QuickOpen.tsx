@@ -59,7 +59,7 @@ export function QuickOpen({ commands, here }: { commands: PaletteCommand[]; here
           here: here.map(asRow),
           environments: (workspace?.environments ?? [])
             .filter((e) => !e.problem)
-            .map((e) => ({ id: e.id, name: e.name, production: !!e.isProduction, variables: (e.variables ?? []).map((v) => v.key).filter(Boolean) })),
+            .map((e) => ({ id: e.id, name: e.name, group: e.group, production: !!e.isProduction, variables: (e.variables ?? []).map((v) => v.key).filter(Boolean) })),
           active,
           open: (ref: ItemRef) => void openRef(ref),
           ask: (question) => startAskSearch({ question }),

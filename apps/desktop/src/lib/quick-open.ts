@@ -1,5 +1,5 @@
 import { aiHidden } from './ai-visible';
-import { COMMAND_HELP, parseCommand, type DebuggerCommand, type ItemRef } from '@testpion/shared';
+import { COMMAND_HELP, environmentLabel, environmentRef, matchEnvironment, parseCommand, type DebuggerCommand, type ItemRef } from '@testpion/shared';
 import { inSettings } from './ui-names';
 
 /**
@@ -39,7 +39,7 @@ export interface QuickSources {
   commands: QuickRow[];
   /** The focused editor's own commands (`@`). */
   here: QuickRow[];
-  environments: Array<{ id: string; name: string; production?: boolean; variables: string[] }>;
+  environments: Array<{ id: string; name: string; group?: string; production?: boolean; variables: string[] }>;
   active?: string;
   open(ref: ItemRef): void;
   switchEnvironment(name: string): void;
@@ -78,15 +78,16 @@ export function quickOpenRows(q: string, s: QuickSources, base: QuickMode = 'ite
       for (const e of s.environments)
         rows.push({
           id: `env:${e.id}`,
-          label: `${e.name}${e.production ? '  (production)' : ''}`,
-          hint: e.name === s.active ? 'active' : 'Switch',
+          // two tenants may both have a "Staging": the label tells them apart, and the switch names the one picked
+          label: `${environmentLabel(e)}${e.production ? '  (production)' : ''}`,
+          hint: matchEnvironment(s.environments, s.active ?? '')?.id === e.id ? 'active' : 'Switch',
           group: 'Environments',
-          run: () => s.switchEnvironment(e.name),
+          run: () => s.switchEnvironment(environmentRef(s.environments, e)),
         });
       for (const e of s.environments)
         for (const v of e.variables.slice(0, 500)) {
           const ref: ItemRef = { kind: 'variable', key: v, environmentId: e.id };
-          rows.push({ id: `var:${e.id}:${v}`, label: `{{${v}}}`, detail: e.name, group: 'Variables', ref, run: () => s.open(ref) });
+          rows.push({ id: `var:${e.id}:${v}`, label: `{{${v}}}`, detail: environmentLabel(e), group: 'Variables', ref, run: () => s.open(ref) });
         }
       return { rows, text, placeholder: 'Environment or variable…', empty: 'No matching environment or variable' };
     }

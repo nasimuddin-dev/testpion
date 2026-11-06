@@ -11,6 +11,7 @@ import { refreshEnvironments } from '../lib/environments-store';
 import { openDocs } from '../lib/docs-link';
 import { Badge, Button, cx, LinkButton, SectionTitle } from './ui';
 import { Callout } from '../components/ui';
+import { environmentOf } from '../lib/active-environment';
 
 /** Normalised error display: what happened, why, and how to fix it (spec §45). */
 /** The provider an error names as the one to set up (a missing API key), if any. */
@@ -46,7 +47,7 @@ function missingVariableOf(error: NormalizedError | undefined): { variable: stri
 function AddVariableButton({ variable, className }: { variable: string; className?: string }) {
   const env = useApp((s) => s.environment);
   const go = async () => {
-    const e = env ? (await refreshEnvironments()).find((x) => x.name === env) : undefined;
+    const e = env ? environmentOf(await refreshEnvironments(), env) : undefined;
     useApp.getState().openIntent('environments', e ? { environmentId: e.id, addVariable: variable } : { tab: 'globals' });
   };
   return (

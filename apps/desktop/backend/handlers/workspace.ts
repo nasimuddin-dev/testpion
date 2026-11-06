@@ -55,6 +55,7 @@ import {
   importFileFilters,
   setWorkspaceNote, ownershipOf } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
+import { currentOwner } from '../current-owner.js';
 import { workspaceLockedBy } from '../backend-health.js';
 import { takeOpenLinks } from '../open-links.js';
 import { isExamplesWorkspace } from '../backend-examples.js';
@@ -355,27 +356,32 @@ export function workspaceHandlers(be: Backend): Handlers {
     'trash.purge': ({ id }: { id?: string }) => purgeTrash(be.ws, id),
     'env.reorder': ({ ids }: { ids: string[] }) => be.ws.reorderEnvironments(ids),
     'currentValues.get': ({ scope, owner }: { scope: 'environment' | 'globals' | 'collectionVariables'; owner?: string }) => {
-      const values = be.currentValues?.get(scope, owner ?? '') ?? {};
-      // never send secret values to the UI: mask sensitive keys
-      return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, be.logger.redactor.isSensitiveKey(k) ? '••••••' : v]));
+      const of = currentOwner(be, scope, owner);
+      const values = be.currentValues?.get(scope, of) ?? {};
+      // never send secret values to the UI: a sensitive key, a variable marked secret, and any value kept encrypted
+      // (a script that copied a token into "copy") are masked
+      const kept = be.currentValues?.secretKeysOf(scope, of) ?? new Set<string>();
+      const marked = new Set(scope === 'environment' ? be.ws.getEnvironment(owner ?? '')?.variables.filter((v) => v.secret).map((v) => v.key) : []);
+      return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, kept.has(k) || marked.has(k) || be.logger.redactor.isSensitiveKey(k) ? '••••••' : v]));
     },
     /** Set a current value now (e.g. a response field saved to a variable); sensitive keys and secret variables are kept encrypted. */
     'currentValues.set': async ({ scope, owner, key, value }: { scope: 'environment' | 'globals' | 'collectionVariables'; owner?: string; key: string; value: unknown }) => {
       if (!be.currentValues) throw new ApsError('ConfigurationError', 'Current values are not available here');
       const secret = scope === 'environment' && !!be.ws.getEnvironment(owner ?? '')?.variables.some((v) => v.key === key && v.secret);
-      await be.currentValues.set(scope, owner ?? '', key, value, secret || be.logger.redactor.isSensitiveKey(key));
+      await be.currentValues.set(scope, currentOwner(be, scope, owner), key, value, secret || be.logger.redactor.isSensitiveKey(key));
     },
-    'currentValues.reset': ({ scope, owner }: { scope?: 'environment' | 'globals' | 'collectionVariables'; owner?: string }) => be.currentValues?.reset(scope, owner),
+    'currentValues.reset': ({ scope, owner }: { scope?: 'environment' | 'globals' | 'collectionVariables'; owner?: string }) => be.currentValues?.reset(scope, scope ? currentOwner(be, scope, owner) : owner),
     /** Postman's environment "quick look": initial and current values of the active environment and globals, secrets masked. */
     /** Every variable a request can use, by scope: its collection's, the environment's, the workspace's and the globals (secrets masked). */
     'env.quickLook': ({ environment, collectionId }: { environment?: string; collectionId?: string }) => {
       const mask = '••••••';
       const r = be.logger.redactor;
-      const rows = (vars: Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }>, current: Record<string, unknown>) => {
+      const rows = (vars: Array<{ key: string; value: string; enabled?: boolean; secret?: boolean }>, current: Record<string, unknown>, kept: Set<string> = new Set()) => {
         const keys = [...new Set([...vars.map((v) => v.key), ...Object.keys(current)])].filter(Boolean);
         return keys.map((key) => {
           const v = vars.find((x) => x.key === key);
-          const sensitive = !!v?.secret || r.isSensitiveKey(key);
+          // (`kept`: current values kept encrypted, e.g. a token a script copied into a variable with a plain name)
+          const sensitive = !!v?.secret || r.isSensitiveKey(key) || kept.has(key);
           const show = (x: unknown) => (x === undefined ? undefined : sensitive ? mask : typeof x === 'string' ? x : JSON.stringify(x));
           return { key, initial: v ? (v.secret ? mask : show(v.value)) : undefined, current: show(current[key]), secret: sensitive, enabled: v?.enabled !== false };
         });
@@ -385,15 +391,15 @@ export function workspaceHandlers(be: Backend): Handlers {
       let collection: { id: string; name: string; variables: ReturnType<typeof rows> } | undefined;
       try {
         const c = collectionId ? be.ws.getCollection(collectionId) : undefined;
-        if (c) collection = { id: c.id, name: c.name, variables: rows(c.variables ?? [], be.currentValues?.get('collectionVariables', c.id) ?? {}) };
+        if (c) collection = { id: c.id, name: c.name, variables: rows(c.variables ?? [], be.currentValues?.get('collectionVariables', c.id) ?? {}, be.currentValues?.secretKeysOf('collectionVariables', c.id)) };
       } catch {
         /* a collection that no longer exists: no section */
       }
       return {
         collection,
-        environment: env ? { id: env.id, name: env.name, isProduction: !!env.isProduction, variables: rows(env.variables, be.currentValues?.get('environment', env.name) ?? {}) } : undefined,
+        environment: env ? { id: env.id, name: env.name, isProduction: !!env.isProduction, variables: rows(env.variables, be.currentValues?.get('environment', env.id) ?? {}, be.currentValues?.secretKeysOf('environment', env.id)) } : undefined,
         workspace: rows(be.ws.workspace.variables ?? [], {}),
-        globals: rows(be.settings.globalVariables ?? [], be.currentValues?.get('globals', '') ?? {}),
+        globals: rows(be.settings.globalVariables ?? [], be.currentValues?.get('globals', '') ?? {}, be.currentValues?.secretKeysOf('globals', '')),
       };
     },
 

@@ -5,7 +5,7 @@ import type { Collection, CollectionNode, SavedExample, SavedHttpRequest } from 
 import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
 import { flattenHeaders } from '../util/headers.js';
-import { isLoopbackHostHeader } from '../net/local-guard.js';
+import { isLoopbackHostHeader, isLoopbackOrigin } from '../net/local-guard.js';
 import { netFetch } from '../net/proxy.js';
 
 /** One example the mock server can answer with. */
@@ -290,7 +290,12 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
     const u = new URL(req.url ?? '/', 'http://mock');
     const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*', 'access-control-expose-headers': '*' };
     if (req.method === 'OPTIONS' && req.headers['access-control-request-method']) {
-      res.writeHead(204, cors);
+      // a request that would go on to the real API is allowed to pages of this computer only (see the fallback below)
+      const wanted = String(req.headers['access-control-request-method']);
+      const mocked = !opts.fallbackUrl || !!state?.isStateful(u.pathname) || !!matchMockRoute(routes, { method: wanted, path: u.pathname, query: Object.fromEntries(u.searchParams) });
+      if (mocked) res.writeHead(204, cors);
+      else if (isLoopbackOrigin(req.headers.origin)) res.writeHead(204, { ...cors, 'access-control-allow-origin': req.headers.origin!, vary: 'Origin' });
+      else res.writeHead(204, { vary: 'Origin' });
       return res.end();
     }
     const t0 = Date.now();
@@ -314,11 +319,15 @@ export async function startMockServer(collection: Collection, opts: MockServerOp
     const r = matchMockRoute(routes, { method: req.method ?? 'GET', path: u.pathname, query, headers: req.headers, body });
     if (opts.delayMs) await new Promise((ok) => setTimeout(ok, opts.delayMs));
     if (!r && opts.fallbackUrl) {
+      // the real API's answer is not for any web page to read: only a page of this computer (a loopback origin) is told it may
+      const { 'access-control-allow-origin': _any, ...forwardedCors } = cors;
+      const origin = req.headers.origin;
+      if (origin && isLoopbackOrigin(origin)) Object.assign(forwardedCors, { 'access-control-allow-origin': origin, vary: 'Origin' });
       try {
-        const status = await forward(opts.fallbackUrl, req, body, res, cors);
+        const status = await forward(opts.fallbackUrl, req, body, res, forwardedCors);
         opts.onRequest?.({ ...seen, status, forwarded: true, ms: Date.now() - t0 });
       } catch (e) {
-        if (!res.headersSent) res.writeHead(502, { ...cors, 'content-type': 'application/json' });
+        if (!res.headersSent) res.writeHead(502, { ...forwardedCors, 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'fallback_failed', message: (e as Error).message, fallback: opts.fallbackUrl }));
         opts.onRequest?.({ ...seen, status: 502, forwarded: true, ms: Date.now() - t0 });
       }

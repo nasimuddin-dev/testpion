@@ -44,6 +44,8 @@ export const WRITE_COMMANDS = new Set([
   'env set',
   'env unset',
   'env order',
+  'env duplicate-group',
+  'env copy',
   'vars rename',
   'replace',
   'tidy',
@@ -51,10 +53,14 @@ export const WRITE_COMMANDS = new Set([
   'workspace rename',
   'workspace delete',
   'workspace export',
+  'workspace note',
+  'workspace conventions',
   'trash restore',
   'trash empty',
   'monitor add',
   'monitor remove',
+  'monitor pause',
+  'monitor resume',
   'datasets',
   'generate-data',
   'tests-from-spec',
@@ -68,6 +74,9 @@ export const WRITE_COMMANDS = new Set([
   'ai discard',
   'item delete',
   'item restore',
+  'item comment add',
+  'item comment resolve',
+  'item comment delete',
   'import-undo',
   'rag connect',
   'rag cache clear',
@@ -87,6 +96,12 @@ export const WRITE_COMMANDS = new Set([
   'settings set',
   'settings reset',
 ]);
+
+/**
+ * The writers that name a workspace of the list by an argument (or make one), not the workspace they run in: the lock of
+ * an open workspace (workspace-guard.ts) and --force are not theirs.
+ */
+const NO_LOCK_CHECK = new Set(['workspace create', 'workspace rename', 'workspace delete', 'workspace export']);
 
 /** The commands that call the user's AI model: each takes `--max-cost <usd>`, refused before anything is sent when one call could cost more. */
 export const AI_COMMANDS = new Set(['ai run', 'ai triage', 'ai script', 'ai attempt-fix', 'generate tests', 'tidy', 'flow generate', 'security generate', 'openapi drift', 'search', 'rag generate-dataset', 'rag draft-references', 'rag author']);
@@ -113,7 +128,7 @@ export function applyCliContract(program: Command): void {
       c.option('--dry-run', 'change nothing: run against copies and list the files that would be added, changed or deleted');
     // every command takes --json, so an agent never has to know which ones do (a command that prints JSON already keeps its own)
     if (!hasOption(c, '--json') && !hasOption(c, '--jsonl')) c.option('--json', NO_ENVELOPE.has(path) ? 'accepted and ignored: the output of this command is not ours' : 'print the result as one JSON envelope (for scripts and AI agents)');
-    if (WRITE_COMMANDS.has(path) && !path.startsWith('workspace ') && !hasOption(c, '--force') && !hasOption(c, '--yes')) c.option('--force', 'write even when another TestPion has this workspace open');
+    if (WRITE_COMMANDS.has(path) && !NO_LOCK_CHECK.has(path) && !hasOption(c, '--force') && !hasOption(c, '--yes')) c.option('--force', 'write even when another TestPion has this workspace open');
     if (AI_COMMANDS.has(path) && !hasOption(c, '--max-cost')) c.option('--max-cost <usd>', 'refuse before anything is sent when one AI call could cost more than this many US dollars (the price table; a local model is free)');
     if (PLAN_ONLY[path] && !hasOption(c, '--dry-run')) c.option('--dry-run', 'change nothing: print what it would do (git is not run)');
     if (CLI_CONFIRM.some((e) => e.command === path) && !hasOption(c, '--yes')) c.option('--yes', 'confirm: required when it cannot ask (--non-interactive, CI); --dry-run shows what it would do first');
@@ -128,7 +143,7 @@ export function applyCliContract(program: Command): void {
       { ...o, json: NO_ENVELOPE.has(path) ? false : o.json, jsonl: o.jsonl === true || (JSON_MEANS_JSONL.has(path) && o.json === true) },
       [action, action.parent].some((c) => !!c && (hasOption(c, '--json') || hasOption(c, '--jsonl'))),
     );
-    if (WRITE_COMMANDS.has(path) && !path.startsWith('workspace ')) refuseWhenOpenElsewhere(o as Record<string, unknown>); // another TestPion has this workspace open (workspace-guard.ts)
+    if (WRITE_COMMANDS.has(path) && !NO_LOCK_CHECK.has(path)) refuseWhenOpenElsewhere(o as Record<string, unknown>); // another TestPion has this workspace open (workspace-guard.ts)
     // one AI call may not cost more than --max-cost
     if (AI_COMMANDS.has(path) && typeof (o as { maxCost?: unknown }).maxCost === 'string') {
       const cap = Number((o as { maxCost: string }).maxCost);

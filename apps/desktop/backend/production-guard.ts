@@ -20,6 +20,9 @@ import {
   collectionRequests,
   detectOperation,
   findMonitor,
+  listMonitorDefinitions,
+  monitorConsentPending,
+  monitorTenants,
   folderChain,
   readRunSummary,
   isDataChangingMethod,
@@ -123,15 +126,24 @@ const RULES: Record<string, Rule> = {
   'flows.webhooks.start': (_be, p) => run(str(p.environment), 'Serve the flows behind their webhooks'),
   'monitor.run': (be, p) => {
     const m = findMonitorSafe(be, p.id);
-    // saved with consent: Run now asks nothing more
-    return m && !m.allowProduction ? run(m.environment, `Run the monitor ${m.name}`) : undefined;
+    if (!m) return undefined;
+    // saved with consent: Run now asks nothing more (a grouped definition: each of its tenants that has none)
+    return monitorTenants(be.ws, m)
+      .filter((t) => !t.allowProduction)
+      .map((t) => run(t.environment, `Run the monitor ${t.name}`));
   },
   'monitor.save': (be, p) => {
-    const m = p.monitor as { id?: string; name?: string; environment?: string } | undefined;
-    const before = m?.id ? findMonitorSafe(be, m.id) : undefined;
-    // the consent stays while the environment does
-    if (before?.allowProduction && before.environment === m?.environment) return undefined;
-    return run(str(m?.environment), `Run the monitor${m?.name ? ` ${m.name}` : ''} on its schedule`);
+    const m = p.monitor as { id?: string; name?: string; environment?: string; environmentGroup?: string; tenant?: { of: string } } | undefined;
+    if (!m) return undefined;
+    const of = m.tenant?.of ?? m.id?.split('@')[0];
+    let before;
+    try {
+      before = of ? listMonitorDefinitions(be.ws).find((d) => d.id === of) : undefined;
+    } catch {
+      return undefined; // the handler says what is wrong with the workspace
+    }
+    // the consent stays while the environment does; a grouped monitor asks for each production environment of its group that has none
+    return monitorConsentPending(be.ws, m, before).map((environment) => run(environment, `Run the monitor${m.name ? ` ${m.name}` : ''} on its schedule`));
   },
   // AI-5 Attempt to fix: applies a flaky test's fix, then runs the test again in the environment of its runs
   'ai.attemptFix': async (be, p) => {

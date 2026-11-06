@@ -205,11 +205,37 @@ export const CollectionRow = memo(function CollectionRow({ c, open, renaming, dr
   );
 });
 
-/** A saved gRPC call or connection, shown under its collection. */
-export const ExtraItemRow = memo(function ExtraItemRow({ g, i, depth, from, id, active, renaming, ctx }: { g: ExtraGroup; i: ExtraGroup['items'][number]; depth: number; from?: string; id: string; active: boolean; renaming: boolean; ctx: Ctx }) {
+/**
+ * A saved gRPC call or connection, shown in its folder of its collection. A drop target like a request: a request, a
+ * folder or another call dropped on it lands just before it.
+ */
+export const ExtraItemRow = memo(function ExtraItemRow({
+  c,
+  g,
+  i,
+  depth,
+  from,
+  id,
+  active,
+  renaming,
+  dropMode,
+  ctx,
+}: {
+  c: Collection;
+  g: ExtraGroup;
+  i: ExtraGroup['items'][number];
+  depth: number;
+  from?: string;
+  id: string;
+  active: boolean;
+  renaming: boolean;
+  dropMode?: DropMode;
+  ctx: Ctx;
+}) {
   const x = () => ctx.current;
   const kind = g.kind;
   const rn = () => g.rename?.(i.id);
+  const dropOf = () => x().dropProps(c, id, 'before', { beforeId: i.id });
   return (
     <TreeRowShell
       kind={kind}
@@ -226,6 +252,7 @@ export const ExtraItemRow = memo(function ExtraItemRow({ g, i, depth, from, id, 
       // a saved item dragged onto another collection moves there (CollectionTree's collectionDrop reads this)
       onDragStart={(e) => e.dataTransfer.setData(SAVED_ITEM_MIME, JSON.stringify({ kind: g.cat, id: i.id, from }))}
       onDragEnd={() => x().savedDragEnd()}
+      drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth, 16)}
       git={savedItemRef(g.cat, i.id)}
     >

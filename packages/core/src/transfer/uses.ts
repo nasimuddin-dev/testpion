@@ -6,7 +6,7 @@
  * (already secret-stripped) text for workspace paths and names, never by running anything; what is named but not in the
  * workspace is listed as missing, so a bundle never claims to hold more than it does.
  */
-import { escapeRegex, isRecord, templateVariables } from '@testpion/shared';
+import { escapeRegex, isRecord, matchEnvironment, templateVariables } from '@testpion/shared';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { LIBRARY_OF, RAW_ROOT, itemKey, type BundleEdge, type BundleKindId, type BundleManifest } from './format.js';
 import { adapter, ALL_BUNDLE_KINDS } from './registry.js';
@@ -110,7 +110,7 @@ export function collectUses(store: WorkspaceStore, roots: readonly BundleRef[], 
     // the environment a monitor or an item names
     if (from.kind === 'monitor' || from.kind === 'load-test' || from.kind === 'evaluation') {
       const m = /"environment"\s*:\s*"([^"]+)"/.exec(text);
-      const e = m && envs.find((x) => x.id === m[1] || x.name === m[1]);
+      const e = m && matchEnvironment(envs, m[1]!);
       if (e) use(from, { kind: 'environment', id: e.id }, `environment ${e.name}`);
     }
     if (from.kind === 'mcp-server') {

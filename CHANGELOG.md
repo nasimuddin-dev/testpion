@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixes from a review of the whole code
+
+- **Monitor alerts.** A scheduled monitor posts its webhook again when it starts failing and when it recovers (the alert was never sent since 0.55.5 on the app's and `monitor start`'s schedule). A monitor whose evaluation was deleted records an error instead of failing silently.
+- **Tenants.** Two tenants may have an environment of the same name without being mixed up: a tenant's monitor runs in its own environment, the active environment no longer jumps to the first one after a refresh, **No environment** stays chosen, the values scripts set are kept per environment (never applied to another tenant's), and the cross-tenant leak check looks at the other tenant's environment of the same name. A run that names an environment that is not there stops with an error instead of running without one. `testpion env set <name> --create` never replaces another environment's file.
+- **Monitors shared through git.** A monitor that arrives with a pull or a clone does not run on its schedule on a computer until the person there chooses **Allow on this computer**. One tenant of a grouped monitor pauses and resumes on its own; production consent is kept per production environment. Secret manager references of a monitor's environment are read before its run. `run_monitor` (MCP) answers one object, with each tenant's result in `tenants`; `save_monitor` keeps the settings it does not set.
+- **Runs.** A suite's teardown runs after `--bail`; a monitor on a suite runs its setup and teardown. **Run collection** runs gRPC calls and connections where the tree shows them, with their folder's variables. The production guard reads a GraphQL query as it is sent (a mutation held in a variable asks) and covers the MCP tools an agent test calls. `{{$randomInt(10,1)}}` no longer fails the step.
+- **Workspace switch.** Mock servers, the recorder, open connections and the Debugger's rules of the workspace that is left are closed; the rules of one workspace are never written into another.
+- **Debugger.** A paired device cannot reach this computer's own services through a tunnel; large downloads no longer queue in memory; a malformed header from a server no longer stops `testpion serve`; a damaged `debugger/rules.json` is read without its bad rules. The stateful mock has a size limit and answers forwarded requests only to local pages.
+- **Collections and imports.** A deleted collection takes its gRPC calls and connections to Recently deleted (they no longer come back on a teammate's computer); undoing an import keeps what was edited since and the documents another import uses; a restored item keeps its id (and an environment its secrets). `CODEOWNERS` patterns match as GitHub matches them; one unreadable comments file no longer hides every comment.
+
+
 ### Any kind of request in any folder
 
 - A collection folder holds REST, SOAP, GraphQL, gRPC and WebSocket / Socket.IO / MQTT / Kafka requests side by side; the Collections tree no longer splits a collection into one group per kind. A folder's **New request ▸** creates any kind in it, the save dialog of a gRPC call or connection offers the collection's folders, and dragging a call onto a folder moves it there. Runs of a folder include the calls inside it, in the order the tree shows. Workspaces from older versions are placed once on open: a call's own folder name becomes the collection folder of that name (with the same folder id on every computer, so git has nothing to merge).

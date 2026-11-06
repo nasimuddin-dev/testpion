@@ -16,6 +16,83 @@ describe('owners of an item (CODEOWNERS and the last change)', () => {
     expect(ownersOf([], 'anything')).toEqual([]);
   });
 
+  it("matches GitHub's documented examples", () => {
+    // the example file of GitHub's "About code owners", in its order
+    const rules = parseCodeowners(
+      [
+        '# This is a comment.',
+        '*       @global-owner1 @global-owner2',
+        '*.js    @js-owner #This is an inline comment.',
+        '*.go docs@example.com',
+        '*.txt @octo-org/octocats',
+        '/build/logs/ @doctocat',
+        'docs/*  docs@example.com',
+        'apps/ @octocat',
+        '/docs/ @doctocat',
+        '/scripts/ @doctocat @octocat',
+        '**/logs @octocat',
+        '/apps/ @octocat',
+        '/apps/github',
+        '/apps/ @octocat',
+        '/apps/github @doctocat',
+      ].join('\n'),
+    );
+    expect(rules).toHaveLength(14);
+    expect(rules[1]).toEqual({ pattern: '*.js', owners: ['@js-owner'] });
+    expect(rules[11]).toEqual({ pattern: '/apps/github', owners: [] });
+    const cases: Array<[string, string[]]> = [
+      ['README.md', ['@global-owner1', '@global-owner2']],
+      ['src/deep/app.js', ['@js-owner']],
+      ['cmd/main.go', ['docs@example.com']],
+      ['notes/todo.txt', ['@octo-org/octocats']],
+      // a later rule that matches wins: two stars then /logs comes after /build/logs/
+      ['build/logs/today.txt', ['@octocat']],
+      ['other/build/logs/x.md', ['@octocat']],
+      // docs/* : the files in docs, not the ones in a folder below
+      ['docs/getting-started.md', ['@doctocat']],
+      ['docs/build-app/troubleshooting.md', ['@doctocat']],
+      ['scripts/run.sh', ['@doctocat', '@octocat']],
+      // two stars then /logs: a logs folder at any depth, the root included
+      ['logs/a.log', ['@octocat']],
+      ['deeply/nested/logs/a.log', ['@octocat']],
+      // apps/ : an apps folder anywhere
+      ['packages/apps/x.md', ['@octocat']],
+      ['apps/web/index.md', ['@octocat']],
+      ['apps/github/index.md', ['@doctocat']],
+    ];
+    for (const [path, owners] of cases) expect([path, ownersOf(rules, path)]).toEqual([path, owners]);
+    // /build/logs/ is the folder at the root only (the rules up to it)
+    expect(ownersOf(rules.slice(0, 5), 'build/logs/today.md')).toEqual(['@doctocat']);
+    expect(ownersOf(rules.slice(0, 5), 'other/build/logs/today.md')).toEqual(['@global-owner1', '@global-owner2']);
+    // /apps/github without owners, as the last rule that matches: nobody owns it
+    expect(ownersOf(rules.slice(0, 12), 'apps/github/index.md')).toEqual([]);
+  });
+
+  it('a last segment * is the direct children only; two stars match no folder too; escaped spaces stay in the pattern', () => {
+    const rules = parseCodeowners(['/tests/* @direct', 'docs/* @docs', '**/gen @gen', 'a/**/b @ab', 'lib/** @lib', 'path\\ with\\ spaces/ @spaces', '\\#notes.md @hash', 'file.[ab] @literal'].join('\n'));
+    expect(rules.map((r) => r.pattern)).toEqual(['/tests/*', 'docs/*', '**/gen', 'a/**/b', 'lib/**', 'path\\ with\\ spaces/', '\\#notes.md', 'file.[ab]']);
+    expect(ownersOf(rules, 'tests/smoke.yaml')).toEqual(['@direct']);
+    expect(ownersOf(rules, 'tests/smoke/login.yaml')).toEqual([]);
+    expect(ownersOf(rules, 'x/tests/smoke.yaml')).toEqual([]);
+    expect(ownersOf(rules, 'docs/a.md')).toEqual(['@docs']);
+    expect(ownersOf(rules, 'docs/guide/a.md')).toEqual([]);
+    expect(ownersOf(rules, 'gen')).toEqual(['@gen']);
+    expect(ownersOf(rules, 'gen/x.ts')).toEqual(['@gen']);
+    expect(ownersOf(rules, 'src/gen/x.ts')).toEqual(['@gen']);
+    expect(ownersOf(rules, 'a/b')).toEqual(['@ab']);
+    expect(ownersOf(rules, 'a/x/y/b/file.ts')).toEqual(['@ab']);
+    expect(ownersOf(rules, 'ab')).toEqual([]);
+    expect(ownersOf(rules, 'lib/x/y.ts')).toEqual(['@lib']);
+    expect(ownersOf(rules, 'path with spaces/file.md')).toEqual(['@spaces']);
+    expect(ownersOf(rules, 'path/file.md')).toEqual([]);
+    expect(ownersOf(rules, '#notes.md')).toEqual(['@hash']);
+    // character ranges are not patterns in CODEOWNERS: the brackets are themselves
+    expect(ownersOf(rules, 'file.a')).toEqual([]);
+    expect(ownersOf(rules, 'file.[ab]')).toEqual(['@literal']);
+    // the same rules asked again (the compiled patterns are reused) answer the same
+    expect(ownersOf(rules, 'tests/smoke.yaml')).toEqual(['@direct']);
+  });
+
   describe('in a repository', () => {
     let r: TestRepo;
     beforeAll(async () => {

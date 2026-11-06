@@ -7,6 +7,8 @@ import { Badge, Button, Empty, IconButton, Modal, Select, Spinner, statusTone } 
 import { formatMs } from '../../lib/format';
 import type { RestTab } from './types';
 import { toEngineRequest } from '../../lib/url';
+import { isActiveEnvironment } from '../../lib/active-environment';
+import { environmentLabel } from '@testpion/shared';
 
 interface Side {
   environment: string;
@@ -32,7 +34,7 @@ export function EnvCompareDialog({ tab, onClose }: { tab: RestTab; onClose(): vo
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result>();
   const [error, setError] = useState<string>();
-  const production = envs.filter((e) => e.isProduction && (e.name === left || e.name === right)).map((e) => e.name);
+  const production = envs.filter((e) => e.isProduction && (isActiveEnvironment(envs, e, left) || isActiveEnvironment(envs, e, right))).map((e) => environmentLabel(e));
 
   const run = async () => {
     setRunning(true);

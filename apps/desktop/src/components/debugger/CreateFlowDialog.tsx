@@ -1,9 +1,10 @@
 import { ArrowRight, KeyRound, Workflow } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { call } from '../../api';
-import { selectEnvironments, toastError, useApp } from '../../store';
+import { toastError, useApp } from '../../store';
 import { openRef } from '../../lib/open-ref';
-import { Badge, Button, Callout, Field, Input, Modal, SectionTitle, Select, Spinner, statusTone, useDebounced, EmptyNote } from '../ui';
+import { Badge, Button, Callout, Field, Input, Modal, SectionTitle, Spinner, statusTone, useDebounced, EmptyNote } from '../ui';
+import { EnvSelect } from '../EnvSelect';
 import { plural } from '../../lib/format';
 
 interface Preview {
@@ -28,9 +29,6 @@ const defaultName = () => `recorded-${new Date().toISOString().slice(0, 16).repl
  * Tests view's Flow tab (the designer).
  */
 export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; since?: string; onClose(): void }) {
-  // the stored list (the same one while no workspace is open: a new [] per read renders forever), filtered once per change
-  const all = useApp(selectEnvironments);
-  const environments = useMemo(() => all.filter((e) => !e.problem), [all]);
   const [environment, setEnvironment] = useState<string>(() => useApp.getState().environment ?? '');
   const [name, setName] = useState(defaultName);
   const [drop, setDrop] = useState<string[]>([]);
@@ -91,14 +89,7 @@ export function CreateFlowDialog({ ids, since, onClose }: { ids?: string[]; sinc
             <Input value={name} onChange={(e) => setName(e.target.value)} aria-label="Flow file name" />
           </Field>
           <Field label="Environment" hint="Its variables are offered: an address or a secret it already holds is used by name.">
-            <Select value={environment} onChange={(e) => setEnvironment(e.target.value)} aria-label="Environment to propose variables for">
-              <option value="">No environment</option>
-              {environments.map((e) => (
-                <option key={e.id} value={e.name}>
-                  {e.name}
-                </option>
-              ))}
-            </Select>
+            <EnvSelect value={environment || undefined} onChange={(name) => setEnvironment(name ?? '')} ariaLabel="Environment to propose variables for" />
           </Field>
         </div>
         {error && <Callout tone="bad">{error}</Callout>}

@@ -6,6 +6,7 @@ import { confirmAction, promptText, toastError, useApp, attempt } from '../store
 import { openRef } from '../lib/open-ref';
 import { plural } from '../lib/format';
 import { Button, Callout } from './ui';
+import { environmentOf } from '../lib/active-environment';
 
 /** A secret in a staged file (core's StagedSecret): never its value. */
 export interface StagedSecret {
@@ -32,7 +33,7 @@ const fixable = (f: StagedSecret) => !f.file.startsWith('datasets/');
 export function GitSecretsPanel({ findings, onChange, onCommitAnyway }: { findings: StagedSecret[]; onChange(next: StagedSecret[] | undefined): void; onCommitAnyway(): void }) {
   const ws = useApp((s) => s.workspace);
   const envName = useApp((s) => s.environment);
-  const env = ws?.environments.find((e) => e.name === envName);
+  const env = environmentOf(ws?.environments, envName);
   const [busy, setBusy] = useState(false);
   const certain = findings.filter((f) => f.confidence === 'high');
   const canFix = findings.filter(fixable);

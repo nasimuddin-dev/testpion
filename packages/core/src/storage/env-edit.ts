@@ -67,6 +67,19 @@ export function requireCollection(store: Pick<WorkspaceStore, 'listCollections'>
   return c;
 }
 
+/**
+ * An id for a new environment that no environment has and whose file (environments/<slug of the id>.json) is free:
+ * two names may give the same file name (names in another script all do), and saving would replace the other's file.
+ */
+export function freeEnvironmentId(store: Pick<WorkspaceStore, 'listEnvironments'>, name: string, taken = new Set<string>()): string {
+  for (const e of store.listEnvironments()) (taken.add(e.id), taken.add(slugify(e.id)));
+  const base = slugify(name) || 'environment';
+  let id = base;
+  for (let n = 2; taken.has(id) || taken.has(slugify(id)); n++) id = `${base.slice(0, 56)}-${n}`;
+  taken.add(id);
+  return id;
+}
+
 /** A variable name: letters, digits, _ . $ - */
 const VARIABLE_NAME = /^[\w.$-]+$/;
 
@@ -74,7 +87,10 @@ function applyEnvironmentVariables(store: WorkspaceStore, ref: string, values: R
   let env = findEnvironment(store, ref);
   if (!env) {
     if (!opts.create) throw new ApsError('ValidationError', `No environment "${ref}". Available: ${store.listEnvironments().map((e) => e.name).join(', ') || 'none'}`, { suggestions: ['Pass --create (create: true) to make it.'] });
-    env = { id: slugify(ref) || 'environment', name: ref, variables: [] } as Environment;
+    // a name several environments share is not "missing": making another one of that name would only add to the confusion
+    const named = store.listEnvironments().filter((e) => e.name.toLowerCase() === ref.trim().toLowerCase());
+    if (named.length) throw new ApsError('ValidationError', `Several environments are named "${ref}": name one by its group, e.g. "${environmentLabel(named[0]!)}"`);
+    env = { id: freeEnvironmentId(store, ref), name: ref, variables: [] } as Environment;
   }
   const variables = [...env.variables];
   const secretValues: Array<[string, string]> = [];
@@ -119,7 +135,9 @@ export function unsetEnvironmentVariables(store: WorkspaceStore, ref: string, ke
 /**
  * Copy one variable from an environment to another (Compare's → and ←, `env copy`): the value, enabled and secret as on the
  * source, replacing what the target has or adding it. A secret's value goes secret store to secret store (with `secrets`);
- * without a store it is added as a secret with no value. Returns what changed.
+ * without a store, or with one that cannot be written (the command line's: secrets come from environment variables there),
+ * it is added as a secret with no value. The value is stored before the environment file is written, so a store that
+ * fails leaves the target as it was. Returns what changed.
  */
 export async function copyVariableToEnvironment(
   store: WorkspaceStore,
@@ -136,15 +154,15 @@ export async function copyVariableToEnvironment(
   const secret = !!(v as { secret?: boolean }).secret;
   const replaced = dst.variables.some((x) => x.key === key);
   const copy = { ...v, value: secret ? '' : v.value, enabled: v.enabled !== false };
-  store.saveEnvironment({ ...dst, variables: replaced ? dst.variables.map((x) => (x.key === key ? copy : x)) : [...dst.variables, copy] });
   let secretCopied = false;
-  if (secret && opts.secrets) {
+  if (secret && opts.secrets?.writable) {
     const value = opts.secrets.get(secretKeys.envVar(src.id, key));
     if (value !== undefined) {
       await opts.secrets.set(secretKeys.envVar(dst.id, key), value);
       secretCopied = true;
     }
   }
+  store.saveEnvironment({ ...dst, variables: replaced ? dst.variables.map((x) => (x.key === key ? copy : x)) : [...dst.variables, copy] });
   return { from: src.name, to: dst.name, key, secret, replaced, secretCopied };
 }
 
@@ -217,11 +235,9 @@ export function duplicateEnvironmentGroup(store: WorkspaceStore, group: string, 
   const from = environmentsOfGroup(envs, group);
   if (!from.length) throw new ApsError('ValidationError', `No environment is in the group "${group}"`);
   if (environmentsOfGroup(envs, want).length) throw new ApsError('ValidationError', `The group "${want}" exists already: its environments would be mixed with the copies`);
-  const taken = new Set(envs.map((e) => e.id));
+  const taken = new Set<string>();
   return from.map((e) => {
-    let id = slugify(`${want} ${e.name}`) || 'environment';
-    for (let n = 2; taken.has(id); n++) id = `${slugify(`${want} ${e.name}`)}-${n}`;
-    taken.add(id);
+    const id = freeEnvironmentId(store, `${want} ${e.name}`, taken);
     const copy: Environment = { ...e, id, group: want, variables: e.variables.map((v) => ((v as { secret?: boolean }).secret ? { ...v, value: '' } : v)) };
     delete (copy as { problem?: string }).problem;
     return store.saveEnvironment(copy);

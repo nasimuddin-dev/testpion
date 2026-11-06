@@ -58,7 +58,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
     ...authTools({ store, secrets, settings }),
     ...outputTools({ store, redactor }),
     ...bundleTools({ store }),
-    ...commentTools({ store }),
+    ...commentTools({ store, readOnly: d.readOnly }),
     ...searchAskTools({ store, secrets, settings }),
     ...mockTools({ store }),
     ...datasetTools({ store }),

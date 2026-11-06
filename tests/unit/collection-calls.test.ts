@@ -48,10 +48,11 @@ describe('any kind of request in any folder', () => {
     const grpc = new Map(store.getLibrary('grpc').items.map((i) => [i.id, i]));
     expect(grpc.get('g-pay')!.folderId).toBe('pay');
     expect(grpc.get('g-refund')!.folderId).toBe(byPath.get('Payments / Refunds'));
-    // the text stays for an older app; an item without a text, or in a collection that is not there, is left alone
-    expect(grpc.get('g-refund')!.folder).toBe('payments / Refunds');
+    // the text has done its work and is gone; an item without a text, or in a collection that is not there, is left alone
+    expect(grpc.get('g-refund')!.folder).toBeUndefined();
     expect(grpc.get('g-top')!.folderId).toBeUndefined();
     expect(grpc.get('g-lost')!.folderId).toBeUndefined();
+    expect(grpc.get('g-lost')!.folder).toBe('X');
     expect(store.getLibrary('websocket').items[0]!.folderId).toBe(byPath.get('Live'));
     // a second time: nothing to do
     expect(placeCollectionCalls(store)).toBe(0);
@@ -68,5 +69,66 @@ describe('any kind of request in any folder', () => {
     expect(copyFolders.get(pay.folderId!)?.path).toEqual(['Payments']);
     expect(copyFolders.get(refund.folderId!)?.path).toEqual(['Payments', 'Refunds']);
     expect(pay.after).toBe(refund.id);
+  });
+
+  it('a call moved to the top level of its collection stays there at the next start', () => {
+    const store = WorkspaceStore.create(join(dir, 'moved'), 'Moved');
+    stores.push(store);
+    store.saveCollection({ schemaVersion: '1.0', id: 'shop', name: 'Shop', version: 0, variables: [], updatedAt: '', items: [] } as never);
+    store.saveLibrary('grpc', {
+      folders: [],
+      items: [
+        { id: 'g-new', name: 'New', folder: 'Payments', collectionId: 'shop', data: {} },
+        // placed by an earlier version, which kept the text next to the folder
+        { id: 'g-old', name: 'Old', folder: 'Payments', folderId: 'fld-shop-payments', collectionId: 'shop', data: {} },
+      ],
+    });
+    expect(placeCollectionCalls(store)).toBe(1);
+    const placed = store.getLibrary('grpc').items;
+    expect(placed.map((i) => [i.id, i.folderId, i.folder])).toEqual([
+      ['g-new', 'fld-shop-payments', undefined],
+      ['g-old', 'fld-shop-payments', undefined],
+    ]);
+    // the app's move to the top level: it clears folderId and after, and leaves the rest of the item as it is
+    store.saveLibrary('grpc', { folders: [], items: placed.map((i) => ({ ...i, folderId: undefined, after: undefined })) });
+    expect(placeCollectionCalls(store)).toBe(0);
+    expect(store.getLibrary('grpc').items.map((i) => i.folderId)).toEqual([undefined, undefined]);
+  });
+
+  it('places only the calls of one collection when asked, and saves the collection before the library', () => {
+    const store = WorkspaceStore.create(join(dir, 'one'), 'One');
+    stores.push(store);
+    for (const id of ['a', 'b']) store.saveCollection({ schemaVersion: '1.0', id, name: id.toUpperCase(), version: 0, variables: [], updatedAt: '', items: [] } as never);
+    store.saveLibrary('websocket', {
+      folders: [],
+      items: [
+        { id: 'w-a', name: 'A', folder: 'Live', collectionId: 'a', data: {} },
+        { id: 'w-b', name: 'B', folder: 'Live', collectionId: 'b', data: {} },
+      ],
+    });
+    expect(placeCollectionCalls(store, { collectionId: 'a' })).toBe(1);
+    expect(store.getLibrary('websocket').items.map((i) => [i.id, i.folderId, i.folder])).toEqual([
+      ['w-a', 'fld-a-live', undefined],
+      ['w-b', undefined, 'Live'],
+    ]);
+    expect(collectionFolders(store.getCollection('b')).size).toBe(0);
+    // a collection that cannot be saved: the library is not written either, so no call points at a folder that does not exist
+    const order: string[] = [];
+    const failing = new Proxy(store, {
+      get(target, key) {
+        if (key === 'saveCollection')
+          return () => {
+            order.push('collection');
+            throw new Error('disk full');
+          };
+        if (key === 'saveLibrary') return (...a: unknown[]) => (order.push('library'), (target.saveLibrary as (...x: unknown[]) => unknown)(...a));
+        const v = Reflect.get(target, key);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    expect(() => placeCollectionCalls(failing)).toThrow(/disk full/);
+    expect(order).toEqual(['collection']);
+    expect(store.getLibrary('websocket').items.find((i) => i.id === 'w-b')).toMatchObject({ folder: 'Live' });
+    expect(store.getLibrary('websocket').items.find((i) => i.id === 'w-b')!.folderId).toBeUndefined();
   });
 });

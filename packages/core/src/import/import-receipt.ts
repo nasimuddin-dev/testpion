@@ -7,6 +7,7 @@ import { atomicWrite } from '../storage/fsutil.js';
 import { shortId } from '../util/ids.js';
 import { ApsError } from '../errors.js';
 import { removeItem } from '../kinds/ops.js';
+import { restoreFromTrash } from '../storage/trash.js';
 import { findingFromNote, newDocument } from './model.js';
 import { buildReport, type ImportReport } from './report.js';
 import type { ImportSinks, WorkspaceImportResult } from './workspace-import.js';
@@ -14,23 +15,31 @@ import type { ImportSinks, WorkspaceImportResult } from './workspace-import.js';
 /**
  * What an import created, so it can be taken back (the app's Undo after an import, `testpion import-undo`) and its report
  * opened again. Both are kept per computer in `.local/import-reports/<id>.json` (git ignores `.local`).
- * Undo moves the collections, environments and API definitions to Recently deleted (`removeItem`: restorable), and
- * removes the flow files and library items the import wrote; it refuses while an imported collection or flow was edited since.
+ * Undo moves the collections, environments and API definitions the import wrote to Recently deleted (`removeItem`:
+ * restorable) and removes the flow files; it refuses while an imported collection or flow was edited since. An imported
+ * collection's gRPC calls and connections go to Recently deleted with it (in its trash entry: restoring the collection
+ * brings them back); only calls the import added to a collection that stays (a re-import) are removed from the library.
+ * An API definition the import replaced comes back from Recently deleted; one it found there already is left alone.
  */
 
 export interface Created {
   collections: Array<{ id: string; name: string; version: number }>;
   environments: Array<{ id: string; name: string }>;
-  /** Paths relative to the workspace (specs/…). */
+  /** Paths relative to the workspace (specs/…): the API definitions this import wrote (not one that was there already with the same text). */
   specs: string[];
+  /** `specs: 'replace'`: the documents that had the path before, now in Recently deleted. Undo puts them back. */
+  specsReplaced?: Array<{ path: string; trashId: string }>;
   flows: Array<{ path: string; hash: string }>;
   library: Array<{ kind: string; ids: string[] }>;
   /** Secret values written to the secret store (kept there on undo: a restored environment still has them). */
   secrets: Array<{ environment: string; key: string }>;
   /** Collections an import updated in place (re-import): the collection as it was, and the version the update saved. Undo puts it back. */
   updated?: Array<{ id: string; name: string; version: number; before: Collection }>;
-  /** Environments an import added variables to (re-import): the environment as it was. */
-  envUpdated?: Array<{ id: string; name: string; before: Environment }>;
+  /**
+   * Environments an import added variables to (re-import): the environment as it was, and the variables added as they
+   * were written (`added`; absent in a receipt of an older version). Undo removes those that are still as written.
+   */
+  envUpdated?: Array<{ id: string; name: string; before: Environment; added?: Array<{ key: string; value: string }> }>;
   /** Names of the workspace globals the import set (a Postman globals file). */
   globals?: string[];
   /** Cookies the import added to the cookie jar (Insomnia's jar). */
@@ -199,10 +208,23 @@ export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { for
       /* gone since */
     }
   }
+  // variables added to an environment are taken out one by one, and only while they are as the import wrote them: the
+  // environment as it was is not saved back (that would lose every edit made to it since)
   for (const e of receipt.envUpdated ?? []) {
     try {
-      store.saveEnvironment(e.before);
-      removed.push(`the added variables of environment "${e.name}"`);
+      if (!e.added) {
+        removed.push(`(the variables added to environment "${e.name}" stay: this import was made by an older version; remove them in Environments)`);
+        continue;
+      }
+      const now = store.listEnvironments().find((x) => x.id === e.id && !x.problem);
+      if (!now) continue; // gone since
+      const written = new Map(e.added.map((a) => [a.key, a.value]));
+      const variables = now.variables.filter((v) => !(written.has(v.key) && String(v.value ?? '') === written.get(v.key)));
+      const taken = now.variables.length - variables.length;
+      if (taken) store.saveEnvironment({ ...now, variables });
+      const kept = e.added.length - taken;
+      if (taken) removed.push(`${taken} added variable${taken === 1 ? '' : 's'} of environment "${e.name}"`);
+      if (kept) removed.push(`(${kept} variable${kept === 1 ? '' : 's'} added to environment "${e.name}" stay${kept === 1 ? 's' : ''}: changed or removed since the import)`);
     } catch {
       /* gone since */
     }
@@ -220,18 +242,30 @@ export function undoImportReceipt(store: WorkspaceStore, id: string, opts: { for
   for (const c of receipt.collections) trash({ kind: 'collection', collectionId: c.id }, 'collection', c.name);
   for (const e of receipt.environments) trash({ kind: 'environment', environmentId: e.id }, 'environment', e.name);
   for (const p of receipt.specs) if (existsSync(store.safePath(p))) trash({ kind: 'spec', path: p }, 'spec', p);
+  // a document the import replaced goes back to its path (free again: the import's own went to the trash just above)
+  for (const s of receipt.specsReplaced ?? []) {
+    try {
+      const back = restoreFromTrash(store, s.trashId);
+      removed.push(`(${back.id} is back as it was before the import)`);
+    } catch {
+      /* no longer in Recently deleted (restored or purged by hand since) */
+    }
+  }
   for (const f of receipt.flows) {
     if (!existsSync(store.safePath(f.path))) continue;
     rmSync(store.safePath(f.path), { force: true });
     removed.push(f.path);
   }
+  // the calls of a collection that went to Recently deleted above went with it (in its trash entry: they come back when
+  // it is restored). What is still in the library was added to a collection that stays (a re-import): those are removed
   for (const l of receipt.library) {
     const lib = store.getLibrary(l.kind);
     const gone = new Set(l.ids);
     const keep = lib.items.filter((i) => !gone.has(i.id));
-    if (keep.length !== lib.items.length) {
+    const n = lib.items.length - keep.length;
+    if (n) {
       store.saveLibrary(l.kind, { folders: lib.folders, items: keep });
-      removed.push(`${l.ids.length} ${l.kind} item${l.ids.length === 1 ? '' : 's'}`);
+      removed.push(`${n} ${l.kind} item${n === 1 ? '' : 's'}`);
     }
   }
   rmSync(join(dir(store), `${id}.json`), { force: true });

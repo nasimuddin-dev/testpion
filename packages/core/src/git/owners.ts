@@ -18,36 +18,77 @@ const PLACES = ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'];
 export function parseCodeowners(text: string): OwnerRule[] {
   const rules: OwnerRule[] = [];
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw.replace(/(^|\s)#.*$/, '').trim();
-    if (!line) continue;
-    const [pattern, ...owners] = line.split(/\s+/);
-    if (!pattern) continue;
-    rules.push({ pattern, owners: owners.filter((o) => o.startsWith('@') || o.includes('@')) });
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    // the pattern ends at the first space that is not escaped (`path\ with\ spaces` is one pattern); it is kept as written
+    let end = 0;
+    while (end < line.length && !/\s/.test(line[end]!)) end += line[end] === '\\' && end + 1 < line.length ? 2 : 1;
+    const pattern = line.slice(0, end);
+    const owners = line
+      .slice(end)
+      .replace(/(^|\s)#.*$/, '')
+      .trim()
+      .split(/\s+/)
+      .filter((o) => o.startsWith('@') || o.includes('@'));
+    rules.push({ pattern, owners });
   }
   return rules;
 }
 
-/** A CODEOWNERS pattern as a regular expression over a repository-relative path (gitignore-like, as GitHub matches it). */
+/** One path segment of a pattern as a regular expression: `*` and `?` stay inside the segment, `\x` is x itself, the rest is literal. */
+function segmentRegex(segment: string): string {
+  let out = '';
+  for (let i = 0; i < segment.length; i++) {
+    const c = segment[i]!;
+    if (c === '\\' && i + 1 < segment.length) out += segment[++i]!.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    else if (c === '*') {
+      while (segment[i + 1] === '*') i++;
+      out += '[^/]*';
+    } else if (c === '?') out += '[^/]';
+    else out += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return out;
+}
+
+/**
+ * A CODEOWNERS pattern as a regular expression over a repository-relative path, as GitHub matches it (gitignore-like,
+ * with GitHub's differences):
+ * - a leading `/`, or a `/` inside the pattern, ties it to the repository root; a bare name (`*.js`, `apps/`) matches at any depth;
+ * - a name matches the file or the folder of that name with everything in it; a trailing `/` only the folder;
+ * - a last segment `*` (`docs/*`, `/tests/*`) matches the direct children only, never what is in a folder below;
+ * - a segment of two stars is any number of folders, none included (two stars then `/logs` is also `logs`; `a`, two stars, `b`
+ *   is also `a/b`); as the last segment it is everything inside the folder before it.
+ */
 function patternRegex(pattern: string): RegExp {
-  let p = pattern;
-  const anchored = p.startsWith('/');
-  const dirOnly = p.endsWith('/');
-  p = p.replace(/^\//, '').replace(/\/$/, '');
-  const body = p
-    .split('**')
-    .map((part) => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]'))
-    .join('.*');
-  const hasSlash = pattern.replace(/\/$/, '').includes('/');
-  const start = anchored || hasSlash ? '^' : '(^|/)';
-  const end = dirOnly ? '(/|$)' : '($|/)';
-  return new RegExp(`${start}${body}${end}`);
+  const dirOnly = /(^|[^\\])\/$/.test(pattern) || pattern === '/';
+  const segments = pattern.replace(/^\//, '').replace(/\/$/, '').split('/');
+  const anchored = pattern.startsWith('/') || segments.length > 1;
+  const last = segments.length - 1;
+  let body = '';
+  segments.forEach((s, i) => {
+    if (s === '**') body += i === last ? '.*' : '(?:.*/)?';
+    else body += segmentRegex(s) + (i < last ? '/' : '');
+  });
+  const end = segments[last] === '**' ? '' : !dirOnly && segments[last] === '*' ? '$' : '(/|$)';
+  return new RegExp(`${anchored ? '^' : '(^|/)'}${body}${end}`);
+}
+
+/** The compiled patterns, by their text: the owners of every row of a list are asked for with the same few rules. */
+const compiled = new Map<string, RegExp>(); // bounded: cleared above 2000 patterns
+function regexOf(pattern: string): RegExp {
+  let re = compiled.get(pattern);
+  if (!re) {
+    if (compiled.size >= 2000) compiled.clear();
+    compiled.set(pattern, (re = patternRegex(pattern)));
+  }
+  return re;
 }
 
 /** The owners of a repository-relative path: the last matching rule's. */
 export function ownersOf(rules: OwnerRule[], repoPath: string): string[] {
   let found: string[] = [];
   const path = repoPath.replace(/\\/g, '/').replace(/^\/+/, '');
-  for (const r of rules) if (patternRegex(r.pattern).test(path)) found = r.owners;
+  for (const r of rules) if (regexOf(r.pattern).test(path)) found = r.owners;
   return found;
 }
 

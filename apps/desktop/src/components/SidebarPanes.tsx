@@ -11,6 +11,7 @@ import { promptText, useApp } from '../store';
 import { openRef } from '../lib/open-ref';
 import { groupByDay, uid } from '../lib/format';
 import { Badge, cx, Empty, FilterInput, IconButton, statusTone } from './ui';
+import { isActiveEnvironment } from '../lib/active-environment';
 
 /** Sidebar pane: the workspace's environments; click one to make it active (Postman's Environments sidebar). */
 export function EnvironmentsPane() {
@@ -49,16 +50,16 @@ export function EnvironmentsPane() {
             mark={<CommentMark to={{ kind: 'environment', environmentId: e.id }} />}
             nodeId={`env-pane:${e.id}`}
             label={e.name}
-            active={e.name === env}
+            active={isActiveEnvironment(ws?.environments, e, env)}
             onClick={() => !e.problem && useApp.getState().setEnvironment(environmentRef(envs, e))}
             onOpen={() => void openRef({ kind: 'environment', environmentId: e.id })}
             ctx={() => ({
               ref: { kind: 'environment', environmentId: e.id },
               name: e.name,
               on: { open: () => void openRef({ kind: 'environment', environmentId: e.id }), makeActive: () => useApp.getState().setEnvironment(environmentRef(envs, e)) },
-              disabled: e.name === env ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
+              disabled: isActiveEnvironment(ws?.environments, e, env) ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {},
             })}
-            className={cx('pl-3', e.name === env && 'text-accent')}
+            className={cx('pl-3', isActiveEnvironment(ws?.environments, e, env) && 'text-accent')}
           >
             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: envColor(e) }} />
             <span className={cx('truncate', e.problem && 'text-bad')}>
@@ -66,7 +67,7 @@ export function EnvironmentsPane() {
               {e.name}
             </span>
             {e.isProduction && <Badge tone="bad">prod</Badge>}
-            {e.name === env && <Check size={13} className="ml-auto shrink-0" />}
+            {isActiveEnvironment(ws?.environments, e, env) && <Check size={13} className="ml-auto shrink-0" />}
           </TreeRowShell>
         ))}
         {!ws?.environments.length && (

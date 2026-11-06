@@ -27,6 +27,7 @@ import { GitMark } from '../components/GitMark';
 import { refreshEnvironments, useEnvironments } from '../lib/environments-store';
 import { deliverSave, type SaveResult } from '../lib/files';
 import { AlsoAddDialog } from '../components/AlsoAddTo';
+import { activeRef, isActiveEnvironment } from '../lib/active-environment';
 
 /**
  * WF-19: open environments are tabs (the one tab model: a single click in the list opens a preview tab, double-click
@@ -125,7 +126,7 @@ export function EnvironmentsView() {
       reordering.current = true;
       await call('env.save', { env: { ...env, name } });
       await load();
-      if (activeEnv === env.name) useApp.getState().setEnvironment(name);
+      if (isActiveEnvironment(envs, env, activeEnv)) useApp.getState().setEnvironment(activeRef(envs.map((e) => (e.id === env.id ? { ...e, name } : e)), { ...env, name }));
       await useApp.getState().refreshWorkspace();
     } catch (e) {
       reordering.current = false;
@@ -230,7 +231,7 @@ export function EnvironmentsView() {
       moveDown: () => void move(e.id, envs.findIndex((x) => x.id === e.id) + 1),
     },
     disabled: {
-      ...(activeEnv === e.name ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {}),
+      ...(isActiveEnvironment(envs, e, activeEnv) ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {}),
       ...(envs[0]?.id === e.id ? { moveUp: 'It is first already' } : {}),
       ...(envs[envs.length - 1]?.id === e.id ? { moveDown: 'It is last already' } : {}),
     },
@@ -253,9 +254,12 @@ export function EnvironmentsView() {
       const before = new Set(envs.find((e) => e.id === draft.id)?.variables.map((v) => v.key) ?? []);
       const added = variables.map((v) => v.key).filter((k) => k && !before.has(k));
       const missingElsewhere = added.filter((k) => envs.some((e) => e.id !== draft.id && !e.problem && !e.variables.some((v) => v.key === k)));
+      // the active environment renamed (or moved to another group) stays the active one under its new name
+      const wasActive = isActiveEnvironment(envs, draft, activeEnv);
       await call('env.save', { env: { ...draft, variables }, secrets });
       tabs.setD(null); // saved: the tab shows the environment as saved
       await load();
+      if (wasActive) useApp.getState().setEnvironment(activeRef(envs.map((e) => (e.id === draft.id ? draft : e)), draft));
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast('Environment saved', 'success');
       if (missingElsewhere.length && envs.some((e) => e.id !== draft.id)) setAlsoFor({ from: draft.id, keys: missingElsewhere });
