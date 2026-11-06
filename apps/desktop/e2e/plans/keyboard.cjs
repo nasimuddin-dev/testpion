@@ -16,7 +16,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  explorer: /ArrowRight→HTTP basics.*ArrowDown→HTTPREST17/,
+  explorer: /ArrowRight→HTTP basics.*ArrowDown→Requests & responses/,
   // General (the folder of the loose prompt) comes first: Down reaches it, then its prompt; End is the last prompt of the last folder
   'ailab-list': /ArrowDown→General.*ArrowDown→Haiku.*End→Refuses a prompt injection.*ArrowUp→Summarise a text.*Home→Saved prompts/,
   // the header is a row of the tree too (TreeRowShell): ↓ from it reaches the first folder

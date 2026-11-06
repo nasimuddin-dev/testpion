@@ -10,7 +10,7 @@ const steps = [
   ['new-grpc', newOf('gRPC request')],
   ['new-ws', newOf('WebSocket')],
   ['new-mcp', newOf('MCP server')],
-  ['saved-ws', `(async () => { await __t.expand('WebSocket & MQTT'); await __t.sleep(300); await __t.expand('WebSocket & MQTT3'); await __t.sleep(300); const r = [...document.querySelectorAll('button[data-tree-row]')].find((b) => b.offsetParent && b.textContent.includes('Postman echo')); r?.click(); await __t.sleep(1500); return ${tabs}; })()`],
+  ['saved-ws', `(async () => { await __t.expand('WebSocket & MQTT'); await __t.sleep(300); await __t.expand('Echo servers'); await __t.sleep(300); const r = [...document.querySelectorAll('button[data-tree-row]')].find((b) => b.offsetParent && b.textContent.includes('Postman echo')); r?.click(); await __t.sleep(1500); return ${tabs}; })()`],
 ];
 
 module.exports = withExpect(steps, {

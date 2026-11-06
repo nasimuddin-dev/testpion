@@ -15,7 +15,7 @@ const H = `
 `;
 const step = stepOf(H);
 const steps = [
-  step('setup', `await __t.requests(); await __t.sleep(500); for (const t of ['HTTP basics', 'REST17', 'Requests & responses10', 'WebSocket & MQTT', 'WebSocket & MQTT3', 'MCP servers', 'GraphQL (Countries']) { await __t.expand(t); await __t.sleep(250); } return titles();`),
+  step('setup', `await __t.requests(); await __t.sleep(500); for (const t of ['HTTP basics', 'Requests & responses10', 'WebSocket & MQTT', 'Echo servers', 'MCP servers', 'GraphQL (Countries']) { await __t.expand(t); await __t.sleep(250); } return titles();`),
   step('dblclick-new-http', `const t = tab('New HTTP request'); if (!t) return 'NO TAB: ' + titles(); t.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await __t.sleep(500); if (!(await type('My HTTP'))) return 'NO INPUT'; return titles();`),
   step('f2-saved-request', `await openRow('GET with query'); const t = tab('GET with query'); t.focus(); key(t, 'F2'); await __t.sleep(500); if (!(await type('GET with query X'))) return 'NO INPUT'; return titles() + ' || tree: ' + rows(/GET with query/);`),
   step('menu-back', `await menuRename('GET with query X'); if (!(await type('GET with query parameters'))) return 'NO INPUT'; return 'tree: ' + rows(/GET with query/);`),

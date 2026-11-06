@@ -41,6 +41,15 @@ const only = opt('only')
   ?.split(',')
   .map((s) => s.trim());
 const out = resolve(opt('out') ?? mkdtempSync(join(tmpdir(), 'testpion-e2e-')));
+// The plans' homes are workspaces the app runs git in (init, commit, checkout, branch rename, remotes). Inside a git
+// repository (this one above all) git finds the enclosing repository and those commands change it: refuse.
+for (let d = out; ; d = dirname(d)) {
+  if (existsSync(join(d, '.git'))) {
+    console.error(`--out ${out} is inside the git repository ${d}: the git plans would run git in it. Choose a folder outside any repository (the default is a temp folder).`);
+    process.exit(2);
+  }
+  if (dirname(d) === d) break;
+}
 const timeoutSec = Number(opt('timeout') ?? 600);
 
 const FAILURE = /^(NO\b|ERR\b)|\bNO (INPUT|MENU|ROW|DIALOG|BUTTON|TAB|PICKER|OVERFLOW)|NOT RENAMED|NOTHING$/;

@@ -64,8 +64,11 @@ const steps = [
   step(
     'dialog-shows-the-links',
     `const d = dialog(); if (!d) return 'NO DIALOG';
-     const envSel = d.querySelector('select[aria-label="Environment to propose variables for"]');
-     setInput(envSel, 'Public APIs');
+     // the shared environment picker (a button with a menu), as everywhere an environment is chosen
+     const envSel = d.querySelector('button[aria-label="Environment to propose variables for"]'); if (!envSel) return 'NO ENVIRONMENT PICKER';
+     envSel.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); envSel.click();
+     const pick = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Public APIs/.test(m.textContent.trim())), 3000); if (!pick) return 'NO Public APIs IN THE PICKER';
+     pick.click(); await __t.sleep(200);
      const name = d.querySelector('input[aria-label="Flow file name"]');
      setInput(name, 'e2e recorded jobs');
      const ok = await __t.waitFor(() => /tests\\/recorded\\/e2e-recorded-jobs/.test(d.textContent) && /vetPassword/.test(d.textContent), 6000);

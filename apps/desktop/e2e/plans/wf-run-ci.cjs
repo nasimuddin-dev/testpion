@@ -58,8 +58,11 @@ const steps = [
      press(more()); (await item('Run in CI…'))?.click();
      const dlg = await __t.waitFor(() => [...document.querySelectorAll('[role=dialog]')].find((d) => /Run in CI/.test(d.textContent)), 4000); if (!dlg) return 'NO DIALOG';
      const before = !!dlg.querySelector('[data-ci-allow-production]');
-     const env = [...dlg.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'E2E CI Prod')); if (!env) return 'NO ENV SELECT';
-     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(env, 'E2E CI Prod'); env.dispatchEvent(new Event('change', { bubbles: true }));
+     // the shared environment picker (a button with a menu), as everywhere an environment is chosen
+     const env = dlg.querySelector('button[aria-label="Environment"]'); if (!env) return 'NO ENV PICKER';
+     env.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); env.click();
+     const pick = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^E2E CI Prod/.test(m.textContent.trim())), 3000); if (!pick) return 'NO E2E CI Prod IN THE PICKER';
+     pick.click(); await __t.sleep(200);
      const box = await __t.waitFor(() => dlg.querySelector('[data-ci-allow-production]'), 3000); if (!box) return 'NO CHECKBOX for a collection';
      box.click();
      const local = await __t.waitFor(() => [...dlg.querySelectorAll('pre, code')].map((x) => x.textContent).find((t) => /run-collection.*--allow-production/.test(t)), 5000);
