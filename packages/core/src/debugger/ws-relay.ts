@@ -22,6 +22,9 @@ export interface FrameVerdict {
 }
 
 const MAX_RULED_FRAME = 4 * 1024 * 1024;
+/** Frames waiting for the rules of a connection: over this the sender waits; under the low mark it goes on. */
+export const BACKLOG_HIGH = 8 * 1024 * 1024;
+const BACKLOG_LOW = 2 * 1024 * 1024;
 
 /** The frame rules of a connection, applied to one frame's text in the direction it travels. `pause` holds a frame for the person to edit it. */
 export function frameDecider(specs: FrameSpec[], direction: WebSocketFrame['direction'], pause?: (text: string, direction: WebSocketFrame['direction']) => Promise<{ drop?: boolean; text?: string } | undefined>) {
@@ -86,12 +89,24 @@ export function createFrameRelay(o: {
   decide(text: string): Promise<FrameVerdict>;
   write(bytes: Buffer): void;
   onFrame(f: WebSocketFrame): void;
+  /**
+   * The frames waiting for the rules (a delay, a held frame) passed `BACKLOG_HIGH` bytes (true), or fell under
+   * `BACKLOG_LOW` again (false): the source should wait meanwhile, or a fast sender fills the memory.
+   */
+  onBacklog?(full: boolean): void;
 }): { push(chunk: Buffer): void } {
   const queue = new ByteQueue();
   queue.need = 2;
   const masked = o.direction === 'sent';
   let bypass = false;
   let tail: Promise<void> = Promise.resolve();
+  let backlog = 0;
+  let full = false;
+  const track = (bytes: number) => {
+    backlog += bytes;
+    if (!full && backlog > BACKLOG_HIGH) (full = true), o.onBacklog?.(true);
+    else if (full && backlog < BACKLOG_LOW) (full = false), o.onBacklog?.(false);
+  };
   const handle = async (raw: Buffer, b0: number, payload: Buffer): Promise<void> => {
     const opcode = b0 & 0x0f;
     const ruled = (opcode === 1 || (opcode === 2 && looksText(payload))) && (b0 & 0xf0) === 0x80;
@@ -116,7 +131,11 @@ export function createFrameRelay(o: {
     o.write(raw);
   };
   const enqueue = (raw: Buffer, b0: number, payload: Buffer) => {
-    tail = tail.then(() => handle(raw, b0, payload)).catch(() => o.write(raw));
+    track(raw.length);
+    tail = tail
+      .then(() => handle(raw, b0, payload))
+      .catch(() => o.write(raw))
+      .finally(() => track(-raw.length));
   };
   return {
     push(chunk: Buffer) {

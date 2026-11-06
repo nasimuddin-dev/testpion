@@ -30,7 +30,7 @@ import { currentNet } from '../net/proxy.js';
 import { applyRequestScripts, applyResponseScripts } from './script-rules.js';
 import { applyHeaderEdits, decideRequest, highlightRuleForResponse, ruleMatches, type DebuggerRule, type HighlightStyle } from './rules.js';
 import { sseParser, webSocketFrameParser, type DebuggerSseEvent, type WebSocketFrame } from './frames.js';
-import { forH2, forH2Out, holdBody, isH2, relayWriter, safeDecode, textLike, withoutPseudo } from './http-util.js';
+import { forH2, forH2Out, holdBody, isH2, relayWriter, safeDecode, sharedPause, textLike, withoutPseudo } from './http-util.js';
 import { decodeBody, dropConnection, hangRequest, localReply, redirectTarget, rewriteBody, writeCutResponse } from './shaping.js';
 import { Pacer, pacedBody, type NetworkSpeed } from './network-speed.js';
 import { createFrameRelay, frameBreaker, frameDecider, responseHead } from './ws-relay.js';
@@ -883,13 +883,19 @@ export async function startDebuggerProxy(opts: DebuggerProxyOptions = {}): Promi
       socket.write(responseHead(ures));
       // with frame rules the relay writes what it forwards; without, the bytes go on untouched and the parser only reads along
       const pause = frameRules && opts.onBreakpoint ? frameBreaker(opts.onBreakpoint, e) : undefined;
-      const sent = frameRules ? createFrameRelay({ direction: 'sent', decide: frameDecider(frameRules, 'sent', pause), write: (b) => void upSocket.write(b), onFrame: frame }) : webSocketFrameParser('sent', frame);
-      const received = frameRules ? createFrameRelay({ direction: 'received', decide: frameDecider(frameRules, 'received', pause), write: (b) => void socket.write(b), onFrame: frame }) : webSocketFrameParser('received', frame);
+      // a side that sends faster than the other reads waits (no queue in memory): for a full socket, and for frames held by rules
+      const clientWaits = sharedPause(socket);
+      const serverWaits = sharedPause(upSocket);
+      const toServer = relayWriter(clientWaits('full'), upSocket);
+      const toClient = relayWriter(serverWaits('full'), socket);
+      const held = (side: ReturnType<typeof clientWaits>) => (full: boolean) => (full ? side.pause() : side.resume());
+      const sent = frameRules ? createFrameRelay({ direction: 'sent', decide: frameDecider(frameRules, 'sent', pause), write: toServer, onFrame: frame, onBacklog: held(clientWaits('rules')) }) : webSocketFrameParser('sent', frame);
+      const received = frameRules ? createFrameRelay({ direction: 'received', decide: frameDecider(frameRules, 'received', pause), write: toClient, onFrame: frame, onBacklog: held(serverWaits('rules')) }) : webSocketFrameParser('received', frame);
       const plain = !frameRules;
-      if (head.length) (sent.push(head), plain && upSocket.write(head));
-      if (upHead.length) (received.push(upHead), plain && socket.write(upHead));
-      socket.on('data', (c: Buffer) => (sent.push(c), plain && upSocket.write(c)));
-      upSocket.on('data', (c: Buffer) => (received.push(c), plain && socket.write(c)));
+      if (head.length) (sent.push(head), plain && toServer(head));
+      if (upHead.length) (received.push(upHead), plain && toClient(upHead));
+      socket.on('data', (c: Buffer) => (sent.push(c), plain && toServer(c)));
+      upSocket.on('data', (c: Buffer) => (received.push(c), plain && toClient(c)));
       // half-open sockets: one side ending is the connection closing
       socket.on('end', () => (finish(), upSocket.end()));
       upSocket.on('end', () => (finish(), socket.end()));

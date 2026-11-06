@@ -26,6 +26,23 @@ interface RelaySource {
   pause(): unknown;
   resume(): unknown;
 }
+
+/**
+ * One source paused for several reasons at once (a full destination, a backlog of frames held by rules): each reason
+ * pauses and resumes its own handle, and the source runs again only when no reason holds it.
+ */
+export function sharedPause(src: RelaySource): (reason: string) => RelaySource {
+  const holding = new Set<string>();
+  return (reason) => ({
+    pause: () => {
+      if (!holding.size) src.pause();
+      holding.add(reason);
+    },
+    resume: () => {
+      if (holding.delete(reason) && !holding.size) src.resume();
+    },
+  });
+}
 interface RelaySink {
   write(chunk: Buffer): unknown;
   on(event: 'drain' | 'close', listener: () => void): unknown;
