@@ -294,8 +294,7 @@ export interface GraphQLTest extends TestBase {
   headers?: KeyValue[];
   auth?: AuthConfig;
   persistedQueries?: boolean; // APQ (graphql.ts): the query's hash first
-  /** A subscription: stop after this many events (default 1). */
-  events?: number;
+  events?: number; // a subscription: stop after this many events (default 1)
   /** A subscription: listen at most this long, in milliseconds (default 10000). */
   waitMs?: number;
 }

@@ -1,5 +1,5 @@
 import type { GraphQLSchema, IntrospectionQuery, GraphQLField, GraphQLInputField, GraphQLNamedType } from 'graphql';
-import { createHash } from 'node:crypto';
+import { sha256Hex } from '../../util/hash.js';
 import { nodeRequire } from '../../util/lazy-require.js';
 
 // graphql loads at first use, not at startup (see util/lazy-require.ts)
@@ -75,7 +75,7 @@ export async function executeGraphQL(spec: GraphQLRequestSpec, opts: HttpExecOpt
   if (!spec.persistedQueries) sent = await executeHttp(toHttp(spec, body), opts);
   else {
     // automatic persisted queries (Apollo's APQ): the hash alone first; the query with it once the server asks for it
-    const extensions = { persistedQuery: { version: 1, sha256Hash: createHash('sha256').update(spec.query).digest('hex') } };
+    const extensions = { persistedQuery: { version: 1, sha256Hash: sha256Hex(spec.query) } };
     const { query: _q, ...rest } = body;
     void _q;
     sent = await executeHttp(toHttp(spec, { ...rest, extensions }), opts);
