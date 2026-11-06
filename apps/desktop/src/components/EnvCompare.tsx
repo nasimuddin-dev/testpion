@@ -51,6 +51,9 @@ export function EnvCompare({ environments, initialLeft, onClose }: { environment
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the pair
   }, [left, right]);
   const name = (id: string) => environments.find((e) => e.id === id)?.name ?? id;
+  // an environment shared from another workspace is changed there: nothing is copied into it
+  const sharedFrom = (id: string) => (environments.find((e) => e.id === id) as { shared?: string } | undefined)?.shared;
+  const intoShared = (id: string) => (sharedFrom(id) ? `${name(id)} is shared from ${sharedFrom(id)}: change it there` : undefined);
   /** Copy a row's variable to the other side (its value, enabled and secret as on the source), after asking: the old value is gone. */
   const copy = async (r: EnvDiffRow, to: 'left' | 'right') => {
     const from = to === 'left' ? right : left;
@@ -160,12 +163,12 @@ export function EnvCompare({ environments, initialLeft, onClose }: { environment
                     {r.status !== 'same' && (
                       <span className="inline-flex gap-0.5 ml-2 align-middle">
                         {r.status !== 'only-right' && (
-                          <IconButton size="sm" label={`Copy ${r.key} to ${name(right)}`} onClick={() => void copy(r, 'right')} data-env-copy="right">
+                          <IconButton size="sm" label={`Copy ${r.key} to ${name(right)}`} disabled={!!intoShared(right)} reason={intoShared(right)} onClick={() => void copy(r, 'right')} data-env-copy="right">
                             <ArrowRight />
                           </IconButton>
                         )}
                         {r.status !== 'only-left' && (
-                          <IconButton size="sm" label={`Copy ${r.key} to ${name(left)}`} onClick={() => void copy(r, 'left')} data-env-copy="left">
+                          <IconButton size="sm" label={`Copy ${r.key} to ${name(left)}`} disabled={!!intoShared(left)} reason={intoShared(left)} onClick={() => void copy(r, 'left')} data-env-copy="left">
                             <ArrowLeft />
                           </IconButton>
                         )}
