@@ -205,6 +205,11 @@ export async function addVariablesToEnvironments(
   for (const ref of [...new Set(to)]) {
     const env = requireEnvironment(store, ref);
     if (env.id === src.id) continue;
+    // shared from another workspace: changed there (listed, with nothing added)
+    if (env.shared) {
+      out.push({ environment: env.name, added: [] });
+      continue;
+    }
     const have = new Set(env.variables.map((v) => v.key));
     const add = wanted.filter((v) => !have.has(v.key));
     if (!add.length) {

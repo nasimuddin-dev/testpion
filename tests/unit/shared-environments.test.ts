@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { checkedSource, WorkspaceStore } from '../../packages/core/src/index.js';
+import { checkedSource, removeItem, renameVariable, sharedDirs, WorkspaceStore } from '../../packages/core/src/index.js';
 import { runCliSync, tempDir } from '../helpers.js';
 
 // A team with a repository of its own still uses another workspace's environments, read-only, without copying them:
@@ -19,7 +20,7 @@ describe('environments shared from another workspace', () => {
   it('checks the folder: relative, another workspace, with the kind named', () => {
     expect(() => checkedSource(team.root, join(tmp.dir, 'platform-shared'), ['environments'])).toThrow(/absolute path/);
     expect(() => checkedSource(team.root, '.', ['environments'])).toThrow(/from itself/);
-    expect(() => checkedSource(team.root, '../nowhere', ['environments'])).toThrow(/has no environments folder/);
+    expect(() => checkedSource(team.root, '../nowhere', ['environments'])).toThrow(/is not a workspace|has no environments folder/);
     expect(() => checkedSource(team.root, '../platform-shared', ['collections'])).toThrow(/What can be shared: environments/);
     expect(checkedSource(team.root, '..\\platform-shared', ['environments'])).toEqual({ path: '../platform-shared', kinds: ['environments'] });
   });
@@ -46,6 +47,21 @@ describe('environments shared from another workspace', () => {
     const copy = team.saveEnvironment({ ...staging, id: 'my-staging', name: 'My staging' });
     expect(copy).not.toHaveProperty('shared');
     expect(team.listEnvironments().find((e) => e.id === 'my-staging')?.shared).toBeUndefined();
+  });
+
+  it('a delete through the item ops, a variable rename and a pulled absolute path leave the other workspace alone', async () => {
+    const file = join(tmp.dir, 'platform-shared', 'environments', 'shared-staging.json');
+    expect(() => removeItem(team, { kind: 'environment', environmentId: 'shared-staging' })).toThrow(/delete it there/);
+    expect(existsSync(file)).toBe(true);
+    // renaming a variable renames it in this workspace's environments only
+    team.saveEnvironment({ id: 'mine', name: 'Mine', variables: [{ key: 'baseUrl', value: 'http://localhost' }] });
+    await renameVariable(team, 'baseUrl', 'apiBase');
+    expect(team.getEnvironment('Mine')!.variables.map((v) => v.key)).toEqual(['apiBase']);
+    expect(readFileSync(file, 'utf8')).toContain('"baseUrl"');
+    // a workspace.json with an absolute path, or a folder that is not a workspace, is not read
+    expect(sharedDirs({ shared: [{ path: join(tmp.dir, 'platform-shared'), kinds: ['environments'] }] }, team.root, 'environments')).toEqual([]);
+    expect(sharedDirs({ shared: [{ path: '..', kinds: ['environments'] }] }, team.root, 'environments')).toEqual([]);
+    expect(() => checkedSource(team.root, '..', ['environments'])).toThrow(/not a workspace|no environments folder/);
   });
 
   it('testpion workspace share adds and removes a folder; env list says where one comes from', () => {

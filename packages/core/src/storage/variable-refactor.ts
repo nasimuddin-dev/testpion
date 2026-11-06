@@ -146,7 +146,8 @@ export async function renameVariable(store: WorkspaceStore, from: string, to: st
   let files = 0;
 
   for (const e of store.listEnvironments()) {
-    if (!e.variables.some((v) => v.key === from)) continue;
+    // an environment shared from another workspace is renamed there (its file and its secrets are not this workspace's)
+    if (e.shared || !e.variables.some((v) => v.key === from)) continue;
     // a secret value lives under env id + key: move it before the key changes
     for (const v of e.variables)
       if (v.key === from && (v as { secret?: boolean }).secret && opts.secrets) {

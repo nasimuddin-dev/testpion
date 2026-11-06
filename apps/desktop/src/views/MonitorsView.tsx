@@ -332,12 +332,14 @@ export function MonitorsView() {
     const passing = parts.filter((x) => x.lastResult?.status === 'passed').length;
     const tone = parts.some((x) => x.running) ? 'accent' : failing ? 'bad' : passing ? 'ok' : 'muted';
     const first = parts[0]!;
+    // the schedule of a tenant that is not paused on its own (else the first one's)
+    const shown = parts.find((x) => !x.paused) ?? first;
     return {
       id: of,
       name: definitionName(first),
       icon: <StatusDot className="block" tone={tone} pulse={parts.some((x) => x.running)} />,
       badge: parts.some((x) => x.needsApproval) ? <Badge tone="warn" title={NEEDS_APPROVAL}>waits for you</Badge> : undefined,
-      subtitle: `${targetName(first)}${first.enabled ? ` · ${first.schedule}` : ''} · ${failing ? `${failing} of ${parts.length} failing` : `${passing} of ${parts.length} passing`}`,
+      subtitle: `${targetName(first)}${shown.enabled ? ` · ${shown.schedule}` : ''} · ${failing ? `${failing} of ${parts.length} failing` : `${passing} of ${parts.length} passing`}`,
     };
   };
   const monitorOps: FolderListOps = {
@@ -411,15 +413,18 @@ export function MonitorsView() {
                   };
                 }}
                 // a grouped monitor's row: Run runs every tenant, Pause and Resume act on the monitor (so on every tenant)
-                parentActions={(of, ids) => {
-                  const parts = rows.filter((x) => ids.includes(x.id));
+                parentActions={(of) => {
+                  // every tenant, also those a filter hides
+                  const parts = rows.filter((x) => x.tenant?.of === of);
                   const paused = parts.every((x) => x.paused);
                   return {
                     on: {
                       run: () => void (async () => {
                         for (const m of parts) await run(m);
                       })(),
-                      ...(paused ? { resume: () => void attempt(() => call('monitor.resume', { id: of })).then(load) } : { pause: () => void attempt(() => call('monitor.pause', { id: of })).then(load) }),
+                      // the monitor's own pause or resume, never the first tenant's (undefined leaves it out of the menu)
+                      pause: paused ? undefined : () => void attempt(() => call('monitor.pause', { id: of })).then(load),
+                      resume: paused ? () => void attempt(() => call('monitor.resume', { id: of })).then(load) : undefined,
                     },
                     disabled: parts.some((x) => busy.includes(x.id) || x.running) ? { run: 'A tenant is running now' } : {},
                   };
@@ -846,6 +851,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     if (!d.name.trim()) return setError('Give the monitor a name.');
     if (unit === 'cron' && cronProblem(cronText)) return setError(`The schedule: ${cronProblem(cronText)}`);
     if (d.quiet && cronProblem(d.quiet.cron)) return setError(`The maintenance window: ${cronProblem(d.quiet.cron)}`);
+    if (d.quiet && !(d.quiet.minutes >= 1)) return setError('Say how long the maintenance window lasts (1 to 1440 minutes).');
     if (unit !== 'cron' && !(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
     if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
     if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
@@ -1089,7 +1095,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               <>
                 <Input className="mono w-36" value={d.quiet.cron} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, cron: e.target.value } })} aria-label="When the window starts (cron)" />
                 <span className="text-muted text-xs">for</span>
-                <Input type="number" min={1} max={1440} className="w-20" value={d.quiet.minutes} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, minutes: Math.min(1440, Math.max(1, Math.round(Number(e.target.value) || 1))) } })} aria-label="Minutes the window lasts" />
+                <Input type="number" min={1} max={1440} className="w-20" value={d.quiet.minutes || ''} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, minutes: Math.min(1440, Math.max(0, Math.round(Number(e.target.value) || 0))) } })} aria-label="Minutes the window lasts" />
                 <span className="text-muted text-xs">minutes</span>
                 <Input className="w-32" placeholder="why (optional)" value={d.quiet.reason ?? ''} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, reason: e.target.value || undefined } })} aria-label="Why the window is there" />
               </>

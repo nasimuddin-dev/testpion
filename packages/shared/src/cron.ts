@@ -58,7 +58,7 @@ export function parseCron(expression: string): CronSchedule {
   const parts = text.split(/\s+/);
   if (parts.length !== 5) throw new Error('A schedule has 5 parts: minute hour day-of-month month day-of-week, e.g. "0 9 * * 1-5" (09:00 on weekdays)');
   const [minutes, hours, days, months, weekdays] = parts.map((p, i) => field(p, FIELDS[i]!));
-  return { minutes: minutes!, hours: hours!, days: days!, months: months!, weekdays: weekdays!, either: parts[2] !== '*' && parts[4] !== '*' };
+  return { minutes: minutes!, hours: hours!, days: days!, months: months!, weekdays: weekdays!, either: !parts[2]!.startsWith('*') && !parts[4]!.startsWith('*') };
 }
 
 /** Why an expression is not a schedule (undefined: it is). */
@@ -80,9 +80,9 @@ const dayMatches = (s: CronSchedule, d: Date) => {
 /** The first time after `after` (to the minute, local time) the schedule runs; undefined when none in five years (31 February). */
 export function nextCronTime(expression: string | CronSchedule, after: Date | number): Date | undefined {
   const s = typeof expression === 'string' ? parseCron(expression) : expression;
-  const d = new Date(typeof after === 'number' ? after : after.getTime());
-  d.setSeconds(0, 0);
-  d.setMinutes(d.getMinutes() + 1);
+  const from = typeof after === 'number' ? after : after.getTime();
+  // the next whole minute (offsets are whole minutes, so a minute on the clock is a minute of absolute time)
+  let d = new Date(Math.floor(from / 60_000) * 60_000 + 60_000);
   const limit = d.getTime() + 5 * 366 * 86_400_000;
   while (d.getTime() <= limit) {
     if (!s.months.has(d.getMonth() + 1)) {
@@ -95,15 +95,17 @@ export function nextCronTime(expression: string | CronSchedule, after: Date | nu
       d.setHours(0, 0, 0, 0);
       continue;
     }
+    // hours and minutes step on absolute time: when the clocks go back, the repeated hour is not a step back in time
     if (!s.hours.has(d.getHours())) {
-      d.setHours(d.getHours() + 1, 0, 0, 0);
+      d = new Date(d.getTime() + (60 - d.getMinutes()) * 60_000);
       continue;
     }
     if (!s.minutes.has(d.getMinutes())) {
-      d.setMinutes(d.getMinutes() + 1, 0, 0);
+      d = new Date(d.getTime() + 60_000);
       continue;
     }
-    return d;
+    if (d.getTime() > from) return d;
+    d = new Date(d.getTime() + 60_000);
   }
   return undefined;
 }
@@ -129,13 +131,24 @@ export function describeCron(expression: string): string {
   const all = (x: Set<number>, n: number) => x.size === n;
   const mins = sorted(s.minutes);
   const hours = sorted(s.hours);
+  /** The step of an even spread over the whole range from 0 (0, 15, 30, 45 of 60: 15), or 0. */
+  const stepOf = (xs: number[], n: number) => {
+    const step = xs.length > 1 ? xs[1]! - xs[0]! : 0;
+    return step > 0 && xs[0] === 0 && n % step === 0 && xs.length === n / step && xs.every((x, i) => x === i * step) ? step : 0;
+  };
+  /** Hours in words: a range "09:00–17:59" when contiguous, else a list "08, 12 and 18". */
+  const hoursText = (hs: number[]) => (hs.every((h, i) => i === 0 || h === hs[i - 1]! + 1) ? `${pad(hs[0]!)}:00–${pad(hs[hs.length - 1]!)}:59` : list(hs.map((h) => `${pad(h)}h`)));
+  const minStep = stepOf(mins, 60);
+  const hourStep = stepOf(hours, 24);
   let time: string;
   if (all(s.minutes, 60) && all(s.hours, 24)) time = 'every minute';
-  else if (all(s.hours, 24) && mins.length > 1 && mins.every((m, i) => i === 0 || m - mins[i - 1]! === mins[1]! - mins[0]!) && mins[0] === 0 && 60 % (mins[1]! - mins[0]!) === 0)
-    time = `every ${mins[1]! - mins[0]!} minutes`;
+  else if (all(s.hours, 24) && minStep) time = `every ${minStep} minutes`;
   else if (all(s.hours, 24)) time = mins.length === 1 && mins[0] === 0 ? 'every hour' : `every hour at ${list(mins.map((m) => `:${pad(m)}`))}`;
   else if (hours.length * mins.length <= 6) time = `at ${list(hours.flatMap((h) => mins.map((m) => `${pad(h)}:${pad(m)}`)))}`;
-  else time = `at ${list(mins.map((m) => `:${pad(m)}`))} past ${hours.length} hours of the day`;
+  else if (hourStep && mins.length === 1) time = `every ${hourStep} hours at :${pad(mins[0]!)}`;
+  else if (all(s.minutes, 60)) time = `every minute ${hours.length === 1 ? `from ${pad(hours[0]!)}:00 to ${pad(hours[0]!)}:59` : `in ${hoursText(hours)}`}`;
+  else if (minStep) time = `every ${minStep} minutes in ${hoursText(hours)}`;
+  else time = `at ${list(mins.map((m) => `:${pad(m)}`))} past each hour in ${hoursText(hours)}`;
   const days: string[] = [];
   const wd = sorted(s.weekdays);
   if (!all(s.weekdays, 7)) days.push(wd.join(',') === '1,2,3,4,5' ? 'on weekdays' : wd.join(',') === '0,6' ? 'on weekends' : `on ${list(wd.map((d) => DAY_NAMES[d]!))}`);

@@ -6,13 +6,15 @@
  *   "shared": [{ "path": "../platform-shared", "kinds": ["environments"] }]
  *
  * What comes from there is listed after the workspace's own, with `shared` (the folder's name) and `readOnly`: it is
- * changed where it lives, never here. Its secret values are this workspace's (by the environment's id, on this computer).
+ * changed where it lives, never here. Its secret values are kept on this computer by the environment's id (as every
+ * environment's are), so a workspace with an environment of the same id sees them too.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import type { Environment, Workspace } from '../model/types.js';
 import { slugify } from '../util/ids.js';
+import { samePath } from './fsutil.js';
 
 /** What a workspace may read from another folder. Collections and tests stay the workspace's own: they are what a team owns. */
 export const SHAREABLE_KINDS = ['environments'] as const;
@@ -29,8 +31,11 @@ export function sharedDirs(ws: Pick<Workspace, 'shared'>, root: string, kind: Sh
   const out: Array<{ name: string; dir: string }> = [];
   for (const s of ws.shared ?? []) {
     if (!s || typeof s.path !== 'string' || !Array.isArray(s.kinds) || !s.kinds.includes(kind)) continue;
+    // workspace.json comes with a pull: only a relative path to another workspace (its workspace.json) is read, never
+    // an absolute path or any folder that happens to hold an environments/ folder
+    if (isAbsolute(s.path) || /^[a-z]:/i.test(s.path) || s.path.startsWith('\\\\')) continue;
     const base = resolve(root, s.path);
-    if (base === resolve(root)) continue; // the workspace itself
+    if (samePath(base, root) || !existsSync(join(base, 'workspace.json'))) continue;
     const dir = resolve(base, kind);
     if (existsSync(dir) && statSync(dir).isDirectory()) out.push({ name: basename(base), dir });
   }
@@ -56,15 +61,16 @@ const byOrder = (a: Environment, b: Environment) => (a.order ?? Number.MAX_SAFE_
  */
 export function withSharedEnvironments(own: Environment[], sources: Array<{ name: string; dir: string }>, read: (dir: string) => Environment[]): Environment[] {
   if (!sources.length) return own;
-  const ids = new Set(own.map((e) => e.id));
+  const ids = new Map(own.map((e) => [e.id, "one of this workspace's"]));
   const shared = sources.flatMap((s) =>
     read(s.dir)
       .sort(byOrder)
       .map((e): Environment => {
         const { order: _order, ...rest } = e;
         void _order;
-        const clash = ids.has(e.id) ? `The shared environment "${e.name}" from ${s.name} has the same id as one of this workspace's: this workspace's is used` : undefined;
-        ids.add(e.id);
+        const other = ids.get(e.id);
+        const clash = other ? `The shared environment "${e.name}" from ${s.name} has the same id as ${other}: that one is used` : undefined;
+        if (!other) ids.set(e.id, `the one shared from ${s.name}`);
         return { ...rest, shared: s.name, readOnly: true, ...(clash ? { problem: clash, variables: [] } : {}) };
       }),
   );
@@ -76,7 +82,7 @@ type EnvStore = { root: string; workspace: Pick<Workspace, 'shared'>; path(...p:
 /** Saving or deleting an environment a shared folder gives (and the workspace has none of its own by that id) is refused. */
 export function refuseSharedEnvironment(store: EnvStore, id: string, what: 'change' | 'delete'): void {
   if (existsSync(store.path('environments', `${slugify(id)}.json`))) return;
-  const s = store.listEnvironments().find((e) => e.shared && e.id === id && !e.problem);
+  const s = store.listEnvironments().find((e) => e.shared && e.id === id);
   if (s) throw new ApsError('ValidationError', `"${s.name}" is shared from ${s.shared}: ${what} it there`, { suggestions: [`Open the workspace in ${s.shared} to change it, or copy it into this workspace (Duplicate) to change a copy.`] });
 }
 
@@ -107,7 +113,8 @@ export function checkedSource(root: string, path: string, kinds: string[]): Shar
   const bad = kinds.filter((k) => !(SHAREABLE_KINDS as readonly string[]).includes(k));
   if (bad.length || !kinds.length) throw new ApsError('ValidationError', `What can be shared: ${SHAREABLE_KINDS.join(', ')}${bad.length ? ` (not ${bad.join(', ')})` : ''}`);
   const base = resolve(root, p);
-  if (base === resolve(root)) throw new ApsError('ValidationError', 'A workspace cannot share from itself');
+  if (samePath(base, root)) throw new ApsError('ValidationError', 'A workspace cannot share from itself');
+  if (!existsSync(join(base, 'workspace.json'))) throw new ApsError('ValidationError', `${base} is not a workspace (it has no workspace.json)`, { suggestions: ['Name the folder of another TestPion workspace (a sibling checkout or a git submodule).'] });
   const missing = kinds.filter((k) => !existsSync(resolve(base, k)));
   if (missing.length) throw new ApsError('ValidationError', `${base} has no ${missing.join(' or ')} folder`, { suggestions: ['Name the folder of another workspace (a sibling checkout or a git submodule).'] });
   return { path: p, kinds: kinds as ShareableKind[] };

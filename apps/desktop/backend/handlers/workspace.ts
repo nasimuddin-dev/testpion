@@ -140,12 +140,12 @@ export function workspaceHandlers(be: Backend): Handlers {
         rel = relative(be.ws.root, picked).split(sep).join('/') || '.';
       }
       const source = checkedSource(be.ws.root, rel, ['environments']);
-      const same = (a: string) => resolve(be.ws.root, a) === resolve(be.ws.root, source.path);
+      const same = (a: string) => samePath(resolve(be.ws.root, a), resolve(be.ws.root, source.path));
       be.ws.updateWorkspace({ shared: [...(be.ws.workspace.shared ?? []).filter((s) => !same(s.path)), source] });
       return sharedOf(be);
     },
     'ws.shareRemove': ({ path }: { path: string }) => {
-      const kept = (be.ws.workspace.shared ?? []).filter((s) => resolve(be.ws.root, s.path) !== resolve(be.ws.root, path));
+      const kept = (be.ws.workspace.shared ?? []).filter((s) => !samePath(resolve(be.ws.root, s.path), resolve(be.ws.root, path)));
       be.ws.updateWorkspace({ shared: kept.length ? kept : undefined });
       return sharedOf(be);
     },
@@ -357,8 +357,10 @@ export function workspaceHandlers(be: Backend): Handlers {
     'env.save': async ({ env, secrets }: { env: Environment; secrets?: Record<string, string> }) => {
       // a shared environment (another workspace's folder): its file is changed there; the secret values typed here are this
       // computer's and are kept (the answer says so with `secretsOnly`)
-      const shared = be.ws.environmentList().find((e) => e.id === env.id && e.shared && !e.problem);
+      const shared = be.ws.environmentList().find((e) => e.id === env.id && e.shared);
       if (shared) {
+        if (shared.problem) throw new ApsError('ValidationError', `"${shared.name}" is shared from ${shared.shared} and cannot be read here: ${shared.problem}`);
+        if (env.name !== shared.name || (env.group ?? '') !== (shared.group ?? '')) throw new ApsError('ValidationError', `"${shared.name}" is shared from ${shared.shared}: rename it there`);
         const own = new Set(shared.variables.filter((v) => v.secret).map((v) => v.key));
         const kept = Object.entries(secrets ?? {}).filter(([k, v]) => v && own.has(k));
         for (const [k, v] of kept) await be.secrets.set(secretKeys.envVar(env.id, k), v);

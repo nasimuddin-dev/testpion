@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { moveToTrash, restoreFromTrash } from '../storage/trash.js';
+import { refuseSharedEnvironment } from '../storage/shared-sources.js';
 import { environmentIndex, missing, ok } from './ref-index.js';
 import type { KindDefs } from './types.js';
 
@@ -19,6 +20,8 @@ export const environmentKinds: KindDefs = {
     },
     ops: {
       remove: (store, id) => {
+        // an environment of another workspace's folder is deleted there, never moved into this workspace's trash
+        refuseSharedEnvironment(store, id, 'delete');
         const trashId = moveToTrash(store, 'environment', join(store.root, store.environmentFileOf(id)));
         if (!trashId) throw new ApsError('ConfigurationError', `No environment ${id}`, { suggestions: [] });
         return trashId;

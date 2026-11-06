@@ -69,7 +69,8 @@ export function findCommittableSecrets(store: WorkspaceStore): SecretFinding[] {
         out.push({ file, where: `collection ${c.name}, variable ${v.key}`, message: `The collection variable "${v.key}" holds a value typed in: move it to a secret environment variable`, kind: 'collection-variable', collectionId: c.id, field: v.key, variable: v.key });
   }
   // environments and the workspace: a sensitive-looking variable with a plain value (not marked secret)
-  for (const e of store.listEnvironments()) {
+  // (an environment shared from another workspace is not in this repository's files: that workspace checks it)
+  for (const e of store.listEnvironments().filter((x) => !x.shared)) {
     for (const v of e.variables)
       if (!v.secret && literal(v.key, v.value))
         out.push({ file: `environments/${e.id}.json`, where: `environment ${e.name}, variable ${v.key}`, message: `"${v.key}" holds a value in plain text: mark it secret (lock icon) so its value stays in the OS secret store`, kind: 'environment-variable', environmentId: e.id, field: v.key, variable: v.key });

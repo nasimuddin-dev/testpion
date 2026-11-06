@@ -12,6 +12,7 @@ const steps = [
       const { mkdirSync, writeFileSync } = require('node:fs');
       const dir = join(home, 'platform-shared', 'environments');
       mkdirSync(dir, { recursive: true });
+      writeFileSync(join(home, 'platform-shared', 'workspace.json'), JSON.stringify({ schemaVersion: '1.0', id: 'platform', name: 'Platform' }));
       writeFileSync(join(dir, 'platform-staging.json'), JSON.stringify({ id: 'platform-staging', name: 'Platform staging', variables: [{ key: 'baseUrl', value: 'https://staging.example.com' }] }));
       return 'written';`,
     false,

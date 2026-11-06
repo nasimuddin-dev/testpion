@@ -307,10 +307,13 @@ export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> 
   if (m.quiet !== undefined) {
     const problem = quietProblem(m.quiet);
     if (problem) throw invalid(problem);
+    if (!nextCronTime(m.quiet.cron, Date.now())) throw invalid(`The maintenance window "${m.quiet.cron}" never comes (no such date)`);
   }
   if (m.cron !== undefined) {
     const problem = cronProblem(m.cron);
     if (problem) throw invalid(`The schedule "${m.cron}": ${problem}`);
+    // 31 February: a schedule that never comes is refused, not saved as a monitor that never runs
+    if (!nextCronTime(m.cron, Date.now())) throw invalid(`The schedule "${m.cron}" never comes (no such date)`);
   } else if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
   const file = m.testFile?.trim();
   const targets = [file, m.collectionId, m.evaluation?.trim()].filter(Boolean).length;
@@ -525,8 +528,12 @@ export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Dat
   const ran = last ? Date.parse(last.startedAt) : NaN;
   if (m.cron) {
     try {
-      const after = Number.isFinite(ran) && ran <= now ? ran : now - 90_000;
-      return nextCronTime(m.cron, after)?.getTime() ?? Number.POSITIVE_INFINITY;
+      // never run: a time of the schedule in the last 10 minutes is due (`monitor run --due` from a system cron every 5 minutes finds it)
+      const after = Number.isFinite(ran) && ran <= now ? ran : now - 10 * 60_000;
+      let t = nextCronTime(m.cron, after);
+      // a time inside the maintenance window is skipped, not run when the window ends
+      for (let i = 0; t && m.quiet && quietUntil(m.quiet, t.getTime()) !== undefined && i < 1000; i++) t = nextCronTime(m.cron, t);
+      return t?.getTime() ?? Number.POSITIVE_INFINITY;
     } catch {
       return Number.POSITIVE_INFINITY; // a schedule that cannot be read never runs (validateMonitor refuses to save one)
     }
@@ -618,7 +625,8 @@ export function resumeMonitor(store: WorkspaceStore, id: string): Monitor {
     saveMonitor(store, { ...def, enabled: true, pausedUntil: undefined, pauseReason: undefined });
     return findMonitor(store, m.id);
   }
-  return saveMonitor(store, { ...m, enabled: true, pausedUntil: undefined, pauseReason: undefined });
+  // the monitor itself resumed: every tenant of it too (a tenant paused on its own was paused with the rest)
+  return saveMonitor(store, { ...m, enabled: true, pausedUntil: undefined, pauseReason: undefined, pausedTenants: undefined });
 }
 
 /** A monitor with its schedule text, last result and next run (what list commands and MCP show). */
@@ -631,7 +639,7 @@ export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now(
     paused: !m.enabled || pausedFor(m, now),
     ...(quiet !== undefined ? { quietUntil: new Date(quiet).toISOString() } : {}),
     lastResult: last,
-    nextRunAt: m.enabled ? new Date(Math.max(nextRunAt(m, last, now), pausedFor(m, now) ? Date.parse(m.pausedUntil!) : now, quiet ?? now, now)).toISOString() : undefined,
+    nextRunAt: m.enabled ? ((t) => (Number.isFinite(t) ? new Date(t).toISOString() : undefined))(Math.max(nextRunAt(m, last, now), pausedFor(m, now) ? Date.parse(m.pausedUntil!) : now, quiet ?? now, now)) : undefined,
     due: isDue(m, last, now),
   };
 }

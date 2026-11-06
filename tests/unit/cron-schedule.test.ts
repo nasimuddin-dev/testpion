@@ -60,3 +60,41 @@ describe('a monitor on a cron schedule', () => {
     expect(isDue(m, ranAt(at(2026, 11, 4, 9, 0)), at(2026, 11, 6, 11, 0).getTime())).toBe(true);
   });
 });
+
+describe('cron: what the review found', () => {
+  it('never steps back in time when the clocks go back (every minute, every 5 minutes)', () => {
+    // 2026-11-01 01:45 PST is in the repeated hour (US clocks went back at 02:00 PDT)
+    const after = Date.UTC(2026, 10, 1, 9, 45);
+    for (const expr of ['* * * * *', '*/5 * * * *']) expect(nextCronTime(expr, after)!.getTime(), expr).toBeGreaterThan(after);
+  });
+
+  it('a field that starts with * is not a restriction for the day rule (odd days that are Mondays)', () => {
+    // */2 day of month AND Monday (vixie): 2026-11-09 is a Monday on an odd day? 9 is odd -> yes
+    expect(local(nextCronTime('0 0 */2 * 1', at(2026, 11, 3)))).toBe('2026-11-9 0:00 Mon');
+  });
+
+  it('says partial spreads and hours in words', () => {
+    expect(describeCron('0,20 * * * *')).toBe('every hour at :00 and :20');
+    expect(describeCron('0-30/10 * * * *')).toBe('every hour at :00, :10, :20 and :30');
+    expect(describeCron('0 */2 * * *')).toBe('every 2 hours at :00');
+    expect(describeCron('15,45 9-17 * * 1-5')).toBe('at :15 and :45 past each hour in 09:00–17:59 on weekdays');
+    expect(describeCron('* 9 * * *')).toBe('every minute from 09:00 to 09:59');
+    expect(describeCron('*/20 * * * *')).toBe('every 20 minutes');
+  });
+});
+
+describe('a cron monitor: what the review found', () => {
+  it('a schedule that never comes is refused; a never-run one is due within 10 minutes of its time', () => {
+    expect(() => parseSchedule('0 0 31 2 *')).not.toThrow(); // it parses
+    const m = { id: 'm', name: 'Hourly', collectionId: 'c', ...parseSchedule('0 * * * *'), enabled: true } as Monitor;
+    expect(isDue(m, undefined, at(2026, 11, 6, 10, 2))).toBe(true);
+    expect(isDue(m, undefined, at(2026, 11, 6, 10, 12))).toBe(false);
+  });
+
+  it('a time inside the maintenance window is skipped, not run when the window ends', () => {
+    const m = { id: 'm', name: 'Night', collectionId: 'c', ...parseSchedule('0 2 * * *'), quiet: { cron: '0 2 * * 0', minutes: 120 }, enabled: true } as Monitor;
+    // ran Saturday 02:00; Sunday 02:00 is in the window: next is Monday 02:00
+    const next = new Date(nextRunAt(m, { startedAt: new Date(at(2026, 11, 7, 2, 0)).toISOString() } as never, at(2026, 11, 8, 4, 30)));
+    expect(local(next)).toBe('2026-11-9 2:00 Mon');
+  });
+});

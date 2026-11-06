@@ -1,5 +1,5 @@
 /** Managing workspaces. */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
 import {
@@ -25,6 +25,8 @@ import {
   readConventions,
   checkedSource,
   SHAREABLE_KINDS,
+  samePath,
+  slugify,
 } from '@testpion/core';
 import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, respond, withWorkspace, JSON_OPTION } from '../shared.js';
 import { registerGitCommands } from './git.js';
@@ -83,7 +85,7 @@ export function registerWorkspaceCommands(program: Command): void {
       withWorkspace(o.workspace, async (store, ephemeral) => {
         if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
         let shared = [...(store.workspace.shared ?? [])];
-        const same = (a: string, b: string) => resolve(store.root, a) === resolve(store.root, b);
+        const same = (a: string, b: string) => samePath(resolve(store.root, a), resolve(store.root, b));
         if (o.add) {
           let source;
           try {
@@ -105,7 +107,10 @@ export function registerWorkspaceCommands(program: Command): void {
         if (!shared.length) return console.log(dim('Nothing is shared into this workspace. Add a folder: testpion workspace share --add ../platform-shared'));
         for (const s of shared) {
           console.log(`${bold(s.path)}  ${dim(s.kinds.join(', '))}`);
-          for (const e of environments.filter((x) => resolve(store.root, s.path).endsWith(x.shared!))) console.log(`  ${e.name}${e.problem ? yellow(`  (${e.problem})`) : ''}`);
+          // the environments of this folder: read from its own environments/ (two folders may have the same name)
+          const dir = resolve(store.root, s.path, 'environments');
+          const ids = new Set(existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) : []);
+          for (const e of environments.filter((x) => ids.has(slugify(x.id)))) console.log(`  ${e.name}${e.problem ? yellow(`  (${e.problem})`) : ''}`);
         }
       }),
     );

@@ -62,8 +62,10 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
       inputSchema: { type: 'object', properties: { monitor: str('Monitor name or id') }, required: ['monitor'] },
       run: async (a) => {
         // a grouped definition (one monitor per environment of a group): every tenant runs, and the answer is one result per tenant
-        const tenants = monitorTenants(store, findMonitor(store, String(a.monitor)));
-        const def = tenants[0]?.tenant ? findMonitor(store, tenants[0].tenant.of) : undefined;
+        const found = findMonitor(store, String(a.monitor));
+        const tenants = monitorTenants(store, found);
+        // the definition of a grouped monitor answers for every tenant; one tenant's id answers for that tenant alone
+        const def = !found.tenant && tenants[0]?.tenant ? found : undefined;
         // every environment is checked before the first run: a refusal for the third tenant must not lose the first two.
         // A monitor on a suite that names no environment runs in the suite's: that one is checked (production, unknown).
         for (const m of tenants) checkEnvironment(await monitorRunEnvironment(store, m));
