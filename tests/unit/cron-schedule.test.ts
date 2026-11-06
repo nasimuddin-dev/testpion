@@ -98,3 +98,12 @@ describe('a cron monitor: what the review found', () => {
     expect(local(next)).toBe('2026-11-9 2:00 Mon');
   });
 });
+
+describe('cron: the hour the clocks skip', () => {
+  it('a daily time in the skipped hour runs right after the gap that day', () => {
+    // US clocks went forward on 2026-03-08 at 02:00 PST (02:30 never came)
+    const next = nextCronTime('30 2 * * *', at(2026, 3, 7, 21, 0))!;
+    if (new Date(2026, 2, 8, 2, 30).getHours() === 3) expect(local(next)).toBe('2026-3-8 3:00 Sun'); // a zone with that gap
+    else expect(local(next)).toBe('2026-3-8 2:30 Sun'); // a zone without one
+  });
+});

@@ -97,7 +97,11 @@ export function nextCronTime(expression: string | CronSchedule, after: Date | nu
     }
     // hours and minutes step on absolute time: when the clocks go back, the repeated hour is not a step back in time
     if (!s.hours.has(d.getHours())) {
-      d = new Date(d.getTime() + (60 - d.getMinutes()) * 60_000);
+      const next = new Date(d.getTime() + (60 - d.getMinutes()) * 60_000);
+      // the clocks went forward (02:00 is 03:00): a time of the hour that never came runs right after the gap, as cron does
+      const skipped = next.getDate() === d.getDate() && next.getHours() > d.getHours() + 1;
+      if (skipped && next.getTime() > from) for (let h = d.getHours() + 1; h < next.getHours(); h++) if (s.hours.has(h)) return next;
+      d = next;
       continue;
     }
     if (!s.minutes.has(d.getMinutes())) {
