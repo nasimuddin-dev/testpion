@@ -4,6 +4,7 @@ import { ApsError, mentionCandidates, addComment, deleteComment, gitIdentity, li
 import type { Backend, Handlers } from '../backend.js';
 
 export function commentsHandlers(be: Backend): Handlers {
+  let people: { root: string; at: number; list: Awaited<ReturnType<typeof mentionCandidates>> } | undefined;
   const refOf = (v: unknown) => {
     const ref = toItemRef(v);
     if (!ref) throw new ApsError('ValidationError', 'ref is not an item reference');
@@ -29,6 +30,13 @@ export function commentsHandlers(be: Backend): Handlers {
     },
     'comments.counts': () => openCommentCounts(be.ws),
     /** Who a comment can @mention: the people of the repository's history and the teams of CODEOWNERS. */
-    'comments.people': () => mentionCandidates(be.ws),
+    // (read again at most once a minute per workspace: every item's comments ask when they open)
+    'comments.people': async () => {
+      const now = Date.now();
+      if (people && people.root === be.ws.root && now - people.at < 60_000) return people.list;
+      const list = await mentionCandidates(be.ws);
+      people = { root: be.ws.root, at: now, list };
+      return list;
+    },
   };
 }
