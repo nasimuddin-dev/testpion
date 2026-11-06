@@ -15,6 +15,7 @@ import { LABEL } from './lib/vocabulary';
 import { plural, POSTMAN_WORDS, environmentRef } from '@testpion/shared';
 import { toastError, useApp, type ViewId } from './store';
 import { watchSecretRefs } from './lib/secret-refs';
+import { watchMentions } from './lib/mention-alerts';
 import { watchOpenLinks } from './lib/open-ref';
 import { focusedScriptEditor } from './lib/script-editor';
 import { focusedPaletteCommands } from './lib/palette-context';
@@ -276,6 +277,8 @@ export default function App() {
     const offMonitors = watchMonitorAlerts();
     const offRuns = watchRunNotifications();
     const offSecrets = watchSecretRefs();
+    // a comment that @mentions you, arriving with a pull: said once
+    const offMentions = watchMentions();
     // testpion://open links (testpion open <ref>, an agent, a report): the item opens here
     const offLinks = watchOpenLinks();
     const offUpdate = on('update.checkManual', () => void checkForUpdates({ manual: true }));
@@ -345,6 +348,7 @@ export default function App() {
       offMonitors();
       offRuns();
       offSecrets();
+      offMentions();
       offLinks();
     };
   }, []);
