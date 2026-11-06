@@ -21,6 +21,7 @@ import { importAction, newCollectionAction, newEnvironmentAction } from '../lib/
 import { ActivityCharts, type Activity } from '../components/ActivityCharts';
 import { AttentionCard } from '../components/AttentionCard';
 import { WorkspaceNoteDialog } from '../components/WorkspaceNoteDialog';
+import { OpenCommentRow, OpenCommentsDialog } from '../components/OpenComments';
 import { StartupProblem } from '../components/StartupProblem';
 import { RecentRuns } from '../components/charts';
 import { refreshCollections, useCollectionTree } from '../lib/collections-store';
@@ -29,7 +30,7 @@ import { loopStep, runStep, WALKTHROUGHS, walkthroughDocs, type OnboardingStep }
 import { shouldAutoStart, useTour } from '../lib/tour';
 import { GuidedTour } from '../components/GuidedTour';
 import { openRef } from '../lib/open-ref';
-import { RefLink, refIcon } from '../components/RefLink';
+import { refIcon } from '../components/RefLink';
 import { TreeBadge } from '../components/TreeParts';
 import { ITEM_KIND_LABEL, itemRefKey, outputFileName, COLLECTION_CALL_LIBRARIES, environmentRef } from '@testpion/shared';
 import { VIEW_NAME } from '../lib/ui-names';
@@ -51,6 +52,8 @@ interface HistoryItem {
 
 
 /** Hue per quick action so the grid is easy to scan. */
+/** How many open comments Home shows (For you first); All N opens every one. */
+const ASKED_SHOWN = 5;
 const HUES = { blue: 'oklch(0.62 0.19 255)', violet: 'oklch(0.6 0.22 295)', teal: 'oklch(0.66 0.13 190)', green: 'oklch(0.64 0.16 150)', orange: 'oklch(0.7 0.16 55)', pink: 'oklch(0.64 0.21 350)', indigo: 'oklch(0.58 0.2 270)', slate: 'oklch(0.6 0.03 260)', red: 'oklch(0.62 0.2 25)', amber: 'oklch(0.74 0.15 75)' };
 
 function Action({ icon, title, text, onClick, hue }: { icon: ReactNode; title: string; text: string; onClick(): void; hue: keyof typeof HUES }) {
@@ -212,6 +215,7 @@ export function HomeView() {
   /** What other people changed in this workspace lately (a workspace in git with commits by others). */
   const [team, setTeam] = useState<TeamActivity>();
   const [asked, setAsked] = useState<OwnedComment[]>([]);
+  const [allAsked, setAllAsked] = useState(false);
   const [noting, setNoting] = useState(false);
   const [certs, setCerts] = useState<Array<{ host: string; issuer?: string; validTo?: string; daysLeft?: number; lastSeen: string }>>([]);
   const [activity, setActivity] = useState<Activity>();
@@ -316,7 +320,7 @@ export function HomeView() {
     void sharedCall<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     // only a workspace in git has a team's history to show
     // the comments that mention you come first
-    void call<OwnedComment[]>('comments.open').then((c) => setAsked([...c.filter((x) => x.forYou), ...c.filter((x) => !x.forYou)].slice(0, 5)), () => setAsked([]));
+    void call<OwnedComment[]>('comments.open').then((c) => setAsked([...c.filter((x) => x.forYou), ...c.filter((x) => !x.forYou)]), () => setAsked([]));
     if (gitSnapshot().status?.repository) void call<TeamActivity>('git.teamActivity', { days: 14, limit: 5 }).then((t) => setTeam(t.commits.length ? t : undefined), () => setTeam(undefined));
     else setTeam(undefined);
     loadActivity();
@@ -370,6 +374,7 @@ export function HomeView() {
             </LinkButton>
           )}
           {noting && <WorkspaceNoteDialog note={ws?.description ?? ''} onClose={() => setNoting(false)} />}
+          {allAsked && <OpenCommentsDialog comments={asked} onClose={() => setAllAsked(false)} />}
           {inExamples ? (
             <p className="relative text-sm mt-3 max-w-3xl">
               These examples use free public APIs. Open a collection and press <b>Send</b>, run a whole collection, or run the <b>All examples</b> and <b>Offline</b> suites in{' '}
@@ -475,24 +480,21 @@ export function HomeView() {
         )}
 
         {asked.length > 0 && (
-          <Card title="Your team is asking" icon={<MessageSquare size={15} />}>
-            <div data-home-comments={asked.length}>
-              {asked.map((c) => (
-                <div key={c.id} className="flex flex-col gap-0.5 px-2 py-1.5 text-sm" data-home-comment>
-                  <span className="flex items-center gap-2 min-w-0">
-                    <RefLink to={c.ref} className="font-medium min-w-0" />
-                    {c.owners?.length > 0 && <Badge title="The team that owns this item (CODEOWNERS)">{c.owners.join(' ')}</Badge>}
-                    {c.forYou && (
-                      <Badge tone="accent" title="It mentions you (@ and your git name or e-mail)" data-home-comment-for-you="">
-                        For you
-                      </Badge>
-                    )}
-                    <span className="text-xs text-muted shrink-0 ml-auto">
-                      {c.by} · {timeAgo(c.at)}
-                    </span>
-                  </span>
-                  <span className="text-muted truncate">{c.text}</span>
-                </div>
+          <Card
+            title="Your team is asking"
+            icon={<MessageSquare size={15} />}
+            // the first few here (For you first); every open comment, with For you and team chips, in the full list
+            action={
+              asked.length > ASKED_SHOWN ? (
+                <LinkButton className="text-xs" onClick={() => setAllAsked(true)} data-home-comments-all>
+                  All {asked.length}
+                </LinkButton>
+              ) : undefined
+            }
+          >
+            <div data-home-comments={Math.min(asked.length, ASKED_SHOWN)}>
+              {asked.slice(0, ASKED_SHOWN).map((c) => (
+                <OpenCommentRow key={c.id} c={c} />
               ))}
             </div>
           </Card>
