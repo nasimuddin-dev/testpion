@@ -183,9 +183,9 @@ export function registerCommentCommand(program: Command): void {
         const all = await openCommentsByOwner(store, o.owner, { name: id.name || userInfo().username, email: id.email, teams });
         const open = o.forMe ? all.filter((c) => c.forYou) : all;
         if (o.json) return printJson({ open });
-        if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}** on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');
+        if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}**${c.replyTo ? ' replied' : ''} on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');
         if (!open.length) return console.log(dim(o.forMe ? 'No open comment mentions you.' : o.owner ? `No open comments on what ${o.owner} owns.` : 'No open comments.'));
-        for (const c of open) console.log(`${bold(c.by)} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${refText(c.ref)}${c.owners.length ? dim(`  (${c.owners.join(' ')})`) : ''}\n  ${c.text}`);
+        for (const c of open) console.log(`${bold(c.by)}${c.replyTo ? dim(' replied') : ''} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${refText(c.ref)}${c.owners.length ? dim(`  (${c.owners.join(' ')})`) : ''}\n  ${c.text}`);
       }),
     );
 }
