@@ -115,7 +115,7 @@ export const RequestRow = memo(function RequestRow({
       onDragEnd={() => x().dragEnd()}
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth, 16)}
-      className={cx(examples.length > 0 && 'relative', picked && 'bg-accent/15 ring-1 ring-inset ring-accent/40')}
+      className={cx(examples.length > 0 && 'relative', picked && 'bg-accent-soft ring-1 ring-inset ring-accent/40')}
       attrs={picked ? { 'data-picked': '' } : undefined}
       git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
       mark={<CommentMark to={{ kind: 'request', collectionId: c.id, requestId: n.id }} />}

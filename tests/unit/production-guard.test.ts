@@ -222,6 +222,8 @@ describe('the backend boundary: every send and run method', () => {
     const be = backend();
     const NOT_SENDING = new Set([
       'http.cancel',
+      // lists what runs (mocks, connections …), and stops through each one's own handler
+      'app.running',
       'grpc.cancel',
       'runs.cancel',
       'ai.cancel',

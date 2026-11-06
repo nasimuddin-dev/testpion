@@ -8,7 +8,7 @@ import { Button, IconButton } from './ui';
  */
 export function PickedRequestsBar({ count, collection, onRun, onMove, onDelete, onClear }: { count: number; collection: string; onRun(): void; onMove(): void; onDelete(): void; onClear(): void }) {
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-1 px-2 py-1 mb-1 rounded-md border border-accent/40 bg-accent/10 text-xs" role="toolbar" aria-label="Picked requests" data-picked-bar={count}>
+    <div className="sticky top-0 z-10 flex items-center gap-1 px-2 py-1 mb-1 rounded-md border border-accent/40 bg-accent-soft text-xs" role="toolbar" aria-label="Picked requests" data-picked-bar={count}>
       <span className="font-medium truncate flex-1" title={`In ${collection}. Ctrl/⌘+click picks or drops one, Shift+click a range, Esc lets go.`}>
         {plural(count, 'request')} picked
       </span>
