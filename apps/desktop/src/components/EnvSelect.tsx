@@ -65,7 +65,7 @@ export function EnvSelect({
       // a name from a hand-edited file is text here whatever it holds (an object would blank the window)
       e.problem
         ? { label: `${String(e.name)}  (cannot be read)`, icon: <TriangleAlert size={13} className="text-bad" />, danger: true, disabled: true, title: e.problem, onSelect: () => undefined }
-        : { label: `${environmentLabel({ name: String(e.name), group: e.group })}${e.isProduction ? '  (production)' : ''}`, icon: <Dot color={envColor(e)} ring={e.isProduction} />, onSelect: () => set(nameIsShared(envs, e) ? environmentLabel({ name: String(e.name), group: e.group }) : e.name) },
+        : { label: `${environmentLabel({ name: String(e.name), group: e.group })}${e.isProduction ? '  (production)' : ''}${e.shared ? '  · shared' : ''}`, ...(e.shared ? { title: `Shared from ${e.shared}: read here, changed there` } : {}), icon: <Dot color={envColor(e)} ring={e.isProduction} />, onSelect: () => set(nameIsShared(envs, e) ? environmentLabel({ name: String(e.name), group: e.group }) : e.name) },
     ),
     { label: 'Manage environments…', icon: <KeyRound size={14} />, separator: true, onSelect: () => void openRef({ kind: 'environment' }) },
   ];
