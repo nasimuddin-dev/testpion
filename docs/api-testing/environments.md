@@ -165,7 +165,7 @@ testpion workspace share --remove ../platform-shared
 "shared": [{ "path": "../platform-shared", "kinds": ["environments"] }]
 ```
 
-Its environments are listed after yours, with a **shared** badge, and work everywhere an environment is chosen. They are read here and changed there: Save, Rename and Delete say so, and **Duplicate** makes a copy of your own to change. One with the id of one of yours is not used (yours is), and the list says why. Secret values stay on each computer, as for your own environments. `testpion env list` prints *(shared from platform-shared)*, and `list_environments` (MCP) carries `shared`.
+Its environments are listed after yours, with a **shared** badge, and work everywhere an environment is chosen. They are read here and changed there: Save, Rename and Delete say so, and **Duplicate** makes a copy of your own to change. One with the id of one of yours is not used (yours is), and the list says why. Secret values stay on each computer, as for your own environments: type them in the shared environment's editor and **Save** keeps them here (nothing else of it changes). `testpion env list` prints *(shared from platform-shared)*, and `list_environments` (MCP) carries `shared`.
 
 ## Compare
 

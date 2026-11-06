@@ -355,6 +355,15 @@ export function workspaceHandlers(be: Backend): Handlers {
     /** A new tenant: every environment of a group copied into a new group (secret values are not copied). */
     'env.duplicateGroup': ({ group, newGroup }: { group: string; newGroup: string }) => duplicateEnvironmentGroup(be.ws, group, newGroup),
     'env.save': async ({ env, secrets }: { env: Environment; secrets?: Record<string, string> }) => {
+      // a shared environment (another workspace's folder): its file is changed there; the secret values typed here are this
+      // computer's and are kept (the answer says so with `secretsOnly`)
+      const shared = be.ws.environmentList().find((e) => e.id === env.id && e.shared && !e.problem);
+      if (shared) {
+        const own = new Set(shared.variables.filter((v) => v.secret).map((v) => v.key));
+        const kept = Object.entries(secrets ?? {}).filter(([k, v]) => v && own.has(k));
+        for (const [k, v] of kept) await be.secrets.set(secretKeys.envVar(env.id, k), v);
+        return { ...shared, secretsOnly: kept.length };
+      }
       for (const [k, v] of Object.entries(secrets ?? {})) if (v) await be.secrets.set(secretKeys.envVar(env.id, k), v);
       return be.ws.saveEnvironmentAsync(env);
     },

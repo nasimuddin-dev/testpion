@@ -260,9 +260,11 @@ export function EnvironmentsView() {
       const missingElsewhere = added.filter((k) => envs.some((e) => e.id !== draft.id && !e.problem && !e.variables.some((v) => v.key === k)));
       // the active environment renamed (or moved to another group) stays the active one under its new name
       const wasActive = isActiveEnvironment(envs, draft, activeEnv);
-      await call('env.save', { env: { ...draft, variables }, secrets });
+      const saved = await call<{ secretsOnly?: number }>('env.save', { env: { ...draft, variables }, secrets });
       tabs.setD(null); // saved: the tab shows the environment as saved
       await load();
+      // a shared environment: only its secret values were kept (the file is changed where it lives)
+      if (draft.shared) return useApp.getState().toast(saved.secretsOnly ? `Kept ${plural(saved.secretsOnly, 'secret value')} on this computer; the rest of "${draft.name}" is changed in ${draft.shared}` : `Nothing kept: "${draft.name}" is changed in ${draft.shared} (type a secret value to keep it here)`, saved.secretsOnly ? 'success' : 'info');
       if (wasActive) useApp.getState().setEnvironment(activeRef(envs.map((e) => (e.id === draft.id ? draft : e)), draft));
       await useApp.getState().refreshWorkspace();
       useApp.getState().toast('Environment saved', 'success');
@@ -450,8 +452,8 @@ export function EnvironmentsView() {
                       variant="primary"
                       icon={<Save size={13} />}
                       onClick={save}
-                      disabled={!!draft.problem || !!draft.shared}
-                      title={draft.shared ? `Shared from ${draft.shared}: change it in that workspace` : draft.problem ? 'Fix the file first: saving now would replace it with what is shown here' : undefined}
+                      disabled={!!draft.problem}
+                      title={draft.shared ? `Shared from ${draft.shared}: Save keeps the secret values you typed (on this computer); the rest is changed in that workspace` : draft.problem ? 'Fix the file first: saving now would replace it with what is shown here' : undefined}
                     >
                       Save
                     </Button>
@@ -471,7 +473,7 @@ export function EnvironmentsView() {
                 </div>
                 {draft.shared && !draft.problem && (
                   <Callout data-env-shared-note="">
-                    Shared from {draft.shared} (another workspace's folder, named in workspace.json): it is read here and changed there. Duplicate makes a copy of this workspace's own to change.
+                    Shared from {draft.shared} (another workspace's folder, named in workspace.json): it is read here and changed there. Its secret values are this computer's: type them below and Save keeps them (nothing else). Duplicate makes a copy of this workspace's own to change.
                   </Callout>
                 )}
                 {draft.problem && (
