@@ -27,7 +27,7 @@ import {
   parseHostsFile,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { debuggerSpeedHandlers } from './debugger-speed.js';
 import { approveRules, changesTraffic, rulesApproved } from '../debugger-rules-trust.js';
 import { newDebuggerState, type DebuggerState } from './debugger-state.js';
@@ -96,8 +96,22 @@ export function checkedRulesFile(raw: unknown, warn: (message: string) => void):
 
 /** The rules file of the workspace, read once and kept on the state (the proxy asks for the active rules on every request). */
 export function rulesOf(be: Backend, state: DebuggerState): DebuggerRulesFile {
-  if (state.rules) return state.rules;
   const file = be.ws.path(RULES_FILE);
+  if (state.rules) {
+    // a pull (or another editor) changed the file: read it again, so its rules wait for approval and a save here never writes the old copy over it
+    const now = Date.now();
+    if (now - (state.rulesCheckedAt ?? 0) < 2000) return state.rules;
+    state.rulesCheckedAt = now;
+    const s = statSync(file, { throwIfNoEntry: false });
+    const sig = s ? `${s.size}:${s.mtimeMs}` : '';
+    if (sig === state.rulesSig) {
+      // the same file: what its rules read (a script file, a reply's files) may have changed with a pull, and that waits too
+      state.rulesApproved = rulesApproved(be, state.rules);
+      return state.rules;
+    }
+  }
+  state.rulesCheckedAt = Date.now();
+  state.rulesSig = ((s) => (s ? `${s.size}:${s.mtimeMs}` : ''))(statSync(file, { throwIfNoEntry: false }));
   let rules: DebuggerRulesFile | undefined;
   if (existsSync(file)) {
     try {
@@ -124,6 +138,7 @@ export const activeRules = (be: Backend, state: DebuggerState): DebuggerRule[] =
 export async function saveRules(be: Backend, state: DebuggerState) {
   const f = rulesOf(be, state);
   await atomicWriteAsync(be.ws.path(RULES_FILE), stableText(debuggerRulesFileValue(f)));
+  state.rulesSig = ((s) => (s ? `${s.size}:${s.mtimeMs}` : ''))(statSync(be.ws.path(RULES_FILE), { throwIfNoEntry: false }));
   // changed here while allowed: what was saved stays allowed (rules that came from elsewhere keep waiting until allowed)
   if (state.rulesApproved) approveRules(be, f);
   else state.rulesApproved = rulesApproved(be, f);
@@ -225,7 +240,7 @@ export function debuggerRulesHandlers(be: Backend): Handlers {
       // how many requests each rule acted on in this capture
       hits: state.proxy?.ruleHits() ?? {},
       // rules that change traffic came with a pull or a clone (or were changed outside this app): they wait for "Allow on this computer"
-      ...(state.rulesApproved ? {} : { needsApproval: true, waiting: rules.filter((r) => r.enabled && changesTraffic(r)).length }),
+      ...(state.rulesApproved ? {} : { needsApproval: true, waiting: Object.values(f.profiles).reduce((n, list) => n + list.filter((r) => r.enabled && changesTraffic(r)).length, 0) }),
     };
   };
   return {

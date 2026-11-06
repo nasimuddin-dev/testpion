@@ -60,6 +60,9 @@ export interface DebuggerState {
   rules?: DebuggerRulesFile;
   /** The rules of the file that change traffic may act here (debugger-rules-trust.ts); false: they wait for "Allow on this computer". */
   rulesApproved?: boolean;
+  /** The rules file's size and time when it was read, and when that was last looked at (it is read again after a change). */
+  rulesSig?: string;
+  rulesCheckedAt?: number;
   /** Listing is paused (Pause in the capture bar): the proxy keeps forwarding and rules keep acting, but nothing new is listed. */
   paused?: boolean;
   /** Exchanges held at a breakpoint, waiting for the window. */

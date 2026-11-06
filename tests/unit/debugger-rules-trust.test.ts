@@ -50,6 +50,27 @@ describe('Debugger rules that change traffic wait for "Allow on this computer"',
     expect(kinds()).toEqual(['highlight']);
   });
 
+  it('a nested field, a script file and a rule in another profile are all part of what was allowed', async () => {
+    const script = { id: 'sc', name: 'Hook', enabled: true, kind: 'script', match: { host: 'api.example.com' }, script: { file: 'debugger/hook.js' } };
+    writeFileSync(be.ws.path('debugger', 'hook.js'), 'tp.response.setBody("one")');
+    pulled([redirect('a.example')]);
+    await be.invoke('debug.approveRules', {});
+    // a pull changes only the redirect's host (a nested field): it waits again
+    pulled([redirect('evil.example')]);
+    expect(((await be.invoke('debug.rules', {})) as State).needsApproval).toBe(true);
+    // a script rule reading a file: allowed as the file is; a pull that rewrites the file waits again
+    pulled([script]);
+    await be.invoke('debug.approveRules', {});
+    writeFileSync(be.ws.path('debugger', 'hook.js'), 'tp.response.setBody("two")');
+    be.debugger!.rules = undefined;
+    expect(((await be.invoke('debug.rules', {})) as State).needsApproval).toBe(true);
+    // a rule in another profile counts in what waits (Allow approves every profile)
+    const file = be.ws.path('debugger/rules.json');
+    writeFileSync(file, JSON.stringify({ active: 'Default', profiles: { Default: [highlight], Mock: [redirect('x.example')] } }));
+    be.debugger!.rules = undefined;
+    expect((await be.invoke('debug.rules', {})) as State).toMatchObject({ needsApproval: true, waiting: 1 });
+  });
+
   it('a file of filters and highlights needs nothing; a highlight color changed by a pull does not ask', async () => {
     pulled([highlight, { id: 'ig', name: 'No fonts', enabled: true, kind: 'ignore', match: { url: '*.woff2' } }]);
     expect(((await be.invoke('debug.rules', {})) as State).needsApproval).toBeUndefined();

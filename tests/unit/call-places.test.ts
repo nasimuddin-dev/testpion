@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AT_START, interleave, placeBefore, repointAfter, shownOrder, siblingBefore } from '../../packages/shared/src/collection-calls';
-import { dropBefore, followersOf } from '../../apps/desktop/src/lib/call-places';
+import { dropBefore, followersOf, followersOfMany } from '../../apps/desktop/src/lib/call-places';
 import { buildTreeRows, folderOpenKey, type ExtraGroup, type TreeRow } from '../../apps/desktop/src/lib/tree-rows';
 import type { Collection, CollectionNode } from '../../apps/desktop/src/types';
 
@@ -235,5 +235,21 @@ describe("the tree's rows with calls", () => {
 
   it('interleave is the order of the rows', () => {
     expect(interleave([{ id: 'r1' }], [call('g1', 'r1')]).map((x) => ('node' in x ? x.node.id : x.call.id))).toEqual(shownOrder([{ id: 'r1' }], [call('g1', 'r1')]));
+  });
+});
+
+describe('the calls that followed several picked requests that go together', () => {
+  it('follow what the first of a run of them followed', () => {
+    const c = collection('shop', [req('r1'), req('r2'), req('r3'), req('r4')]);
+    const calls = [call('g2', 'r2'), call('g3', 'r3'), call('g4', 'r4')];
+    // shown: r1 r2 g2 r3 g3 r4 g4. r2 and r3 picked and deleted: g2 follows r1 (past r2), g3 follows g2 (what r3
+    // followed, a call that stays); g4 keeps r4
+    const after = followersOfMany(c, calls, new Set(['r2', 'r3']));
+    expect(Object.fromEntries(after)).toEqual({ g2: 'r1', g3: 'g2' });
+    expect(shownOrder([{ id: 'r1' }, { id: 'r4' }], applied(calls, after))).toEqual(['r1', 'g2', 'g3', 'r4', 'g4']);
+    // two picked in a row with a call after the second: it follows what the first followed
+    expect(followersOfMany(c, [call('g3', 'r3')], new Set(['r2', 'r3'])).get('g3')).toBe('r1');
+    // the first ones of the folder: they follow its start
+    expect(followersOfMany(c, [call('g1', 'r1')], new Set(['r1'])).get('g1')).toBe(AT_START);
   });
 });

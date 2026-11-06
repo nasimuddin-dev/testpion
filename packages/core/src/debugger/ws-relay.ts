@@ -140,7 +140,9 @@ export function createFrameRelay(o: {
   return {
     push(chunk: Buffer) {
       if (bypass) {
-        tail = tail.then(() => o.write(chunk));
+        // past the rules, still behind a held frame: counted, so the sender waits while it is held
+        track(chunk.length);
+        tail = tail.then(() => o.write(chunk)).finally(() => track(-chunk.length));
         return;
       }
       queue.add(chunk);
@@ -171,7 +173,8 @@ export function createFrameRelay(o: {
           bypass = true;
           const rest = buf;
           queue.set(Buffer.alloc(0));
-          tail = tail.then(() => o.write(rest));
+          track(rest.length);
+          tail = tail.then(() => o.write(rest)).finally(() => track(-rest.length));
           return;
         }
         const total = off + (isMasked ? 4 : 0) + len;

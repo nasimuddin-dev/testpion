@@ -20,7 +20,7 @@ export function RulesApproval({ state, onChange }: { state?: RulesState; onChang
         </Button>
       }
     >
-      {state.waiting ? `${plural(state.waiting, 'rule')} that change${state.waiting === 1 ? 's' : ''} traffic` : 'Rules that change traffic'} came with a pull or a clone, or were changed outside this
+      {state.waiting ? `${plural(state.waiting, 'rule')} that change${state.waiting === 1 ? 's' : ''} traffic${state.profiles.length > 1 ? ` (in every profile, not only ${state.active})` : ''}` : 'Rules that change traffic'} came with a pull or a clone, or were changed outside this
       app: they do not act on this computer until you allow them. Check where they send and what they change first. Filters and highlights work without it.
     </Callout>
   );

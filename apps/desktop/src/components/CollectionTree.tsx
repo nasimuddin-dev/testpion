@@ -9,7 +9,7 @@ import { VirtualList } from './ui';
 import { focusRow } from './TreeParts';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { LABEL } from '../lib/vocabulary';
-import { dropBefore, followersOf } from '../lib/call-places';
+import { dropBefore, followersOf, followersOfMany } from '../lib/call-places';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { deleteWithUndo, restoreDeleted } from '../lib/undo-delete';
 import { MoveDialog, subtreeIds } from './MoveDialog';
@@ -406,6 +406,8 @@ export const CollectionTree = memo(function CollectionTree({
       const [from, other] = await Promise.all([fullCollection(fromShown), toShown.id === fromShown.id ? undefined : fullCollection(toShown)]);
       const shownNode = wholeNode(from, shown);
       const to = other ?? from;
+      // a folder that is gone (a pull, another window) takes nothing: the request stays where it is
+      if (folderId && findNode(to.items, folderId)?.kind !== 'folder') return useApp.getState().toast('That folder is no longer there: nothing was moved', 'error');
       const without = { ...from, items: mapNodes(from.items, (x) => (x.id === shownNode.id ? null : x)) };
       let n = shownNode;
       if (!other) {
@@ -622,6 +624,9 @@ export const CollectionTree = memo(function CollectionTree({
     const c = pickedCollection!;
     const ids = new Set(pickedIds);
     setPicked(undefined);
+    // the calls that follow one of them follow what the first of a run of them followed (read now, while they are in place)
+    const followers = followersOfMany(c, callsOf(c), ids);
+    let followAgain: (() => Promise<unknown>) | undefined;
     return fullCollection(c).then(
       (whole) =>
         deleteWithUndo({
@@ -630,8 +635,12 @@ export const CollectionTree = memo(function CollectionTree({
           run: async () => {
             closeTabsFor([...ids]);
             await saveNow({ ...whole, items: mapNodes(whole.items, (x) => (ids.has(x.id) ? null : x)) });
+            followAgain = await callsAfter(followers);
           },
-          undo: () => saveNow(whole),
+          undo: async () => {
+            await saveNow(whole);
+            await followAgain?.();
+          },
         }),
       toastError,
     );
@@ -642,11 +651,15 @@ export const CollectionTree = memo(function CollectionTree({
     const c = pickedCollection!;
     const ids = pickedIds;
     setPicked(undefined);
+    const followers = followersOfMany(c, callsOf(c), new Set(ids));
     void (async () => {
       const whole = await fullCollection(c);
+      // a folder that is gone (a pull, another window) takes nothing: the requests stay where they are
+      if (folderId && findNode(whole.items, folderId)?.kind !== 'folder') return useApp.getState().toast('That folder is no longer there: nothing was moved', 'error');
       const nodes = ids.map((id) => findNode(whole.items, id)).filter((n): n is CollectionNode => !!n);
       const without = mapNodes(whole.items, (x) => (ids.includes(x.id) ? null : x));
       if (!(await save({ ...whole, items: nodes.reduce((items, n) => addToFolder(items, folderId, n), without) }))) return;
+      await callsAfter(followers);
       useApp.getState().toast(`Moved ${plural(nodes.length, 'request')} to ${folderId ? (findNode(whole.items, folderId)?.name ?? c.name) : c.name}`, 'success');
     })().catch(toastError);
   };
@@ -766,7 +779,9 @@ export const CollectionTree = memo(function CollectionTree({
       aria-label="Collections"
       aria-multiselectable={pickedIds.length > 0 || undefined}
       onKeyDown={(e) => {
-        if (e.key === 'Escape' && pickedIds.length) (e.stopPropagation(), setPicked(undefined));
+        // Esc on a row of the tree (not in a dialog or a rename field inside it) lets go of the picks
+        if (e.key === 'Escape' && pickedIds.length && (e.target as HTMLElement).closest?.('[data-tree-row]') && !(e.target as HTMLElement).closest('input, textarea, [role=dialog]'))
+          (e.stopPropagation(), setPicked(undefined));
       }}
     >
       {pickedIds.length > 0 && pickedCollection && (

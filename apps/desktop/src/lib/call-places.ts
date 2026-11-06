@@ -47,6 +47,23 @@ export function followersOf(c: Collection, calls: readonly PlacedItem[], id: str
 }
 
 /**
+ * Several requests about to be deleted or moved away together (the tree's picked requests): the calls that followed any
+ * of them, and what each follows now: what the first of a run of them followed, past the others that go too.
+ */
+export function followersOfMany(c: Collection, calls: readonly PlacedItem[], ids: ReadonlySet<string>): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const id of ids) {
+    const at = folderHolding(c, calls, id);
+    if (at === undefined) continue;
+    const here = folderChildren(c, calls, at);
+    let before = siblingBefore(here.nodes, here.calls, id) ?? AT_START;
+    for (let n = 0; ids.has(before) && n < 10_000; n++) before = siblingBefore(here.nodes, here.calls, before) ?? AT_START;
+    for (const i of here.calls) if (i.after === id && !ids.has(i.id)) out.set(i.id, before);
+  }
+  return out;
+}
+
+/**
  * An item dropped just before a request, a folder or a call of a collection (`moved`: a call, or with `node` a request
  * or folder): the folder it lands in, the node a moved node is inserted before (none: the folder's end) and the calls
  * whose `after` changes (shared `placeBefore`). Undefined when the sibling is not in the collection.
