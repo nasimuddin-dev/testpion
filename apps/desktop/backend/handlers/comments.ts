@@ -20,7 +20,12 @@ export function commentsHandlers(be: Backend): Handlers {
     'comments.delete': ({ ref, id }: { ref: unknown; id: string }) => (deleteComment(be.ws, refOf(ref), id), changed({ deleted: id })),
     'comments.restore': ({ ref, comment }: { ref: unknown; comment: Parameters<typeof restoreComment>[2] }) => changed(restoreComment(be.ws, refOf(ref), comment)),
     /** Every open comment with its item's owners (CODEOWNERS); `owner` keeps one team's. */
-    'comments.open': ({ owner }: { owner?: string } = {}) => openCommentsByOwner(be.ws, owner),
+    // `forYou` on the comments that @mention this person (the git identity); `forMe` keeps those only
+    'comments.open': async ({ owner, forMe }: { owner?: string; forMe?: boolean } = {}) => {
+      const id = await gitIdentity(be.ws.root).catch(() => ({ name: undefined, email: undefined }));
+      const all = await openCommentsByOwner(be.ws, owner, { name: id.name || userInfo().username, email: id.email });
+      return forMe ? all.filter((c) => c.forYou) : all;
+    },
     'comments.counts': () => openCommentCounts(be.ws),
   };
 }

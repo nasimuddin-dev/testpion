@@ -1,5 +1,5 @@
 import { Check, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ItemRef } from '@testpion/shared';
 import { call, on } from '../api';
 import { useSticky } from '../lib/sticky';
@@ -81,7 +81,7 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
                   </IconButton>
                 </span>
               </div>
-              <div className="text-sm whitespace-pre-wrap break-words">{c.text}</div>
+              <div className="text-sm whitespace-pre-wrap break-words">{withMentions(c.text)}</div>
               {c.resolvedAt && <div className="text-2xs text-muted">Settled by {c.resolvedBy} {timeAgo(c.resolvedAt)}</div>}
             </li>
           ))}
@@ -114,5 +114,19 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
         <p className="text-2xs text-muted">Saved in the workspace under comments/; commit it and your team reads it next to this item.</p>
       </div>
     </section>
+  );
+}
+
+/** A comment's text with its @mentions (`@Ana`, `@org/payments`) stand out, as the people they name read them. */
+function withMentions(text: string): ReactNode {
+  const parts = text.split(/((?:^|(?<=[\s(,;:]))@[A-Za-z0-9][\w.-]*(?:\/[\w.-]+)?)/);
+  return parts.map((p, i) =>
+    i % 2 ? (
+      <span key={i} className="text-accent font-medium" data-mention="">
+        {p}
+      </span>
+    ) : (
+      p
+    ),
   );
 }

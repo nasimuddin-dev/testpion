@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Mentions in comments
+
+- `@Ana` or `@org/payments` in a comment for your team is highlighted; the comments that mention you (your git name or e-mail) come first on Home, marked **For you**; `testpion item comment open --for-me [--team @org/payments]`; open comments carry `mentions` (and `forYou`) in `--json`, `comments.open` and `team_comments`.
+
 ### What runs now
 
 - The status bar's MCP segment also counts what else runs for the workspace (runs in progress, mock servers, the GraphQL mock, the recorder, the Debugger's capture, WebSocket, Socket.IO, MQTT and Kafka connections, MCP sessions, GraphQL subscriptions); a click lists each, with Stop.

@@ -54,3 +54,4 @@ export * from './exchange-view.js';
 export * from './debugger-select.js';
 export * from './cron.js';
 export * from './owners.js';
+export * from './mentions.js';

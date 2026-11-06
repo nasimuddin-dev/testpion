@@ -144,13 +144,18 @@ export function registerCommentCommand(program: Command): void {
     .option(...WORKSPACE_OPTION)
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .option('--owner <team>', 'only the comments on items this team owns (as CODEOWNERS names it; the @ is optional)')
+    .option('--for-me', 'only the comments that @mention you (your git name or e-mail) or a team you name with --team')
+    .option('--team <team>', 'with --for-me: also the comments that @mention this team (repeatable)', (v: string, all: string[] = []) => [...all, v])
     .option(...JSON_RESULT_OPTION)
-    .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean; owner?: string }) =>
+    .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean; owner?: string; forMe?: boolean; team?: string[] }) =>
       inWorkspace(o.workspace, async (store) => {
-        const open = await openCommentsByOwner(store, o.owner);
+        // who is asking: the git identity of the workspace's repository (the name its comments are signed with)
+        const id = await gitIdentity(store.root).catch(() => ({ name: undefined, email: undefined }));
+        const all = await openCommentsByOwner(store, o.owner, { name: id.name || userInfo().username, email: id.email, teams: o.team });
+        const open = o.forMe ? all.filter((c) => c.forYou) : all;
         if (o.json) return printJson({ open });
         if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}** on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');
-        if (!open.length) return console.log(dim(o.owner ? `No open comments on what ${o.owner} owns.` : 'No open comments.'));
+        if (!open.length) return console.log(dim(o.forMe ? 'No open comment mentions you.' : o.owner ? `No open comments on what ${o.owner} owns.` : 'No open comments.'));
         for (const c of open) console.log(`${bold(c.by)} ${dim(c.at.slice(0, 16).replace('T', ' '))} on ${refText(c.ref)}${c.owners.length ? dim(`  (${c.owners.join(' ')})`) : ''}\n  ${c.text}`);
       }),
     );

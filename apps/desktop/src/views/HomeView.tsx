@@ -315,7 +315,8 @@ export function HomeView() {
     void sharedCall<typeof certs>('certificates.list').then(setCerts, () => setCerts([]));
     void sharedCall<typeof health>('stats.collectionsHealth').then(setHealth, () => setHealth({}));
     // only a workspace in git has a team's history to show
-    void call<OwnedComment[]>('comments.open').then((c) => setAsked(c.slice(0, 5)), () => setAsked([]));
+    // the comments that mention you come first
+    void call<OwnedComment[]>('comments.open').then((c) => setAsked([...c.filter((x) => x.forYou), ...c.filter((x) => !x.forYou)].slice(0, 5)), () => setAsked([]));
     if (gitSnapshot().status?.repository) void call<TeamActivity>('git.teamActivity', { days: 14, limit: 5 }).then((t) => setTeam(t.commits.length ? t : undefined), () => setTeam(undefined));
     else setTeam(undefined);
     loadActivity();
@@ -478,6 +479,11 @@ export function HomeView() {
                   <span className="flex items-center gap-2 min-w-0">
                     <RefLink to={c.ref} className="font-medium min-w-0" />
                     {c.owners?.length > 0 && <Badge title="The team that owns this item (CODEOWNERS)">{c.owners.join(' ')}</Badge>}
+                    {c.forYou && (
+                      <Badge tone="accent" title="It mentions you (@ and your git name or e-mail)" data-home-comment-for-you="">
+                        For you
+                      </Badge>
+                    )}
                     <span className="text-xs text-muted shrink-0 ml-auto">
                       {c.by} · {timeAgo(c.at)}
                     </span>
