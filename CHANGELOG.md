@@ -6,7 +6,7 @@
 
 - With a `CODEOWNERS`, the Collections tree shows each collection's owners after its name, and `@team` in the explorer's filter (`@payments`, `@org/payments`) shows only the collections that team owns. `testpion collections` prints the owners (`--json`: `owners`) and `--owner <team>` keeps one team's.
 
-### Monitors at set times
+### Monitors: set times, and one row for a monitor of every tenant
 
 - A monitor that runs in every environment of a group is one row in the Monitors list (the worst dot of its tenants, *2 of 3 passing*), its tenants folded under it and named by their environment.
 
