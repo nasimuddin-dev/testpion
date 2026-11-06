@@ -1,3 +1,4 @@
+import { sharedDataFile } from '../../storage/shared-sources.js';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { createEngineContext } from '../../engine.js';
@@ -54,7 +55,8 @@ export function runTools(d: ModuleToolDeps): Tool[] {
         let data: DatasetRecord[] | undefined;
         if (a.data) {
           const database = !!dbKindOf(String(a.data)) || /^env:\w+$/.test(String(a.data));
-          const file = database ? String(a.data) : store.safePath(String(a.data));
+          // (a dataset a shared folder gives: ../platform-shared/datasets/x.csv, read there)
+          const file = database ? String(a.data) : (sharedDataFile(store, String(a.data)) ?? store.safePath(String(a.data)));
           if (!database && !existsSync(file)) throw new ApsError('ConfigurationError', `No data file ${String(a.data)} in the workspace`);
           data = [];
           for await (const r of readDataset({ path: file, query: a.query ? String(a.query) : undefined, limit: 10_000 })) data.push(r);

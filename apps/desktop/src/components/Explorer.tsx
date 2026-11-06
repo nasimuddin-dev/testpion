@@ -23,7 +23,7 @@ import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
-import { datasetBadge, datasetYaml } from '../lib/datasets';
+import { datasetBadge, datasetPath, datasetYaml } from '../lib/datasets';
 import { GenerateDataDialog } from './GenerateDataDialog';
 import { useStableCallbacks } from '../hooks';
 import { saveAsTest } from '../lib/save-test';
@@ -77,6 +77,8 @@ const DATASETS: ReadonlySet<ListPart> = new Set(['datasets']);
 interface DatasetRow {
   path: string;
   name: string;
+  /** Given by a shared folder (workspace.json `shared`): its name; `name` is then ../<folder>/datasets/… */
+  shared?: string;
   size: number;
   format: string;
   rows?: number;
@@ -487,16 +489,18 @@ export function Explorer() {
     name: d.name,
     on: {
       open: () => void openRef({ kind: 'dataset', name: d.name }),
-      revealFile: () => void call('workspace.revealFile', { path: `datasets/${d.name}` }).catch(toastError),
+      revealFile: () => void call('workspace.revealFile', { path: datasetPath(d.name) }).catch(toastError),
       preview: () => intent('dataset', { dataset: d.name, tab: 'preview' }),
       runWithDataset: () => intent('collections', { run: true, dataPath: d.path }),
-      copyPath: () => void copyText(`datasets/${d.name}`, 'the path'),
+      copyPath: () => void copyText(datasetPath(d.name), 'the path'),
       useInTest: () => void copyText(datasetYaml(d.name), 'the dataset block for a test file'),
       rename: () => setRenaming(d.name),
       duplicate: () => void datasetAction(() => call('datasets.duplicate', { name: d.name })),
       move: moveToFolderSubmenu(datasetOps, datasetFolders.items, d.name, folder),
       delete: () => void deleteDataset(d),
     },
+    // from another workspace's folder: changed there
+    disabled: d.shared ? Object.fromEntries(['rename', 'duplicate', 'move', 'delete'].map((k) => [k, `Shared from ${d.shared}: change it there`])) : {},
   });
   /** A favorite is a request: the request's menu (no variant), with what the explorer can do from here. */
   const favoriteMenu = (c: Collection, n: Extract<CollectionNode, { kind: 'http' | 'graphql' }>): NodeMenuCtx => {
@@ -799,13 +803,23 @@ export function Explorer() {
                   nodeId={`datasets:${d.name}`}
                   indent
                   icon={<TreeBadge label={datasetBadge(d.format).text} className={datasetBadge(d.format).cls} />}
-                  label={d.name}
-                  sub={d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
+                  label={d.shared ? d.name.replace(/^.*\//, '') : d.name}
+                  sub={
+                    d.shared ? (
+                      <>
+                        <SharedBadge from={d.shared} /> {d.rows !== undefined ? plural(d.rows, 'row') : d.tables ? plural(d.tables.length, 'table') : undefined}
+                      </>
+                    ) : d.rows !== undefined ? (
+                      plural(d.rows, 'row')
+                    ) : d.tables ? (
+                      plural(d.tables.length, 'table')
+                    ) : undefined
+                  }
                   activeId={d.name}
                   onClick={() => void openRef({ kind: 'dataset', name: d.name })}
                   ctx={() => datasetMenu(d, d.folder)}
-                  rename={renamer(d.name, `datasets:${d.name}`, (to) => datasetAction(() => call('datasets.rename', { name: d.name, to })))}
-                  drag={[{ kind: 'dataset', name: d.name }]}
+                  rename={d.shared ? undefined : renamer(d.name, `datasets:${d.name}`, (to) => datasetAction(() => call('datasets.rename', { name: d.name, to })))}
+                  drag={d.shared ? undefined : [{ kind: 'dataset', name: d.name }]}
                   git={{ kind: 'dataset', name: d.name }}
                 />
               )}

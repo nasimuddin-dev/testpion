@@ -500,10 +500,10 @@ export function registerDataCommands(program: Command): void {
           const out = await appendDatasetRow(store, o.add, row);
           return o.json ? printJson(out) : console.log(green(`${out.path}: ${out.rows} record${out.rows === 1 ? '' : 's'}`));
         }
-        const rows = listWorkspaceDatasets(store);
+        const rows = listWorkspaceDatasets(store, { includeShared: true }); // (then those a shared folder gives, `shared` its name)
         if (o.json) return printJson(rows);
         if (!rows.length) return console.log(dim('No datasets. Put CSV, JSON, JSONL or SQLite files in the workspace datasets/ folder.'));
-        for (const r of rows) console.log(`${r.path}  ${dim(`${r.format}, ${(r.size / 1024).toFixed(1)} KB${r.tables ? `, tables: ${r.tables.join(', ') || 'none'}` : ''}`)}`);
+        for (const r of rows) console.log(`${r.path}  ${dim(`${r.format}, ${(r.size / 1024).toFixed(1)} KB${r.tables ? `, tables: ${r.tables.join(', ') || 'none'}` : ''}${r.shared ? ` (shared from ${r.shared})` : ''}`)}`);
       });
     });
   datasets

@@ -26,6 +26,7 @@
 ### Environments and API definitions shared from another workspace
 
 - API definitions too: a shared folder's `specs/` is listed under **API definitions** as *shared* (`../platform-shared/specs/x.yaml`), opens read-only and is read by contract checks, coverage, lint, compare, deprecated calls, the body editor's schema and tests or flows from a spec (named with the folder, so they never replace your own); Quick Open and `search_workspace` find it. Only plain files of its `specs/` are read (links are skipped); a folder inside the workspace is refused. `testpion workspace share --add` takes every kind the folder has by default.
+- Datasets too: a shared folder's `datasets/` is listed under **Datasets** with the *shared* badge (`../platform-shared/datasets/users.csv`), previewed and opened read-only, and read by collection runs and tests; `testpion datasets` and `list_datasets` list it.
 - In the app, a `shared` entry that arrives with a pull waits for **Allow on this computer** (shown in the Environments list, API definitions and the dialog); one added in the app is allowed at once. The CLI reads every entry.
 - `workspace.json` `shared: [{ "path": "../platform-shared", "kinds": ["environments"] }]` (or `testpion workspace share --add ../platform-shared`) reads another workspace's environments read-only: listed after the workspace's own with a **shared** badge, usable everywhere, refused by Save, Rename and Delete (Duplicate copies one); an id of the workspace's own wins. `env list` and `list_environments` say where one comes from.
 

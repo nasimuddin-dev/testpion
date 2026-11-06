@@ -101,7 +101,7 @@ describe('datasets: columns and the first rows', () => {
 
   it('refuses a missing dataset and a path outside datasets/', async () => {
     await expect(readWorkspaceDataset(store, 'nope.csv')).rejects.toThrow(/No dataset datasets\/nope\.csv/);
-    await expect(readWorkspaceDataset(store, '../workspace.json')).rejects.toThrow(/escapes/);
+    await expect(readWorkspaceDataset(store, '../workspace.json')).rejects.toThrow(/escapes|No shared dataset/);
     await expect(readWorkspaceDataset(store, '')).rejects.toThrow(/name is needed/);
   });
 });

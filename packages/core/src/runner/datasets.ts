@@ -7,7 +7,9 @@ import { dirname, extname, join, relative, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import { queryAll } from '../util/jsonpath.js';
 import { dbKindOf, dbRecords } from './db-datasets.js';
-import { noteOwnChange } from '../storage/fsutil.js';
+import { noteOwnChange, plainFileInside } from '../storage/fsutil.js';
+import { DATA_FILE, sharedDataFile, sharedDirs } from '../storage/shared-sources.js';
+import type { Workspace } from '../model/types.js';
 import { BoundedMap } from '../util/collections.js';
 import { cursorOf, offsetOfCursor } from '../util/page.js';
 import { netFetch } from '../net/proxy.js';
@@ -279,6 +281,8 @@ interface WorkspaceDataset {
   format: 'csv' | 'json' | 'jsonl' | 'markdown' | 'sqlite';
   /** SQLite: its tables (a dataset needs a query). */
   tables?: string[];
+  /** Given by a shared folder (workspace.json `shared`): its name; `path` is then ../<folder>/datasets/… and the file is read, never written. */
+  shared?: string;
 }
 
 /**
@@ -333,16 +337,21 @@ async function countLines(file: string): Promise<number> {
 }
 
 /** Data files in the workspace's datasets/ folder (up to three levels deep), newest first. */
-export function listWorkspaceDatasets(store: { root: string; path(...p: string[]): string }): WorkspaceDataset[] {
+/**
+ * The data files of datasets/ (newest first, at most 500); with `includeShared`, then those of the shared folders' datasets/
+ * (workspace.json `shared`), named by their path from the workspace and marked `shared` (plain files only: a link is skipped).
+ */
+export function listWorkspaceDatasets(store: { root: string; path(...p: string[]): string; workspace?: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'> }, opts: { includeShared?: boolean } = {}): WorkspaceDataset[] {
   const root = store.path('datasets');
   const out: WorkspaceDataset[] = [];
-  const walk = (dir: string, depth: number) => {
+  const walk = (dir: string, depth: number, from?: { name: string; dir: string }) => {
     if (!existsSync(dir) || depth > 3) return;
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const p = join(dir, e.name);
-      if (e.isDirectory()) walk(p, depth + 1);
+      if (e.isDirectory()) walk(p, depth + 1, from);
       // inline-*: copies older versions made for evaluation runs
-      else if (/\.(csv|tsv|json|jsonl|ndjson|md|db|db3|sqlite|sqlite3)$/i.test(e.name) && !e.name.startsWith('inline-')) {
+      else if (from && plainFileInside(from.dir, p) === undefined) continue;
+      else if (DATA_FILE.test(e.name) && !e.name.startsWith('inline-')) {
         const st = statSync(p);
         const format = formatOf({ path: p });
         let tables: string[] | undefined;
@@ -352,12 +361,16 @@ export function listWorkspaceDatasets(store: { root: string; path(...p: string[]
           } catch {
             tables = [];
           }
-        out.push({ path: relative(store.root, p).split(sep).join('/'), size: st.size, modified: st.mtime.toISOString(), format: format === 'markdown' ? 'markdown' : format, ...(tables ? { tables } : {}) });
+        out.push({ path: relative(store.root, p).split(sep).join('/'), size: st.size, modified: st.mtime.toISOString(), format: format === 'markdown' ? 'markdown' : format, ...(tables ? { tables } : {}), ...(from ? { shared: from.name } : {}) });
       }
     }
   };
   walk(root, 0);
-  return out.sort((a, b) => (a.modified < b.modified ? 1 : -1)).slice(0, 500);
+  const own = out.sort((a, b) => (a.modified < b.modified ? 1 : -1)).slice(0, 500);
+  if (!opts.includeShared || !store.workspace) return own;
+  out.length = 0;
+  for (const s of sharedDirs(store.sharedView ?? store.workspace, store.root, 'datasets')) walk(s.dir, 0, s);
+  return [...own, ...out.sort((a, b) => (a.modified < b.modified ? 1 : -1)).slice(0, 500)];
 }
 
 /** A column of a dataset and the kind of value it holds (a hint from the rows read: CSV cells that are all numbers count as numbers). */
@@ -414,12 +427,15 @@ interface WorkspaceDatasetPreview {
  * `name` is the file under datasets/ (with or without the folder). A SQLite database lists its tables and reads
  * rows only with `query`.
  */
-export async function readWorkspaceDataset(store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string }, name: string, opts: { limit?: number; query?: string; cursor?: string | number; offset?: number } = {}): Promise<WorkspaceDatasetPreview> {
+export async function readWorkspaceDataset(store: { root: string; path(...p: string[]): string; safePath(rel: string, base?: string): string; workspace?: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'> }, name: string, opts: { limit?: number; query?: string; cursor?: string | number; offset?: number } = {}): Promise<WorkspaceDatasetPreview> {
   const clean = String(name ?? '')
     .trim()
     .replace(/^datasets[\/]/, '');
   if (!clean) throw new ApsError('ValidationError', 'A dataset name is needed', { suggestions: ['Name a file of the datasets/ folder, e.g. users.csv (list_datasets / `testpion datasets` show them).'] });
-  const file = store.safePath(clean, store.path('datasets'));
+  // one a shared folder gives: ../platform-shared/datasets/users.csv (read there, never written)
+  const shared = clean.startsWith('../') && store.workspace ? sharedDataFile({ root: store.root, workspace: store.workspace, sharedView: store.sharedView }, clean) : undefined;
+  if (clean.startsWith('../') && !shared) throw new ApsError('ValidationError', `No shared dataset ${clean}`, { suggestions: ['`testpion datasets` (or the list_datasets tool) lists the datasets, the shared ones by their path.'] });
+  const file = shared ?? store.safePath(clean, store.path('datasets'));
   if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${clean}`, { suggestions: ['`testpion datasets` (or the list_datasets tool) lists the datasets of the workspace.'] });
   const st = statSync(file);
   const format = formatOf({ path: file });

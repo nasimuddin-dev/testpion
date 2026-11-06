@@ -83,7 +83,7 @@ describe('environments shared from another workspace', () => {
     writeFileSync(join(tmp.dir, 'platform-shared', 'specs', 'platform.yaml'), 'openapi: 3.0.3\ninfo: { title: P, version: "1" }\npaths: {}\n');
     const both = cli(['workspace', 'share', '--add', '../platform-shared', '-w', ws]);
     expect(both.status, both.out + both.err).toBe(0);
-    expect(JSON.parse(both.out).data).toMatchObject({ shared: [{ path: '../platform-shared', kinds: ['environments', 'specs'] }], specs: ['../platform-shared/specs/platform.yaml'] });
+    expect(JSON.parse(both.out).data).toMatchObject({ shared: [{ path: '../platform-shared', kinds: ['environments', 'specs', 'datasets'] }], specs: ['../platform-shared/specs/platform.yaml'] });
     const envOnly = cli(['workspace', 'share', '--add', '../platform-shared', '--kinds', 'environments', '-w', ws]);
     expect(JSON.parse(envOnly.out).data).toMatchObject({ shared: [{ kinds: ['environments'] }], specs: [] });
   });

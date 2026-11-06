@@ -9,12 +9,12 @@ import { useDoc } from '../lib/docs';
 import { useSticky } from '../lib/sticky';
 import { copyText } from '../lib/clipboard';
 import { plural } from '../lib/format';
-import { datasetBadge, datasetYaml } from '../lib/datasets';
+import { datasetBadge, datasetPath, datasetYaml } from '../lib/datasets';
 import { dataLanguageOf } from '../data-languages';
 import { CodeEditor } from '../components/CodeEditor';
 import { JsonTable } from '../components/JsonTable';
 import { useSingleEditorTab } from '../components/EditorTabs';
-import { Badge, Button, Empty, Field, Input, Tabs } from '../components/ui';
+import { Badge, Button, Empty, Field, Input, SharedNote, Tabs } from '../components/ui';
 
 type Tab = 'preview' | 'file';
 
@@ -23,6 +23,8 @@ const tabDataset = persisted<{ dataset?: string }>('dataset', {});
 
 interface OpenedDataset {
   name: string;
+  /** Given by a shared folder (workspace.json `shared`): read here, changed there. */
+  shared?: string;
   path: string;
   text: string;
   format: string;
@@ -107,7 +109,7 @@ export function DatasetView() {
     await attempt(async () => {
       await call('datasets.write', { name, text });
       setSaved(text);
-      useApp.getState().toast(`Saved datasets/${name}`, 'success');
+      useApp.getState().toast(`Saved ${datasetPath(name!)}`, 'success');
       await loadPreview(name, query);
     });
   };
@@ -134,9 +136,9 @@ export function DatasetView() {
       {/* its ⋯: the dataset's menu as its row in the explorer has it (lib/node-menu.ts) */}
       <ItemBreadcrumb
         label="Where this dataset is"
-        crumbs={[{ label: 'Datasets' }, ...name.split('/').slice(0, -1).map((f) => ({ label: f }))]}
+        crumbs={[{ label: 'Datasets' }, ...(file?.shared ? [{ label: `shared from ${file.shared}` }] : name.split('/').slice(0, -1).map((f) => ({ label: f })))]}
         name={name.split('/').pop()!}
-        actions={openItemMenu('dataset', { ref: { kind: 'dataset', name }, name, on: { revealFile: () => void attempt(() => call('workspace.revealFile', { path: `datasets/${name}` })), copyPath: () => void copyText(`datasets/${name}`, 'the path'), runWithDataset: runCollection, useInTest } })}
+        actions={openItemMenu('dataset', { ref: { kind: 'dataset', name }, name, on: { revealFile: () => void attempt(() => call('workspace.revealFile', { path: datasetPath(name) })), copyPath: () => void copyText(datasetPath(name), 'the path'), runWithDataset: runCollection, useInTest } })}
       />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-line shrink-0 min-w-0">
         <Database size={16} className="text-muted shrink-0" />
@@ -158,11 +160,12 @@ export function DatasetView() {
           Use in a test
         </Button>
         {!file?.binary && (
-          <Button icon={<Save size={14} />} disabled={!dirty} reason="Nothing changed yet" onClick={() => void save()} title="Save (Ctrl+S)">
+          <Button icon={<Save size={14} />} disabled={!dirty || !!file?.shared} reason={file?.shared ? `Shared from ${file.shared}: change it in that workspace` : 'Nothing changed yet'} onClick={() => void save()} title="Save (Ctrl+S)">
             Save
           </Button>
         )}
       </div>
+      {file?.shared && <SharedNote className="m-2" from={file.shared}>Tests and collection runs read it as one of this workspace&apos;s.</SharedNote>}
       <Tabs label="Dataset"
         value={tab}
         onChange={setTab}
@@ -197,7 +200,7 @@ export function DatasetView() {
             )}
             {preview && preview.rows.length ? (
               <div className="flex-1 min-h-0" data-dataset-preview>
-                <JsonTable rows={preview.rows} path={`datasets/${name}`} columnTypes={columnTypes} />
+                <JsonTable rows={preview.rows} path={datasetPath(name)} columnTypes={columnTypes} />
                 {preview.count > preview.rows.length && (
                   <p className="text-xs text-muted px-2 py-1 border-t border-line">
                     The first {PREVIEW_ROWS} of {plural(preview.count, 'row')}; the File tab has them all.
@@ -217,7 +220,7 @@ export function DatasetView() {
         ) : file?.binary ? (
           <Empty title="A SQLite database">It isn't edited as text; the Preview tab reads it with a query.</Empty>
         ) : (
-          <CodeEditor language={dataLanguageOf(name)} path={`datasets/${name}`} value={text} onChange={setText} />
+          <CodeEditor language={dataLanguageOf(name)} path={datasetPath(name)} value={text} onChange={setText} readOnly={!!file?.shared} />
         )}
       </div>
     </div>

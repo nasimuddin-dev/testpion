@@ -18,6 +18,7 @@ export function watchSharedEnvironments(be: Backend): void {
   const KINDS = [
     ['environments', /\.json$/i],
     ['specs', /\.(json|ya?ml)$/i],
+    ['datasets', /\.(csv|tsv|json|jsonl|ndjson|md|db|db3|sqlite|sqlite3)$/i],
   ] as const;
   const look = () => {
     try {

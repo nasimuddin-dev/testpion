@@ -12,6 +12,8 @@ export interface SharedSources {
   environments: Array<{ name: string; from: string; problem?: string }>;
   /** As every command takes them: ../platform-shared/specs/clinic.yaml */
   specs: string[];
+  /** As every command takes them: ../platform-shared/datasets/users.csv */
+  datasets?: string[];
   /** Entries that came with a pull: not read on this computer until allowed. */
   waiting?: Array<{ path: string; kinds: string[] }>;
 }
@@ -101,7 +103,8 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
               const base = s.path.replace(/\/+$/, '');
               const envs = state.environments.filter((e) => base.endsWith(e.from));
               const specs = (state.specs ?? []).filter((p) => p.startsWith(`${base}/specs/`)).map((p) => p.replace(/^.*\//, ''));
-              const gives = [...envs.map((e) => e.name), ...specs];
+              const datasets = (state.datasets ?? []).filter((p) => p.startsWith(`${base}/datasets/`)).map((p) => p.replace(/^.*\//, ''));
+              const gives = [...envs.map((e) => e.name), ...specs, ...datasets];
               return (
                 <div key={s.path} className="flex items-center gap-2 rounded-md border border-line px-2 py-1.5" data-shared-source={s.path}>
                   <span className="mono truncate">{s.path}</span>

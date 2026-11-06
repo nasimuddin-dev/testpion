@@ -53,7 +53,7 @@ import {
   samePath,
   type RefResolution,
   importFileFilters,
-  setWorkspaceNote, ownershipOf, checkedSource, sharedSpecs, SHAREABLE_KINDS } from '@testpion/core';
+  setWorkspaceNote, ownershipOf, checkedSource, sharedSpecs, SHAREABLE_KINDS, listWorkspaceDatasets } from '@testpion/core';
 import { allowShared, sharedWaiting, trustShared } from '../shared-trust.js';
 import type { Backend, Handlers } from '../backend.js';
 import { currentOwner } from '../current-owner.js';
@@ -68,6 +68,7 @@ function sharedOf(be: Backend) {
     shared: be.ws.workspace.shared ?? [],
     environments: be.ws.listEnvironments().filter((e) => e.shared).map((e) => ({ name: e.name, from: e.shared!, ...(e.problem ? { problem: e.problem } : {}) })),
     specs: sharedSpecs(be.ws, { includeAsync: true }),
+    datasets: listWorkspaceDatasets(be.ws, { includeShared: true }).filter((d) => d.shared).map((d) => d.path),
     // entries that came with a pull (or were written outside this app): not read until allowed on this computer
     waiting: sharedWaiting(be, be.ws),
   };

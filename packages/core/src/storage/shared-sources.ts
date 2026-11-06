@@ -20,7 +20,7 @@ import { isInside, plainFileInside, samePath } from './fsutil.js';
 const viewOf = (store: { workspace: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'> }) => store.sharedView ?? store.workspace;
 
 /** What a workspace may read from another folder. Collections and tests stay the workspace's own: they are what a team owns. */
-export const SHAREABLE_KINDS = ['environments', 'specs'] as const;
+export const SHAREABLE_KINDS = ['environments', 'specs', 'datasets'] as const;
 export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
 
 export interface SharedSource {
@@ -144,6 +144,28 @@ export function sharedSpecSource(store: SpecStore, path: string): string | undef
 /** The file of a shared API definition to read (never to write), or undefined when the path is not one. */
 export function sharedSpecFile(store: SpecStore, path: string): string | undefined {
   return sharedSpecSource(store, path) ? resolve(store.root, path) : undefined;
+}
+
+/** A data file a dataset can be (what the datasets/ folder lists). */
+export const DATA_FILE = /\.(csv|tsv|json|jsonl|ndjson|md|db|db3|sqlite|sqlite3)$/i;
+
+/**
+ * The shared folder a path from the workspace leads into (`../platform-shared/datasets/users.csv` → platform-shared), if
+ * it is a plain data file really inside a shared datasets/ folder (any depth, never climbing out, never a link).
+ */
+export function sharedDataSource(store: SpecStore, path: string): string | undefined {
+  if (!path.startsWith('../') || !DATA_FILE.test(path)) return undefined;
+  const full = resolve(store.root, path);
+  for (const s of sharedDirs(viewOf(store), store.root, 'datasets')) {
+    const rel = relative(s.dir, full);
+    if (rel && !rel.startsWith('..') && !isAbsolute(rel) && plainFileInside(s.dir, full) !== undefined) return s.name;
+  }
+  return undefined;
+}
+
+/** The file of a shared dataset to read (never to write), or undefined when the path is not one. */
+export function sharedDataFile(store: SpecStore, path: string): string | undefined {
+  return sharedDataSource(store, path) ? resolve(store.root, path) : undefined;
 }
 
 /** A source to add, checked: a folder (relative to the workspace, as git keeps it on every computer) that holds the kinds named. */

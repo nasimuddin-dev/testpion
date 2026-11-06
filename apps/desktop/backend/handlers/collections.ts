@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported, collectionOwners, sharedSpecSource, specFileToRead } from '@testpion/core';
+import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported, collectionOwners, sharedSpecSource, specFileToRead, sharedDataSource, sharedDataFile } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -18,13 +18,22 @@ export function collectionsHandlers(be: Backend): Handlers {
     if (SPEC_PATH.test(p) || sharedSpecSource(be.ws, p)) return specFileToRead(be.ws, p);
     throw new ApsError('ValidationError', `Not an API definition in specs/: ${p}`);
   };
-  /** A dataset's file from its name under datasets/ (datasets/users.csv or users.csv), inside that folder only. */
+  /** A dataset's file from its name under datasets/ (datasets/users.csv or users.csv), inside that folder only: what is written. */
   const datasetFile = (name: string) => {
     const clean = String(name ?? '')
       .trim()
       .replace(/^datasets[\\/]/, '');
     if (!clean) throw new ApsError('ValidationError', 'A dataset name is needed');
+    // one a shared folder gives (../platform-shared/datasets/x.csv) is changed where it lives
+    const from = sharedDataSource(be.ws, clean);
+    if (from) throw new ApsError('ValidationError', `${clean.replace(/^.*\//, '')} is shared from ${from}: change it there`, { suggestions: [`Open the workspace in ${from} to change it.`] });
+    if (clean.startsWith('../')) throw new ApsError('ValidationError', `No dataset ${clean}`);
     return be.ws.safePath(clean, be.ws.path('datasets'));
+  };
+  /** A dataset's file to read: one of datasets/, or one a shared folder gives (read-only). */
+  const datasetToRead = (name: string) => {
+    const clean = String(name ?? '').trim();
+    return (clean.startsWith('../') && sharedDataFile(be.ws, clean)) || datasetFile(clean);
   };
   const datasetName = (file: string) => relative(be.ws.path('datasets'), file).split(sep).join('/');
   /** A new file under datasets/ named `base.ext`; never an existing one: base-2.ext, base-3.ext … */
@@ -289,19 +298,22 @@ export function collectionsHandlers(be: Backend): Handlers {
     },
     /** Data files in the workspace's datasets/ folder (for the Collection Runner and tests), newest first; `rows` for text files up to 5 MB (the sidebar's count). */
     'datasets.list': () => {
-      const list = listWorkspaceDatasets(be.ws);
+      // (then those a shared folder gives: ../platform-shared/datasets/x.csv, `shared` its name)
+      const list = listWorkspaceDatasets(be.ws, { includeShared: true });
       // forget the files that are gone (another workspace, a delete)
       const now = new Set(list.map((d) => d.path));
       for (const k of counted.keys()) if (!now.has(k)) counted.delete(k);
-      return list.map((d) => ({ path: join(be.ws.root, d.path), name: d.path.replace(/^datasets\//, ''), size: d.size, modified: d.modified, format: d.format, tables: d.tables, rows: recordsOf(d) }));
+      return list.map((d) => ({ path: join(be.ws.root, d.path), name: d.path.replace(/^datasets\//, ''), size: d.size, modified: d.modified, format: d.format, tables: d.tables, rows: recordsOf(d), ...(d.shared ? { shared: d.shared } : {}) }));
     },
     /** A dataset by its name under datasets/ (the tab): its text (CSV, JSON, JSONL, Markdown; up to 20 MB) and what it is. */
     'datasets.open': ({ name }: { name: string }) => {
-      const file = datasetFile(name);
+      const file = datasetToRead(name);
       if (!existsSync(file)) throw new ApsError('ValidationError', `No dataset datasets/${name}`);
-      if (!datasetFormatOfName(file)) return { name: datasetName(file), path: file, text: '', format: 'sqlite', size: statSync(file).size, binary: true };
+      const from = sharedDataSource(be.ws, String(name ?? '').trim());
+      const named = from ? { name: String(name).trim(), shared: from } : { name: datasetName(file) };
+      if (!datasetFormatOfName(file)) return { ...named, path: file, text: '', format: 'sqlite', size: statSync(file).size, binary: true };
       if (statSync(file).size > 20 * 1024 * 1024) throw new ApsError('ValidationError', 'The dataset is larger than 20 MB');
-      return { name: datasetName(file), path: file, text: readFileSync(file, 'utf8'), format: datasetFormatOfName(file), size: statSync(file).size, binary: false };
+      return { ...named, path: file, text: readFileSync(file, 'utf8'), format: datasetFormatOfName(file), size: statSync(file).size, binary: false };
     },
     /** The first rows of a dataset with its columns (and their kinds of value) and its record count (the tab's preview). */
     'datasets.preview': ({ name, limit, query }: { name: string; limit?: number; query?: string }) => readWorkspaceDataset(be.ws, name, { limit: limit ?? 200, query }),

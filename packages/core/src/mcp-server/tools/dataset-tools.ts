@@ -14,7 +14,7 @@ export function datasetTools({ store }: { store: WorkspaceStore }): Tool[] {
       description:
         "Data files in the workspace datasets/ folder, newest first: path (give it to run_collection as `data`), size, format (csv, json, jsonl, markdown, sqlite) and, for SQLite databases, their tables (run_collection then needs a `query`). A response saved with the app's Table ▸ Save as dataset lands here too. read_dataset shows the rows of one.",
       inputSchema: { type: 'object', properties: {} },
-      run: () => listWorkspaceDatasets(store),
+      run: () => listWorkspaceDatasets(store, { includeShared: true }),
     },
     {
       name: 'read_dataset',

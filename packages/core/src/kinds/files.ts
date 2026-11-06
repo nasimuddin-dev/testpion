@@ -3,7 +3,7 @@ import { ApsError } from '../errors.js';
 import { CAPTURE_SESSIONS_DIR, captureSessionFileName } from '../debugger/capture-history.js';
 import { existsSync } from 'node:fs';
 import { moveToTrash, restoreFromTrash, trashSpec } from '../storage/trash.js';
-import { sharedSpecFile, sharedSpecSource } from '../storage/shared-sources.js';
+import { sharedDataFile, sharedDataSource, sharedSpecFile, sharedSpecSource } from '../storage/shared-sources.js';
 import { fileIn, missing, ok } from './ref-index.js';
 import type { KindDefs } from './types.js';
 
@@ -35,12 +35,16 @@ export const fileKinds: KindDefs = {
   dataset: {
     resolve: (store, ref) => {
       const r = ref as Extract<ItemRef, { kind: 'dataset' }>;
+      // (one a shared folder gives is named by its path from the workspace: ../platform-shared/datasets/x.csv)
+      if (r.name.startsWith('../')) return sharedDataFile(store, r.name) ? ok(r, r.name.replace(/^.*\//, ''), r.name) : missing(r, `${r.name} is no longer there (or no longer shared).`, { label: 'Search the workspace', view: 'search' });
       return fileIn(store, store.path('datasets'), r.name)
         ? ok(r, r.name, `datasets/${r.name}`)
         : missing(r, `datasets/${r.name} is no longer there (deleted or renamed).`, { label: 'Search the workspace', view: 'search' });
     },
     ops: {
       remove: (store, id) => {
+        const from = sharedDataSource(store, id);
+        if (from) throw new ApsError('ValidationError', `${id.replace(/^.*\//, '')} is shared from ${from}: delete it there`);
         const file = fileIn(store, store.path('datasets'), id);
         const trashId = file && moveToTrash(store, 'dataset', file);
         if (!trashId) throw new ApsError('ValidationError', `No dataset datasets/${id}`, { suggestions: [] });

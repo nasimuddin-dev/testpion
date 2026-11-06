@@ -20,8 +20,11 @@ export function datasetBadge(format: string): { text: string; cls: string } {
 }
 
 /** The `dataset:` block of a YAML test that reads this file (a database needs its query). */
+/** A dataset's path from the workspace: datasets/<name>, or the name itself for one a shared folder gives (../platform-shared/datasets/x.csv). */
+export const datasetPath = (name: string) => (name.startsWith('../') ? name : `datasets/${name}`);
+
 export function datasetYaml(name: string, query?: string): string {
-  const lines = ['dataset:', `  path: datasets/${name}`];
+  const lines = ['dataset:', `  path: ${datasetPath(name)}`];
   if (query) lines.push(`  query: ${/[:#'"]/.test(query) ? JSON.stringify(query) : query}`);
   return lines.join('\n') + '\n';
 }
