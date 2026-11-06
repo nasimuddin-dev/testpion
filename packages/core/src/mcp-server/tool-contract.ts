@@ -542,7 +542,7 @@ export function withToolContract(tools: Tool[], o: { docs: Record<string, ToolDo
               : 'Only needed after a long session of sends: the confirmation code the user gives you.',
             'string',
           )
-        : prop('true to go ahead (ask the user first); without it nothing changes', 'boolean');
+        : prop('true: go ahead (ask the user first); else nothing changes', 'boolean');
     const required = t.inputSchema.required?.map((r) => aliases.find(([, k]) => k === r)?.[0] ?? r);
     const doc = t.doc ?? o.docs[t.name];
     return {

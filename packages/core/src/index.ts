@@ -253,6 +253,7 @@ export * from './runner/saved-evaluations.js';
 export * from './eval/matrix.js';
 export * from './runner/eval-matrix-runs.js';
 export * from './runner/monitors.js';
+export * from './runner/monitor-quiet.js';
 export { rotateEvaluation, runMonitorEvaluation, type MonitorRagInfo } from './runner/monitor-rag.js';
 export * from './runner/ci-config.js';
 export * from './runner/env-request-compare.js';

@@ -8,6 +8,7 @@ import { flowDeployStatus } from '../../runner/flow-deploy.js';
 import { listMonitorDefinitions, listMonitors, monitorConsent, monitorStatus, parseSchedule, saveMonitor } from '../../runner/monitors.js';
 import { findCollection } from '../../storage/env-edit.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
+import type { QuietWindow } from '../../runner/monitor-quiet.js';
 import { ApsError } from '../../errors.js';
 import { shortId } from '../../util/ids.js';
 import { str, type Tool } from '../tool.js';
@@ -70,6 +71,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           baseline: str('With evaluation: fail when a metric dropped against `previous`, `best` (of the last 30 runs) or a run id'),
           maxDrop: { type: 'number', description: 'With baseline: the smallest drop that fails (default 0.05)' },
           every: { type: ['string', 'number'], description: 'How often: minutes, 15m, 1h, 1d, or cron' },
+          quiet: { type: ['object', 'null'], description: 'Maintenance window, no runs: { cron, minutes, reason? }; null removes it' },
           environment: str('The environment it runs with'),
           environmentGroup: str('Or every environment of a group (a tenant each)'),
           webhook: str('Alert URL (Slack / Teams / Discord webhook or any URL; {{variables}} work)'),
@@ -102,6 +104,8 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           ...(a.environment ? { environment: String(a.environment) } : {}),
           ...(environmentGroup ? { environmentGroup } : {}),
           ...(a.webhook ? { webhook: String(a.webhook) } : existing?.webhook ? { webhook: existing.webhook } : {}),
+          // a maintenance window: given, removed (null), or kept
+          ...(a.quiet === null ? {} : a.quiet && typeof a.quiet === 'object' ? { quiet: a.quiet as QuietWindow } : existing?.quiet ? { quiet: existing.quiet } : {}),
           ...monitorConsent(store, { environment: a.environment ? String(a.environment) : undefined, environmentGroup }, existing, false),
         });
         return monitorStatus(store, m);

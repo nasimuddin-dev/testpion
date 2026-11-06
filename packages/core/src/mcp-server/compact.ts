@@ -78,7 +78,7 @@ export function compactTool<T extends Pick<Tool, 'description' | 'inputSchema'>>
     for (const [name, p] of Object.entries(props)) {
       if (!p || typeof p.description !== 'string') continue;
       // (a code-style confirm - "A code from the user, not true" - is a safety instruction: it stays)
-      if (SHARED_PARAMETERS.has(name) || (name === 'confirm' && p.description.startsWith('true to go ahead'))) props[name] = Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'description')) as typeof p;
+      if (SHARED_PARAMETERS.has(name) || (name === 'confirm' && p.description.startsWith('true: go ahead'))) props[name] = Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'description')) as typeof p;
     }
   return { ...t, description: compactDescription(t.description), inputSchema: schema as T['inputSchema'] };
 }

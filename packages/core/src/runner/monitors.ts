@@ -23,6 +23,7 @@ import { runMonitorPromptEvaluation } from './monitor-prompt.js';
 import { resolveMetric } from '../eval/rag/metric-registry.js';
 import { netFetch } from '../net/proxy.js';
 import { prefetchEnvironmentSecrets } from '../vars/external-secrets.js';
+import { quietProblem, quietText, quietUntil, type QuietWindow } from './monitor-quiet.js';
 
 /**
  * Monitors: a collection (or some of its folders / requests) run on a schedule, like Postman monitors.
@@ -74,6 +75,8 @@ interface MonitorData {
    * ("0 9 * * 1-5": 09:00 on weekdays). A run missed while nothing ran the schedule runs once when it starts again.
    */
   cron?: string;
+  /** A maintenance window that comes back (monitor-quiet.ts): no scheduled run inside it. */
+  quiet?: QuietWindow;
   enabled: boolean;
   /** Paused for a while (a deploy, a maintenance window): no run until this time (ISO), then the schedule goes on by itself. */
   pausedUntil?: string;
@@ -301,6 +304,10 @@ export function findMonitor(store: WorkspaceStore, ref: string): Monitor {
 /** Check a monitor definition against the workspace (collection, selection, environment, interval). */
 export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> & MonitorData): void {
   if (!m.name?.trim()) throw invalid('A monitor needs a name');
+  if (m.quiet !== undefined) {
+    const problem = quietProblem(m.quiet);
+    if (problem) throw invalid(problem);
+  }
   if (m.cron !== undefined) {
     const problem = cronProblem(m.cron);
     if (problem) throw invalid(`The schedule "${m.cron}": ${problem}`);
@@ -530,18 +537,21 @@ export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Dat
   return ran + m.everyMinutes * 60_000;
 }
 
-/** How often a monitor runs, in words: "every 15 minutes", "at 09:00 on weekdays". */
-export function monitorScheduleText(m: Pick<Monitor, 'everyMinutes' | 'cron'>): string {
-  if (!m.cron) return formatEvery(m.everyMinutes);
-  try {
-    return describeCron(m.cron);
-  } catch {
-    return `on the schedule "${m.cron}" (cannot be read)`;
-  }
+/** How often a monitor runs, in words: "every 15 minutes", "at 09:00 on weekdays", and its maintenance window. */
+export function monitorScheduleText(m: Pick<Monitor, 'everyMinutes' | 'cron' | 'quiet'>): string {
+  let when: string;
+  if (!m.cron) when = formatEvery(m.everyMinutes);
+  else
+    try {
+      when = describeCron(m.cron);
+    } catch {
+      when = `on the schedule "${m.cron}" (cannot be read)`;
+    }
+  return m.quiet ? `${when} · ${quietText(m.quiet)}` : when;
 }
 
 export function isDue(m: Monitor, last: MonitorResult | undefined, now = Date.now()): boolean {
-  return m.enabled && !pausedFor(m, now) && nextRunAt(m, last, now) <= now;
+  return m.enabled && !pausedFor(m, now) && quietUntil(m.quiet, now) === undefined && nextRunAt(m, last, now) <= now;
 }
 
 /** Whether a timed pause is still on (an expired one is over: the schedule went on by itself). */
@@ -614,12 +624,14 @@ export function resumeMonitor(store: WorkspaceStore, id: string): Monitor {
 /** A monitor with its schedule text, last result and next run (what list commands and MCP show). */
 export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now()) {
   const last = lastMonitorResult(store, m.id);
+  const quiet = quietUntil(m.quiet, now);
   return {
     ...m,
-    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : monitorScheduleText(m),
+    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : quiet !== undefined ? `in its maintenance window until ${new Date(quiet).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}${m.quiet!.reason ? ` (${m.quiet!.reason})` : ''}` : monitorScheduleText(m),
     paused: !m.enabled || pausedFor(m, now),
+    ...(quiet !== undefined ? { quietUntil: new Date(quiet).toISOString() } : {}),
     lastResult: last,
-    nextRunAt: m.enabled ? new Date(Math.max(nextRunAt(m, last, now), pausedFor(m, now) ? Date.parse(m.pausedUntil!) : now, now)).toISOString() : undefined,
+    nextRunAt: m.enabled ? new Date(Math.max(nextRunAt(m, last, now), pausedFor(m, now) ? Date.parse(m.pausedUntil!) : now, quiet ?? now, now)).toISOString() : undefined,
     due: isDue(m, last, now),
   };
 }

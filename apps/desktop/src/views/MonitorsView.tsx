@@ -64,6 +64,8 @@ interface MonitorDraft {
   everyMinutes: number;
   /** At set times instead: a cron schedule in this computer's local time ("0 9 * * 1-5"). */
   cron?: string;
+  /** A maintenance window that comes back: no scheduled run starts inside it. */
+  quiet?: { cron: string; minutes: number; reason?: string };
   enabled: boolean;
   iterations?: number;
   bail?: boolean;
@@ -730,7 +732,7 @@ function CronPreview({ text }: { text: string }) {
 
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'cron', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'cron', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays', 'quiet'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
@@ -829,6 +831,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
     setError(undefined);
     if (!d.name.trim()) return setError('Give the monitor a name.');
     if (unit === 'cron' && cronProblem(cronText)) return setError(`The schedule: ${cronProblem(cronText)}`);
+    if (d.quiet && cronProblem(d.quiet.cron)) return setError(`The maintenance window: ${cronProblem(d.quiet.cron)}`);
     if (unit !== 'cron' && !(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
     if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
     if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
@@ -1061,6 +1064,24 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
         </Field>
         <Field label="Alert after" hint="Failures in a row before the alert is posted (1: at the first failure). A single blip stays quiet; the recovery is posted only after an alert.">
           <Input type="number" min={1} max={10} className="w-24" aria-label="Alert after this many failures in a row" value={d.alertAfter ?? 1} onChange={(e) => setD({ ...d, alertAfter: Math.min(10, Math.max(1, Number(e.target.value) || 1)) })} data-monitor-alert-after />
+        </Field>
+        <Field
+          label="Maintenance window"
+          hint="A time that comes back (a deploy, a backup) when no scheduled run starts, so nothing pages anyone: when it starts (cron, this computer's time) and how long it lasts. Run now still works."
+        >
+          <div className="flex flex-wrap items-center gap-2" data-monitor-quiet>
+            <Toggle checked={!!d.quiet} onChange={(on) => setD({ ...d, quiet: on ? { cron: '0 2 * * 0', minutes: 120 } : undefined })} title="A maintenance window" />
+            {d.quiet && (
+              <>
+                <Input className="mono w-36" value={d.quiet.cron} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, cron: e.target.value } })} aria-label="When the window starts (cron)" />
+                <span className="text-muted text-xs">for</span>
+                <Input type="number" min={1} max={1440} className="w-20" value={d.quiet.minutes} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, minutes: Math.min(1440, Math.max(1, Math.round(Number(e.target.value) || 1))) } })} aria-label="Minutes the window lasts" />
+                <span className="text-muted text-xs">minutes</span>
+                <Input className="w-32" placeholder="why (optional)" value={d.quiet.reason ?? ''} onChange={(e) => setD({ ...d, quiet: { ...d.quiet!, reason: e.target.value || undefined } })} aria-label="Why the window is there" />
+              </>
+            )}
+          </div>
+          {d.quiet && <CronPreview text={d.quiet.cron} />}
         </Field>
       </div>
     </ModalOrPanel>

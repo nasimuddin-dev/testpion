@@ -122,6 +122,10 @@ export function registerMonitorCommands(program: Command): void {
     .option('-n, --iteration-count <n>', 'iterations per run')
     .option('--bail', 'stop a run at the first failure')
     .option('--webhook <url>', 'POST an alert here when the monitor starts failing or recovers (Slack / Teams / Discord webhook or any URL; {{variables}} work)')
+    .option('--maintenance <cron>', 'a maintenance window that comes back, when no scheduled run starts (cron in local time: "0 2 * * 0" is Sundays at 02:00); with --maintenance-for')
+    .option('--maintenance-for <duration>', 'how long the window lasts: 30m, 2h (at most 24h)')
+    .option('--maintenance-reason <text>', 'why (shown while it lasts)')
+    .option('--no-maintenance', 'remove the maintenance window')
     .option('--alert-after <n>', 'post the alert only at this many failures in a row (default 1: at the first); a blip stays quiet')
     .option('--max-p95 <ms>', 'fail a run whose p95 response time is over this many milliseconds (even when its checks pass)')
     .option('--min-cert-days <days>', 'fail a run when the TLS certificate of a host it calls expires within this many days')
@@ -149,6 +153,8 @@ export function registerMonitorCommands(program: Command): void {
           alertAfter: o.alertAfter !== undefined ? Number(o.alertAfter) : existing?.alertAfter,
           maxP95Ms: o.maxP95 !== undefined ? Number(o.maxP95) : existing?.maxP95Ms,
           minCertDays: o.minCertDays !== undefined ? Number(o.minCertDays) : existing?.minCertDays,
+          // a maintenance window: given, removed (--no-maintenance), or kept as it was
+          quiet: typeof o.maintenance === 'string' ? { cron: o.maintenance, minutes: parsePauseFor(o.maintenanceFor ?? '60m'), ...(o.maintenanceReason ? { reason: String(o.maintenanceReason) } : {}) } : o.maintenance === false ? undefined : existing?.quiet,
           // a production environment: data changes on its schedule only with --allow-production (kept while the environment is)
           // (for --env-group: each production environment of the group, by id)
           ...monitorConsent(store, { environment: o.environment, environmentGroup: o.envGroup ? String(o.envGroup) : o.environment ? undefined : existing?.environmentGroup }, existing, o.allowProduction === true),
