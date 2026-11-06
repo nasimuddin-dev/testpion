@@ -333,7 +333,8 @@ export function EnvironmentsView() {
                         : undefined
                     }
                     // dragged onto another row it moves there (the order is the one every environment picker uses); Alt+↑/↓ too
-                    drag={[{ kind: 'environment', environmentId: e.id }]}
+                    // a shared environment keeps its folder's order: it is not dragged
+                    drag={e.shared ? undefined : [{ kind: 'environment', environmentId: e.id }]}
                     onDragStart={() => setDragId(e.id)}
                     onDragEnd={() => (setDragId(undefined), setDropAt(undefined))}
                     drop={{
@@ -350,7 +351,7 @@ export function EnvironmentsView() {
                       over: dropAt === i ? 'before' : undefined,
                     }}
                     onKeyDown={(ev) => {
-                      if (!ev.altKey || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
+                      if (e.shared || !ev.altKey || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
                       ev.preventDefault();
                       void move(e.id, ev.key === 'ArrowUp' ? i - 1 : i + 1);
                     }}
