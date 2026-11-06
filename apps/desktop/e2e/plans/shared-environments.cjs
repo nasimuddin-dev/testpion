@@ -28,12 +28,12 @@ const steps = [
     'listed-with-a-badge-and-read-only',
     `(async () => {
       await __t.view('Environments'); await __t.sleep(900);
-      const badge = await __t.waitFor(() => [...document.querySelectorAll('[data-env-shared]')].find((b) => b.offsetParent), 8000); if (!badge) return 'NO SHARED BADGE';
+      const badge = await __t.waitFor(() => [...document.querySelectorAll('[data-shared]')].find((b) => b.offsetParent), 8000); if (!badge) return 'NO SHARED BADGE';
       const row = badge.closest('[data-tree-row]') ?? badge.parentElement; await __t.real.click(row); await __t.sleep(900);
-      const note = await __t.waitFor(() => document.querySelector('[data-env-shared-note]'), 5000);
+      const note = await __t.waitFor(() => document.querySelector('[data-shared-note]'), 5000);
       const save = [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Save');
       const after = await window.aps.invoke('ws.shareRemove', { path: '../platform-shared' });
-      return 'badge: ' + badge.getAttribute('data-env-shared') + ' | note: ' + !!note + ' | save keeps secrets only: ' + /Save keeps the secret values you typed/.test(save?.title || '') + ' | removed: ' + (after.shared.length === 0);
+      return 'badge: ' + badge.getAttribute('data-shared') + ' | note: ' + !!note + ' | save keeps secrets only: ' + /Save keeps the secret values you typed/.test(save?.title || '') + ' | removed: ' + (after.shared.length === 0);
     })()`,
   ],
 ];

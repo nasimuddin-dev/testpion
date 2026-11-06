@@ -28,13 +28,13 @@ const steps = [
     'listed-shared-and-opened-read-only',
     `(async () => {
       await __t.view('Collections'); await __t.sleep(900);
-      const mark = await __t.waitFor(() => [...document.querySelectorAll('[data-spec-shared]')].find((b) => b.offsetParent), 8000);
+      const mark = await __t.waitFor(() => [...document.querySelectorAll('[data-shared]')].find((b) => b.offsetParent), 8000);
       if (!mark) { await window.aps.invoke('ws.shareRemove', { path: '../platform-specs' }); return 'NO SHARED ROW'; }
       const row = mark.closest('[data-tree-row]') ?? mark.parentElement; row.scrollIntoView({ block: 'center' }); await __t.sleep(300); await __t.real.click(row);
-      const note = await __t.waitFor(() => document.querySelector('[data-spec-shared-note]'), 6000);
+      const note = await __t.waitFor(() => document.querySelector('[data-shared-note]'), 6000);
       const save = [...document.querySelectorAll('main button')].find((b) => b.offsetParent && b.textContent.trim() === 'Save');
       const after = await window.aps.invoke('ws.shareRemove', { path: '../platform-specs' });
-      return 'row: ' + mark.getAttribute('data-spec-shared') + ' | note: ' + !!note + ' | save: ' + (save?.disabled ? 'disabled' : 'ENABLED') + ' | removed: ' + (after.specs.length === 0);
+      return 'row: ' + mark.getAttribute('data-shared') + ' | note: ' + !!note + ' | save: ' + (save?.disabled ? 'disabled' : 'ENABLED') + ' | removed: ' + (after.specs.length === 0);
     })()`,
   ],
 ];

@@ -1,6 +1,6 @@
 import { startAi } from './ai/AiAction';
 import { startFlowGenerate, startTidyImport } from './ai/flow-generate';
-import { Download, FilePlus2, FolderInput, Play, Trash2, Undo2 } from 'lucide-react';
+import { Download, FilePlus2, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import { call, on } from '../api';
@@ -798,15 +798,14 @@ export const CollectionTree = memo(function CollectionTree({
           where={pickedCollection.name}
           onClear={() => setPicked(undefined)}
           actions={[
-            { label: LABEL.run, icon: <Play size={12} />, onClick: runPicked, title: 'Run them in the order the tree shows, in the active environment' },
-            { label: LABEL.moveTo, icon: <FolderInput size={12} />, onClick: () => setMovingPicked(true) },
+            { label: LABEL.run, onClick: runPicked, title: 'Run them in the order the tree shows, in the active environment' },
+            { label: LABEL.moveTo, onClick: () => setMovingPicked(true) },
             {
               label: LABEL.export,
-              icon: <Download size={12} />,
               title: 'One file with just these requests (and what they use, if you choose)',
               onClick: () => openExportBundle({ selection: pickedIds.map((id) => ({ kind: 'request' as const, collectionId: pickedCollection.id, requestId: id })), title: `${plural(pickedIds.length, 'request')} of ${pickedCollection.name}` }),
             },
-            { label: LABEL.delete, icon: <Trash2 size={12} />, onClick: () => void deletePicked() },
+            { label: LABEL.delete, danger: true, onClick: () => void deletePicked() },
           ]}
         />
       )}

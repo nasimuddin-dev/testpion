@@ -21,7 +21,7 @@ import { ApiPreviewPanel, type ApiOutline } from '../components/ApiPreviewPanel'
 import { ApiFuzzPanel } from '../components/ApiFuzzPanel';
 import { AsyncPreviewPanel, type AsyncOutline } from '../components/AsyncPreviewPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
-import { Badge, Button, Callout, Empty, Tabs, useDebounced } from '../components/ui';
+import { Badge, Button, Empty, SharedNote, Tabs, useDebounced } from '../components/ui';
 import { plural } from '../lib/format';
 
 type Tab = 'definition' | 'preview' | 'lint' | 'fuzz' | 'coverage' | 'compare';
@@ -232,9 +232,9 @@ export function ApiDefinitionView() {
         ]}
       />
       {shared && (
-        <Callout className="m-2" data-spec-shared-note="">
-          Shared from {shared} (another workspace&apos;s folder, named in workspace.json): it is read here, for contract checks, coverage and tests, and changed in that workspace.
-        </Callout>
+        <SharedNote className="m-2" from={shared}>
+          Contract checks, coverage and tests read it as one of this workspace&apos;s.
+        </SharedNote>
       )}
       <div className="flex-1 min-h-0">
         {tab === 'definition' ? (

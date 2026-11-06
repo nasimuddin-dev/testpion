@@ -1,5 +1,5 @@
 import { Check, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MENTION, type ItemRef } from '@testpion/shared';
 import { call, on } from '../api';
 import { useSticky } from '../lib/sticky';
@@ -7,6 +7,7 @@ import { timeAgo } from '../lib/format';
 import { toastError } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import { Button, EmptyNote, IconButton, SectionTitle, Textarea, cx } from './ui';
+import { SuggestList, suggestKey } from './SuggestInput';
 
 type Comment = { id: string; by: string; at: string; text: string; resolvedAt?: string; resolvedBy?: string };
 
@@ -33,6 +34,12 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
   const typing = /(?:^|[\s(,;:])@([\p{L}\p{N}_./-]*)$/u.exec(text.slice(0, caret))?.[1];
   const suggestions =
     typing === undefined ? [] : people.filter((p) => !typing || p.handle.toLowerCase().includes(typing.toLowerCase()) || p.label.toLowerCase().includes(typing.toLowerCase())).slice(0, 6);
+  // the list of them under the box: its active row, closed by Esc where the caret is (typing on opens it again)
+  const listId = useId();
+  const [active, setActive] = useState(0);
+  const [closedAt, setClosedAt] = useState<number>();
+  const listed = suggestions.length > 0 && closedAt !== caret;
+  useEffect(() => setActive(0), [typing]);
   /** Put `@handle ` in place of the @word being typed, and the caret after it. */
   const mention = (handle: string) => {
     const before = text.slice(0, caret).replace(/@[\p{L}\p{N}_./-]*$/u, `@${handle} `);
@@ -123,34 +130,33 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           maxRows={8}
           placeholder="Ask or note something for your team…"
           aria-label="New comment"
+          role="combobox"
+          aria-expanded={listed}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={listed ? `${listId}-${Math.min(active, suggestions.length - 1)}` : undefined}
           onKeyDown={(e) => {
-            // Tab takes the first suggestion of the @word being typed
-            // (a bare @ leaves Tab to move on: only a started name takes it)
-            if (e.key === 'Tab' && !e.shiftKey && typing && suggestions.length) return void (e.preventDefault(), mention(suggestions[0]!.handle));
+            // the suggestions of the @word being typed, as every list of suggestions (↑ ↓, Enter or Tab, Esc); a bare @
+            // leaves the keys alone: only a started name opens the list
+            if (listed && suggestKey(e, { count: suggestions.length, index: active, setIndex: setActive, take: (i) => mention(suggestions[i]!.handle), close: () => setClosedAt(caret) })) return;
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim() && !busy) void add();
           }}
           data-comment-text
         />
-        {suggestions.length > 0 && (
-          <div className="flex flex-wrap gap-1" role="listbox" aria-label="Mention" data-mention-suggestions={suggestions.length}>
-            {suggestions.map((s) => (
-              <button
-                key={s.handle}
-                type="button"
-                role="option"
-                aria-selected={false}
-                className="rounded border border-line px-1.5 py-0.5 text-xs hover:bg-hover"
-                title={s.kind === 'team' ? 'A team of CODEOWNERS' : 'Someone of the repository’s history (Tab takes the first)'}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => mention(s.handle)}
-              >
-                {s.kind === 'team' ? s.label : `@${s.handle} · ${s.label}`}
-              </button>
-            ))}
+        {listed && (
+          <div className="relative" data-mention-suggestions={suggestions.length}>
+            <SuggestList
+              id={listId}
+              label="Mention"
+              rows={suggestions.map((s) => ({ key: s.handle, content: s.kind === 'team' ? s.label : `@${s.handle} · ${s.label}`, title: s.kind === 'team' ? 'A team of CODEOWNERS' : 'Someone of the repository’s history' }))}
+              index={active}
+              setIndex={setActive}
+              take={(i) => mention(suggestions[i]!.handle)}
+            />
           </div>
         )}
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="primary" disabled={busy || !text.trim()} title={text.trim() ? 'Add the comment (Ctrl+Enter)' : 'Type the comment first'} onClick={() => void add()} data-comment-add>
+          <Button size="sm" variant="primary" disabled={busy || !text.trim()} reason={busy ? 'Wait for the last change to save' : 'Type the comment first'} title="Add the comment (Ctrl+Enter)" onClick={() => void add()} data-comment-add>
             Add comment
           </Button>
         </div>

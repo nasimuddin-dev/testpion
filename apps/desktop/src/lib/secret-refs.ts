@@ -1,5 +1,6 @@
 import { call, on } from '../api';
 import { confirmAction, useApp, attempt } from '../store';
+import { LABEL } from './vocabulary';
 
 interface Blocked {
   ref: string;
@@ -19,7 +20,7 @@ export async function allowSecretRefs(environment: string, refs: Blocked[]): Pro
     title: `Read secrets from ${tools}?`,
     message: `${environment} keeps ${refs.length === 1 ? 'a secret' : `${refs.length} secrets`} in ${tools}. Reading ${refs.length === 1 ? 'it runs this command' : 'them runs these commands'} on this computer, signed in as you:`,
     detail: refs.map((r) => r.commandLine).join('\n'),
-    confirmLabel: 'Allow on this computer',
+    confirmLabel: LABEL.allowHere,
   });
   if (!ok) return false;
   await attempt(async () => {
@@ -63,7 +64,7 @@ async function allowScript(b: { kind: 'host'; host: string } | { kind: 'secrets'
       : await confirmAction({
           title: 'Let scripts read secrets?',
           message: `Scripts in this workspace read secret variables (${b.keys.slice(0, 5).join(', ')}${b.keys.length > 5 ? ', …' : ''}). Until you allow it, scripts do not see the values; requests still use them. Allow it only if you know where this workspace comes from.`,
-          confirmLabel: 'Allow on this computer',
+          confirmLabel: LABEL.allowHere,
         });
   if (!ok) return;
   await attempt(async () => {

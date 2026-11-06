@@ -2,8 +2,9 @@ import { FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { asError, call } from '../api';
 import { hasNativeDialogs } from '../lib/files';
-import { attempt } from '../store';
-import { Button, Callout, Field, IconButton, Input, Modal } from './ui';
+import { LABEL } from '../lib/vocabulary';
+import { attempt, useApp } from '../store';
+import { Button, Callout, EmptyNote, Field, IconButton, Input, Modal } from './ui';
 
 /** What the workspace reads from other workspaces' folders (workspace.json `shared`), and the environments and API definitions they give. */
 export interface SharedSources {
@@ -36,13 +37,23 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
       setError(asError(e).message);
     }
   };
-  const remove = (p: string) =>
+  // at once, with Undo (the entry comes back as it was, with its kinds)
+  const remove = (s: { path: string; kinds: string[] }) =>
     void attempt(async () => {
-      setState(await call<SharedSources>('ws.shareRemove', { path: p }));
+      setState(await call<SharedSources>('ws.shareRemove', { path: s.path }));
       onChanged();
+      useApp.getState().toast(`Stopped reading from ${s.path}`, 'info', {
+        label: 'Undo',
+        onClick: () =>
+          void attempt(async () => {
+            const back = await call<SharedSources | undefined>('ws.shareAdd', { path: s.path, kinds: s.kinds });
+            if (back) setState(back);
+            onChanged();
+          }),
+      });
     });
   return (
-    <Modal title="Shared from another workspace" onClose={onClose} width={560} footer={<Button onClick={onClose}>Close</Button>}>
+    <Modal title={LABEL.sharedFromWorkspace.replace(/…$/, '')} onClose={onClose} width={560} footer={<Button onClick={onClose}>Close</Button>}>
       <div className="grid gap-3 text-sm" data-shared-sources="">
         <p className="text-muted">
           A team with a repository of its own can use the environments and API definitions another workspace keeps (a sibling checkout or a git submodule), without copying them.
@@ -61,7 +72,7 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
                   <span className="text-muted text-xs truncate flex-1" title={gives.join(', ')}>
                     {gives.length ? gives.join(', ') : 'nothing yet'}
                   </span>
-                  <IconButton size="md" label={`Stop reading from ${s.path}`} onClick={() => remove(s.path)}>
+                  <IconButton label={`Stop reading from ${s.path}`} onClick={() => remove(s)}>
                     <Trash2 />
                   </IconButton>
                 </div>
@@ -69,7 +80,7 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
             })}
           </div>
         ) : (
-          state && <p className="text-muted">Nothing is shared into this workspace yet.</p>
+          state && <EmptyNote>Nothing is shared into this workspace yet.</EmptyNote>
         )}
         <Field label="Another workspace's folder" hint="Relative to this workspace, e.g. ../platform-shared">
           <div className="flex gap-2">
@@ -79,7 +90,7 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
                 Browse…
               </Button>
             )}
-            <Button variant="primary" icon={<Plus size={13} />} disabled={!path.trim()} title={path.trim() ? undefined : 'Type the folder first, or Browse…'} onClick={() => void add(path)}>
+            <Button variant="primary" icon={<Plus size={13} />} disabled={!path.trim()} reason="Type the folder first, or Browse…\" onClick={() => void add(path)}>
               Add
             </Button>
           </div>

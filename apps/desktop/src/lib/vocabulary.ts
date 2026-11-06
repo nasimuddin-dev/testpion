@@ -6,6 +6,10 @@ import { DEFAULT_FOLDER } from '@testpion/shared';
  * these labels only.
  */
 export const LABEL = {
+  /** The one dialog of what a workspace reads from another workspace's folder (environments, API definitions), from every section that has some. */
+  sharedFromWorkspace: 'Shared from another workspace…',
+  /** Trust what came with a pull or a clone (a monitor's schedule, Debugger rules, a secret reference) on this computer. */
+  allowHere: 'Allow on this computer',
   /** The one name of the reverse proxy that captures the traffic of one API (menus, the palette, the dialog's title is the same without the …). */
   captureReverseProxy: 'Capture traffic for one API…',
   /** The Debugger's one way to start: the proxy, the system proxy and HTTPS in one click. */

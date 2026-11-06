@@ -8,6 +8,7 @@ import { ChevronDown, CircleHelp, Loader2, MoreHorizontal, Search, X } from 'luc
 import { iconForLabel, textOf } from './action-icons';
 import { TabOverflow } from './TabOverflow';
 import { cx } from '../lib/cx';
+import { LABEL } from '../lib/vocabulary';
 import { focusTab, tabKeyTarget } from '../lib/tablist-keys';
 import { openDocs } from '../lib/docs-link';
 import { Menu, type MenuItem } from './Menu';
@@ -548,6 +549,56 @@ const CALLOUT_TONE = { accent: 'border-accent/40 bg-accent/5', warn: 'border-war
  * resolve, the safeguards of a load test). One look everywhere. A block lays out as `rounded-md p-3 text-sm grid gap-2`;
  * `className` replaces that layout when a place needs another spacing or radius.
  */
+/**
+ * The one notice of something that came with a pull or a clone (a monitor's schedule, Debugger rules) and waits to be
+ * allowed on this computer: what it is and what to check (`children`), and the button, busy while `onAllow` runs.
+ */
+export function ApprovalNotice({ onAllow, children, ...data }: { onAllow(): Promise<unknown> | void; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
+  const [busy, setBusy] = useState(false);
+  const allow = async () => {
+    setBusy(true);
+    try {
+      await onAllow();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Callout
+      tone="warn"
+      {...data}
+      action={
+        <Button size="sm" loading={busy} onClick={() => void allow()}>
+          {LABEL.allowHere}
+        </Button>
+      }
+    >
+      {children}
+    </Callout>
+  );
+}
+
+/**
+ * The one mark of an item another workspace's folder gives (workspace.json `shared`): read here, changed there. Every list
+ * shows it the same way (environments, API definitions).
+ */
+export function SharedBadge({ from }: { from: string }) {
+  return (
+    <Badge title={`Shared from ${from}: read here, changed there`} data-shared={from}>
+      shared
+    </Badge>
+  );
+}
+
+/** The note on an item another workspace's folder gives, in its editor: where it is changed; `children` says what is kept here. */
+export function SharedNote({ from, children, className }: { from: string; children?: ReactNode; className?: string }) {
+  return (
+    <Callout className={className} data-shared-note={from}>
+      Shared from {from} (another workspace&apos;s folder, named in workspace.json): it is read here and changed there.{children ? <> {children}</> : null}
+    </Callout>
+  );
+}
+
 export function Callout({
   tone = 'accent',
   block,

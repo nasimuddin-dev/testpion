@@ -785,7 +785,7 @@ export function TestsView() {
                         count={picked.ids.length}
                         noun="test file"
                         onClear={() => setPicked(undefined)}
-                        actions={[{ label: LABEL.run, icon: <Play size={12} />, title: 'Run them as one run, in the active environment', onClick: () => void run(picked.ids, plural(picked.ids.length, 'test file')) }]}
+                        actions={[{ label: LABEL.run, title: 'Run them as one run, in the active environment', onClick: () => void run(picked.ids, plural(picked.ids.length, 'test file')) }]}
                       />
                     </div>
                   )}

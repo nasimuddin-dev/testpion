@@ -19,7 +19,8 @@ import { KeyValueEditor } from '../components/KeyValueEditor';
 import { EnvCompare } from '../components/EnvCompare';
 import { EnvMatrix } from '../components/EnvMatrix';
 import { TrashDialog } from '../components/TrashDialog';
-import { Badge, Button, Callout, cx, Empty, Field, Input, LinkButton, Menu, MoreMenu, Split, Tabs, Toggle, EmptyNote } from '../components/ui';
+import { Badge, Button, Callout, cx, Empty, Field, Input, LinkButton, Menu, MoreMenu, Split, Tabs, Toggle, EmptyNote, SharedBadge, SharedNote } from '../components/ui';
+import { LABEL } from '../lib/vocabulary';
 import type { NodeMenuCtx } from '../lib/node-menu';
 import { CountPill, focusRow, treeKeys, withRefDefaults } from '../components/TreeParts';
 import { buildNodeMenu } from '../lib/node-menu';
@@ -299,7 +300,7 @@ export function EnvironmentsView() {
                   create: [
                     { label: 'New environment', icon: <Plus size={14} />, onSelect: () => void newEnvironment() },
                     // the environments another workspace keeps (a sibling checkout or a submodule), read-only
-                    { label: 'Environments from another workspace…', icon: <FolderInput size={14} />, onSelect: () => setSharing(true) },
+                    { label: LABEL.sharedFromWorkspace, icon: <FolderInput size={14} />, onSelect: () => setSharing(true) },
                   ],
                   on: { recentlyDeleted: () => setTrashOpen(true) },
                 })}
@@ -363,11 +364,7 @@ export function EnvironmentsView() {
                       {String(e.name)}
                     </span>
                     {e.isProduction && <Badge tone="bad">prod</Badge>}
-                    {e.shared && (
-                      <Badge title={`Shared from ${e.shared}: read here, changed there`} data-env-shared={e.shared}>
-                        shared
-                      </Badge>
-                    )}
+                    {e.shared && <SharedBadge from={e.shared} />}
                     {e.problem ? (
                       <span className="ml-auto text-warn" title={`This environment's file cannot be read: ${e.problem}`}>
                         <TriangleAlert size={13} aria-label="Cannot be read" />
@@ -473,9 +470,9 @@ export function EnvironmentsView() {
                   </div>
                 </div>
                 {draft.shared && !draft.problem && (
-                  <Callout data-env-shared-note="">
-                    Shared from {draft.shared} (another workspace's folder, named in workspace.json): it is read here and changed there. Its secret values are this computer's: type them below and Save keeps them (nothing else). Duplicate makes a copy of this workspace's own to change.
-                  </Callout>
+                  <SharedNote from={draft.shared}>
+                    Its secret values are this computer&apos;s: type them below and Save keeps them (nothing else). Duplicate makes a copy of this workspace&apos;s own to change.
+                  </SharedNote>
                 )}
                 {draft.problem && (
                   <Callout tone="warn">

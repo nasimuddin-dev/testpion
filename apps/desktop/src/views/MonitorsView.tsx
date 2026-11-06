@@ -26,7 +26,7 @@ import { formatCost, formatMs, timeAgo, plural } from '../lib/format';
 import { RagMonitorFields } from '../components/rag/RagMonitorFields';
 import { EvalCostLine } from '../components/ai/EvalCostLine';
 import { useEvalEstimate, type CostDraft } from '../lib/eval-estimate';
-import { Badge, Button, Callout, cx, Empty, Field, Input, Menu, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
+import { ApprovalNotice, Badge, Button, cx, Empty, Field, Input, Menu, type MenuItem, Metric, MetricGrid, ModalOrPanel, NamedOptions, PageHeader, SectionTitle, Select, Split, StatusDot, Toggle, Tooltip } from '../components/ui';
 import { NoOpenItems } from '../components/LibraryTabStrip';
 import { useCollectionTree } from '../lib/collections-store';
 import { useLibrary } from '../lib/library';
@@ -501,7 +501,7 @@ export function MonitorsView() {
             onEdit={() => setEditing(current)}
             onToggle={() => void toggle(current)}
             onPause={(minutes) => void pauseFor(current, minutes)}
-            onApprove={() => void attempt(async () => void (await call('monitor.approve', { id: current.id }))).then(load)}
+            onApprove={() => attempt(async () => void (await call('monitor.approve', { id: current.id }))).then(load)}
             menu={monitorMenu(current)}
           />
         ) : (
@@ -552,7 +552,7 @@ function MonitorDetail(p: {
   /** Pause for a while (minutes, or until tomorrow 09:00), with why. */
   onPause(minutes: number | 'tomorrow'): void;
   /** "Allow on this computer": its schedule runs here from now on. */
-  onApprove(): void;
+  onApprove(): Promise<unknown> | void;
   /** The monitor's ⋯ (lib/node-menu.ts builds it): rename, duplicate, Delete… with Undo, as its row in the list. */
   menu: MenuItem[];
 }) {
@@ -642,9 +642,9 @@ function MonitorDetail(p: {
         }
       />
       {m.needsApproval && (
-        <Callout tone="warn" data-monitor-needs-approval="" action={<Button size="sm" onClick={p.onApprove}>Allow on this computer</Button>}>
+        <ApprovalNotice data-monitor-needs-approval="" onAllow={p.onApprove}>
           {NEEDS_APPROVAL}. Check what it runs, where and how often first. Run now works without it.
-        </Callout>
+        </ApprovalNotice>
       )}
 
       <MetricGrid compact>

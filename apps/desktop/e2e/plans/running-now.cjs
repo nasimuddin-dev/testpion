@@ -12,7 +12,7 @@ const steps = [
       window.__runningCol = col.name;
       const seg = document.querySelector('[data-running]'); if (!seg) return 'NO SEGMENT';
       seg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })); seg.click();
-      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Mock server of /.test(m.textContent.trim())), 5000);
+      const item = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => /^Stop: Mock server of /.test(m.textContent.trim())), 5000);
       // an open menu renders its button anew (closed, it is only the button): look the segment up each time
       const segNow = () => document.querySelector('[data-running]')?.textContent.trim() ?? '';
       const says = await __t.waitFor(() => (/1 more running/.test(segNow()) ? segNow() : null), 3000);

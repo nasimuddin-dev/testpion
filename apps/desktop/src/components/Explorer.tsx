@@ -18,7 +18,7 @@ import { ExportDialog } from './ExportDialog';
 import { SIDEBAR_TRASH_KINDS, TrashDialog } from './TrashDialog';
 import { fullCollection, refreshCollections, useCollectionTree } from '../lib/collections-store';
 import { ImportModal } from '../views/rest/dialogs';
-import { Bar, FilterInput, IconButton, Menu } from './ui';
+import { Bar, FilterInput, IconButton, Menu, SharedBadge } from './ui';
 import { ExpandCollapseToggle } from './ExpandCollapseToggle';
 import { focusRow, KIND_COLOR, TreeBadge, treeKeys } from './TreeParts';
 import { usePersisted } from '../lib/sticky';
@@ -729,7 +729,7 @@ export function Explorer() {
             create: [
               { label: 'Import an OpenAPI document', icon: <Upload size={14} />, onSelect: importDefinition },
               // read-only, from a sibling checkout or a submodule: listed here, changed there
-              { label: 'API definitions from another workspace…', icon: <FolderInput size={14} />, onSelect: () => setSharing(true) },
+              { label: LABEL.sharedFromWorkspace, icon: <FolderInput size={14} />, onSelect: () => setSharing(true) },
             ],
             on: { newFolder: () => void newFolderIn(specOps), openApiDefinitions: () => intent('apidef', {}), ...sectionTree('specs', specOps, specFolders.items) },
           })}
@@ -751,7 +751,7 @@ export function Explorer() {
                   indent
                   icon={<TreeBadge label="API" className={KIND_COLOR.api} />}
                   label={sharedSpecFrom(s) ? s.replace(/^.*\//, '') : s.replace(/^specs\//, '')}
-                  sub={sharedSpecFrom(s) && <span data-spec-shared={sharedSpecFrom(s)}>shared from {sharedSpecFrom(s)}</span>}
+                  sub={sharedSpecFrom(s) && <SharedBadge from={sharedSpecFrom(s)!} />}
                   activeId={s}
                   onClick={() => void openRef({ kind: 'spec', path: s })}
                   ctx={() => specMenu(s, folder)}
