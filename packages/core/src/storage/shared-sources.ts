@@ -44,8 +44,9 @@ export function sharedDirs(ws: Pick<Workspace, 'shared'>, root: string, kind: Sh
 
 /** The names, sizes and times of the environment files of these folders: the frozen list is read again when it changes. */
 export function environmentFilesSignature(dirs: string[]): string {
+  // (a shared folder removed between the listing of the sources and this: no files)
   const sigOf = (dir: string) =>
-    readdirSync(dir)
+    (existsSync(dir) ? readdirSync(dir) : [])
       .filter((f) => f.endsWith('.json'))
       .sort()
       .map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false })))
@@ -63,7 +64,7 @@ export function withSharedEnvironments(own: Environment[], sources: Array<{ name
   if (!sources.length) return own;
   const ids = new Map(own.map((e) => [e.id, "one of this workspace's"]));
   const shared = sources.flatMap((s) =>
-    read(s.dir)
+    (existsSync(s.dir) ? read(s.dir) : [])
       .sort(byOrder)
       .map((e): Environment => {
         const { order: _order, ...rest } = e;
