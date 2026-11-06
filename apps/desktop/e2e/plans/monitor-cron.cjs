@@ -38,9 +38,26 @@ const steps = [
      await window.aps.invoke('monitor.delete', { id: window.__cronMonitorId });
      return 'value: ' + input.value + ' | first: ' + first.replace(/next: .*/, 'next: …') + ' | wrong: ' + wrong + ' | half: ' + half.replace(/next: .*/, 'next: …') + ' | window: ' + windowSays.replace(/next: .*/, 'next: …');`,
   ),
+  step(
+    'a-time-zone-is-said-and-kept',
+    `const cols = await window.aps.invoke('col.list');
+     const saved = await window.aps.invoke('monitor.save', { monitor: { name: 'Tokyo mornings', collectionId: cols[0].id, everyMinutes: 60, cron: '0 9 * * 1-5', timezone: 'Asia/Tokyo', enabled: true } });
+     await __t.view('Monitors'); await __t.sleep(900);
+     const row = await __t.waitFor(() => [...document.querySelectorAll('aside *, main *')].find((e) => e.children.length === 0 && e.offsetParent && e.textContent.trim() === 'Tokyo mornings'), 8000); if (!row) return 'NO ROW';
+     await __t.real.click(row); await __t.sleep(800);
+     const sched = (await __t.waitFor(() => document.querySelector('[data-monitor-schedule]'), 5000))?.textContent.trim();
+     const edit = [...document.querySelectorAll('button')].find((b) => b.offsetParent && b.textContent.trim() === 'Edit'); if (!edit) return 'NO EDIT';
+     await __t.real.click(edit);
+     const tz = await __t.waitFor(() => document.querySelector('[data-monitor-timezone]'), 5000);
+     const preview = document.querySelector('[data-monitor-cron-preview]')?.textContent.trim() ?? '';
+     await __t.esc(); await __t.sleep(300);
+     await window.aps.invoke('monitor.delete', { id: saved.id });
+     return 'page: ' + sched + ' | field: ' + (tz?.value ?? 'NO FIELD') + ' | preview: ' + preview.replace(/: [A-Z][a-z]{2}, .*/, ': …');`,
+  ),
 ];
 
 module.exports = withExpect(steps, {
+  'a-time-zone-is-said-and-kept': /^page: at 09:00 on weekdays \(Asia\/Tokyo\) \| field: Asia\/Tokyo \| preview: Runs at 09:00 on weekdays in Asia\/Tokyo · next \(your time\): …$/,
   'a-monitor-at-set-times': /^list says: at 09:00 on weekdays \| page says: at 09:00 on weekdays$/,
   'the-editor-reads-the-schedule-as-it-is-typed': /^value: \*\/30 \* \* \* \* \| first: Runs at 09:00 on weekdays · next: … \| wrong: "25" is out of range for the hour \(0–23\) \| half: Runs every 30 minutes · next: … \| window: Runs at 02:00 on Sunday · next: …$/,
 });

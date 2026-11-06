@@ -25,9 +25,25 @@ const steps = [
     })()`,
   ],
   [
+    'duplicate-makes-a-copy-of-your-own',
+    `(async () => {
+      await __t.view('Collections'); await __t.sleep(900);
+      const items = await __t.menu('platform.yaml'); if (/^NO /.test(items)) return items;
+      const dup = [...document.querySelectorAll('[role=menu]:last-of-type [role=menuitem]')].find((m) => m.textContent.trim() === 'Duplicate');
+      const off = ['Rename', 'Delete'].map((l) => [...document.querySelectorAll('[role=menu]:last-of-type [role=menuitem]')].find((m) => m.textContent.trim().startsWith(l))?.getAttribute('aria-disabled') === 'true');
+      dup?.click();
+      const copied = await __t.waitFor(async () => (await window.aps.invoke('openapi.specs', {})).includes('specs/platform.yaml'), 6000);
+      if (copied) await window.aps.invoke('openapi.spec.delete', { path: 'specs/platform.yaml' });
+      await __t.esc();
+      return 'duplicate: ' + !!dup + ' | rename and delete off: ' + off.join(',') + ' | copied: ' + !!copied;
+    })()`,
+  ],
+  [
     'listed-shared-and-opened-read-only',
     `(async () => {
       await __t.view('Collections'); await __t.sleep(900);
+      // (a click on the rail item already shown folds the sidebar: show it again)
+      if (!document.querySelector('[data-explorer-area]')?.offsetParent) { await __t.view('Collections'); await __t.sleep(900); }
       const mark = await __t.waitFor(() => [...document.querySelectorAll('[data-shared]')].find((b) => b.offsetParent), 8000);
       if (!mark) { await window.aps.invoke('ws.shareRemove', { path: '../platform-specs' }); return 'NO SHARED ROW'; }
       const row = mark.closest('[data-tree-row]') ?? mark.parentElement; row.scrollIntoView({ block: 'center' }); await __t.sleep(300); await __t.real.click(row);
@@ -40,6 +56,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
+  'duplicate-makes-a-copy-of-your-own': /^duplicate: true \| rename and delete off: true,true \| copied: true$/,
   'shared-with-the-kinds-it-has': /^kinds: specs \| specs: \.\.\/platform-specs\/specs\/platform\.yaml$/,
   'listed-shared-and-opened-read-only': /^row: platform-specs \| note: true \| save: disabled \| removed: true$/,
 });
