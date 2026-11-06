@@ -23,6 +23,33 @@ export interface FolderListItem {
   subtitle?: ReactNode;
   icon?: ReactNode;
   badge?: ReactNode;
+  /**
+   * Items with the same parent are parts of one thing (a monitor's tenants, one per environment of its group): they are
+   * drawn under one row of it, folded until opened, whose menu is what the parts share (their first one's menu, named
+   * as the parent). The parent's icon and badge sum the parts up.
+   */
+  parent?: { id: string; name: string; icon?: ReactNode; badge?: ReactNode; subtitle?: ReactNode };
+}
+
+/** The items of a folder as drawn: an item alone, or the parts of one parent under its row (in the order first met). */
+type Shown = { it: FolderListItem } | { parent: NonNullable<FolderListItem['parent']>; parts: FolderListItem[] };
+function withParents(items: FolderListItem[]): Shown[] {
+  const out: Shown[] = [];
+  const groups = new Map<string, FolderListItem[]>();
+  for (const it of items) {
+    if (!it.parent) {
+      out.push({ it });
+      continue;
+    }
+    const parts = groups.get(it.parent.id);
+    if (parts) parts.push(it);
+    else {
+      const list = [it];
+      groups.set(it.parent.id, list);
+      out.push({ parent: it.parent, parts: list });
+    }
+  }
+  return out;
 }
 
 /** What a list can do with its items and folders; each view stores them its own way. */
@@ -192,7 +219,39 @@ export function FolderList({
   // what the rows call, through one ref that is always current: the rows are memoized
   const host = useRef<ListHost>(null!);
   host.current = { kind, onSelect, onOpen, itemCtx, refOf, finishRename };
-  const row = (it: FolderListItem) => <FolderListRow key={rowKey.get(it) ?? it.id} it={it} nodeId={treeKey(id, rowKey.get(it) ?? it.id)} active={selected === it.id} renaming={renaming === it.id} host={host} />;
+  const row = (it: FolderListItem, depth = 1) => <FolderListRow key={rowKey.get(it) ?? it.id} it={it} nodeId={treeKey(id, rowKey.get(it) ?? it.id)} active={selected === it.id} renaming={renaming === it.id} depth={depth} host={host} />;
+  /** A parent and its parts: one row (folded until opened, open while filtering or while a part is selected), then the parts. */
+  const parentRows = (p: NonNullable<FolderListItem['parent']>, parts: FolderListItem[]) => {
+    const key = `parent:${p.id}`;
+    const open = !!ql || (opened[key] ?? false) || parts.some((x) => x.id === selected);
+    return (
+      <div key={key} data-list-parent={p.id}>
+        <TreeRowShell
+          kind={kind}
+          nodeId={treeKey(id, 'parent', p.id)}
+          label={p.name}
+          depth={1}
+          tall={!!p.subtitle}
+          expanded={open}
+          onClick={() => setOpened((o) => ({ ...o, [key]: !open }))}
+          ctx={() => ({ ...itemCtx(parts[0]!), name: p.name })}
+          className="pl-9"
+        >
+          <span className="flex-1 min-w-0">
+            <span className="flex items-center gap-2">
+              {open ? OPEN_ICON : CLOSED_ICON}
+              {p.icon && <span className="shrink-0 grid place-items-center w-3.5">{p.icon}</span>}
+              <span className="truncate">{p.name}</span>
+              <CountPill n={parts.length} />
+              {p.badge && <span className="ml-auto shrink-0">{p.badge}</span>}
+            </span>
+            {p.subtitle && <span className="block text-xs text-muted truncate pl-[2.75rem]">{p.subtitle}</span>}
+          </span>
+        </TreeRowShell>
+        {open && <div role="group">{parts.map((x) => row(x, 2))}</div>}
+      </div>
+    );
+  };
 
   const area = useAreaMenu(`section:${kind}` as NodeKind, headerCtx, title);
   return (
@@ -247,7 +306,7 @@ export function FolderList({
                 </TreeRowShell>
                 {open && (
                   <div role="group">
-                    {inFolder.map((it) => row(it))}
+                    {withParents(inFolder).map((s) => ('it' in s ? row(s.it) : parentRows(s.parent, s.parts)))}
                     {!inFolder.length && !ql && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
                   </div>
                 )}
@@ -288,14 +347,14 @@ interface ListHost {
 }
 
 /** One item of the list (a name, with its icon, badge and subtitle). Memoized: only its own props re-render it. */
-const FolderListRow = memo(function FolderListRow({ it, nodeId, active, renaming, host }: { it: FolderListItem; nodeId: string; active: boolean; renaming: boolean; host: RefObject<ListHost> }) {
+const FolderListRow = memo(function FolderListRow({ it, nodeId, active, renaming, depth = 1, host }: { it: FolderListItem; nodeId: string; active: boolean; renaming: boolean; depth?: number; host: RefObject<ListHost> }) {
   const h = () => host.current;
   return (
     <TreeRowShell
       kind={h().kind}
       nodeId={nodeId}
       label={it.name}
-      depth={1}
+      depth={depth}
       tall={!!it.subtitle}
       active={active}
       onClick={() => !renaming && h().onSelect(it.id)}
@@ -305,7 +364,7 @@ const FolderListRow = memo(function FolderListRow({ it, nodeId, active, renaming
       git={h().refOf(it.id)}
       mark={<CommentMark to={h().refOf(it.id)} />}
       rename={renaming ? { value: it.name, done: (name) => h().finishRename(it.id, name) } : undefined}
-      className="pl-9"
+      className={depth > 1 ? 'pl-14' : 'pl-9'}
     >
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-2">

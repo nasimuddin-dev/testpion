@@ -320,6 +320,24 @@ export function MonitorsView() {
       await load();
     });
   };
+  /**
+   * The row of a monitor that runs in every environment of a group: its tenants' rows sit under it. Its dot is the worst
+   * of theirs (running, failing, passing, never run) and it says how many pass.
+   */
+  const tenantsRow = (of: string) => {
+    const parts = rows.filter((x) => x.tenant?.of === of);
+    const failing = parts.filter((x) => x.lastResult && x.lastResult.status !== 'passed').length;
+    const passing = parts.filter((x) => x.lastResult?.status === 'passed').length;
+    const tone = parts.some((x) => x.running) ? 'accent' : failing ? 'bad' : passing ? 'ok' : 'muted';
+    const first = parts[0]!;
+    return {
+      id: of,
+      name: definitionName(first),
+      icon: <StatusDot className="block" tone={tone} pulse={parts.some((x) => x.running)} />,
+      badge: parts.some((x) => x.needsApproval) ? <Badge tone="warn" title={NEEDS_APPROVAL}>waits for you</Badge> : undefined,
+      subtitle: `${targetName(first)}${first.enabled ? ` · ${first.schedule}` : ''} · ${failing ? `${failing} of ${parts.length} failing` : `${passing} of ${parts.length} passing`}`,
+    };
+  };
   const monitorOps: FolderListOps = {
     renameItem: (id, name) => update(id, { name }),
     moveItem: (id, folder) => update(id, { folder }),
@@ -375,8 +393,10 @@ export function MonitorsView() {
                 onAdd={(folder) => setEditing({ ...newDraft(), ...(folder ? { folder } : {}) })}
                 items={rows.map((m) => ({
                   id: m.id,
-                  name: m.name,
+                  // a tenant's row sits under its monitor's row: it is named by its environment there
+                  name: m.tenant ? m.name.slice(definitionName(m).length).replace(/^ · /, '') || m.name : m.name,
                   folder: m.folder,
+                  ...(m.tenant ? { parent: tenantsRow(m.tenant.of) } : {}),
                   icon: <StatusDot className="block" tone={m.running ? 'accent' : !m.lastResult ? 'muted' : m.lastResult.status === 'passed' ? 'ok' : 'bad'} pulse={m.running} />,
                   badge: m.needsApproval ? <Badge tone="warn" title={NEEDS_APPROVAL}>waits for you</Badge> : !m.paused ? <RecentRuns statuses={m.recent ?? []} /> : <Badge title={m.pausedUntil ? m.schedule : undefined}>paused</Badge>,
                   subtitle: `${targetName(m)}${m.enabled ? ` · ${m.schedule}` : ''}${m.uptime7d !== undefined ? ` · ${m.uptime7d}% (7 days)` : ''}${m.lastResult ? ` · ${timeAgo(m.lastResult.startedAt)}` : ''}`,
