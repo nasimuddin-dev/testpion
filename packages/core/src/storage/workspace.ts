@@ -26,6 +26,7 @@ export { migrateWorkspace, type Migration } from './workspace-migrate.js';
 export { SCRIPT_PACKAGE_NAME } from './script-package-name.js';
 import { migrateWorkspace } from './workspace-migrate.js';
 import { SCRIPT_PACKAGE_NAME } from './script-package-name.js';
+import { sharedDirs } from './shared-sources.js';
 
 /* ------------------------------------------------------------------ workspace store */
 
@@ -341,10 +342,14 @@ export class WorkspaceStore {
 
   /** Every environment as listEnvironments answers it, shared and frozen: the files are read again only when one of them changed. */
   environmentList(): readonly Environment[] {
-    const dir = this.path('environments');
-    // the files' names, sizes and times: a list of environments read again only when one of them changed
-    const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
-    const sig = files.map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false }))).join('|');
+    // the files' names, sizes and times (the shared folders' too): a list of environments read again only when one of them changed
+    const sigOf = (dir: string) =>
+      readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false })))
+        .join('|');
+    const sig = [this.path('environments'), ...sharedDirs(this.ws, this.root, 'environments').map((s) => s.dir)].map((d) => `${d}>${sigOf(d)}`).join('||');
     const hit = this.views.get('environments');
     return hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, sig: '', value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
   }
@@ -489,36 +494,65 @@ export class WorkspaceStore {
     if (existsSync(join(dir, slug))) return `environments/${slug}`;
     // a name, or a label "Acme ▸ Staging" (two tenants may share a name): the files are read, never the list (callers that index refs count on it)
     const [group, name] = idOrName.includes(' ▸ ') ? idOrName.split(' ▸ ', 2).map((x) => x.trim()) : [undefined, idOrName];
-    for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
-      try {
-        const e = readJsonShared<Environment>(join(dir, f));
-        if (e.id === idOrName || (e.name === name && (group === undefined || (e.group?.trim() ?? '').toLowerCase() === group!.toLowerCase()))) return `environments/${f}`;
-      } catch {
-        /* not an environment */
+    // the workspace's own first, then the shared folders' (a path that leaves the workspace: ../platform-shared/environments/x.json)
+    for (const d of [dir, ...sharedDirs(this.ws, this.root, 'environments').map((s) => s.dir)])
+      for (const f of readdirSync(d).filter((x) => x.endsWith('.json'))) {
+        try {
+          const e = readJsonShared<Environment>(join(d, f));
+          if (e.id === idOrName || (e.name === name && (group === undefined || (e.group?.trim() ?? '').toLowerCase() === group!.toLowerCase())))
+            return d === dir ? `environments/${f}` : relative(this.root, join(d, f)).split(sep).join('/');
+        } catch {
+          /* not an environment */
+        }
       }
-    }
     throw new ApsError('ValidationError', `No environment "${idOrName}"`);
   }
 
   /** Every environment; one whose file cannot be read is listed too, with `problem` saying why (and no variables). */
   listEnvironments(o: { etag?: boolean } = {}): Environment[] {
-    const dir = this.path('environments');
-    const envs = readdirSync(dir)
-      .filter((f) => f.endsWith('.json'))
-      .sort()
-      .map((f): Environment => {
-        const base = f.slice(0, -'.json'.length);
-        try {
-          const e = normalizeEnvironment(readJson<Environment>(join(dir, f)), base);
-          const etag = o.etag ? this.handOut(join(dir, f)) : undefined;
-          return etag ? { ...e, etag } : e;
-        } catch (e) {
-          const text = readTextCached(join(dir, f));
-          return { id: scanString(text, 'id') ?? base, name: scanString(text, 'name') ?? base, variables: [], problem: (e as Error).message };
-        }
-      });
+    const read = (dir: string, etags: boolean) =>
+      readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+        .map((f): Environment => {
+          const base = f.slice(0, -'.json'.length);
+          try {
+            const e = normalizeEnvironment(readJson<Environment>(join(dir, f)), base);
+            const etag = etags ? this.handOut(join(dir, f)) : undefined;
+            return etag ? { ...e, etag } : e;
+          } catch (e) {
+            const text = readTextCached(join(dir, f));
+            return { id: scanString(text, 'id') ?? base, name: scanString(text, 'name') ?? base, variables: [], problem: (e as Error).message };
+          }
+        });
     // stable sort: explicit order first, the rest keep file-name order
-    return envs.sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+    const own = read(this.path('environments'), !!o.etag).sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
+    // then those of the shared folders (workspace.json `shared`), in their own order, read-only; one with the id of one of
+    // the workspace's own stays the workspace's, the shared one is listed with why it is not used
+    const ids = new Set(own.map((e) => e.id));
+    const shared = sharedDirs(this.ws, this.root, 'environments').flatMap((s) =>
+      read(s.dir, false)
+        .sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER))
+        .map((e): Environment => {
+          const { order: _order, ...rest } = e;
+          void _order;
+          const clash = ids.has(e.id) ? `The shared environment "${e.name}" from ${s.name} has the same id as one of this workspace's: this workspace's is used` : undefined;
+          ids.add(e.id);
+          return { ...rest, shared: s.name, readOnly: true, ...(clash ? { problem: clash, variables: [] } : {}) };
+        }),
+    );
+    return shared.length ? [...own, ...shared] : own;
+  }
+
+  /** A shared environment (from another workspace's folder) by id, when the workspace has none of its own with that id. */
+  private sharedEnvironment(id: string): Environment | undefined {
+    if (existsSync(this.path('environments', `${slugify(id)}.json`))) return undefined;
+    return this.listEnvironments().find((e) => e.shared && e.id === id && !e.problem);
+  }
+
+  private refuseShared(id: string, what: string): void {
+    const s = this.sharedEnvironment(id);
+    if (s) throw new ApsError('ValidationError', `"${s.name}" is shared from ${s.shared}: ${what} it there`, { suggestions: [`Open the workspace in ${s.shared} to change it, or copy it into this workspace (Duplicate) to change a copy.`] });
   }
 
   /** Set the display order of environments. Ids not listed keep their relative order after the listed ones. */
@@ -528,7 +562,8 @@ export class WorkspaceStore {
       const i = ids.indexOf(e.id);
       return i >= 0 ? i : ids.length + envs.indexOf(e);
     };
-    const sorted = [...envs].sort((a, b) => rank(a) - rank(b));
+    // the workspace's own only: a shared environment's place is its folder's
+    const sorted = [...envs].filter((e) => !e.shared).sort((a, b) => rank(a) - rank(b));
     sorted.forEach((e, order) => {
       if (e.order !== order && !e.problem) writeJson(this.path('environments', `${slugify(e.id)}.json`), environmentFileValue({ ...e, order }));
     });
@@ -563,8 +598,11 @@ export class WorkspaceStore {
 
   private planEnvironmentSave(env: Environment): { file: string; content: Record<string, unknown>; clean: Environment } {
     if (!env || typeof env !== 'object' || typeof env.id !== 'string' || !env.id) throw new ApsError('ValidationError', 'An environment to save needs an id');
-    const { problem: _problem, etag, ...rest } = env;
+    this.refuseShared(env.id, 'change');
+    const { problem: _problem, etag, shared: _shared, readOnly: _readOnly, ...rest } = env;
     void _problem;
+    void _shared;
+    void _readOnly;
     const clean: Environment = { ...rest, name: typeof env.name === 'string' ? env.name : env.id, variables: (Array.isArray(env.variables) ? env.variables : []).map((v) => (v.secret ? { ...v, value: '' } : v)) };
     // the position is owned by reorderEnvironments; a save from a stale editor copy must not move it
     const file = this.path('environments', `${slugify(env.id)}.json`);
@@ -585,6 +623,7 @@ export class WorkspaceStore {
 
   /** Moves the environment to the trash (restorable for 30 days; its secret values stay in the secret store). */
   deleteEnvironment(id: string): void {
+    this.refuseShared(id, 'delete');
     moveToTrash(this, 'environment', this.path('environments', `${slugify(id)}.json`));
   }
 

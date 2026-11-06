@@ -23,6 +23,8 @@ import {
   conventionFindings,
   initConventions,
   readConventions,
+  checkedSource,
+  SHAREABLE_KINDS,
 } from '@testpion/core';
 import { EXIT, green, dim, bold, yellow, CliError, cliSelf, printJson, respond, withWorkspace, JSON_OPTION } from '../shared.js';
 import { registerGitCommands } from './git.js';
@@ -68,6 +70,43 @@ export function registerWorkspaceCommands(program: Command): void {
         }
         if (o.json) return printJson({ workspace: store.workspace.name, note });
         console.log(note || dim('No note. Set one with `testpion workspace note "text"`.'));
+      }),
+    );
+  ws.command('share')
+    .description(`read pieces of another workspace (a sibling checkout or a git submodule) read-only, without copying them: ${SHAREABLE_KINDS.join(', ')}. They are listed after this workspace's own, named with the folder they come from, and changed there. Without --add or --remove: list what is shared`)
+    .option('--add <path>', 'the folder of the other workspace, relative to this one (e.g. ../platform-shared)')
+    .option('--kinds <list>', `what to read from it, comma separated (default: environments; one of ${SHAREABLE_KINDS.join(', ')})`)
+    .option('--remove <path>', 'stop reading from this folder')
+    .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
+    .option('--json', 'print as JSON')
+    .action((o: { add?: string; kinds?: string; remove?: string; workspace?: string; json?: boolean }) =>
+      withWorkspace(o.workspace, async (store, ephemeral) => {
+        if (ephemeral) throw new CliError('No workspace found: run inside a workspace or pass -w <nameOrPath>', EXIT.CONFIG_ERROR);
+        let shared = [...(store.workspace.shared ?? [])];
+        const same = (a: string, b: string) => resolve(store.root, a) === resolve(store.root, b);
+        if (o.add) {
+          let source;
+          try {
+            source = checkedSource(store.root, o.add, (o.kinds ?? 'environments').split(',').map((k) => k.trim()).filter(Boolean));
+          } catch (e) {
+            throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+          }
+          shared = [...shared.filter((s) => !same(s.path, source.path)), source];
+          store.updateWorkspace({ shared });
+        }
+        if (o.remove) {
+          const before = shared.length;
+          shared = shared.filter((s) => !same(s.path, o.remove!));
+          if (shared.length === before) throw new CliError(`Nothing is shared from ${o.remove}`, EXIT.CONFIG_ERROR);
+          store.updateWorkspace({ shared: shared.length ? shared : undefined });
+        }
+        const environments = store.listEnvironments().filter((e) => e.shared);
+        if (o.json) return printJson({ shared, environments: environments.map((e) => ({ name: e.name, id: e.id, from: e.shared, ...(e.group ? { group: e.group } : {}), ...(e.problem ? { problem: e.problem } : {}) })) });
+        if (!shared.length) return console.log(dim('Nothing is shared into this workspace. Add a folder: testpion workspace share --add ../platform-shared'));
+        for (const s of shared) {
+          console.log(`${bold(s.path)}  ${dim(s.kinds.join(', '))}`);
+          for (const e of environments.filter((x) => resolve(store.root, s.path).endsWith(x.shared!))) console.log(`  ${e.name}${e.problem ? yellow(`  (${e.problem})`) : ''}`);
+        }
       }),
     );
   ws.command('conventions')

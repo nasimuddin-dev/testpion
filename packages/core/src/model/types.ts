@@ -623,6 +623,8 @@ export interface Workspace {
   variables: KeyValue[];
   createdAt: string;
   updatedAt: string;
+  /** Folders of other workspaces this one reads from, read-only (storage/shared-sources.ts): `[{ path: "../platform-shared", kinds: ["environments"] }]`. */
+  shared?: Array<{ path: string; kinds: Array<'environments'> }>;
 }
 
 export interface EnvironmentVariable {
@@ -648,6 +650,10 @@ export interface Environment {
   order?: number;
   /** Set on a listed environment whose file cannot be read (invalid JSON): why. It has no variables then; never saved. */
   problem?: string;
+  /** Listed from another workspace's folder (workspace.json `shared`): that folder's name. Never saved here. */
+  shared?: string;
+  /** With `shared`: changed where it lives, not in this workspace. */
+  readOnly?: boolean;
 }
 
 /** A saved response of a request (Postman "example"): documents the API and feeds the mock server. */

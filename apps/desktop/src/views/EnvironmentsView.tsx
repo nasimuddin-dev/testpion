@@ -234,6 +234,8 @@ export function EnvironmentsView() {
       ...(isActiveEnvironment(envs, e, activeEnv) ? { makeActive: 'It is the active environment' } : e.problem ? { makeActive: 'Its file cannot be read' } : {}),
       ...(envs[0]?.id === e.id ? { moveUp: 'It is first already' } : {}),
       ...(envs[envs.length - 1]?.id === e.id ? { moveDown: 'It is last already' } : {}),
+      // from another workspace's folder (workspace.json `shared`): changed there; Duplicate makes a copy of this workspace's own
+      ...(e.shared ? Object.fromEntries(['rename', 'delete', 'moveUp', 'moveDown'].map((k) => [k, `Shared from ${e.shared}: change it there`])) : {}),
     },
   });
   // new variables of a saved environment, offered to the others (AlsoAddDialog)
@@ -349,6 +351,11 @@ export function EnvironmentsView() {
                       {String(e.name)}
                     </span>
                     {e.isProduction && <Badge tone="bad">prod</Badge>}
+                    {e.shared && (
+                      <Badge title={`Shared from ${e.shared}: read here, changed there`} data-env-shared={e.shared}>
+                        shared
+                      </Badge>
+                    )}
                     {e.problem ? (
                       <span className="ml-auto text-warn" title={`This environment's file cannot be read: ${e.problem}`}>
                         <TriangleAlert size={13} aria-label="Cannot be read" />
@@ -430,7 +437,13 @@ export function EnvironmentsView() {
                         { label: '.env file', icon: <FileText size={14} />, onSelect: () => void exportEnv('dotenv') },
                       ]}
                     />
-                    <Button variant="primary" icon={<Save size={13} />} onClick={save} disabled={!!draft.problem} title={draft.problem ? 'Fix the file first: saving now would replace it with what is shown here' : undefined}>
+                    <Button
+                      variant="primary"
+                      icon={<Save size={13} />}
+                      onClick={save}
+                      disabled={!!draft.problem || !!draft.shared}
+                      title={draft.shared ? `Shared from ${draft.shared}: change it in that workspace` : draft.problem ? 'Fix the file first: saving now would replace it with what is shown here' : undefined}
+                    >
                       Save
                     </Button>
                     <MoreMenu
@@ -447,6 +460,11 @@ export function EnvironmentsView() {
                     />
                   </div>
                 </div>
+                {draft.shared && !draft.problem && (
+                  <Callout data-env-shared-note="">
+                    Shared from {draft.shared} (another workspace's folder, named in workspace.json): it is read here and changed there. Duplicate makes a copy of this workspace's own to change.
+                  </Callout>
+                )}
                 {draft.problem && (
                   <Callout tone="warn">
                     The file of this environment cannot be read, so its variables are not shown and it cannot be saved here: {draft.problem}. Fix the file (or restore it from git), or delete the environment.

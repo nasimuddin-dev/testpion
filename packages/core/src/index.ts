@@ -343,6 +343,7 @@ export * from './storage/collection-calls.js';
 export * from './storage/collection-timing.js';
 export * from './util/jwt.js';
 export * from './storage/workspace.js';
+export * from './storage/shared-sources.js';
 export * from './storage/workspace-bundle.js';
 export * from './storage/bundle-secrets.js';
 export * from './storage/search.js';

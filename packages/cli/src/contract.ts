@@ -109,6 +109,7 @@ export const WRITE_COMMANDS = new Set([
   'rag trust-db',
   'rag label document',
   'rag calibrate',
+  'workspace share',
 ]);
 
 /**
@@ -127,6 +128,7 @@ const WRITES_ONLY_WHEN: Record<string, (o: Record<string, unknown>) => boolean> 
   'rag trust-db': (o) => !o.list,
   'rag calibrate': (o) => o.apply === true,
   'agents-md': (o) => !o.stdout,
+  'workspace share': (o) => !!(o.add || o.remove),
 };
 
 /** The commands that call the user's AI model: each takes `--max-cost <usd>`, refused before anything is sent when one call could cost more. */

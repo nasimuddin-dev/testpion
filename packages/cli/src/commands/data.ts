@@ -947,9 +947,9 @@ export function registerDataCommands(program: Command): void {
         const page = pagedList(all, o);
         // `label` is what to write wherever an environment is named ("Acme ▸ Staging" when the name is shared by another tenant,
         // also one that --group left out of this list)
-        const envs = page.items.map((e) => ({ id: e.id, name: e.name, label: environmentRef(everything, e), ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.problem ? { problem: e.problem } : {}) }));
+        const envs = page.items.map((e) => ({ id: e.id, name: e.name, label: environmentRef(everything, e), ...(e.group ? { group: e.group } : {}), production: !!e.isProduction, isProduction: !!e.isProduction, variables: e.variables.filter((v) => v.enabled !== false).map((v) => (v.secret ? `${v.key} (secret)` : v.key)), ...(e.shared ? { shared: e.shared } : {}), ...(e.problem ? { problem: e.problem } : {}) }));
         if (o.json) printJson(envs);
-        else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.group ? dim(`${e.group} ▸ `) : ''}${e.name}${e.production ? red(' (production)') : ''}\t${dim(e.variables.join(', '))}`);
+        else for (const e of envs.filter((x) => !x.problem)) console.log(`${e.group ? dim(`${e.group} ▸ `) : ''}${e.name}${e.production ? red(' (production)') : ''}${e.shared ? dim(` (shared from ${e.shared})`) : ''}\t${dim(e.variables.join(', '))}`);
         if (!o.json) warnProblems(all, 'environment');
         reportPage(page, o, 'environments');
       });

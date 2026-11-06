@@ -151,6 +151,22 @@ From a variable's popover, the button next to **Copy** goes to where that variab
 
 Give an environment a **Group** (*Acme*, *Globex*) when one workspace tests the same API for several tenants or deployments: the Environments list and the picker show *Acme ▸ Staging* and keep a group's environments together; the status bar and run headers say which tenant a run was for. The group is a name in the environment file (`"group": "Acme"`), nothing more, so git carries it and the cloud version keeps it. `testpion env list --json` carries `group`. A new tenant starts as a copy of an existing one: **New tenant from Acme…** under the Group field (or `testpion env duplicate-group Acme Globex`) copies every environment of the group with its names, flags and variables into the new group; secret values are not copied, since they belong to the tenant. Two tenants may both have a *Staging*: wherever an environment is named (`-e`, a monitor, a test suite, the picker), write the label *Acme ▸ Staging* (in a terminal `Acme/Staging` or `"Acme > Staging"` is read the same); the bare name alone names the environment without a group, or nothing when every *Staging* is in a group (never one of them by chance). To run a flow for every tenant at once, tick **Acme ▸ every environment** in **Run in several environments**, or write `--env-matrix group:Acme` (`testpion test flows/checkout.yaml --env-matrix group:Acme`, also in a CI pipeline).
 
+## Shared from another workspace {#shared}
+
+A team with a repository of its own can use the environments another workspace keeps (a platform team's *Staging* and *Production*) without copying them. Name the other workspace's folder, relative to yours, in `workspace.json`, or from the terminal:
+
+```bash
+testpion workspace share --add ../platform-shared            # a sibling checkout or a git submodule
+testpion workspace share                                      # what is shared, and the environments it gives
+testpion workspace share --remove ../platform-shared
+```
+
+```json
+"shared": [{ "path": "../platform-shared", "kinds": ["environments"] }]
+```
+
+Its environments are listed after yours, with a **shared** badge, and work everywhere an environment is chosen. They are read here and changed there: Save, Rename and Delete say so, and **Duplicate** makes a copy of your own to change. One with the id of one of yours is not used (yours is), and the list says why. Secret values stay on each computer, as for your own environments. `testpion env list` prints *(shared from platform-shared)*, and `list_environments` (MCP) carries `shared`.
+
 ## Compare
 
 **Compare** (at the top of an environment) shows two environments side by side. Differences come first:

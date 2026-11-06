@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Environments shared from another workspace
+
+- `workspace.json` `shared: [{ "path": "../platform-shared", "kinds": ["environments"] }]` (or `testpion workspace share --add ../platform-shared`) reads another workspace's environments read-only: listed after the workspace's own with a **shared** badge, usable everywhere, refused by Save, Rename and Delete (Duplicate copies one); an id of the workspace's own wins. `env list` and `list_environments` say where one comes from.
+
 ### Collections by team
 
 - With a `CODEOWNERS`, the Collections tree shows each collection's owners after its name, and `@team` in the explorer's filter (`@payments`, `@org/payments`) shows only the collections that team owns. `testpion collections` prints the owners (`--json`: `owners`) and `--owner <team>` keeps one team's.
