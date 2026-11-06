@@ -37,6 +37,18 @@ export function clearTokenCache(): number {
  * Apply an (already variable-resolved) auth config to request headers/url.
  * Mutates and returns the given headers map and URL.
  */
+/**
+ * The auth that travels as one header, for what is not a plain HTTP request (a WebSocket handshake, gRPC metadata):
+ * bearer, basic and an API key in a header. undefined: none, or a kind that needs the HTTP request itself (signing,
+ * digest, OAuth flows…).
+ */
+export function headerAuth(auth: AuthConfig | undefined): { key: string; value: string; enabled: true } | undefined {
+  if (auth?.type === 'bearer' && auth.token) return { key: 'Authorization', value: `Bearer ${auth.token}`, enabled: true };
+  if (auth?.type === 'basic') return { key: 'Authorization', value: `Basic ${Buffer.from(`${auth.username ?? ''}:${auth.password ?? ''}`).toString('base64')}`, enabled: true };
+  if (auth?.type === 'apiKey' && (auth.in ?? 'header') === 'header' && auth.key) return { key: auth.key, value: auth.value ?? '', enabled: true };
+  return undefined;
+}
+
 export async function applyAuth(auth: AuthConfig | undefined, headers: Headers, url: URL, ctx: AuthContext = {}): Promise<void> {
   if (!auth || auth.type === 'none' || auth.type === 'inherit') return;
   const r = ctx.redactor;

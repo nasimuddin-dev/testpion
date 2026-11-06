@@ -44,6 +44,31 @@ describe('collection runs include gRPC calls and connections', () => {
     expect(collectionRealtimeTests(store, col, ['refunds']).map((t) => t.id)).toEqual(['g-refund']);
   });
 
+  it('a call gets the headers and auth of its collection and folders: gRPC metadata, the handshake of a connection; its own win', () => {
+    const items = {
+      grpc: [{ id: 'g', name: 'Refund', collectionId: 'shop', folderId: 'pay', data: { target: 'x:1', method: 'a.B/C', metadata: [{ key: 'x-tenant', value: 'mine' }] } }],
+      websocket: [
+        { id: 'w', name: 'Feed', collectionId: 'shop', folderId: 'pay', data: { url: 'ws://x', headers: [] } },
+        { id: 'm', name: 'Broker', collectionId: 'shop', folderId: 'pay', data: { url: 'mqtt://x', mode: 'mqtt', topic: 't' } },
+        { id: 'top', name: 'Top', collectionId: 'shop', data: { url: 'ws://x' } },
+      ],
+    } as Record<string, unknown[]>;
+    const store = { getLibrary: (kind: string) => ({ folders: [], items: items[kind] ?? [] }) } as never;
+    const col = {
+      id: 'shop',
+      name: 'Shop',
+      auth: { type: 'apiKey', key: 'x-api-key', value: '{{key}}', in: 'header' },
+      headers: [{ key: 'x-tenant', value: 'acme' }],
+      items: [{ kind: 'folder', id: 'pay', name: 'Payments', auth: { type: 'bearer', token: '{{token}}' }, headers: [{ key: 'x-area', value: 'pay' }], items: [] }],
+    } as never;
+    const byId = Object.fromEntries(collectionRealtimeTests(store, col).map((t) => [t.id, t as { metadata?: unknown; headers?: unknown }]));
+    // the folder's bearer wins over the collection's API key; the call's own x-tenant wins over the collection's
+    expect(byId.g!.metadata).toEqual([{ key: 'x-area', value: 'pay' }, { key: 'Authorization', value: 'Bearer {{token}}', enabled: true }, { key: 'x-tenant', value: 'mine' }]);
+    expect(byId.w!.headers).toEqual([{ key: 'x-tenant', value: 'acme' }, { key: 'x-area', value: 'pay' }, { key: 'Authorization', value: 'Bearer {{token}}', enabled: true }]);
+    expect(byId.m!.headers).toBeUndefined(); // MQTT has no handshake headers
+    expect(byId.top!.headers).toEqual([{ key: 'x-tenant', value: 'acme' }, { key: 'x-api-key', value: '{{key}}', enabled: true }]);
+  });
+
   it('runs a collection: its request, then its gRPC call and its connection', async () => {
     // HTTP, gRPC and WebSocket servers
     const http = createServer((_req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}'));

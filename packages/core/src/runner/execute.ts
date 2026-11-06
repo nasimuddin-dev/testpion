@@ -30,6 +30,7 @@ import { redactedHead, type Redactor } from '../util/redact.js';
 import { summarizeParsed } from '../util/body-head.js';
 import type { Logger } from '../log/logger.js';
 import { executeHttp, timingSummary } from '../protocols/http/client.js';
+import { headerAuth } from '../protocols/http/auth.js';
 import { detectOperation, executeGraphQL, type GraphQLResult } from '../protocols/graphql/graphql.js';
 import { collectSubscriptionEvents, subscriptionUrl } from '../protocols/graphql/subscription.js';
 import { executeGrpc, parseGrpcTarget } from '../protocols/grpc/grpc.js';
@@ -484,9 +485,8 @@ async function runGraphQLSubscription(test: GraphQLTest, r: { endpoint: string; 
   const t0 = Date.now();
   const headers = [...(r.headers ?? [])];
   // the usual header auth travels with the WebSocket handshake
-  if (auth?.type === 'bearer' && auth.token) headers.push({ key: 'Authorization', value: `Bearer ${auth.token}`, enabled: true });
-  else if (auth?.type === 'basic') headers.push({ key: 'Authorization', value: `Basic ${Buffer.from(`${auth.username ?? ''}:${auth.password ?? ''}`).toString('base64')}`, enabled: true });
-  else if (auth?.type === 'apiKey' && (auth.in ?? 'header') === 'header' && auth.key) headers.push({ key: auth.key, value: auth.value ?? '', enabled: true });
+  const authHeader = headerAuth(auth);
+  if (authHeader) headers.push(authHeader);
   const vars = typeof r.variables === 'string' ? (r.variables.trim() ? (JSON.parse(r.variables) as Record<string, unknown>) : undefined) : (r.variables as Record<string, unknown> | undefined);
   const wait = Math.min(Math.max(100, test.waitMs ?? 10_000), 600_000);
   try {
