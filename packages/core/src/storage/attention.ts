@@ -20,6 +20,7 @@ import { collectionRequests } from '../runner/collection-run.js';
 import { ragTrendFindings } from '../runner/rag-trend.js';
 import { CONVENTIONS_FILE, conventionFindings } from './conventions.js';
 import { missingSecrets } from './missing-secrets.js';
+import { sharedSourceProblems } from './shared-sources.js';
 import { secretKeys } from './secrets.js';
 import type { SecretReader } from '../vars/variables.js';
 
@@ -187,6 +188,9 @@ export async function workspaceAttention(store: WorkspaceStore, opts: { certDays
   // files that can't be read: nothing in them works until they are fixed
   for (const e of store.listEnvironments())
     if (e.problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Environment "${e.name}" can't be read: ${e.problem}`, ref: { kind: 'environment', environmentId: e.id } });
+  // a shared folder that gives nothing (not cloned here, moved, no such kind): its environments silently went missing
+  for (const p of sharedSourceProblems(store))
+    out.push({ kind: 'file', severity: 'medium', group: 'Workspace files', type: 'warning', message: `workspace.json reads ${p.kinds.join(' and ')} from ${p.path}, which ${p.problem}`, ref: { kind: 'environment', scope: 'workspace' } });
   const collections = store.listCollections(); // once: the failing requests below walk the same list
   for (const c of collections)
     if ((c as { problem?: string }).problem) out.push({ kind: 'file', severity: 'high', group: 'Workspace files', type: 'error', message: `Collection "${c.name}" can't be read: ${(c as { problem?: string }).problem}`, ref: { kind: 'collection', collectionId: c.id } });

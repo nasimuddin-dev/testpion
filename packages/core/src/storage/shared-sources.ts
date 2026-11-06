@@ -168,6 +168,39 @@ export function sharedDataFile(store: SpecStore, path: string): string | undefin
   return sharedDataSource(store, path) ? resolve(store.root, path) : undefined;
 }
 
+/**
+ * The `shared` entries read here that give nothing, and why: the folder is not on this computer (a sibling checkout not
+ * cloned yet), is no workspace, lacks a kind, or is a path never read (absolute, inside this workspace). Needs attention
+ * lists them, so a teammate's environments that silently went missing are said.
+ */
+export function sharedSourceProblems(store: { root: string; workspace: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'> }): Array<{ path: string; kinds: string[]; problem: string }> {
+  const out: Array<{ path: string; kinds: string[]; problem: string }> = [];
+  for (const s of viewOf(store).shared ?? []) {
+    if (!s || typeof s.path !== 'string' || !Array.isArray(s.kinds)) continue;
+    const say = (problem: string) => out.push({ path: s.path, kinds: s.kinds, problem });
+    if (isAbsolute(s.path) || /^[a-z]:/i.test(s.path) || s.path.startsWith('\\\\')) {
+      say('is an absolute path, which is never read: name it relative to the workspace');
+      continue;
+    }
+    const base = resolve(store.root, s.path);
+    if (samePath(base, store.root) || isInside(store.root, base)) {
+      say('is inside this workspace, so it is never read as shared');
+      continue;
+    }
+    if (!existsSync(base)) {
+      say('is not on this computer: clone it there (a sibling checkout or a git submodule)');
+      continue;
+    }
+    if (!existsSync(join(base, 'workspace.json'))) {
+      say('is not a TestPion workspace (it has no workspace.json)');
+      continue;
+    }
+    const missing = s.kinds.filter((k) => !existsSync(join(base, k)));
+    if (missing.length) say(`has no ${missing.join(' or ')} folder`);
+  }
+  return out;
+}
+
 /** A source to add, checked: a folder (relative to the workspace, as git keeps it on every computer) that holds the kinds named. */
 export function checkedSource(root: string, path: string, kinds: string[]): SharedSource {
   const p = path.trim().replace(/\\/g, '/');

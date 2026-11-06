@@ -87,4 +87,14 @@ describe('environments shared from another workspace', () => {
     const envOnly = cli(['workspace', 'share', '--add', '../platform-shared', '--kinds', 'environments', '-w', ws]);
     expect(JSON.parse(envOnly.out).data).toMatchObject({ shared: [{ kinds: ['environments'] }], specs: [] });
   });
+
+  it('a shared folder that gives nothing is said (not on this computer, no such kind) in what needs attention', async () => {
+    const { sharedSourceProblems, workspaceAttention } = await import('../../packages/core/src/index.js');
+    team.updateWorkspace({ shared: [{ path: '../not-cloned-yet', kinds: ['environments'] }, { path: '../platform-shared', kinds: ['environments', 'specs'] }] });
+    const found = sharedSourceProblems(team).map((p) => `${p.path}: ${p.problem}`);
+    expect(found).toEqual(['../not-cloned-yet: is not on this computer: clone it there (a sibling checkout or a git submodule)', '../platform-shared: has no specs folder'].filter((x) => !(x.includes('specs') && existsSync(join(tmp.dir, 'platform-shared', 'specs')))));
+    const items = (await workspaceAttention(team)).filter((i) => i.message.startsWith('workspace.json reads'));
+    expect(items[0]).toMatchObject({ group: 'Workspace files', type: 'warning', message: 'workspace.json reads environments from ../not-cloned-yet, which is not on this computer: clone it there (a sibling checkout or a git submodule)' });
+    team.updateWorkspace({ shared: undefined });
+  });
 });

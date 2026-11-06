@@ -171,6 +171,8 @@ Its environments are listed after yours, with a **shared** badge, and work every
 
 **Datasets** come the same way (`--kinds datasets`, or by default when the folder has a `datasets/`): listed under **Datasets** with the *shared* badge as `../platform-shared/datasets/users.csv`, previewed and opened read-only; a collection run reads it, and a test file names it by its path from the test file (`dataset: path: ../../platform-shared/datasets/users.csv` from `tests/smoke.yaml`). Save, Rename, Move and Delete say it is changed in that workspace, and **Duplicate** copies it into your `datasets/` to change; only plain files of its `datasets/` are read.
 
+**A folder that gives nothing is said.** When a shared folder is not on your computer (the sibling checkout is not cloned yet), is not a workspace, or lacks a kind it should give, **Needs attention** lists it under *Workspace files* (*workspace.json reads environments from ../platform-shared, which is not on this computer*), as `testpion problems` and `what_needs_attention` do.
+
 **An entry that came with a pull waits.** `workspace.json` is shared through git, so a teammate can add a `shared` entry; the app does not read that folder on your computer until you allow it: the Environments list and API definitions show *workspace.json reads … from ../platform-shared* with **Allow on this computer** (as a monitor's schedule and the Debugger's rules that came with a pull). One you add in the app is allowed at once; a pulled change to an entry (another folder, more kinds) waits again. The CLI reads every entry, so a pipeline runs what the repository says.
 
 ## Compare
