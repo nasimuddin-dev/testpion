@@ -631,6 +631,10 @@ export function Explorer() {
       </div>
       {/* keyboard, like a file tree: ↑ ↓ move between rows, → expands, ← collapses (Enter opens, F2 renames, Delete deletes, Shift+F10 the menu) */}
       <div className="flex-1 overflow-auto" onKeyDown={treeKeys} onContextMenu={area.onContextMenu} data-explorer-area>
+        {/* workspace.json `shared` entries that came with a pull (API definitions, datasets): one notice, until allowed */}
+        <div className="px-2 pt-1 empty:hidden">
+          <SharedWaitingNotice onAllowed={() => void load(false, new Set<ListPart>(['specs', 'datasets']))} />
+        </div>
         {/* favorite requests from every collection, one click away (⋯ ▸ Add to favorites on a request) */}
         {favorites.length > 0 && (
           <Section
@@ -748,7 +752,6 @@ export function Explorer() {
           })}
         >
           <>
-            <SharedWaitingNotice onAllowed={() => void load(false, SPECS)} />
             <FolderedRows
               section="specs"
               kind="folder:spec"
@@ -797,7 +800,6 @@ export function Explorer() {
           })}
         >
           <>
-            <SharedWaitingNotice onAllowed={() => void load(false, DATASETS)} />
             <FolderedRows
               section="datasets"
               kind="folder:dataset"

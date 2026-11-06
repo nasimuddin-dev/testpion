@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MENTION, type ItemRef } from '@testpion/shared';
 import { call, on } from '../api';
 import { useSticky } from '../lib/sticky';
-import { timeAgo } from '../lib/format';
+import { plural, timeAgo } from '../lib/format';
 import { toastError } from '../store';
 import { deleteWithUndo } from '../lib/undo-delete';
 import { Button, EmptyNote, IconButton, SectionTitle, Textarea, cx } from './ui';
@@ -133,7 +133,7 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
               let removed: Comment[] = [c];
               void run(() =>
                 deleteWithUndo({
-                  what: parent ? 'the reply' : repliesOf(c.id).length ? `the comment and its ${repliesOf(c.id).length === 1 ? 'reply' : 'replies'}` : 'the comment',
+                  what: parent ? 'the reply' : repliesOf(c.id).length ? `the comment and its ${plural(repliesOf(c.id).length, 'reply', 'replies')}` : 'the comment',
                   run: () => call<{ removed?: Comment[] }>('comments.delete', { ref, id: c.id }).then((r) => void (removed = r.removed ?? removed)),
                   undo: async () => {
                     for (const x of removed) await call('comments.restore', { ref, comment: x });

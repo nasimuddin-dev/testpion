@@ -77,6 +77,7 @@ export const WRITE_COMMANDS = new Set([
   'item comment add',
   'item comment resolve',
   'item comment delete',
+  'item comment edit',
   'import-undo',
   'rag connect',
   'rag cache clear',
