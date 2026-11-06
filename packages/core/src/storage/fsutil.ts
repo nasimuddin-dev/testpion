@@ -324,6 +324,8 @@ export function renameOwned(from: string, to: string): void {
 /** Copy a file or folder as the app's own change. */
 export function copyOwned(from: string, to: string, opts: { recursive?: boolean } = {}): void {
   mkdirSync(dirname(to), { recursive: true });
+  // a link at the destination (a dangling one too, committed in a repository) would be written through to where it points
+  if (lstatSync(to, { throwIfNoEntry: false })?.isSymbolicLink()) throw new ApsError('ValidationError', `${to} is a link: nothing is copied over it`);
   if (opts.recursive) cpSync(from, to, { recursive: true });
   else copyFileSync(from, to);
   noteOwnChange(to);
