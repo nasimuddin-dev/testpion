@@ -30,13 +30,17 @@ const steps = [
      const wrong = preview();
      setVal(input, '*/30 * * * *'); await __t.sleep(300);
      const half = preview();
+     // the maintenance window: off, then on with its default (Sundays 02:00 for 2 hours), said in words
+     const quiet = document.querySelector('[data-monitor-quiet]'); const sw = quiet?.querySelector('[role=switch]');
+     if (sw) (sw.click(), await __t.sleep(300));
+     const windowSays = quiet?.parentElement?.querySelectorAll('[data-monitor-cron-preview]')[0]?.textContent.trim() ?? 'NO WINDOW PREVIEW';
      await __t.esc(); await __t.sleep(300);
      await window.aps.invoke('monitor.delete', { id: window.__cronMonitorId });
-     return 'value: ' + input.value + ' | first: ' + first.replace(/next: .*/, 'next: …') + ' | wrong: ' + wrong + ' | half: ' + half.replace(/next: .*/, 'next: …');`,
+     return 'value: ' + input.value + ' | first: ' + first.replace(/next: .*/, 'next: …') + ' | wrong: ' + wrong + ' | half: ' + half.replace(/next: .*/, 'next: …') + ' | window: ' + windowSays.replace(/next: .*/, 'next: …');`,
   ),
 ];
 
 module.exports = withExpect(steps, {
   'a-monitor-at-set-times': /^list says: at 09:00 on weekdays \| page says: at 09:00 on weekdays$/,
-  'the-editor-reads-the-schedule-as-it-is-typed': /^value: \*\/30 \* \* \* \* \| first: Runs at 09:00 on weekdays · next: … \| wrong: "25" is out of range for the hour \(0–23\) \| half: Runs every 30 minutes · next: …$/,
+  'the-editor-reads-the-schedule-as-it-is-typed': /^value: \*\/30 \* \* \* \* \| first: Runs at 09:00 on weekdays · next: … \| wrong: "25" is out of range for the hour \(0–23\) \| half: Runs every 30 minutes · next: … \| window: Runs at 02:00 on Sunday · next: …$/,
 });
