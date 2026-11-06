@@ -8,7 +8,7 @@ import { useVarPopover } from '../lib/var-popover';
 import { useRef } from 'react';
 import { Badge, Menu, cx, type MenuItem } from './ui';
 
-type Env = { id?: string; name: string; color?: string; isProduction?: boolean; problem?: string; group?: string };
+type Env = { id?: string; name: string; color?: string; isProduction?: boolean; problem?: string; group?: string; shared?: string };
 
 /** An environment's colour: its own, else red for production and green otherwise; none: the line colour. */
 export const envColor = (e?: Pick<Env, 'color' | 'isProduction'>) => (e ? (e.color ?? (e.isProduction ? 'var(--bad)' : 'var(--ok)')) : 'var(--line-strong)');
