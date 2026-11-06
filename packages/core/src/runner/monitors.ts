@@ -644,7 +644,7 @@ export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now(
   const quiet = quietUntil(m.quiet, now, m.timezone);
   return {
     ...m,
-    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : quiet !== undefined ? `in its maintenance window until ${new Date(quiet).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}${m.quiet!.reason ? ` (${m.quiet!.reason})` : ''}` : monitorScheduleText(m),
+    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : quiet !== undefined ? `in its maintenance window until ${new Date(quiet).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...(m.timezone ? { timeZone: m.timezone, timeZoneName: 'short' } : {}) })}${m.quiet!.reason ? ` (${m.quiet!.reason})` : ''}` : monitorScheduleText(m),
     paused: !m.enabled || pausedFor(m, now),
     ...(quiet !== undefined ? { quietUntil: new Date(quiet).toISOString() } : {}),
     lastResult: last,
