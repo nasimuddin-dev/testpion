@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { userInfo } from 'node:os';
-import { addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, resolveItemRef, tenantOf, type ItemRef, type WorkspaceStore } from '@testpion/core';
+import { WorkspaceManager, addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, resolveItemRef, tenantOf, type ItemRef, type WorkspaceStore } from '@testpion/core';
 import { EXIT, bold, dim, green, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** An item by its reference text (`request:<collection>/<request>`, `test:tests/smoke.yaml`, a testpion:// link …). */
@@ -145,13 +145,15 @@ export function registerCommentCommand(program: Command): void {
     .option('--markdown', 'print a Markdown list (to post to a chat or a pull request)')
     .option('--owner <team>', 'only the comments on items this team owns (as CODEOWNERS names it; the @ is optional)')
     .option('--for-me', 'only the comments that @mention you (your git name or e-mail) or a team you name with --team')
-    .option('--team <team>', 'with --for-me: also the comments that @mention this team (repeatable)', (v: string, all: string[] = []) => [...all, v])
+    .option('--team <team>', 'with --for-me: also the comments that @mention this team (repeatable; default: Settings ▸ Git ▸ Your teams)', (v: string, all: string[] = []) => [...all, v])
     .option(...JSON_RESULT_OPTION)
     .action(async (o: { workspace?: string; json?: boolean; markdown?: boolean; owner?: string; forMe?: boolean; team?: string[] }) =>
       inWorkspace(o.workspace, async (store) => {
         // who is asking: the git identity of the workspace's repository (the name its comments are signed with)
         const id = await gitIdentity(store.root).catch(() => ({ name: undefined, email: undefined }));
-        const all = await openCommentsByOwner(store, o.owner, { name: id.name || userInfo().username, email: id.email, teams: o.team });
+        // (your teams: --team, else Settings ▸ Git ▸ Your teams)
+        const teams = o.team?.length ? o.team : new WorkspaceManager().loadSettings().git?.teams;
+        const all = await openCommentsByOwner(store, o.owner, { name: id.name || userInfo().username, email: id.email, teams });
         const open = o.forMe ? all.filter((c) => c.forYou) : all;
         if (o.json) return printJson({ open });
         if (o.markdown) return console.log(open.length ? ['**Open comments from the team**', ...open.map((c) => `- **${c.by}** on \`${refText(c.ref)}\` (${c.at.slice(0, 10)}): ${c.text.replace(/\s+/g, ' ')}`)].join('\n') : 'No open comments.');
