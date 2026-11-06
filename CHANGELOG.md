@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Comments: replies, changes, the full list
+
+- A comment's **Reply** puts the answer under it (`testpion item comment add <item> "text" --reply-to <id>`, RPC `comments.add { replyTo }`, MCP `team_comments` add with `id`); settling a comment settles its replies, deleting it deletes them (Undo puts them back), and a reply to your comment is **For you**.
+- The author of a comment can change it (the pencil, `testpion item comment edit <item> <id> "text"`, `team_comments` edit); it then says *edited*.
+- **All N** on Home's *Your team is asking* lists every open comment, with **For you** and team chips.
+- **Settings ▸ Git ▸ Your teams**: a comment that mentions one of your teams is for you (`git.teams`; `item comment open --for-me` uses it).
+- Deleting the last comment of an item no longer shows *changed outside TestPion*.
+
 ### Mentions in comments
 
 - `@Ana` or `@org/payments` in a comment for your team is highlighted; the comments that mention you (your git name or e-mail) come first on Home, marked **For you**; `testpion item comment open --for-me [--team @org/payments]`; open comments carry `mentions` (and `forYou`) in `--json`, `comments.open` and `team_comments`.
@@ -15,8 +23,10 @@
 - In the Tests view the same picking runs several test files as one run.
 - Ctrl/⌘+click and Shift+click pick requests of one collection in the Collections tree; the bar above it runs them as one run, moves them to a folder or deletes them (one Undo), and Esc lets go.
 
-### Environments shared from another workspace
+### Environments and API definitions shared from another workspace
 
+- API definitions too: a shared folder's `specs/` is listed under **API definitions** as *shared* (`../platform-shared/specs/x.yaml`), opens read-only and is read by contract checks, coverage, lint, compare, deprecated calls, the body editor's schema and tests or flows from a spec (named with the folder, so they never replace your own); Quick Open and `search_workspace` find it. Only plain files of its `specs/` are read (links are skipped); a folder inside the workspace is refused. `testpion workspace share --add` takes every kind the folder has by default.
+- In the app, a `shared` entry that arrives with a pull waits for **Allow on this computer** (shown in the Environments list, API definitions and the dialog); one added in the app is allowed at once. The CLI reads every entry.
 - `workspace.json` `shared: [{ "path": "../platform-shared", "kinds": ["environments"] }]` (or `testpion workspace share --add ../platform-shared`) reads another workspace's environments read-only: listed after the workspace's own with a **shared** badge, usable everywhere, refused by Save, Rename and Delete (Duplicate copies one); an id of the workspace's own wins. `env list` and `list_environments` say where one comes from.
 
 ### Collections by team
