@@ -1,5 +1,5 @@
 import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderInput, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
-import { SharedSourcesDialog } from './SharedSourcesDialog';
+import { SharedSourcesDialog, SharedWaitingNotice } from './SharedSourcesDialog';
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { call, on } from '../api';
 import { sharedCall } from '../lib/shared-call';
@@ -735,6 +735,7 @@ export function Explorer() {
           })}
         >
           <>
+            <SharedWaitingNotice onAllowed={() => void load(false, SPECS)} />
             <FolderedRows
               section="specs"
               kind="folder:spec"

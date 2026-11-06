@@ -335,6 +335,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'debug.approveRules': {},
   'ws.shared': {},
   'ws.shareAdd': { path: 'p?', kinds: 'sa?' },
+  'ws.shareAllow': { path: 'p?' },
+  'ws.shareWaiting': {},
   'ws.shareRemove': { path: 'p' },
   'monitor.pause': { id: 's', minutes: 'n?', until: 's?', reason: 's?' },
   'monitor.resume': { id: 's' },

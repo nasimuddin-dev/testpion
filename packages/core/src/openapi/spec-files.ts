@@ -7,14 +7,14 @@ import { fetchImportText } from '../import/fetch-url.js';
 import { loadOpenApi, requestBodySchema } from './contract.js';
 import { sharedSpecFile, sharedSpecs } from '../storage/shared-sources.js';
 
-type SpecStore = Pick<WorkspaceStore, 'safePath'> & Partial<Pick<WorkspaceStore, 'root' | 'workspace'>>;
+type SpecStore = Pick<WorkspaceStore, 'safePath'> & Partial<Pick<WorkspaceStore, 'root' | 'workspace' | 'sharedView'>>;
 
 /**
  * The file of an API definition to read: one in the workspace, or one a shared folder gives (`../platform-shared/specs/x.yaml`,
  * workspace.json `shared`). Anything else outside the workspace is refused, as by `safePath`.
  */
 export function specFileToRead(store: SpecStore, path: string): string {
-  const shared = store.root && store.workspace ? sharedSpecFile({ root: store.root, workspace: store.workspace }, path) : undefined;
+  const shared = store.root && store.workspace ? sharedSpecFile({ root: store.root, workspace: store.workspace, sharedView: store.sharedView }, path) : undefined;
   return shared ?? store.safePath(path);
 }
 
@@ -76,13 +76,13 @@ export async function readSpecRef(store: SpecStore | undefined, ref: SpecRef | s
  * The API definitions kept in the workspace, as paths from its root (`specs/clinic.yaml`; with `includeAsync`,
  * `specs/asyncapi/*` too); with `includeShared`, then those shared folders give (`../platform-shared/specs/x.yaml`).
  */
-export function listSpecs(store: Pick<WorkspaceStore, 'path'> & Partial<Pick<WorkspaceStore, 'root' | 'workspace'>>, opts: { includeAsync?: boolean; includeShared?: boolean } = {}): string[] {
+export function listSpecs(store: Pick<WorkspaceStore, 'path'> & Partial<Pick<WorkspaceStore, 'root' | 'workspace' | 'sharedView'>>, opts: { includeAsync?: boolean; includeShared?: boolean } = {}): string[] {
   const list = (rel: string) => {
     const dir = store.path(...rel.split('/'));
     return existsSync(dir) ? readdirSync(dir).filter((f) => SPEC_FILE.test(f)).map((f) => `${rel}/${f}`) : [];
   };
   const own = [...list('specs'), ...(opts.includeAsync ? list('specs/asyncapi') : [])];
-  return opts.includeShared && store.root && store.workspace ? [...own, ...sharedSpecs({ root: store.root, workspace: store.workspace }, opts)] : own;
+  return opts.includeShared && store.root && store.workspace ? [...own, ...sharedSpecs({ root: store.root, workspace: store.workspace, sharedView: store.sharedView }, opts)] : own;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { environmentRef } from '@testpion/shared';
 import { envColor } from '../components/EnvSelect';
 import { Plus, ArrowLeftRight, Copy, Grid3x3, Download, FileJson, FileText, FolderInput, KeyRound, Save, ScanSearch, TriangleAlert } from 'lucide-react';
-import { SharedSourcesDialog } from '../components/SharedSourcesDialog';
+import { SharedSourcesDialog, SharedWaitingNotice } from '../components/SharedSourcesDialog';
 import { SecretRefsLine } from '../components/SecretRefsLine';
 import { useGitRepo } from '../lib/git';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -308,6 +308,10 @@ export function EnvironmentsView() {
                 <span className="text-xs font-semibold truncate">Environments</span>
                 {envs.length > 0 && <CountPill n={envs.length} />}
               </TreeRowShell>
+              {/* workspace.json `shared` entries that came with a pull: not read here until allowed */}
+              <div className="px-2 empty:hidden">
+                <SharedWaitingNotice onAllowed={() => void load()} />
+              </div>
               <div className="flex-1 overflow-auto" role="tree" aria-label="Environments">
                 {envs.map((e, i) => (
                   <TreeRowShell

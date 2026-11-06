@@ -187,6 +187,9 @@ export class WorkspaceStore {
   get workspace(): Workspace {
     return this.ws;
   }
+  /** Which `shared` entries are read here (the app: those allowed on this computer); unset, all of them. */
+  sharedTrust?: (s: { path: string; kinds: string[] }) => boolean;
+  get sharedView(): Pick<Workspace, 'shared'> { return { shared: this.ws.shared?.filter((s) => !this.sharedTrust || this.sharedTrust(s)) }; } // prettier-ignore
 
   get id(): string {
     return this.ws.id;
@@ -343,7 +346,7 @@ export class WorkspaceStore {
   /** Every environment as listEnvironments answers it, shared and frozen: the files are read again only when one of them changed. */
   environmentList(): readonly Environment[] {
     // the files' names, sizes and times (the shared folders' too): a list of environments read again only when one of them changed
-    const sig = environmentFilesSignature([this.path('environments'), ...sharedDirs(this.ws, this.root, 'environments').map((s) => s.dir)]);
+    const sig = environmentFilesSignature([this.path('environments'), ...sharedDirs(this.sharedView, this.root, 'environments').map((s) => s.dir)]);
     const hit = this.views.get('environments');
     return hit && hit.from === sig ? (hit.value as Environment[]) : (this.views.set('environments', { from: sig, sig: '', value: deepFreeze(this.listEnvironments()) }), this.views.get('environments')!.value as Environment[]);
   }
@@ -521,7 +524,7 @@ export class WorkspaceStore {
         });
     // stable sort: explicit order first, the rest keep file-name order; then those of the shared folders (shared-sources.ts)
     const own = read(this.path('environments'), !!o.etag).sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER));
-    return withSharedEnvironments(own, sharedDirs(this.ws, this.root, 'environments'), (dir) => read(dir, false));
+    return withSharedEnvironments(own, sharedDirs(this.sharedView, this.root, 'environments'), (dir) => read(dir, false));
   }
 
   /** Set the display order of environments. Ids not listed keep their relative order after the listed ones. */

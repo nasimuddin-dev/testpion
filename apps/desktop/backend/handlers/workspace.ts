@@ -54,6 +54,7 @@ import {
   type RefResolution,
   importFileFilters,
   setWorkspaceNote, ownershipOf, checkedSource, sharedSpecs, SHAREABLE_KINDS } from '@testpion/core';
+import { allowShared, sharedWaiting } from '../shared-trust.js';
 import type { Backend, Handlers } from '../backend.js';
 import { currentOwner } from '../current-owner.js';
 import { workspaceLockedBy } from '../backend-health.js';
@@ -67,6 +68,8 @@ function sharedOf(be: Backend) {
     shared: be.ws.workspace.shared ?? [],
     environments: be.ws.listEnvironments().filter((e) => e.shared).map((e) => ({ name: e.name, from: e.shared!, ...(e.problem ? { problem: e.problem } : {}) })),
     specs: sharedSpecs(be.ws, { includeAsync: true }),
+    // entries that came with a pull (or were written outside this app): not read until allowed on this computer
+    waiting: sharedWaiting(be, be.ws),
   };
 }
 
@@ -147,6 +150,16 @@ export function workspaceHandlers(be: Backend): Handlers {
       const source = checkedSource(be.ws.root, rel, kinds?.length ? kinds : has.length ? has : ['environments']);
       const same = (a: string) => samePath(resolve(be.ws.root, a), resolve(be.ws.root, source.path));
       be.ws.updateWorkspace({ shared: [...(be.ws.workspace.shared ?? []).filter((s) => !same(s.path)), source] });
+      allowShared(be, be.ws, [source]); // added here, by this person: read on this computer
+      return sharedOf(be);
+    },
+    /** Only the entries that wait for "Allow on this computer" (cheap: asked whenever data changes). */
+    'ws.shareWaiting': () => sharedWaiting(be, be.ws),
+    /** "Allow on this computer": entries of workspace.json `shared` that came with a pull are read here from now on (`path`: that one, else every one waiting). */
+    'ws.shareAllow': ({ path }: { path?: string } = {}) => {
+      const waiting = sharedWaiting(be, be.ws).filter((s) => path === undefined || samePath(resolve(be.ws.root, s.path), resolve(be.ws.root, path)));
+      allowShared(be, be.ws, waiting);
+      if (waiting.length) be.host.emit('data.changed', { method: 'ws.shareAllow', kinds: ['environments', 'specs'] });
       return sharedOf(be);
     },
     'ws.shareRemove': ({ path }: { path: string }) => {

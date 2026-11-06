@@ -89,6 +89,7 @@ import {
   samePath,
   type OutputDeps,
 } from '@testpion/core';
+import { trustShared } from './shared-trust.js';
 import { encryptedSecrets, reportStartupProblem, closeStoreAfterRuns, noteProblem, noteSlowCall, recordBestEffort, reportMetaProblem, scheduleSweep, settleWithin } from './backend-health.js';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
@@ -441,6 +442,7 @@ export class Backend {
     if (this.settings.lastWorkspace !== this.store.root) this.settings = this.manager.saveSettings({ ...this.settings, lastWorkspace: this.store.root });
     this.logger.info(`Opened workspace ${this.store.workspace.name}`, { migrations: this.store.migrationsApplied });
     reportMetaProblem(this, this.store);
+    trustShared(this, this.store); // workspace.json `shared` entries are read once allowed on this computer
     this.store.onWarn = (m) => this.logger.warn(m);
     for (const m of this.store.warnings) this.logger.warn(m);
     scheduleSweep(this, this.store);

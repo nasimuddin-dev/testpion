@@ -1,10 +1,10 @@
 import { FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { asError, call } from '../api';
+import { asError, call, on } from '../api';
 import { hasNativeDialogs } from '../lib/files';
 import { LABEL } from '../lib/vocabulary';
 import { attempt, useApp } from '../store';
-import { Button, Callout, EmptyNote, Field, IconButton, Input, Modal } from './ui';
+import { ApprovalNotice, Button, Callout, EmptyNote, Field, IconButton, Input, Modal } from './ui';
 
 /** What the workspace reads from other workspaces' folders (workspace.json `shared`), and the environments and API definitions they give. */
 export interface SharedSources {
@@ -12,6 +12,40 @@ export interface SharedSources {
   environments: Array<{ name: string; from: string; problem?: string }>;
   /** As every command takes them: ../platform-shared/specs/clinic.yaml */
   specs: string[];
+  /** Entries that came with a pull: not read on this computer until allowed. */
+  waiting?: Array<{ path: string; kinds: string[] }>;
+}
+
+/** What waits says: the folders and what they would give. */
+const waitingText = (w: Array<{ path: string; kinds: string[] }>) =>
+  `workspace.json reads ${w.map((s) => `${s.kinds.join(' and ')} from ${s.path}`).join('; ')}: it came with a pull or a clone (or was changed outside this app), so nothing of ${w.length === 1 ? 'that folder' : 'those folders'} is read on this computer until you allow it. Check that it is the folder you expect first.`;
+
+/**
+ * The notice of `shared` entries that wait for "Allow on this computer", where shared items are listed (Environments,
+ * API definitions): nothing when none waits. Reads again when the workspace changes.
+ */
+export function SharedWaitingNotice({ onAllowed }: { onAllowed?(): void }) {
+  const [waiting, setWaiting] = useState<SharedSources['waiting']>([]);
+  useEffect(() => {
+    const load = () => void call<NonNullable<SharedSources['waiting']>>('ws.shareWaiting').then(setWaiting, () => undefined);
+    load();
+    const offs = [on('data.changed', load), on('workspace.changedOnDisk', load)];
+    return () => offs.forEach((off) => off());
+  }, []);
+  if (!waiting?.length) return null;
+  return (
+    <ApprovalNotice
+      data-shared-waiting={waiting.length}
+      onAllow={() =>
+        attempt(async () => {
+          setWaiting((await call<SharedSources>('ws.shareAllow')).waiting ?? []);
+          onAllowed?.();
+        })
+      }
+    >
+      {waitingText(waiting)}
+    </ApprovalNotice>
+  );
 }
 
 /**
@@ -95,6 +129,19 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
             </Button>
           </div>
         </Field>
+        {!!state?.waiting?.length && (
+          <ApprovalNotice
+            data-shared-waiting={state.waiting.length}
+            onAllow={() =>
+              attempt(async () => {
+                setState(await call<SharedSources>('ws.shareAllow'));
+                onChanged();
+              })
+            }
+          >
+            {waitingText(state.waiting)}
+          </ApprovalNotice>
+        )}
         {error && <Callout tone="bad">{error}</Callout>}
       </div>
     </Modal>

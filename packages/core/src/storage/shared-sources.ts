@@ -16,6 +16,9 @@ import type { Environment, Workspace } from '../model/types.js';
 import { slugify } from '../util/ids.js';
 import { isInside, plainFileInside, samePath } from './fsutil.js';
 
+/** The `shared` entries read here: a store's `sharedView` (the app keeps those not yet allowed on this computer out), else all. */
+const viewOf = (store: { workspace: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'> }) => store.sharedView ?? store.workspace;
+
 /** What a workspace may read from another folder. Collections and tests stay the workspace's own: they are what a team owns. */
 export const SHAREABLE_KINDS = ['environments', 'specs'] as const;
 export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
@@ -80,7 +83,7 @@ export function withSharedEnvironments(own: Environment[], sources: Array<{ name
   return [...own, ...shared];
 }
 
-type EnvStore = { root: string; workspace: Pick<Workspace, 'shared'>; path(...p: string[]): string; listEnvironments(): Environment[] };
+type EnvStore = { root: string; workspace: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'>; path(...p: string[]): string; listEnvironments(): Environment[] };
 
 /** Saving or deleting an environment a shared folder gives (and the workspace has none of its own by that id) is refused. */
 export function refuseSharedEnvironment(store: EnvStore, id: string, what: 'change' | 'delete'): void {
@@ -95,7 +98,7 @@ export function refuseSharedEnvironment(store: EnvStore, id: string, what: 'chan
  */
 export function sharedEnvironmentFile(store: EnvStore, idOrName: string): string | undefined {
   const [group, name] = idOrName.includes(' ▸ ') ? idOrName.split(' ▸ ', 2).map((x) => x.trim()) : [undefined, idOrName];
-  for (const s of sharedDirs(store.workspace, store.root, 'environments'))
+  for (const s of sharedDirs(viewOf(store), store.root, 'environments'))
     for (const f of readdirSync(s.dir).filter((x) => x.endsWith('.json'))) {
       try {
         const e = JSON.parse(readFileSync(join(s.dir, f), 'utf8')) as Environment;
@@ -109,7 +112,7 @@ export function sharedEnvironmentFile(store: EnvStore, idOrName: string): string
 }
 
 const SPEC_FILE = /\.(json|ya?ml)$/i;
-type SpecStore = { root: string; workspace: Pick<Workspace, 'shared'> };
+type SpecStore = { root: string; workspace: Pick<Workspace, 'shared'>; sharedView?: Pick<Workspace, 'shared'> };
 
 /**
  * The API definitions shared folders give, as paths from the workspace (`../platform-shared/specs/clinic.yaml`; with
@@ -117,7 +120,7 @@ type SpecStore = { root: string; workspace: Pick<Workspace, 'shared'> };
  */
 export function sharedSpecs(store: SpecStore, opts: { includeAsync?: boolean } = {}): string[] {
   const out: string[] = [];
-  for (const s of sharedDirs(store.workspace, store.root, 'specs'))
+  for (const s of sharedDirs(viewOf(store), store.root, 'specs'))
     for (const dir of [s.dir, ...(opts.includeAsync ? [join(s.dir, 'asyncapi')] : [])]) {
       if (!existsSync(dir)) continue;
       // plain files only: a link in the other repository (to a credentials file) is neither listed nor read
@@ -130,7 +133,7 @@ export function sharedSpecs(store: SpecStore, opts: { includeAsync?: boolean } =
 export function sharedSpecSource(store: SpecStore, path: string): string | undefined {
   if (!path.startsWith('../') || !SPEC_FILE.test(path)) return undefined;
   const full = resolve(store.root, path);
-  for (const s of sharedDirs(store.workspace, store.root, 'specs')) {
+  for (const s of sharedDirs(viewOf(store), store.root, 'specs')) {
     // a file right in the shared specs/ folder or its asyncapi/: never a path that climbs out of it
     const rel = relative(s.dir, full);
     if (rel && !rel.startsWith('..') && !isAbsolute(rel) && /^(asyncapi[\\/])?[^\\/]+$/.test(rel) && plainFileInside(s.dir, full) !== undefined) return s.name;

@@ -27,7 +27,7 @@ export function watchSharedEnvironments(be: Backend): void {
       const paths: string[] = [];
       for (const [kind, files] of KINDS) {
         // (a shared specs/ folder's asyncapi/ too: the API definitions list shows those)
-        const dirs = sharedDirs(be.ws.workspace, be.ws.root, kind).flatMap((s) => (kind === 'specs' ? [s.dir, join(s.dir, 'asyncapi')] : [s.dir]));
+        const dirs = sharedDirs(be.ws.sharedView, be.ws.root, kind).flatMap((s) => (kind === 'specs' ? [s.dir, join(s.dir, 'asyncapi')] : [s.dir]));
         sig[kind] = dirs.length ? environmentFilesSignature(dirs, files) : '';
         // a workspace opened (or switched): what is there now is the start, not a change
         if (last?.root === be.ws.root && last.sig[kind] !== sig[kind]) changed.push(kind), paths.push(...dirs);

@@ -430,10 +430,12 @@ export interface RpcParamTypes {
   'ws.revealFile': RpcCommonParams & { path: string };
   'ws.search': RpcCommonParams & { query: string };
   'ws.shareAdd': RpcCommonParams & { path?: string; kinds?: string[] };
+  'ws.shareAllow': RpcCommonParams & { path?: string };
   'ws.shareRemove': RpcCommonParams & { path: string };
+  'ws.shareWaiting': RpcCommonParams;
   'ws.shared': RpcCommonParams;
   'ws.update': RpcCommonParams & { name?: string; description?: string; variables?: unknown[] };
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 419;
+export const RPC_METHOD_COUNT = 421;
