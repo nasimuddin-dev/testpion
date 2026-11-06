@@ -75,3 +75,40 @@ export function moveIntoCollection<N extends CollectionNode>(node: N, taken: Ite
   const r = ensureUniqueIds({ items: [node] }, taken, (prefix) => uid(prefix));
   return { node: r.collection.items[0] as N, renamed: r.renamed };
 }
+
+/** Where a node was, to put it back after a delete: its folder ('' : the top level) and the node that came after it. */
+export interface NodePlace {
+  node: CollectionNode;
+  folderId: string;
+  /** The sibling it stood before (none: it was the last of its folder). */
+  beforeId?: string;
+}
+
+/** The places of these nodes before they are removed (in tree order). */
+export function placesOf(nodes: CollectionNode[], ids: ReadonlySet<string>, folderId = ''): NodePlace[] {
+  const out: NodePlace[] = [];
+  nodes.forEach((n, i) => {
+    if (ids.has(n.id)) {
+      // the next sibling that stays (a removed one cannot be put back before)
+      const after = nodes.slice(i + 1).find((x) => !ids.has(x.id));
+      out.push({ node: n, folderId, ...(after ? { beforeId: after.id } : {}) });
+    } else if (n.kind === 'folder') out.push(...placesOf(n.items, ids, n.id));
+  });
+  return out;
+}
+
+/**
+ * Removed nodes put back into the collection as it is now (Undo of a delete): each before the sibling it stood before,
+ * else at the end of its folder, else (the folder is gone too) at the top level. What changed meanwhile stays.
+ */
+export function putBackNodes(nodes: CollectionNode[], places: readonly NodePlace[]): CollectionNode[] {
+  let out = nodes;
+  // in tree order: a run of removed siblings, each before the same next sibling, keeps its order
+  for (const p of places) {
+    if (findNode(out, p.node.id)) continue; // back already (another window, an agent)
+    if (p.beforeId && findNode(out, p.beforeId)) out = insertBefore(out, p.beforeId, p.node);
+    else if (p.folderId && findNode(out, p.folderId)?.kind === 'folder') out = addToFolder(out, p.folderId, p.node);
+    else out = [...out, p.node];
+  }
+  return out;
+}

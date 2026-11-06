@@ -22,7 +22,7 @@ import { matchIndex, type RequestCategory } from '../lib/collection-filter';
 
 // the tree's data operations live in lib/collection-nodes (re-exported: views import them from here)
 export { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode } from '../lib/collection-nodes';
-import { mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
+import { placesOf, putBackNodes, type NodePlace, mapNodes, findNode, addToFolder, insertBefore, folderIdsTo, withNewIds, duplicateNode, moveIntoCollection, nodeIdsExcept } from '../lib/collection-nodes';
 import { setSubtree as setTreeSubtree, useTreeOpen, treeKey } from '../lib/tree-state';
 import { requestCopyItems } from '../lib/request-copy';
 import { saveAsTest } from '../lib/save-test';
@@ -250,8 +250,10 @@ export const CollectionTree = memo(function CollectionTree({
             if (n.kind === 'folder') putCallsBack = await onFolderCallsRemove?.(c.id, subtreeIds(n));
             followAgain = await callsAfter(followers);
           },
+          // put back where it was, into the collection as it is now (an edit made since stays)
           undo: async () => {
-            await saveNow(whole);
+            const now = await call<Collection>('col.get', { id: c.id });
+            await saveNow({ ...now, items: putBackNodes(now.items, placesOf(whole.items, new Set([n.id]))) });
             await putCallsBack?.();
             await followAgain?.();
           },
@@ -627,8 +629,9 @@ export const CollectionTree = memo(function CollectionTree({
     // the calls that follow one of them follow what the first of a run of them followed (read now, while they are in place)
     const followers = followersOfMany(c, callsOf(c), ids);
     let followAgain: (() => Promise<unknown>) | undefined;
+    let places: NodePlace[] = [];
     return fullCollection(c).then(
-      (whole) =>
+      (whole) => (places = placesOf(whole.items, ids)) &&
         deleteWithUndo({
           kind: 'request',
           name: plural(ids.size, 'request'),
@@ -637,8 +640,10 @@ export const CollectionTree = memo(function CollectionTree({
             await saveNow({ ...whole, items: mapNodes(whole.items, (x) => (ids.has(x.id) ? null : x)) });
             followAgain = await callsAfter(followers);
           },
+          // put back where they were, into the collection as it is now (an edit made since stays)
           undo: async () => {
-            await saveNow(whole);
+            const now = await call<Collection>('col.get', { id: c.id });
+            await saveNow({ ...now, items: putBackNodes(now.items, places) });
             await followAgain?.();
           },
         }),
