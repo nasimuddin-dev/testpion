@@ -820,7 +820,7 @@ export interface AppSettings {
    * Git: how often the app fetches in the background (minutes; 0 = off, default 5) while a workspace in git with a remote is open;
    * and `autoPull`: when the fetch finds new commits and the workspace has no changes of yours, pull them (a plain fast-forward, never a merge).
    */
-  git?: { autoFetchMinutes?: number; autoPull?: boolean };
+  git?: { autoFetchMinutes?: number; autoPull?: boolean; /** your teams (`@org/payments`): a comment mentioning one is for you */ teams?: string[] };
   /** The rail of the desktop app (per computer): the order of its views and which are shown; the rest are under More…. */
   rail?: { order?: string[]; shown?: string[] };
   /** Row heights, paddings and text sizes of the desktop app: comfortable (default) or compact. */

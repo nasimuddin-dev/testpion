@@ -161,6 +161,17 @@ export function SettingsView() {
             </Field>
           )}
           {tab === 'git' && (
+            <Field label="Your teams" hint="The teams you are in, as CODEOWNERS names them (@org/payments), comma separated: a comment that mentions one of them is for you (first on Home, and a message when it arrives). For this computer.">
+              <Input
+                aria-label="Your teams"
+                placeholder="@org/payments, @org/qa"
+                value={(s.git?.teams ?? []).join(', ')}
+                onChange={(e) => set({ git: { ...s.git, teams: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } })}
+                data-settings-teams
+              />
+            </Field>
+          )}
+          {tab === 'git' && (
             <Field
               label="Pull my team's commits by itself"
               hint={

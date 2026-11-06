@@ -38,6 +38,7 @@ export const SETTING_SPECS: Record<string, Spec> = {
   'tls.systemCa': { kind: 'boolean', doc: 'Also trust the certificates of the operating system.' },
   'git.autoFetchMinutes': { kind: 'number', doc: 'How often the app fetches in the background, in minutes (0: never).' },
   'git.autoPull': { kind: 'boolean', doc: "Pull your team's new commits by itself when this workspace has no changes of yours (a plain fast-forward; never a merge)." },
+  'git.teams': { kind: 'list', doc: 'The teams you are in, as CODEOWNERS names them (@org/payments): a comment that mentions one of them is for you.' },
   'ai.localOnly': { kind: 'boolean', doc: 'AI only with models on this computer.' },
   'ai.privacy': { kind: { oneOf: ['full', 'metadata', 'names'] }, doc: 'What an AI action starts with: full (redacted), metadata or names only.' },
   'ai.maskPersonalData': { kind: 'boolean', doc: 'Mask e-mail addresses, phone numbers and card numbers before AI calls.' },

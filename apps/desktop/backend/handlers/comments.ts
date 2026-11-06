@@ -23,7 +23,8 @@ export function commentsHandlers(be: Backend): Handlers {
     // `forYou` on the comments that @mention this person (the git identity); `forMe` keeps those only
     'comments.open': async ({ owner, forMe }: { owner?: string; forMe?: boolean } = {}) => {
       const id = await gitIdentity(be.ws.root).catch(() => ({ name: undefined, email: undefined }));
-      const all = await openCommentsByOwner(be.ws, owner, { name: id.name || userInfo().username, email: id.email });
+      // the teams this person said they are in (Settings ▸ Git): a comment that mentions one is for them too
+      const all = await openCommentsByOwner(be.ws, owner, { name: id.name || userInfo().username, email: id.email, teams: be.settings.git?.teams });
       return forMe ? all.filter((c) => c.forYou) : all;
     },
     'comments.counts': () => openCommentCounts(be.ws),

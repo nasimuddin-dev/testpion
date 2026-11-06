@@ -56,6 +56,7 @@ export const SETTINGS_INDEX: readonly SettingsEntry[] = [
   { tab: 'requests', label: 'Ask before sending a request that changes data with a variable that has no value', words: 'confirm unresolved variable post put patch delete warn' },
   { tab: 'git', label: 'Fetch in the background every (minutes)', words: 'auto fetch remote' },
   { tab: 'git', label: "Pull my team's commits by itself", words: 'auto pull fast-forward team remote' },
+  { tab: 'git', label: 'Your teams', words: 'mentions comments codeowners team for you' },
   { tab: 'proxy', label: 'Proxy URL', words: 'http proxy corporate' },
   { tab: 'proxy', label: 'Bypass the proxy for', words: 'no_proxy hosts' },
   { tab: 'proxy', label: 'User name (optional)', words: 'proxy login' },
