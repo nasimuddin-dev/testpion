@@ -1,4 +1,5 @@
 import type { GraphQLSchema, IntrospectionQuery, GraphQLField, GraphQLInputField, GraphQLNamedType } from 'graphql';
+import { createHash } from 'node:crypto';
 import { nodeRequire } from '../../util/lazy-require.js';
 
 // graphql loads at first use, not at startup (see util/lazy-require.ts)
@@ -14,7 +15,15 @@ export interface GraphQLResult {
   data?: unknown;
   errors?: Array<{ message: string; path?: unknown; locations?: unknown; extensions?: unknown }>;
   operationType?: 'query' | 'mutation' | 'subscription';
+  /** With persistedQueries: the server knew the hash (hit), was sent the query to keep (registered), or does not do APQ (unsupported). */
+  persisted?: 'hit' | 'registered' | 'unsupported';
 }
+
+/** An error of an APQ answer: the server does not know the hash yet, or does not do persisted queries. */
+const apqError = (json: unknown, code: 'PERSISTED_QUERY_NOT_FOUND' | 'PERSISTED_QUERY_NOT_SUPPORTED') =>
+  ((json as { errors?: Array<{ message?: string; extensions?: { code?: string } }> } | undefined)?.errors ?? []).some(
+    (e) => e?.extensions?.code === code || e?.message === (code === 'PERSISTED_QUERY_NOT_FOUND' ? 'PersistedQueryNotFound' : 'PersistedQueryNotSupported'),
+  );
 
 function toHttp(spec: GraphQLRequestSpec, body: unknown): HttpRequestSpec {
   const headers = [...(spec.headers ?? [])];
@@ -61,9 +70,27 @@ export async function executeGraphQL(spec: GraphQLRequestSpec, opts: HttpExecOpt
   const body: Record<string, unknown> = { query: spec.query };
   if (variables) body.variables = variables;
   if (spec.operationName) body.operationName = spec.operationName;
-  const { response, prepared } = await executeHttp(toHttp(spec, body), opts);
+  let persisted: GraphQLResult['persisted'];
+  let sent: Awaited<ReturnType<typeof executeHttp>>;
+  if (!spec.persistedQueries) sent = await executeHttp(toHttp(spec, body), opts);
+  else {
+    // automatic persisted queries (Apollo's APQ): the hash alone first; the query with it once the server asks for it
+    const extensions = { persistedQuery: { version: 1, sha256Hash: createHash('sha256').update(spec.query).digest('hex') } };
+    const { query: _q, ...rest } = body;
+    void _q;
+    sent = await executeHttp(toHttp(spec, { ...rest, extensions }), opts);
+    persisted = 'hit';
+    if (apqError(sent.response.json, 'PERSISTED_QUERY_NOT_FOUND')) {
+      sent = await executeHttp(toHttp(spec, { ...body, extensions }), opts);
+      persisted = 'registered';
+    } else if (apqError(sent.response.json, 'PERSISTED_QUERY_NOT_SUPPORTED')) {
+      sent = await executeHttp(toHttp(spec, body), opts);
+      persisted = 'unsupported';
+    }
+  }
+  const { response, prepared } = sent;
   const json = response.json as { data?: unknown; errors?: GraphQLResult['errors'] } | undefined;
-  return { response, prepared, data: json?.data, errors: json?.errors, operationType: op.type };
+  return { response, prepared, data: json?.data, errors: json?.errors, operationType: op.type, ...(persisted ? { persisted } : {}) };
 }
 
 export async function introspect(spec: Omit<GraphQLRequestSpec, 'query'>, opts: HttpExecOptions = {}): Promise<{ schema: GraphQLSchema; sdl: string; introspection: IntrospectionQuery }> {

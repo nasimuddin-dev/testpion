@@ -526,7 +526,7 @@ async function runGraphQL(test: GraphQLTest, scope: VariableScope, svc: ExecServ
   const s = span.child(`graphql ${test.operationName ?? ''}`.trim(), 'graphql', { input: { query: r.query, variables: r.variables } });
   if (detectOperation(r.query, r.operationName).type === 'subscription') return runGraphQLSubscription(test, r, auth, svc, s, signal);
   try {
-    const out = await executeGraphQL({ ...r, auth }, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, cookieJar: svc.cookieJar, variableNames: () => scope.names() });
+    const out = await executeGraphQL({ ...r, auth, ...(test.persistedQueries ? { persistedQueries: true } : {}) }, { signal, redactor: svc.redactor, maxPreviewBytes: svc.maxPreviewBytes ?? 1024 * 1024, cookieJar: svc.cookieJar, variableNames: () => scope.names() });
     svc.onHttpResponse?.({ testId: test.id ?? test.name, status: out.response.status, statusText: out.response.statusText ?? '', headers: out.response.headers, body: out.response.bodyPreview, durationMs: out.response.durationMs, url: out.prepared.url, timing: timingSummary(out.response) });
     if (out.response.connection?.certificate) svc.onCertificate?.(out.prepared.url, out.response.connection.certificate);
     if (deprecationOf(out.response.headers)) svc.onDeprecation?.('POST', out.prepared.url, out.response.headers);

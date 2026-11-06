@@ -64,6 +64,8 @@ interface Draft {
   auth?: AuthConfig;
   assertions: CheckConfig[];
   operationName?: string;
+  /** Automatic persisted queries (APQ): the query's hash first, the query once the server asks for it. */
+  persistedQueries?: boolean;
   collectionId?: string;
   requestId?: string;
   name: string;
@@ -76,8 +78,8 @@ interface Draft {
 }
 
 /** A saved GraphQL request's fields, compared to tell unsaved edits and a change on disk apart. */
-function gqlSnapshot(x: Pick<Draft, 'endpoint' | 'query' | 'variables' | 'headers' | 'auth' | 'operationName' | 'assertions' | 'preRequestScript' | 'testScript'>): string {
-  return JSON.stringify([x.endpoint, x.query, x.variables, x.headers ?? [], x.auth ?? null, x.operationName ?? null, x.assertions ?? [], x.preRequestScript || null, x.testScript || null]);
+function gqlSnapshot(x: Pick<Draft, 'endpoint' | 'query' | 'variables' | 'headers' | 'auth' | 'operationName' | 'assertions' | 'preRequestScript' | 'testScript' | 'persistedQueries'>): string {
+  return JSON.stringify([x.endpoint, x.query, x.variables, x.headers ?? [], x.auth ?? null, x.operationName ?? null, x.assertions ?? [], x.preRequestScript || null, x.testScript || null, !!x.persistedQueries]);
 }
 
 interface SubEvent {
@@ -101,7 +103,7 @@ query GetPatient($id: ID!) {
 /** GraphQL variables as editor text: saved requests may keep them as a JSON object. */
 /** A saved request as this editor's fields (opening it, or taking the version on disk), with its snapshot as the base. */
 function draftOf(collectionId: string, n: SavedGraphQLRequest): Partial<Draft> {
-  const f = { endpoint: n.request.endpoint, query: n.request.query, variables: variablesText(n.request.variables), headers: n.request.headers ?? [], auth: n.request.auth, assertions: n.assertions ?? [], collectionId, requestId: n.id, name: n.name, operationName: n.request.operationName, preRequestScript: n.preRequestScript, testScript: n.testScript };
+  const f = { endpoint: n.request.endpoint, query: n.request.query, variables: variablesText(n.request.variables), headers: n.request.headers ?? [], auth: n.request.auth, assertions: n.assertions ?? [], collectionId, requestId: n.id, name: n.name, operationName: n.request.operationName, persistedQueries: n.request.persistedQueries, preRequestScript: n.preRequestScript, testScript: n.testScript };
   return { ...f, base: gqlSnapshot(f) };
 }
 
@@ -147,7 +149,7 @@ export function GraphQLView() {
     }
   };
   const [running, setRunning] = useState<string>();
-  const [result, setResult] = useState<{ response?: HttpResponseData; errors?: unknown[]; checks?: CheckResult[]; error?: NormalizedError; operationType?: string; scriptLogs?: Array<{ phase: string; message: string }> }>();
+  const [result, setResult] = useState<{ response?: HttpResponseData; errors?: unknown[]; checks?: CheckResult[]; error?: NormalizedError; operationType?: string; persisted?: 'hit' | 'registered' | 'unsupported'; scriptLogs?: Array<{ phase: string; message: string }> }>();
   const [sub, setSub] = useState<'variables' | 'headers' | 'auth' | 'scripts' | 'tests' | 'connection'>('variables');
   // a running subscription and its events
   const [subscription, setSubscription] = useState<{ id: string; protocol: string }>();
@@ -314,7 +316,7 @@ export function GraphQLView() {
       const opName = d.operationName && operations.some((o) => o.name === d.operationName) ? d.operationName : operations.length > 1 ? operations[0]?.name : undefined;
       const r = await call('gql.send', {
         id,
-        request: { endpoint: d.endpoint, query: d.query, variables: d.variables, operationName: opName, headers: d.headers, auth: d.auth?.type === 'inherit' ? undefined : d.auth },
+        request: { endpoint: d.endpoint, query: d.query, variables: d.variables, operationName: opName, headers: d.headers, auth: d.auth?.type === 'inherit' ? undefined : d.auth, ...(d.persistedQueries ? { persistedQueries: true } : {}) },
         environment: env,
         collectionId: d.collectionId,
         requestId: d.requestId,
@@ -395,7 +397,7 @@ export function GraphQLView() {
       kind: 'graphql',
       id: d.requestId ?? uid('gql-'),
       name,
-      request: { endpoint: d.endpoint, query: d.query, variables: d.variables, headers: d.headers, auth: d.auth, operationName: d.operationName },
+      request: { endpoint: d.endpoint, query: d.query, variables: d.variables, headers: d.headers, auth: d.auth, operationName: d.operationName, ...(d.persistedQueries ? { persistedQueries: true } : {}) },
       assertions: d.assertions,
       preRequestScript: d.preRequestScript || undefined,
       testScript: d.testScript || undefined,
@@ -425,7 +427,7 @@ export function GraphQLView() {
       // never saved without the variables as if there were none: the file would run another query
       return useApp.getState().toast(`The variables are not valid JSON (${asError(e).message}): fix them, then save the test file`, 'error');
     }
-    void saveAsTestFile(d.name || selectedOp?.name || 'GraphQL query', { kind: 'graphql', endpoint: d.endpoint, query: d.query, variables, operationName: operations.length > 1 ? selectedOp?.name : undefined, headers: d.headers, auth: d.auth }, d.assertions);
+    void saveAsTestFile(d.name || selectedOp?.name || 'GraphQL query', { kind: 'graphql', endpoint: d.endpoint, query: d.query, variables, operationName: operations.length > 1 ? selectedOp?.name : undefined, headers: d.headers, auth: d.auth, ...(d.persistedQueries ? { persistedQueries: true } : {}) }, d.assertions);
   };
   const renameTabTo = (name: string) => setD((x) => ({ ...x, name }));
   useSingleEditorTab('graphql', { title: tabTitle(d.name, NEW_TAB_TITLE.graphql), badge: 'GQL', badgeClass: 'kind-graphql', item: d.requestId, onRenameTo: renameTabTo, onSaveAsTest: saveTest });
@@ -447,6 +449,12 @@ export function GraphQLView() {
             <span className="hidden @[52rem]:inline">{mockUrl ? 'Mock on' : 'Mock'}</span>
           </Button>
         </Tooltip>
+        <label
+          className="text-xs flex items-center gap-1.5 shrink-0"
+          title="Automatic persisted queries (Apollo's APQ): the query's hash is sent first, and the query only when the server does not know it yet; the response says hit, registered or unsupported"
+        >
+          <input type="checkbox" checked={!!d.persistedQueries} onChange={(e) => set({ persistedQueries: e.target.checked || undefined })} data-gql-apq /> APQ
+        </label>
         {operations.length > 1 && (
           <Select aria-label="Operation" value={d.operationName ?? operations[0]?.name ?? ''} onChange={(e) => set({ operationName: e.target.value })}>
             {operations.map((o) => (
@@ -595,6 +603,15 @@ export function GraphQLView() {
                     <Badge tone={statusTone(result.response.status)}>{result.response.status}</Badge>
                     <span className="text-muted">{formatMs(result.response.durationMs)}</span>
                     {!!result.errors?.length && <Badge tone="bad">{result.errors.length} GraphQL error(s)</Badge>}
+                    {result.persisted && (
+                      <Badge
+                        tone={result.persisted === 'unsupported' ? 'warn' : 'default'}
+                        title={result.persisted === 'hit' ? 'The server knew the query by its hash: only the hash was sent' : result.persisted === 'registered' ? 'The server did not know the hash yet: the query was sent with it, to keep' : 'The server does not do persisted queries: the query was sent as usual'}
+                        data-gql-persisted={result.persisted}
+                      >
+                        APQ {result.persisted}
+                      </Badge>
+                    )}
                   </Bar>
                   <Tabs label="Response"
                     value={resTab}

@@ -101,6 +101,7 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'operationName', description: 'Which operation of the document to run.', shape: 'text' },
     { key: 'headers', description: 'Headers: { Name: value }.', shape: 'map' },
     { key: 'auth', description: 'Authentication, as for http.', shape: 'map' },
+    { key: 'persistedQueries', description: "true: automatic persisted queries (Apollo's APQ): the query's hash first, the query once the server asks.", shape: 'boolean' },
     { key: 'events', description: 'A subscription: stop after this many events (default 1). The body is the first event ($.data…), every event is in $.events.', shape: 'number' },
     { key: 'wait', description: 'A subscription: milliseconds to listen at most (default 10000; waitMs works too).', shape: 'number' },
   ],
@@ -111,6 +112,7 @@ const BY_TYPE: Record<string, TestKeyDoc[]> = {
     { key: 'metadata', description: 'gRPC metadata: { key: value }.', shape: 'map' },
     { key: 'protos', description: 'The .proto files (a path or a list); left out, the server is asked through reflection (proto works too).', shape: 'list' },
     { key: 'tls', description: 'true for a TLS connection.', shape: 'boolean' },
+    { key: 'web', description: 'true: gRPC-Web over HTTP/1.1 (Envoy, a grpc-web proxy); the target may be an http(s) URL. Unary and server-streaming.', shape: 'boolean' },
   ],
   websocket: [
     { key: 'url', description: 'ws://, wss:// (WebSocket), http(s):// (Socket.IO), mqtt:// (MQTT) or kafka://broker:9092 (Kafka; several brokers separated by commas).', shape: 'text' },

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### GraphQL persisted queries
+
+- **APQ** on a GraphQL request (and `persistedQueries: true` in a test) sends it as an automatic persisted query (Apollo's APQ): the hash first, the query once the server asks; the response says hit, registered or unsupported.
+
 ### gRPC-Web
 
 - A gRPC call can go over **gRPC-Web** (Settings ▸ gRPC-Web, `web: true` in a test, `grpc_call { web: true }`): HTTP/1.1 through Envoy's `grpc_web` filter or a grpc-web proxy, the address an `http(s)://` URL (a path allowed), the same protos and message JSON; unary and server-streaming methods, the status read from the trailers or the headers.

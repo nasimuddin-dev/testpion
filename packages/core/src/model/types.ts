@@ -140,6 +140,7 @@ export interface GraphQLRequestSpec {
   headers?: KeyValue[];
   auth?: AuthConfig;
   settings?: HttpSettings;
+  persistedQueries?: boolean; // automatic persisted queries (APQ): the query's hash first, the query once the server asks
 }
 
 /* ------------------------------------------------------------------ mcp */
@@ -292,6 +293,7 @@ export interface GraphQLTest extends TestBase {
   operationName?: string;
   headers?: KeyValue[];
   auth?: AuthConfig;
+  persistedQueries?: boolean; // APQ (graphql.ts): the query's hash first
   /** A subscription: stop after this many events (default 1). */
   events?: number;
   /** A subscription: listen at most this long, in milliseconds (default 10000). */
