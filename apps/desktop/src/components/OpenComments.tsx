@@ -13,7 +13,7 @@ export function OpenCommentRow({ c }: { c: OwnedComment }) {
         <RefLink to={c.ref} className="font-medium min-w-0" />
         {c.owners?.length > 0 && <Badge title="The team that owns this item (CODEOWNERS)">{c.owners.join(' ')}</Badge>}
         {c.forYou && (
-          <Badge tone="accent" title="It mentions you (@ and your git name or e-mail)" data-home-comment-for-you="">
+          <Badge tone="accent" title="It mentions you (@ and your git name or e-mail) or one of your teams, or answers a comment of yours" data-home-comment-for-you="">
             For you
           </Badge>
         )}

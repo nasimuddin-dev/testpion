@@ -50,6 +50,10 @@ export async function mentionCandidates(store: Pick<WorkspaceStore, 'root'>): Pr
 export async function openCommentsByOwner(store: WorkspaceStore, owner?: string, me?: { name?: string; email?: string; teams?: string[] }): Promise<OwnedComment[]> {
   const open = openComments(store);
   const co = await workspaceCodeowners(store.root).catch(() => undefined);
+  // a reply to a comment this person wrote is for them too (its comment is open while the reply is, so it is here)
+  const byId = new Map(open.map((c) => [c.id, c]));
+  const same = (a?: string, b?: string) => !!a && !!b && a.toLowerCase().replace(/\s+/g, '') === b.toLowerCase().replace(/\s+/g, '');
+  const answersMe = (c: (typeof open)[number]) => !!me && !!c.replyTo && same(byId.get(c.replyTo)?.by, me.name) && !same(c.by, me.name);
   const out = open.map((c): OwnedComment => {
     let file: string | undefined;
     try {
@@ -58,7 +62,7 @@ export async function openCommentsByOwner(store: WorkspaceStore, owner?: string,
       file = undefined;
     }
     const mentions = mentionsIn(c.text);
-    const forYou = !!me && (mentionsPerson(mentions, me) || mentions.some((m) => me.teams?.some((t) => sameOwner(t, m))));
+    const forYou = !!me && (mentionsPerson(mentions, me) || mentions.some((m) => me.teams?.some((t) => sameOwner(t, m))) || answersMe(c));
     return { ...c, owners: co && file ? ownersOf(co.rules, toRepoPath(co.repo, store.root, file)) : [], mentions, ...(forYou ? { forYou } : {}) };
   });
   return owner?.trim() ? out.filter((c) => c.owners.some((o) => sameOwner(o, owner))) : out;

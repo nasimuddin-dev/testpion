@@ -11,6 +11,9 @@ interface ForYou {
   id: string;
   by: string;
   text: string;
+  /** A reply (to a comment of yours, when it has no mention of you). */
+  replyTo?: string;
+  mentions?: string[];
   ref: ItemRef;
 }
 
@@ -42,7 +45,7 @@ export function watchMentions(): () => void {
       const fresh = mine.filter((c) => !seen.has(c.id));
       if (announce)
         for (const c of fresh.slice(0, 3)) {
-          const text = `${c.by} mentioned you: ${c.text.length > 90 ? `${c.text.slice(0, 90)}…` : c.text}`;
+          const text = `${c.by} ${c.replyTo && !c.mentions?.length ? 'answered your comment' : 'mentioned you'}: ${c.text.length > 90 ? `${c.text.slice(0, 90)}…` : c.text}`;
           useApp.getState().toast(text, 'info', { ref: c.ref });
           if (document.hidden) notifySystem('TestPion', text, { ref: c.ref, tag: `mention-${c.id}` });
         }

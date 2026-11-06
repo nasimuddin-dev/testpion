@@ -47,6 +47,22 @@ describe('mentions in comments', () => {
       s.close();
     }
   });
+
+  it('a reply to a comment you wrote is for you (not your own reply)', async () => {
+    const s = WorkspaceStore.create(join(tmp.dir, 'ws-replies'), 'Replies');
+    try {
+      const ref = { kind: 'environment', environmentId: 'development' } as const;
+      const mine = addComment(s, ref, 'Who owns staging?', 'Ana Lee');
+      addComment(s, ref, 'Platform does.', 'Bob', { replyTo: mine.id });
+      addComment(s, ref, 'Thanks', 'Ana Lee', { replyTo: mine.id });
+      const theirs = addComment(s, ref, 'Is prod frozen?', 'Bob');
+      addComment(s, ref, 'Until Friday.', 'Cy', { replyTo: theirs.id });
+      const open = await openCommentsByOwner(s, undefined, { name: 'Ana Lee' });
+      expect(open.filter((c) => c.forYou).map((c) => c.text)).toEqual(['Platform does.']);
+    } finally {
+      s.close();
+    }
+  });
 });
 
 describe('who a comment can mention', () => {
