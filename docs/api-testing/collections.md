@@ -55,6 +55,10 @@ Folders have their own menu (**New HTTP request**, **New folder**, **Expand all*
 
 A saved gRPC call or connection has the same groups: **Open**, **Open in new tab**, **Copy link**, **Copy as grpcurl** (or **Copy URL**), **Save as test…**, **Rename**, **Duplicate**, **Move to collection ▸** and **Delete…**; drag it onto another collection to move it there. Its folder has **Expand all** / **Collapse all**, **Rename folder** and **Delete folder…** (its calls move to the top level, with **Undo**).
 
+## Pick several requests
+
+**Ctrl+click** (**⌘+click** on a Mac) requests in the tree to pick them; **Shift+click** picks every request between the last one and this one. A bar above the tree then says how many are picked and offers **Run** (one run of just those, in the order the tree shows them, in the active environment), **Move to…** (a folder of the same collection, or its top level), **Delete** (one **Undo** brings them all back) and **×** (or **Esc**) to let go. Picking in another collection starts over there; a plain click still opens a request.
+
 ## Tidy up
 
 **Tools ▸ Tidy up…** in a collection's header finds what piles up in big or imported collections:

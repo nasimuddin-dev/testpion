@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Pick several requests
+
+- Ctrl/⌘+click and Shift+click pick requests of one collection in the Collections tree; the bar above it runs them as one run, moves them to a folder or deletes them (one Undo), and Esc lets go.
+
 ### Environments shared from another workspace
 
 - `workspace.json` `shared: [{ "path": "../platform-shared", "kinds": ["environments"] }]` (or `testpion workspace share --add ../platform-shared`) reads another workspace's environments read-only: listed after the workspace's own with a **shared** badge, usable everywhere, refused by Save, Rename and Delete (Duplicate copies one); an id of the workspace's own wins. `env list` and `list_environments` say where one comes from.

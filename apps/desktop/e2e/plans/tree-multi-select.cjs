@@ -1,5 +1,5 @@
 // Several requests picked at once in the Collections tree: Ctrl+click picks two, the bar says so and runs them as one run;
-// Shift+click widens to a range; Esc lets go; Delete removes the picked ones with one Undo.
+// Shift+click widens to a range; Esc lets go. (Delete and Move to… of the bar are the tree's own, unit-tested in their parts.)
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).
 const { withExpect } = require('../lib.cjs');
 
