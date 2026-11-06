@@ -2,7 +2,7 @@ import { userInfo } from 'node:os';
 import { toItemRef } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
 import { gitIdentity } from '../../git/git.js';
-import { addComment, listComments, resolveComment } from '../../storage/comments.js';
+import { addComment, editComment, listComments, resolveComment } from '../../storage/comments.js';
 import { resolveItemRef } from '../../storage/item-refs.js';
 import { openCommentsByOwner } from '../../storage/comment-owners.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
@@ -29,11 +29,11 @@ export function commentTools({ store, readOnly }: { store: WorkspaceStore; readO
     {
       name: 'team_comments',
       write: !readOnly,
-      description: `Comments the team leaves on an item (a request, a test file, an evaluation, a monitor …), kept under comments/ and carried by git. \`action\` open: every open comment of the workspace, newest first, with its \`ref\`; list: the thread of \`ref\`${readOnly ? '.' : '; add: `text` on `ref`, signed with the git identity (with \`id\`: a reply to that comment); resolve: comment `id` of `ref` settled.'}`,
+      description: `Comments the team leaves on an item (a request, a test file, an evaluation, a monitor …), kept under comments/ and carried by git. \`action\` open: every open comment of the workspace, newest first, with its \`ref\`; list: the thread of \`ref\`${readOnly ? '.' : '; add: `text` on `ref`, signed with the git identity (with \`id\`: a reply to that comment); edit: your comment \`id\` gets \`text\`; resolve: comment `id` of `ref` settled.'}`,
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: readOnly ? ['open', 'list'] : ['open', 'list', 'add', 'resolve'] },
+          action: { type: 'string', enum: readOnly ? ['open', 'list'] : ['open', 'list', 'add', 'edit', 'resolve'] },
           ref: { type: 'object', description: 'An ItemRef' },
           owner: str('open: only what this CODEOWNERS owner owns'),
           ...(readOnly ? {} : { text: str('At most 2000 characters'), id: str('Comment id') }),
@@ -54,10 +54,11 @@ export function commentTools({ store, readOnly }: { store: WorkspaceStore; readO
         const action = String(a.action);
         if (action === 'open') return openCommentsByOwner(store, typeof a.owner === 'string' ? a.owner : undefined);
         if (action === 'list') return listComments(store, refOf(a.ref));
-        if (readOnly && (action === 'add' || action === 'resolve')) throw new ApsError('ValidationError', 'This server is read-only: it cannot add or resolve a comment');
+        if (readOnly && (action === 'add' || action === 'edit' || action === 'resolve')) throw new ApsError('ValidationError', 'This server is read-only: it cannot add or resolve a comment');
         if (action === 'add') return addComment(store, existing(a.ref), String(a.text ?? ''), await who(), { replyTo: typeof a.id === 'string' && a.id ? a.id : undefined });
+        if (action === 'edit') return editComment(store, refOf(a.ref), String(a.id ?? ''), String(a.text ?? ''), await who());
         if (action === 'resolve') return resolveComment(store, refOf(a.ref), String(a.id ?? ''), await who());
-        throw new ApsError('ValidationError', `action is ${readOnly ? 'open or list' : 'open, list, add or resolve'}`);
+        throw new ApsError('ValidationError', `action is ${readOnly ? 'open or list' : 'open, list, add, edit or resolve'}`);
       },
     },
   ];

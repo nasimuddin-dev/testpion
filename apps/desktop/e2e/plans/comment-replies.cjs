@@ -32,6 +32,19 @@ const steps = [
      return 'replying shown: ' + !!replying + ' | under it: ' + /Payments does/.test(under?.textContent ?? '') + ' | reply mode off: ' + !h.querySelector('[data-comment-replying]');`,
   ),
   step(
+    'change-your-own-comment',
+    `${H}
+     const h = await openInfo(); if (!h) return 'NO HOST';
+     const first = h.querySelector('[data-comment="open"]'); if (!first) return 'NO COMMENT';
+     const edit = first.querySelector('[data-comment-edit]'); if (!edit) return 'NO EDIT (is it yours?)';
+     edit.click();
+     const box = await __t.waitFor(() => h.querySelector('[data-comment-edit-text]'), 3000); if (!box) return 'NO EDIT BOX';
+     await __t.real.click(box); await __t.real.key('End'); await __t.real.type(' (checkout)');
+     await __t.real.click(h.querySelector('[data-comment-edit-save]'));
+     const changed = await __t.waitFor(() => /Who owns this endpoint\\? \\(checkout\\)/.test(h.querySelector('[data-comment="open"]')?.textContent ?? '') && h.querySelector('[data-comment-edited]'), 6000);
+     return 'changed: ' + !!changed;`,
+  ),
+  step(
     'settle-and-delete-take-the-reply',
     `${H}
      const h = await openInfo(); if (!h) return 'NO HOST';
@@ -49,5 +62,6 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'reply-to-a-comment': /^replying shown: true \| under it: true \| reply mode off: true$/,
+  'change-your-own-comment': /^changed: true$/,
   'settle-and-delete-take-the-reply': /^all settled: true \| open after settling: 0 \| reply gone with it: true$/,
 });

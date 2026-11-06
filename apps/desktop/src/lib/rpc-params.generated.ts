@@ -82,6 +82,7 @@ export interface RpcParamTypes {
   'comments.add': RpcCommonParams & { ref: unknown; text: string; replyTo?: string };
   'comments.counts': RpcCommonParams;
   'comments.delete': RpcCommonParams & { ref: unknown; id: string };
+  'comments.edit': RpcCommonParams & { ref: unknown; id: string; text: string };
   'comments.list': RpcCommonParams & { ref: unknown };
   'comments.open': RpcCommonParams & { owner?: string; forMe?: boolean };
   'comments.people': RpcCommonParams;
@@ -438,4 +439,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 421;
+export const RPC_METHOD_COUNT = 422;

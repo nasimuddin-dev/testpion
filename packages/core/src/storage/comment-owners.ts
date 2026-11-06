@@ -7,7 +7,7 @@ import { mentionsIn, mentionsPerson } from '@testpion/shared';
 import { ownersOf, workspaceCodeowners } from '../git/owners.js';
 import { gitLog, toRepoPath } from '../git/git.js';
 import { sameOwner } from './attention.js';
-import { openComments, type OpenComment } from './comments.js';
+import { openComments, sameAuthor, type OpenComment } from './comments.js';
 import { itemInfo } from './item-info.js';
 import type { WorkspaceStore } from './workspace.js';
 
@@ -52,7 +52,7 @@ export async function openCommentsByOwner(store: WorkspaceStore, owner?: string,
   const co = await workspaceCodeowners(store.root).catch(() => undefined);
   // a reply to a comment this person wrote is for them too (its comment is open while the reply is, so it is here)
   const byId = new Map(open.map((c) => [c.id, c]));
-  const same = (a?: string, b?: string) => !!a && !!b && a.toLowerCase().replace(/\s+/g, '') === b.toLowerCase().replace(/\s+/g, '');
+  const same = sameAuthor;
   const answersMe = (c: (typeof open)[number]) => !!me && !!c.replyTo && same(byId.get(c.replyTo)?.by, me.name) && !same(c.by, me.name);
   const out = open.map((c): OwnedComment => {
     let file: string | undefined;

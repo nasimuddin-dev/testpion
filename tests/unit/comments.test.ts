@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceStore, addComment, commentFileOf, deleteComment, listComments, openCommentCounts, openComments, resolveComment, restoreComment, COMMENT_LIMIT, describeFile, type ItemRef } from '../../packages/core/src/index.js';
+import { WorkspaceStore, addComment, commentFileOf, deleteComment, editComment, listComments, openCommentCounts, openComments, resolveComment, restoreComment, COMMENT_LIMIT, describeFile, type ItemRef } from '../../packages/core/src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'tp-comments-'));
 const store = WorkspaceStore.create(join(dir, 'ws'), 'Comments');
@@ -116,5 +116,14 @@ describe('comments for your team', () => {
     deleteComment(store, item, q.id);
     expect(restoreComment(store, item, gone!)).not.toHaveProperty('replyTo');
     expect(openComments(store).some((c) => c.id === r1.id && !c.replyTo)).toBe(true);
+  });
+
+  it('its author changes a comment (edited is said); nobody else can', () => {
+    const item: ItemRef = { kind: 'test', path: 'tests/edits.yaml' };
+    const c = addComment(store, item, 'Who ownz this?', 'Ana Lee');
+    expect(editComment(store, item, c.id, 'Who owns this?', 'ana lee')).toMatchObject({ text: 'Who owns this?' });
+    expect(listComments(store, item)[0]!.editedAt).toBeTruthy();
+    expect(() => editComment(store, item, c.id, 'Mine now', 'Bo')).toThrow(/Only Ana Lee can change this comment/);
+    expect(() => editComment(store, item, c.id, '  ', 'Ana Lee')).toThrow(/empty/);
   });
 });

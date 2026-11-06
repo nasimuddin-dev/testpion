@@ -1,4 +1,4 @@
-import { Check, MessageSquare, Reply, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, MessageSquare, Pencil, Reply, RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MENTION, type ItemRef } from '@testpion/shared';
 import { call, on } from '../api';
@@ -9,7 +9,7 @@ import { deleteWithUndo } from '../lib/undo-delete';
 import { Button, EmptyNote, IconButton, SectionTitle, Textarea, cx } from './ui';
 import { SuggestList, suggestKey } from './SuggestInput';
 
-type Comment = { id: string; by: string; at: string; text: string; resolvedAt?: string; resolvedBy?: string; replyTo?: string };
+type Comment = { id: string; by: string; at: string; text: string; resolvedAt?: string; resolvedBy?: string; replyTo?: string; editedAt?: string; mine?: boolean };
 
 /**
  * Comments for your team on the open item (the Info panel): the thread, oldest first, settled ones greyed; a box to add one.
@@ -91,6 +91,10 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
   }, [comments, replyTo]);
   const open = roots.filter((c) => !c.resolvedAt);
   const settled = roots.filter((c) => c.resolvedAt);
+  // a comment of yours being changed in place: its text, Save (Ctrl+Enter) or Cancel (Esc)
+  const [editing, setEditing] = useState<{ id: string; text: string }>();
+  useEffect(() => setEditing(undefined), [key]);
+  const saveEdit = () => editing && run(() => call('comments.edit', { ref, id: editing.id, text: editing.text }).then(() => setEditing(undefined)));
   /** One comment: who, when, its text, and its actions (a reply: delete only; it is settled with its thread). */
   const row = (c: Comment, parent?: Comment) => (
     <div className={cx('group flex flex-col gap-0.5 min-w-0 rounded border border-line px-2 py-1.5', (c.resolvedAt || parent?.resolvedAt) && 'opacity-60')} data-comment={c.resolvedAt || parent?.resolvedAt ? 'settled' : 'open'}>
@@ -99,7 +103,17 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
         <span className="text-muted shrink-0" title={c.at}>
           {timeAgo(c.at)}
         </span>
+        {c.editedAt && (
+          <span className="text-2xs text-muted shrink-0" title={`Changed ${c.editedAt}`} data-comment-edited>
+            edited
+          </span>
+        )}
         <span className="ml-auto inline-flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+          {c.mine && !c.resolvedAt && !parent?.resolvedAt && (
+            <IconButton size="sm" label="Change this comment" disabled={busy} reason="Wait for the last change to save" onClick={() => setEditing({ id: c.id, text: c.text })} data-comment-edit>
+              <Pencil />
+            </IconButton>
+          )}
           {!parent && !c.resolvedAt && (
             <IconButton size="sm" label={`Reply to ${c.by}`} onClick={() => (setReplyTo(c), box.current?.focus())} data-comment-reply-button>
               <Reply />
@@ -134,7 +148,34 @@ export function ItemComments({ ref }: { ref: ItemRef }) {
           </IconButton>
         </span>
       </div>
-      <div className="text-sm whitespace-pre-wrap break-words">{withMentions(c.text)}</div>
+      {editing?.id === c.id ? (
+        <div className="flex flex-col gap-1">
+          <Textarea
+            value={editing.text}
+            autoFocus
+            rows={2}
+            autoGrow
+            maxRows={8}
+            aria-label="Change the comment"
+            onChange={(e) => setEditing({ id: c.id, text: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') return void (e.preventDefault(), e.stopPropagation(), setEditing(undefined));
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && editing.text.trim()) void saveEdit();
+            }}
+            data-comment-edit-text
+          />
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="primary" disabled={busy || !editing.text.trim()} reason={busy ? 'Wait for the last change to save' : 'Type the comment first (or delete it)'} onClick={() => void saveEdit()} data-comment-edit-save>
+              Save
+            </Button>
+            <Button size="sm" onClick={() => setEditing(undefined)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm whitespace-pre-wrap break-words">{withMentions(c.text)}</div>
+      )}
       {c.resolvedAt && <div className="text-2xs text-muted">Settled by {c.resolvedBy} {timeAgo(c.resolvedAt)}</div>}
     </div>
   );

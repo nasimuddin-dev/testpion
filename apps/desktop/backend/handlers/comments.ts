@@ -1,6 +1,6 @@
 /** RPC handlers: comments for your team on an item (storage/comments.ts), signed with the git identity. */
 import { userInfo } from 'node:os';
-import { ApsError, mentionCandidates, addComment, deleteComment, gitIdentity, listComments, openCommentCounts, openCommentsByOwner, resolveComment, restoreComment, toItemRef } from '@testpion/core';
+import { ApsError, mentionCandidates, addComment, deleteComment, editComment, sameAuthor, gitIdentity, listComments, openCommentCounts, openCommentsByOwner, resolveComment, restoreComment, toItemRef } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
 export function commentsHandlers(be: Backend): Handlers {
@@ -15,7 +15,12 @@ export function commentsHandlers(be: Backend): Handlers {
   const changed = <T,>(r: T): T => (be.host.emit('comments.changed', {}), r);
   const who = async () => (await gitIdentity(be.ws.root).catch(() => ({ name: undefined }))).name || userInfo().username || 'someone';
   return {
-    'comments.list': ({ ref }: { ref: unknown }) => listComments(be.ws, refOf(ref)),
+    // `mine`: written by this person (the git identity): its author can change it
+    'comments.list': async ({ ref }: { ref: unknown }) => {
+      const me = await who();
+      return listComments(be.ws, refOf(ref)).map((c) => (sameAuthor(c.by, me) ? { ...c, mine: true } : c));
+    },
+    'comments.edit': async ({ ref, id, text }: { ref: unknown; id: string; text: string }) => changed(editComment(be.ws, refOf(ref), id, text, await who())),
     'comments.add': async ({ ref, text, replyTo }: { ref: unknown; text: string; replyTo?: string }) => changed(addComment(be.ws, refOf(ref), text, await who(), { replyTo })),
     'comments.resolve': async ({ ref, id, resolved }: { ref: unknown; id: string; resolved?: boolean }) => changed(resolveComment(be.ws, refOf(ref), id, await who(), resolved !== false)),
     // (with its replies: `removed` is what Undo puts back)

@@ -441,6 +441,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'comments.add': { ref: 'x', text: 's', replyTo: 's?' },
   'comments.resolve': { ref: 'x', id: 's', resolved: 'b?' },
   'comments.delete': { ref: 'x', id: 's' },
+  'comments.edit': { ref: 'x', id: 's', text: 's' },
   'comments.restore': { ref: 'x', comment: 'o' },
   'comments.open': { owner: 's?', forMe: 'b?' },
   'comments.people': {},

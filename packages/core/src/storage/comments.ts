@@ -25,6 +25,8 @@ export interface ItemComment {
   /** Set when someone marked it as settled. */
   resolvedAt?: string;
   resolvedBy?: string;
+  /** Set when its author changed the text (ISO time). */
+  editedAt?: string;
   /** A reply: the id of the comment it answers (always a thread's first comment). It is shown under it, settled and deleted with it. */
   replyTo?: string;
 }
@@ -108,6 +110,26 @@ export function addComment(store: Store, ref: ItemRef, text: string, by: string,
   const c: ItemComment = { id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, by: by.trim() || 'someone', at: new Date().toISOString(), text: body, ...(replyTo ? { replyTo } : {}) };
   t.comments.push(c);
   writeThread(store, t);
+  return c;
+}
+
+/** The same person, however the name is spaced or cased (git names, the computer's user name). */
+export const sameAuthor = (a?: string, b?: string) => !!a && !!b && a.toLowerCase().replace(/\s+/g, '') === b.toLowerCase().replace(/\s+/g, '');
+
+/** Change the text of a comment; only its author can (a typo, a better question). */
+export function editComment(store: Store, ref: ItemRef, id: string, text: string, by: string): ItemComment {
+  const body = text.trim();
+  if (!body) throw new ApsError('ValidationError', 'The comment is empty (delete it instead)');
+  if (body.length > COMMENT_LIMIT) throw new ApsError('ValidationError', `The comment is ${body.length - COMMENT_LIMIT} characters too long (at most ${COMMENT_LIMIT})`);
+  const t = readThread(store, ref);
+  const c = t.comments.find((x) => x.id === id);
+  if (!c) throw new ApsError('ValidationError', `No comment ${id} on this item`);
+  if (!sameAuthor(c.by, by)) throw new ApsError('ValidationError', `Only ${c.by} can change this comment: reply to it instead`);
+  if (c.text !== body) {
+    c.text = body;
+    c.editedAt = new Date().toISOString();
+    writeThread(store, t);
+  }
   return c;
 }
 

@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { userInfo } from 'node:os';
-import { WorkspaceManager, addComment, deleteComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, resolveItemRef, tenantOf, type ItemRef, type WorkspaceStore } from '@testpion/core';
+import { WorkspaceManager, addComment, deleteComment, editComment, gitIdentity, itemInfo, listComments, openCommentsByOwner, ownershipOf, parseItemRef, resolveComment, resolveItemRef, tenantOf, type ItemRef, type WorkspaceStore } from '@testpion/core';
 import { EXIT, bold, dim, green, CliError, printJson, withWorkspace, WORKSPACE_OPTION, JSON_RESULT_OPTION } from '../shared.js';
 
 /** An item by its reference text (`request:<collection>/<request>`, `test:tests/smoke.yaml`, a testpion:// link …). */
@@ -79,6 +79,27 @@ export function registerCommentCommand(program: Command): void {
         }
         if (o.json) return printJson({ item, comment: c });
         console.log(`${green('Added')} ${dim(c.id)} by ${c.by}. Commit comments/ so your team sees it.`);
+      }),
+    );
+
+  cmd
+    .command('edit')
+    .description('change the text of a comment you wrote')
+    .argument('<item>', 'the item')
+    .argument('<id>', 'the comment id (from `item comment list`)')
+    .argument('<text>', 'the new text')
+    .option(...WORKSPACE_OPTION)
+    .option(...JSON_RESULT_OPTION)
+    .action(async (item: string, id: string, text: string, o: { workspace?: string; json?: boolean }) =>
+      inWorkspace(o.workspace, async (store) => {
+        let c;
+        try {
+          c = editComment(store, refArg(item), id, text, await who(store.root));
+        } catch (e) {
+          throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
+        }
+        if (o.json) return printJson({ item, comment: c });
+        console.log(`${green('Changed')} ${dim(id)}.`);
       }),
     );
 
