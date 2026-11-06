@@ -246,6 +246,17 @@ describe('run history, replay and pins of a flow file', () => {
     expect(typeof detail.results[0]!.variables?.n).toBe('number');
   });
 
+  it('pages: nextCursor is where older runs start, and the pages together are the whole list', async () => {
+    const all = (await flowRuns(store, file)).runs.map((r) => r.runId);
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    const first = await flowRuns(store, file, { limit: 1 });
+    expect(first.runs.map((r) => r.runId)).toEqual([all[0]]);
+    expect(first.nextCursor).toBeGreaterThan(0);
+    const rest = await flowRuns(store, file, { cursor: first.nextCursor });
+    expect(rest.runs.map((r) => r.runId)).toEqual(all.slice(1));
+    expect(rest.nextCursor).toBeUndefined();
+  });
+
   it('a run where none of the steps of the file ran (they wait for a step in another file) is skipped, not passed', async () => {
     const orphan = join(root, 'tests', 'orphan-flow.yaml');
     writeFileSync(orphan, `tests:\n  - { id: x, name: X, url: "${base}/ok", dependsOn: [elsewhere] }\n  - { id: y, name: Y, url: "${base}/ok", dependsOn: [x] }\n`);

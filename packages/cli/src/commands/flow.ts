@@ -74,9 +74,10 @@ export function registerFlowCommand(program: Command): void {
     .argument('<file>', 'a test file (inside tests/, or from the current folder)')
     .option('--run <runId>', "one run's steps in file order: status, timing, input, output and variables")
     .option('-n, --limit <n>', 'how many runs (default 30)')
+    .option('--cursor <n>', 'older runs: the nextCursor of the page before (printed with --json)')
     .option(...WORKSPACE_OPTION)
     .option('--json', 'print the runs (or the run) as JSON (for scripts and AI agents)')
-    .action(async (file: string, o: { run?: string; limit?: string; workspace?: string; json?: boolean }) => {
+    .action(async (file: string, o: { run?: string; limit?: string; cursor?: string; workspace?: string; json?: boolean }) => {
       const workspace = groupOptions(flow, o);
       return withWorkspace(workspace, async (store) => {
         const ref = testFileRef(store, file);
@@ -93,7 +94,7 @@ export function registerFlowCommand(program: Command): void {
           }
           return;
         }
-        const h = await flowRuns(store, ref, { limit: o.limit ? Number(o.limit) : undefined });
+        const h = await flowRuns(store, ref, { limit: o.limit ? Number(o.limit) : undefined, cursor: o.cursor ? Number(o.cursor) : undefined });
         if (o.json) return printJson(h);
         if (!h.runs.length) return console.log(dim(`tests/${h.file} has not been run yet.`));
         console.log(bold(`tests/${h.file}`) + dim(`  ${h.runs.length} run${h.runs.length === 1 ? '' : 's'}, newest first`));
@@ -104,6 +105,7 @@ export function registerFlowCommand(program: Command): void {
           );
         }
         const failed = h.runs.find((r) => r.status === 'failed');
+        if (h.nextCursor !== undefined) console.log(dim(`\nOlder runs: testpion flow runs ${ref} --cursor ${h.nextCursor}`));
         console.log(dim(`\ntestpion flow runs ${ref} --run <id> shows a run's steps${failed ? `; testpion test ${ref} --seed-run ${failed.runId} replays it on its own data` : ''}.`));
       });
     });

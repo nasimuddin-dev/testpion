@@ -89,14 +89,22 @@ async function resultsOf(store: WorkspaceStore, abs: string, runId: string, ids?
  * The runs that included a flow file, newest first: when, how long, how its steps went. Runs record the files they
  * included (summary.json `files`); older runs are read when they are small enough (at most 5000 results).
  */
-export async function flowRuns(store: WorkspaceStore, file: string, opts: { limit?: number; scan?: number } = {}): Promise<{ file: string; runs: FlowRunRow[] }> {
+/**
+ * `cursor`: where the page starts in the workspace's runs, newest first (the `nextCursor` of the page before). A page
+ * looks at up to `scan` runs of the workspace (default 300, at most 1000); `nextCursor` is set while older runs remain.
+ */
+export async function flowRuns(store: WorkspaceStore, file: string, opts: { limit?: number; scan?: number; cursor?: number } = {}): Promise<{ file: string; runs: FlowRunRow[]; nextCursor?: number }> {
   const { abs, rel } = flowFile(store, file);
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 200);
   const isFile = pathMatcher(abs); // as the workspace names it, or as a run did (see resultsOf)
   const ids = new Set((await stepsOf(abs)).map((s) => s.id));
   const runs: FlowRunRow[] = [];
-  for (const run of store.meta.listRuns({ limit: Math.min(Math.max(opts.scan ?? 300, limit), 1000) }).items) {
+  const start = Math.max(0, Math.floor(opts.cursor ?? 0));
+  const page = store.meta.listRuns({ limit: Math.min(Math.max(opts.scan ?? 300, limit), 1000), offset: start, countTotal: false });
+  let looked = 0;
+  for (const run of page.items) {
     if (runs.length >= limit) break;
+    looked++;
     const summary = readRunSummary(store, run.id);
     if (summary?.files && !summary.files.some(isFile)) continue;
     if (!summary?.files && run.total > 5000) continue;
@@ -119,7 +127,9 @@ export async function flowRuns(store: WorkspaceStore, file: string, opts: { limi
       ...(bad ? { firstFailed: bad.id } : {}),
     });
   }
-  return { file: rel, runs };
+  // more runs of the workspace after the ones looked at: the next page starts there
+  const more = looked < page.items.length || store.meta.listRuns({ limit: 1, offset: start + looked, countTotal: false }).items.length > 0;
+  return { file: rel, runs, ...(more ? { nextCursor: start + looked } : {}) };
 }
 
 /** One run of a flow in full: each step's result (checks, input, output, timing, the variables after it), in file order. */

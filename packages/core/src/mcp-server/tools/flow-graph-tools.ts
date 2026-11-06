@@ -38,10 +38,15 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
     {
       name: 'flow_runs',
       description:
-        "A flow file's run history, newest first: each run that included the file with its status (passed / failed / cancelled), when, how long, how its steps went and the first failing step. With `runId`, that run's steps in file order: status, checks, input and output, timing and the variables after each step (values cut at 4 KB, secrets redacted) — to see where a value went wrong. Re-run part of a flow with run_tests: paths [file] and from (a step) and/or seedRunId (replays that run's data from its first failing step).",
+        "A flow file's run history, newest first: each run that included the file with its status (passed / failed / cancelled), when, how long, how its steps went and the first failing step; `nextCursor` (when set) is the `cursor` of older runs. With `runId`, that run's steps in file order: status, checks, input and output, timing and the variables after each step (values cut at 4 KB, secrets redacted) — to see where a value went wrong. Re-run part of a flow with run_tests: paths [file] and from (a step) and/or seedRunId (replays that run's data from its first failing step).",
       inputSchema: {
         type: 'object',
-        properties: { file, runId: str("One run's steps in full (from this tool's list)"), limit: { type: 'integer', minimum: 1, maximum: 200, description: 'How many runs (default 30)' } },
+        properties: {
+          file,
+          runId: str("One run's steps in full (from this tool's list)"),
+          limit: { type: 'integer', minimum: 1, maximum: 200, description: 'How many runs (default 30)' },
+          cursor: { type: 'integer', minimum: 0, description: 'Where the page starts: the `nextCursor` of the page before (leave out for the newest runs)' },
+        },
         required: ['file'],
       },
       run: async (a) => {
@@ -64,7 +69,7 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
             })),
           };
         }
-        return flowRuns(store, String(a.file ?? ''), { limit: typeof a.limit === 'number' ? a.limit : undefined });
+        return flowRuns(store, String(a.file ?? ''), { limit: typeof a.limit === 'number' ? a.limit : undefined, cursor: typeof a.cursor === 'number' ? a.cursor : undefined });
       },
     },
     {
