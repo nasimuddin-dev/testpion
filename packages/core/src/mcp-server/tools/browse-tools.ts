@@ -1,6 +1,7 @@
 import { environmentRef } from '@testpion/shared';
 import { collectionMarkdown } from '../../report/collection-docs.js';
 import { collectionSavedItems } from '../../runner/collection-realtime.js';
+import { collectionOwners } from '../../git/owners.js';
 import { callFolderPath, collectionFolders } from '../../storage/collection-calls.js';
 import { secretKeys } from '../../storage/secrets.js';
 import { collectionTiming } from '../../storage/collection-timing.js';
@@ -16,19 +17,24 @@ export function browseTools(d: ModuleToolDeps): Tool[] {
       name: 'list_collections',
       description: 'List the collections of the TestPion workspace with their request counts (HTTP/GraphQL requests, gRPC calls, WebSocket/MQTT connections).',
       inputSchema: { type: 'object', properties: {} },
-      run: () =>
-        collections().map((c) => {
+      run: async () => {
+        const all = collections();
+        // the team that owns each (CODEOWNERS), as the Collections tree shows it
+        const owners = await collectionOwners(store, all.map((c) => c.id)).catch(() => ({}) as Record<string, string[]>);
+        return all.map((c) => {
           const saved = collectionSavedItems(store, c.id);
           return {
             id: c.id,
             name: c.name,
+            ...(owners[c.id] ? { owners: owners[c.id] } : {}),
             description: c.description?.slice(0, 300),
             requests: flatten(c.items).length,
             grpcCalls: saved?.grpc?.length ?? 0,
             connections: saved?.websocket?.length ?? 0,
             examples: flatten(c.items).reduce((a, f) => a + (f.node.kind === 'http' ? f.node.examples?.length ?? 0 : 0), 0),
           };
-        }),
+        });
+      },
     },
     {
       name: 'list_requests',
