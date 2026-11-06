@@ -1,6 +1,8 @@
 import { Bot, FileCode2, FilePlus2, FileSpreadsheet, History, KeyRound, Layers, Play, Save, ShieldCheck, Workflow } from 'lucide-react';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { pickRequest, type Picked } from '../lib/picked-requests';
+import { PickedBar } from '../components/PickedBar';
 import { asError, call, on } from '../api';
 import { confirmAction, promptText, toastError, useApp, attempt } from '../store';
 import { useIntent, useSaveShortcut } from '../hooks';
@@ -721,8 +723,12 @@ export function TestsView() {
   });
   const testsArea = useAreaMenu('section:test', testsMenu, 'Tests');
   // what the tree's rows call, through one ref that is always current (the tree and its rows are memoized)
+  // several test files picked (Ctrl/⌘+click, Shift+click) to run together; Esc lets go
+  const [picked, setPicked] = useState<Picked>();
+  const pickedSet = useMemo(() => new Set(picked?.ids ?? []), [picked]);
   const host = useRef<TestsHost>(null!);
   host.current = {
+    pick: (path, how, order) => setPicked((p) => pickRequest(p, 'tests', path, how, order)),
     openFile: (path) => void openFile(path),
     run: (paths, name) => void run(paths, name),
     toggle: (path) => setOpen((o) => ({ ...o, [path]: !(o[path] ?? true) })),
@@ -747,7 +753,13 @@ export function TestsView() {
             render: () => (
               <>
                 {/* the keyboard moves through the header and the tree as one list (↑ from the first file reaches the header) */}
-                <div className="flex-1 min-h-0 flex flex-col" onKeyDown={treeKeys}>
+                <div
+                  className="flex-1 min-h-0 flex flex-col"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && picked && (e.target as HTMLElement).closest?.('[data-tree-row]') && !(e.target as HTMLElement).closest('input, textarea, [role=dialog]')) return void (e.stopPropagation(), setPicked(undefined));
+                    treeKeys(e);
+                  }}
+                >
                 <TreeRowShell kind="section:test" nodeId="tests:section" label="Tests" header ctx={testsMenu} className="mx-0 pl-3 shrink-0">
                   <span className="text-xs font-semibold truncate">Tests</span>
                 </TreeRowShell>
@@ -758,7 +770,17 @@ export function TestsView() {
                 )}
                 {testsArea.menu}
                 <div className="flex-1 overflow-auto" onContextMenu={testsArea.onContextMenu}>
-                  {tree.length ? <TestFileTree tree={tree} filter={tf} open={open} file={file} renaming={renamingPath} host={host} /> : <NoTestFiles onNew={() => void newFile('http')} />}
+                  {picked && picked.ids.length > 0 && (
+                    <div className="px-2">
+                      <PickedBar
+                        count={picked.ids.length}
+                        noun="test file"
+                        onClear={() => setPicked(undefined)}
+                        actions={[{ label: LABEL.run, icon: <Play size={12} />, title: 'Run them as one run, in the active environment', onClick: () => void run(picked.ids, plural(picked.ids.length, 'test file')) }]}
+                      />
+                    </div>
+                  )}
+                  {tree.length ? <TestFileTree tree={tree} filter={tf} open={open} file={file} renaming={renamingPath} picked={pickedSet} host={host} /> : <NoTestFiles onNew={() => void newFile('http')} />}
                   {/* a blank strip after the last file, always there to right-click (the tree's menu), as in the explorer */}
                   <div className="min-h-16" aria-hidden />
                 </div>

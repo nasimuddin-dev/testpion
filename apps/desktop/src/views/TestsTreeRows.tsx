@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FileCheck2, FilePlus2, Folder, Play, Workflow } from 'lucide-react';
-import { memo, useMemo, type RefObject } from 'react';
+import { memo, useCallback, useMemo, useRef, type RefObject } from 'react';
 import { useApp } from '../store';
 import { Empty, IconButton, rowActionClass, VirtualList } from '../components/ui';
 import { TEST_KINDS, TreeBadge } from '../components/TreeParts';
@@ -33,6 +33,8 @@ export interface TestsHost {
   isTestFile(name: string): boolean;
   /** A file renamed in place (F2, Rename): its new name, in its folder; nothing when cancelled. */
   finishRename(n: TestNode, name?: string): void;
+  /** Ctrl/⌘+click or Ctrl/⌘+Space (`toggle`), Shift+click or Shift+Space (`range`) on a file: picked with others; `order`: the files shown. */
+  pick(path: string, how: 'toggle' | 'range', order: string[]): void;
 }
 
 /** One row of the tree as drawn: a folder (open or closed) or a file, at its depth. */
@@ -63,7 +65,7 @@ function filterTestTree(nodes: TestNode[], tf: string): TestNode[] {
  * keystroke in the editor never touches it (its props are the tree, the filter and what is open), and a tree of a
  * thousand files draws only the rows on screen.
  */
-export const TestFileTree = memo(function TestFileTree({ tree, filter, open, file, renaming, host }: { tree: TestNode[]; filter: string; open: TreeOpen; file?: string; renaming?: string; host: RefObject<TestsHost> }) {
+export const TestFileTree = memo(function TestFileTree({ tree, filter, open, file, renaming, picked, host }: { tree: TestNode[]; filter: string; open: TreeOpen; file?: string; renaming?: string; picked?: ReadonlySet<string>; host: RefObject<TestsHost> }) {
   const rows = useMemo(() => {
     const out: Row[] = [];
     const walk = (nodes: TestNode[], depth: number) => {
@@ -80,6 +82,10 @@ export const TestFileTree = memo(function TestFileTree({ tree, filter, open, fil
     return out;
   }, [tree, filter, open]);
   const rowHeight = 2 * useApp((s) => s.settings?.fontSize ?? 14);
+  // the files as shown, for a Shift+click range
+  const order = useRef<string[]>([]);
+  order.current = rows.filter((r) => r.n.kind !== 'dir').map((r) => r.n.path);
+  const pick = useCallback((path: string, how: 'toggle' | 'range') => host.current.pick(path, how, order.current), [host]);
   if (filter && !rows.length) return <p className="px-3 py-4 text-sm text-muted text-center">No test files match this filter.</p>;
   return (
     <div role="tree" aria-label="Test files" data-tree-rows={rows.length}>
@@ -90,7 +96,7 @@ export const TestFileTree = memo(function TestFileTree({ tree, filter, open, fil
         name="TestFileTree"
         scrollParent
         overscan={rows.length <= DRAW_ALL ? DRAW_ALL : OVERSCAN}
-        render={(r) => <TestTreeRow n={r.n} depth={r.depth} expanded={r.open} active={file === r.n.path} renaming={renaming === r.n.path} host={host} />}
+        render={(r) => <TestTreeRow n={r.n} depth={r.depth} expanded={r.open} active={file === r.n.path} renaming={renaming === r.n.path} picked={!!picked?.has(r.n.path)} pick={pick} host={host} />}
       />
     </div>
   );
@@ -100,7 +106,25 @@ export const TestFileTree = memo(function TestFileTree({ tree, filter, open, fil
  * A row of the test file tree, like the collection tree's: folder (chevron) or file, ▶ run and ⋯ (also on right-click).
  * F2 renames a file in place (its name, in its folder; the tab's Rename takes a path, which can move it).
  */
-const TestTreeRow = memo(function TestTreeRow({ n, depth, expanded, active, renaming, host }: { n: TestNode; depth: number; expanded?: boolean; active?: boolean; renaming: boolean; host: RefObject<TestsHost> }) {
+const TestTreeRow = memo(function TestTreeRow({
+  n,
+  depth,
+  expanded,
+  active,
+  renaming,
+  picked = false,
+  pick,
+  host,
+}: {
+  n: TestNode;
+  depth: number;
+  expanded?: boolean;
+  active?: boolean;
+  renaming: boolean;
+  picked?: boolean;
+  pick(path: string, how: 'toggle' | 'range'): void;
+  host: RefObject<TestsHost>;
+}) {
   const h = () => host.current;
   const dir = n.kind === 'dir';
   const runnable = dir || h().isTestFile(n.name);
@@ -112,7 +136,15 @@ const TestTreeRow = memo(function TestTreeRow({ n, depth, expanded, active, rena
       depth={depth}
       active={active}
       expanded={expanded}
-      onClick={() => (dir ? h().toggle(n.path) : h().openFile(n.path))}
+      // a file with Ctrl/⌘ or Shift held is picked with others (to run them together) instead of opened
+      onClick={(e) => (dir ? h().toggle(n.path) : runnable && (e.ctrlKey || e.metaKey) ? pick(n.path, 'toggle') : runnable && e.shiftKey ? pick(n.path, 'range') : h().openFile(n.path))}
+      onKeyDown={(e) => {
+        if (dir || !runnable || e.key !== ' ' || !(e.ctrlKey || e.metaKey || e.shiftKey)) return;
+        e.preventDefault();
+        pick(n.path, e.shiftKey ? 'range' : 'toggle');
+      }}
+      className={picked ? 'bg-accent-soft ring-1 ring-inset ring-accent/40' : undefined}
+      attrs={picked ? { 'data-picked': '' } : undefined}
       onOpen={dir ? undefined : () => h().openFile(n.path)}
       ctx={() => (dir ? h().folderMenu(n) : h().fileMenu(n))}
       rename={renaming ? { value: n.name, label: 'File name', done: (name) => h().finishRename(n, name) } : undefined}

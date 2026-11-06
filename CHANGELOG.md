@@ -8,6 +8,7 @@
 
 ### Pick several requests
 
+- In the Tests view the same picking runs several test files as one run.
 - Ctrl/⌘+click and Shift+click pick requests of one collection in the Collections tree; the bar above it runs them as one run, moves them to a folder or deletes them (one Undo), and Esc lets go.
 
 ### Environments shared from another workspace

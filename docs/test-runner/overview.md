@@ -41,6 +41,8 @@ Test files open as tabs in one strip, followed by two fixed tabs:
 - **Flow** shows the active file as a canvas, and is a full visual designer: add blocks (request, GraphQL, gRPC, WebSocket, MCP, LLM, Delay, Condition, For each / Repeat, Script, Sub-flow, Log, Wait until, Set variable, Assert, Finally, Parallel group, Output) from the **Start** node, connect them, run or debug them with breakpoints, see each run in **History**, import and export Arazzo, and **Deploy** the flow to a schedule, a webhook, an MCP tool or CI. **+ ▸ New flow (designer)** starts an empty one. Every change is written to the same YAML. See [Design a flow](/test-runner/integration-testing#design-a-flow).
 - **Runs** shows the run you pick in the **Runs** list on the left, with its results.
 
+To run a few files together, **Ctrl+click** (**⌘+click**) them in the list on the left, or **Shift+click** for a range (**Ctrl+Space** and **Shift+Space** from the keyboard): the bar above the list says how many are picked, and **Run** runs them as one run. **Esc** lets go.
+
 - Right-click a flow's tab (or open **Run flow ▾** in the designer) for **Run with data…** (once per row of a CSV, JSON, JSONL file, SQLite database or database query; the **Runs** tab shows a live grid of rows with status, time, the failing step and the values) and **Run in several environments…** (the same in the designer: a step × environment grid with the steps and values that differ marked).
 - Every run's results also have a **Timeline** tab: each step's bar, the waits, the **critical path**, and the down arrow to save it as one HTML file to share.
 - From the terminal:

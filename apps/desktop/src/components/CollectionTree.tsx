@@ -1,6 +1,6 @@
 import { startAi } from './ai/AiAction';
 import { startFlowGenerate, startTidyImport } from './ai/flow-generate';
-import { Download, FilePlus2, Undo2 } from 'lucide-react';
+import { Download, FilePlus2, FolderInput, Play, Trash2, Undo2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection, CollectionFolder, CollectionNode } from '../types';
 import { call, on } from '../api';
@@ -33,7 +33,7 @@ import { buildTreeRows, callShown, examplesOpenKey, findTreeRow, folderOpenKey, 
 import { CATEGORY_META, CollectionRow, EmptyRow, ExampleRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
 import { useOpenRequestId } from './open-request-id';
 import { pickRequest, type Picked } from '../lib/picked-requests';
-import { PickedRequestsBar } from './PickedRequestsBar';
+import { PickedBar } from './PickedBar';
 
 // THE badge lives in TreeParts; the panels that drew a method badge through this module keep their import
 export { TreeBadge } from './TreeParts';
@@ -785,9 +785,23 @@ export const CollectionTree = memo(function CollectionTree({
       }}
     >
       {pickedIds.length > 0 && pickedCollection && (
-        <PickedRequestsBar count={pickedIds.length} collection={pickedCollection.name} onRun={runPicked} onMove={() => setMovingPicked(true)}
-          onExport={() => openExportBundle({ selection: pickedIds.map((id) => ({ kind: 'request' as const, collectionId: pickedCollection.id, requestId: id })), title: `${plural(pickedIds.length, 'request')} of ${pickedCollection.name}` })}
-          onDelete={() => void deletePicked()} onClear={() => setPicked(undefined)} />
+        <PickedBar
+          count={pickedIds.length}
+          noun="request"
+          where={pickedCollection.name}
+          onClear={() => setPicked(undefined)}
+          actions={[
+            { label: LABEL.run, icon: <Play size={12} />, onClick: runPicked, title: 'Run them in the order the tree shows, in the active environment' },
+            { label: LABEL.moveTo, icon: <FolderInput size={12} />, onClick: () => setMovingPicked(true) },
+            {
+              label: LABEL.export,
+              icon: <Download size={12} />,
+              title: 'One file with just these requests (and what they use, if you choose)',
+              onClick: () => openExportBundle({ selection: pickedIds.map((id) => ({ kind: 'request' as const, collectionId: pickedCollection.id, requestId: id })), title: `${plural(pickedIds.length, 'request')} of ${pickedCollection.name}` }),
+            },
+            { label: LABEL.delete, icon: <Trash2 size={12} />, onClick: () => void deletePicked() },
+          ]}
+        />
       )}
       {movingPicked && pickedCollection && pickedIds.length > 0 && (
         // within their collection: a move to another one goes one request at a time (its menu's Move to…)
