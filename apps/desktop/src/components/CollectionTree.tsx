@@ -785,7 +785,9 @@ export const CollectionTree = memo(function CollectionTree({
       }}
     >
       {pickedIds.length > 0 && pickedCollection && (
-        <PickedRequestsBar count={pickedIds.length} collection={pickedCollection.name} onRun={runPicked} onMove={() => setMovingPicked(true)} onDelete={() => void deletePicked()} onClear={() => setPicked(undefined)} />
+        <PickedRequestsBar count={pickedIds.length} collection={pickedCollection.name} onRun={runPicked} onMove={() => setMovingPicked(true)}
+          onExport={() => openExportBundle({ selection: pickedIds.map((id) => ({ kind: 'request' as const, collectionId: pickedCollection.id, requestId: id })), title: `${plural(pickedIds.length, 'request')} of ${pickedCollection.name}` })}
+          onDelete={() => void deletePicked()} onClear={() => setPicked(undefined)} />
       )}
       {movingPicked && pickedCollection && pickedIds.length > 0 && (
         // within their collection: a move to another one goes one request at a time (its menu's Move to…)
