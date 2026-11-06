@@ -1,6 +1,7 @@
 import { interleave, liveKinds } from '@testpion/shared';
 import type { AuthConfig, Collection, CollectionNode, GrpcTest, KeyValue, LibraryItem, TestCase, WebSocketTest } from '../model/types.js';
 import { headerAuth } from '../protocols/http/auth.js';
+import { folderVariables, inheritedHeaders, joinScripts, withInheritedHeaders } from './folder-defaults.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { folderByPath, textFolderPath } from '../storage/collection-calls.js';
 
@@ -8,8 +9,9 @@ import { folderByPath, textFolderPath } from '../storage/collection-calls.js';
  * gRPC calls and WebSocket / Socket.IO / MQTT connections are saved in the workspace library
  * (library/grpc.json, library/websocket.json) and shown in a collection through their `collectionId`.
  * A collection run includes them: each becomes a test that runs where the collection shows it, after the request it
- * follows there (`runAfter`), with the variables of the folders around it, and their headers and auth (bearer, basic,
- * API key in a header) as gRPC metadata or with the WebSocket / Socket.IO handshake, as a request inside gets them.
+ * follows there (`runAfter`), with what a request inside gets from the collection and the folders around it: their
+ * variables, their pre-request and test scripts, and their headers and auth (bearer, basic, API key in a header) as
+ * gRPC metadata or with the WebSocket / Socket.IO handshake.
  */
 
 /** A saved gRPC call, as the gRPC editor stores it. */
@@ -175,7 +177,7 @@ export function duplicateCollection(store: Pick<WorkspaceStore, 'getCollection' 
  * The gRPC calls and connections shown in a collection, as tests (gRPC first, then connections; each in
  * folder and name order). With a selection, only the selected ones.
  */
-export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'>, collection: { id: string; name: string; items?: CollectionNode[]; auth?: AuthConfig; headers?: KeyValue[] }, selection?: string[]): TestCase[] {
+export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'>, collection: { id: string; name: string; items?: CollectionNode[]; auth?: AuthConfig; headers?: KeyValue[]; preRequestScript?: string; testScript?: string }, selection?: string[]): TestCase[] {
   type Call = { kind: 'grpc' | 'websocket'; item: LibraryItem<SavedGrpcCall | SavedConnection> };
   const calls: Call[] = (['grpc', 'websocket'] as const).flatMap((kind) => store.getLibrary<SavedGrpcCall | SavedConnection>(kind).items.filter((i) => i.collectionId === collection.id).map((item) => ({ kind, item })));
   // any kind of request in any folder: a call's folder (`folderId`) and its place there decide when it runs, and a
@@ -215,45 +217,37 @@ export function collectionRealtimeTests(store: Pick<WorkspaceStore, 'getLibrary'
   visit(collection.items ?? [], '');
   // a test is named by the call's folder path in the collection (the text folder of an older version otherwise)
   const named = (c: Call) => (folderOf(c) ? { ...c.item, folder: path.get(folderOf(c)) } : c.item);
-  // the variables of the folders around a call are its own, as they are a request's (inner folders win)
-  const variablesOf = (c: Call): Record<string, string> | undefined => {
-    const chain: string[] = [];
-    for (let f: string | undefined = folderOf(c) || undefined; f; f = parent.get(f)) chain.unshift(f);
-    const out: Record<string, string> = {};
-    for (const id of chain) for (const v of folders.get(id)?.variables ?? []) if (v.key && v.enabled !== false) out[v.key] = v.value ?? '';
-    return Object.keys(out).length ? out : undefined;
+  /** The folders around a call, outermost first. */
+  const foldersOf = (c: Call) => {
+    const chain: Array<Extract<CollectionNode, { kind: 'folder' }>> = [];
+    for (let f: string | undefined = folderOf(c) || undefined; f; f = parent.get(f)) chain.unshift(folders.get(f)!);
+    return chain;
   };
-  // the headers and the auth of the collection and the folders around a call travel with it, as with a request inside:
-  // as gRPC metadata, or with a WebSocket / Socket.IO handshake (inner folders win; the call's own headers win over all)
-  const inheritedOf = (c: Call): KeyValue[] => {
-    const chain: string[] = [];
-    for (let f: string | undefined = folderOf(c) || undefined; f; f = parent.get(f)) chain.unshift(f);
-    const byKey = new Map<string, KeyValue>();
+  // what a request inside gets, a call gets too (as with a request, inner folders win and the call's own headers win over
+  // all): the folders' variables, the collection's and folders' scripts, and their headers and auth (bearer, basic, API
+  // key in a header) as gRPC metadata or with a WebSocket / Socket.IO handshake
+  const inheritedOf = (around: ReturnType<typeof foldersOf>): KeyValue[] => {
+    const headers = inheritedHeaders(collection, around);
     let auth: AuthConfig | undefined = collection.auth?.type === 'inherit' ? undefined : collection.auth;
-    for (const h of collection.headers ?? []) if (h.key && h.enabled !== false) byKey.set(h.key.toLowerCase(), h);
-    for (const id of chain) {
-      const f = folders.get(id);
-      if (f?.auth && f.auth.type !== 'inherit') auth = f.auth;
-      for (const h of f?.headers ?? []) if (h.key && h.enabled !== false) byKey.set(h.key.toLowerCase(), h);
-    }
+    for (const f of around) if (f.auth && f.auth.type !== 'inherit') auth = f.auth;
     const a = headerAuth(auth);
-    if (a) byKey.set(a.key.toLowerCase(), a);
-    return [...byKey.values()];
-  };
-  const withInherited = (own: KeyValue[] | undefined, inherited: KeyValue[]): KeyValue[] | undefined => {
-    if (!inherited.length) return own;
-    const mine = new Set((own ?? []).filter((h) => h.key && h.enabled !== false).map((h) => h.key.toLowerCase()));
-    return [...inherited.filter((h) => !mine.has(h.key.toLowerCase())), ...(own ?? [])];
+    return a ? [...headers.filter((h) => h.key.toLowerCase() !== a.key.toLowerCase()), a] : headers;
   };
   return ordered.filter(selected).map((c) => {
     const test: TestCase = c.kind === 'grpc' ? savedGrpcCallToTest(named(c) as LibraryItem<SavedGrpcCall>, collection.name) : savedConnectionToTest(named(c) as LibraryItem<SavedConnection>, collection.name);
-    const variables = variablesOf(c);
-    const inherited = inheritedOf(c);
+    const around = foldersOf(c);
+    const variables = folderVariables(around);
+    const inherited = inheritedOf(around);
     if (inherited.length) {
-      if (test.type === 'grpc') test.metadata = withInherited(test.metadata, inherited);
+      if (test.type === 'grpc') test.metadata = withInheritedHeaders(test.metadata, inherited);
       // MQTT and Kafka have no handshake headers
-      else if (test.type === 'websocket' && test.mode !== 'mqtt' && test.mode !== 'kafka') test.headers = withInherited(test.headers, inherited);
+      else if (test.type === 'websocket' && test.mode !== 'mqtt' && test.mode !== 'kafka') test.headers = withInheritedHeaders(test.headers, inherited);
     }
-    return Object.assign({ ...test, ...(variables ? { variables } : {}) }, { runAfter: follows.get(c) ?? '' }) as TestCase;
+    const preRequestScript = joinScripts(collection.preRequestScript, ...around.map((f) => f.preRequestScript));
+    const testScript = joinScripts(collection.testScript, ...around.map((f) => f.testScript));
+    return Object.assign(
+      { ...test, ...(Object.keys(variables).length ? { variables } : {}), ...(preRequestScript ? { preRequestScript } : {}), ...(testScript ? { testScript } : {}) },
+      { runAfter: follows.get(c) ?? '' },
+    ) as TestCase;
   });
 }

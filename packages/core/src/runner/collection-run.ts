@@ -1,7 +1,7 @@
 import type { AuthConfig, Collection, CollectionFolder, CollectionNode, RunSummary, SavedGraphQLRequest, SavedHttpRequest, TestCase, TestResult } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import { sleep } from '../util/concurrency.js';
-import { inheritedHeaders, withFolderDefaults, withInheritedHeaders } from './folder-defaults.js';
+import { folderVariables, inheritedHeaders, joinScripts, withFolderDefaults, withInheritedHeaders } from './folder-defaults.js';
 import { runTests, type RunEvent, type RunOptions } from './runner.js';
 import type { DatasetRecord } from './datasets.js';
 import { namesSetByScripts, scriptsOf, templatedText, templateVariables } from '@testpion/shared';
@@ -95,18 +95,7 @@ export function folderChain(collection: Collection, requestId: string): Collecti
 }
 
 /** Folder variables of a chain as one map (inner folders win). */
-export function folderVariables(folders: CollectionFolder[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const f of folders) for (const v of f.variables ?? []) if (v.key && v.enabled !== false) out[v.key] = v.value ?? '';
-  return out;
-}
-
-/** Join collection-level, folder-level and request-level scripts; blocks keep their `const`s apart. */
-function joinScripts(...scripts: Array<string | undefined>): string | undefined {
-  const parts = scripts.filter((s): s is string => !!s?.trim());
-  if (!parts.length) return undefined;
-  return parts.length === 1 ? parts[0] : parts.map((s) => `{\n${s}\n}`).join('\n');
-}
+export { folderVariables };
 
 /** Convert a collection request into a test case the runner can execute. */
 export function collectionRequestToTest(collection: Collection, ref: CollectionRequestRef, extra: { id?: string; name?: string; data?: DatasetRecord } = {}): TestCase {

@@ -59,12 +59,17 @@ describe('collection runs include gRPC calls and connections', () => {
       name: 'Shop',
       auth: { type: 'apiKey', key: 'x-api-key', value: '{{key}}', in: 'header' },
       headers: [{ key: 'x-tenant', value: 'acme' }],
-      items: [{ kind: 'folder', id: 'pay', name: 'Payments', auth: { type: 'bearer', token: '{{token}}' }, headers: [{ key: 'x-area', value: 'pay' }], items: [] }],
+      preRequestScript: "tp.variables.set('a', 1)",
+      items: [{ kind: 'folder', id: 'pay', name: 'Payments', auth: { type: 'bearer', token: '{{token}}' }, headers: [{ key: 'x-area', value: 'pay' }], testScript: "tp.test('ok', () => {})", items: [] }],
     } as never;
-    const byId = Object.fromEntries(collectionRealtimeTests(store, col).map((t) => [t.id, t as { metadata?: unknown; headers?: unknown }]));
+    const byId = Object.fromEntries(collectionRealtimeTests(store, col).map((t) => [t.id, t as { metadata?: unknown; headers?: unknown; preRequestScript?: string; testScript?: string }]));
     // the folder's bearer wins over the collection's API key; the call's own x-tenant wins over the collection's
-    expect(byId.g!.metadata).toEqual([{ key: 'x-area', value: 'pay' }, { key: 'Authorization', value: 'Bearer {{token}}', enabled: true }, { key: 'x-tenant', value: 'mine' }]);
+    expect(byId.g!.metadata).toEqual([{ key: 'x-tenant', value: 'mine' }, { key: 'x-area', value: 'pay' }, { key: 'Authorization', value: 'Bearer {{token}}', enabled: true }]);
     expect(byId.w!.headers).toEqual([{ key: 'x-tenant', value: 'acme' }, { key: 'x-area', value: 'pay' }, { key: 'Authorization', value: 'Bearer {{token}}', enabled: true }]);
+    // the collection's and the folder's scripts run around it, as around a request inside
+    expect(byId.w!.preRequestScript).toBe("tp.variables.set('a', 1)");
+    expect(byId.w!.testScript).toBe("tp.test('ok', () => {})");
+    expect(byId.top!.testScript).toBeUndefined();
     expect(byId.m!.headers).toBeUndefined(); // MQTT has no handshake headers
     expect(byId.top!.headers).toEqual([{ key: 'x-tenant', value: 'acme' }, { key: 'x-api-key', value: '{{key}}', enabled: true }]);
   });

@@ -7,6 +7,20 @@ import type { Collection, CollectionFolder, HttpSettings, KeyValue } from '../mo
  */
 
 /** The headers of a collection and its folders (outermost first): an inner level replaces an outer header of the same name. */
+/** The variables of a request's folders (outermost first): an inner folder's win. */
+export function folderVariables(folders: Array<Pick<CollectionFolder, 'variables'>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of folders) for (const v of f.variables ?? []) if (v.key && v.enabled !== false) out[v.key] = v.value ?? '';
+  return out;
+}
+
+/** Join collection-level, folder-level and request-level scripts; blocks keep their `const`s apart. */
+export function joinScripts(...scripts: Array<string | undefined>): string | undefined {
+  const parts = scripts.filter((s): s is string => !!s?.trim());
+  if (!parts.length) return undefined;
+  return parts.length === 1 ? parts[0] : parts.map((s) => `{\n${s}\n}`).join('\n');
+}
+
 export function inheritedHeaders(collection: Pick<Collection, 'headers'> | undefined, folders: Array<Pick<CollectionFolder, 'headers'>>): KeyValue[] {
   const out = new Map<string, KeyValue>();
   for (const level of [collection?.headers, ...folders.map((f) => f.headers)])
