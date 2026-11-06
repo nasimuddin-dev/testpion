@@ -9,8 +9,10 @@ const steps = [
     `(async () => {
       const envs = await window.aps.invoke('env.list'); const env = envs.find((e) => !e.problem); if (!env) return 'NO ENVIRONMENT';
       const ref = { kind: 'environment', environmentId: env.id };
-      await window.aps.invoke('comments.add', { ref, text: 'Nothing for anyone here' });
-      const c = await window.aps.invoke('comments.add', { ref, text: 'Is the base URL right, @' + me.replace(/\\s+/g, '') + '?' });
+      // a comment is signed with the name the app knows you by (git, else this computer's user): mention that one
+      const other = await window.aps.invoke('comments.add', { ref, text: 'Nothing for anyone here' });
+      window.__otherId = other.id;
+      const c = await window.aps.invoke('comments.add', { ref, text: 'Is the base URL right, @' + String(other.by).replace(/\\s+/g, '') + '?' });
       window.__mentionRef = ref; window.__mentionId = c.id;
       const open = await window.aps.invoke('comments.open');
       const mine = open.find((x) => x.id === c.id);
