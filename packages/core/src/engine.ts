@@ -13,6 +13,7 @@ import type { ExecServices } from './runner/execute.js';
 import type { WorkspaceStore } from './storage/workspace.js';
 import { recordCertificate } from './storage/certificates.js';
 import { recordDeprecation } from './storage/deprecations.js';
+import { sharedSpecFile } from './storage/shared-sources.js';
 import { deprecationOf, environmentLabel } from '@testpion/shared';
 import { secretKeys, type SecretStore } from './storage/secrets.js';
 import { CookieJar } from './cookies/cookie-jar.js';
@@ -172,7 +173,8 @@ export function createEngineContext(opts: ContextOptions): EngineContext {
     cookieJar: opts.cookieJar === false ? undefined : (opts.cookieJar ?? new CookieJar()),
     environmentName: environment?.name,
     production: environment?.isProduction ? { environment: environment.name, allowed: opts.allowProduction ?? productionAllowed() } : undefined,
-    readFile: (path: string) => readFileSync(store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
+    // an `openapi` check may name an API definition a shared folder gives (../platform-shared/specs/x.yaml): read-only, nothing else outside
+    readFile: (path: string) => readFileSync((!opts.fileRoot && sharedSpecFile(store, path)) || store.safePath(path, opts.fileRoot ?? store.root), 'utf8'),
     workspaceRoot: opts.fileRoot ?? store.root,
     scriptPackage: (name: string) => store.readScriptPackage(name),
     net: opts.net,

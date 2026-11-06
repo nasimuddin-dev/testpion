@@ -429,7 +429,7 @@ export interface RpcParamTypes {
   'ws.rename': RpcCommonParams & { ref: string; name: string };
   'ws.revealFile': RpcCommonParams & { path: string };
   'ws.search': RpcCommonParams & { query: string };
-  'ws.shareAdd': RpcCommonParams & { path?: string };
+  'ws.shareAdd': RpcCommonParams & { path?: string; kinds?: string[] };
   'ws.shareRemove': RpcCommonParams & { path: string };
   'ws.shared': RpcCommonParams;
   'ws.update': RpcCommonParams & { name?: string; description?: string; variables?: unknown[] };

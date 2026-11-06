@@ -8,7 +8,7 @@ import { collectionRequests } from '../runner/collection-run.js';
 import { mockPathOf } from '../mock/mock-server.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { basePaths, findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
-import { listSpecs } from './spec-files.js';
+import { listSpecs, specFileToRead } from './spec-files.js';
 
 export interface DeprecatedOperationCall {
   /** The API definition's path in the workspace (`specs/api.yaml`). */
@@ -39,10 +39,11 @@ export function deprecatedOperationCalls(store: WorkspaceStore): DeprecatedOpera
   const out: DeprecatedOperationCall[] = [];
   const collections = store.listCollections().filter((c) => !(c as { problem?: string }).problem);
   if (!collections.length) return out;
-  for (const spec of listSpecs(store).sort()) {
+  // a shared platform API's deprecations reach this workspace's calls too
+  for (const spec of listSpecs(store, { includeShared: true }).sort()) {
     let doc: OpenApiDoc;
     try {
-      doc = loadOpenApi(readFileSync(store.safePath(spec), 'utf8'));
+      doc = loadOpenApi(readFileSync(specFileToRead(store, spec), 'utf8'));
     } catch {
       continue; // not an OpenAPI document, or unreadable
     }

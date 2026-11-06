@@ -157,15 +157,17 @@ A team with a repository of its own can use the environments another workspace k
 
 ```bash
 testpion workspace share --add ../platform-shared            # a sibling checkout or a git submodule
-testpion workspace share                                      # what is shared, and the environments it gives
+testpion workspace share                                      # what is shared, and the environments and API definitions it gives
 testpion workspace share --remove ../platform-shared
 ```
 
 ```json
-"shared": [{ "path": "../platform-shared", "kinds": ["environments"] }]
+"shared": [{ "path": "../platform-shared", "kinds": ["environments", "specs"] }]
 ```
 
 Its environments are listed after yours, with a **shared** badge, and work everywhere an environment is chosen. They are read here and changed there: Save, Rename and Delete say so, and **Duplicate** makes a copy of your own to change. One with the id of one of yours is not used (yours is), and the list says why. Secret values stay on each computer, as for your own environments: type them in the shared environment's editor and **Save** keeps them here (nothing else of it changes). `testpion env list` prints *(shared from platform-shared)*, and `list_environments` (MCP) carries `shared`.
+
+**API definitions** come the same way (`--kinds specs`; without `--kinds`, everything the folder has: its `environments/` and `specs/`). They are listed under **API definitions** after yours, as *shared from platform-shared*; **API definitions from another workspace…** in that section's menu opens the same dialog. Every command and agent names one by its path from your workspace, `../platform-shared/specs/platform.yaml`: it opens read-only, and lint, coverage, compare, contract checks (`openapi` checks, the body editor's schema), deprecated calls, tests and flows from a spec all read it. Rename, Move, Delete and Save say it is changed in that workspace. Only the plain files of its `specs/` (and `specs/asyncapi/`) are read (a link there is skipped): no other path outside your workspace is. The folder must be outside your workspace (a sibling checkout, or a submodule next to it): one inside it is yours already. Tests and flows generated from a shared definition are named with its folder (`tests/platform-shared-orders/`), so they never replace your own.
 
 ## Compare
 

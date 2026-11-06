@@ -617,7 +617,7 @@ export interface Workspace {
   variables: KeyValue[];
   createdAt: string;
   updatedAt: string;
-  shared?: Array<{ path: string; kinds: Array<'environments'> }>; // other workspaces' folders read here, read-only (storage/shared-sources.ts)
+  shared?: Array<{ path: string; kinds: Array<'environments' | 'specs'> }>; // other workspaces' folders read here, read-only (storage/shared-sources.ts)
 }
 
 export interface EnvironmentVariable {

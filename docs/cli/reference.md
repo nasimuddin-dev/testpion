@@ -32,7 +32,7 @@ A few more that came with teamwork and AI quality:
 | See what a pull would bring | `testpion git incoming` |
 | Tell git who I am | `testpion git identity --name "Ana" --email ana@example.com` |
 | Write a note for my team on Home | `testpion workspace note "Start with Staging."` |
-| Use another workspace's environments, read-only | `testpion workspace share --add ../platform-shared` |
+| Use another workspace's environments and API definitions, read-only | `testpion workspace share --add ../platform-shared` |
 | List the secrets this computer still needs | `testpion secrets --missing` |
 | Check the test cases of an evaluation | `testpion eval lint "Support intents"` |
 | See what changed between two prompts | `testpion eval version-diff "Support intents" "Shorter"` |

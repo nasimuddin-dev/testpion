@@ -41,8 +41,8 @@ describe('shared environments in the app', () => {
     writeFileSync(be.ws.path('environments', 'platform-prod.json'), JSON.stringify({ id: 'platform-prod', name: 'Mine', variables: [] }));
     expect(((await be.invoke('env.list', {})) as Array<{ id: string; name: string; shared?: string }>).find((e) => e.id === 'platform-prod' && !e.shared)?.name).toBe('Mine');
     await be.invoke('env.save', { env: { id: 'platform-prod', name: 'Mine again', variables: [] } });
-    const removed = (await be.invoke('ws.shareRemove', { path: rel })) as { shared: unknown[]; environments: unknown[] };
-    expect(removed).toEqual({ shared: [], environments: [] });
+    const removed = (await be.invoke('ws.shareRemove', { path: rel })) as { shared: unknown[]; environments: unknown[]; specs: unknown[] };
+    expect(removed).toEqual({ shared: [], environments: [], specs: [] });
     await expect(be.invoke('ws.shareAdd', { path: '../nowhere-at-all' })).rejects.toThrow(/is not a workspace|has no environments folder/);
   });
 });

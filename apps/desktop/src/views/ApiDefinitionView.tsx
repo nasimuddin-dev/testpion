@@ -21,7 +21,7 @@ import { ApiPreviewPanel, type ApiOutline } from '../components/ApiPreviewPanel'
 import { ApiFuzzPanel } from '../components/ApiFuzzPanel';
 import { AsyncPreviewPanel, type AsyncOutline } from '../components/AsyncPreviewPanel';
 import { useSingleEditorTab } from '../components/EditorTabs';
-import { Badge, Button, Empty, Tabs, useDebounced } from '../components/ui';
+import { Badge, Button, Callout, Empty, Tabs, useDebounced } from '../components/ui';
 import { plural } from '../lib/format';
 
 type Tab = 'definition' | 'preview' | 'lint' | 'fuzz' | 'coverage' | 'compare';
@@ -55,7 +55,7 @@ export function ApiDefinitionView() {
   const [spec, setSpec] = useState<string | undefined>(() => docState.load().spec);
   useEffect(() => docState.save({ spec }), [spec, docState]);
   // an AsyncAPI document (kept in specs/asyncapi/): its own preview; lint, fuzz, coverage and compare read OpenAPI
-  const isAsync = !!spec?.startsWith('specs/asyncapi/');
+  const isAsync = /(^|\/)specs\/asyncapi\//.test(spec ?? '');
   const [tab, setTab] = useSticky<Tab>(`apidef:tab:${docId ?? 'main'}`, 'definition');
   useEffect(() => {
     if (isAsync && tab !== 'definition' && tab !== 'preview') setTab('definition');
@@ -68,23 +68,26 @@ export function ApiDefinitionView() {
   const [text, setText] = useState('');
   const [saved, setSaved] = useState('');
   const [error, setError] = useState<string>();
+  // shared from another workspace's folder (workspace.json `shared`): read here, changed there
+  const [shared, setShared] = useState<string>();
   // Retry (after the document or its outline could not be read) reads them again
   const [attemptNo, setAttemptNo] = useState(0);
   const retry = () => setAttemptNo((n) => n + 1);
   useEffect(() => {
     if (!spec) return;
     setError(undefined);
-    call<{ text: string }>('openapi.spec.get', { path: spec }).then(
+    call<{ text: string; shared?: string }>('openapi.spec.get', { path: spec }).then(
       (r) => {
         setText(r.text);
         setSaved(r.text);
+        setShared(r.shared);
       },
       (e) => setError(asError(e).message),
     );
   }, [spec, attemptNo]);
   const dirty = text !== saved;
   const save = async () => {
-    if (!spec || !dirty) return;
+    if (!spec || !dirty || shared) return;
     await attempt(async () => {
       await call('openapi.spec.save', { path: spec, text });
       setSaved(text);
@@ -149,7 +152,8 @@ export function ApiDefinitionView() {
   };
 
   const info = useMemo(() => infoOf(saved), [saved]);
-  const name = spec?.replace(/^specs\//, '');
+  // a shared one is named by its file (../platform-shared/specs/clinic.yaml: clinic.yaml)
+  const name = spec?.startsWith('../') ? spec.replace(/^.*\//, '') : spec?.replace(/^specs\//, '');
   useSingleEditorTab('apidef', spec ? { title: name!, badge: isAsync ? 'ASYNC' : 'API', badgeClass: 'kind-api', item: spec, dirty } : undefined);
 
   if (!spec)
@@ -167,7 +171,7 @@ export function ApiDefinitionView() {
       {/* WF-11: API definitions › folder › file, like every item view */}
       <ItemBreadcrumb
         label="Where this API definition is"
-        crumbs={[{ label: 'API definitions' }, ...name!.split('/').slice(0, -1).map((f) => ({ label: f }))]}
+        crumbs={[{ label: 'API definitions' }, ...(shared ? [{ label: `shared from ${shared}` }] : name!.split('/').slice(0, -1).map((f) => ({ label: f })))]}
         name={name!.split('/').pop()!}
         dirty={dirty}
         // its ⋯: the API definition's menu as its row in the explorer has it (lib/node-menu.ts)
@@ -195,7 +199,14 @@ export function ApiDefinitionView() {
             </Button>
           </>
         )}
-        <Button className={isAsync || !aiOn ? 'ml-auto' : undefined} icon={<Save size={14} />} disabled={!dirty} reason="Nothing changed yet" onClick={() => void save()} title="Save (Ctrl+S)">
+        <Button
+          className={isAsync || !aiOn ? 'ml-auto' : undefined}
+          icon={<Save size={14} />}
+          disabled={!dirty || !!shared}
+          reason={shared ? `Shared from ${shared}: change it in that workspace` : 'Nothing changed yet'}
+          onClick={() => void save()}
+          title="Save (Ctrl+S)"
+        >
           Save
         </Button>
       </div>
@@ -220,6 +231,11 @@ export function ApiDefinitionView() {
               ]),
         ]}
       />
+      {shared && (
+        <Callout className="m-2" data-spec-shared-note="">
+          Shared from {shared} (another workspace&apos;s folder, named in workspace.json): it is read here, for contract checks, coverage and tests, and changed in that workspace.
+        </Callout>
+      )}
       <div className="flex-1 min-h-0">
         {tab === 'definition' ? (
           error ? (
@@ -232,6 +248,7 @@ export function ApiDefinitionView() {
               path={spec}
               value={text}
               onChange={setText}
+              readOnly={!!shared}
               onMount={(ed, monaco) => {
                 editor.current = { ed, monaco };
                 mark();

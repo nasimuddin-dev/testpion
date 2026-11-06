@@ -22,7 +22,7 @@ import { ApsError } from '../errors.js';
 import type { AuthConfig, CheckConfig, Collection, CollectionFolder, CollectionNode, KeyValue } from '../model/types.js';
 import { flowsFromCollection } from '../openapi/flows-from-spec.js';
 import { loadOpenApi, requestBodySchema } from '../openapi/contract.js';
-import { listSpecs } from '../openapi/spec-files.js';
+import { listSpecs, specFileToRead } from '../openapi/spec-files.js';
 import { stepFromSavedRequest } from '../runner/flow-steps-from-requests.js';
 import { findCollection } from '../storage/env-edit.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -287,14 +287,15 @@ function uniqueId(base: string, used: Set<string>): string {
 function specOperations(store: WorkspaceStore, requests: Saved[]): { spec: string; operations: Array<Record<string, unknown>> } | undefined {
   let specs: string[];
   try {
-    specs = listSpecs(store).sort();
+    // the workspace's own, then those a shared folder gives (a platform API this collection calls)
+    specs = [...listSpecs(store).sort(), ...listSpecs(store, { includeShared: true }).filter((s) => s.startsWith('../'))];
   } catch {
     return undefined;
   }
   for (const spec of specs) {
     let doc: ReturnType<typeof loadOpenApi>;
     try {
-      const file = store.safePath(spec);
+      const file = specFileToRead(store, spec);
       if (statSync(file).size > MAX_SPEC_BYTES) continue;
       doc = loadOpenApi(readFileSync(file, 'utf8'));
     } catch {

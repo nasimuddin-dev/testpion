@@ -1,6 +1,6 @@
 /** Managing workspaces. */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 import { Command } from 'commander';
 import {
   WorkspaceManager,
@@ -25,6 +25,7 @@ import {
   readConventions,
   checkedSource,
   SHAREABLE_KINDS,
+  sharedSpecs,
   samePath,
   slugify,
 } from '@testpion/core';
@@ -77,7 +78,7 @@ export function registerWorkspaceCommands(program: Command): void {
   ws.command('share')
     .description(`read pieces of another workspace (a sibling checkout or a git submodule) read-only, without copying them: ${SHAREABLE_KINDS.join(', ')}. They are listed after this workspace's own, named with the folder they come from, and changed there. Without --add or --remove: list what is shared`)
     .option('--add <path>', 'the folder of the other workspace, relative to this one (e.g. ../platform-shared)')
-    .option('--kinds <list>', `what to read from it, comma separated (default: environments; one of ${SHAREABLE_KINDS.join(', ')})`)
+    .option('--kinds <list>', `what to read from it, comma separated (default: each of ${SHAREABLE_KINDS.join(', ')} it has)`)
     .option('--remove <path>', 'stop reading from this folder')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory')
     .option('--json', 'print as JSON')
@@ -89,7 +90,8 @@ export function registerWorkspaceCommands(program: Command): void {
         if (o.add) {
           let source;
           try {
-            source = checkedSource(store.root, o.add, (o.kinds ?? 'environments').split(',').map((k) => k.trim()).filter(Boolean));
+            const has = SHAREABLE_KINDS.filter((k) => existsSync(resolve(store.root, o.add!, k)));
+            source = checkedSource(store.root, o.add, o.kinds ? o.kinds.split(',').map((k) => k.trim()).filter(Boolean) : has.length ? has : ['environments']);
           } catch (e) {
             throw new CliError((e as Error).message, EXIT.CONFIG_ERROR);
           }
@@ -103,7 +105,8 @@ export function registerWorkspaceCommands(program: Command): void {
           store.updateWorkspace({ shared: shared.length ? shared : undefined });
         }
         const environments = store.listEnvironments().filter((e) => e.shared);
-        if (o.json) return printJson({ shared, environments: environments.map((e) => ({ name: e.name, id: e.id, from: e.shared, ...(e.group ? { group: e.group } : {}), ...(e.problem ? { problem: e.problem } : {}) })) });
+        const specs = sharedSpecs(store, { includeAsync: true });
+        if (o.json) return printJson({ shared, environments: environments.map((e) => ({ name: e.name, id: e.id, from: e.shared, ...(e.group ? { group: e.group } : {}), ...(e.problem ? { problem: e.problem } : {}) })), specs });
         if (!shared.length) return console.log(dim('Nothing is shared into this workspace. Add a folder: testpion workspace share --add ../platform-shared'));
         for (const s of shared) {
           console.log(`${bold(s.path)}  ${dim(s.kinds.join(', '))}`);
@@ -111,6 +114,9 @@ export function registerWorkspaceCommands(program: Command): void {
           const dir = resolve(store.root, s.path, 'environments');
           const ids = new Set(existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) : []);
           for (const e of environments.filter((x) => ids.has(slugify(x.id)))) console.log(`  ${e.name}${e.problem ? yellow(`  (${e.problem})`) : ''}`);
+          // its API definitions, by the path every command takes them as (../platform-shared/specs/clinic.yaml)
+          const specsDir = resolve(store.root, s.path, 'specs') + sep;
+          for (const p of specs.filter((x) => resolve(store.root, x).startsWith(specsDir))) console.log(`  ${p}`);
         }
       }),
     );

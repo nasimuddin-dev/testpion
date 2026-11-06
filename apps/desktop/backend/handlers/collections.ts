@@ -1,7 +1,7 @@
 /** RPC handlers: Collections (requests, folders, examples, import/export) and their mock servers. */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported, collectionOwners } from '@testpion/core';
+import { isDeviceFileName, copyFolderEntry, moveFolderEntry, atomicWriteAsync, writeOwned, renameOwned, copyOwned, ApsError, dbKindOf, redactDbUrl, isSqliteDataset, collectionVariableFlow, listWorkspaceDatasets, appendDatasetRow, readDataset, readWorkspaceDataset, removeItem, sqliteTables, bruFilesToBrunoExport, collectionToBru, importIntoWorkspace, diffOpenApi, lintOpenApi, openApiOutline, asyncApiOutline, workspaceApiCoverage, apiCoverageMarkdown, collectionSecurityFindings, definedVariableNames, listSpecs, findBodySchema, readSpecRef, type SpecRef, collectionToOpenApiText, collectionToHttpFile, collectionToAsyncApi, exportCollectionPackage, writeZip, generateWorkspaceDataset, replaceInCollection, moveCollectionVariablesToEnvironments, tidyCollection, applyTidy, type ReplaceField, writeTestsFromSpec, writeFlows, exampleFromResponse, startMockServer, collectionMarkdown, collectionHtml, exportPostmanCollection, withRequestExamples, type SavedExample, convertCollectionScripts, importRequestSnippet, isRequestSnippet, type Collection, collectionSavedItems, collectionFolders, callFolderPath, duplicateCollection, shortId, collectionTreeOf, replaceSpecWithImported, collectionOwners, sharedSpecSource, specFileToRead } from '@testpion/core';
 import type { Backend, Handlers, CollectionRunParams } from '../backend.js';
 import { countDatasetRecords, datasetFormatOfName } from '@testpion/shared';
 import { recordIncoming } from './debugger.js';
@@ -12,6 +12,12 @@ import { saveText } from './save-text.js';
 const SPEC_PATH = /^specs\/(asyncapi\/)?[^/\\]+\.(json|ya?ml)$/i;
 
 export function collectionsHandlers(be: Backend): Handlers {
+  /** The file of an API definition to read: one in specs/, or one a shared folder gives (read-only); anything else is refused. */
+  const specToRead = (path: string | undefined): string => {
+    const p = String(path ?? '');
+    if (SPEC_PATH.test(p) || sharedSpecSource(be.ws, p)) return specFileToRead(be.ws, p);
+    throw new ApsError('ValidationError', `Not an API definition in specs/: ${p}`);
+  };
   /** A dataset's file from its name under datasets/ (datasets/users.csv or users.csv), inside that folder only. */
   const datasetFile = (name: string) => {
     const clean = String(name ?? '')
@@ -195,13 +201,13 @@ export function collectionsHandlers(be: Backend): Handlers {
     },
     /** OpenAPI documents kept in the workspace (specs/), for comparing versions. */
     // the API definitions list shows AsyncAPI documents too; coverage, diff and the data generator take OpenAPI only
-    'openapi.specs': ({ includeAsync }: { includeAsync?: boolean } = {}) => listSpecs(be.ws, { includeAsync }),
+    // then those a shared folder gives (../platform-shared/specs/x.yaml: workspace.json `shared`), read-only
+    'openapi.specs': ({ includeAsync }: { includeAsync?: boolean } = {}) => listSpecs(be.ws, { includeAsync, includeShared: true }),
     /** EX-G3 "Replace instead" after an import kept both: the new document takes the old one's name, the old one goes to Recently deleted. */
     'openapi.replaceSpec': ({ kept, original, collectionId }: { kept: string; original: string; collectionId?: string }) => replaceSpecWithImported(be.ws, { kept, original, collectionId }),
     /** An AsyncAPI document as its readers see it: servers, channels, what the application does, messages. */
     'asyncapi.outline': ({ path, text }: { path?: string; text?: string }) => {
-      if (text === undefined && (!path || !SPEC_PATH.test(path))) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
-      return asyncApiOutline(text ?? readFileSync(be.ws.safePath(path!), 'utf8'));
+      return asyncApiOutline(text ?? readFileSync(specToRead(path), 'utf8'));
     },
     /**
      * The JSON Schema a request's body should follow, from the operation it maps to in one of the workspace's API
@@ -218,36 +224,36 @@ export function collectionsHandlers(be: Backend): Handlers {
     },
     /** The text of an OpenAPI document kept in the workspace (specs/), for its editor tab. */
     'openapi.spec.get': ({ path }: { path: string }) => {
-      if (!SPEC_PATH.test(path)) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path}`);
-      return { path, text: readFileSync(be.ws.safePath(path), 'utf8') };
+      const shared = sharedSpecSource(be.ws, path);
+      return { path, text: readFileSync(specToRead(path), 'utf8'), ...(shared ? { shared } : {}) };
     },
     /** Save an OpenAPI document edited in its tab (only files in specs/). */
     'openapi.spec.save': async ({ path, text }: { path: string; text: string }) => {
+      const shared = sharedSpecSource(be.ws, path);
+      if (shared) throw new ApsError('ValidationError', `${path.replace(/^.*\//, '')} is shared from ${shared}: change it there`, { suggestions: [`Open the workspace in ${shared} to change it.`] });
       if (!SPEC_PATH.test(path)) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path}`);
       await atomicWriteAsync(be.ws.safePath(path), text);
       return { path };
     },
     /** An OpenAPI document as a reader sees it: operations by tag, parameters, bodies, responses, a request per operation. */
     'openapi.outline': ({ path, text }: { path?: string; text?: string }) => {
-      if (text === undefined && (!path || !SPEC_PATH.test(path))) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
-      return openApiOutline(text ?? readFileSync(be.ws.safePath(path!), 'utf8'));
+      return openApiOutline(text ?? readFileSync(specToRead(path), 'utf8'));
     },
     /** A first test suite from an API definition: tests/<api>/<tag>.yaml and tests/<api>.suite.yaml (existing files kept). */
     'openapi.generateTests': ({ path, negative, overwrite }: { path: string; negative?: boolean; overwrite?: boolean }) => {
-      if (!SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
+      specToRead(path);
       const r = writeTestsFromSpec(be.ws, path, { negative, overwrite }); // its data.changed names the files (own-writes.ts)
       return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped };
     },
     /** An integration suite (a flow per resource) from a definition in specs/ or from a collection: tests/<api>/flows/*.yaml and tests/<api>-integration.suite.yaml. */
     'openapi.generateFlows': ({ path, collectionId, overwrite }: { path?: string; collectionId?: string; overwrite?: boolean }) => {
-      if (!collectionId && !SPEC_PATH.test(path ?? '')) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
+      if (!collectionId) specToRead(path);
       const r = writeFlows(be.ws, collectionId ? { collection: be.ws.getCollection(collectionId) } : { spec: path! }, { overwrite }); // its data.changed names the files
       return { written: r.written.map((f) => ({ path: f.path, tests: f.tests })), skipped: r.skipped, resources: r.resources, variables: r.variables };
     },
     /** Lint problems of an OpenAPI document (the text being edited, or a document in specs/), with their places. */
     'openapi.lint': ({ path, text, disable }: { path?: string; text?: string; disable?: string[] }) => {
-      if (text === undefined && (!path || !SPEC_PATH.test(path))) throw new ApsError('ValidationError', `Not an API definition in specs/: ${path ?? ''}`);
-      return lintOpenApi(text ?? readFileSync(be.ws.safePath(path!), 'utf8'), { disable });
+      return lintOpenApi(text ?? readFileSync(specToRead(path), 'utf8'), { disable });
     },
     /** Breaking and other changes between two OpenAPI versions; each side is a workspace path, a link or the text. */
     'openapi.diff': async ({ old, new: next }: { old: SpecRef; new: SpecRef }) => diffOpenApi(await readSpecRef(be.ws, old), await readSpecRef(be.ws, next)),

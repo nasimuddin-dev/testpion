@@ -23,6 +23,7 @@ import { stringifyYaml } from '../util/lazy-yaml.js';
 import { tryParseYaml } from '../util/yaml-doc.js';
 import { type ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
+import { specFileToRead } from '../openapi/spec-files.js';
 import { fuzzCases } from '../openapi/fuzz.js';
 import { findOperation, loadOpenApi, type OpenApiDoc } from '../openapi/contract.js';
 import { bodySchemaOf, existingRequests, matchUrl, propertiesOf, requestsOfTestFile, SPEC_CATEGORIES, specGapReport, specOperations, type SpecCategory, type SpecGapReport, type SpecOperation } from '../openapi/spec-gaps.js';
@@ -319,7 +320,7 @@ export function loadSpec(store: WorkspaceStore, spec: string): { text: string; d
   if (!/\.(json|ya?ml)$/i.test(rel)) throw new ApsError('ValidationError', `"${spec}" is not an API definition file`, { suggestions: ['Pass a file of specs/ (specs/clinic.yaml) (the API definitions of the workspace).'] });
   let text: string;
   try {
-    const file = store.safePath(rel);
+    const file = specFileToRead(store, rel); // (or one a shared folder gives: read, never written)
     text = readFileSync(file, 'utf8');
   } catch (e) {
     throw new ApsError('ConfigurationError', `Cannot read ${rel}: ${(e as Error).message}`, { suggestions: ['The path is relative to the workspace (specs/clinic.yaml).'] });

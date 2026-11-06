@@ -252,8 +252,9 @@ export const CollectionTree = memo(function CollectionTree({
           },
           // put back where it was, into the collection as it is now (an edit made since stays)
           undo: async () => {
-            const now = await call<Collection>('col.get', { id: c.id });
-            await saveNow({ ...now, items: putBackNodes(now.items, placesOf(whole.items, new Set([n.id]))) });
+            // (the collection gone since, deleted or renamed away: it comes back as it was before the delete)
+            const now = await call<Collection>('col.get', { id: c.id }).catch(() => undefined);
+            await saveNow(now ? { ...now, items: putBackNodes(now.items, placesOf(whole.items, new Set([n.id]))) } : whole);
             await putCallsBack?.();
             await followAgain?.();
           },
@@ -642,8 +643,9 @@ export const CollectionTree = memo(function CollectionTree({
           },
           // put back where they were, into the collection as it is now (an edit made since stays)
           undo: async () => {
-            const now = await call<Collection>('col.get', { id: c.id });
-            await saveNow({ ...now, items: putBackNodes(now.items, places) });
+            // (the collection gone since: it comes back as it was before the delete)
+            const now = await call<Collection>('col.get', { id: c.id }).catch(() => undefined);
+            await saveNow(now ? { ...now, items: putBackNodes(now.items, places) } : whole);
             await followAgain?.();
           },
         }),

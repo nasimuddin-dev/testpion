@@ -14,10 +14,10 @@ import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ApsError } from '../errors.js';
 import type { Environment, Workspace } from '../model/types.js';
 import { slugify } from '../util/ids.js';
-import { samePath } from './fsutil.js';
+import { isInside, plainFileInside, samePath } from './fsutil.js';
 
 /** What a workspace may read from another folder. Collections and tests stay the workspace's own: they are what a team owns. */
-export const SHAREABLE_KINDS = ['environments'] as const;
+export const SHAREABLE_KINDS = ['environments', 'specs'] as const;
 export type ShareableKind = (typeof SHAREABLE_KINDS)[number];
 
 export interface SharedSource {
@@ -35,19 +35,21 @@ export function sharedDirs(ws: Pick<Workspace, 'shared'>, root: string, kind: Sh
     // an absolute path or any folder that happens to hold an environments/ folder
     if (isAbsolute(s.path) || /^[a-z]:/i.test(s.path) || s.path.startsWith('\\\\')) continue;
     const base = resolve(root, s.path);
-    if (samePath(base, root) || !existsSync(join(base, 'workspace.json'))) continue;
+    // a folder inside this workspace is this workspace's already (its files are read as its own)
+    if (samePath(base, root) || isInside(root, base) || !existsSync(join(base, 'workspace.json'))) continue;
     const dir = resolve(base, kind);
-    if (existsSync(dir) && statSync(dir).isDirectory()) out.push({ name: basename(base), dir });
+    // really inside that workspace: a kind folder that is a link elsewhere (~/.docker) is not read
+    if (existsSync(dir) && statSync(dir).isDirectory() && isInside(base, dir)) out.push({ name: basename(base), dir });
   }
   return out;
 }
 
-/** The names, sizes and times of the environment files of these folders: the frozen list is read again when it changes. */
-export function environmentFilesSignature(dirs: string[]): string {
+/** The names, sizes and times of the environment files (or those `files` matches) of these folders: the frozen list is read again when it changes. */
+export function environmentFilesSignature(dirs: string[], files = /\.json$/i): string {
   // (a shared folder removed between the listing of the sources and this: no files)
   const sigOf = (dir: string) =>
     (existsSync(dir) ? readdirSync(dir) : [])
-      .filter((f) => f.endsWith('.json'))
+      .filter((f) => files.test(f))
       .sort()
       .map((f) => ((s) => `${f}:${s?.size}:${s?.mtimeMs}`)(statSync(join(dir, f), { throwIfNoEntry: false })))
       .join('|');
@@ -106,6 +108,41 @@ export function sharedEnvironmentFile(store: EnvStore, idOrName: string): string
   return undefined;
 }
 
+const SPEC_FILE = /\.(json|ya?ml)$/i;
+type SpecStore = { root: string; workspace: Pick<Workspace, 'shared'> };
+
+/**
+ * The API definitions shared folders give, as paths from the workspace (`../platform-shared/specs/clinic.yaml`; with
+ * `includeAsync`, their `specs/asyncapi/` too): listed after the workspace's own, read-only.
+ */
+export function sharedSpecs(store: SpecStore, opts: { includeAsync?: boolean } = {}): string[] {
+  const out: string[] = [];
+  for (const s of sharedDirs(store.workspace, store.root, 'specs'))
+    for (const dir of [s.dir, ...(opts.includeAsync ? [join(s.dir, 'asyncapi')] : [])]) {
+      if (!existsSync(dir)) continue;
+      // plain files only: a link in the other repository (to a credentials file) is neither listed nor read
+      for (const f of readdirSync(dir).filter((x) => SPEC_FILE.test(x) && plainFileInside(s.dir, join(dir, x)) !== undefined)) out.push(relative(store.root, join(dir, f)).split(sep).join('/'));
+    }
+  return out;
+}
+
+/** The shared folder a path from the workspace leads into (`../platform-shared/specs/x.yaml` → platform-shared), if it is a shared API definition. */
+export function sharedSpecSource(store: SpecStore, path: string): string | undefined {
+  if (!path.startsWith('../') || !SPEC_FILE.test(path)) return undefined;
+  const full = resolve(store.root, path);
+  for (const s of sharedDirs(store.workspace, store.root, 'specs')) {
+    // a file right in the shared specs/ folder or its asyncapi/: never a path that climbs out of it
+    const rel = relative(s.dir, full);
+    if (rel && !rel.startsWith('..') && !isAbsolute(rel) && /^(asyncapi[\\/])?[^\\/]+$/.test(rel) && plainFileInside(s.dir, full) !== undefined) return s.name;
+  }
+  return undefined;
+}
+
+/** The file of a shared API definition to read (never to write), or undefined when the path is not one. */
+export function sharedSpecFile(store: SpecStore, path: string): string | undefined {
+  return sharedSpecSource(store, path) ? resolve(store.root, path) : undefined;
+}
+
 /** A source to add, checked: a folder (relative to the workspace, as git keeps it on every computer) that holds the kinds named. */
 export function checkedSource(root: string, path: string, kinds: string[]): SharedSource {
   const p = path.trim().replace(/\\/g, '/');
@@ -115,6 +152,7 @@ export function checkedSource(root: string, path: string, kinds: string[]): Shar
   if (bad.length || !kinds.length) throw new ApsError('ValidationError', `What can be shared: ${SHAREABLE_KINDS.join(', ')}${bad.length ? ` (not ${bad.join(', ')})` : ''}`);
   const base = resolve(root, p);
   if (samePath(base, root)) throw new ApsError('ValidationError', 'A workspace cannot share from itself');
+  if (isInside(root, base)) throw new ApsError('ValidationError', `${p} is inside this workspace: its files are this workspace's already`, { suggestions: ['Share a folder next to this workspace (../platform-shared), e.g. a sibling checkout or a submodule beside it.'] });
   if (!existsSync(join(base, 'workspace.json'))) throw new ApsError('ValidationError', `${base} is not a workspace (it has no workspace.json)`, { suggestions: ['Name the folder of another TestPion workspace (a sibling checkout or a git submodule).'] });
   const missing = kinds.filter((k) => !existsSync(resolve(base, k)));
   if (missing.length) throw new ApsError('ValidationError', `${base} has no ${missing.join(' or ')} folder`, { suggestions: ['Name the folder of another workspace (a sibling checkout or a git submodule).'] });

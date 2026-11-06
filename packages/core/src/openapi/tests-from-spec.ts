@@ -8,6 +8,7 @@ import { fuzzCases, fuzzFindingsToTests, type FuzzCase, type FuzzReport } from '
 import { openApiOutline, successCode } from './outline.js';
 import { importAsyncApi } from '../import/asyncapi.js';
 import { atomicWrite } from '../storage/fsutil.js';
+import { apiNameOf, specFileToRead } from './spec-files.js';
 
 /**
  * A first test suite from an API definition (`testpion tests-from-spec`, the Preview tab's Generate tests,
@@ -72,7 +73,8 @@ export function testsFromSpec(text: string, opts: { specPath?: string; negative?
   if (parsed && typeof parsed === 'object' && typeof (parsed as { asyncapi?: unknown }).asyncapi === 'string') return testsFromAsyncApi(text, opts.specPath);
   const outline = openApiOutline(text);
   const { cases } = fuzzCases(text, { baseUrl: '{{baseUrl}}', includeDelete: opts.includeDelete, maxPerOperation: 60 });
-  const api = slugify(opts.specPath?.replace(/^specs\//, '').replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '') || outline.title) || 'api';
+  // named by the file (specs/clinic.yaml, or ../platform-shared/specs/clinic.yaml a shared folder gives): clinic
+  const api = slugify(apiNameOf(opts.specPath)?.replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '') || outline.title) || 'api';
   const files: GeneratedTestFile[] = [];
   // the cases of each operation, found once (not by a pass over all the cases for each operation)
   const casesOf = new Map<string, FuzzCase[]>();
@@ -121,11 +123,12 @@ export function testsFromSpec(text: string, opts: { specPath?: string; negative?
 
 /** Write them into the workspace; files that exist are kept unless `overwrite`. */
 export function writeTestsFromSpec(
-  store: Pick<WorkspaceStore, 'safePath'>,
+  store: Pick<WorkspaceStore, 'safePath' | 'path'> & Partial<Pick<WorkspaceStore, 'root' | 'workspace'>>,
   spec: string,
   opts: { negative?: boolean; includeDelete?: boolean; overwrite?: boolean } = {},
 ): { written: GeneratedTestFile[]; skipped: string[] } {
-  const files = testsFromSpec(readFileSync(store.safePath(spec), 'utf8'), { specPath: spec, negative: opts.negative, includeDelete: opts.includeDelete });
+  // (a definition a shared folder gives is read there; the tests are written here)
+  const files = testsFromSpec(readFileSync(specFileToRead(store, spec), 'utf8'), { specPath: spec, negative: opts.negative, includeDelete: opts.includeDelete });
   const written: GeneratedTestFile[] = [];
   const skipped: string[] = [];
   for (const f of files) {

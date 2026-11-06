@@ -5,14 +5,16 @@ import { hasNativeDialogs } from '../lib/files';
 import { attempt } from '../store';
 import { Button, Callout, Field, IconButton, Input, Modal } from './ui';
 
-/** What the workspace reads from other workspaces' folders (workspace.json `shared`), and the environments it gives. */
+/** What the workspace reads from other workspaces' folders (workspace.json `shared`), and the environments and API definitions they give. */
 export interface SharedSources {
   shared: Array<{ path: string; kinds: string[] }>;
   environments: Array<{ name: string; from: string; problem?: string }>;
+  /** As every command takes them: ../platform-shared/specs/clinic.yaml */
+  specs: string[];
 }
 
 /**
- * Environments shared from another workspace (a sibling checkout or a git submodule): read here, changed there. The same
+ * Environments and API definitions shared from another workspace (a sibling checkout or a git submodule): read here, changed there. The same
  * as `testpion workspace share`; the folder is kept relative to the workspace, so it is the same on every computer.
  */
 export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; onChanged(): void }) {
@@ -40,20 +42,25 @@ export function SharedSourcesDialog({ onClose, onChanged }: { onClose(): void; o
       onChanged();
     });
   return (
-    <Modal title="Environments from another workspace" onClose={onClose} width={560} footer={<Button onClick={onClose}>Close</Button>}>
+    <Modal title="Shared from another workspace" onClose={onClose} width={560} footer={<Button onClick={onClose}>Close</Button>}>
       <div className="grid gap-3 text-sm" data-shared-sources="">
         <p className="text-muted">
-          A team with a repository of its own can use the environments another workspace keeps (a sibling checkout or a git submodule), without copying them. They are listed after this
-          workspace&apos;s own with a <b>shared</b> badge, and changed where they live. Secret values stay on each computer.
+          A team with a repository of its own can use the environments and API definitions another workspace keeps (a sibling checkout or a git submodule), without copying them.
+          They are listed after this workspace&apos;s own, marked <b>shared</b>, and changed where they live. Secret values stay on each computer.
         </p>
         {state?.shared.length ? (
           <div className="grid gap-1">
             {state.shared.map((s) => {
-              const envs = state.environments.filter((e) => s.path.replace(/\/+$/, '').endsWith(e.from));
+              const base = s.path.replace(/\/+$/, '');
+              const envs = state.environments.filter((e) => base.endsWith(e.from));
+              const specs = (state.specs ?? []).filter((p) => p.startsWith(`${base}/specs/`)).map((p) => p.replace(/^.*\//, ''));
+              const gives = [...envs.map((e) => e.name), ...specs];
               return (
                 <div key={s.path} className="flex items-center gap-2 rounded-md border border-line px-2 py-1.5" data-shared-source={s.path}>
                   <span className="mono truncate">{s.path}</span>
-                  <span className="text-muted text-xs truncate flex-1">{envs.length ? envs.map((e) => e.name).join(', ') : 'no environments yet'}</span>
+                  <span className="text-muted text-xs truncate flex-1" title={gives.join(', ')}>
+                    {gives.length ? gives.join(', ') : 'nothing yet'}
+                  </span>
                   <IconButton size="md" label={`Stop reading from ${s.path}`} onClick={() => remove(s.path)}>
                     <Trash2 />
                   </IconButton>

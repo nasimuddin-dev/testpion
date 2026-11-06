@@ -12,7 +12,7 @@ import { useIntent, useLeaveGuard, useSaveShortcut } from '../hooks';
 import type { AppSettings, PriceEntry, ProviderConfig } from '../types';
 import { checkForUpdates } from '../updates';
 import { NETWORK_DISCLOSURES } from '../lib/network-disclosures';
-import { Badge, Button, Field, HelpLink, IconButton, Input, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
+import { Badge, Button, Field, HelpLink, IconButton, Input, ListInput, Segmented, Select, Tabs, Toggle, Textarea, NamedOptions } from '../components/ui';
 import { OutputActions } from '../components/output/OutputFrame';
 import { SettingsSearch } from '../components/SettingsSearch';
 import { SettingsTransfer } from '../components/SettingsTransfer';
@@ -162,13 +162,7 @@ export function SettingsView() {
           )}
           {tab === 'git' && (
             <Field label="Your teams" hint="The teams you are in, as CODEOWNERS names them (@org/payments), comma separated: a comment that mentions one of them is for you (first on Home, and a message when it arrives). For this computer.">
-              <Input
-                aria-label="Your teams"
-                placeholder="@org/payments, @org/qa"
-                value={(s.git?.teams ?? []).join(', ')}
-                onChange={(e) => set({ git: { ...s.git, teams: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) } })}
-                data-settings-teams
-              />
+              <ListInput aria-label="Your teams" placeholder="@org/payments, @org/qa" value={s.git?.teams ?? []} onValue={(teams) => set({ git: { ...s.git, teams } })} data-settings-teams />
             </Field>
           )}
           {tab === 'git' && (

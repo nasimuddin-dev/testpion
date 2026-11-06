@@ -20,6 +20,7 @@ import { deref, operationParameters } from '../util/json-ref.js';
 import type { CollectionNode } from '../model/types.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import { coveragePct as pct, findOperation, loadOpenApi, type OpenApiDoc } from './contract.js';
+import { specFileToRead } from './spec-files.js';
 
 type Json = Record<string, any>;
 
@@ -469,7 +470,7 @@ export function specGapReport(doc: OpenApiDoc, existing: ExistingRequest[], o: {
 
 /** The gap report of a spec file of the workspace (specs/…) against its tests and collections. */
 export function workspaceSpecGaps(store: WorkspaceStore, spec: string): SpecGapReport {
-  const text = readFileSync(store.safePath(spec), 'utf8');
+  const text = readFileSync(specFileToRead(store, spec), 'utf8');
   return specGapReport(loadOpenApi(text), existingRequests(store), { spec });
 }
 

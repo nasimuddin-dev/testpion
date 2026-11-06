@@ -334,7 +334,7 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'app.stopRunning': { kind: 's', id: 's' },
   'debug.approveRules': {},
   'ws.shared': {},
-  'ws.shareAdd': { path: 'p?' },
+  'ws.shareAdd': { path: 'p?', kinds: 'sa?' },
   'ws.shareRemove': { path: 'p' },
   'monitor.pause': { id: 's', minutes: 'n?', until: 's?', reason: 's?' },
   'monitor.resume': { id: 's' },

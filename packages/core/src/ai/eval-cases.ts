@@ -14,6 +14,7 @@
  */
 import { casesToJsonl, datasetRecords } from '@testpion/shared';
 import { ApsError } from '../errors.js';
+import { specFileToRead } from '../openapi/spec-files.js';
 import { loadOpenApi } from '../openapi/contract.js';
 import { specOperations } from '../openapi/spec-gaps.js';
 import { historyResponse } from '../storage/history-compare.js';
@@ -169,7 +170,7 @@ export async function prepareEvalCases(store: WorkspaceStore, context: Record<st
   let label = `${c.source}`;
   if (c.source === 'spec') {
     if (!c.spec) throw new ApsError('ValidationError', 'Name the API definition (a file under specs/)');
-    const text = readFileSync(store.safePath(c.spec), 'utf8');
+    const text = readFileSync(specFileToRead(store, c.spec), 'utf8'); // (or one a shared folder gives)
     const ops = specOperations(loadOpenApi(text)).slice(0, 60);
     if (!ops.length) throw new ApsError('ValidationError', `${c.spec} has no operations to write cases about`);
     local.allowed = ops.map((o) => o.key);

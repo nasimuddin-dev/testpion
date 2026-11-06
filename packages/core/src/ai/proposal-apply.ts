@@ -9,6 +9,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { atomicWrite } from '../storage/fsutil.js';
+import { sharedSpecSource } from '../storage/shared-sources.js';
 import type { CheckConfig, Collection, CollectionNode, SavedHttpRequest } from '../model/types.js';
 import { ApsError } from '../errors.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
@@ -174,6 +175,8 @@ function applyItem(store: WorkspaceStore, item: ProposalItem): ProposalUndo {
     case 'spec': {
       // an API definition under specs/ (a contract-drift patch): the file as it is now must be the one the patch was made from
       const rel = String(item.path ?? '').replace(/\\/g, '/');
+      const sharedFrom = sharedSpecSource(store, rel);
+      if (sharedFrom) throw new ApsError('ValidationError', `${rel.replace(/^.*\//, '')} is shared from ${sharedFrom}: change it there (the patch applies in that workspace)`);
       if (!/^specs\/[^/].*\.(json|ya?ml)$/i.test(rel) || rel.split('/').includes('..')) throw new ApsError('ValidationError', `"${item.title}" names no API definition under specs/ (${rel || 'no path'})`);
       const file = store.safePath(rel);
       let before: string;

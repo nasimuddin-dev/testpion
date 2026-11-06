@@ -53,7 +53,7 @@ import {
   samePath,
   type RefResolution,
   importFileFilters,
-  setWorkspaceNote, ownershipOf, checkedSource } from '@testpion/core';
+  setWorkspaceNote, ownershipOf, checkedSource, sharedSpecs, SHAREABLE_KINDS } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 import { currentOwner } from '../current-owner.js';
 import { workspaceLockedBy } from '../backend-health.js';
@@ -66,6 +66,7 @@ function sharedOf(be: Backend) {
   return {
     shared: be.ws.workspace.shared ?? [],
     environments: be.ws.listEnvironments().filter((e) => e.shared).map((e) => ({ name: e.name, from: e.shared!, ...(e.problem ? { problem: e.problem } : {}) })),
+    specs: sharedSpecs(be.ws, { includeAsync: true }),
   };
 }
 
@@ -131,15 +132,19 @@ export function workspaceHandlers(be: Backend): Handlers {
     'ws.gitReady': () => makeGitReady(be.ws),
     /** Environments read from other workspaces' folders (workspace.json `shared`), as `testpion workspace share` lists them. */
     'ws.shared': () => sharedOf(be),
-    /** Read another workspace's environments: `path` relative to this workspace, or picked in a folder dialog (undefined: closed). */
-    'ws.shareAdd': async ({ path }: { path?: string } = {}) => {
+    /**
+     * Read another workspace's environments and API definitions: `path` relative to this workspace, or picked in a folder
+     * dialog (undefined: closed). `kinds` defaults to each shareable folder it has.
+     */
+    'ws.shareAdd': async ({ path, kinds }: { path?: string; kinds?: string[] } = {}) => {
       let rel = path;
       if (rel === undefined) {
         const picked = await be.host.openDialog?.({ directory: true });
         if (!picked) return undefined;
         rel = relative(be.ws.root, picked).split(sep).join('/') || '.';
       }
-      const source = checkedSource(be.ws.root, rel, ['environments']);
+      const has = SHAREABLE_KINDS.filter((k) => existsSync(resolve(be.ws.root, rel!, k)));
+      const source = checkedSource(be.ws.root, rel, kinds?.length ? kinds : has.length ? has : ['environments']);
       const same = (a: string) => samePath(resolve(be.ws.root, a), resolve(be.ws.root, source.path));
       be.ws.updateWorkspace({ shared: [...(be.ws.workspace.shared ?? []).filter((s) => !same(s.path)), source] });
       return sharedOf(be);

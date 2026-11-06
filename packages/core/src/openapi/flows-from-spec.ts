@@ -10,6 +10,7 @@ import { collectionToOpenApiText } from './from-collection.js';
 import { deref, openApiOutline, successCode, type OutlineOperation } from './outline.js';
 import type { GeneratedTestFile } from './tests-from-spec.js';
 import { atomicWrite } from '../storage/fsutil.js';
+import { apiNameOf, specFileToRead } from './spec-files.js';
 
 /**
  * An integration suite from an API definition (`testpion integration-suite`, the Preview tab's Generate ▸ Integration
@@ -202,7 +203,7 @@ export function flowsFromSpec(text: string, opts: { specPath?: string; title?: s
   const ops = outline.tags.flatMap((t) => t.operations);
   const { cases } = fuzzCases(text, { baseUrl: '{{baseUrl}}', includeDelete: true, maxPerOperation: 60 });
   const validOf = (op: OutlineOperation) => cases.find((c) => c.operation === `${op.method.toUpperCase()} ${op.path}` && c.mutation === 'valid');
-  const api = slugify(opts.specPath?.replace(/^specs\//, '').replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '') || opts.title || outline.title) || 'api';
+  const api = slugify(apiNameOf(opts.specPath)?.replace(/\.(openapi|swagger)?\.?(ya?ml|json)$/i, '') || opts.title || outline.title) || 'api';
   const files: GeneratedTestFile[] = [];
   const variables = new Set<string>(['baseUrl']);
   const contract = opts.specPath ? [{ type: 'openapi', spec: opts.specPath }] : [];
@@ -326,8 +327,8 @@ interface WrittenFlows {
 }
 
 /** Write the flows of a definition in specs/ (or of a collection) into the workspace; files that exist are kept unless `overwrite`. */
-export function writeFlows(store: Pick<WorkspaceStore, 'safePath'>, source: { spec: string } | { collection: Collection }, opts: { overwrite?: boolean } = {}): WrittenFlows {
-  const r = 'spec' in source ? flowsFromSpec(readFileSync(store.safePath(source.spec), 'utf8'), { specPath: source.spec }) : flowsFromCollection(source.collection);
+export function writeFlows(store: Pick<WorkspaceStore, 'safePath'> & Partial<Pick<WorkspaceStore, 'root' | 'workspace'>>, source: { spec: string } | { collection: Collection }, opts: { overwrite?: boolean } = {}): WrittenFlows {
+  const r = 'spec' in source ? flowsFromSpec(readFileSync(specFileToRead(store, source.spec), 'utf8'), { specPath: source.spec }) : flowsFromCollection(source.collection);
   const written: GeneratedTestFile[] = [];
   const skipped: string[] = [];
   for (const f of r.files) {

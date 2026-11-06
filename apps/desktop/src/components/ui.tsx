@@ -164,6 +164,31 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 Input.displayName = 'Input';
 
 /**
+ * A list typed as comma-separated text (teams, names): what is typed stays as typed (a comma ends one item and starts the
+ * next), `onValue` gets the trimmed items without empty ones; the text follows `value` when it changes elsewhere.
+ */
+export function ListInput({ value, onValue, ...p }: { value: readonly string[]; onValue(items: string[]): void } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+  const parse = (t: string) => t.split(',').map((x) => x.trim()).filter(Boolean);
+  const [text, setText] = useState(value.join(', '));
+  const joined = value.join('\u0000');
+  useEffect(() => {
+    // changed elsewhere (another window, a reset): show it, unless it is what the text already says
+    setText((t) => (parse(t).join('\u0000') === joined ? t : value.join(', ')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joined]);
+  return (
+    <Input
+      {...p}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        onValue(parse(e.target.value));
+      }}
+    />
+  );
+}
+
+/**
  * The filter box of a list or an output bar, the one way everywhere (D1): one height, the search icon, a name for a
  * screen reader (`label`), and Esc clears it (with nothing typed, Esc goes on to whatever is around: a dialog closes).
  * `className` places and sizes the box (flex-1, w-48 …).

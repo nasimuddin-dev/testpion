@@ -1,7 +1,9 @@
 import type { ItemRef } from '@testpion/shared';
 import { ApsError } from '../errors.js';
 import { CAPTURE_SESSIONS_DIR, captureSessionFileName } from '../debugger/capture-history.js';
+import { existsSync } from 'node:fs';
 import { moveToTrash, restoreFromTrash, trashSpec } from '../storage/trash.js';
+import { sharedSpecFile, sharedSpecSource } from '../storage/shared-sources.js';
 import { fileIn, missing, ok } from './ref-index.js';
 import type { KindDefs } from './types.js';
 
@@ -15,11 +17,20 @@ export const fileKinds: KindDefs = {
   spec: {
     resolve: (store, ref) => {
       const r = ref as Extract<ItemRef, { kind: 'spec' }>;
-      return /^specs\//.test(r.path) && fileIn(store, store.root, r.path)
+      // one of the workspace's own, or one a shared folder gives (../platform-shared/specs/x.yaml)
+      const shared = sharedSpecFile(store, r.path);
+      return (/^specs\//.test(r.path) && fileIn(store, store.root, r.path)) || (shared && existsSync(shared))
         ? ok(r, r.path.replace(/^.*\//, ''), r.path)
         : missing(r, `${r.path} is no longer there (deleted or renamed).`, { label: 'Search the workspace', view: 'search' });
     },
-    ops: { remove: (store, id) => trashSpec(store, id), restore: (store, trashId) => restoreFromTrash(store, trashId) },
+    ops: {
+      remove: (store, id) => {
+        const from = sharedSpecSource(store, id);
+        if (from) throw new ApsError('ValidationError', `${id.replace(/^.*\//, '')} is shared from ${from}: delete it there`);
+        return trashSpec(store, id);
+      },
+      restore: (store, trashId) => restoreFromTrash(store, trashId),
+    },
   },
   dataset: {
     resolve: (store, ref) => {

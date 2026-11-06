@@ -1,4 +1,5 @@
-import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
+import { ArchiveRestore, Database, Download, FileCode2, FilePlus2, FolderInput, FolderPlus, Layers, PanelLeftClose, Plug, Plus, RefreshCw, Star, Upload } from 'lucide-react';
+import { SharedSourcesDialog } from './SharedSourcesDialog';
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { call, on } from '../api';
 import { sharedCall } from '../lib/shared-call';
@@ -61,6 +62,15 @@ const ALL_PARTS: ReadonlySet<ListPart> = new Set(PART_KINDS.map(([p]) => p));
 const LIBRARY: ReadonlySet<ListPart> = new Set(['library']);
 const MCP: ReadonlySet<ListPart> = new Set(['mcp']);
 const SPECS: ReadonlySet<ListPart> = new Set(['specs']);
+/** The folder an API definition is shared from (`../platform-shared/specs/x.yaml` → platform-shared), or undefined for the workspace's own. */
+const sharedSpecFrom = (path: string): string | undefined =>
+  path.startsWith('../')
+    ? path
+        .split('/')
+        .slice(0, -1)
+        .filter((x) => !['..', 'specs', 'asyncapi'].includes(x))
+        .pop()
+    : undefined;
 const DATASETS: ReadonlySet<ListPart> = new Set(['datasets']);
 
 /** A file of the workspace's datasets/ folder, as datasets.list answers. */
@@ -183,6 +193,8 @@ export function Explorer() {
   const calls = useCollectionCalls(allCollections);
   const [servers, setServers] = useState<Array<McpServerConfig & { connected?: boolean }>>([]);
   const [specs, setSpecs] = useState<string[]>([]);
+  // API definitions another workspace keeps (workspace.json `shared`): the dialog the Environments view opens too
+  const [sharing, setSharing] = useState(false);
   const [datasets, setDatasets] = useState<DatasetRow[]>([]);
   // folders of the MCP servers (a server keeps its own folder; empty folders are kept here), of the API definitions and
   // of the datasets (virtual: path → folder, the files never move)
@@ -417,7 +429,8 @@ export function Explorer() {
   /** The menu of an API definition: open, lint, coverage, compare, copy, generate tests or flows, rename, move, delete (Undo). */
   const specMenu = (path: string, folder: string | undefined): NodeMenuCtx => {
     const ref = { kind: 'spec' as const, path };
-    const isAsync = path.startsWith('specs/asyncapi/');
+    const isAsync = /(^|\/)specs\/asyncapi\//.test(path);
+    const from = sharedSpecFrom(path);
     return {
       ref,
       name: path,
@@ -453,15 +466,19 @@ export function Explorer() {
           });
         },
       },
-      disabled: isAsync
-        ? {
-            generateSpecTests: 'Tests from a spec read OpenAPI documents',
-            driftReport: 'Contract drift reads OpenAPI documents',
-            lint: 'Lint reads OpenAPI documents',
-            apiCoverage: 'API coverage reads OpenAPI documents',
-            compareVersions: 'Compare versions reads OpenAPI documents',
-          }
-        : {},
+      disabled: {
+        ...(isAsync
+          ? {
+              generateSpecTests: 'Tests from a spec read OpenAPI documents',
+              driftReport: 'Contract drift reads OpenAPI documents',
+              lint: 'Lint reads OpenAPI documents',
+              apiCoverage: 'API coverage reads OpenAPI documents',
+              compareVersions: 'Compare versions reads OpenAPI documents',
+            }
+          : {}),
+        // from another workspace's folder: changed there
+        ...(from ? Object.fromEntries(['rename', 'move', 'delete'].map((k) => [k, `Shared from ${from}: change it there`])) : {}),
+      },
     };
   };
   /** The menu of a dataset: open, preview, run a collection with it, copy, use in a test, rename, duplicate, move, delete (Undo). */
@@ -563,6 +580,7 @@ export function Explorer() {
   return (
     <aside aria-label="Collections explorer" style={{ width }} className="relative shrink-0 border-r border-line bg-panel flex flex-col min-h-0">
       {handle}
+      {sharing && <SharedSourcesDialog onClose={() => setSharing(false)} onChanged={() => void load(false, SPECS)} />}
       <Bar>
         <Layers size={15} className="text-accent shrink-0" />
         <span className="font-semibold text-sm flex-1 truncate" title={ws?.name}>
@@ -708,7 +726,11 @@ export function Explorer() {
           def={specs.length > 0}
           forceOpen={!!f && shownSpecs.length > 0}
           menu={() => ({
-            create: [{ label: 'Import an OpenAPI document', icon: <Upload size={14} />, onSelect: importDefinition }],
+            create: [
+              { label: 'Import an OpenAPI document', icon: <Upload size={14} />, onSelect: importDefinition },
+              // read-only, from a sibling checkout or a submodule: listed here, changed there
+              { label: 'API definitions from another workspace…', icon: <FolderInput size={14} />, onSelect: () => setSharing(true) },
+            ],
             on: { newFolder: () => void newFolderIn(specOps), openApiDefinitions: () => intent('apidef', {}), ...sectionTree('specs', specOps, specFolders.items) },
           })}
         >
@@ -728,12 +750,13 @@ export function Explorer() {
                   nodeId={`specs:${s}`}
                   indent
                   icon={<TreeBadge label="API" className={KIND_COLOR.api} />}
-                  label={s.replace(/^specs\//, '')}
+                  label={sharedSpecFrom(s) ? s.replace(/^.*\//, '') : s.replace(/^specs\//, '')}
+                  sub={sharedSpecFrom(s) && <span data-spec-shared={sharedSpecFrom(s)}>shared from {sharedSpecFrom(s)}</span>}
                   activeId={s}
                   onClick={() => void openRef({ kind: 'spec', path: s })}
                   ctx={() => specMenu(s, folder)}
-                  rename={renamer(s, `specs:${s}`, (to) => call<{ path: string }>('openapi.spec.rename', { path: s, to: to.replace(/^.*\//, '') }).then(() => load(false, SPECS), toastError))}
-                  drag={[{ kind: 'spec', path: s }]}
+                  rename={sharedSpecFrom(s) ? undefined : renamer(s, `specs:${s}`, (to) => call<{ path: string }>('openapi.spec.rename', { path: s, to: to.replace(/^.*\//, '') }).then(() => load(false, SPECS), toastError))}
+                  drag={sharedSpecFrom(s) ? undefined : [{ kind: 'spec', path: s }]}
                   git={{ kind: 'spec', path: s }}
                 />
               )}
