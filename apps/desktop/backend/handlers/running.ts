@@ -1,13 +1,13 @@
 /**
  * RPC handlers: what the app has running for the open workspace, in one list (the status bar's "Running"), and a way to
- * stop each: mock servers, the GraphQL mock, the traffic recorder, the HTTP Debugger's proxy, open connections
+ * stop each: runs in progress, mock servers, the GraphQL mock, the traffic recorder, the HTTP Debugger's proxy, open connections
  * (WebSocket, Socket.IO, MQTT, Kafka), MCP sessions and GraphQL subscriptions. A stop goes through the handler the
  * view itself uses, so the view that started it shows it stopped too.
  */
 import { ApsError } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
 
-export type RunningKind = 'mock' | 'graphql-mock' | 'recorder' | 'debugger' | 'websocket' | 'socketio' | 'mqtt' | 'kafka' | 'mcp' | 'subscription';
+export type RunningKind = 'run' | 'mock' | 'graphql-mock' | 'recorder' | 'debugger' | 'websocket' | 'socketio' | 'mqtt' | 'kafka' | 'mcp' | 'subscription';
 
 export interface RunningItem {
   kind: RunningKind;
@@ -22,6 +22,8 @@ export interface RunningItem {
 /** Everything running now, in the order of the list. */
 export function runningItems(be: Backend): RunningItem[] {
   const out: RunningItem[] = [];
+  // runs in progress (a collection run, a test run, an evaluation): stopped as their own Stop does
+  for (const [id, r] of be.runs) if (!r.done) out.push({ kind: 'run', id, label: 'Run in progress', detail: id });
   const collectionName = (id: string) => {
     try {
       return be.ws.listCollections().find((c) => c.id === id)?.name ?? id;
@@ -45,6 +47,7 @@ export function runningItems(be: Backend): RunningItem[] {
 
 /** The handler that stops each kind, with what it is given (the one its own view calls). */
 const STOP: Record<RunningKind, (id: string) => [string, Record<string, unknown>]> = {
+  run: (id) => ['runs.cancel', { runId: id }],
   mock: (id) => ['mock.stop', { collectionId: id }],
   'graphql-mock': () => ['gql.mock.stop', {}],
   recorder: () => ['record.stop', {}],

@@ -4,7 +4,7 @@
 
 ### What runs now
 
-- The status bar's MCP segment also counts what else runs for the workspace (mock servers, the GraphQL mock, the recorder, the Debugger's capture, WebSocket, Socket.IO, MQTT and Kafka connections, MCP sessions, GraphQL subscriptions); a click lists each, with Stop.
+- The status bar's MCP segment also counts what else runs for the workspace (runs in progress, mock servers, the GraphQL mock, the recorder, the Debugger's capture, WebSocket, Socket.IO, MQTT and Kafka connections, MCP sessions, GraphQL subscriptions); a click lists each, with Stop.
 
 ### Pick several requests
 

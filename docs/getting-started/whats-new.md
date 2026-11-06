@@ -54,7 +54,7 @@ The options added in 0.56, 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48,
 - **A run follows the tree.** **Run collection** runs a folder's gRPC calls and connections where the tree shows them, between its requests (not after all of them), with the folder's variables and scripts, and with the headers and auth (bearer, basic, API key in a header) of the collection and its folders: as gRPC metadata, or with a WebSocket or Socket.IO handshake.
 
 ### Small things {#whats-new-small-056}
-- **What runs now.** The status bar's MCP segment says how many other things the app keeps running (mock servers, the recorder, the Debugger, open connections, subscriptions); a click lists each, with Stop.
+- **What runs now.** The status bar's MCP segment says how many other things the app keeps running (runs in progress, mock servers, the recorder, the Debugger, open connections, subscriptions); a click lists each, with Stop.
 - The OpenAPI lint notes a parameter without a description and an operation that documents no failure. Every button, input and dialog has a name for a screen reader (a plan keeps it so). Navigation names are in Title Case and read from one file, so a renamed view is one edit.
 - Two tenants with an environment of the same name are never mixed up: the active environment, a tenant's monitor and the values scripts set are kept per environment, **No environment** stays chosen, and a run that names an environment that is gone (or a name two tenants share) stops with an error instead of running without one.
 - Switching workspace stops what served the old one: its mock servers, recorder, open connections and Debugger rules.
