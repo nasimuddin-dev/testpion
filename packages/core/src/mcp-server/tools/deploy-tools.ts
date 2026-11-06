@@ -72,6 +72,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           maxDrop: { type: 'number', description: 'With baseline: the smallest drop that fails (default 0.05)' },
           every: { type: ['string', 'number'], description: 'How often: minutes, 15m, 1h, 1d, or cron' },
           quiet: { type: ['object', 'null'], description: 'Maintenance window, no runs: { cron, minutes, reason? }; null removes it' },
+          timezone: str('IANA zone of the cron times (Europe/Berlin); default local'),
           environment: str('The environment it runs with'),
           environmentGroup: str('Or every environment of a group (a tenant each)'),
           webhook: str('Alert URL (Slack / Teams / Discord webhook or any URL; {{variables}} work)'),
@@ -106,6 +107,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           ...(a.webhook ? { webhook: String(a.webhook) } : existing?.webhook ? { webhook: existing.webhook } : {}),
           // a maintenance window: given, removed (null), or kept
           ...(a.quiet === null ? {} : a.quiet && typeof a.quiet === 'object' ? { quiet: a.quiet as QuietWindow } : existing?.quiet ? { quiet: existing.quiet } : {}),
+          ...(typeof a.timezone === 'string' ? (a.timezone.trim() ? { timezone: a.timezone.trim() } : {}) : existing?.timezone ? { timezone: existing.timezone } : {}),
           ...monitorConsent(store, { environment: a.environment ? String(a.environment) : undefined, environmentGroup }, existing, false),
         });
         return monitorStatus(store, m);

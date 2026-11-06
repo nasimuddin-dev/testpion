@@ -35,7 +35,8 @@ import { useExternalChange } from '../lib/external-change';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
-import { outputFileName, COLLECTION_CALL_LIBRARIES, cronProblem, describeCron, nextCronTimes } from '@testpion/shared';
+import { outputFileName, COLLECTION_CALL_LIBRARIES, cronProblem, describeCron, nextCronTimes, timeZoneProblem } from '@testpion/shared';
+import { SuggestInput } from '../components/SuggestInput';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
 const NEW_TAB = 'new';
@@ -43,6 +44,8 @@ const NEW_TAB = 'new';
 interface MonitorDraft {
   id?: string;
   name: string;
+  /** The time zone of its cron times (IANA); unset: the local time of the computer that runs it. */
+  timezone?: string;
   /** The collection it runs ('' when it runs a test file). */
   collectionId: string;
   selection?: string[];
@@ -737,21 +740,32 @@ function useTestFiles(): string[] {
 
 /** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
 /** A cron schedule in words and its next three runs, or what is wrong with it: read as it is typed. */
-function CronPreview({ text }: { text: string }) {
-  const problem = cronProblem(text);
+/** The time zones this computer knows (for the time zone field's suggestions). */
+const TIME_ZONES: string[] = (() => {
+  try {
+    return (Intl as unknown as { supportedValuesOf?(k: string): string[] }).supportedValuesOf?.('timeZone') ?? ['UTC'];
+  } catch {
+    return ['UTC'];
+  }
+})();
+
+function CronPreview({ text, timeZone }: { text: string; timeZone?: string }) {
+  const problem = cronProblem(text) ?? (timeZone ? timeZoneProblem(timeZone) : undefined);
   if (problem) return <div className="text-xs text-bad mt-1" data-monitor-cron-preview="">{problem}</div>;
-  const next = nextCronTimes(text, Date.now(), 3).map((t) => t.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+  // the next times in this computer's clock (with the zone's own when it is another)
+  const next = nextCronTimes(text, Date.now(), 3, timeZone).map((t) => t.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
   return (
     <div className="text-xs text-muted mt-1" data-monitor-cron-preview="">
       Runs {describeCron(text)}
-      {next.length ? ` · next: ${next.join(', ')}` : ' · never (no such date)'}
+      {timeZone ? ` in ${timeZone}` : ''}
+      {next.length ? ` · next${timeZone ? ' (your time)' : ''}: ${next.join(', ')}` : ' · never (no such date)'}
     </div>
   );
 }
 
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'cron', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays', 'quiet'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'cron', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays', 'quiet', 'timezone'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
@@ -977,7 +991,21 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               <option value="cron">at set times (cron)</option>
             </Select>
           </div>
-          {unit === 'cron' && <CronPreview text={cronText} />}
+          {unit === 'cron' && (
+            <div className="flex items-center gap-2 mt-1">
+              <SuggestInput
+                className="w-56"
+                value={d.timezone ?? ''}
+                onChange={(v) => setD({ ...d, timezone: v.trim() || undefined })}
+                suggest={(v) => (v.trim() ? TIME_ZONES.filter((z) => z.toLowerCase().includes(v.trim().toLowerCase())).slice(0, 8) : [])}
+                placeholder="Time zone: this computer's"
+                aria-label="Time zone"
+                title="The time zone of the schedule and the maintenance window (Europe/Berlin, UTC): a server in another zone runs it at the team's times. Empty: the time of the computer that runs it."
+                data-monitor-timezone
+              />
+            </div>
+          )}
+          {unit === 'cron' && <CronPreview text={cronText} timeZone={d.timezone} />}
         </Field>
         {target === 'evaluation' && promptEvaluation && (
           <div className="grid grid-cols-2 gap-3" data-monitor-prompt-fields>
@@ -1101,7 +1129,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
               </>
             )}
           </div>
-          {d.quiet && <CronPreview text={d.quiet.cron} />}
+          {d.quiet && <CronPreview text={d.quiet.cron} timeZone={d.timezone} />}
         </Field>
       </div>
     </ModalOrPanel>

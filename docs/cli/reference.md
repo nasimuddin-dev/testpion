@@ -1175,6 +1175,7 @@ testpion monitor add "API health" --collection "My API" --every 5m --max-p95 800
 testpion monitor add "API health" --collection "My API" --every 1h --min-cert-days 21 -w my-workspace   # and when a certificate expires within 21 days
 testpion monitor add "Morning check" --collection "My API" --every "0 9 * * 1-5" -w my-workspace   # at set times: 09:00 on weekdays (cron, local time)
 testpion monitor add "API health" --collection "My API" --every 15m --maintenance "0 2 * * 0" --maintenance-for 2h --maintenance-reason deploy -w my-workspace   # no run in that window (--no-maintenance removes it)
+testpion monitor add "Morning check" --collection "My API" --every "0 9 * * 1-5" --timezone Europe/Berlin -w my-workspace   # 09:00 in Berlin, whatever the zone of the computer that runs it
 testpion monitor run --due -w my-workspace      # for cron; exit 1 if a run failed
 testpion monitor uptime "API health" -w my-workspace --days 90   # uptime per day, like a status page
 testpion monitor requests "API health" -w my-workspace          # each request over the latest runs: median / p95, failures

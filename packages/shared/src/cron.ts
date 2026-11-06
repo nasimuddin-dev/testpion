@@ -78,9 +78,10 @@ const dayMatches = (s: CronSchedule, d: Date) => {
 };
 
 /** The first time after `after` (to the minute, local time) the schedule runs; undefined when none in five years (31 February). */
-export function nextCronTime(expression: string | CronSchedule, after: Date | number): Date | undefined {
+export function nextCronTime(expression: string | CronSchedule, after: Date | number, timeZone?: string): Date | undefined {
   const s = typeof expression === 'string' ? parseCron(expression) : expression;
   const from = typeof after === 'number' ? after : after.getTime();
+  if (timeZone) return nextCronTimeIn(s, from, timeZone);
   // the next whole minute (offsets are whole minutes, so a minute on the clock is a minute of absolute time)
   let d = new Date(Math.floor(from / 60_000) * 60_000 + 60_000);
   const limit = d.getTime() + 5 * 366 * 86_400_000;
@@ -114,13 +115,88 @@ export function nextCronTime(expression: string | CronSchedule, after: Date | nu
   return undefined;
 }
 
-/** The next `count` runs after `after`. */
-export function nextCronTimes(expression: string, after: Date | number, count: number): Date[] {
+/** The next `count` runs after `after` (in `timeZone` when given, else local time). */
+export function nextCronTimes(expression: string, after: Date | number, count: number, timeZone?: string): Date[] {
   const s = parseCron(expression);
   const out: Date[] = [];
   let t: Date | undefined = new Date(typeof after === 'number' ? after : after.getTime());
-  while (out.length < count && (t = nextCronTime(s, t))) out.push(t);
+  while (out.length < count && (t = nextCronTime(s, t, timeZone))) out.push(t);
   return out;
+}
+
+/* ------------------------------------------------------------------ in a time zone */
+
+/** Why a time zone is not one (an IANA name such as Europe/Berlin or UTC); undefined: it is. */
+export function timeZoneProblem(timeZone: string): string | undefined {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return undefined;
+  } catch {
+    return `"${timeZone}" is not a time zone: write an IANA name, e.g. Europe/Berlin, America/New_York or UTC`;
+  }
+}
+
+type Wall = { y: number; mo: number; d: number; h: number; mi: number; wd: number };
+const FORMATS = new Map<string, Intl.DateTimeFormat>();
+const WEEKDAY: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** The clock on the wall in a time zone at an instant. */
+function wallIn(timeZone: string, t: number): Wall {
+  let f = FORMATS.get(timeZone);
+  if (!f) FORMATS.set(timeZone, (f = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', weekday: 'short' })));
+  const p: Record<string, string> = {};
+  for (const x of f.formatToParts(new Date(t))) p[x.type] = x.value;
+  return { y: Number(p.year), mo: Number(p.month), d: Number(p.day), h: Number(p.hour) % 24, mi: Number(p.minute), wd: WEEKDAY[p.weekday!] ?? 0 };
+}
+
+/** The instant a wall clock in a time zone shows y-mo-d 00:00 (or the first minute after it, when midnight is skipped). */
+function startOfDayIn(timeZone: string, y: number, mo: number, d: number): number {
+  const guess = Date.UTC(y, mo - 1, d);
+  // the zone's offset at the guess, then at the corrected time (the offset may change in between)
+  let t = guess;
+  for (let i = 0; i < 3; i++) {
+    const w = wallIn(timeZone, t);
+    const shown = Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi);
+    const next = t + (guess - shown);
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+
+/** nextCronTime in a time zone: the same rules on the zone's wall clock (absolute minutes; a time the clocks skip runs right after). */
+function nextCronTimeIn(s: CronSchedule, from: number, timeZone: string): Date | undefined {
+  let t = Math.floor(from / 60_000) * 60_000 + 60_000;
+  const limit = t + 5 * 366 * 86_400_000;
+  while (t <= limit) {
+    const w = wallIn(timeZone, t);
+    if (!s.months.has(w.mo)) {
+      t = startOfDayIn(timeZone, w.mo === 12 ? w.y + 1 : w.y, w.mo === 12 ? 1 : w.mo + 1, 1);
+      continue;
+    }
+    const dom = s.days.has(w.d);
+    const dow = s.weekdays.has(w.wd);
+    if (!(s.either ? dom || dow : dom && dow)) {
+      const next = new Date(Date.UTC(w.y, w.mo - 1, w.d + 1));
+      t = startOfDayIn(timeZone, next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate());
+      continue;
+    }
+    if (!s.hours.has(w.h)) {
+      const next = t + (60 - w.mi) * 60_000;
+      const n = wallIn(timeZone, next);
+      // the clocks went forward (02:00 is 03:00): a time of the hour that never came runs right after the gap
+      if (n.d === w.d && n.h > w.h + 1 && next > from) for (let h = w.h + 1; h < n.h; h++) if (s.hours.has(h)) return new Date(next);
+      t = next;
+      continue;
+    }
+    if (!s.minutes.has(w.mi)) {
+      t += 60_000;
+      continue;
+    }
+    if (t > from) return new Date(t);
+    t += 60_000;
+  }
+  return undefined;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');

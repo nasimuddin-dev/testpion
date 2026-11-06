@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { cronProblem, describeCron, environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment, nextCronTime, parseCron } from '@testpion/shared';
+import { cronProblem, describeCron, environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment, nextCronTime, parseCron, timeZoneProblem } from '@testpion/shared';
 import { ownershipOf } from '../git/owners.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { appendBoundedLine } from '../util/jsonl-append.js';
@@ -71,10 +71,12 @@ interface MonitorData {
   /** Minutes between runs (1 minute to 1 week). With `cron`, not used (kept for older versions). */
   everyMinutes: number;
   /**
-   * At set times instead of every N minutes: a cron expression in the local time of the computer that runs it
-   * ("0 9 * * 1-5": 09:00 on weekdays). A run missed while nothing ran the schedule runs once when it starts again.
+   * At set times instead of every N minutes: a cron expression in the local time of the computer that runs it, or in
+   * `timezone` ("0 9 * * 1-5": 09:00 on weekdays). A run missed while nothing ran the schedule runs once when it starts again.
    */
   cron?: string;
+  /** The time zone of `cron` and of the maintenance window (an IANA name: Europe/Berlin), so a server in UTC runs it at the team's 09:00. */
+  timezone?: string;
   /** A maintenance window that comes back (monitor-quiet.ts): no scheduled run inside it. */
   quiet?: QuietWindow;
   enabled: boolean;
@@ -307,13 +309,17 @@ export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> 
   if (m.quiet !== undefined) {
     const problem = quietProblem(m.quiet);
     if (problem) throw invalid(problem);
-    if (!nextCronTime(m.quiet.cron, Date.now())) throw invalid(`The maintenance window "${m.quiet.cron}" never comes (no such date)`);
+    if (!nextCronTime(m.quiet.cron, Date.now(), m.timezone)) throw invalid(`The maintenance window "${m.quiet.cron}" never comes (no such date)`);
+  }
+  if (m.timezone !== undefined) {
+    const problem = timeZoneProblem(m.timezone);
+    if (problem) throw invalid(problem);
   }
   if (m.cron !== undefined) {
     const problem = cronProblem(m.cron);
     if (problem) throw invalid(`The schedule "${m.cron}": ${problem}`);
     // 31 February: a schedule that never comes is refused, not saved as a monitor that never runs
-    if (!nextCronTime(m.cron, Date.now())) throw invalid(`The schedule "${m.cron}" never comes (no such date)`);
+    if (!nextCronTime(m.cron, Date.now(), m.timezone)) throw invalid(`The schedule "${m.cron}" never comes (no such date)`);
   } else if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
   const file = m.testFile?.trim();
   const targets = [file, m.collectionId, m.evaluation?.trim()].filter(Boolean).length;
@@ -531,9 +537,9 @@ export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Dat
       // never run: a time of the schedule in the last 10 minutes is due (`monitor run --due` from a system cron every 5 minutes finds it)
       const after = Number.isFinite(ran) && ran <= now ? ran : now - 10 * 60_000;
       const s = parseCron(m.cron);
-      let t = nextCronTime(s, after);
+      let t = nextCronTime(s, after, m.timezone);
       // a time inside the maintenance window is skipped, not run when the window ends: the next one after its end
-      for (let i = 0, end: number | undefined; t && m.quiet && (end = quietUntil(m.quiet, t.getTime())) !== undefined && i < 50; i++) t = nextCronTime(s, end - 1);
+      for (let i = 0, end: number | undefined; t && m.quiet && (end = quietUntil(m.quiet, t.getTime(), m.timezone)) !== undefined && i < 50; i++) t = nextCronTime(s, end - 1, m.timezone);
       return t?.getTime() ?? Number.POSITIVE_INFINITY;
     } catch {
       return Number.POSITIVE_INFINITY; // a schedule that cannot be read never runs (validateMonitor refuses to save one)
@@ -546,12 +552,12 @@ export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Dat
 }
 
 /** How often a monitor runs, in words: "every 15 minutes", "at 09:00 on weekdays", and its maintenance window. */
-export function monitorScheduleText(m: Pick<Monitor, 'everyMinutes' | 'cron' | 'quiet'>): string {
+export function monitorScheduleText(m: Pick<Monitor, 'everyMinutes' | 'cron' | 'quiet' | 'timezone'>): string {
   let when: string;
   if (!m.cron) when = formatEvery(m.everyMinutes);
   else
     try {
-      when = describeCron(m.cron);
+      when = describeCron(m.cron) + (m.timezone ? ` (${m.timezone})` : '');
     } catch {
       when = `on the schedule "${m.cron}" (cannot be read)`;
     }
@@ -559,7 +565,7 @@ export function monitorScheduleText(m: Pick<Monitor, 'everyMinutes' | 'cron' | '
 }
 
 export function isDue(m: Monitor, last: MonitorResult | undefined, now = Date.now()): boolean {
-  return m.enabled && !pausedFor(m, now) && quietUntil(m.quiet, now) === undefined && nextRunAt(m, last, now) <= now;
+  return m.enabled && !pausedFor(m, now) && quietUntil(m.quiet, now, m.timezone) === undefined && nextRunAt(m, last, now) <= now;
 }
 
 /** Whether a timed pause is still on (an expired one is over: the schedule went on by itself). */
@@ -633,7 +639,7 @@ export function resumeMonitor(store: WorkspaceStore, id: string): Monitor {
 /** A monitor with its schedule text, last result and next run (what list commands and MCP show). */
 export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now()) {
   const last = lastMonitorResult(store, m.id);
-  const quiet = quietUntil(m.quiet, now);
+  const quiet = quietUntil(m.quiet, now, m.timezone);
   return {
     ...m,
     schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : quiet !== undefined ? `in its maintenance window until ${new Date(quiet).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}${m.quiet!.reason ? ` (${m.quiet!.reason})` : ''}` : monitorScheduleText(m),

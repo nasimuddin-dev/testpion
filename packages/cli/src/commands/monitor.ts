@@ -148,6 +148,7 @@ export function registerMonitorCommands(program: Command): void {
     .option('--maintenance-for <duration>', 'how long the window lasts: 30m, 2h (at most 24h)')
     .option('--maintenance-reason <text>', 'why (shown while it lasts)')
     .option('--no-maintenance', 'remove the maintenance window')
+    .option('--timezone <zone>', 'the time zone of a cron schedule and the maintenance window (an IANA name: Europe/Berlin, UTC; default: the local time of the computer that runs it); "" removes it')
     .option('--alert-after <n>', 'post the alert only at this many failures in a row (default 1: at the first); a blip stays quiet')
     .option('--max-p95 <ms>', 'fail a run whose p95 response time is over this many milliseconds (even when its checks pass)')
     .option('--min-cert-days <days>', 'fail a run when the TLS certificate of a host it calls expires within this many days')
@@ -177,6 +178,8 @@ export function registerMonitorCommands(program: Command): void {
           minCertDays: o.minCertDays !== undefined ? Number(o.minCertDays) : existing?.minCertDays,
           // a maintenance window: given, removed (--no-maintenance), or kept as it was
           quiet: typeof o.maintenance === 'string' ? { cron: o.maintenance, minutes: parsePauseFor(o.maintenanceFor ?? '60m'), ...(o.maintenanceReason ? { reason: String(o.maintenanceReason) } : {}) } : o.maintenance === false ? undefined : existing?.quiet,
+          // the zone of the cron times: given (an empty one removes it), or kept as it was
+          timezone: typeof o.timezone === 'string' ? o.timezone.trim() || undefined : existing?.timezone,
           // a production environment: data changes on its schedule only with --allow-production (kept while the environment is)
           // (for --env-group: each production environment of the group, by id)
           ...monitorConsent(store, { environment: o.environment, environmentGroup: o.envGroup ? String(o.envGroup) : o.environment ? undefined : existing?.environmentGroup }, existing, o.allowProduction === true),

@@ -23,18 +23,18 @@ export function quietProblem(q: QuietWindow): string | undefined {
   return undefined;
 }
 
-/** The end of the window `now` is in (ms), or undefined when it is in none. */
-export function quietUntil(q: QuietWindow | undefined, now = Date.now()): number | undefined {
+/** The end of the window `now` is in (ms), or undefined when it is in none; `timeZone`: the monitor's (its cron is that zone's clock). */
+export function quietUntil(q: QuietWindow | undefined, now = Date.now(), timeZone?: string): number | undefined {
   if (!q || quietProblem(q)) return undefined;
   const span = q.minutes * 60_000;
   const s = parseCron(q.cron);
   // the starts of the window in the last `minutes` (and the minute before): the latest one that has begun; windows that
   // overlap (every 5 minutes for an hour) make one long quiet time, until the last of them ends
   let end: number | undefined;
-  for (let t = nextCronTime(s, now - span - 60_000), n = 0; t && t.getTime() <= now && n < 2000; t = nextCronTime(s, t), n++) end = t.getTime() + span;
+  for (let t = nextCronTime(s, now - span - 60_000, timeZone), n = 0; t && t.getTime() <= now && n < 2000; t = nextCronTime(s, t, timeZone), n++) end = t.getTime() + span;
   if (end === undefined || now >= end) return undefined;
   // a window that starts again before this one ends goes on (at most a day further)
-  for (let t = nextCronTime(s, now), n = 0; t && t.getTime() < end && n < 1440; t = nextCronTime(s, t), n++) end = Math.max(end, t.getTime() + span);
+  for (let t = nextCronTime(s, now, timeZone), n = 0; t && t.getTime() < end && n < 1440; t = nextCronTime(s, t, timeZone), n++) end = Math.max(end, t.getTime() + span);
   return end;
 }
 

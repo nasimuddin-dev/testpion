@@ -84,7 +84,7 @@ export function monitorsStatus(store: WorkspaceStore, o: { days?: number; tzOffs
         ...(m.environment ? { environment: store.getEnvironment(m.environment)?.name ?? m.environment, ...(store.getEnvironment(m.environment)?.group ? { group: store.getEnvironment(m.environment)!.group } : {}) } : {}),
         schedule: st.schedule,
         // in its maintenance window: shown like a pause, with until when (its schedule text says so)
-        paused: !m.enabled || pausedFor(m, now) || quietUntil(m.quiet, now) !== undefined,
+        paused: !m.enabled || pausedFor(m, now) || quietUntil(m.quiet, now, m.timezone) !== undefined,
         state: !last ? 'unknown' : last.status === 'passed' ? 'up' : 'down',
         ...(last ? { last: { status: last.status, startedAt: last.startedAt, p95Ms: last.p95Ms, passed: last.passed, total: last.total, reason: last.reason } } : {}),
         ...(runs ? { uptime: Math.round((passed / runs) * 1000) / 10 } : {}),
