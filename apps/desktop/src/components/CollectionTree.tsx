@@ -32,6 +32,8 @@ import { deferDrop, useDragSession } from '../lib/drag-ref';
 import { buildTreeRows, callShown, examplesOpenKey, findTreeRow, folderOpenKey, isOpenKey, scopedNodeId, treeRowKey, type ExtraGroup, type TreeRow } from '../lib/tree-rows';
 import { CATEGORY_META, CollectionRow, EmptyRow, ExampleRow, ExtraItemRow, FolderRow, RequestRow, SAVED_ITEM_MIME, type DropMode, type RowContext } from './CollectionTreeRows';
 import { useOpenRequestId } from './open-request-id';
+import { pickRequest, type Picked } from '../lib/picked-requests';
+import { PickedRequestsBar } from './PickedRequestsBar';
 
 // THE badge lives in TreeParts; the panels that drew a method badge through this module keep their import
 export { TreeBadge } from './TreeParts';
@@ -603,6 +605,51 @@ export const CollectionTree = memo(function CollectionTree({
   };
   const [editing, setEditing] = useState<{ c: Collection; folder: CollectionFolder }>();
   const f = filter?.trim().toLowerCase();
+  // several requests of one collection picked (Ctrl/⌘+click, Shift+click), to run, move or delete together; Esc lets go
+  const [picked, setPicked] = useState<Picked>();
+  const [movingPicked, setMovingPicked] = useState(false);
+  const pickedCollection = picked ? collections.find((c) => c.id === picked.collectionId) : undefined;
+  // what is still there (a request deleted or moved away is no longer picked)
+  const pickedIds = useMemo(() => (picked && pickedCollection ? picked.ids.filter((id) => !!findNode(pickedCollection.items, id)) : []), [picked, pickedCollection]);
+  const pickedSet = useMemo(() => new Set(pickedIds), [pickedIds]);
+  const runPicked = () =>
+    void attempt(async () => {
+      const r = await call<{ runId: string }>('col.run', { collectionId: pickedCollection!.id, selection: pickedIds, environment: useApp.getState().environment || undefined });
+      useApp.getState().toast(`Running ${plural(pickedIds.length, 'request')} of ${pickedCollection!.name}`, 'success', { ref: { kind: 'run', runId: r.runId } });
+    });
+  /** Delete them at once; one Undo puts them all back where they were. */
+  const deletePicked = () => {
+    const c = pickedCollection!;
+    const ids = new Set(pickedIds);
+    setPicked(undefined);
+    return fullCollection(c).then(
+      (whole) =>
+        deleteWithUndo({
+          kind: 'request',
+          name: plural(ids.size, 'request'),
+          run: async () => {
+            closeTabsFor([...ids]);
+            await saveNow({ ...whole, items: mapNodes(whole.items, (x) => (ids.has(x.id) ? null : x)) });
+          },
+          undo: () => saveNow(whole),
+        }),
+      toastError,
+    );
+  };
+  /** Move them, in the order the tree shows them, to a folder of their collection (or its top level). */
+  const movePicked = (folderId: string | undefined) => {
+    setMovingPicked(false);
+    const c = pickedCollection!;
+    const ids = pickedIds;
+    setPicked(undefined);
+    void (async () => {
+      const whole = await fullCollection(c);
+      const nodes = ids.map((id) => findNode(whole.items, id)).filter((n): n is CollectionNode => !!n);
+      const without = mapNodes(whole.items, (x) => (ids.includes(x.id) ? null : x));
+      if (!(await save({ ...whole, items: nodes.reduce((items, n) => addToFolder(items, folderId, n), without) }))) return;
+      useApp.getState().toast(`Moved ${plural(nodes.length, 'request')} to ${folderId ? (findNode(whole.items, folderId)?.name ?? c.name) : c.name}`, 'success');
+    })().catch(toastError);
+  };
 
   // every row that shows (the open collections and folders), in order: a list of thousands is cheap to
   // build; only the rows on screen are drawn
@@ -674,6 +721,7 @@ export const CollectionTree = memo(function CollectionTree({
     collectionMenu,
     newRequest,
     newRequestLabel,
+    pick: (c, n, how) => setPicked((p) => pickRequest(p, c.id, n.id, how, rows.filter((r) => r.t === 'req' && r.c.id === c.id).map((r) => (r as { n: CollectionNode }).n.id))),
   };
   const canHistory = inGit;
   // the dragged row stays drawn while the list scrolls or changes under the drag (its dragend must reach React)
@@ -698,6 +746,7 @@ export const CollectionTree = memo(function CollectionTree({
             active={activeRequestId === r.n.id}
             renaming={renaming === r.key}
             examplesOpen={!!isOpenKey(open, examplesOpenKey(r.c.id, r.n.id), treeKey(r.n.id, 'examples'))}
+            picked={picked?.collectionId === r.c.id && pickedSet.has(r.n.id)}
             dropMode={dropModeOf(r.key)}
             ctx={ctx}
           />
@@ -710,7 +759,23 @@ export const CollectionTree = memo(function CollectionTree({
   };
 
   return (
-    <div className="text-sm" data-tree-rows={rows.length} role="tree" aria-label="Collections">
+    <div
+      className="text-sm"
+      data-tree-rows={rows.length}
+      role="tree"
+      aria-label="Collections"
+      aria-multiselectable={pickedIds.length > 0 || undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && pickedIds.length) (e.stopPropagation(), setPicked(undefined));
+      }}
+    >
+      {pickedIds.length > 0 && pickedCollection && (
+        <PickedRequestsBar count={pickedIds.length} collection={pickedCollection.name} onRun={runPicked} onMove={() => setMovingPicked(true)} onDelete={() => void deletePicked()} onClear={() => setPicked(undefined)} />
+      )}
+      {movingPicked && pickedCollection && pickedIds.length > 0 && (
+        // within their collection: a move to another one goes one request at a time (its menu's Move to…)
+        <MoveDialog node={findNode(pickedCollection.items, pickedIds[0]!)!} from={pickedCollection} collections={[pickedCollection]} onClose={() => setMovingPicked(false)} onMove={(_to, folderId) => movePicked(folderId)} />
+      )}
       {editing && (
         <FolderEditor
           folder={editing.folder}

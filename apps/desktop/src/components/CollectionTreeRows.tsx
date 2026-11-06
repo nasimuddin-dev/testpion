@@ -51,6 +51,8 @@ export interface RowContext {
   collectionMenu(c: Collection): NodeMenuCtx;
   newRequest(c: Collection): void;
   newRequestLabel?: string;
+  /** Ctrl/⌘+click (`toggle`) or Shift+click (`range`) on a request: pick it with others, to run, move or delete together. */
+  pick(c: Collection, n: CollectionNode, how: 'toggle' | 'range'): void;
 }
 type Ctx = RefObject<RowContext>;
 
@@ -67,6 +69,7 @@ export const RequestRow = memo(function RequestRow({
   active,
   renaming,
   examplesOpen,
+  picked = false,
   dropMode,
   ctx,
 }: {
@@ -76,6 +79,8 @@ export const RequestRow = memo(function RequestRow({
   active: boolean;
   renaming: boolean;
   examplesOpen: boolean;
+  /** Picked with others (Ctrl/⌘+click, Shift+click). */
+  picked?: boolean;
   dropMode?: DropMode;
   ctx: Ctx;
 }) {
@@ -95,15 +100,17 @@ export const RequestRow = memo(function RequestRow({
       depth={depth}
       active={active}
       ctx={() => x().requestMenu(c, n)}
-      // every click on a request opens its own tab (Enter is a click on the button, so it opens too)
-      onClick={() => x().onOpen(c, n)}
+      // every click on a request opens its own tab (Enter is a click on the button, so it opens too); with Ctrl/⌘ or
+      // Shift it is picked with others instead
+      onClick={(e) => (e.ctrlKey || e.metaKey ? x().pick(c, n, 'toggle') : e.shiftKey ? x().pick(c, n, 'range') : x().onOpen(c, n))}
       rename={renaming ? { value: n.name, label: 'Request name', done: (name) => x().finishRename(c, n.id, name) } : undefined}
       drag={[{ kind: 'request', collectionId: c.id, requestId: n.id }]}
       onDragStart={() => x().dragStart(c, n)}
       onDragEnd={() => x().dragEnd()}
       drop={{ onDragOver: (e) => dropOf().onDragOver(e), onDragLeave: () => dropOf().onDragLeave(), onDrop: (e) => dropOf().onDrop(e), over: dropMode }}
       style={indent(depth, 16)}
-      className={cx(examples.length > 0 && 'relative')}
+      className={cx(examples.length > 0 && 'relative', picked && 'bg-accent/15 ring-1 ring-inset ring-accent/40')}
+      attrs={picked ? { 'data-picked': '' } : undefined}
       git={{ kind: 'request', collectionId: c.id, requestId: n.id }}
       mark={<CommentMark to={{ kind: 'request', collectionId: c.id, requestId: n.id }} />}
     >
