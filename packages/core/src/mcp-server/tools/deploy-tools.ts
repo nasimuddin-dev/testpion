@@ -5,7 +5,7 @@
  */
 import { editFlowFile } from '../../runner/flow-edit.js';
 import { flowDeployStatus } from '../../runner/flow-deploy.js';
-import { listMonitorDefinitions, listMonitors, monitorConsent, monitorStatus, parseEvery, saveMonitor } from '../../runner/monitors.js';
+import { listMonitorDefinitions, listMonitors, monitorConsent, monitorStatus, parseSchedule, saveMonitor } from '../../runner/monitors.js';
 import { findCollection } from '../../storage/env-edit.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { ApsError } from '../../errors.js';
@@ -51,7 +51,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
     {
       name: 'save_monitor',
       description:
-        'Add or change a monitor: a collection (or some of its folders / requests) or a test file / flow under tests/ (testFile) that runs on a schedule, like `testpion monitor add`. Exactly one of collection and testFile. every: minutes or "15m", "1h", "1d" (1 minute to 7 days). A monitor with the same name is replaced. Each run is recorded (monitor_results, monitor_uptime); webhook gets an alert when it starts failing or recovers. Schedule a flow: testFile + every.',
+        'Add or change a monitor: a collection (or some of its folders / requests) or a test file / flow under tests/ (testFile) that runs on a schedule, like `testpion monitor add`. Exactly one of collection and testFile. every: minutes or "15m", "1h", "1d" (1 minute to 7 days), or cron "0 9 * * 1-5" (local time). A monitor with the same name is replaced. Each run is recorded (monitor_results, monitor_uptime); webhook gets an alert when it starts failing or recovers. Schedule a flow: testFile + every.',
       write: true,
       inputSchema: {
         type: 'object',
@@ -69,7 +69,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           maxCostUsd: { type: 'number', description: 'With evaluation: stop judging in one run at this much (USD); the rest is n/a, not a failed gate' },
           baseline: str('With evaluation: fail when a metric dropped against `previous`, `best` (of the last 30 runs) or a run id'),
           maxDrop: { type: 'number', description: 'With baseline: the smallest drop that fails (default 0.05)' },
-          every: { type: ['string', 'number'], description: 'How often: minutes, or 15m, 1h, 1d' },
+          every: { type: ['string', 'number'], description: 'How often: minutes, 15m, 1h, 1d, or cron' },
           environment: str('The environment it runs with'),
           environmentGroup: str('Or every environment of a group (a tenant each)'),
           webhook: str('Alert URL (Slack / Teams / Discord webhook or any URL; {{variables}} work)'),
@@ -97,7 +97,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
           id: existing?.id ?? shortId('mon-'),
           name,
           ...(collection ? { collectionId: collection.id, ...(Array.isArray(a.selection) && a.selection.length ? { selection: a.selection.map(String) } : {}) } : hasEvaluation ? { evaluation: String(a.evaluation), ...(typeof a.limit === 'number' ? { limit: a.limit } : {}), ...(a.gates && typeof a.gates === 'object' ? { gates: Object.fromEntries(Object.entries(a.gates as Record<string, unknown>).map(([k, v]) => [k, Number(v)])) } : {}), ...(typeof a.judgeSample === 'number' ? { judgeSample: a.judgeSample } : {}), ...(typeof a.judgeBudgetUsdPerDay === 'number' ? { judgeBudgetUsdPerDay: a.judgeBudgetUsdPerDay } : {}), ...(a.rotate === true ? { rotate: true } : {}), ...(typeof a.maxCostUsd === 'number' ? { maxCostUsd: a.maxCostUsd } : {}), ...(a.baseline ? { baseline: String(a.baseline) } : {}), ...(typeof a.maxDrop === 'number' ? { maxDrop: a.maxDrop } : {}) } : { testFile: String(a.testFile) }),
-          everyMinutes: parseEvery(a.every as string | number),
+          ...parseSchedule(a.every as string | number),
           enabled: a.enabled !== false,
           ...(a.environment ? { environment: String(a.environment) } : {}),
           ...(environmentGroup ? { environmentGroup } : {}),

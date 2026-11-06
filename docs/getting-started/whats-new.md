@@ -26,6 +26,7 @@ The options added in 0.56, 0.55, 0.54 (with 0.53), 0.52, 0.51, 0.50, 0.49, 0.48,
 - **A status page to host.** **Status page** in the Monitors view and `testpion monitor status -o status.html`: every monitor's state, uptime and a block per day as one page with no script, for GitHub Pages or an intranet; `-o status.md` for a wiki.
 - **Watch a prompt or agent.** A monitor can run a saved evaluation every night and fail on a drop in pass rate (right-click an evaluation ▸ **Monitor on a schedule…**).
 - **A monitor from a teammate waits for you.** Monitors are shared through git, so one that arrives with a pull or a clone (or was changed outside the app) does not run on its schedule on your computer until you choose **Allow on this computer** on it: check what it runs, where and how often first. A monitor you save yourself needs nothing; **Run now** always works.
+- **At set times.** A monitor can run on a cron schedule instead of every N minutes: **Run at** `0 9 * * 1-5` is 09:00 on weekdays, said in words with its next runs as you type (`--every "0 9 * * 1-5"`, MCP `save_monitor` `every` too).
 - **One tenant pauses on its own.** On a monitor that runs in every environment of a group, **Pause** on one tenant's row pauses that tenant only, and consent to change data in production is kept per production environment.
 
 ### Needs attention, and what to do with it {#whats-new-attention}

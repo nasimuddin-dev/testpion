@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment } from '@testpion/shared';
+import { cronProblem, describeCron, environmentLabel, environmentRef, environmentsOfGroup, matchEnvironment, nextCronTime } from '@testpion/shared';
 import { ownershipOf } from '../git/owners.js';
 import { atomicWrite } from '../storage/fsutil.js';
 import { appendBoundedLine } from '../util/jsonl-append.js';
@@ -67,8 +67,13 @@ interface MonitorData {
    * "Checkout · Acme ▸ Staging"), each with its own results and schedule, from this one definition.
    */
   environmentGroup?: string;
-  /** Minutes between runs (1 minute to 1 week). */
+  /** Minutes between runs (1 minute to 1 week). With `cron`, not used (kept for older versions). */
   everyMinutes: number;
+  /**
+   * At set times instead of every N minutes: a cron expression in the local time of the computer that runs it
+   * ("0 9 * * 1-5": 09:00 on weekdays). A run missed while nothing ran the schedule runs once when it starts again.
+   */
+  cron?: string;
   enabled: boolean;
   /** Paused for a while (a deploy, a maintenance window): no run until this time (ISO), then the schedule goes on by itself. */
   pausedUntil?: string;
@@ -225,6 +230,20 @@ export function parseEvery(text: string | number): number {
   return minutes;
 }
 
+/**
+ * How often, as `--every` / `every` take it: an interval (15m, 1h, 1d, minutes) or a cron schedule at set times
+ * ("0 9 * * 1-5", "@daily"), in the local time of the computer that runs it.
+ */
+export function parseSchedule(text: string | number): Pick<Monitor, 'everyMinutes' | 'cron'> {
+  const t = String(text).trim();
+  if (/^@\w+$/.test(t) || t.split(/\s+/).length === 5) {
+    const problem = cronProblem(t);
+    if (problem) throw invalid(`The schedule "${t}": ${problem}`);
+    return { everyMinutes: 60, cron: t };
+  }
+  return { everyMinutes: parseEvery(t) };
+}
+
 export function formatEvery(minutes: number): string {
   if (minutes % 1440 === 0) return minutes === 1440 ? 'daily' : `every ${minutes / 1440} days`;
   if (minutes % 60 === 0) return minutes === 60 ? 'hourly' : `every ${minutes / 60} hours`;
@@ -282,7 +301,10 @@ export function findMonitor(store: WorkspaceStore, ref: string): Monitor {
 /** Check a monitor definition against the workspace (collection, selection, environment, interval). */
 export function validateMonitor(store: WorkspaceStore, m: Pick<Monitor, 'name'> & MonitorData): void {
   if (!m.name?.trim()) throw invalid('A monitor needs a name');
-  if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
+  if (m.cron !== undefined) {
+    const problem = cronProblem(m.cron);
+    if (problem) throw invalid(`The schedule "${m.cron}": ${problem}`);
+  } else if (!(m.everyMinutes >= MIN_EVERY_MINUTES && m.everyMinutes <= MAX_EVERY_MINUTES)) throw invalid('A monitor runs every 1 minute to 7 days');
   const file = m.testFile?.trim();
   const targets = [file, m.collectionId, m.evaluation?.trim()].filter(Boolean).length;
   if (targets > 1) throw invalid('A monitor runs one of a collection, a test file or a RAG evaluation, not both: clear the others');
@@ -487,13 +509,35 @@ function recordResult(store: WorkspaceStore, r: MonitorResult): void {
   appendBoundedLine(resultsFile(store, r.monitorId), JSON.stringify(r), KEEP_RESULTS, (f, text) => atomicWrite(f, text));
 }
 
-/** When a monitor should run next: `everyMinutes` after its last run, or now if it never ran. */
+/**
+ * When a monitor should run next: `everyMinutes` after its last run, or now if it never ran. On a cron schedule: the
+ * first time of the schedule after its last run (one missed while nothing ran it is due now, once); never run, the
+ * time of the schedule that is due now or next (a scheduler looks every 30 seconds).
+ */
 export function nextRunAt(m: Monitor, last: MonitorResult | undefined, now = Date.now()): number {
+  const ran = last ? Date.parse(last.startedAt) : NaN;
+  if (m.cron) {
+    try {
+      const after = Number.isFinite(ran) && ran <= now ? ran : now - 90_000;
+      return nextCronTime(m.cron, after)?.getTime() ?? Number.POSITIVE_INFINITY;
+    } catch {
+      return Number.POSITIVE_INFINITY; // a schedule that cannot be read never runs (validateMonitor refuses to save one)
+    }
+  }
   if (!last) return now;
-  const ran = Date.parse(last.startedAt);
   // the clock was set back (an NTP correction, a restored VM): a last run in the future would make the monitor wait for hours; it is due now, and its new result carries the right time
   if (ran > now) return now;
   return ran + m.everyMinutes * 60_000;
+}
+
+/** How often a monitor runs, in words: "every 15 minutes", "at 09:00 on weekdays". */
+export function monitorScheduleText(m: Pick<Monitor, 'everyMinutes' | 'cron'>): string {
+  if (!m.cron) return formatEvery(m.everyMinutes);
+  try {
+    return describeCron(m.cron);
+  } catch {
+    return `on the schedule "${m.cron}" (cannot be read)`;
+  }
 }
 
 export function isDue(m: Monitor, last: MonitorResult | undefined, now = Date.now()): boolean {
@@ -572,7 +616,7 @@ export function monitorStatus(store: WorkspaceStore, m: Monitor, now = Date.now(
   const last = lastMonitorResult(store, m.id);
   return {
     ...m,
-    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : formatEvery(m.everyMinutes),
+    schedule: !m.enabled ? 'paused' : pausedFor(m, now) ? pausedText(m) : monitorScheduleText(m),
     paused: !m.enabled || pausedFor(m, now),
     lastResult: last,
     nextRunAt: m.enabled ? new Date(Math.max(nextRunAt(m, last, now), pausedFor(m, now) ? Date.parse(m.pausedUntil!) : now, now)).toISOString() : undefined,

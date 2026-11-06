@@ -20,7 +20,7 @@ A monitor runs a collection (or chosen folders and requests), or a test file or 
 Open **Monitors** (the rail's **More…**, or <kbd>Ctrl</kbd>+<kbd>K</kbd> ▸ *Go to Monitors*) and click **New monitor**. You can also right-click a collection or folder and choose **Monitor on a schedule…**, or use **File ▸ New ▸ Monitor…**. Then choose:
 
 - **Runs**: **A collection** or **A test file or flow**, then the **Collection** (or the **Test file**, from `tests/`) and the **Environment** (the same picker as the top bar; production is marked in red). A flow's **Deploy ▸ Schedule** opens this editor with its file already picked.
-- **Run every**: minutes, hours or days.
+- **Run every**: minutes, hours or days; or **at set times (cron)**: a cron schedule in your computer's time, such as `0 9 * * 1-5` (09:00 on weekdays) or `*/30 * * * *` (every half hour). The field says the schedule in words and its next three runs as you type it, or what is wrong with it. A time missed while the app was closed runs once when it opens. From the terminal, `--every` takes either: `--every 15m` or `--every "0 9 * * 1-5"` (also `@hourly`, `@daily`, `@weekly`).
 - **What to run** (a collection): tick folders or requests. Tick nothing to run the whole collection. A test file always runs as a whole, its steps in order like `testpion test` (a suite runs its files).
 - **Stop at the first failure**, if later requests depend on earlier ones.
 

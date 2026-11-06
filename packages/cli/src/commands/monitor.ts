@@ -10,7 +10,7 @@ import {
   executeMonitor,
   findMonitor,
   formatDuration,
-  formatEvery,
+  monitorScheduleText,
   isDue,
   lastMonitorResult,
   listMonitors,
@@ -20,7 +20,7 @@ import {
   monitorStatus,
   monitorsStatus,
   monitorsStatusMarkdown,
-  parseEvery,
+  parseSchedule,
   parsePauseFor,
   pauseMonitor,
   resumeMonitor,
@@ -115,7 +115,7 @@ export function registerMonitorCommands(program: Command): void {
     .option('--max-cost <usd>', 'with --rag-evaluation: stop judging in one run at this much; the rest is n/a, not a failed gate')
     .option('--baseline <run>', 'with --rag-evaluation: fail when a metric dropped against previous (the last run of this monitor), best (of the last 30) or a run id')
     .option('--max-drop <n>', 'with --baseline: the smallest drop that fails (default 0.05)')
-    .requiredOption('--every <interval>', 'how often: minutes, or e.g. 15m, 1h, 1d (1 minute to 7 days)')
+    .requiredOption('--every <interval>', 'how often: minutes, or e.g. 15m, 1h, 1d (1 minute to 7 days); or at set times, a cron schedule in local time: "0 9 * * 1-5" (09:00 on weekdays), @daily')
     .option('--folder <nameOrId>', 'run only this folder or request (repeatable)', collect)
     .option('-e, --environment <name>', 'environment to run with')
     .option('--env-group <group>', 'run in every environment of this group (a tenant each: one monitor per environment in lists, the status page and alerts, from this one definition)')
@@ -141,7 +141,7 @@ export function registerMonitorCommands(program: Command): void {
           environment: o.environment,
           // an environment named for an existing grouped monitor: it runs there from now on, no longer once per tenant
           environmentGroup: o.envGroup ? String(o.envGroup) : o.environment ? undefined : existing?.environmentGroup,
-          everyMinutes: parseEvery(o.every),
+          ...parseSchedule(o.every),
           enabled: !o.paused,
           iterations: o.iterationCount ? Number(o.iterationCount) : undefined,
           bail: o.bail || undefined,
@@ -154,7 +154,7 @@ export function registerMonitorCommands(program: Command): void {
           ...monitorConsent(store, { environment: o.environment, environmentGroup: o.envGroup ? String(o.envGroup) : o.environment ? undefined : existing?.environmentGroup }, existing, o.allowProduction === true),
         });
         if (o.json) printJson(m);
-        else console.log(green(`${existing ? 'Updated' : 'Added'} monitor "${m.name}": ${target(store, m)}, ${m.enabled ? formatEvery(m.everyMinutes) : 'paused'}`));
+        else console.log(green(`${existing ? 'Updated' : 'Added'} monitor "${m.name}": ${target(store, m)}, ${m.enabled ? monitorScheduleText(m) : 'paused'}`));
       }),
     );
 
@@ -225,7 +225,7 @@ export function registerMonitorCommands(program: Command): void {
       withWorkspace(o.workspace, (store) => {
         const m = findMonitor(store, ref);
         const saved = resumeMonitor(store, m.id);
-        respond({ resumed: saved.name, id: saved.id, schedule: formatEvery(saved.everyMinutes) }, () => console.log(green(`"${saved.name}" runs ${formatEvery(saved.everyMinutes)} again`)));
+        respond({ resumed: saved.name, id: saved.id, schedule: monitorScheduleText(saved) }, () => console.log(green(`"${saved.name}" runs ${monitorScheduleText(saved)} again`)));
       }),
     );
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Monitors at set times
+
+- A monitor runs on a cron schedule (minute hour day month weekday, in the local time of the computer that runs it) instead of every N minutes: the editor's **at set times (cron)** says the schedule in words and its next three runs as it is typed; `testpion monitor add … --every "0 9 * * 1-5"` and MCP `save_monitor` `every` take a schedule as well as an interval; lists, the status page and `flow_deploy_status` say it in words ("at 09:00 on weekdays"). A time missed while nothing ran the schedule runs once when it starts again.
+
 ### Fixes from a review of the whole code
 
 - **Monitor alerts.** A scheduled monitor posts its webhook again when it starts failing and when it recovers (the alert was never sent since 0.55.5 on the app's and `monitor start`'s schedule). A monitor whose evaluation was deleted records an error instead of failing silently.

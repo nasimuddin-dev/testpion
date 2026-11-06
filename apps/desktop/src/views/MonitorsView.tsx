@@ -35,7 +35,7 @@ import { useExternalChange } from '../lib/external-change';
 import { EnvBadge, EnvSelect } from '../components/EnvSelect';
 import { OutputActions } from '../components/output/OutputFrame';
 import type { OutputSpec } from '../components/output/output-core';
-import { outputFileName, COLLECTION_CALL_LIBRARIES } from '@testpion/shared';
+import { outputFileName, COLLECTION_CALL_LIBRARIES, cronProblem, describeCron, nextCronTimes } from '@testpion/shared';
 
 /** The tab of a monitor being created (not saved yet, so no id). */
 const NEW_TAB = 'new';
@@ -62,6 +62,8 @@ interface MonitorDraft {
   /** Every environment of this group instead (one monitor per environment in the list, from this definition). */
   environmentGroup?: string;
   everyMinutes: number;
+  /** At set times instead: a cron schedule in this computer's local time ("0 9 * * 1-5"). */
+  cron?: string;
   enabled: boolean;
   iterations?: number;
   bail?: boolean;
@@ -693,16 +695,31 @@ function useTestFiles(): string[] {
 }
 
 /** What a monitor's definition is, to tell unsaved edits from a change on disk (its results and status left out). */
+/** A cron schedule in words and its next three runs, or what is wrong with it: read as it is typed. */
+function CronPreview({ text }: { text: string }) {
+  const problem = cronProblem(text);
+  if (problem) return <div className="text-xs text-bad mt-1" data-monitor-cron-preview="">{problem}</div>;
+  const next = nextCronTimes(text, Date.now(), 3).map((t) => t.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+  return (
+    <div className="text-xs text-muted mt-1" data-monitor-cron-preview="">
+      Runs {describeCron(text)}
+      {next.length ? ` · next: ${next.join(', ')}` : ' · never (no such date)'}
+    </div>
+  );
+}
+
 function monitorSnapshot(m: Partial<MonitorDraft>): string {
   const x = m as Record<string, unknown>;
-  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
+  return JSON.stringify(['name', 'folder', 'collectionId', 'selection', 'testFile', 'evaluation', 'limit', 'gates', 'judgeSample', 'judgeBudgetUsdPerDay', 'rotate', 'maxCostUsd', 'baseline', 'maxDrop', 'environment', 'environmentGroup', 'everyMinutes', 'cron', 'enabled', 'iterations', 'bail', 'webhook', 'alertAfter', 'maxP95Ms', 'minCertDays'].map((k) => x[k] ?? null));
 }
 
 function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: MonitorDraft; collections: Collection[]; onCancel(): void; onSave(d: MonitorDraft): Promise<void> }) {
   const unit0 = draft.everyMinutes % 1440 === 0 ? UNITS[2] : draft.everyMinutes % 60 === 0 ? UNITS[1] : UNITS[0];
   const [d, setD] = useState<MonitorDraft>(draft);
   const [every, setEvery] = useState(String(draft.everyMinutes / unit0.f));
-  const [unit, setUnit] = useState<string>(unit0.id);
+  // 'cron': at set times (the schedule in `cronText`) instead of every N minutes, hours or days
+  const [unit, setUnit] = useState<string>(draft.cron ? 'cron' : unit0.id);
+  const [cronText, setCronText] = useState(draft.cron ?? '0 9 * * 1-5');
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
   // what it runs: a collection (and some of its folders) or a test file / flow under tests/
@@ -728,7 +745,7 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
   const base = useRef(monitorSnapshot(draft));
   useExternalChange<MonitorDraft>({
     kinds: ['library'],
-    items: () => (d.id ? [{ key: d.id, label: d.name || draft.name, base: base.current, dirty: monitorSnapshot({ ...d, everyMinutes: Number(every) * unitF }) !== base.current }] : []),
+    items: () => (d.id ? [{ key: d.id, label: d.name || draft.name, base: base.current, dirty: monitorSnapshot(unit === 'cron' ? { ...d, cron: cronText } : { ...d, everyMinutes: Number(every) * unitF, cron: undefined }) !== base.current }] : []),
     read: async (keys) => {
       const m = (await call<MonitorDraft[]>('monitor.list')).find((x) => x.id === keys[0]);
       return new Map(m ? [[keys[0]!, { snapshot: monitorSnapshot(m), value: m }]] : []);
@@ -737,7 +754,8 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
       base.current = snapshot;
       const u = m.everyMinutes % 1440 === 0 ? UNITS[2] : m.everyMinutes % 60 === 0 ? UNITS[1] : UNITS[0];
       setD(m);
-      setUnit(u.id);
+      setUnit(m.cron ? 'cron' : u.id);
+      if (m.cron) setCronText(m.cron);
       setEvery(String(m.everyMinutes / u.f));
       setTarget(m.evaluation ? 'evaluation' : m.testFile ? 'file' : 'collection');
       setGatesText(Object.entries(m.gates ?? {}).map(([k, v]) => `${k}=${v}`).join(', '));
@@ -790,7 +808,8 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
   const submit = async () => {
     setError(undefined);
     if (!d.name.trim()) return setError('Give the monitor a name.');
-    if (!(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
+    if (unit === 'cron' && cronProblem(cronText)) return setError(`The schedule: ${cronProblem(cronText)}`);
+    if (unit !== 'cron' && !(minutes >= 1 && minutes <= 10080)) return setError('A monitor runs every 1 minute to 7 days.');
     if (target === 'file' && !d.testFile) return setError('Pick the test file to run.');
     if (target === 'collection' && !d.collectionId) return setError('Pick the collection to run.');
     if (target === 'evaluation' && !d.evaluation) return setError('Pick the evaluation to run.');
@@ -814,7 +833,8 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
           : { ...none, testFile: undefined, selection: d.selection?.length ? d.selection : undefined };
     setSaving(true);
     try {
-      await onSave({ ...d, ...what, name: d.name.trim(), everyMinutes: minutes, environment: d.environment || undefined });
+      const schedule = unit === 'cron' ? { cron: cronText.trim(), everyMinutes: d.everyMinutes || 60 } : { cron: undefined, everyMinutes: minutes };
+      await onSave({ ...d, ...what, ...schedule, name: d.name.trim(), environment: d.environment || undefined });
     } catch (e) {
       setError(asError(e).message);
     } finally {
@@ -891,17 +911,30 @@ function MonitorEditor({ draft, collections, onCancel, onSave }: { draft: Monito
             </div>
           </Field>
         </div>
-        <Field label="Run every" hint="From 1 minute to 7 days. The first run starts as soon as it's saved.">
+        <Field
+          label={unit === 'cron' ? 'Run at' : 'Run every'}
+          hint={
+            unit === 'cron'
+              ? 'A cron schedule (minute hour day month weekday) in this computer’s time: 0 9 * * 1-5 is 09:00 on weekdays, */30 * * * * every half hour. A time missed while the app was closed runs once when it opens.'
+              : "From 1 minute to 7 days. The first run starts as soon as it's saved."
+          }
+        >
           <div className="flex gap-2">
-            <Input type="number" min={1} className="w-24" value={every} onChange={(e) => setEvery(e.target.value)} aria-label="Interval" />
+            {unit === 'cron' ? (
+              <Input className="mono w-48" value={cronText} onChange={(e) => setCronText(e.target.value)} aria-label="Cron schedule" placeholder="0 9 * * 1-5" data-monitor-cron />
+            ) : (
+              <Input type="number" min={1} className="w-24" value={every} onChange={(e) => setEvery(e.target.value)} aria-label="Interval" />
+            )}
             <Select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit">
               {UNITS.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.label}
                 </option>
               ))}
+              <option value="cron">at set times (cron)</option>
             </Select>
           </div>
+          {unit === 'cron' && <CronPreview text={cronText} />}
         </Field>
         {target === 'evaluation' && promptEvaluation && (
           <div className="grid grid-cols-2 gap-3" data-monitor-prompt-fields>

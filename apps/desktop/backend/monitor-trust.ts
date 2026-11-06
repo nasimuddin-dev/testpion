@@ -23,7 +23,7 @@ const definitionId = (m: Pick<Monitor, 'id' | 'tenant'>) => m.tenant?.of ?? m.id
 
 /** What an approval covers: change any of it and the monitor waits again. */
 export function monitorFingerprint(m: Monitor): string {
-  const what = [m.collectionId ?? '', m.selection ?? [], m.testFile ?? '', m.evaluation ?? '', m.environment ?? '', m.environmentGroup ?? '', m.everyMinutes, m.enabled, m.webhook ?? '', !!m.allowProduction, [...(m.allowProductionFor ?? [])].sort()];
+  const what = [m.collectionId ?? '', m.selection ?? [], m.testFile ?? '', m.evaluation ?? '', m.environment ?? '', m.environmentGroup ?? '', m.cron ? `cron ${m.cron}` : m.everyMinutes, m.enabled, m.webhook ?? '', !!m.allowProduction, [...(m.allowProductionFor ?? [])].sort()];
   return createHash('sha256').update(JSON.stringify(what)).digest('hex').slice(0, 32);
 }
 

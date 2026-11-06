@@ -9,7 +9,7 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import { realPathOf } from '../storage/fsutil.js';
 import { readExposure } from './exposed-flows.js';
 import { webhookFlows, webhookOfText } from './flow-webhook-config.js';
-import { formatEvery, lastMonitorResult, listMonitors, monitorTestFile } from './monitors.js';
+import { monitorScheduleText, lastMonitorResult, listMonitors, monitorTestFile } from './monitors.js';
 
 interface FlowDeployStatus {
   file: string;
@@ -65,7 +65,7 @@ export function flowDeployStatus(store: WorkspaceStore, file: string, opts: { se
   const monitor = listMonitors(store).find((m) => !!m.testFile && monitorTestFile(m.testFile) === rel);
   if (monitor) {
     const last = lastMonitorResult(store, monitor.id);
-    out.schedule = { monitorId: monitor.id, name: monitor.name, every: formatEvery(monitor.everyMinutes), enabled: monitor.enabled, ...(last ? { lastStatus: last.status } : {}) };
+    out.schedule = { monitorId: monitor.id, name: monitor.name, every: monitorScheduleText(monitor), enabled: monitor.enabled, ...(last ? { lastStatus: last.status } : {}) };
   }
 
   const own = webhookOfText(text, rel);
