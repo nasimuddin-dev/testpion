@@ -138,7 +138,9 @@ export class WorkspaceSearch {
     for (const s of this.store.getMcpServers()) docs.push({ hit: { kind: 'mcp-server', id: s.id, title: s.name, subtitle: `MCP · ${s.transport}`, ref: { kind: 'mcp-server', serverId: s.id } }, text: `${s.name} ${'command' in s ? s.command : ''} ${'url' in s ? s.url : ''}` });
     for (const p of this.store.getProviders()) docs.push({ hit: { kind: 'provider', id: p.id, title: p.name, subtitle: `AI provider · ${p.kind}`, ref: { kind: 'provider', providerId: p.id } }, text: `${p.name} ${p.kind} ${p.defaultModel ?? ''}` });
     // API definitions and datasets are things of their own (not only something a request or test mentions)
-    for (const path of listSpecs(this.store, { includeAsync: true })) docs.push({ hit: { kind: 'spec', id: path, title: path.replace(/^.*\//, ''), subtitle: `API definition · ${path}`, ref: { kind: 'spec', path } }, text: path });
+    // (with those a shared folder gives: ../platform-shared/specs/x.yaml, found and opened like the workspace's own)
+    for (const path of listSpecs(this.store, { includeAsync: true, includeShared: true }))
+      docs.push({ hit: { kind: 'spec', id: path, title: path.replace(/^.*\//, ''), subtitle: `API definition · ${path.startsWith('../') ? `shared · ${path}` : path}`, ref: { kind: 'spec', path } }, text: path });
     for (const name of datasetNames(this.store.path('datasets'))) docs.push({ hit: { kind: 'dataset', id: name, title: name.replace(/^.*\//, ''), subtitle: `Dataset · datasets/${name}`, ref: { kind: 'dataset', name } }, text: `datasets/${name}` });
     const walkTests = (nodes: TestFileNode[]) => {
       for (const n of nodes) {

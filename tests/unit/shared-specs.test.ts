@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { Backend } from '../../apps/desktop/backend/backend.js';
-import { apiNameOf, checkedSource, findBodySchema, removeItem, listSpecs, readSpecRef, sharedSpecSource, specFileToRead } from '../../packages/core/src/index.js';
+import { apiNameOf, checkedSource, findBodySchema, removeItem, listSpecs, readSpecRef, sharedSpecSource, specFileToRead, WorkspaceSearch } from '../../packages/core/src/index.js';
 
 // API definitions shared from another workspace (workspace.json `shared` with kind specs): listed after the workspace's
 // own as ../platform-shared/specs/x.yaml, read everywhere a definition is read (outline, lint, body schema, coverage,
@@ -51,6 +51,8 @@ describe('API definitions shared from another workspace', () => {
     expect(await readSpecRef(be.ws, { path })).toBe(SPEC);
     // a request of this workspace finds its body schema in the shared definition
     expect(findBodySchema(be.ws, 'POST', 'https://api.example.com/users')?.spec).toBe(path);
+    // found by search (Quick Open, search_workspace), marked shared
+    expect(new WorkspaceSearch(be.ws).search('platform.yaml').find((h) => h.kind === 'spec')).toMatchObject({ id: path, subtitle: `API definition · shared · ${path}` });
     // opened from its row (the ref resolves), never deleted from here
     expect(await be.invoke('ref.resolve', { ref: { kind: 'spec', path } })).toMatchObject({ ok: true });
     expect(() => removeItem(be.ws, { kind: 'spec', path })).toThrow(/shared from platform-shared: delete it there/);
