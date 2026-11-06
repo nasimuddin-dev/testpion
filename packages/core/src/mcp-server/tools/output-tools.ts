@@ -26,7 +26,7 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
     {
       name: 'save_output',
       write: true,
-      description: `Get or save an output of TestPion as a file format: run results (HTML, JSON, JUnit, Markdown, CSV, ZIP), History (HAR, CSV, JSON), traces (OTLP JSON), a flow's timeline, a data run's rows or an evaluation matrix (CSV, JSON, Markdown, HTML), a monitor's runs, the runs list, the workspace's uncommitted changes (patch, Markdown), or a saved response body. The same bytes the app's download arrow and \`testpion output\` write. \`surface\` is one of: ${surfaces.join(', ')}; give the parameters it needs (run, file, data_run, runs, query, monitor, history_id …). Without \`save_to\` the content comes back (text; base64 for ZIP/PNG), cut at ${INLINE_TEXT.toLocaleString('en-US')} characters; with \`save_to\` it is written to a new file inside the workspace (never over an existing file or a definition) and only the path and size come back. Secrets stay masked.`,
+      description: `Get or save an output of TestPion as a file format: run results (HTML, JSON, JUnit, Markdown, CSV, ZIP), History (HAR, CSV, JSON), traces (OTLP JSON), a flow's timeline, a data run's rows or an evaluation matrix (CSV, JSON, Markdown, HTML), a monitor's runs, the runs list, the workspace's uncommitted changes (patch, Markdown), or a saved response body. The same bytes the app's download arrow and \`testpion output\` write. \`surface\` is one of the enum of its parameter; give the parameters it needs (run, file, data_run, runs, query, monitor, history_id …). Without \`save_to\` the content comes back (text; base64 for ZIP/PNG), cut at ${INLINE_TEXT.toLocaleString('en-US')} characters; with \`save_to\` it is written to a new file inside the workspace (never over an existing file or a definition) and only the path and size come back. Secrets stay masked.`,
       doc: {
         when: 'Use it to hand a report, an export or a list (run results as JUnit or CSV, History as HAR, the changes as a patch) to a person or a CI step as a file, in the format they asked for.',
         whenNot: 'To look at results yourself, use the tools that return structured data (`run_breakdown`, `history_list`, `monitor_results`, `git_diff`); this one returns a file format.',
@@ -36,7 +36,8 @@ export function outputTools({ store, redactor }: { store: WorkspaceStore; redact
       inputSchema: {
         type: 'object',
         properties: {
-          surface: { ...str(`The output: ${surfaces.join(', ')}`), enum: surfaces },
+          // the enum lists them: said once
+          surface: { ...str('The output'), enum: surfaces },
           format: str('The format (default: the output’s own); each output lists its formats in `testpion output --list --json`'),
           run: str('run.results, flow.timeline: the run id'),
           file: str('flow.timeline: a flow file in the workspace (its latest run)'),

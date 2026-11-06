@@ -51,7 +51,7 @@ export function deployTools({ store }: { store: WorkspaceStore }): Tool[] {
     {
       name: 'save_monitor',
       description:
-        'Add or change a monitor: a collection (or some of its folders / requests) or a test file / flow under tests/ (testFile) that runs on a schedule, like `testpion monitor add`. Exactly one of collection and testFile. every: minutes or "15m", "1h", "1d" (1 minute to 7 days), or cron "0 9 * * 1-5" (local time). A monitor with the same name is replaced. Each run is recorded (monitor_results, monitor_uptime); webhook gets an alert when it starts failing or recovers. Schedule a flow: testFile + every.',
+        'Add or change a monitor: a collection (or some of its folders / requests) or a test file / flow under tests/ (testFile) that runs on a schedule, like `testpion monitor add`. Exactly one of collection and testFile. every: minutes or "15m", "1h", "1d" (1 minute to 7 days), or cron (local time). A monitor with the same name is replaced. Each run is recorded (monitor_results, monitor_uptime); webhook gets an alert when it starts failing or recovers. Schedule a flow: testFile + every.',
       write: true,
       inputSchema: {
         type: 'object',

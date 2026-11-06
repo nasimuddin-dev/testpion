@@ -38,15 +38,10 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
     {
       name: 'flow_runs',
       description:
-        "A flow file's run history, newest first: each run that included the file with its status (passed / failed / cancelled), when, how long, how its steps went and the first failing step; `nextCursor` (when set) is the `cursor` of older runs. With `runId`, that run's steps in file order: status, checks, input and output, timing and the variables after each step (values cut at 4 KB, secrets redacted) — to see where a value went wrong. Re-run part of a flow with run_tests: paths [file] and from (a step) and/or seedRunId (replays that run's data from its first failing step).",
+        "A flow file's run history, newest first: each run that included the file with its status (passed / failed / cancelled), when, how long, how its steps went and the first failing step. With `runId`, that run's steps in file order: status, checks, input and output, timing and the variables after each step (values cut at 4 KB, secrets redacted) — to see where a value went wrong. Re-run part of a flow with run_tests: paths [file] and from (a step) and/or seedRunId (replays that run's data from its first failing step).",
       inputSchema: {
         type: 'object',
-        properties: {
-          file,
-          runId: str("One run's steps in full (from this tool's list)"),
-          limit: { type: 'integer', minimum: 1, maximum: 200, description: 'How many runs (default 30)' },
-          cursor: { type: 'integer', minimum: 0, description: 'Where the page starts: the `nextCursor` of the page before (leave out for the newest runs)' },
-        },
+        properties: { file, runId: str("One run's steps in full (from this tool's list)"), limit: { type: 'integer', minimum: 1, maximum: 200, description: 'How many runs (default 30)' } },
         required: ['file'],
       },
       run: async (a) => {
@@ -69,7 +64,10 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
             })),
           };
         }
-        return flowRuns(store, String(a.file ?? ''), { limit: typeof a.limit === 'number' ? a.limit : undefined, cursor: typeof a.cursor === 'number' ? a.cursor : undefined });
+        // pages come from the MCP wrapper (cursor / nextCursor of its own): the store's position in the workspace's runs is the CLI's
+        const { nextCursor: _next, ...runs } = await flowRuns(store, String(a.file ?? ''), { limit: typeof a.limit === 'number' ? a.limit : undefined });
+        void _next;
+        return runs;
       },
     },
     {
@@ -83,8 +81,8 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
           file,
           step: {
             type: 'object',
-            description:
-              'One step as in a test file: { name, type, method, url, … }; delay: { type: delay, ms } (0 to 600000); condition: { type: condition, if }; script; flow: { file, inputs }; log: { message }; set: { set, scope }; assert: { assertions, subject }. Any step: if, when, repeat, forEach, finally, parallel; a request: until.',
+            // the block shapes are in the tool's description: said once
+            description: 'One step as in a test file: { name, type, method, url, … }, or a block as above (delay ms: 0 to 600000).',
             properties: {
               name: str('The step name'),
               type: { type: 'string', enum: ['http', 'graphql', 'grpc', 'websocket', 'mcp', 'llm', 'rag', 'agent', 'delay', 'condition', 'script', 'flow', 'log', 'set', 'assert', 'wait'] },
@@ -97,7 +95,7 @@ export function flowGraphTools({ store }: { store: WorkspaceStore }): Tool[] {
               inputs: { type: 'object', additionalProperties: true, description: "type flow: the sub-flow's variables" },
               message: str('type log: the text to show, with {{variables}}'),
               until: {
-                description: "Run the request again until this holds: { if: \"$.status == 'done'\", every: '2s', timeout: '60s', backoff: 1.5, maxEvery: '30s' }, or the expression",
+                description: 'Polling (as above), or just the expression; maxEvery caps the backed-off wait',
                 anyOf: [
                   { type: 'string' },
                   {

@@ -58,7 +58,8 @@ export const LIST_TOOLS: Record<string, { field?: string; native?: boolean; max?
   git_diff: {},
   git_changes: { field: 'items' },
   git_history: { field: 'versions' },
-  flow_runs: {},
+  // the runs of the file, newest first: the wrapper pages them (the tool reads at most 200)
+  flow_runs: { field: 'runs', max: 200 },
   test_history: { field: 'runs', max: 200 },
   debugger_exchanges: { field: 'exchanges' },
   list_kinds: { field: 'kinds' },

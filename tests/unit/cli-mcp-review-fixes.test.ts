@@ -275,7 +275,7 @@ describe('MCP: answers that are not a result of the tool', () => {
     const client = await connect({ profile: 'verbose' });
     const tools = (await client.listTools()).tools;
     const capped = Object.entries(LIST_TOOLS).filter(([, l]) => l.max);
-    expect(capped.map(([n]) => n).sort()).toEqual(['git_log', 'load_history', 'monitor_results', 'test_history']);
+    expect(capped.map(([n]) => n).sort()).toEqual(['flow_runs', 'git_log', 'load_history', 'monitor_results', 'test_history']);
     // (the listed `limit` is the wrapper's page size; the tool's own maximum is what its module clamps to: 200 for each of these)
     for (const [name, l] of capped) {
       expect(tools.find((x) => x.name === name), name).toBeDefined();

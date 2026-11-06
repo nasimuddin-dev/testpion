@@ -149,15 +149,16 @@ export function requestTools(d: ModuleToolDeps): Tool[] {
       name: 'realtime_exchange',
       write: true,
       description:
-        'Talk to a WebSocket, Socket.IO, MQTT or Kafka server: connect, send messages (WebSocket text frames), emit events (Socket.IO, optionally waiting for acknowledgements), subscribe and publish (MQTT), or read topics and produce messages (Kafka; reads use a consumer group of their own), in order, collect everything that arrives for waitMs, then close. Returns the messages with their direction, time, event name or topic (Kafka: key, partition, offset, headers). {{variables}} resolve from the environment (use one for a password).',
+        // what each protocol sends is said once, in `send` and `subscribe`
+        'Talk to a WebSocket, Socket.IO, MQTT or Kafka server: connect, subscribe, send what `send` holds in order, collect everything that arrives for waitMs, then close. Returns the messages with their direction, time, event name or topic (Kafka: key, partition, offset, headers). {{variables}} resolve from the environment (use one for a password).',
       inputSchema: {
         type: 'object',
         properties: {
-          url: str('ws:// / wss:// for WebSocket; http(s)://host/namespace for Socket.IO; mqtt(s)://host:port for MQTT; kafka(s)://broker:9092 for Kafka (several brokers comma separated)'),
-          mode: { type: 'string', enum: ['websocket', 'socketio', 'mqtt', 'kafka'], description: 'Default: kafka for kafka(s):// URLs, mqtt for mqtt(s):// URLs, socketio for http(s) URLs, websocket otherwise (give mqtt for a broker behind ws://)' },
+          url: str('ws:// / wss:// for WebSocket; http(s)://host/namespace for Socket.IO; mqtt(s)://host:port for MQTT; kafka(s)://broker:9092 for Kafka (brokers comma separated)'),
+          mode: { type: 'string', enum: ['websocket', 'socketio', 'mqtt', 'kafka'], description: 'Default: from the URL (kafka(s):// kafka, mqtt(s):// mqtt, http(s) socketio, else websocket); mqtt for a broker behind ws://' },
           send: {
             type: 'array',
-            description: 'WebSocket: strings (JSON as text). Socket.IO: { event, args?, ack? } objects. MQTT: { topic, payload?, qos?, retain? } messages to publish. Kafka: { topic, payload?, key?, headers?, partition? } messages to produce',
+            description: 'WebSocket: strings (JSON as text). Socket.IO: { event, args?, ack? } (ack: wait for the acknowledgement). MQTT: { topic, payload?, qos?, retain? } to publish. Kafka: { topic, payload?, key?, headers?, partition? } to produce (reads use a consumer group of their own)',
             items: {
               anyOf: [
                 { type: 'string' },

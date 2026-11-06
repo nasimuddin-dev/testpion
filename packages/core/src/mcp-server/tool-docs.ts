@@ -354,6 +354,11 @@ export const TOOL_DOCS: Record<string, ToolDoc> = {
     whenNot: 'To run a collection without a monitor, use `run_collection`; to change a monitor, use `save_monitor`.',
     example: { monitor: 'Veterinary API smoke' },
   },
+  pause_monitor: {
+    when: 'Around a deploy: pause, then resume.',
+    whenNot: 'To stop it for good: `save_monitor` enabled: false.',
+    example: { monitor: 'Checkout', minutes: 30 },
+  },
   save_monitor: {
     when: 'Use it to schedule a collection, folder or test file to run every few minutes, hours or days.',
     whenNot: 'To run once now, use `run_monitor` or `run_tests`; to list monitors, use `list_monitors`.',

@@ -201,7 +201,7 @@ export function ragEvalTools({ store, secrets, settings, checkEnvironment }: { s
       doc: {"when":"Measuring a RAG system with a saved evaluation: metrics, gates, why samples failed, a baseline comparison.","whenNot":"For a plain LLM evaluation (run_evaluation), or before rag_estimate has been read when cost matters.","example":{"evaluation":"Clinic RAG","metrics":["faithfulness","recall@5"],"min":["faithfulness=0.8"],"max_cost_usd":1}},
       write: true,
       description:
-        'Run a saved RAG evaluation with chosen metrics and gates: every dataset record goes to the RAG target, is scored, and the run is recorded. Returns the run id, per-metric aggregates (mean, p10, pass rate, n/a, 95% interval), why samples failed (retrieval miss, unfaithful, false refusal …), the gates (`min`: ["faithfulness=0.8"]), the `baseline` comparison and the worst samples. Stops BEFORE the first question when the target cannot be called or a judged metric has no judge. Call rag_estimate first; pass `max_cost_usd`.',
+        'Run a saved RAG evaluation with chosen metrics and gates: every dataset record goes to the RAG target, is scored, and the run is recorded. Returns the run id, per-metric aggregates (mean, p10, pass rate, n/a, 95% interval), why samples failed (retrieval miss, unfaithful, false refusal …), the gates (`min`), the `baseline` comparison and the worst samples. Stops BEFORE the first question when the target cannot be called or a judged metric has no judge. Call rag_estimate first; pass `max_cost_usd`.',
       inputSchema: {
         type: 'object',
         properties: {

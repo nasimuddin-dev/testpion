@@ -234,6 +234,7 @@ Not sure which tool? **`search_tools`** takes what you want to do ("capture traf
 | `mcp_tool_usage` | How the tools of the workspace's MCP servers were called from the app: calls, failures, median and p95 time per tool. |
 | `monitor_uptime` | A monitor's uptime per day over the last N days (runs, passed, uptime, slowest p95). |
 | `run_monitor` | Run a monitor now; returns the result and the failed requests. |
+| `pause_monitor` | Pause a monitor for a while (`minutes` or `until`, with a `reason`), around a deploy, or resume it (`resume: true`). |
 | `compare_responses` | Compare two responses by history id: status, timing, header changes and a field-by-field JSON body diff (`$.path` added / removed / changed). Sensitive values are masked. |
 | `set_environment_variable` | Set plain variables of an environment (optionally creating it); `alsoIn` adds them to other environments where they are missing (empty, or the same values with `copyValues`). Secret variables are refused. |
 | `reorder_environments` | Set the order of environments in the environment picker (names or ids, first to last). |

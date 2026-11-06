@@ -1,7 +1,7 @@
 import { createEngineContext } from '../../engine.js';
 import type { TestResult } from '../../model/types.js';
 import { monitorRequestStats } from '../../runner/monitor-requests.js';
-import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorRunEnvironment, monitorStatus, monitorTenants } from '../../runner/monitors.js';
+import { executeMonitor, findMonitor, listMonitors, monitorDaily, monitorResults, monitorRunEnvironment, monitorStatus, monitorTenants, pauseMonitor, resumeMonitor } from '../../runner/monitors.js';
 import type { RunEvent } from '../../runner/runner.js';
 import { str, limitArg } from '../tool.js';
 import type { Tool } from '../tool.js';
@@ -38,6 +38,21 @@ export function monitorTools(d: ModuleToolDeps): Tool[] {
         const runs = days.reduce((n, d) => n + d.runs, 0);
         const passed = days.reduce((n, d) => n + d.passed, 0);
         return { uptime: runs ? Math.round((passed / runs) * 1000) / 10 : undefined, runs, passed, days };
+      },
+    },
+    {
+      name: 'pause_monitor',
+      write: true,
+      description: 'Pause a monitor (`minutes`, `until`, or until resumed; `reason`), or resume it (`resume: true`). A tenant id pauses that tenant.',
+      inputSchema: {
+        type: 'object',
+        properties: { monitor: str('Monitor name or id'), minutes: { type: 'number' }, until: str('ISO time'), reason: str('Why'), resume: { type: 'boolean' } },
+        required: ['monitor'],
+      },
+      run: (a) => {
+        const id = findMonitor(store, String(a.monitor)).id;
+        const m = a.resume === true ? resumeMonitor(store, id) : pauseMonitor(store, id, { minutes: typeof a.minutes === 'number' ? a.minutes : undefined, until: a.until ? String(a.until) : undefined, reason: a.reason ? String(a.reason) : undefined });
+        return monitorStatus(store, m);
       },
     },
     {

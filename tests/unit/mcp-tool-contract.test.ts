@@ -97,6 +97,7 @@ describe('the shape of every tool', () => {
     ...Object.fromEntries(
       ['send_request', 'grpc_call', 'realtime_exchange', 'graphql_operation', 'graphql_subscribe', 'run_collection', 'run_tests', 'run_monitor', 'compare_request_across_environments', 'flow_data_run', 'flow_env_matrix', 'mcp_server_tools', 'mcp_call_tool', 'run_evaluation'].map((n) => [n, SENDS]),
     ),
+    pause_monitor: 'a pause ends by itself (minutes, until) or with resume: true; nothing is deleted or overwritten, and the CLI pauses without asking too',
     // the AI quality tools: the sample runs only on the offline demo model; trying a check asks for its own confirm: true before a paid model is called
     eval_sample: 'runs only on the offline demo model (rules, no key, no network) and writes the sample evaluation the way the editor does',
     eval_trust_reviewer: 'writes only the person’s own verdict on an answer into labels/ the way rag_label does, and reads the run; nothing is sent to a model',
