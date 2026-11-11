@@ -369,9 +369,11 @@ export function HomeView() {
             <p className="relative text-sm text-muted mt-1.5 max-w-2xl">Build, test and debug REST, GraphQL, gRPC, WebSocket, MCP and AI APIs. Everything stays on this computer.</p>
           )}
           {ws && !inExamples && (
-            <LinkButton className="relative block mt-2 text-xs" onClick={() => setNoting(true)} title="A few lines everyone who opens this workspace sees here; with git it travels to your team" data-workspace-note-edit>
-              {ws.description?.trim() ? 'Edit the note for your team' : 'Add a note for your team'}
-            </LinkButton>
+            <p className="relative mt-2 text-xs">
+              <LinkButton onClick={() => setNoting(true)} title="A few lines everyone who opens this workspace sees here; with git it travels to your team" data-workspace-note-edit>
+                {ws.description?.trim() ? 'Edit the note for your team' : 'Add a note for your team'}
+              </LinkButton>
+            </p>
           )}
           {noting && <WorkspaceNoteDialog note={ws?.description ?? ''} onClose={() => setNoting(false)} />}
           {allAsked && <OpenCommentsDialog comments={asked} onClose={() => setAllAsked(false)} />}
@@ -384,9 +386,11 @@ export function HomeView() {
               . New to API testing? Start with <b>Public REST APIs (playground)</b>: logins, tokens and whole create, read, update and delete flows. GraphQL, SOAP, gRPC, WebSocket, MQTT, SSE and MCP servers each have public services to try, and {VIEW_NAME.aiQuality} has prompts that run on an offline demo model.
             </p>
           ) : examplesSeen ? null : (
-            <LinkButton className="relative block mt-3 text-sm" onClick={() => void runMenuCommand('open-examples')}>
-              Explore the examples workspace: REST, GraphQL, gRPC, WebSocket, MCP and AI against public APIs →
-            </LinkButton>
+            <p className="relative mt-3 text-sm">
+              <LinkButton className="text-left" onClick={() => void runMenuCommand('open-examples')}>
+                Explore the examples workspace: REST, GraphQL, gRPC, WebSocket, MCP and AI against public APIs →
+              </LinkButton>
+            </p>
           )}
           {inExamples && (
             <p className="relative text-sm mt-2">
@@ -397,7 +401,7 @@ export function HomeView() {
             </p>
           )}
           {env && (
-            <p className="relative mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-bg/70 px-3 py-1 text-xs text-muted">
+            <p className="relative mt-4 flex w-fit items-center gap-2 rounded-full border border-line bg-bg/70 px-3 py-1 text-xs text-muted">
               <span className="w-2 h-2 rounded-full" style={{ background: environmentOf(ws?.environments, env)?.color ?? 'var(--ok)' }} />
               Active environment: <span className="text-fg font-medium">{env}</span>
             </p>

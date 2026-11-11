@@ -316,7 +316,7 @@ export function FolderList({
                 {open && (
                   <div role="group">
                     {withParents(inFolder).map((s) => ('it' in s ? row(s.it) : parentRows(s.parent, s.parts)))}
-                    {!inFolder.length && !ql && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
+                    {!inFolder.length && !ql && items.length > 0 && <div className="pl-9 py-1 text-xs text-muted">Empty folder: drag a {itemNoun} here or use Move to folder.</div>}
                   </div>
                 )}
               </div>
@@ -327,9 +327,12 @@ export function FolderList({
             <>
               {empty}
               <div className="flex flex-wrap justify-center gap-2 px-3 pb-3">
-                <Button size="sm" icon={<Plus size={12} />} onClick={() => onAdd()}>
-                  {addLabel}
-                </Button>
+                {/* the empty text has its own next step (the same action): one button for it, not two */}
+                {!empty && (
+                  <Button size="sm" icon={<Plus size={12} />} onClick={() => onAdd()}>
+                    {addLabel}
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" icon={<FolderPlus size={12} />} onClick={() => void newFolder()}>
                   New folder
                 </Button>

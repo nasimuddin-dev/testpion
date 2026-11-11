@@ -81,25 +81,25 @@ export function RunList({ runs, active, onSelect, onOverview, onRerunFailed, onR
             <span className="flex-1 min-w-0">
               <span className="block text-sm truncate">{r.name}</span>
               <RunMiniBar r={r} />
-              <span className="text-xs text-muted flex gap-2">
+              <span className="text-xs text-muted flex items-center gap-2 whitespace-nowrap">
                 <span className={r.failed + r.errors ? 'text-bad' : 'text-ok'}>
                   {r.passed}/{r.total}
                 </span>
                 {/* failures (a check did not hold) apart from errors (it could not run), as the Problems panel tells them apart */}
                 {r.failed > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-bad" title="Failures: checks that did not hold" data-run-failures={r.failed}>
+                  <span className="inline-flex items-center gap-0.5 text-bad shrink-0" title="Failures: checks that did not hold" data-run-failures={r.failed}>
                     {TYPE_ICON.failure}
                     {r.failed} failed
                   </span>
                 )}
                 {r.errors > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-bad" title="Errors: could not run (network, TLS, timeout or a script)" data-run-errors={r.errors}>
+                  <span className="inline-flex items-center gap-0.5 text-bad shrink-0" title="Errors: could not run (network, TLS, timeout or a script)" data-run-errors={r.errors}>
                     {TYPE_ICON.error}
                     {plural(r.errors, 'error')}
                   </span>
                 )}
-                {r.environment && <EnvBadge name={r.environment} className="max-w-32" />}
-                <span className="ml-auto">{timeAgo(r.startedAt)}</span>
+                {r.environment && <EnvBadge name={r.environment} className="max-w-32 min-w-0" />}
+                <span className="ml-auto shrink-0">{timeAgo(r.startedAt)}</span>
               </span>
             </span>
           </TreeRowShell>

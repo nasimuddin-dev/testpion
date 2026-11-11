@@ -1,3 +1,4 @@
+import { VIEW_NAME } from '../lib/ui-names';
 import { formatCost, formatMs, plural, timeAgo, undatedModel } from '../lib/format';
 import { BarRow, ChartCard, StatTile, Swatch } from './charts';
 import { Empty, LinkButton, Spinner } from './ui';
@@ -26,8 +27,8 @@ export function AiUsage() {
   return (
     <div className="h-full overflow-auto p-4 flex flex-col gap-6 max-w-5xl">
       <AiFeatureUsage />
-      <section className="flex flex-col gap-3" aria-label="AI Lab usage">
-        <h2 className="font-semibold">AI Lab prompts</h2>
+      <section className="flex flex-col gap-3" aria-label="Prompt usage">
+        <h2 className="font-semibold">Prompts run in {VIEW_NAME.aiQuality}</h2>
         <AiLabUsage />
       </section>
     </div>
@@ -137,7 +138,7 @@ function AiLabUsage() {
         </tbody>
       </table>
       <p className="text-xs text-muted">
-        From the latest 2000 prompts run in the AI Lab. Agents get the same with the <code>llm_usage</code> MCP tool; <code>testpion history llm</code> prints it.
+        From the latest 2000 prompts run in {VIEW_NAME.aiQuality}. Agents get the same with the <code>llm_usage</code> MCP tool; <code>testpion history llm</code> prints it.
       </p>
     </div>
   );

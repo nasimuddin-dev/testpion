@@ -1,3 +1,4 @@
+import { AI_TAB_NAME, VIEW_NAME, where } from '../lib/ui-names';
 import { StoragePanel } from '../components/StoragePanel';
 import { AgentsPanel } from '../components/AgentsPanel';
 import { ScriptTrustPanel } from '../components/ScriptTrustPanel';
@@ -524,7 +525,7 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
         <Toggle checked={s.ai?.hidden === true} onChange={(v) => set({ ai: { ...(s.ai ?? {}), hidden: v } })} label="Hide all AI actions" />
       </div>
       <p className="text-sm text-muted -mt-1">
-        Removes every AI button, menu item, command and the assistant from the window, whether or not a model is set up. AI Lab (testing models), the CLI and the MCP tools are not affected; nothing is deleted. Turn it off to have them back.
+        Removes every AI button, menu item, command and the assistant from the window, whether or not a model is set up. {VIEW_NAME.aiQuality} (testing models), the CLI and the MCP tools are not affected; nothing is deleted. Turn it off to have them back.
       </p>
       <Toggle
         checked={on}
@@ -537,8 +538,8 @@ function AssistantSettings({ s, set, providers }: { s: AppSettings; set(p: Parti
       </p>
       {on && (
         <>
-          {radio('claude', 'Claude (Anthropic), with your API key', 'Anthropic bills your account for what you use. The key also appears in AI Lab and evaluations as "Claude (your API key)".')}
-          {radio('workspace', 'A provider of this workspace', 'A provider set up in AI Lab ▸ Providers, for example a local Ollama model that works offline.')}
+          {radio('claude', 'Claude (Anthropic), with your API key', `Anthropic bills your account for what you use. The key also appears in ${VIEW_NAME.aiQuality} as "Claude (your API key)".`)}
+          {radio('workspace', 'A provider of this workspace', `A provider set up in ${where(VIEW_NAME.aiQuality, AI_TAB_NAME.providers)}, for example a local Ollama model that works offline.`)}
           {source === 'claude' ? (
             <div className="flex flex-col gap-3 pl-6">
               {status?.hasKey ? (

@@ -1,3 +1,4 @@
+import { VIEW_NAME } from '../lib/ui-names';
 import { ChevronDown, ChevronRight, FileCheck2, FilePlus2, Folder, Play, Workflow } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, type RefObject } from 'react';
 import { useApp } from '../store';
@@ -178,7 +179,7 @@ export function NoTestFiles({ onNew }: { onNew(): void }) {
       ]}
     >
       A test is a YAML file in tests/: a request (HTTP, GraphQL, gRPC, WebSocket, MCP or AI) and its checks, or a whole flow. Create one, generate a first suite from an API definition, or save one
-      from a request tab, the MCP view or AI Lab.
+      from a request tab, the MCP view or {VIEW_NAME.aiQuality}.
     </Empty>
   );
 }

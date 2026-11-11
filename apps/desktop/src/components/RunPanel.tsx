@@ -53,6 +53,12 @@ function lowestScore(r: TestResult): number | undefined {
   return low;
 }
 
+/** A result's name apart from the case it ends in: "Intent dataset [refill-1]" is "Intent dataset" and "[refill-1]". */
+const caseOf = (name: string): { head: string; tail?: string } => {
+  const m = /^(.+?) (\[[^\[\]]+\])$/.exec(name);
+  return m ? { head: m[1]!, tail: m[2]! } : { head: name };
+};
+
 export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { runId: string; expectedTotal?: number; onRerunFailed?(runId: string): void; /** A result to select once the run is read (by the test's name): the flow diagram's node, a preview row. */ focusName?: string }) {
   const [progress, setProgress] = useState<Progress>({ completed: 0, passed: 0, failed: 0, skipped: 0, errors: 0, running: 0 });
   const [summary, setSummary] = useState<RunSummary | null>(null);
@@ -313,7 +319,11 @@ export function RunPanel({ runId, expectedTotal, onRerunFailed, focusName }: { r
                       className={cx('w-full h-full flex items-center gap-2 px-3 border-b border-line/50 text-sm text-left hover:bg-hover', sel?.id === r.id && sel.attempts === r.attempts && 'bg-accent-soft')}
                     >
                       <StatusIcon status={r.status} />
-                      <span className="truncate flex-1 min-w-0">{r.name}</span>
+                      {/* a data row's name ends in its case ("Intent dataset [refill-1]"): the case stays readable when the name is cut */}
+                      <span className="flex flex-1 min-w-0 gap-1" data-result-name>
+                        <span className="truncate">{caseOf(r.name).head}</span>
+                        {caseOf(r.name).tail && <span className="truncate shrink-0 max-w-[60%] text-muted">{caseOf(r.name).tail}</span>}
+                      </span>
                       {r.review?.rating === 'good' && <ThumbsUp size={12} className="text-ok shrink-0" aria-label="Rated good" />}
                       {r.review?.rating === 'bad' && <ThumbsDown size={12} className="text-bad shrink-0" aria-label="Rated bad" />}
                       {low !== undefined && (
