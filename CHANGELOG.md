@@ -20,6 +20,7 @@
 
 ### For AI agents
 
+- **Long runs as tasks.** The tools that run things (collections, tests, evaluations, monitors, load tests) can be started as an MCP task: the agent gets a task at once, polls it and reads the result, instead of waiting for minutes on one call. Clients that do not ask for a task are answered as before.
 - **A short tool list by default.** `testpion mcp-server` now lists the tools of the common jobs (about 25) and your workspace's own flows instead of all 220: an agent's context stays small. The tools `search_tools` finds join the list for the rest of the session, and `search_tools` with `name` and `arguments` calls any tool. `--profile full` (or `TESTPION_MCP_PROFILE=full`) lists every tool as before.
 
 ## 0.56.0 — 2026-11-11

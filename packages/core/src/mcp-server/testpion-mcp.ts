@@ -11,6 +11,8 @@ import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
 import { compactTool, SHARED_PARAMETER_NOTE } from './compact.js';
 import { MinimalList, throughSearchTools, toolsOfCall } from './minimal-list.js';
+import { errorCallResult, plainCallResult } from './call-result.js';
+import { BoundedTaskStore, TASKS_CAPABILITY, startToolTask, taskExecution } from './mcp-tasks.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
 import { ConfirmCodes, contractCallResult, elicitationConfirmer, isContractResult, TOOL_DETAILS, withToolContract, type Confirmer } from './tool-contract.js';
@@ -141,7 +143,8 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   const server = new (mcpServer().Server)(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
-      capabilities: { tools: profile === 'minimal' ? { listChanged: true } : {}, resources: {}, prompts: {} },
+      capabilities: { tools: profile === 'minimal' ? { listChanged: true } : {}, resources: {}, prompts: {}, tasks: TASKS_CAPABILITY },
+      taskStore: new BoundedTaskStore() as never,
       instructions: `TestPion workspace "${store.workspace.name}". list_kinds says what every kind of item can do and which deletes can be undone. what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}${profile === 'verbose' ? '' : ` ${SHARED_PARAMETER_NOTE}`}`,
     },
   );
@@ -149,7 +152,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     tools: listedTools().map(({ name, description, inputSchema, outputSchema, write }) => {
       // the title is the tool's own field; repeating it inside the annotations was 6 KB of a full list
       const { title, ...annotations } = toolAnnotations(name, !!write);
-      return { name, title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations };
+      return { name, title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations, ...taskExecution(name) };
     }),
   }));
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
@@ -198,34 +201,28 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     if (missing.length) throw new ApsError('ValidationError', `Missing: ${missing.join(', ')}`);
     return { description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(args) } }] };
   });
-  /** Minimal profile: the tools a call brought up join the list, and the client is told (one that ignores it can still call them). */
+  // minimal profile: the tools a call brought up join the list, and the client is told
   const reveal = (names: string[]) => {
     if (profile !== 'minimal' || !minimal.add(names, (n) => tools().some((t) => t.name === n))) return;
     registry = { ...registry!, listed: registry!.tools.filter((t) => minimal.has(t.name)).map(compactTool) };
     void server.sendToolListChanged().catch(() => undefined);
   };
-  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (call) => {
+  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (call, extra) => {
     const req = { ...call, params: throughSearchTools(call.params) };
     const tool = tools().find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}. search_tools finds a tool by what you want to do.` }], structuredContent: { error: errorEnvelope(new ApsError('ValidationError', `Unknown tool ${req.params.name}`, { suggestions: ['search_tools finds a tool by what you want to do.'] })) } };
-    try {
-      const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
-      reveal(toolsOfCall(tool.name, isContractResult(r) ? r.value : r));
-      if (isContractResult(r)) return contractCallResult(r);
-      const out = r;
-      if (typeof out === 'string') return { content: [{ type: 'text', text: out }] };
-      // the JSON as text for every client, and as structured content for clients that read it (a list is wrapped: structured content is an object)
-      const structured = Array.isArray(out) ? { items: out } : out && typeof out === 'object' ? (out as Record<string, unknown>) : { value: out };
-      // a result that says so (a flow with a failed step) is an error result for the client, with the details kept
-      return { ...(structured.isError === true ? { isError: true } : {}), content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], structuredContent: structured };
-    } catch (e) {
-      const err = normalizeError(e);
-      // the text for every client, and { error: { code, message, hint, retryable } } (the CLI envelope's mapping) for the ones that read structured content.
-      // A tool that declares an outputSchema cannot carry it there (clients validate structuredContent against the schema): it goes in _meta.error.
-      const envelope = errorEnvelope(err);
-      const declared = !!listedTools().find((t) => t.name === req.params.name)?.outputSchema;
-      return { isError: true, content: [{ type: 'text', text: `${err.kind}: ${err.message}${err.suggestions.length ? `\n${err.suggestions.join('\n')}` : ''}` }], ...(declared ? {} : { structuredContent: { error: envelope } }), _meta: { error: envelope } };
-    }
+    const exec = async (): Promise<Record<string, unknown>> => {
+      try {
+        const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
+        reveal(toolsOfCall(tool.name, isContractResult(r) ? r.value : r));
+        if (isContractResult(r)) return contractCallResult(r);
+        return plainCallResult(r);
+      } catch (e) {
+        return errorCallResult(e, !!listedTools().find((t) => t.name === req.params.name)?.outputSchema);
+      }
+    };
+    // a client that asks for a task (a long run) gets it at once and polls; the others wait for the result as before
+    return req.params.task ? startToolTask(tool.name, extra, req.params.task, exec) : exec();
   });
   // a deleting or overwriting call without confirm: true asks the user when the client can (MCP elicitation)
   confirmer = elicitationConfirmer(server);

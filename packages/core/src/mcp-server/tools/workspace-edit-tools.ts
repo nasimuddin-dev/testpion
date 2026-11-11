@@ -370,8 +370,8 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     {
       name: 'mcp_server_tools',
       write: true,
-      description: 'Connect to one of the workspace\'s MCP servers and list what it offers: tools (with input schemas), resources and prompts, plus its server info. Use it before mcp_call_tool. A stdio server runs only when the user allowed its command in the app. check: true adds protocol checks and what changed since the tools were approved (drift). select: which tool each model picks.',
-      inputSchema: { type: 'object', properties: { server: str('Server name or id (list_mcp_servers)'), check: { type: 'boolean' }, approve: { type: 'boolean', description: 'Keep what it offers now as approved (mcp-snapshots/)' }, select: { type: 'array', items: { type: 'string' }, description: 'provider/model' } }, required: ['server'] },
+      description: 'Connect to one of the workspace\'s MCP servers and list what it offers: tools (with input schemas), resources and prompts, plus its server info. Use it before mcp_call_tool. A stdio server runs only when the user allowed its command in the app. check: protocol checks and drift since approved. select: which tool each model picks.',
+      inputSchema: { type: 'object', properties: { server: str('Server name or id (list_mcp_servers)'), check: { type: 'boolean' }, approve: { type: 'boolean' }, select: { type: 'array', items: { type: 'string' } } }, required: ['server'] },
       run: async (a) => {
         const s = await d.mcpSession(String(a.server));
         try {

@@ -119,3 +119,36 @@ describe('the minimal profile grows with what the agent finds', () => {
     await client.close();
   });
 });
+
+// long runs as MCP tasks: the client asks for a task, gets it at once, polls, then reads the result
+describe('a long run as a task', () => {
+  it('the run tools say they take a task; run_tests as a task ends completed with the result of the run; the others refuse', async () => {
+    const { client } = await connect();
+    expect(client.getServerCapabilities()?.tasks).toMatchObject({ list: {}, cancel: {}, requests: { tools: { call: {} } } });
+    const tools = (await client.listTools()).tools;
+    const taskTools = tools.filter((t) => (t as { execution?: { taskSupport?: string } }).execution?.taskSupport === 'optional').map((t) => t.name);
+    expect(taskTools.sort()).toEqual(['flow_data_run', 'load_test', 'rag_run', 'run_collection', 'run_evaluation', 'run_monitor', 'run_tests', 'security_tests_run']);
+    // without `task` the call answers as before
+    const direct = await client.callTool({ name: 'run_tests', arguments: { paths: ['bulk/t1.yaml'] } });
+    expect(direct.isError, JSON.stringify(direct.content).slice(0, 400)).toBeFalsy();
+    const steps: string[] = [];
+    let result: { isError?: boolean; structuredContent?: Record<string, unknown> } | undefined;
+    for await (const m of client.experimental.tasks.callToolStream({ name: 'run_tests', arguments: { paths: ['bulk/t1.yaml'] } }, undefined, { task: { ttl: 60_000 } })) {
+      steps.push(m.type);
+      if (m.type === 'result') result = m.result as typeof result;
+      if (m.type === 'error') throw m.error;
+    }
+    expect(steps[0]).toBe('taskCreated');
+    expect(steps.at(-1)).toBe('result');
+    expect(result?.isError).toBeFalsy();
+    expect(Object.keys(result?.structuredContent ?? {}).sort()).toEqual(Object.keys((direct.structuredContent as Record<string, unknown>) ?? {}).sort());
+    const listed = await client.experimental.tasks.listTasks();
+    expect(listed.tasks.map((t) => t.status)).toEqual(['completed']);
+    expect(listed.tasks[0]!.ttl).toBe(60_000);
+    // a tool that does not run things refuses a task
+    const refused: string[] = [];
+    for await (const m of client.experimental.tasks.callToolStream({ name: 'list_collections', arguments: {} }, undefined, { task: { ttl: 1000 } })) if (m.type === 'error') refused.push(String(m.error.message));
+    expect(refused.join(' ')).toMatch(/does not run as a task/);
+    await client.close();
+  }, 60_000);
+});

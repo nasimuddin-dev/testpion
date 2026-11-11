@@ -43,8 +43,8 @@ export function searchTool(tools: Tool[], titleOf: (name: string, write: boolean
   return {
     name: 'search_tools',
     description:
-      'Find a TestPion tool by what you want to do ("run tests", "mock", "capture traffic", "compare two runs", "secrets"): the matching tools with a line each and their required arguments. Pass `name` instead to get the complete entry of one tool. Any tool it names can be called, listed or not; `name` with `arguments` calls it here. Use it before guessing a tool name.',
-    inputSchema: { type: 'object', properties: { query: str('What you want to do, in a few words'), name: str('A tool name: returns the complete entry of that tool (description with when not to use it and an example, every parameter described)'), arguments: { type: 'object', description: 'With `name`: call that tool' } }, required: [] },
+      'Find a TestPion tool by what you want to do ("run tests", "mock", "capture traffic", "compare two runs", "secrets"): the matching tools with a line each and their required arguments. Pass `name` instead to get the complete entry of one tool. Any tool it names can be called, listed or not (`name` with `arguments` calls it). Use it before guessing a tool name.',
+    inputSchema: { type: 'object', properties: { query: str('What you want to do, in a few words'), name: str('A tool name: returns the complete entry of that tool (description with when not to use it and an example, every parameter described)'), arguments: { type: 'object' } }, required: [] },
     run: (a) => {
       if (typeof a.name === 'string' && a.name) {
         const full = entryOf?.(a.name);
