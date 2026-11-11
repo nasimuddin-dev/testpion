@@ -47,8 +47,11 @@ interface ConversationRun {
   latencyMs: number;
 }
 
+/** Where the user's messages come from: a script, or a function asked after every answer (a simulated user, simulate.ts) that gives undefined when it is over. */
+export type UserMessages = string[] | ((turns: ConversationTurn[]) => Promise<string | undefined>);
+
 /** Replays `messages` against the target; a turn that fails stops the conversation with the turn named. */
-export async function runConversation(target: RagTarget, messages: string[], scope: VariableScope, run: TargetRunner, extraVars: Record<string, unknown> = {}): Promise<ConversationRun> {
+export async function runConversation(target: RagTarget, messages: UserMessages, scope: VariableScope, run: TargetRunner, extraVars: Record<string, unknown> = {}): Promise<ConversationRun> {
   const turns: ConversationTurn[] = [];
   const calls: TargetCall[] = [];
   const toolCalls: RagToolCallRef[] = [];
@@ -56,14 +59,16 @@ export async function runConversation(target: RagTarget, messages: string[], sco
   let latencyMs = 0;
   // a system that keeps its session in a cookie: what each answer sets goes back with the next turn (this conversation only)
   const jar = target.conversation?.mode === 'server-session' && target.conversation.cookies ? new ConversationCookies() : undefined;
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i]!;
+  const scripted = Array.isArray(messages);
+  for (let i = 0; scripted ? i < messages.length : i < MAX_USER_TURNS; i++) {
+    const msg = scripted ? messages[i]! : await messages(turns);
+    if (msg === undefined) break;
     let call: TargetCall;
     try {
       call = await callTarget(target, msg, scope, run, { ...extraVars, ...historyVars(turns, msg, conversationId, i + 1) }, jar ? { cookie: jar.header() } : {});
     } catch (e) {
       const err = e as Error & { message: string };
-      err.message = `turn ${i + 1} of ${messages.length} ("${msg.slice(0, 60)}"): ${err.message}`;
+      err.message = `turn ${i + 1}${scripted ? ` of ${messages.length}` : ''} ("${msg.slice(0, 60)}"): ${err.message}`;
       throw err;
     }
     calls.push(call);

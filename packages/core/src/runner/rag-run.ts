@@ -15,6 +15,9 @@ import type { CheckContext } from '../eval/checks.js';
 import { callTarget, type TargetCall, type TargetRunner } from '../eval/rag/run-target.js';
 import { pickRecord, type ConversationTurn } from '../eval/rag/record.js';
 import { historyVars, runConversation, userMessages } from '../eval/rag/conversation.js';
+import { ApsError } from '../errors.js';
+import { simulatedUser, simulationOf } from '../eval/rag/simulate.js';
+import type { RagJudgeHost } from '../eval/rag/judge.js';
 import { scrubDocImage, storableRecord } from '../eval/rag/images.js';
 import { normalizeTest } from './loader.js';
 
@@ -38,19 +41,23 @@ const KEEP_TURN_CHARS = 2000;
 const compactTurns = (turns: ConversationTurn[]): ConversationTurn[] =>
   turns.map((t) => (t.contexts ? { ...t, contexts: t.contexts.slice(0, KEEP_TURN_DOCS).map((d) => ({ ...d, text: d.text.slice(0, KEEP_TURN_CHARS) })) } : t));
 
-export async function runRagTargetTest(test: RagTest, scope: VariableScope, span: SpanHandle, run: StepRunner, guard?: (step: TestCase, scope: VariableScope) => void): Promise<RagRunResult> {
+export async function runRagTargetTest(test: RagTest, scope: VariableScope, span: SpanHandle, run: StepRunner, guard?: (step: TestCase, scope: VariableScope) => void, sim?: { host?: RagJudgeHost; signal?: AbortSignal }): Promise<RagRunResult> {
   const record0 = pickRecord(test.variables);
   const messages = userMessages(record0?.turns);
   const first = scope.resolve(test.question);
+  // a record with a persona (or simulate: true): a model plays the user until the goal is met, it gives up, or the turn limit
+  const spec = simulationOf(test.variables, record0);
+  const user = spec ? simulatedUser(sim?.host, spec, { opening: first, judge: test.judge, signal: sim?.signal }) : undefined;
   // a conversation asks the last user message of the transcript as "the question" of the single-turn metrics
-  const s = span.child(messages.length ? 'rag conversation' : 'rag target', 'internal', { input: messages.length ? messages.join(' → ').slice(0, 500) : first });
+  const s = span.child(user ? 'rag simulated conversation' : messages.length ? 'rag conversation' : 'rag target', 'internal', { input: messages.length ? messages.join(' → ').slice(0, 500) : first });
   try {
     const runner: TargetRunner = { normalize: (raw) => normalizeTest(raw), run, guard };
     let calls: TargetCall[];
     let turns: ConversationTurn[] | undefined;
     let convToolCalls: RagToolCallRef[] | undefined;
-    if (messages.length) {
-      const conv = await runConversation(test.target!, messages.map((m) => scope.resolve(m)), scope, runner, test.variables ?? {});
+    if (user || messages.length) {
+      const conv = await runConversation(test.target!, user ? user.next : messages.map((m) => scope.resolve(m)), scope, runner, test.variables ?? {});
+      if (!conv.calls.length) throw new ApsError('ValidationError', `The simulated user sent nothing (${user?.outcome().reason || 'it stopped before its first message'})`, { suggestions: ['Give the record a question (the opening message), or a goal the user has not already reached.'] });
       calls = conv.calls;
       turns = conv.turns;
       convToolCalls = conv.toolCalls;
@@ -68,7 +75,9 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
     // the tools the system called: its own trace (the target's mapping) beside any the dataset lists
     const traced = turns ? convToolCalls : sample.toolCalls;
     const toolCalls = traced?.length ? traced : record0?.toolCalls;
-    const record = record0 || turns || toolCalls ? { ...(record0 ?? {}), ...(turns ? { turns } : {}), ...(toolCalls?.length ? { toolCalls } : {}) } : undefined;
+    const simulated = user?.outcome();
+    if (simulated) s.setAttributes({ simulated: simulated.ended, userTurns: simulated.userTurns });
+    const record = record0 || turns || toolCalls ? { ...(record0 ?? {}), ...(turns ? { turns } : {}), ...(toolCalls?.length ? { toolCalls } : {}), ...(simulated ? { simulated } : {}) } : undefined;
     return {
       ctx: {
         testType: 'rag',
@@ -87,7 +96,7 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
         latencyMs: turns ? latencyMs : call.latencyMs,
         firstTokenMs: call.ctx.firstTokenMs,
       },
-      partial: { input: turns ? messages.join('\n') : question, output: sample.answer.slice(0, 4000) },
+      partial: { input: turns ? turns.filter((t) => t.role === 'user').map((t) => t.content).join('\n') : question, output: sample.answer.slice(0, 4000) },
       metadata: {
         rag: {
           query: question,
@@ -107,7 +116,7 @@ export async function runRagTargetTest(test: RagTest, scope: VariableScope, span
             ...(toolCalls?.length ? { toolCalls: toolCalls.slice(0, 100) } : {}),
             ...(sample.meta ? { meta: sample.meta } : {}),
           },
-          ...(turns ? { conversation: { turns: calls.length, latenciesMs: calls.map((c) => c.latencyMs), ...(calls.at(-1)?.sample.conversationId ? { conversationId: calls.at(-1)!.sample.conversationId } : {}) } } : {}),
+          ...(turns ? { conversation: { ...(simulated ? { simulated: simulated.ended } : {}), turns: calls.length, latenciesMs: calls.map((c) => c.latencyMs), ...(calls.at(-1)?.sample.conversationId ? { conversationId: calls.at(-1)!.sample.conversationId } : {}) } } : {}),
           ...(calls.some((c) => c.sample.warnings.length) ? { warnings: calls.flatMap((c) => c.sample.warnings).slice(0, 10) } : {}),
         },
       },

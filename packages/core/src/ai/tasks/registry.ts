@@ -12,6 +12,7 @@ import type { StoredResponse } from '../verify.js';
 import type { AiPrivacy, AiTier } from '../ai-settings.js';
 import { parseGeneratedRequest } from '../assist.js';
 import type { ProposalFinding, ProposalItem } from '../proposal.js';
+import { SIMULATE_USER_SCHEMA } from '../../eval/rag/simulate-prompt.js';
 import { TASK_INSTRUCTIONS } from './prompts.js';
 import { quoteTemplateValues } from '../yaml-repair.js';
 import type { FormatKind } from '../flow-format.js';
@@ -648,6 +649,18 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     temperature: 0,
     contextTokens: 24_000,
     maxTokens: 3000,
+    maxRepairs: 2,
+  }),
+  T('simulate-user', {
+    title: 'Play a user in a conversation',
+    description:
+      'The next message of a simulated user with a persona and a goal, talking to a system under test, or that the goal is met or the user gives up, as JSON. Used by evaluations whose records have a persona column; counted in the usage ledger and the judge budget of the run.',
+    tier: 'large',
+    output: { kind: 'json', schema: SIMULATE_USER_SCHEMA },
+    context: 'persona (how the user talks), goal (what the user wants), transcript (the conversation so far)',
+    temperature: 0.4,
+    contextTokens: 24_000,
+    maxTokens: 800,
     maxRepairs: 2,
   }),
   T('rag-suggest-mapping', {

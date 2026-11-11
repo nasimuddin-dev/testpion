@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Simulated users
+
+- A dataset record with a **persona** and a **goal** is a conversation a model plays against your bot: it talks until it has what it wanted, it gives up, or `max_turns` is reached. Six built-in personas (plain, terse, confused, impatient, wandering, changing) or your own words; the result says how the conversation ended, and the conversation metrics score it. `testpion rag personas --json` lists the personas and the columns.
+
 ### GraphQL persisted queries
 
 - **APQ** on a GraphQL request (and `persistedQueries: true` in a test) sends it as an automatic persisted query (Apollo's APQ): the hash first, the query once the server asks; the response says hit, registered or unsupported.

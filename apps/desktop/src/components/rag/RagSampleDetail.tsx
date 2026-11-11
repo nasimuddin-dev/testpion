@@ -29,6 +29,8 @@ const CHUNK_STATES: Array<{ label: 'relevant' | 'partly' | 'not'; text: string; 
   { label: 'not', text: 'Wrong', title: 'This document is not about the question' },
 ];
 type Item = { text: string; ok: boolean; evidence?: string; rating?: number };
+/** How a conversation with a simulated user ended, in words. */
+const SIMULATION_END: Record<string, string> = { 'goal-met': 'It got what it wanted', 'gave-up': 'It gave up', 'turn-limit': 'The turn limit was reached before it got what it wanted' };
 
 const itemsOf = (c: CheckResult | undefined): Item[] => ((c?.metadata as { items?: Item[] } | undefined)?.items ?? []).filter((i) => typeof i.text === 'string');
 
@@ -60,6 +62,7 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
       </Modal>
     );
   const { result, sample } = data;
+  const simulated = sample?.record?.simulated;
   const checks = [...result.checks].sort((a, b) => Number((b.name || b.type) === focus) - Number((a.name || a.type) === focus));
   const focused = result.checks.find((c) => (c.name || c.type) === focus);
   const verdicts = new Map(itemsOf(focused).map((i) => [i.text, i]));
@@ -189,6 +192,12 @@ export function RagSampleDetail({ runId, resultId, focus, target, judge, onClose
               {(sample.record?.turns?.length ?? 0) > 0 && (
                 <div data-rag-transcript>
                   <div className="text-xs text-muted">The conversation ({sample.record!.turns!.filter((t) => t.role === 'assistant').length} answers from your system)</div>
+                  {simulated && (
+                    <div className="text-xs mt-0.5" data-rag-simulated={simulated.ended}>
+                      A simulated user{simulated.personaId ? ` (${simulated.personaId})` : ''} wrote the user messages. It wanted: {simulated.goal}. {SIMULATION_END[simulated.ended] ?? simulated.ended}
+                      {simulated.reason ? `: ${simulated.reason}` : '.'}
+                    </div>
+                  )}
                   <ol className="mt-1 space-y-1">
                     {sample.record!.turns!.map((t, i) => (
                       <li key={i} className={cx('rounded px-2 py-1 border-l-2', t.role === 'user' ? 'border-line bg-surface/40' : 'border-accent/60')}>

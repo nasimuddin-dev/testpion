@@ -253,7 +253,7 @@ async function executeTestIn(testIn: TestCase, svc: ExecServices, opts: { tracer
         case 'llm':
           return runLlm(test, scope, svc, root, signal);
         case 'rag':
-          return test.target ? runRagTargetTest(test, scope, root, (step, sc) => protocolStep(step, sc, svc, root, signal), svc.production ? (step, sc) => assertProductionStep(svc.production!, productionStep(step, sc)) : undefined) : runRag(test, scope, svc, root, signal);
+          return test.target ? runRagTargetTest(test, scope, root, (step, sc) => protocolStep(step, sc, svc, root, signal), svc.production ? (step, sc) => assertProductionStep(svc.production!, productionStep(step, sc)) : undefined, { host: svc.ragJudge, signal }) : runRag(test, scope, svc, root, signal);
         case 'agent':
           return runAgentTest(test, scope, svc, root, signal);
         case 'delay':
@@ -337,7 +337,7 @@ async function executeTestIn(testIn: TestCase, svc: ExecServices, opts: { tracer
         n: test.targetRepeats!,
         configs: checkConfigs,
         first: { ctx, checks: ragScored.checks },
-        call: () => runRagTargetTest(test, scope, root, (step, sc) => protocolStep(step, sc, svc, root, opts.signal!), svc.production ? (step, sc) => assertProductionStep(svc.production!, productionStep(step, sc)) : undefined),
+        call: () => runRagTargetTest(test, scope, root, (step, sc) => protocolStep(step, sc, svc, root, opts.signal!), svc.production ? (step, sc) => assertProductionStep(svc.production!, productionStep(step, sc)) : undefined, { host: svc.ragJudge, signal: opts.signal }),
         signal: opts.signal,
       });
       ragScored = { ...ragScored, checks: again.checks };

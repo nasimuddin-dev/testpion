@@ -4,10 +4,23 @@
  * never over a file that is there, so your own probes added to a file are kept; run them with the `safety` preset.
  */
 import { Command } from 'commander';
-import { PROBE_SETS, listProbeSets, seedProbeSets } from '@testpion/core';
+import { PERSONAS, PROBE_SETS, SIMULATE_DEFAULT_TURNS, SIMULATE_MAX_TURNS, listProbeSets, seedProbeSets } from '@testpion/core';
 import { EXIT, CliError, bold, dim, green, printJson, withWorkspace, yellow } from '../shared.js';
 
 export function registerRagProbeCommands(rag: Command): void {
+  rag
+    .command('personas')
+    .description('the built-in personas of a simulated user: a dataset record with a persona (one of these ids, or your own words) and a goal is a conversation a model plays until the goal is met, it gives up, or max_turns')
+    .option('--json', 'print as JSON (for scripts and AI agents)')
+    .action((o: { json?: boolean }) => {
+      const columns = { persona: 'one of the ids, or a description of the user in words', goal: 'what the user wants (expected_outcome works too)', question: 'optional: the opening message (left out, the model writes it)', max_turns: `most user messages (default ${SIMULATE_DEFAULT_TURNS}, at most ${SIMULATE_MAX_TURNS})`, simulate: 'true: a simulated user without naming a persona (the plain one)' };
+      if (o.json) return printJson({ personas: PERSONAS, columns, example: { id: 'booking-terse', persona: 'terse', goal: 'Book a visit for a dog on Tuesday morning', max_turns: 6 } });
+      for (const p of PERSONAS) console.log(`${bold(p.id.padEnd(10))} ${p.text}`);
+      console.log('');
+      console.log(dim('A dataset line: {"id": "booking-terse", "persona": "terse", "goal": "Book a visit for a dog on Tuesday morning"}'));
+      console.log(dim('The simulated user runs on the judge of the evaluation; score the conversation with goal-accuracy, user-friction, knowledge-retention …'));
+    });
+
   const probes = rag.command('probes').description('seeded safety probe sets: prompts a safe RAG system should refuse, resist or answer carefully, as datasets in the workspace (run them with --preset safety)');
 
   probes

@@ -135,6 +135,7 @@ export { IMAGE_LIMITS, imageRefOf, loadImages, defaultImageSource, toChatImages,
 export { prepareImage, sniffImage, stripJpegMetadata, stripPngMetadata, imageTokens, type PreparedImage } from './util/image-info.js';
 export { visionCapable } from './ai/vision.js';
 export { runConversation, userMessages, historyVars, turnPairs } from './eval/rag/conversation.js';
+export { PERSONAS, simulationOf, simulatedUser, nextUserMove, SIMULATE_DEFAULT_TURNS, SIMULATE_MAX_TURNS, type SimulationSpec, type SimulationOutcome, type SimulationEnd } from './eval/rag/simulate.js';
 export { conversationInput } from './eval/rag/conversation-input.js';
 export { traceOf, type TraceStep } from './eval/rag/agent-trace.js';
 export { parseCondition, routeProblems, hasRoute } from './eval/rag/route.js';

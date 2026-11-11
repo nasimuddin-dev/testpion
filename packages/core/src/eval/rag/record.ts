@@ -24,6 +24,8 @@ export interface RagRecord {
   images?: string[];
   /** A conversation: the user messages to send (a transcript to replay), or after a run the whole transcript with the system's answers. */
   turns?: ConversationTurn[];
+  /** After a run with a simulated user (simulate.ts): who it was, what it wanted and how the conversation ended. */
+  simulated?: import('./simulate.js').SimulationOutcome;
   /** The topics a conversation may stay on (topic adherence). */
   referenceTopics?: string[];
   /** What the user wanted to achieve, in words (goal accuracy with a reference). */

@@ -345,6 +345,38 @@ transcript: `knowledge-retention` (does it ask again for what the user said?), `
 question, answer and chunks and reports the mean (or `aggregate: min`) and each turn. Ragas multi-turn samples import as conversation
 records and export back (`reference` is the goal, `expected_outcome`; `reference_tool_calls` and `reference_topics` are kept).
 
+#### Simulated users {#simulated-users}
+
+A scripted conversation cannot follow a system that answers differently from what the script expected. A **simulated user** can:
+a model plays the user, with a way of talking (the persona) and something it wants (the goal), and talks to your system until it
+has what it wanted, it gives up, or the turn limit is reached.
+
+A dataset record asks for it with these columns (no `turns`: a record with scripted turns is always replayed):
+
+| Column | What it is |
+|---|---|
+| `persona` | A built-in persona (`plain`, `terse`, `confused`, `impatient`, `wandering`, `changing`) or your own description of the user in words. |
+| `goal` | What the user wants, in words (`expected_outcome` is the same column). Needed. |
+| `question` | Optional: the opening message. Left out, the model writes it. |
+| `max_turns` | The most user messages (default 6, at most 30). |
+| `simulate` | `true` asks for a simulated user without naming a persona (the plain one). |
+
+```json
+{"id": "booking-terse", "persona": "terse", "goal": "Book a visit for a dog on Tuesday morning"}
+{"id": "booking-confused", "persona": "confused", "goal": "Book a visit for a dog on Tuesday morning"}
+```
+
+The same goal with several personas shows how robust the system is: one line per persona. `testpion rag personas --json` lists the
+personas and the columns.
+
+The simulated user runs on **the judge of the evaluation** (the AI task `simulate-user`): the same redaction, usage ledger, caps and
+judge budget (`--max-cost`, `maxCalls`) apply, and there is no fallback: without a usable model the sample fails with what to set up.
+Its messages are not cached, so two runs are two different conversations; use *Ask the same question again* (`--repeat-target`) to
+see the spread. The result keeps the transcript and how it ended (`metadata.rag.record.simulated`: `ended` is `goal-met`, `gave-up`
+or `turn-limit`, with the user's own reason), and the sample's drill-down says so above the conversation. That ending is the
+simulated user's own opinion: score the conversation with `goal-accuracy` (it reads the same goal), `user-friction`,
+`knowledge-retention` and the other conversation metrics, which are judged separately.
+
 #### Agents and tool calls {#r3-agents}
 
 Map the tool calls the system made in the Connect dialog (**The list of tool calls**, then each call's **name** and **arguments**;
