@@ -293,6 +293,7 @@ export function registerRagEvalCommands(rag: Command): void {
     .option('--junit <file>', 'write the JUnit report here')
     .option('--html <file>', 'write the HTML report here')
     .option('--report-json <file>', 'write the JSON report here')
+    .option('--sarif <file>', 'write the failed checks as SARIF 2.1.0 here (code scanning), safety checks with their OWASP LLM Top 10 category')
     .option('--markdown <file>', 'write the metrics table as Markdown here (a pull-request comment)')
     .option('-o, --out <dir>', 'output directory of the run')
     .option('-q, --quiet', 'only the summary')
@@ -488,6 +489,7 @@ interface RunFlags {
   maxRegression: string;
   junit?: string;
   html?: string;
+  sarif?: string;
   reportJson?: string;
   markdown?: string;
   out?: string;
@@ -555,7 +557,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         await ctx.dispose();
       }
     }
-    const reports: ReportFormat[] = [...new Set<ReportFormat>(['json', 'markdown', ...(o.junit ? (['junit'] as const) : []), ...(o.html ? (['html'] as const) : [])])];
+    const reports: ReportFormat[] = [...new Set<ReportFormat>(['json', 'markdown', ...(o.junit ? (['junit'] as const) : []), ...(o.html ? (['html'] as const) : []), ...(o.sarif ? (['sarif'] as const) : [])])];
     const out = await config(() =>
       runRagEvaluation({
         store,
@@ -576,7 +578,7 @@ async function runCommand(ref: string, o: RunFlags): Promise<number> {
         },
       }),
     );
-    for (const [file, report] of [[o.junit, out.reports.junit], [o.html, out.reports.html], [o.reportJson, out.reports.json], [o.markdown, out.reports.markdown]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
+    for (const [file, report] of [[o.junit, out.reports.junit], [o.html, out.reports.html], [o.reportJson, out.reports.json], [o.markdown, out.reports.markdown], [o.sarif, out.reports.sarif]] as const) if (file && report && resolve(file) !== resolve(report)) copyFileSync(report, resolve(file));
     const matrix = await buildMetricMatrix(runResults(store, out.runId), { runId: out.runId, limit: 1 });
     const gateResults = checkGates(matrix, gates);
     const baselineFile = o.baselineResults && existsSync(resolve(o.baselineResults)) ? resolve(o.baselineResults) : undefined;

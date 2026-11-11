@@ -1,6 +1,6 @@
 # Draft an evaluation with AI {#top}
 
-Choosing what to measure is the hard part of testing a RAG system: which of the 138 [metrics](./rag-metrics.md), with which pass
+Choosing what to measure is the hard part of testing a RAG system: which of the 139 [metrics](./rag-metrics.md), with which pass
 marks, judged by which model, on how many questions, and what should fail a build. **Draft an evaluation with AI** reads your RAG
 target and your dataset, proposes a complete evaluation, **drops what cannot run on your data**, dry-runs the rest on a few samples
 without sending anything to a judge, and offers it for review. Nothing is saved until you accept. Running an evaluation is
@@ -10,7 +10,7 @@ without sending anything to a judge, and offers it for review. Nothing is saved 
 
 **Evaluations**, type **Bot with sources**, with a bot chosen under **My bot**: below the target, **What do you want to find out?** (optional: "answers come
 from the handbook and never invent a dose") and a file of **Test cases** from the workspace's `datasets/` folder. Beside the button TestPion says
-how many metrics your data can support ("52 of 138 metrics can run on clinic.jsonl (200 records)"): the others lack an input such as
+how many metrics your data can support ("52 of 139 metrics can run on clinic.jsonl (200 records)"): the others lack an input such as
 gold chunk ids or a reference answer, and their names and what they miss are in its tooltip.
 
 Press **Draft an evaluation with AI**. Hovering it shows the model, the estimate and what stays on this computer; **What will be

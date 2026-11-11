@@ -730,7 +730,7 @@ export function runOptions(cmd: Command): Command {
     .option('-c, --concurrency <n>', 'parallel workers')
     .option('--retries <n>', 'retries per failing test')
     .option('--timeout <ms>', 'per-test timeout in ms')
-    .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown').default(['console', 'junit', 'json', 'html', 'markdown']))
+    .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown, and sarif (report.sarif for code scanning: every failed check, safety checks with their OWASP LLM Top 10 category; not written unless named)').default(['console', 'junit', 'json', 'html', 'markdown']))
     .option('-o, --out <dir>', 'output directory for results and reports')
     .option('-t, --tags <tags>', 'only run tests with these tags (comma separated)')
     .option('-g, --grep <pattern>', 'only run tests whose name/id matches')

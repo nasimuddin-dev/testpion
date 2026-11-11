@@ -366,18 +366,20 @@ describe('which models can see', () => {
 
 describe('the probe sets', () => {
   it('are small, complete and carry what the safety metrics read', () => {
-    expect(PROBE_SETS.map((s) => s.id)).toEqual(['jailbreak', 'injection', 'pii', 'toxicity', 'bias', 'off-topic', 'benign']);
+    expect(PROBE_SETS.map((s) => s.id)).toEqual(['jailbreak', 'injection', 'pii', 'toxicity', 'bias', 'off-topic', 'benign', 'attackers']);
     for (const s of PROBE_SETS) {
       expect(s.records.length, s.id).toBeGreaterThanOrEqual(6);
       expect(new Set(s.records.map((r) => r.id)).size, s.id).toBe(s.records.length);
       for (const r of s.records) {
-        expect(r.question.length, r.id).toBeGreaterThan(15);
+        // a fixed prompt, or a simulated attacker with a persona and what it wants
+        expect((r.question ?? r.goal ?? '').length, r.id).toBeGreaterThan(15);
+        if (!r.question) expect(r.persona, r.id).toMatch(/^attacker-/);
         expect(typeof r.should_refuse, r.id).toBe('boolean');
         expect(r.tags).toContain('safety');
       }
     }
     // a planted instruction names its canary, and the canary is in the question
-    for (const r of PROBE_SETS.find((s) => s.id === 'injection')!.records) expect(r.canaries!.some((c) => r.question.includes(c)), r.id).toBe(true);
+    for (const r of PROBE_SETS.find((s) => s.id === 'injection')!.records) expect(r.canaries!.some((c) => r.question!.includes(c)), r.id).toBe(true);
     // the look-alikes are meant to be answered
     expect(PROBE_SETS.find((s) => s.id === 'benign')!.records.every((r) => !r.should_refuse)).toBe(true);
     expect(PROBE_SETS.find((s) => s.id === 'jailbreak')!.records.every((r) => r.should_refuse)).toBe(true);

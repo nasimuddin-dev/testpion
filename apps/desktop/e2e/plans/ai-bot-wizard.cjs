@@ -1,6 +1,6 @@
 // AU-20 · The wizard for a bot with sources: the Start page's "Answers come from my documents" card opens three steps (which bot, your
 // questions, what should be true). With no bot it says so and offers Connect; with one it is chosen. The checks step shows two goals
-// instead of the 138 metrics, the standard set of 5 as a preset line, and More checks opens the full picker. Run asks for the cost
+// instead of the 139 metrics, the standard set of 5 as a preset line, and More checks opens the full picker. Run asks for the cost
 // first (a judged check), runs on the local demo RAG system with a mock AI reviewer, and saves the SAME type rag evaluation.
 // Offline: the mock provider and a local server only; no key is used.
 // Part of the end-to-end UI regression suite (see e2e/run-e2e.mjs and .claude/skills/ui-regression).

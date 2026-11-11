@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Red teaming
+
+- **Attackers that adapt.** A simulated user with an attacker persona (step by step, behind a story, claiming authority) keeps trying for several turns; the new check `attack-resisted` fails when it gets what it wanted or a canary shows up in any answer. `testpion rag probes add attackers` writes six such records.
+- **Instructions planted in tool results.** `testpion mock mcp <file> --inject` adds a planted instruction to every tool result of an MCP mock, to test whether an agent obeys text its tools return.
+- **SARIF report with OWASP categories.** `-r sarif` (and `rag run --sarif <file>`) writes the failed checks for code-scanning views; safety checks carry their category of the OWASP Top 10 for LLM applications (2025), and the report says how many tests covered each of the ten.
+
 ### Check an MCP server
 
 - `testpion mcp --check` checks a server as a whole: the protocol where a client can see it, how easy its tools are for an agent, and **what changed since you approved it**. `--approve` keeps what it offers now in `mcp-snapshots/` (a file of the workspace, so it travels with git). A changed description is shown with the old and the new words; a removed tool or a parameter that became required is marked as breaking. Server info in the app shows the same, with **Approve**.

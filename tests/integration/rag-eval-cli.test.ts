@@ -61,7 +61,7 @@ afterAll(async () => {
 describe('rag metrics, presets, metric', () => {
   it('metrics prints the catalogue as JSON and as groups for people; a Ragas name finds its metric', async () => {
     const all = cliData<{ count: number; metrics: Array<{ id: string; kind: string }> }>((await cli(['rag', 'metrics', '--json'])).out);
-    expect(all.count).toBe(138);
+    expect(all.count).toBe(139);
     expect(all.metrics.find((m) => m.id === 'faithfulness')).toMatchObject({ kind: 'judged' });
     const free = cliData<{ count: number }>((await cli(['rag', 'metrics', '--kind', 'deterministic', '--json'])).out);
     expect(free.count).toBe(55);

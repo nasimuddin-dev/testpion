@@ -123,7 +123,7 @@ export function registerRunCommands(program: Command): void {
     .addOption(new Option('--timeout-request <ms>', 'same as --timeout (Newman)').hideHelp())
     .addOption(new Option('--reporters <formats...>', 'same as --reporter (Newman)').hideHelp())
     .option('--reporter-junit-export <file>', 'also write the JUnit report to this file')
-    .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown').default(['console', 'junit', 'json', 'html', 'markdown']))
+    .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown, and sarif (report.sarif for code scanning: every failed check, safety checks with their OWASP LLM Top 10 category; not written unless named)').default(['console', 'junit', 'json', 'html', 'markdown']))
     .option('-o, --out <dir>', 'output directory for results and reports')
     .option('--var <key=value>', 'runtime variable (repeatable)', collectVar)
     .option('--baseline <name>', 'compare results against a saved baseline')

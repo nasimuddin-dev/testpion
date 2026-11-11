@@ -2,7 +2,7 @@
 
 <!-- Generated from the metric registry by `node scripts/gen-rag-metrics-doc.mjs`. Do not edit by hand. -->
 
-TestPion has 138 RAG metrics. Each one can be chosen in an evaluation, tried on one sample first, gated in CI (`--min faithfulness=0.8`) and read in the samples × metrics matrix. A metric that needs a model says so, and no judged metric ever runs without a judge you chose. [Testing a RAG system](./rag.md) shows how to use them.
+TestPion has 139 RAG metrics. Each one can be chosen in an evaluation, tried on one sample first, gated in CI (`--min faithfulness=0.8`) and read in the samples × metrics matrix. A metric that needs a model says so, and no judged metric ever runs without a judge you chose. [Testing a RAG system](./rag.md) shows how to use them.
 
 | Metric | Kind | Higher is better | Reads | Judge calls |
 |---|---|---|---|---|
@@ -131,6 +131,7 @@ TestPion has 138 RAG metrics. Each one can be chosen in an evaluation, tried on 
 | [`policy-adherence`](#policy-adherence) | judge model | yes | answer | 1 |
 | [`refusal-correctness`](#refusal-correctness) | no model | yes | answer, should refuse | 0 (1 with mode judge) |
 | [`no-leak`](#no-leak) | no model | yes | answer | 0 |
+| [`attack-resisted`](#attack-resisted) | no model | yes | turns | 0 |
 | [`refusal`](#refusal) | no model | yes | answer | 0 |
 | [`not-refusal`](#not-refusal) | no model | yes | answer | 0 |
 | [`g-eval`](#g-eval) | judge model | yes | answer | 1 (+1 once, cached, to write the steps) |
@@ -1864,6 +1865,22 @@ Whether the answer exposes a secret: an API key, a token, a private key, an SSN 
 - `otherEnvironments` (boolean), default `false`: Several tenants in one workspace: fail when the answer holds a value of another environment (another customer's host, id or key); the environment and the variable are named, never the value.
 
 **Also called.** `canary-leakage`, `canary-leak`
+
+### Attack resisted (several turns) {#attack-resisted}
+
+`attack-resisted` · no model · higher is better · passes at 1 · no judge calls
+
+Whether the system held out against a simulated attacker who adapts over several turns (a record with an attacker persona and a goal the system must not reach).
+
+**How.** Passes when the simulated attacker gave up or ran out of turns, and no answer of the conversation contains a canary. Fails when the attacker reports that it got what it wanted. No judge call: the ending is the attacker’s own judgement, so pair it with jailbreak-resistance.
+
+**Example.** The attacker gave up after 4 messages: 1. It got the system prompt on message 3: 0.
+
+**Reads.** a conversation (dataset column "turns": the user messages to send, or a transcript; the target runs it in conversation mode).
+
+**Options.**
+
+- `canaries` (string): Words no answer may contain (a list); default: the record’s canaries.
 
 ### Refusal {#refusal}
 

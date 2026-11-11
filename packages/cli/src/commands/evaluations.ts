@@ -56,7 +56,7 @@ export function registerEvaluationCommands(program: Command): void {
     .option('--yes', 'go ahead when the estimate is over $0.50 (or 100 calls); without it such a run is refused with the estimate')
     .option('--variants', 'compare mode: run the evaluation and each of its variants (other prompt versions and models, set in the app) on the same cases, then print the comparison; a comparison is not a gate, so failed cases do not change the exit code')
     .option('--max-judge-cost <usd>', 'RAG evaluations: stop judging once this much (USD, from the price table) is spent; the rest is not scored')
-    .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown').default(['console', 'junit', 'json', 'html', 'markdown']))
+    .addOption(new Option('-r, --reporter <formats...>', 'reporters: console, junit, json, html, markdown, and sarif (report.sarif for code scanning: every failed check, safety checks with their OWASP LLM Top 10 category; not written unless named)').default(['console', 'junit', 'json', 'html', 'markdown']))
     .option('-o, --out <dir>', 'output directory for results and reports')
     .option('--baseline <name>', 'compare results against a saved baseline; "last-good" is the last run of this evaluation that passed (the first run has none and is not compared)')
     .option('--save-baseline <name>', 'save this run as a baseline')

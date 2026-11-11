@@ -262,6 +262,7 @@ export * from './runner/ci-config.js';
 export * from './runner/env-request-compare.js';
 
 export * from './report/reports.js';
+export * from './report/sarif.js';
 export * from './report/response-diff.js';
 export * from './report/response-stats.js';
 export * from './report/collection-html.js';

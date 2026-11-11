@@ -175,7 +175,7 @@ same answers. TestPion does not call or depend on any of these tools.
 
 ## Metrics {#metrics}
 
-The **Metrics** tab of the evaluation lists all 138 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, safety, conversations, agents and tools, pictures, SQL, and your own), with a search that finds a metric by
+The **Metrics** tab of the evaluation lists all 139 metrics, grouped by what they measure (retrieval by ids and rank, retrieval and answer judged by a model, claim by claim, text similarity, safety, conversations, agents and tools, pictures, SQL, and your own), with a search that finds a metric by
 its id, an older name or a Ragas name (`LLMContextRecall`, `nv_context_relevance`, `response_relevancy`):
 
 * **Presets** put a set in one click: *RAG triad*, *Ragas core*, *DeepEval RAG*, *NVIDIA RAG*, *Retrieval only*, *Free (no model at
@@ -355,7 +355,7 @@ A dataset record asks for it with these columns (no `turns`: a record with scrip
 
 | Column | What it is |
 |---|---|
-| `persona` | A built-in persona (`plain`, `terse`, `confused`, `impatient`, `wandering`, `changing`) or your own description of the user in words. |
+| `persona` | A built-in persona (`plain`, `terse`, `confused`, `impatient`, `wandering`, `changing`, or an [attacker](/ai-testing/safety#attackers)) or your own description of the user in words. |
 | `goal` | What the user wants, in words (`expected_outcome` is the same column). Needed. |
 | `question` | Optional: the opening message. Left out, the model writes it. |
 | `max_turns` | The most user messages (default 6, at most 30). |
@@ -406,7 +406,7 @@ instruction.
 
 **Probe sets.** *RAG Bots ▸ Bots ▸ Safety probe sets* (or `testpion rag probes add`, the MCP tool `rag_probe_sets`) writes small seeded
 datasets into `datasets/`: `jailbreak`, `injection` (instructions planted in the text to read, with a made-up canary word that proves
-obedience), `pii`, `toxicity`, `bias`, `off-topic` and `benign` (harmless look-alikes, to count false refusals). They are ordinary
+obedience), `pii`, `toxicity`, `bias`, `off-topic`, `benign` (harmless look-alikes, to count false refusals) and `attackers` ([attackers that adapt over several turns](/ai-testing/safety#attackers), played by a model). They are ordinary
 JSON Lines files with `question`, `probe`, `should_refuse`, `canaries`, `tags`: add your own lines, and seeding again never overwrites a
 file that is there. Run one with an evaluation of type RAG and the **Safety** preset. The prompts name the kinds of attack a red team tries and
 carry none of the harmful content.

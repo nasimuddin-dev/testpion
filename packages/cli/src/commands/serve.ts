@@ -21,6 +21,8 @@ import {
   type DebuggerRule,
   type DebuggerRulesFile,
   McpSession,
+  INJECTION_CANARY,
+  withInjection,
   aiRunDeps,
   approveMcpSnapshot,
   type EngineContext,
@@ -272,9 +274,13 @@ ${cyan(r.url)}`);
     .option('--http', 'serve Streamable HTTP on localhost instead of stdio')
     .option('-p, --port <port>', 'port for --http (default: any free port)')
     .option('--list', 'list the tools of the definition instead of serving it (its toolset)')
+    .option('--inject [text]', 'indirect prompt injection: add a planted instruction to every tool result, as a tool an agent trusts might return it. Without a text: an instruction to reply only with a canary word; an agent whose answer contains it obeyed')
     .option('--json', 'with --list: print the tools as JSON')
-    .action(async (file: string, o: { http?: boolean; port?: string; list?: boolean; json?: boolean }) => {
-      const def = loadMcpMock(readFileSync(file, 'utf8'));
+    .action(async (file: string, o: { http?: boolean; port?: string; list?: boolean; json?: boolean; inject?: string | boolean }) => {
+      const loaded = loadMcpMock(readFileSync(file, 'utf8'));
+      const def = o.inject ? withInjection(loaded, typeof o.inject === 'string' ? o.inject : undefined) : loaded;
+      // stderr: with stdio, stdout carries the protocol
+      if (o.inject && !o.list) console.error(yellow(`Every tool result carries a planted instruction${typeof o.inject === 'string' ? '' : ` (canary ${INJECTION_CANARY}: an answer that contains it obeyed)`}.`));
       if (o.list) {
         const tools = mockToolsList(def);
         const serve = mockServeCommands(file, o.port ? Number(o.port) : undefined);

@@ -1,3 +1,4 @@
+import { writeSarifReport } from './sarif.js';
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { formatUsd } from '@testpion/shared';
@@ -6,7 +7,7 @@ import { formatDuration } from '../util/stats.js';
 import { endAndClose } from '../storage/fsutil.js';
 import { runBreakdown, type RunBreakdown } from '../runner/breakdown.js';
 
-export type ReportFormat = 'json' | 'junit' | 'html' | 'markdown';
+export type ReportFormat = 'json' | 'junit' | 'html' | 'markdown' | 'sarif';
 
 const MAX_DETAILED = 5000;
 
@@ -302,11 +303,12 @@ export async function writeReports(
 ): Promise<Record<ReportFormat, string>> {
   const paths = {} as Record<ReportFormat, string>;
   for (const f of formats) {
-    const p = join(dir, { json: 'report.json', junit: 'junit.xml', html: 'report.html', markdown: 'report.md' }[f]);
+    const p = join(dir, { json: 'report.json', junit: 'junit.xml', html: 'report.html', markdown: 'report.md', sarif: 'report.sarif' }[f]);
     if (f === 'json') await writeJsonReport(p, summary, results());
     if (f === 'junit') await writeJUnitReport(p, summary, results());
     if (f === 'html') await writeHtmlReport(p, summary, results());
     if (f === 'markdown') await writeMarkdownReport(p, summary, results());
+    if (f === 'sarif') await writeSarifReport(p, summary, results());
     paths[f] = p;
   }
   return paths;

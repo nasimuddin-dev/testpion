@@ -48,7 +48,7 @@ const READS = new Set([
   'trash list', 'doctor', 'diagnostics', 'agent-info', 'open', 'monitor list', 'monitor status', 'monitor results', 'monitor requests', 'monitor uptime', 'secrets',
   'history list', 'history stats', 'history activity', 'history scores', 'history flaky', 'history results', 'history test', 'history mcp-tools', 'history llm', 'history diff',
   'generate gaps', 'flows', 'flow', 'flow runs', 'flow report', 'ai tasks', 'ai proposals', 'ai usage', 'kinds', 'bundle inspect',
-  'rag metrics', 'rag presets', 'rag metric show', 'rag metric list', 'rag metric validate', 'rag compare', 'rag matrix', 'rag label list', 'rag trend', 'rag probes list', 'rag targets',
+  'rag metrics', 'rag presets', 'rag metric show', 'rag metric list', 'rag metric validate', 'rag compare', 'rag matrix', 'rag label list', 'rag trend', 'rag probes list', 'rag personas', 'rag targets',
   'item comment list', 'item comment open', 'item owners', 'settings get', 'lint collection', 'lint tests', 'lint openapi', 'openapi diff', 'openapi ops', 'openapi coverage',
   'debug show', 'debug exchanges', 'debug snippet', 'debug programs', 'debug diff', 'debug open', 'debug gateway',
 ]);

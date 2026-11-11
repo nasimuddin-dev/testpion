@@ -46,7 +46,7 @@ const STEPS = [
   { id: 'checks', title: 'What should be true?' },
 ] as const;
 
-/** The two goals people have for a bot with sources, each the one to three metrics that decide it (the 138 are under More checks). */
+/** The two goals people have for a bot with sources, each the one to three metrics that decide it (the 139 are under More checks). */
 const GOALS = [
   {
     id: 'sources',
@@ -70,7 +70,7 @@ const EXTRAS: CheckConfig[] = RAG_STARTER_EVALUATORS.filter((e) => !GOALS.some((
 /**
  * The wizard for a bot with sources (AU-20): three steps, one screen each. 1 Which bot (choose a connected one, or connect one
  * with a preset), 2 Your questions (the case table of records: type, load, generate from documents, capture from real calls,
- * import), 3 What should be true (two goals instead of 138 metrics, the standard set of 5 checks as a preset, More checks for the
+ * import), 3 What should be true (two goals instead of 139 metrics, the standard set of 5 checks as a preset, More checks for the
  * full picker; the cost under it). It saves the SAME evaluation of type rag as the full editor: no new file format.
  */
 export function BotWizard({

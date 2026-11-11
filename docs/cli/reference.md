@@ -104,7 +104,7 @@ testpion eval diff <run> <case>   A case's answer against the run before it
 testpion eval variants <name>   Compare the versions of an evaluation (eval run <name> --variants runs them)
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
-testpion rag targets|probe|connect|metrics|metric|probes|presets|run|rescore|compare|cache|import|export   RAG systems under test: connect, probe, the 138 metrics, your own metrics, run with gates, re-score, compare, convert datasets
+testpion rag targets|probe|connect|metrics|metric|probes|presets|run|rescore|compare|cache|import|export   RAG systems under test: connect, probe, the 139 metrics, your own metrics, run with gates, re-score, compare, convert datasets
 testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule) for coding agents
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
@@ -152,6 +152,8 @@ testpion git conflicts [file] [--resolve ours|theirs] -w   After a pull that sto
 testpion git resolve <file> --ours|--theirs|--pick <key=ours|theirs…>|--edit <key=value…> -w   Settle a conflicted file: a side for everything, a side per conflict key, or your own value (--edit item:r1#request.url='"https://…"' takes JSON for an item or field key, --edit hunk:0='the lines to keep' plain text for a hunk key)
 testpion diff <from> [to] -w  What changed between two commits, by meaning (--markdown for a pull-request comment)
 testpion mcp [--url|--sse|--server <name> -w] [--call <tool> --args <json>] [--json]   Inspect an MCP server (a saved one with --server), or call one of its tools
+testpion mock mcp <file> [--http] --inject [text]   Serve an MCP mock with an instruction planted in every tool result (indirect prompt injection); without a text, one that asks for the canary QUOKKA-7741
+testpion test|run|run-collection … -r sarif   ·   testpion rag run … --sarif <file>   Failed checks as SARIF 2.1.0 for code scanning, safety checks with their OWASP LLM Top 10 (2025) category
 testpion mcp --server <name> --check | --approve [--probe-arguments] [--json]   Check a server as a whole: the protocol, how easy it is for an agent, and what changed since --approve kept its tools (mcp-snapshots/); exit 1 on an error or a change to review
 testpion mcp --server <name> --selection-cases | --select --models <provider/model,…> [--cases <file>] [--min 0.9] [--json]   Does each model pick the right tool: write the cases with AI, then ask every model (no tool is called)
 testpion ws <url> [-m msg] [-e event=json]    Talk to a WebSocket or Socket.IO server and print the replies

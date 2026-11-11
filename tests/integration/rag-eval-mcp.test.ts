@@ -64,7 +64,7 @@ afterAll(async () => {
 describe('RAG metric tools over MCP', () => {
   it('rag_metrics lists the catalogue and the presets; a Ragas name finds its metric', async () => {
     const all = (await call<{ count: number; metrics: Array<{ id: string; kind: string }>; presets: Array<{ id: string }> }>('rag_metrics', {})).data;
-    expect(all.count).toBe(138);
+    expect(all.count).toBe(139);
     expect(all.presets.map((p) => p.id)).toContain('ragas-core');
     expect((await call<{ metrics: Array<{ id: string }> }>('rag_metrics', { search: 'response_relevancy' })).data.metrics.map((m) => m.id)).toContain('answer-relevance');
     expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(55);
