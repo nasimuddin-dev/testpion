@@ -256,6 +256,8 @@ export interface RpcParamTypes {
   'lib.save': RpcCommonParams & { kind: string; library: Record<string, unknown> };
   'load.start': RpcCommonParams & { config: Record<string, unknown>; collection?: Record<string, unknown> };
   'load.thresholds': RpcCommonParams & { rules: string[]; snapshot: Record<string, unknown> };
+  'mcp.approve': RpcCommonParams & { serverId: string };
+  'mcp.check': RpcCommonParams & { serverId: string };
   'mcp.deleteServer': RpcCommonParams & { serverId: string };
   'mcp.mock.call': RpcCommonParams & { definition: Record<string, unknown>; tool: string; args?: Record<string, unknown> };
   'mcp.mock.parse': RpcCommonParams & { text: string };
@@ -440,4 +442,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 423;
+export const RPC_METHOD_COUNT = 425;
