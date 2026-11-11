@@ -35,6 +35,11 @@ describe('cron in a time zone', () => {
     // the clocks go back (New York 2026-11-01): 01:30 runs once, the first one
     expect(at('30 1 * * *', '2026-11-01T00:00:00Z', 'America/New_York')).toBe('2026-11-01T05:30');
     expect(at('30 1 * * *', '2026-11-01T05:30:00Z', 'America/New_York')).toBe('2026-11-02T06:30');
+    // a schedule for every hour keeps its pace through the repeated hour (no hour without a run)
+    expect(at('*/15 * * * *', '2026-11-01T05:45:00Z', 'America/New_York')).toBe('2026-11-01T06:00');
+    expect(at('*/15 * * * *', '2026-11-01T06:20:00Z', 'America/New_York')).toBe('2026-11-01T06:30');
+    expect(at('*/15 * * * *', '2026-11-01T06:45:00Z', 'America/New_York')).toBe('2026-11-01T07:00');
+    expect(at('*/15 * * * *', '2026-11-01T05:10:00Z', 'America/New_York')).toBe('2026-11-01T05:15');
   });
 
   it('says what is not a zone, and is quick', () => {

@@ -22,3 +22,13 @@ describe('local cron across the clocks going forward', () => {
     expect(at('America/New_York', '0 9 * * 1-5', '2026-11-06T12:00:00Z')).toBe('2026-11-06T14:00');
   });
 });
+
+describe('local cron across the clocks going back', () => {
+  it('a schedule at set hours runs once (the first time); one for every hour keeps its pace', () => {
+    // New York 2026-11-01: 01:30 comes twice (05:30Z and 06:30Z)
+    expect(at('America/New_York', '30 1 * * *', '2026-11-01T00:00:00Z')).toBe('2026-11-01T05:30');
+    expect(at('America/New_York', '30 1 * * *', '2026-11-01T05:30:00Z')).toBe('2026-11-02T06:30');
+    expect(at('America/New_York', '*/15 * * * *', '2026-11-01T05:45:00Z')).toBe('2026-11-01T06:00');
+    expect(at('America/New_York', '*/15 * * * *', '2026-11-01T06:45:00Z')).toBe('2026-11-01T07:00');
+  });
+});

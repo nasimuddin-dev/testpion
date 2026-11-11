@@ -5,6 +5,8 @@
 ### GraphQL persisted queries
 
 - **APQ** on a GraphQL request (and `persistedQueries: true` in a test) sends it as an automatic persisted query (Apollo's APQ): the hash first, the query once the server asks; the response says hit, registered or unsupported.
+- A server that refuses a request without a query (it never heard of APQ) gets the query as usual, and the response says unsupported.
+- A cron schedule at set hours ("30 1 * * *") runs once on the night the clocks go back, with or without a time zone; one for every hour ("*/15 * * * *") keeps its pace through the repeated hour.
 
 ### gRPC-Web
 

@@ -105,6 +105,13 @@ export function nextCronTime(expression: string | CronSchedule, after: Date | nu
     for (let m = 0; m < wall; m++) if (s.hours.has(Math.floor(m / 60)) && s.minutes.has(m % 60)) return true;
     return false;
   };
+  // the clocks went back: a schedule at set hours ("30 1 * * *") runs once, the first time; one for every hour keeps its pace
+  const fixedHours = s.hours.size !== 24;
+  const repeated = (x: Date) =>
+    [30, 60].some((k) => {
+      const e = new Date(x.getTime() - k * 60_000);
+      return e.getHours() === x.getHours() && e.getMinutes() === x.getMinutes();
+    });
   const limit = d.getTime() + 5 * 366 * 86_400_000;
   while (d.getTime() <= limit) {
     if (!s.months.has(d.getMonth() + 1)) {
@@ -132,7 +139,7 @@ export function nextCronTime(expression: string | CronSchedule, after: Date | nu
       d = next;
       continue;
     }
-    if (d.getTime() > from) return d;
+    if (d.getTime() > from && !(fixedHours && repeated(d))) return d;
     const next = new Date(d.getTime() + 60_000);
     if (skippedRuns(d, next)) return next;
     d = next;
@@ -228,7 +235,7 @@ function instantOfWall(timeZone: string, w: Pick<Wall, 'y' | 'mo' | 'd' | 'h' | 
 /**
  * nextCronTime in a time zone. It walks the zone's wall calendar (day by day, the schedule's hours and minutes in
  * order) and turns each wall time into its instant: a time the clocks skip runs when they jump, a time they repeat
- * runs once (the first), as cron does.
+ * runs once (the first) when the schedule names its hours and both times when it is for every hour, as cron does.
  */
 function nextCronTimeIn(s: CronSchedule, from: number, timeZone: string): Date | undefined {
   const start = wallIn(timeZone, from);
@@ -236,6 +243,7 @@ function nextCronTimeIn(s: CronSchedule, from: number, timeZone: string): Date |
   const minutes = [...s.minutes].sort((a, b) => a - b);
   // a wall time before `from`'s cannot be after it: a time the clocks repeat counts at its first, earlier, occurrence
   const earliest = wallMinutes(start);
+  const everyHour = s.hours.size === 24;
   for (let day = 0; day < 5 * 366; day++) {
     const date = new Date(Date.UTC(start.y, start.mo - 1, start.d - 1 + day));
     const y = date.getUTCFullYear();
@@ -247,11 +255,22 @@ function nextCronTimeIn(s: CronSchedule, from: number, timeZone: string): Date |
     if (!(s.either ? dom || dow : dom && dow)) continue;
     for (const h of hours) {
       if (wallMinutes({ y, mo, d, h, mi: 59 }) < earliest) continue;
-      for (const mi of minutes) {
-        if (wallMinutes({ y, mo, d, h, mi }) < earliest) continue;
-        const t = instantOfWall(timeZone, { y, mo, d, h, mi });
-        if (t > from) return new Date(t);
+      if (!everyHour) {
+        for (const mi of minutes) {
+          if (wallMinutes({ y, mo, d, h, mi }) < earliest) continue;
+          const t = instantOfWall(timeZone, { y, mo, d, h, mi });
+          if (t > from) return new Date(t);
+        }
+        continue;
       }
+      // every hour: the hour the clocks repeat runs both times (its second pass comes after the whole first one)
+      let best: number | undefined;
+      for (const mi of minutes) {
+        const want = wallMinutes({ y, mo, d, h, mi });
+        const t = instantOfWall(timeZone, { y, mo, d, h, mi });
+        for (const c of [t, t + 1_800_000, t + 3_600_000]) if (c > from && (best === undefined || c < best) && (c === t || wallMinutes(wallIn(timeZone, c)) === want)) best = c;
+      }
+      if (best !== undefined) return new Date(best);
     }
   }
   return undefined;

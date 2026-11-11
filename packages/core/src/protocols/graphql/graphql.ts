@@ -25,6 +25,12 @@ const apqError = (json: unknown, code: 'PERSISTED_QUERY_NOT_FOUND' | 'PERSISTED_
     (e) => e?.extensions?.code === code || e?.message === (code === 'PERSISTED_QUERY_NOT_FOUND' ? 'PersistedQueryNotFound' : 'PersistedQueryNotSupported'),
   );
 
+/** An answer with errors and no `data`: the request was refused before it ran (GraphQL's request errors). */
+const notRun = (json: unknown) => {
+  const j = json as { data?: unknown; errors?: unknown } | undefined;
+  return !!j && typeof j === 'object' && Array.isArray(j.errors) && j.errors.length > 0 && j.data === undefined;
+};
+
 function toHttp(spec: GraphQLRequestSpec, body: unknown): HttpRequestSpec {
   const headers = [...(spec.headers ?? [])];
   if (!headers.some((h) => h.key.toLowerCase() === 'accept' && h.enabled !== false))
@@ -83,9 +89,13 @@ export async function executeGraphQL(spec: GraphQLRequestSpec, opts: HttpExecOpt
     if (apqError(sent.response.json, 'PERSISTED_QUERY_NOT_FOUND')) {
       sent = await executeHttp(toHttp(spec, { ...body, extensions }), opts);
       persisted = 'registered';
-    } else if (apqError(sent.response.json, 'PERSISTED_QUERY_NOT_SUPPORTED')) {
+    } else if (apqError(sent.response.json, 'PERSISTED_QUERY_NOT_SUPPORTED') || notRun(sent.response.json)) {
+      // the server says it does not do APQ, or refused a request without a query ("Must provide query string"):
+      // nothing ran (an answer without `data` never started), so the query goes as usual
+      const said = apqError(sent.response.json, 'PERSISTED_QUERY_NOT_SUPPORTED');
       sent = await executeHttp(toHttp(spec, body), opts);
-      persisted = 'unsupported';
+      // the same refusal with the query (its own error, a login): APQ was not the reason, so nothing is said about it
+      persisted = said || !notRun(sent.response.json) ? 'unsupported' : undefined;
     }
   }
   const { response, prepared } = sent;

@@ -21,6 +21,10 @@ beforeAll(async () => {
       const reply = (x: unknown) => res.end(JSON.stringify(x));
       if (req.url === '/plain')
         return b.extensions ? reply({ errors: [{ message: 'PersistedQueryNotSupported', extensions: { code: 'PERSISTED_QUERY_NOT_SUPPORTED' } }] }) : reply({ data: { hello: 'plain' } });
+      // a server that never heard of APQ: no query, no answer (graphql-http's "Must provide query string")
+      if (req.url === '/strict') return b.query ? reply({ data: { hello: 'strict' } }) : ((res.statusCode = 400), reply({ errors: [{ message: 'Must provide query string.' }] }));
+      // refuses everything (not signed in): APQ is not the reason
+      if (req.url === '/closed') return reply({ errors: [{ message: 'Not signed in' }] });
       const hash = b.extensions?.persistedQuery?.sha256Hash;
       if (hash && !b.query && !kept.has(hash)) return reply({ errors: [{ message: 'PersistedQueryNotFound', extensions: { code: 'PERSISTED_QUERY_NOT_FOUND' } }] });
       if (hash && b.query) {
@@ -45,6 +49,11 @@ describe('automatic persisted queries', () => {
     expect(second).toMatchObject({ persisted: 'hit', data: { hello: 'world' } });
     expect(bodies.at(-1)!.query).toBeUndefined();
     expect(await executeGraphQL({ endpoint: `${base}/plain`, query, persistedQueries: true })).toMatchObject({ persisted: 'unsupported', data: { hello: 'plain' } });
+    // a server that only refuses the request without a query gets the query as usual
+    expect(await executeGraphQL({ endpoint: `${base}/strict`, query, persistedQueries: true })).toMatchObject({ persisted: 'unsupported', data: { hello: 'strict' } });
+    const closed = await executeGraphQL({ endpoint: `${base}/closed`, query, persistedQueries: true });
+    expect(closed.persisted).toBeUndefined();
+    expect(closed.errors).toEqual([{ message: 'Not signed in' }]);
     // without the option nothing changes: the query, no extensions
     const plain = await executeGraphQL({ endpoint: `${base}/apq`, query });
     expect(plain.persisted).toBeUndefined();
