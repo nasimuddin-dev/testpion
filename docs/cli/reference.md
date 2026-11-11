@@ -105,7 +105,7 @@ testpion eval variants <name>   Compare the versions of an evaluation (eval run 
 testpion eval compare <run> --baseline <run>   Compare an evaluation run with a baseline case by case; exit 1 on regressions (for CI)
 testpion eval matrix <runs...>   Evaluation runs side by side: cases × variants, against a baseline (a page at a time)
 testpion rag targets|probe|connect|metrics|metric|probes|presets|run|rescore|compare|cache|import|export   RAG systems under test: connect, probe, the 139 metrics, your own metrics, run with gates, re-score, compare, convert datasets
-testpion agents init [--targets agents,claude,cursor]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule) for coding agents
+testpion agents init [--targets agents,claude,cursor,skill]   Write or refresh AGENTS.md (and a CLAUDE.md pointer, a Cursor rule, an Agent Skill) for coding agents
 testpion coverage <spec> -w   API coverage: which OpenAPI operations and responses the runs exercised (--min for CI)
 testpion docs <collection>    Write Markdown (or --html) documentation for a collection
 testpion export <collection>  Export a collection as Postman v2.1 (or TestPion JSON)
@@ -661,7 +661,7 @@ Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is T
 
 | Option | |
 |---|---|
-| `--targets <list>` | `agents` (always), `claude`, `cursor`, comma-separated |
+| `--targets <list>` | `agents` (always), `claude`, `cursor`, `skill` (an Agent Skill, `.claude/skills/testpion/SKILL.md`, loaded by an agent only when a task needs TestPion), comma-separated |
 | `--force` | repair broken markers (a begin without its end, two blocks) instead of skipping the file |
 | `--dry-run` | report what would be written, write nothing |
 | `--json` | `{ workspace, root, dryRun, files: [{ target, path, status, reason? }] }`; status is `created`, `updated`, `unchanged` or `skipped` |
@@ -731,6 +731,7 @@ RAG systems under test (the RAG bots rail item ▸ Bots; the guide is [RAG testi
 | `rag rescore <run>` | Score a finished run again with `--metrics`/`--preset`/`--judge`/`--judges`/`--swap`/`--repeat`: its stored answers and contexts are used and the RAG system is not called; a new run is recorded. `--estimate` is exact (the cache hits are counted). `--min`, `--junit`, `--html`. |
 | `rag compare <run> -b <baseline>` | The two runs metric by metric: means, the difference over the samples both scored, a 95% interval (seeded paired bootstrap) and whether it is real. Exit 1 on a regression. `--min-delta`. |
 | `rag probes list|add [sets…]` | The [seeded safety probe sets](../ai-testing/rag.md#r3-safety): list them and which are in the workspace, or write them to `datasets/probes-<set>.jsonl` (a file that exists is kept, so your own lines stay). Run one with `rag run … --preset safety`. |
+| `rag personas` | The built-in personas of a [simulated user](../ai-testing/rag.md#simulated-users) (and the attacker personas of red teaming); `--json`. |
 | `rag cache clear` | Empty the judge cache (verdicts stored by the content hash of the prompt). |
 | `rag import <file>` | A dataset of another tool (Ragas, DeepEval, NVIDIA retriever data, promptfoo tests, BEIR queries with `--qrels` and `--corpus`, or traces of your application exported from OpenTelemetry as OTLP/JSON, with `--only-errors`; JSON, JSONL, CSV, YAML; only data is read) as TestPion records (`question`, `reference`, `reference_contexts`, `reference_ids`, `tags`). `--from ragas\|deepeval\|nvidia\|promptfoo\|beir\|testpion` (default: found by the columns), `-o` writes JSON Lines, `--format json` an array. Notes on what was left out go to stderr. |
 | `rag export <dataset> --to ragas\|deepeval` | A dataset file, or a saved evaluation by name, as Ragas or DeepEval records. `--run <runId>` adds the answer and retrieved contexts each record got in that run, `--names ragas` names the score columns as Ragas does so Ragas can run on the same file. |

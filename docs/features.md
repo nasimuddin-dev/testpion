@@ -103,6 +103,7 @@ See [WebSocket](./api-testing/websocket.md).
 - Elicitation, sampling and roots: answer a server that asks for input (a form from its schema) or for an LLM completion (reviewed before anything is sent), in the inspector and in tests.
 - A protocol trace of every JSON-RPC message, with direction, payloads and latency.
 - **For AI agents** (Server info, or `testpion mcp --lint`): how easy the server's tools are for an agent to use.
+- **Check a server** (Server info, or `testpion mcp --check`): the protocol, the tools, and what changed since you approved it (`--approve` keeps a snapshot in the workspace); `testpion mcp --select` shows which tool each model picks. [Check a server](/mcp/tools#check)
 
 ::: details More in this area (4 more)
 
@@ -155,6 +156,8 @@ See [WebSocket](./api-testing/websocket.md).
 - **Deterministic** evaluators cover exact match, JSON Schema, regex and thresholds.
 - **Heuristic and semantic** evaluators cover similarity and RAG metrics; with a judge, the RAG checks work **claim by claim** (faithfulness, context precision and recall, answer correctness), each verdict with its evidence.
 - **LLM-as-judge** scores are clearly labelled and reproducible.
+- **Simulated users** play a persona with a goal against a bot over several turns; **attacker personas** and the check `attack-resisted` do the same for red teaming, an MCP mock can plant instructions in its tool results (`--inject`), and a SARIF report carries the OWASP LLM Top 10 category of each failed safety check.
+- **Test data from traces**: an OpenTelemetry export of your AI application becomes dataset records (`testpion rag import --from otel`).
 - Also included: agent tool-use checks, safety checks (prompt injection, data leakage, tool misuse), baselines for regression tracking, and **human review**: 👍 / 👎 and a note on any result, kept beside the run and read by agents.
 - **Matrix** compares runs side by side (cases × variants, coloured against a baseline run by regression or improvement); `testpion eval compare <run> --baseline <run>` fails a CI job on regressions.
 
@@ -259,4 +262,4 @@ In git, flow files are compared by meaning like collections: steps added, remove
 
 ## For AI agents and scripts
 
-`testpion mcp-server` serves the workspace to AI agents as MCP tools (`--profile full` compact by default, `minimal` or `verbose`; `search_tools` for the rest and for a tool's complete entry), with one contract for every tool (`confirm: true` before deleting, paged lists, concise results). `testpion agents init` writes AGENTS.md from the live workspace. Every CLI `--json` prints one envelope (`{ schema_version, command, status, data, errors, warnings, metrics }`), with `--jsonl`, `--dry-run` and `--non-interactive`. [MCP server](/ai-testing/mcp-server) · [CLI reference](/cli/reference#json-output-dry-runs-and-scripts)
+`testpion mcp-server` serves the workspace to AI agents as MCP tools (`--profile full` compact by default, `minimal` or `verbose`; `search_tools` for the rest and for a tool's complete entry), with one contract for every tool (`confirm: true` before deleting, paged lists, concise results). `testpion agents init` writes AGENTS.md from the live workspace (`--targets skill`: an Agent Skill); the docs site serves every page as Markdown and all of them as `llms-full.txt`. Every CLI `--json` prints one envelope (`{ schema_version, command, status, data, errors, warnings, metrics }`), with `--jsonl`, `--dry-run` and `--non-interactive`. [MCP server](/ai-testing/mcp-server) · [CLI reference](/cli/reference#json-output-dry-runs-and-scripts)

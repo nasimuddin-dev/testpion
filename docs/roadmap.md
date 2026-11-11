@@ -24,6 +24,7 @@ Everything below is in the app today; the [changelog](/changelog) has the detail
 - **Finding your way:** Quick Open, a Problems list, an Info panel, a terminal in the bottom panel, `testpion://` links, and one menu vocabulary everywhere.
 - **Git:** changes by meaning (flows step by step), Pull & push in one step, conflicts request by request.
 - **AI:** an AI Lab with model comparison, evaluations for LLMs, RAG and agents (with a matrix of runs against a baseline), an assistant in the request builder, AI that writes verified checks, tp tests and integration flows from a collection, explains and fixes failed runs and finds out why a test is flaky, as proposals you review (with what is sent shown first, Local only and cost caps), `testpion mcp-server` for AI agents, AGENTS.md from the live workspace, and one JSON envelope for every CLI `--json`.
+- **AI testing:** simulated users (a persona and a goal), red teaming (attackers that adapt, instructions planted in MCP tool results, a SARIF report with OWASP LLM Top 10 categories), a check of an MCP server (conformance, drift since you approved it, which tool each model picks) and test data from OpenTelemetry traces.
 - **OpenTelemetry export** of traces (OTLP/HTTP) from the app, the CLI and MCP.
 - **The CLI on npm:** `npx testpion` or `npm install -g testpion`, no clone needed.
 - **Updates** inside the app (Windows installer and Linux AppImage; other builds are pointed to the download page).

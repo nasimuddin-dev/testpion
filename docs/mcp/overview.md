@@ -18,6 +18,7 @@ TestPion is a full MCP client built on the official TypeScript SDK. MCP servers 
 - Run tools from forms generated from their JSON Schema, and save calls as regression tests (**Save as test…**).
 - Answer a server's [elicitation, sampling and roots](./client-features.md) requests.
 - [Debug](./debugging.md) with a timeline of every JSON-RPC message.
+- [Check a server](./tools.md#check) as a whole: the protocol, how easy its tools are for an agent, and what changed since you approved it.
 
 Transport handling is isolated from the domain model: a tracing decorator wraps whichever transport is used.
 
