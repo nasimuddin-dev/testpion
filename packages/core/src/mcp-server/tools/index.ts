@@ -1,5 +1,6 @@
 import { ApsError } from '../../errors.js';
 import { createEngineContext } from '../../engine.js';
+import { withEngine } from './server-kit.js';
 import { McpSession } from '../../protocols/mcp/client.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { aiTools } from './ai-tools.js';
@@ -90,6 +91,7 @@ export function moduleTools(d: ModuleToolDeps): Tool[] {
       collections: d.collections,
       findCollection,
       findRequest,
+      withContext: (fn) => withEngine({ store, secrets, settings }, {}, fn),
       // the workspace's MCP servers, with the environment's variables; a stdio server only when the user allowed its command
       mcpSession: async (ref) => {
         const ctx = createEngineContext({ store, secrets, settings });

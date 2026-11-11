@@ -28,14 +28,8 @@ import {
   type EngineContext,
   type WorkspaceStore,
   checkMcpServer,
-  estimateCost,
-  mcpSnapshotFile,
-  parseSelectionCases,
-  runAiTask,
-  runToolSelection,
-  selectionCasesText,
-  vetSelectionCases,
-  type SelectionCase,
+  selectServerTools,
+  writeSelectionCases,
   recordingToCollection,
   startRecorder,
   collectSubscriptionEvents,
@@ -442,39 +436,22 @@ ${cyan(r.url)}`);
           if (o.selectionCases || o.select) {
             if (!ws) throw new CliError('Tool selection works on a server saved in a workspace: use --server <name>', EXIT.CONFIG_ERROR);
             const d = await s.discover();
-            const casesFile = String(o.cases ?? `datasets/mcp-selection-${mcpSnapshotFile({ id: cfg.id, name: cfg.name }).replace(/^mcp-snapshots\//, '').replace(/\.json$/, '')}.jsonl`);
-            const casesPath = resolve(ws.store.root, casesFile);
+            const server = { id: cfg.id, name: cfg.name };
+            const casesFile = o.cases ? String(o.cases) : undefined;
             if (o.selectionCases) {
-              if (existsSync(casesPath) && !o.force) throw new CliError(`${casesFile} exists (it may hold cases you corrected). Pass --force to write it again.`, EXIT.CONFIG_ERROR);
-              const perTool = Math.min(5, Math.max(1, Number(o.perTool) || 2));
-              const r = await runAiTask(aiRunDeps({ ctx: ws.ctx, settings: new WorkspaceManager().loadSettings(), store: ws.store, surface: process.env.CI ? 'ci' : 'cli', env: process.env }), {
-                task: 'mcp-selection-cases',
-                context: { tools: d.tools.map((t) => ({ name: t.name, description: t.description ?? '', parameters: Object.keys((t.inputSchema?.properties ?? {}) as Record<string, unknown>) })), perTool, noneCases: Math.max(2, Math.round(d.tools.length / 5)) },
-              });
-              const written = ((r.value as { cases?: SelectionCase[] } | undefined)?.cases ?? []).map((c) => ({ ask: String(c.ask ?? '').trim(), tool: String(c.tool ?? '').trim() })).filter((c) => c.ask && c.tool);
-              const vetted = vetSelectionCases(written, d.tools);
-              if (!vetted.cases.length) throw new CliError(`The model (${r.provider}/${r.model}) wrote no usable case${r.problems.length ? `: ${r.problems.slice(0, 2).join('; ')}` : ''}`, EXIT.TEST_FAILURE);
-              mkdirSync(dirname(casesPath), { recursive: true });
-              writeFileSync(casesPath, selectionCasesText(vetted.cases));
-              if (o.json) return printJson({ file: casesFile, cases: vetted.cases.length, dropped: vetted.dropped, uncovered: vetted.uncovered, model: `${r.provider}/${r.model}`, usage: r.usage, costUsd: r.costUsd });
-              console.log(`${green('Wrote')} ${vetted.cases.length} cases to ${casesFile} ${dim(`· ${r.provider}/${r.model} · AI-generated: read them before you rely on them`)}`);
-              for (const x of vetted.dropped) console.log(`  ${yellow('dropped')} ${x.ask} ${dim(`(${x.why})`)}`);
-              if (vetted.uncovered.length) console.log(yellow(`No case for: ${vetted.uncovered.join(', ')}. Add lines for them: {"ask": "…", "tool": "<name>"}.`));
+              const w = await writeSelectionCases(aiRunDeps({ ctx: ws.ctx, settings: new WorkspaceManager().loadSettings(), store: ws.store, surface: process.env.CI ? 'ci' : 'cli', env: process.env }), { root: ws.store.root, server, offered: d, perTool: Number(o.perTool) || undefined, file: casesFile, force: !!o.force });
+              if (o.json) return printJson(w);
+              console.log(`${green('Wrote')} ${w.cases} cases to ${w.file} ${dim(`· ${w.model} · AI-generated: read them before you rely on them`)}`);
+              for (const x of w.dropped) console.log(`  ${yellow('dropped')} ${x.ask} ${dim(`(${x.why})`)}`);
+              if (w.uncovered.length) console.log(yellow(`No case for: ${w.uncovered.join(', ')}. Add lines for them: {"ask": "…", "tool": "<name>"}.`));
               console.log(dim(`Run them: testpion mcp --server "${cfg.name}" --select --models <provider/model,…>`));
               return;
             }
-            if (!existsSync(casesPath)) throw new CliError(`No cases at ${casesFile}. Write them with --selection-cases (an AI task), or pass --cases <file> with one {"ask", "tool"} a line.`, EXIT.CONFIG_ERROR);
             const models = String(o.models ?? '').split(',').map((m) => m.trim()).filter(Boolean);
-            const run = await runToolSelection(ws.ctx.services.providers, {
-              tools: d.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: (t.inputSchema ?? { type: 'object' }) as Record<string, unknown> })),
-              instructions: d.instructions,
-              cases: parseSelectionCases(readFileSync(casesPath, 'utf8')),
-              models,
-              cost: (p, model, usage) => estimateCost(ws.ctx.services.pricing ?? [], p.config, model, usage).cost,
-            });
+            const { server: _server, casesFile: usedFile, ...run } = await selectServerTools({ root: ws.store.root, server, offered: d, ctx: ws.ctx, models, file: casesFile, store: ws.store, surface: process.env.CI ? 'ci' : 'cli' });
             const min = o.min !== undefined ? Number(o.min) : undefined;
             const below = min !== undefined ? run.models.filter((m) => m.accuracy < min || m.errors === m.cases) : [];
-            if (o.json) printJson({ server: cfg.name, casesFile, ...run, ...(min !== undefined ? { min, passed: !below.length } : {}) });
+            if (o.json) printJson({ server: cfg.name, casesFile: usedFile, ...run, ...(min !== undefined ? { min, passed: !below.length } : {}) });
             else {
               console.log(bold(run.text));
               for (const m of run.models) {

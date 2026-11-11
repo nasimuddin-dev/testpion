@@ -23,7 +23,7 @@ import {
   removeItem,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
-import { approveMcpSnapshot, checkMcpServer, commandLine, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
+import { approveMcpSnapshot, checkMcpServer, commandLine, isCommandTrusted, selectionCasesInfo, selectServerTools, trustCommand, trustedCommands, writeSelectionCases } from '@testpion/core';
 
 /** Requests an inspected server sent to the client (elicitation, sampling) that wait for the user. */
 interface PendingClientRequest {
@@ -46,6 +46,11 @@ export function mcpHandlers(be: Backend): Handlers {
       pending.set(id, { serverId, resolve: resolve as (r: unknown) => void, timer });
       be.host.emit('mcp.clientRequest', { id, serverId, serverName, kind, params: be.mcpRedactors.get(serverId)?.redact(params) ?? params });
     });
+  const serverRef = (serverId: string) => {
+    const cfg = be.ws.getMcpServers().find((x) => x.id === serverId);
+    if (!cfg) throw new ApsError('ConfigurationError', `Unknown MCP server ${serverId}`);
+    return { id: cfg.id, name: cfg.name };
+  };
   const cancelPending = (serverId: string) => {
     for (const [id, p] of pending)
       if (p.serverId === serverId) {
@@ -269,6 +274,18 @@ export function mcpHandlers(be: Backend): Handlers {
       if (!cfg) throw new ApsError('ConfigurationError', `Unknown MCP server ${serverId}`);
       const c = await checkMcpServer(be.session(serverId), { root: be.ws.root, server: { id: cfg.id, name: cfg.name } });
       return { file: approveMcpSnapshot(be.ws.root, { id: cfg.id, name: cfg.name }, c.snapshot), tools: c.snapshot.tools.length };
+    },
+    /** Tool selection: where the cases of this server are and how many (datasets/mcp-selection-<server>.jsonl). */
+    'mcp.selectionInfo': ({ serverId }: { serverId: string }) => selectionCasesInfo(be.ws.root, serverRef(serverId)),
+    /** Has the AI assistant write the cases (a request a user would type and the tool it needs); a file that exists is kept unless force. */
+    'mcp.selectionCases': async ({ serverId, perTool, force }: { serverId: string; perTool?: number; force?: boolean }) => {
+      const offered = await be.session(serverId).discover();
+      return be.withAiDeps({}, (deps) => writeSelectionCases(deps, { root: be.ws.root, server: serverRef(serverId), offered, perTool, force }));
+    },
+    /** Offers the server's tools to each model and asks every case; no tool is called. */
+    'mcp.selection': async ({ serverId, models }: { serverId: string; models: string[] }) => {
+      const offered = await be.session(serverId).discover();
+      return selectServerTools({ root: be.ws.root, server: serverRef(serverId), offered, ctx: be.context({}), models, store: be.ws, surface: 'app' });
     },
     /** Suggestions for a prompt argument or resource-template parameter (completion/complete). */
     'mcp.complete': ({ serverId, ref, argument, context }: { serverId: string; ref: { type: 'ref/prompt'; name: string } | { type: 'ref/resource'; uri: string }; argument: { name: string; value: string }; context?: Record<string, string> }) =>

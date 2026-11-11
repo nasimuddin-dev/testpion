@@ -25,6 +25,13 @@ const steps = [
       return 'says: ' + /^Nothing changed since it was approved on \\d{4}-\\d{2}-\\d{2}\\.$/.test(same.querySelector('[data-mcp-drift-text]').textContent.trim()) + ' | button off with a reason: ' + (button.disabled && /Nothing changed/.test(button.title));
     })()`,
   ],
+  [
+    'which-tool-each-model-picks-starts-without-cases',
+    `(async () => {
+      const box = await __t.waitFor(() => document.querySelector('[data-mcp-selection]'), 8000); if (!box) return 'NO SECTION';
+      return 'state: ' + box.getAttribute('data-mcp-selection') + ' | file: ' + /datasets\/mcp-selection-[a-z0-9-]+\.jsonl/.test(box.querySelector('[data-mcp-selection-text]').textContent) + ' | write button: ' + box.querySelector('[data-mcp-selection-write]').textContent.trim() + ' | run button: ' + !!box.querySelector('[data-mcp-selection-run]');
+    })()`,
+  ],
 ];
 
 module.exports = withExpect(steps, {
@@ -32,4 +39,5 @@ module.exports = withExpect(steps, {
   connect: /^connected$/,
   'not-approved-yet-and-the-protocol-checks-pass': /^state: never \| says: true \| protocol: ok \| true$/,
   'approve-keeps-what-it-offers-now': /^says: true \| button off with a reason: true$/,
+  'which-tool-each-model-picks-starts-without-cases': /^state: empty \| file: true \| write button: Write cases with AI \| run button: false$/,
 });

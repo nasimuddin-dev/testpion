@@ -11,6 +11,8 @@ import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { McpSession } from '../../protocols/mcp/client.js';
 import { approveMcpSnapshot, checkMcpServer } from '../../protocols/mcp/check.js';
 import { lintMcpTools } from '@testpion/shared';
+import { selectServerTools } from '../../eval/mcp-selection-server.js';
+import type { EngineContext } from '../../engine.js';
 import { str, type Tool } from '../tool.js';
 
 /**
@@ -29,6 +31,8 @@ interface EditToolsDeps {
   findRequest(c: Collection, ref: unknown): Flat;
   /** The engine context for the workspace's MCP servers (resolved variables, redaction, cookies). */
   mcpSession(ref: string): Promise<McpSession>;
+  /** An engine context of the workspace (providers, pricing) for a job: disposed when it ends. */
+  withContext<T>(fn: (ctx: EngineContext) => Promise<T>): Promise<T>;
 }
 
 
@@ -366,8 +370,8 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     {
       name: 'mcp_server_tools',
       write: true,
-      description: 'Connect to one of the workspace\'s MCP servers and list what it offers: tools (with input schemas), resources and prompts, plus its server info. Use it before mcp_call_tool. A stdio server runs only when the user allowed its command in the app. check: true adds protocol checks and what changed since the tools were approved (drift).',
-      inputSchema: { type: 'object', properties: { server: str('Server name or id (list_mcp_servers)'), check: { type: 'boolean' }, approve: { type: 'boolean', description: 'Keep what it offers now as approved (mcp-snapshots/)' } }, required: ['server'] },
+      description: 'Connect to one of the workspace\'s MCP servers and list what it offers: tools (with input schemas), resources and prompts, plus its server info. Use it before mcp_call_tool. A stdio server runs only when the user allowed its command in the app. check: true adds protocol checks and what changed since the tools were approved (drift). select: which tool each model picks.',
+      inputSchema: { type: 'object', properties: { server: str('Server name or id (list_mcp_servers)'), check: { type: 'boolean' }, approve: { type: 'boolean', description: 'Keep what it offers now as approved (mcp-snapshots/)' }, select: { type: 'array', items: { type: 'string' }, description: 'provider/model' } }, required: ['server'] },
       run: async (a) => {
         const s = await d.mcpSession(String(a.server));
         try {
@@ -380,6 +384,15 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
             return { ...c, lint: { ...c.lint, findings: c.lint.findings.slice(0, 40) } };
           }
           const disc = await s.discover();
+          if (Array.isArray(a.select)) {
+            const all = store.getMcpServers();
+            const ref = String(a.server).toLowerCase();
+            const cfg = all.find((x) => x.id.toLowerCase() === ref) ?? all.find((x) => x.name.toLowerCase() === ref);
+            if (!cfg) throw new ApsError('ConfigurationError', `Unknown MCP server ${String(a.server)}`);
+            const models = a.select.map(String);
+            const r = await d.withContext((ctx) => selectServerTools({ root: store.root, server: { id: cfg.id, name: cfg.name }, offered: disc, ctx, models, store, surface: 'mcp' }));
+            return { ...r, models: r.models.map((m) => ({ ...m, misses: m.misses.slice(0, 30) })) };
+          }
           const lint = lintMcpTools(disc.tools, { instructions: disc.instructions, prompts: disc.prompts, resources: disc.resources });
           return { serverInfo: disc.serverInfo, instructions: disc.instructions, tools: disc.tools, resources: disc.resources.slice(0, 200), prompts: disc.prompts, lint: { ...lint, findings: lint.findings.slice(0, 40) } };
         } finally {

@@ -83,3 +83,37 @@ describe('which tool does each model choose', () => {
     expect(v.uncovered).toEqual(['get_order', 'refund_order']);
   });
 });
+
+// the same run for a server saved in a workspace (the app, the CLI and the MCP tool share it)
+describe('tool selection for a server of a workspace', () => {
+  it('reads the cases of datasets/mcp-selection-<server>.jsonl and says so when there are none', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { selectionCasesFile, selectionCasesInfo, selectServerTools } = await import('@testpion/core');
+    const root = mkdtempSync(join(tmpdir(), 'tp-sel-'));
+    try {
+      const server = { id: 'srv-1', name: 'Orders API' };
+      const file = selectionCasesFile(server);
+      expect(file).toMatch(/^datasets\/mcp-selection-[a-z0-9-]+\.jsonl$/);
+      expect(selectionCasesInfo(root, server)).toEqual({ file, exists: false, cases: 0 });
+      const ctx = { services: { providers: registry(), pricing: [] } } as never;
+      await expect(selectServerTools({ root, server, offered: { tools: TOOLS }, ctx, models: ['good'] })).rejects.toThrow(/No cases at datasets\/mcp-selection-/);
+      mkdirSync(join(root, 'datasets'), { recursive: true });
+      writeFileSync(join(root, file), selectionCasesText(CASES));
+      expect(selectionCasesInfo(root, server)).toEqual({ file, exists: true, cases: 5 });
+      const calls: Array<Record<string, unknown>> = [];
+      const store = { meta: { addAiCall: (c: Record<string, unknown>) => calls.push(c) } } as never;
+      const r = await selectServerTools({ root, server, offered: { tools: TOOLS }, ctx, models: ['good', 'confused/mock-model'], store, surface: 'app' });
+      expect(r).toMatchObject({ server: 'Orders API', casesFile: file, cases: 5, tools: 3 });
+      expect(r.models.map((m) => m.accuracy)).toEqual([1, 0.4]);
+      // one line a model in the usage ledger
+      expect(calls.map((c) => [c.task, c.surface, c.provider, c.model, c.calls, c.outcome])).toEqual([
+        ['mcp-selection', 'app', 'good', '', 5, 'ok'],
+        ['mcp-selection', 'app', 'confused', 'mock-model', 5, 'ok'],
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

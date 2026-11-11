@@ -82,6 +82,8 @@ testpion mcp --server "Orders" --selection-cases                      # the AI a
 testpion mcp --server "Orders" --select --models openai/gpt-4o-mini,ollama/llama3.2 --min 0.9
 ```
 
+In the app the same is under **Server info ▸ Which tool does each model pick?**: **Write cases with AI**, then name the models (`provider/model`, comma separated) and **Ask the models**; each model gets a line with its share, the requests it missed and the tools it confuses. An agent runs it with the MCP tool `mcp_server_tools` and `select: ["provider/model"]`. Every run is a line per model in the AI usage of the workspace (task `mcp-selection`).
+
 The cases are a file you own, `datasets/mcp-selection-<server>.jsonl`: one `{"ask": "What the user types", "tool": "the_tool_it_needs"}` a line, with `"tool": "none"` for a request no tool fits. `--selection-cases` writes a first version (AI-generated: read and correct it; a case that names its tool or expects a tool the server does not have is dropped, and tools without a case are named). `--select` offers the tool list and the server instructions to each model, asks every case once, and reports per model how often it chose right, each miss (what it needed, what it chose), the pairs of tools it confuses more than once, and the requests **every** model missed: those point at a description, not at a model. `--min` makes the command exit with 1 below that share. `--json` prints it all, with tokens and cost per model.
 
 :::

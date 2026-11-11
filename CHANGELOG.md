@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Check an MCP server
+
+- **Which tool does each model pick?** is now in the app (**Server info**): write the cases with AI, name the models, and read each model's share, misses and confused tools. Agents run it with `mcp_server_tools` and `select`. A run is listed in the workspace's AI usage.
+
 ### For AI agents
 
 - **A short tool list by default.** `testpion mcp-server` now lists the tools of the common jobs (about 25) and your workspace's own flows instead of all 220: an agent's context stays small. The tools `search_tools` finds join the list for the rest of the session, and `search_tools` with `name` and `arguments` calls any tool. `--profile full` (or `TESTPION_MCP_PROFILE=full`) lists every tool as before.

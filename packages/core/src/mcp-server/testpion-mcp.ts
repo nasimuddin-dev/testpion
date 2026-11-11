@@ -10,13 +10,14 @@ import { Redactor } from '../util/redact.js';
 import type { WorkspaceStore } from '../storage/workspace.js';
 import type { SecretStore } from '../storage/secrets.js';
 import { compactTool, SHARED_PARAMETER_NOTE } from './compact.js';
+import { MinimalList, throughSearchTools, toolsOfCall } from './minimal-list.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
 import { ConfirmCodes, contractCallResult, elicitationConfirmer, isContractResult, TOOL_DETAILS, withToolContract, type Confirmer } from './tool-contract.js';
 import { TOOL_DOCS } from './tool-docs.js';
 import type { DebuggerExchange } from '../debugger/proxy.js';
 import { withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
-import { MINIMAL_TOOLS, searchTool } from './tools/search-tools.js';
+import { searchTool } from './tools/search-tools.js';
 import { readSpecRef } from '../openapi/spec-files.js';
 import { requireCollection } from '../storage/env-edit.js';
 import { browseTools } from './tools/browse-tools.js';
@@ -66,11 +67,7 @@ interface TestPionMcpOptions {
 
 export type McpProfile = 'full' | 'minimal' | 'verbose';
 
-/**
- * The profile asked for: the option, else TESTPION_MCP_PROFILE, else `fallback`. A server made in code lists every tool
- * (`full`); the one served to an agent (`serveTestPionMcp`: the command line and the app) starts with the common jobs
- * (`minimal`), and search_tools adds what the agent asks for.
- */
+/** The profile asked for: the option, else TESTPION_MCP_PROFILE, else `fallback` (`full` for a server made in code, `minimal` for the one served to an agent). */
 export function resolveMcpProfile(profile?: string, fallback: McpProfile = 'full'): McpProfile {
   const p = profile ?? process.env.TESTPION_MCP_PROFILE ?? fallback;
   if (p !== 'full' && p !== 'minimal' && p !== 'verbose') throw new ApsError('ConfigurationError', `The MCP profile is full, minimal or verbose, not "${p}"`);
@@ -119,15 +116,12 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
    * `initialize` should not wait for, growing with the number of test files. A flow never shadows a built-in tool.
    */
   let registry: { all: Tool[]; tools: Tool[]; listed: Tool[] } | undefined;
-  // minimal profile: the tools the agent found with search_tools (or called by name) join the list for the rest of the session
-  const revealed = new Set<string>();
-  let ownFlowTools = new Set<string>();
+  const minimal = new MinimalList();
   const tools = () => (registry ??= buildRegistry()).tools;
   function buildRegistry() {
     const every = [...all];
     const flows = flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !every.some((x) => x.name === t.name));
-    // the workspace's own flows exposed as tools are listed in every profile: they are what the team chose to offer
-    ownFlowTools = new Set(flows.map((t) => t.name));
+    minimal.own = new Set(flows.map((t) => t.name));
     every.push(...flows);
     const base = withEnvironmentSecrets(store, withProductionConsent(every.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
     base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title, (name) => registry?.tools.find((t) => t.name === name)));
@@ -139,7 +133,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       confirmCodes: opts.confirmCodes ? new ConfirmCodes(opts.confirmCodes.announce) : undefined,
       sendBudget: opts.sendBudget ?? (Number.isFinite(envBudget) && envBudget > 0 ? envBudget : undefined),
     });
-    const chosen = profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name) || ownFlowTools.has(t.name) || revealed.has(t.name)) : withContract;
+    const chosen = profile === 'minimal' ? withContract.filter((t) => minimal.has(t.name)) : withContract;
     return { all: every, tools: withContract, listed: profile === 'verbose' ? chosen : chosen.map(compactTool) };
   }
   const listedTools = () => (registry ??= buildRegistry()).listed;
@@ -204,28 +198,19 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     if (missing.length) throw new ApsError('ValidationError', `Missing: ${missing.join(', ')}`);
     return { description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(args) } }] };
   });
-  /** Minimal profile: add tools to the list and tell the client (a client that ignores the notice can still call them). */
+  /** Minimal profile: the tools a call brought up join the list, and the client is told (one that ignores it can still call them). */
   const reveal = (names: string[]) => {
-    if (profile !== 'minimal') return;
-    const fresh = names.filter((n) => !revealed.has(n) && !MINIMAL_TOOLS.has(n) && !ownFlowTools.has(n) && tools().some((t) => t.name === n));
-    if (!fresh.length) return;
-    for (const n of fresh) revealed.add(n);
-    const all = registry!;
-    registry = { ...all, listed: all.tools.filter((t) => MINIMAL_TOOLS.has(t.name) || ownFlowTools.has(t.name) || revealed.has(t.name)).map(compactTool) };
+    if (profile !== 'minimal' || !minimal.add(names, (n) => tools().some((t) => t.name === n))) return;
+    registry = { ...registry!, listed: registry!.tools.filter((t) => minimal.has(t.name)).map(compactTool) };
     void server.sendToolListChanged().catch(() => undefined);
   };
-  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
-    // search_tools { name, arguments } calls the named tool: for a client that offers its model only the listed tools
-    const via = req.params.name === 'search_tools' ? (req.params.arguments as Record<string, unknown> | undefined) : undefined;
-    if (via && typeof via.name === 'string' && via.name !== 'search_tools' && via.arguments && typeof via.arguments === 'object' && !Array.isArray(via.arguments)) req = { ...req, params: { ...req.params, name: via.name, arguments: via.arguments as Record<string, unknown> } };
+  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (call) => {
+    const req = { ...call, params: throughSearchTools(call.params) };
     const tool = tools().find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}. search_tools finds a tool by what you want to do.` }], structuredContent: { error: errorEnvelope(new ApsError('ValidationError', `Unknown tool ${req.params.name}`, { suggestions: ['search_tools finds a tool by what you want to do.'] })) } };
     try {
       const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
-      if (tool.name === 'search_tools') {
-        const found = (isContractResult(r) ? r.value : r) as { tools?: { name: string }[]; name?: string } | undefined;
-        reveal([...(found?.tools ?? []).map((t) => t.name), ...(typeof found?.name === 'string' ? [found.name] : [])]);
-      } else reveal([tool.name]);
+      reveal(toolsOfCall(tool.name, isContractResult(r) ? r.value : r));
       if (isContractResult(r)) return contractCallResult(r);
       const out = r;
       if (typeof out === 'string') return { content: [{ type: 'text', text: out }] };
