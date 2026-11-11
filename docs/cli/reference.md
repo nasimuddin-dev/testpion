@@ -1241,14 +1241,14 @@ Serves a workspace to AI agents over MCP on stdio: browsing (`list_collections`,
 ```bash
 testpion mcp-server -w my-workspace
 testpion mcp-server --read-only
-testpion mcp-server --profile minimal      # only the common jobs' tools; search_tools finds the rest
+testpion mcp-server --profile full         # every tool listed at the start (the default lists the common jobs; search_tools adds the rest)
 ```
 
 | Option | Description |
 |---|---|
 | `-w, --workspace` | Workspace name or directory (default: nearest `workspace.json`). |
 | `--read-only` | Only the browsing tools; no requests are sent. |
-| `--profile full\|minimal` | Which tools are listed: every tool (`full`, the default) or the common jobs (`minimal`, for agents that load every listed tool into their context); `search_tools` finds the others, and any tool can be called. |
+| `--profile minimal\|full\|verbose` | Which tools are listed: the common jobs (`minimal`, the default since 0.57; the tools `search_tools` finds join the list) or every tool (`full`, compact; `verbose`, complete text). Any tool can be called in every profile. |
 | `--allow-production` | Allow sending to environments marked as production. Each sending tool call must also pass `allowProduction: true`. |
 | `--block-private-networks` | Refuse requests to localhost, private networks and cloud metadata addresses, and don't start local (stdio) MCP servers. For shared or hosted use; see [Network policy](/security/privacy#network-policy-shared-and-hosted-servers). |
 | `--allow-host <host...>` | With `--block-private-networks`: hosts that stay reachable. |

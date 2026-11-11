@@ -66,9 +66,13 @@ interface TestPionMcpOptions {
 
 export type McpProfile = 'full' | 'minimal' | 'verbose';
 
-/** The profile asked for: the option, else TESTPION_MCP_PROFILE, else `full`. */
-export function resolveMcpProfile(profile?: string): McpProfile {
-  const p = profile ?? process.env.TESTPION_MCP_PROFILE ?? 'full';
+/**
+ * The profile asked for: the option, else TESTPION_MCP_PROFILE, else `fallback`. A server made in code lists every tool
+ * (`full`); the one served to an agent (`serveTestPionMcp`: the command line and the app) starts with the common jobs
+ * (`minimal`), and search_tools adds what the agent asks for.
+ */
+export function resolveMcpProfile(profile?: string, fallback: McpProfile = 'full'): McpProfile {
+  const p = profile ?? process.env.TESTPION_MCP_PROFILE ?? fallback;
   if (p !== 'full' && p !== 'minimal' && p !== 'verbose') throw new ApsError('ConfigurationError', `The MCP profile is full, minimal or verbose, not "${p}"`);
   return p;
 }
@@ -115,10 +119,16 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
    * `initialize` should not wait for, growing with the number of test files. A flow never shadows a built-in tool.
    */
   let registry: { all: Tool[]; tools: Tool[]; listed: Tool[] } | undefined;
+  // minimal profile: the tools the agent found with search_tools (or called by name) join the list for the rest of the session
+  const revealed = new Set<string>();
+  let ownFlowTools = new Set<string>();
   const tools = () => (registry ??= buildRegistry()).tools;
   function buildRegistry() {
     const every = [...all];
-    every.push(...flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !every.some((x) => x.name === t.name)));
+    const flows = flowTools({ store, secrets, settings, redactor, checkEnvironment }).filter((t) => !every.some((x) => x.name === t.name));
+    // the workspace's own flows exposed as tools are listed in every profile: they are what the team chose to offer
+    ownFlowTools = new Set(flows.map((t) => t.name));
+    every.push(...flows);
     const base = withEnvironmentSecrets(store, withProductionConsent(every.filter((t) => !(opts.readOnly && t.write)), !!opts.allowProduction));
     base.push(searchTool(base, (name, write) => toolAnnotations(name, write).title, (name) => registry?.tools.find((t) => t.name === name)));
     // one contract for every tool (tool-contract.ts): descriptions, id names, pages, size, confirmation, output schemas
@@ -129,7 +139,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       confirmCodes: opts.confirmCodes ? new ConfirmCodes(opts.confirmCodes.announce) : undefined,
       sendBudget: opts.sendBudget ?? (Number.isFinite(envBudget) && envBudget > 0 ? envBudget : undefined),
     });
-    const chosen = profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name)) : withContract;
+    const chosen = profile === 'minimal' ? withContract.filter((t) => MINIMAL_TOOLS.has(t.name) || ownFlowTools.has(t.name) || revealed.has(t.name)) : withContract;
     return { all: every, tools: withContract, listed: profile === 'verbose' ? chosen : chosen.map(compactTool) };
   }
   const listedTools = () => (registry ??= buildRegistry()).listed;
@@ -137,7 +147,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
   const server = new (mcpServer().Server)(
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
-      capabilities: { tools: {}, resources: {}, prompts: {} },
+      capabilities: { tools: profile === 'minimal' ? { listChanged: true } : {}, resources: {}, prompts: {} },
       instructions: `TestPion workspace "${store.workspace.name}". list_kinds says what every kind of item can do and which deletes can be undone. what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}${profile === 'verbose' ? '' : ` ${SHARED_PARAMETER_NOTE}`}`,
     },
   );
@@ -194,11 +204,28 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     if (missing.length) throw new ApsError('ValidationError', `Missing: ${missing.join(', ')}`);
     return { description: p.description, messages: [{ role: 'user', content: { type: 'text', text: p.text(args) } }] };
   });
+  /** Minimal profile: add tools to the list and tell the client (a client that ignores the notice can still call them). */
+  const reveal = (names: string[]) => {
+    if (profile !== 'minimal') return;
+    const fresh = names.filter((n) => !revealed.has(n) && !MINIMAL_TOOLS.has(n) && !ownFlowTools.has(n) && tools().some((t) => t.name === n));
+    if (!fresh.length) return;
+    for (const n of fresh) revealed.add(n);
+    const all = registry!;
+    registry = { ...all, listed: all.tools.filter((t) => MINIMAL_TOOLS.has(t.name) || ownFlowTools.has(t.name) || revealed.has(t.name)).map(compactTool) };
+    void server.sendToolListChanged().catch(() => undefined);
+  };
   server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => {
+    // search_tools { name, arguments } calls the named tool: for a client that offers its model only the listed tools
+    const via = req.params.name === 'search_tools' ? (req.params.arguments as Record<string, unknown> | undefined) : undefined;
+    if (via && typeof via.name === 'string' && via.name !== 'search_tools' && via.arguments && typeof via.arguments === 'object' && !Array.isArray(via.arguments)) req = { ...req, params: { ...req.params, name: via.name, arguments: via.arguments as Record<string, unknown> } };
     const tool = tools().find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}. search_tools finds a tool by what you want to do.` }], structuredContent: { error: errorEnvelope(new ApsError('ValidationError', `Unknown tool ${req.params.name}`, { suggestions: ['search_tools finds a tool by what you want to do.'] })) } };
     try {
       const r = await tool.run((req.params.arguments ?? {}) as Record<string, unknown>);
+      if (tool.name === 'search_tools') {
+        const found = (isContractResult(r) ? r.value : r) as { tools?: { name: string }[]; name?: string } | undefined;
+        reveal([...(found?.tools ?? []).map((t) => t.name), ...(typeof found?.name === 'string' ? [found.name] : [])]);
+      } else reveal([tool.name]);
       if (isContractResult(r)) return contractCallResult(r);
       const out = r;
       if (typeof out === 'string') return { content: [{ type: 'text', text: out }] };
@@ -228,7 +255,7 @@ export async function serveTestPionMcp(opts: TestPionMcpOptions & { stdio?: { in
   // the person sees the confirmation codes here (stderr: the terminal or the host's log), the agent does not read them
   const announce = (i: { code: string; tool: string; what: string }) => process.stderr.write(`[testpion mcp] Confirmation needed: ${i.tool} will ${i.what}\n[testpion mcp] If you approve, give your agent this code: ${i.code}\n`);
   const codesOff = opts.confirmCodes === false || process.env.TESTPION_MCP_CONFIRM_CODES === '0';
-  const server = createTestPionMcpServer({ ...opts, confirmCodes: codesOff ? false : (opts.confirmCodes ?? { announce }) });
+  const server = createTestPionMcpServer({ ...opts, profile: resolveMcpProfile(opts.profile, 'minimal'), confirmCodes: codesOff ? false : (opts.confirmCodes ?? { announce }) });
   const transport = new (mcpServerStdio().StdioServerTransport)(opts.stdio?.input as never, opts.stdio?.output as never);
   const closed = new Promise<void>((resolve) => (server.onclose = () => resolve()));
   await server.connect(transport);

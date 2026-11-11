@@ -88,3 +88,34 @@ describe('tools/list size', () => {
     await client.close();
   });
 });
+
+// the served default (0.57): the common jobs first, and what the agent finds joins the list
+describe('the minimal profile grows with what the agent finds', () => {
+  it('search_tools adds the tools it found to the list and says the list changed; a tool called by name joins too; the workspace flows are always listed', async () => {
+    const { client } = await connect('minimal');
+    let changed = 0;
+    client.fallbackNotificationHandler = async (n) => void (n.method === 'notifications/tools/list_changed' && changed++);
+    const names = async () => (await client.listTools()).tools.map((t) => t.name);
+    const before = await names();
+    expect(before).toContain('send_request');
+    expect(before).toContain('bulk_flow_0');
+    expect(before).not.toContain('git_status');
+    const found = (await client.callTool({ name: 'search_tools', arguments: { query: 'git status' } })).structuredContent as { tools: { name: string }[] };
+    expect(found.tools.map((t) => t.name)).toContain('git_status');
+    const after = await names();
+    expect(after).toContain('git_status');
+    expect(after.length).toBe(before.length + found.tools.filter((t) => !before.includes(t.name)).length);
+    // a client that offers its model only the first list calls through search_tools
+    const via = await client.callTool({ name: 'search_tools', arguments: { name: 'list_datasets', arguments: {} } });
+    expect(via.isError).toBeFalsy();
+    expect(await names()).toContain('list_datasets');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(changed).toBeGreaterThanOrEqual(2);
+    await client.close();
+  }, 60_000);
+  it('the full profile does not announce list changes', async () => {
+    const { client } = await connect();
+    expect(client.getServerCapabilities()?.tools?.listChanged).toBeFalsy();
+    await client.close();
+  });
+});

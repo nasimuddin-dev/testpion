@@ -144,7 +144,7 @@ export function registerServeCommands(program: Command): void {
     .description('serve a workspace to AI agents over MCP (stdio): list and read collections, send requests, run collections')
     .option(...WORKSPACE_OPTION)
     .option('--read-only', 'only the browsing tools: no requests are sent')
-    .option('--profile <name>', "what tools/list holds: full (every tool, compact: the default, about 200 KB), minimal (the common jobs, about 30 KB; search_tools finds the rest) or verbose (every tool with its complete text, about 310 KB). Any tool can be called in every profile; search_tools --name <tool> returns a tool's complete entry. The environment variable TESTPION_MCP_PROFILE sets the default.")
+    .option('--profile <name>', "what tools/list holds: minimal (the default: the common jobs, about 30 KB; the tools search_tools finds join the list), full (every tool, compact, about 200 KB) or verbose (every tool with its complete text, about 310 KB). Any tool can be called in every profile; search_tools --name <tool> returns a tool's complete entry. The environment variable TESTPION_MCP_PROFILE sets the default.")
     .option('--allow-production', 'allow sending to environments marked as production')
     .option('--block-private-networks', 'refuse requests to localhost, private and cloud-metadata addresses (for shared or hosted use)')
     .option('--allow-host <host...>', 'with --block-private-networks: hosts that stay reachable')

@@ -202,7 +202,7 @@ Exit codes: ${Object.entries(EXIT_CODES)
 { "mcpServers": { "testpion": { "command": "testpion", "args": ["mcp-server", "-w", "."] } } }
 \`\`\`
 
-\`--read-only\` offers only the tools that look; \`--profile minimal\` lists ${mcp.profiles.minimal}. Start with ${mcp.start}. In the TestPion app, Settings ▸ AI agents has the setup per client and tests the connection.
+\`--read-only\` offers only the tools that look; it lists ${mcp.profiles.minimal}; \`--profile full\` lists every tool. Start with ${mcp.start}. In the TestPion app, Settings ▸ AI agents has the setup per client and tests the connection.
 
 ## Add a request, a test, a flow
 
@@ -292,7 +292,7 @@ Work through the \`testpion\` command line. With \`--json\` a command answers wi
 
 - Never write a secret into a file. Secrets are \`{{variables}}\`; their values live in the app's secret store or in \`TESTPION_SECRET_<NAME>\`.
 - Never pass \`--allow-production\` unless the user asked for it in this conversation.
-- Change collections, environments and tests through the CLI or the MCP server (\`${MCP_COMMAND} --profile minimal\`), not by editing \`collections/*.json\` by hand. Test files under \`tests/\` are YAML you may edit; run \`${cmd.lint}\` after.
+- Change collections, environments and tests through the CLI or the MCP server (\`${MCP_COMMAND}\`), not by editing \`collections/*.json\` by hand. Test files under \`tests/\` are YAML you may edit; run \`${cmd.lint}\` after.
 - Anything an AI wrote here (tests, checks, cases) is a proposal: show it to the user before it is relied on.
 - After a change, run the tests it touches and report the result with the failing checks, not only "done".
 ${AGENT_END}

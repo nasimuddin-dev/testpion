@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### For AI agents
+
+- **A short tool list by default.** `testpion mcp-server` now lists the tools of the common jobs (about 25) and your workspace's own flows instead of all 220: an agent's context stays small. The tools `search_tools` finds join the list for the rest of the session, and `search_tools` with `name` and `arguments` calls any tool. `--profile full` (or `TESTPION_MCP_PROFILE=full`) lists every tool as before.
+
 ## 0.56.0 — 2026-11-11
 
 ### For AI agents

@@ -46,7 +46,7 @@ export function agentCommands(w: string): Record<string, string> {
     evaluation: `testpion eval run "<saved evaluation>"${w} · testpion eval compare <run> --baseline <run>${w} --json`,
     lint: `testpion lint-tests${w} --json`,
     generate: `testpion tests-from-spec specs/<api>.yaml${w} --json · testpion integration-suite <spec | collection>${w} --json`,
-    mcpServer: `testpion mcp-server${w} [--profile minimal] [--read-only]`,
+    mcpServer: `testpion mcp-server${w} [--profile full] [--read-only]`,
     agentsInit: `testpion agents init${w} [--targets agents,claude,cursor,skill] --json`,
     doctor: 'testpion doctor --json',
     open: `testpion open <ref>${w} [--json]: the app opens the item a "ref" names (the ItemRef in --json output and MCP results: {kind, …ids})`,
@@ -58,7 +58,7 @@ export function agentMcp(command: string) {
   return {
     command,
     claudeCode: `claude mcp add testpion -- ${command}`,
-    profiles: { full: 'every tool (the default)', minimal: `${MINIMAL_TOOLS.size} tools of the common jobs; search_tools finds the rest` },
+    profiles: { full: 'every tool', minimal: `${MINIMAL_TOOLS.size} tools of the common jobs (the default); the tools search_tools finds join the list` },
     start: 'what_needs_attention, then testpion_guide (the check types and the test file format)',
   };
 }

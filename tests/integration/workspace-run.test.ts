@@ -287,7 +287,7 @@ describe('example workspace (end-to-end)', () => {
   it('CLI: `testpion mcp-server` gives AI agents the workspace as MCP tools', async () => {
     const env = { TESTPION_HOME: join(dir, 'home'), TESTPION_MCP_CONFIRM_CODES: '0' } as Record<string, string>;
     const cli = cliPath;
-    const s = new McpSession({ id: 'pl', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root], env });
+    const s = new McpSession({ id: 'pl', name: 'testpion', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root, '--profile', 'full'], env });
     await s.connect(20_000);
     try {
       // the fixed tools, plus one tool per flow with an expose: block under tests/ (none in this workspace; flow-tools.test.ts covers them)
@@ -428,7 +428,7 @@ describe('example workspace (end-to-end)', () => {
       await s.close();
     }
     // --read-only hides the tools that send requests
-    const ro = new McpSession({ id: 'ro', name: 'testpion-ro', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root, '--read-only'], env });
+    const ro = new McpSession({ id: 'ro', name: 'testpion-ro', transport: 'stdio', command: process.execPath, args: [cli, 'mcp-server', '-w', ws.root, '--profile', 'full', '--read-only'], env });
     await ro.connect(20_000);
     try {
       expect((await ro.listTools()).map((t) => t.name)).not.toContain('send_request');
