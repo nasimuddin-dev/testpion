@@ -46,6 +46,13 @@ const MANY = 50;
 const TOO_MANY = 100;
 const BIG_LIST_TOKENS = 20_000;
 
+/** Characters a person does not see in a description but a model reads (zero-width, direction marks, the Unicode tag block). */
+const INVISIBLE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]|\uDB40[\uDC00-\uDC7F]/;
+/** Wording that talks to the model instead of describing the tool: how a poisoned description reads. */
+const INSTRUCTS = /\b(ignore (all |any |the )?(previous|prior|above|earlier) (instructions|messages)|do not (tell|mention|reveal|inform)( this)?( to)? the user|don't (tell|mention) the user|without (telling|informing|asking) the user|before (using|calling) any other tool|you must (always|first) call|system prompt|<\/?(important|system|secret)>|read (the file )?~?\/?\.ssh|\.env\b|id_rsa)/i;
+/** The texts of a tool an agent reads: its description and every parameter description. */
+const toolTexts = (t: LintTool): string[] => [t.description ?? '', ...Object.values((t.inputSchema?.properties ?? {}) as Record<string, { description?: unknown }>).map((p) => (typeof p?.description === 'string' ? p.description : ''))];
+
 const words = (s: string) => s.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
 
 export interface LintPrompt {
@@ -81,6 +88,11 @@ export function lintMcpTools(tools: LintTool[], o: { instructions?: string; prom
       else seen.set(key, name);
     }
 
+    const texts = toolTexts(t);
+    if (texts.some((x) => INVISIBLE.test(x))) add('error', 'invisible-text', `A description of ${name} holds characters a person cannot see (zero-width or direction marks). A model reads them: this is how instructions are hidden in a tool. Remove them, or do not use this server.`, name);
+    const told = texts.map((x) => INSTRUCTS.exec(x)?.[0]).find(Boolean);
+    if (told) add('warn', 'instruction-like', `A description of ${name} talks to the model instead of describing the tool ("${told}"). An agent may obey it: read the whole description before you trust this server.`, name);
+
     const schema = t.inputSchema ?? {};
     if (schema.type !== 'object') add('error', 'schema-type', `The input schema of ${name} is not an object schema (type: object): clients cannot build its arguments.`, name);
     const props = (schema.properties ?? {}) as Record<string, { description?: string; type?: unknown; enum?: unknown }>;
@@ -113,6 +125,7 @@ export function lintMcpTools(tools: LintTool[], o: { instructions?: string; prom
   if (tools.length > TOO_MANY) add('error', 'too-many-tools', `${tools.length} tools is too many: agents pick worse the more they are offered. Group them, or offer a smaller set per task.`);
   else if (tools.length > MANY) add('warn', 'many-tools', `${tools.length} tools: agents pick worse the more they are offered (past about ${MANY}). Group them, or offer a smaller set per task.`);
   if (listTokens > BIG_LIST_TOKENS) add('warn', 'big-list', `The tool list takes about ${listTokens.toLocaleString('en-US')} tokens of an agent's context every time. Shorten descriptions, or offer fewer tools.`);
+  if (o.instructions && INVISIBLE.test(o.instructions)) add('error', 'invisible-text', 'The server instructions hold characters a person cannot see. A model reads them.');
   if (!o.instructions?.trim() && tools.length > 8) add('tip', 'no-instructions', `The server gives no instructions: with ${tools.length} tools, a few lines on how they fit together help an agent plan.`);
 
   const rank = { error: 0, warn: 1, tip: 2 } as const;

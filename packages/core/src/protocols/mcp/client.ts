@@ -105,7 +105,11 @@ export class TracingTransport implements Transport {
     await this.inner.close().catch(() => undefined);
   }
 
+  /** The MCP revision the handshake agreed on. */
+  protocolVersion?: string;
+
   setProtocolVersion(v: string): void {
+    this.protocolVersion = v;
     (this.inner as { setProtocolVersion?: (v: string) => void }).setProtocolVersion?.(v);
   }
 
@@ -382,6 +386,7 @@ export class McpSession {
     const caps = this.client.getServerCapabilities() ?? {};
     const out: McpDiscovery = {
       serverInfo: this.client.getServerVersion() as McpDiscovery['serverInfo'],
+      ...(this.transport?.protocolVersion ? { protocolVersion: this.transport.protocolVersion } : {}),
       capabilities: caps as Record<string, unknown>,
       instructions: this.client.getInstructions(),
       tools: [],

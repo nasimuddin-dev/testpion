@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Check an MCP server
+
+- `testpion mcp --check` checks a server as a whole: the protocol where a client can see it, how easy its tools are for an agent, and **what changed since you approved it**. `--approve` keeps what it offers now in `mcp-snapshots/` (a file of the workspace, so it travels with git). A changed description is shown with the old and the new words; a removed tool or a parameter that became required is marked as breaking. Server info in the app shows the same, with **Approve**.
+- The check of a server's tools now finds descriptions that talk to the model (*ignore previous instructions*, *do not tell the user* …) and characters a person cannot see.
+- **Does each model pick the right tool?** `testpion mcp --select --models a,b` offers the tool list to each model and asks requests a user would type (`--selection-cases` writes them with AI); no tool is called. It reports how often each model chose right and which tools it confuses.
+
 ### Simulated users
 
 - A dataset record with a **persona** and a **goal** is a conversation a model plays against your bot: it talks until it has what it wanted, it gives up, or `max_turns` is reached. Six built-in personas (plain, terse, confused, impatient, wandering, changing) or your own words; the result says how the conversation ended, and the conversation metrics score it. `testpion rag personas --json` lists the personas and the columns.

@@ -9,6 +9,7 @@ import { shortId } from '../../util/ids.js';
 import type { WorkspaceStore } from '../../storage/workspace.js';
 import { commandLine, isCommandTrusted } from '../../storage/trust.js';
 import { McpSession } from '../../protocols/mcp/client.js';
+import { approveMcpSnapshot, checkMcpServer } from '../../protocols/mcp/check.js';
 import { lintMcpTools } from '@testpion/shared';
 import { str, type Tool } from '../tool.js';
 
@@ -365,11 +366,19 @@ export function workspaceEditTools(d: EditToolsDeps): Tool[] {
     {
       name: 'mcp_server_tools',
       write: true,
-      description: 'Connect to one of the workspace\'s MCP servers and list what it offers: tools (with input schemas), resources and prompts, plus its server info. Use it before mcp_call_tool. A stdio server runs only when the user allowed its command in the app.',
-      inputSchema: { type: 'object', properties: { server: str('Server name or id (list_mcp_servers)') }, required: ['server'] },
+      description: 'Connect to one of the workspace\'s MCP servers and list what it offers: tools (with input schemas), resources and prompts, plus its server info. Use it before mcp_call_tool. A stdio server runs only when the user allowed its command in the app. check: true adds protocol checks and what changed since the tools were approved (drift).',
+      inputSchema: { type: 'object', properties: { server: str('Server name or id (list_mcp_servers)'), check: { type: 'boolean' }, approve: { type: 'boolean', description: 'Keep what it offers now as approved (mcp-snapshots/)' } }, required: ['server'] },
       run: async (a) => {
         const s = await d.mcpSession(String(a.server));
         try {
+          if (a.check === true || a.approve === true) {
+            const all = store.getMcpServers();
+            const ref = String(a.server).toLowerCase();
+            const cfg = all.find((x) => x.id.toLowerCase() === ref) ?? all.find((x) => x.name.toLowerCase() === ref);
+            const { snapshot, ...c } = await checkMcpServer(s, { root: store.root, server: cfg ? { id: cfg.id, name: cfg.name } : undefined });
+            if (a.approve === true && cfg) return { approved: true, file: approveMcpSnapshot(store.root, { id: cfg.id, name: cfg.name }, snapshot), tools: snapshot.tools.length };
+            return { ...c, lint: { ...c.lint, findings: c.lint.findings.slice(0, 40) } };
+          }
           const disc = await s.discover();
           const lint = lintMcpTools(disc.tools, { instructions: disc.instructions, prompts: disc.prompts, resources: disc.resources });
           return { serverInfo: disc.serverInfo, instructions: disc.instructions, tools: disc.tools, resources: disc.resources.slice(0, 200), prompts: disc.prompts, lint: { ...lint, findings: lint.findings.slice(0, 40) } };

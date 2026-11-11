@@ -66,6 +66,8 @@ export * from './asyncapi/contract.js';
 export * from './asyncapi/outline.js';
 export * from './protocols/realtime.js';
 export * from './protocols/mcp/client.js';
+export * from './protocols/mcp/check.js';
+export * from './eval/mcp-selection.js';
 export * from './protocols/websocket/websocket.js';
 export * from './protocols/registry.js';
 export * from './cookies/cookie-jar.js';

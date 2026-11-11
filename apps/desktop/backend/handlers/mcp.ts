@@ -23,7 +23,7 @@ import {
   removeItem,
 } from '@testpion/core';
 import type { Backend, Handlers } from '../backend.js';
-import { commandLine, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
+import { approveMcpSnapshot, checkMcpServer, commandLine, isCommandTrusted, trustCommand, trustedCommands } from '@testpion/core';
 
 /** Requests an inspected server sent to the client (elicitation, sampling) that wait for the user. */
 interface PendingClientRequest {
@@ -256,6 +256,20 @@ export function mcpHandlers(be: Backend): Handlers {
     'mcp.prompt': ({ serverId, name, args }: { serverId: string; name: string; args: Record<string, string> }) =>
       be.mcpLogged(serverId, 'PROMPT', `prompts/get ${name}`, args, () => be.session(serverId).getPrompt(name, args)),
     'mcp.ping': async ({ serverId }: { serverId: string }) => be.session(serverId).ping(),
+    /** The check of a connected server: the protocol where a client can see it, and what changed since its snapshot (mcp-snapshots/) was approved. */
+    'mcp.check': async ({ serverId }: { serverId: string }) => {
+      const cfg = be.ws.getMcpServers().find((s) => s.id === serverId);
+      if (!cfg) throw new ApsError('ConfigurationError', `Unknown MCP server ${serverId}`);
+      const { snapshot, lint: _lint, ...c } = await checkMcpServer(be.session(serverId), { root: be.ws.root, server: { id: cfg.id, name: cfg.name } });
+      return { ...c, tools: snapshot.tools.length };
+    },
+    /** Keeps what the server offers now as approved (a file of the workspace, so the approval travels with git). */
+    'mcp.approve': async ({ serverId }: { serverId: string }) => {
+      const cfg = be.ws.getMcpServers().find((s) => s.id === serverId);
+      if (!cfg) throw new ApsError('ConfigurationError', `Unknown MCP server ${serverId}`);
+      const c = await checkMcpServer(be.session(serverId), { root: be.ws.root, server: { id: cfg.id, name: cfg.name } });
+      return { file: approveMcpSnapshot(be.ws.root, { id: cfg.id, name: cfg.name }, c.snapshot), tools: c.snapshot.tools.length };
+    },
     /** Suggestions for a prompt argument or resource-template parameter (completion/complete). */
     'mcp.complete': ({ serverId, ref, argument, context }: { serverId: string; ref: { type: 'ref/prompt'; name: string } | { type: 'ref/resource'; uri: string }; argument: { name: string; value: string }; context?: Record<string, string> }) =>
       be.session(serverId).complete(ref, argument, context),

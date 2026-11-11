@@ -1,7 +1,7 @@
 /** Servers and inspectors: the workspace MCP server, mock servers (REST, MCP, GraphQL) and the MCP inspector. */
-import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { Command, Option } from 'commander';
 import { lintMcpTools } from '@testpion/shared';
 import { createInterface } from 'node:readline';
@@ -21,6 +21,19 @@ import {
   type DebuggerRule,
   type DebuggerRulesFile,
   McpSession,
+  aiRunDeps,
+  approveMcpSnapshot,
+  type EngineContext,
+  type WorkspaceStore,
+  checkMcpServer,
+  estimateCost,
+  mcpSnapshotFile,
+  parseSelectionCases,
+  runAiTask,
+  runToolSelection,
+  selectionCasesText,
+  vetSelectionCases,
+  type SelectionCase,
   recordingToCollection,
   startRecorder,
   collectSubscriptionEvents,
@@ -352,12 +365,22 @@ ${cyan(r.url)}`);
     .option('-e, --environment <name>', 'environment for {{variables}} in the server settings')
     .option('--call <tool>', 'call this tool instead of listing')
     .option('--lint', 'instead of listing, check how easy the tools are for an AI agent to use: descriptions, parameters, names, destructive hints, the size of the list (exit 1 when there is an error)')
+    .option('--check', 'instead of listing, check the server as a whole: the protocol where a client can see it, how easy it is for an agent (--lint), and what changed since it was approved (exit 1 on an error or a change to review)')
+    .option('--approve', 'with --server: keep what the server offers now as approved (mcp-snapshots/<server>.json in the workspace); --check compares with it')
+    .option('--probe-arguments', 'with --check: also call the tools that say they only read, without their required arguments, to see that the server refuses (this calls real tools)')
+    .option('--selection-cases', 'with --server: have the AI assistant write requests a user would type, each with the tool it needs, into datasets/mcp-selection-<server>.jsonl (read and correct them; --force writes over the file)')
+    .option('--select', 'with --server and --models: offer the tool list to each model, ask every case, and report how often each model chose the right tool and which tools it confuses (no tool is called)')
+    .option('--models <list>', 'with --select: provider/model, comma separated (providers of the workspace)')
+    .option('--cases <file>', 'with --select or --selection-cases: the cases file (default datasets/mcp-selection-<server>.jsonl), one {"ask", "tool"} a line; "tool": "none" when no tool fits')
+    .option('--per-tool <n>', 'with --selection-cases: requests per tool (default 2, at most 5)')
+    .option('--min <fraction>', 'with --select: exit 1 when a model chooses right less often than this (0..1)')
+    .option('--force', 'with --selection-cases: write over an existing cases file')
     .option('--args <json>', 'arguments of the tool as JSON', '{}')
     .option('--json', 'print as JSON (for scripts and AI agents)')
     .argument('[command...]', 'stdio command, e.g. -- node server.js')
     .action(async (command: string[], o) => {
       /** Connect, then list what the server offers, or call one tool. */
-      const talk = async (cfg: McpServerConfig) => {
+      const talk = async (cfg: McpServerConfig, root?: string, ws?: { store: WorkspaceStore; ctx: EngineContext }) => {
         const s = new McpSession(cfg);
         await s.connect();
         try {
@@ -376,6 +399,87 @@ ${cyan(r.url)}`);
               if (r.structuredContent !== undefined) printJson(r.structuredContent);
             }
             if (r.isError) process.exitCode = EXIT.TEST_FAILURE;
+            return;
+          }
+          if (o.check || o.approve) {
+            const c = await checkMcpServer(s, { root, server: root ? { id: cfg.id, name: cfg.name } : undefined, probeArguments: !!o.probeArguments });
+            if (o.approve) {
+              if (!root) throw new CliError('--approve keeps the snapshot in a workspace: use it with --server <name> (a server saved in the workspace)', EXIT.CONFIG_ERROR);
+              const file = approveMcpSnapshot(root, { id: cfg.id, name: cfg.name }, c.snapshot);
+              if (o.json) return printJson({ approved: true, file, tools: c.snapshot.tools.length, prompts: c.snapshot.prompts.length, resources: c.snapshot.resources.length, changes: c.drift?.changes ?? [] });
+              console.log(`${green('Approved')} ${c.snapshot.tools.length} tool${c.snapshot.tools.length === 1 ? '' : 's'} of ${cfg.name} ${dim(`· ${file}`)}`);
+              if (c.drift?.changes.length) console.log(dim(`It replaced the earlier approval: ${c.drift.text}`));
+              return;
+            }
+            const { snapshot: _snapshot, ...shown } = c;
+            if (o.json) printJson(shown);
+            else {
+              console.log(bold(`${c.serverInfo?.name ?? cfg.name} ${c.serverInfo?.version ?? ''}`), dim(c.protocolVersion ? `MCP ${c.protocolVersion}` : ''));
+              console.log(c.conformance.errors ? red(c.conformance.text) : c.conformance.warnings ? yellow(c.conformance.text) : green(c.conformance.text));
+              for (const f of c.conformance.findings) console.log(`  ${f.level === 'error' ? red('error') : f.level === 'warn' ? yellow('warn ') : dim('tip  ')} ${f.text}`);
+              console.log(c.lint.errors ? red(c.lint.text) : c.lint.warnings ? yellow(c.lint.text) : green(c.lint.text));
+              for (const f of c.lint.findings.filter((x) => x.level !== 'tip')) console.log(`  ${f.level === 'error' ? red('error') : yellow('warn ')} ${f.text}`);
+              if (c.drift) {
+                console.log(c.drift.breaking ? red(c.drift.text) : c.drift.review ? yellow(c.drift.text) : green(c.drift.text));
+                for (const ch of c.drift.changes) {
+                  console.log(`  ${ch.level === 'breaking' ? red('breaking') : ch.level === 'review' ? yellow('review  ') : dim('info    ')} ${ch.text}`);
+                  // a text an agent reads: the approved words and the new ones, so the review can happen here
+                  if (typeof ch.before === 'string' && typeof ch.after === 'string') console.log(dim(`           was: ${ch.before.slice(0, 300) || '(empty)'}`) + String.fromCharCode(10) + `           now: ${ch.after.slice(0, 300) || '(empty)'}`);
+                }
+                if (c.drift.changed) console.log(dim(`Read the changes, then approve them: testpion mcp --server "${cfg.name}" --approve`));
+              } else if (root) console.log(dim(`Never approved: once you have read the tools, testpion mcp --server "${cfg.name}" --approve keeps what it offers now, and --check then reports every change.`));
+              else console.log(dim('With --server <name> (a server saved in a workspace) the check also reports what changed since you approved it.'));
+            }
+            if (!c.ok) process.exitCode = EXIT.TEST_FAILURE;
+            return;
+          }
+          if (o.selectionCases || o.select) {
+            if (!ws) throw new CliError('Tool selection works on a server saved in a workspace: use --server <name>', EXIT.CONFIG_ERROR);
+            const d = await s.discover();
+            const casesFile = String(o.cases ?? `datasets/mcp-selection-${mcpSnapshotFile({ id: cfg.id, name: cfg.name }).replace(/^mcp-snapshots\//, '').replace(/\.json$/, '')}.jsonl`);
+            const casesPath = resolve(ws.store.root, casesFile);
+            if (o.selectionCases) {
+              if (existsSync(casesPath) && !o.force) throw new CliError(`${casesFile} exists (it may hold cases you corrected). Pass --force to write it again.`, EXIT.CONFIG_ERROR);
+              const perTool = Math.min(5, Math.max(1, Number(o.perTool) || 2));
+              const r = await runAiTask(aiRunDeps({ ctx: ws.ctx, settings: new WorkspaceManager().loadSettings(), store: ws.store, surface: process.env.CI ? 'ci' : 'cli', env: process.env }), {
+                task: 'mcp-selection-cases',
+                context: { tools: d.tools.map((t) => ({ name: t.name, description: t.description ?? '', parameters: Object.keys((t.inputSchema?.properties ?? {}) as Record<string, unknown>) })), perTool, noneCases: Math.max(2, Math.round(d.tools.length / 5)) },
+              });
+              const written = ((r.value as { cases?: SelectionCase[] } | undefined)?.cases ?? []).map((c) => ({ ask: String(c.ask ?? '').trim(), tool: String(c.tool ?? '').trim() })).filter((c) => c.ask && c.tool);
+              const vetted = vetSelectionCases(written, d.tools);
+              if (!vetted.cases.length) throw new CliError(`The model (${r.provider}/${r.model}) wrote no usable case${r.problems.length ? `: ${r.problems.slice(0, 2).join('; ')}` : ''}`, EXIT.TEST_FAILURE);
+              mkdirSync(dirname(casesPath), { recursive: true });
+              writeFileSync(casesPath, selectionCasesText(vetted.cases));
+              if (o.json) return printJson({ file: casesFile, cases: vetted.cases.length, dropped: vetted.dropped, uncovered: vetted.uncovered, model: `${r.provider}/${r.model}`, usage: r.usage, costUsd: r.costUsd });
+              console.log(`${green('Wrote')} ${vetted.cases.length} cases to ${casesFile} ${dim(`· ${r.provider}/${r.model} · AI-generated: read them before you rely on them`)}`);
+              for (const x of vetted.dropped) console.log(`  ${yellow('dropped')} ${x.ask} ${dim(`(${x.why})`)}`);
+              if (vetted.uncovered.length) console.log(yellow(`No case for: ${vetted.uncovered.join(', ')}. Add lines for them: {"ask": "…", "tool": "<name>"}.`));
+              console.log(dim(`Run them: testpion mcp --server "${cfg.name}" --select --models <provider/model,…>`));
+              return;
+            }
+            if (!existsSync(casesPath)) throw new CliError(`No cases at ${casesFile}. Write them with --selection-cases (an AI task), or pass --cases <file> with one {"ask", "tool"} a line.`, EXIT.CONFIG_ERROR);
+            const models = String(o.models ?? '').split(',').map((m) => m.trim()).filter(Boolean);
+            const run = await runToolSelection(ws.ctx.services.providers, {
+              tools: d.tools.map((t) => ({ name: t.name, description: t.description, inputSchema: (t.inputSchema ?? { type: 'object' }) as Record<string, unknown> })),
+              instructions: d.instructions,
+              cases: parseSelectionCases(readFileSync(casesPath, 'utf8')),
+              models,
+              cost: (p, model, usage) => estimateCost(ws.ctx.services.pricing ?? [], p.config, model, usage).cost,
+            });
+            const min = o.min !== undefined ? Number(o.min) : undefined;
+            const below = min !== undefined ? run.models.filter((m) => m.accuracy < min || m.errors === m.cases) : [];
+            if (o.json) printJson({ server: cfg.name, casesFile, ...run, ...(min !== undefined ? { min, passed: !below.length } : {}) });
+            else {
+              console.log(bold(run.text));
+              for (const m of run.models) {
+                console.log(`${m.accuracy >= (min ?? 0.9) ? green(`${Math.round(m.accuracy * 100)}%`) : yellow(`${Math.round(m.accuracy * 100)}%`)} ${bold(m.model)} ${dim(`${m.correct} of ${m.cases - m.errors} right · ${m.usage.inputTokens} in / ${m.usage.outputTokens} out${m.costUsd !== undefined ? ` · $${m.costUsd.toFixed(4)}` : ''}`)}`);
+                if (m.errors) console.log(`  ${red(`${m.errors} not answered`)} ${dim(m.firstError ?? '')}`);
+                for (const x of m.misses.slice(0, 10)) console.log(`  ${red('✗')} "${x.ask}" ${dim(`needed ${x.expected}, chose ${x.picked}`)}`);
+                if (m.misses.length > 10) console.log(dim(`  … and ${m.misses.length - 10} more (--json lists all)`));
+                for (const x of m.confusions) console.log(`  ${yellow('confuses')} ${x.expected} with ${x.picked} ${dim(`${x.count}×: make their descriptions say when to use which`)}`);
+              }
+            }
+            if (below.length) process.exitCode = EXIT.TEST_FAILURE;
             return;
           }
           const d = await s.discover();
@@ -412,7 +516,7 @@ ${cyan(r.url)}`);
             const r = String(o.server).toLowerCase();
             const found = ctx.services.mcpServers.find((x) => x.id.toLowerCase() === r) ?? ctx.services.mcpServers.find((x) => x.name.toLowerCase() === r);
             if (!found) throw new CliError(`No MCP server "${o.server}" in the workspace. Available: ${ctx.services.mcpServers.map((x) => x.name).join(', ') || 'none'}`, EXIT.CONFIG_ERROR);
-            await talk(found);
+            await talk(found, store.root, { store, ctx });
           } finally {
             await ctx.dispose();
           }

@@ -152,6 +152,8 @@ testpion git conflicts [file] [--resolve ours|theirs] -w   After a pull that sto
 testpion git resolve <file> --ours|--theirs|--pick <key=ours|theirs…>|--edit <key=value…> -w   Settle a conflicted file: a side for everything, a side per conflict key, or your own value (--edit item:r1#request.url='"https://…"' takes JSON for an item or field key, --edit hunk:0='the lines to keep' plain text for a hunk key)
 testpion diff <from> [to] -w  What changed between two commits, by meaning (--markdown for a pull-request comment)
 testpion mcp [--url|--sse|--server <name> -w] [--call <tool> --args <json>] [--json]   Inspect an MCP server (a saved one with --server), or call one of its tools
+testpion mcp --server <name> --check | --approve [--probe-arguments] [--json]   Check a server as a whole: the protocol, how easy it is for an agent, and what changed since --approve kept its tools (mcp-snapshots/); exit 1 on an error or a change to review
+testpion mcp --server <name> --selection-cases | --select --models <provider/model,…> [--cases <file>] [--min 0.9] [--json]   Does each model pick the right tool: write the cases with AI, then ask every model (no tool is called)
 testpion ws <url> [-m msg] [-e event=json]    Talk to a WebSocket or Socket.IO server and print the replies
 testpion mqtt <url> [-s topic] [-p topic=msg] Subscribe and publish on an MQTT broker and print what arrives
 testpion kafka <brokers> [-r topic] [-p topic=value] Read and produce Kafka topics and print what arrives

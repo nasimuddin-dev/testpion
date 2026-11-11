@@ -13,6 +13,7 @@ import type { AiPrivacy, AiTier } from '../ai-settings.js';
 import { parseGeneratedRequest } from '../assist.js';
 import type { ProposalFinding, ProposalItem } from '../proposal.js';
 import { SIMULATE_USER_SCHEMA } from '../../eval/rag/simulate-prompt.js';
+import { SELECTION_CASES_SCHEMA } from '../../eval/mcp-selection-prompt.js';
 import { TASK_INSTRUCTIONS } from './prompts.js';
 import { quoteTemplateValues } from '../yaml-repair.js';
 import type { FormatKind } from '../flow-format.js';
@@ -661,6 +662,16 @@ export const AI_TASKS: readonly AiTaskDef[] = [
     temperature: 0.4,
     contextTokens: 24_000,
     maxTokens: 800,
+    maxRepairs: 2,
+  }),
+  T('mcp-selection-cases', {
+    title: 'Write tool-selection cases for an MCP server',
+    description: 'Requests a user would type, each with the tool of the server it needs (or none), to test whether a model picks the right tool. TestPion drops cases that name a tool that does not exist or give the tool name away.',
+    tier: 'large',
+    output: { kind: 'json', schema: SELECTION_CASES_SCHEMA },
+    context: 'tools [{name, description, parameters}], perTool (requests per tool), noneCases (requests no tool fits)',
+    contextTokens: 24_000,
+    maxTokens: 6000,
     maxRepairs: 2,
   }),
   T('rag-suggest-mapping', {
