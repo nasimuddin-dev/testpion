@@ -64,7 +64,7 @@ describe('rag metrics, presets, metric', () => {
     expect(all.count).toBe(139);
     expect(all.metrics.find((m) => m.id === 'faithfulness')).toMatchObject({ kind: 'judged' });
     const free = cliData<{ count: number }>((await cli(['rag', 'metrics', '--kind', 'deterministic', '--json'])).out);
-    expect(free.count).toBe(55);
+    expect(free.count).toBe(56);
     const ragas = cliData<{ metrics: Array<{ id: string }> }>((await cli(['rag', 'metrics', '--search', 'LLMContextRecall', '--json'])).out);
     expect(ragas.metrics.map((m) => m.id)[0]).toBe('context-recall');
     const text = await cli(['rag', 'metrics', '--group', 'retrieval-ir']);

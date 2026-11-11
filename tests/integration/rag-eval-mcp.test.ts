@@ -67,7 +67,7 @@ describe('RAG metric tools over MCP', () => {
     expect(all.count).toBe(139);
     expect(all.presets.map((p) => p.id)).toContain('ragas-core');
     expect((await call<{ metrics: Array<{ id: string }> }>('rag_metrics', { search: 'response_relevancy' })).data.metrics.map((m) => m.id)).toContain('answer-relevance');
-    expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(55);
+    expect((await call<{ count: number }>('rag_metrics', { kind: 'deterministic' })).data.count).toBe(56);
   });
 
   it('rag_try_metric: a dry run shows the prompt and sends nothing; a real run scores; a free metric answers at once', async () => {

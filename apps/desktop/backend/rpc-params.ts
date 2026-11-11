@@ -317,6 +317,8 @@ export const RPC_PARAMS: Record<string, ParamSpec> = {
   'load.start': { config: 'o', collection: 'o?' },
   'load.thresholds': { rules: 'sa', snapshot: 'o' },
   'mcp.deleteServer': { serverId: 's' },
+  'mcp.check': { serverId: 's' },
+  'mcp.approve': { serverId: 's' },
   'mcp.mock.call': { definition: 'o', tool: 's', args: 'o?' },
   'mcp.mock.parse': { text: 's' },
   'mcp.mock.read': { file: 'wp', name: 's?' },

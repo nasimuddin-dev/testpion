@@ -28,7 +28,7 @@ afterAll(printScorecard);
 // (+170: RAG R3 added about fifty more checks (conversation, agent, safety, multimodal, g-eval, dag …), named in the same list)
 // (+10: the follow-up pass added four checks, answer-regex, answer-length, answer-json-schema and judge-cost, named in the same list)
 const FLOW_BUDGET = 1370;
-const CHECKS_BUDGET = 950; // (+190: the same R2 metrics are named in the checks reference; +150: the same R3 checks; +10: the four checks of the follow-up pass)
+const CHECKS_BUDGET = 960; // (+190: the same R2 metrics are named in the checks reference; +150: the same R3 checks; +10: the four checks of the follow-up pass; +10: attack-resisted, the check of a simulated attacker)
 
 describe('the format reference', () => {
   it('stays within its token budget', () => {
