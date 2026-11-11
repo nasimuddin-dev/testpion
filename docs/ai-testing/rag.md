@@ -166,8 +166,9 @@ a file is executed) and writes TestPion records:
 | BEIR | `queries.jsonl` + the qrels file (query-id, corpus-id, score; TREC's four columns work) + optionally `corpus.jsonl` | `question`, `reference_ids` (the documents with a positive score, best grade first), `reference_contexts` |
 | NVIDIA retriever data | `query` / `question` with `pos_doc`, `positive_passages` or `positive_ctxs` (and negatives) | gold ids and texts of the positives; negatives kept as `negative_contexts` |
 | promptfoo | a config or a list of `tests` (YAML or JSON): the question variable, the expected value of an `equals` / `contains` / `similar` / `context-recall` assertion, a `context` variable | `question`, `reference`, `reference_contexts` |
+| Traces of your application (OpenTelemetry) | an OTLP/JSON export of traces (`resourceSpans`; one object, or one a line) | `question`, `answer`, `contexts`, `tool_calls`, `turns`, `model`, `latency_ms`, tokens; see [From traces](#from-traces) |
 
-The format is found from the column names (or give `--from ragas|deepeval|nvidia|promptfoo|beir`; BEIR also takes `--qrels` and
+The format is found from the column names (or give `--from ragas|deepeval|nvidia|promptfoo|beir|otel`; BEIR also takes `--qrels` and
 `--corpus`). A multi-turn Ragas sample becomes a conversation record (see [Conversations](#r3-conversations)); promptfoo assertions other than the expected value are left out and named in the notes.
 **Export as…** (`testpion rag export <dataset|evaluation> --to ragas|deepeval`, `rag_export_dataset`) goes the other way; with
 `--run <runId>` the answer and retrieved contexts each record got in that run are included, so Ragas or DeepEval can score the very
@@ -344,6 +345,21 @@ transcript: `knowledge-retention` (does it ask again for what the user said?), `
 (`per-turn:faithfulness`, `per-turn:answer-relevance` …) which scores every assistant turn with a single-turn metric on that turn's own
 question, answer and chunks and reports the mean (or `aggregate: min`) and each turn. Ragas multi-turn samples import as conversation
 records and export back (`reference` is the goal, `expected_outcome`; `reference_tool_calls` and `reference_topics` are kept).
+
+#### From traces of your application {#from-traces}
+
+What real users asked is the best test data you have. If your application is traced with OpenTelemetry, export the traces as OTLP/JSON and import them:
+
+```bash
+testpion rag import traces.json --from otel -o datasets/from-production.jsonl
+testpion rag import traces.json --only-errors --limit 50 -o datasets/failures.jsonl
+```
+
+Every trace with a model call becomes one record: the user's `question`, the `answer` the system gave, the documents it retrieved (`contexts`), the tools it ran (`tool_calls`), the conversation the model was shown (`turns`), the model, the time it took and the tokens. Because a record already has the answer, it can be scored **as it is**, without calling your system: add it to an evaluation and run the metrics that need no reference (`faithfulness`, `answer-relevance`, the safety metrics), or add a `reference` where you know the right answer and keep it as a regression test. A trace where a span failed is tagged `error`.
+
+The OpenTelemetry GenAI conventions are still changing, and each SDK writes its own names, so the import reads all the forms in use: `gen_ai.input.messages` / `gen_ai.output.messages`, the older `gen_ai.prompt` / `gen_ai.completion` (as JSON or indexed attributes), messages as span events, tool spans (`gen_ai.tool.name`), and OpenInference (`llm.input_messages…`, `retrieval.documents…`, `tool.name`). A trace without recorded messages is skipped and counted: most instrumentations leave message content out until you turn it on (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`).
+
+Traces hold what people typed. Read the records and remove personal data before you commit the file. In the app, *Import…* takes the same file (**Traces of your app (OpenTelemetry)**).
 
 #### Simulated users {#simulated-users}
 

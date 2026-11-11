@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Test data from traces
+
+- `testpion rag import traces.json --from otel` (and *Import…* in the app) turns an OpenTelemetry export of your AI application's traces into dataset records: the question, the answer the system gave, what it retrieved and the tools it ran. `--only-errors` keeps the traces where something failed. The records can be scored as they are, without calling your system.
+
 ### Red teaming
 
 - **Attackers that adapt.** A simulated user with an attacker persona (step by step, behind a story, claiming authority) keeps trying for several turns; the new check `attack-resisted` fails when it gets what it wanted or a canary shows up in any answer. `testpion rag probes add attackers` writes six such records.

@@ -171,6 +171,7 @@ export * from './runner/rag-evaluation.js';
 export * from './eval/rag/run-target.js';
 export * from './eval/rag/targets.js';
 export * from './eval/rag/dataset-formats.js';
+export { importOtelTraces, type TraceImport } from './eval/rag/otel-traces.js';
 export * from './eval/rag/dataset-imports.js';
 export * from './eval/rag/preflight.js';
 export * from './runner/rag-probe.js';

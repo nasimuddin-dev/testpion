@@ -9,15 +9,16 @@
  * where `answer` and `contexts` (an answer already given and what was retrieved for it) are only there when the file
  * came from a run; a target is called for the question anyway. Import then export keeps every column both formats share.
  */
+import { importOtelTraces } from './otel-traces.js';
 import { datasetFormatOf, previewDatasetRecords, type DatasetTextFormat } from '@testpion/shared';
 import { ApsError } from '../../errors.js';
 import { importNvidia, importPromptfoo, str } from './dataset-imports.js';
 import { listOf } from './lists.js';
 import { turnsOf } from './record.js';
 
-export type RagDatasetFormat = 'testpion' | 'ragas' | 'deepeval' | 'nvidia' | 'promptfoo' | 'beir';
+export type RagDatasetFormat = 'testpion' | 'ragas' | 'deepeval' | 'nvidia' | 'promptfoo' | 'beir' | 'otel';
 /** The formats a dataset can be imported from (BEIR needs its queries, qrels and corpus files: see importBeir). */
-export const RAG_DATASET_FORMATS: readonly RagDatasetFormat[] = ['testpion', 'ragas', 'deepeval', 'nvidia', 'promptfoo', 'beir'];
+export const RAG_DATASET_FORMATS: readonly RagDatasetFormat[] = ['testpion', 'ragas', 'deepeval', 'nvidia', 'promptfoo', 'beir', 'otel'];
 /** The formats a dataset can be exported to. */
 const RAG_EXPORT_FORMATS: readonly RagDatasetFormat[] = ['ragas', 'deepeval'];
 
@@ -54,6 +55,8 @@ const pick = (r: Rec, ...keys: string[]) => {
 /** Which format a dataset's records are in, by the column names each tool uses. */
 export function detectRagFormat(records: Rec[]): RagDatasetFormat {
   const r = records[0] ?? {};
+  // an OpenTelemetry export (OTLP/JSON): traces of an AI application
+  if (has(r, 'resourceSpans')) return 'otel';
   if (has(r, 'vars') || has(r, 'assert')) return 'promptfoo';
   if (has(r, 'pos_doc', 'positive_passages', 'positive_ctxs', 'pos_docs')) return 'nvidia';
   if (has(r, 'question') || has(r, 'reference_ids')) return 'testpion';
@@ -74,6 +77,10 @@ export interface ImportResult {
 /** Records of a Ragas or DeepEval dataset as TestPion's. A record that is TestPion's own is kept as it is. */
 export function importRagRecords(records: Rec[], from?: RagDatasetFormat): ImportResult {
   const fmt = from ?? detectRagFormat(records);
+  if (fmt === 'otel') {
+    const t = importOtelTraces(records);
+    return { records: t.records, notes: t.notes, from: fmt };
+  }
   if (fmt === 'nvidia') return { ...importNvidia(records), from: fmt };
   if (fmt === 'promptfoo') return { ...importPromptfoo(records), from: fmt };
   if (fmt === 'beir') throw new ApsError('ValidationError', 'A BEIR dataset is three files (queries, qrels and optionally the corpus): use importBeir, or `testpion rag import queries.jsonl --from beir --qrels qrels/test.tsv --corpus corpus.jsonl`');

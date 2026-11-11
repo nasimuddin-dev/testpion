@@ -13,6 +13,7 @@ import {
   findRagTarget,
   findSavedEvaluation,
   importBeir,
+  importOtelTraces,
   importRagRecords,
   metricScoreColumns,
   parseRagImportText,
@@ -111,23 +112,31 @@ export function registerRagCommands(program: Command): void {
 
   rag
     .command('import')
-    .description('convert a dataset of another tool (Ragas, DeepEval, BEIR queries + qrels, NVIDIA retriever data, promptfoo tests; JSON, JSONL, CSV or YAML; only data is read, nothing is executed) into a TestPion RAG dataset: question, reference, reference_contexts, reference_ids')
+    .description('convert a dataset of another tool (Ragas, DeepEval, BEIR queries + qrels, NVIDIA retriever data, promptfoo tests, or traces of your AI application exported from OpenTelemetry as OTLP/JSON; JSON, JSONL, CSV or YAML; only data is read, nothing is executed) into a TestPion RAG dataset: question, reference, reference_contexts, reference_ids')
     .argument('<file>', 'the dataset file')
     .addOption(new Option('--from <format>', `the format of the file (default: found by its columns): ${FORMATS}`).choices([...RAG_DATASET_FORMATS]))
     .option('--qrels <file>', 'BEIR: the qrels file (query-id, corpus-id, score)')
     .option('--corpus <file>', 'BEIR: the corpus (corpus.jsonl), to fill reference_contexts')
-    .option('--limit <n>', 'BEIR: only the first n queries')
+    .option('--limit <n>', 'BEIR: only the first n queries; traces: only the first n records')
+    .option('--only-errors', 'traces (--from otel): only the traces where a span failed')
     .option('-o, --out <file>', 'write the dataset here (JSON Lines; default: print it)')
     .option('--format <format>', 'jsonl or json output', 'jsonl')
     .option('--json', 'print { from, records, notes } as JSON')
-    .action((file: string, o: { from?: RagDatasetFormat; qrels?: string; corpus?: string; limit?: string; out?: string; format: string; json?: boolean }) => {
+    .action((file: string, o: { from?: RagDatasetFormat; qrels?: string; corpus?: string; limit?: string; onlyErrors?: boolean; out?: string; format: string; json?: boolean }) => {
       const text0 = readFileSync(resolve(file), 'utf8');
       let r: ReturnType<typeof importRagRecords>;
       try {
         if (o.from === 'beir') {
           if (!o.qrels) throw new CliError('A BEIR import needs --qrels <file> (and --corpus <file> for the texts)', EXIT.CONFIG_ERROR);
           r = { ...importBeir({ queries: text0, qrels: readFileSync(resolve(o.qrels), 'utf8'), corpus: o.corpus ? readFileSync(resolve(o.corpus), 'utf8') : undefined }, { limit: o.limit ? Number(o.limit) : undefined }), from: 'beir' };
-        } else r = importRagRecords(parseRagImportText(text0, file, o.from), o.from);
+        } else {
+          const raw = parseRagImportText(text0, file, o.from);
+          // an OpenTelemetry export: traces of an AI application become records with the answer the system gave
+          if (o.from === 'otel' || (!o.from && raw[0] && 'resourceSpans' in raw[0])) {
+            const t = importOtelTraces(raw, { limit: o.limit ? Number(o.limit) : undefined, onlyErrors: !!o.onlyErrors });
+            r = { records: t.records, notes: t.notes, from: 'otel' };
+          } else r = importRagRecords(raw, o.from);
+        }
       } catch (e) {
         throw e instanceof ApsError ? new CliError(e.message, EXIT.CONFIG_ERROR) : e;
       }

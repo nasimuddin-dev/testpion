@@ -5,7 +5,7 @@ import { useApp, attempt } from '../../store';
 import { pickTextFile } from '../../lib/files';
 import { Button, Callout, Field, Modal, Select } from '../ui';
 
-type Format = 'auto' | 'ragas' | 'deepeval' | 'nvidia' | 'promptfoo' | 'beir';
+type Format = 'auto' | 'ragas' | 'deepeval' | 'nvidia' | 'promptfoo' | 'beir' | 'otel';
 
 const FORMATS: Array<{ id: Format; label: string; hint: string }> = [
   { id: 'auto', label: 'Find it from the columns', hint: 'Ragas, DeepEval, NVIDIA retriever data and promptfoo files are recognised by their column names.' },
@@ -13,6 +13,7 @@ const FORMATS: Array<{ id: Format; label: string; hint: string }> = [
   { id: 'deepeval', label: 'DeepEval', hint: 'Goldens or test cases: input, expected_output, context, actual_output, retrieval_context.' },
   { id: 'nvidia', label: 'NVIDIA retriever data', hint: 'query + pos_doc / positive_passages (the gold chunks) and optional negatives.' },
   { id: 'promptfoo', label: 'promptfoo tests', hint: 'A config or list of tests (YAML or JSON): vars (the question, a context) and checks (the expected value).' },
+  { id: 'otel', label: 'Traces of your app (OpenTelemetry)', hint: 'An OTLP/JSON export of traces: every trace with a model call becomes a record with the question, the answer the system gave, what it retrieved and the tools it called. Read the records for personal data before you commit them.' },
   { id: 'beir', label: 'BEIR (queries + qrels)', hint: 'queries.jsonl, the qrels file (query-id, corpus-id, score) and optionally corpus.jsonl for the gold texts.' },
 ];
 
