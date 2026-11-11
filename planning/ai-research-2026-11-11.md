@@ -26,6 +26,17 @@ an MCP mock, OTLP export of run traces, junit/json/html/markdown reporters, CLI 
 Not proposed: guardrail false-positive testing (the benign probe set already serves it), A2A protocol testing (no clear
 demand found in this pass), pairwise/Elo ranking (matrix + baseline covers the need).
 
+## Status (2026-11-11, same day)
+
+| Id | State | What was built | Left out |
+|---|---|---|---|
+| N-1 | Built (51db89ba) | `eval/rag/simulate.ts`: a record with `persona` + `goal` is played by the AI task `simulate-user` on the evaluation's judge; six personas; `metadata.rag.record.simulated`; `testpion rag personas`; the drill-down says how it ended. | No UI to author personas (they are dataset columns). The ending is the simulated user's own opinion. |
+| N-2 | Built (4d97e4c5) | `protocols/mcp/check.ts` (conformance), `shared/mcp-snapshot.ts` (approved snapshot in `mcp-snapshots/`, drift), lint codes `instruction-like` and `invisible-text`, `eval/mcp-selection.ts` (which tool each model picks; AI task `mcp-selection-cases`); CLI `mcp --check / --approve / --selection-cases / --select`; MCP `mcp_server_tools { check, approve }`; Server info panel `ServerCheck.tsx`; e2e plan `mcp-server-check`. | Tool selection has no UI and no MCP tool (CLI only). Conformance covers what a client can see without side effects, not the official conformance suite. Selection calls go to the provider directly: tokens and cost are reported, not written to the usage ledger. |
+| N-3 | Built (b7aea4bd) | Attacker personas + metric `attack-resisted` (139 metrics) + probe set `attackers`; `mock mcp --inject` and `inject:` in a mock file; `report/sarif.ts` (`-r sarif`, `rag run --sarif`) with the OWASP LLM Top 10 (2025) mapping and coverage. | The OWASP mapping is small on purpose; LLM03, LLM04, LLM07, LLM08 have no checks of their own. No OWASP view in the app. |
+| N-4 | Built (2a094f4c) | `eval/rag/otel-traces.ts`: OTLP/JSON traces to dataset records (`rag import --from otel`, `--only-errors`, the app's Import dialog). | File import only: no OTLP receiver on a port. One record a trace (conversations across traces are not joined). |
+| N-5 | Partly (c5cb76a1) | `agents init --targets skill` (an Agent Skill); the docs build writes `<page>.md` and `llms-full.txt`. | **Not done, owner decision:** making `minimal` the default MCP profile (it changes what existing agent setups list). **Not built:** long runs as MCP tasks. The verbose tool list still sits near its 330 KiB cap (221 tools, not about 170 as written above). |
+| N-6 | Checked, not built | TestPion uses `@modelcontextprotocol/sdk` 1.32.1; its newest revision is **2025-11-25** (also 2025-06-18, 2025-03-26, 2024-11-05). The 1.x line ends at 1.32.2 with the same list. The 2026-07-28 revision is in the v2 SDK, which is split into `@modelcontextprotocol/client`, `/server` and `/core` (2.4.0, needs zod 4). `mcp --check` now reports the revision a server speaks. | Speaking 2026-07-28 means moving client, server and mock to the v2 packages: a major dependency change across `protocols/mcp/client.ts`, `mcp-server/` and the mock. **Owner decision** before starting; a server that only speaks the stateless revision cannot be connected until then. |
+
 ## Sources
 
 - https://arize.com/resources/llm-and-agent-evaluation-platforms/
