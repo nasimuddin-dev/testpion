@@ -69,3 +69,23 @@ describe('runBreakdown flaky tests', () => {
     expect(none.result().phases).toBeUndefined();
   });
 });
+
+describe('OWASP coverage of a run', () => {
+  const withChecks = (name: string, checks: Array<[string, boolean]>): TestResult => ({ ...r(name, 'passed', 10, 'llm'), checks: checks.map(([type, passed]) => ({ type, name: type, passed, source: 'assertion', message: '' })) }) as TestResult;
+  it('counts the tests that covered each category and those that failed there; nothing when no test covered one', () => {
+    const none = runBreakdown();
+    none.add(r('plain', 'passed', 10));
+    expect(none.result().owasp).toBeUndefined();
+    const b = runBreakdown();
+    b.add(withChecks('a', [['prompt-injection-resistance', true], ['attack-resisted', false]]));
+    b.add(withChecks('b', [['pii-leakage', true]]));
+    b.add(withChecks('c', [['jailbreak-resistance', true]]));
+    const owasp = b.result().owasp!;
+    expect(owasp).toHaveLength(10);
+    expect(owasp.filter((c) => c.tests).map((c) => [c.id, c.tests, c.failed])).toEqual([
+      ['LLM01:2025', 2, 1],
+      ['LLM02:2025', 1, 0],
+    ]);
+  });
+});
+

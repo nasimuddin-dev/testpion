@@ -5,6 +5,7 @@ import { formatMs, plural } from '../lib/format';
 import { BarRow, ChartCard, StackedColumns, Swatch } from './charts';
 import { StatusIcon } from './Results';
 import { Busy, Empty } from './ui';
+import { OwaspCard, type OwaspRow } from './OwaspCoverage';
 
 /** From `runs.breakdown` (runBreakdown in core). */
 interface Breakdown {
@@ -27,6 +28,7 @@ interface Breakdown {
   flaky?: Array<{ id: string; name: string; attempts: number }>;
   scores?: Array<{ name: string; buckets: number[]; mean: number; count: number }>;
   phases?: { requests: number; newConnections: number; reused: number; dnsMs: number; tcpMs: number; tlsMs: number; ttfbMs: number; downloadMs: number };
+  owasp?: OwaspRow[];
 }
 
 const PHASES = [
@@ -236,6 +238,7 @@ export function RunCharts({ runId, onPick }: { runId: string; onPick?(name: stri
             </div>
           </ChartCard>
         )}
+        {data.owasp && <OwaspCard rows={data.owasp} />}
         {data.failingChecks.length > 0 && (
           <ChartCard title="Checks that failed most">
             <div className="flex flex-col">

@@ -184,8 +184,10 @@ const steps = [
      ${view('Charts')}
      const hist = document.querySelectorAll('[data-rag-histogram]').length;
      const charts = !!document.querySelector('[data-rag-charts]');
+     await __t.waitFor(() => document.querySelector('[data-run-owasp-row]'), 6000);
+     const owasp = document.querySelectorAll('[data-run-owasp-row]').length + '/' + document.querySelectorAll('[data-run-owasp-row][data-state="untested"]').length;
      ${view('Samples')}
-     return 'tags: ' + tags.sort().join(',') + ' | charts: ' + charts + ' | histograms: ' + hist;`,
+     return 'tags: ' + tags.sort().join(',') + ' | charts: ' + charts + ' | histograms: ' + hist + ' | owasp rows/untested: ' + owasp;`,
   ),
   step(
     'score-again-then-compare-and-the-pivot',
@@ -269,7 +271,7 @@ module.exports = withExpect(
     'the-picture-is-judged': /^score: 1 \| .* \| judge calls: 1$/,
     'the-connect-dialog-maps-tools-a-session-and-a-picture': /^slots: toolCalls:true,toolCall\.name:true,toolCall\.arguments:true,conversationId:true,context\.image:true \| modes: ,stateless-history,server-session \| chosen: server-session$/,
     'a-run-for-the-views': /^runs: 1 \| total: 3$/,
-    'by-tag-and-charts': /^tags: hours,policy \| charts: true \| histograms: [1-9]/,
+    'by-tag-and-charts': /^tags: hours,policy \| charts: true \| histograms: [1-9]\d* \| owasp rows\/untested: 10\/[1-9]$/,
     'score-again-then-compare-and-the-pivot': /^runs: 2 \| dialog closed: true \| compare: true rows [1-9]\d* \| summary: .* \| pivot rows: [1-9]/,
     'the-matrix-export-offers-the-files': /formats: .*CSV.*JSON.*HTML/,
     'the-monitor-editor-has-the-rag-fields': /^evaluation chosen: R3 views \| fields: Gates:true,Share of samples judged:true,Daily judge budget in USD:true \| gates typed: faithfulness=0\.8$/,

@@ -1,4 +1,5 @@
 import type { TestResult } from '../model/types.js';
+import { OwaspTally, type OwaspCoverage } from '../report/sarif.js';
 
 /** Upper bounds (ms) of the latency histogram's buckets; the last bucket is open-ended. */
 const LATENCY_BUCKETS = [50, 100, 250, 500, 1000, 2500, 5000] as const;
@@ -32,6 +33,8 @@ export interface RunBreakdown {
    * count on new connections), and how many requests opened a new connection or reused one.
    */
   phases?: { requests: number; newConnections: number; reused: number; dnsMs: number; tcpMs: number; tlsMs: number; ttfbMs: number; downloadMs: number };
+  /** The OWASP Top 10 for LLM applications (2025): per category, the tests that covered it and those that failed there. Only when a test covered one. */
+  owasp?: OwaspCoverage[];
 }
 
 const PHASE_KEYS = ['dnsMs', 'tcpMs', 'tlsMs', 'ttfbMs', 'downloadMs'] as const;
@@ -50,8 +53,10 @@ export function runBreakdown() {
   const flaky: RunBreakdown['flaky'] = [];
   const phases = { requests: 0, newConnections: 0, reused: 0, dnsMs: 0, tcpMs: 0, tlsMs: 0, ttfbMs: 0, downloadMs: 0 };
   let timed = 0;
+  const owasp = new OwaspTally();
   return {
     add(r: TestResult) {
+      if (r.checks?.length) owasp.add(r);
       const bad = r.status === 'failed' || r.status === 'error';
       if (r.status === 'passed' && (r.attempts ?? 1) > 1 && flaky.length < 200) flaky.push({ id: r.id, name: r.name, attempts: r.attempts });
       const t = (byType[r.type] ??= { passed: 0, failed: 0, skipped: 0 });
@@ -98,7 +103,7 @@ export function runBreakdown() {
       const failingChecks = [...checks].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
       const scored = [...scores].map(([name, e]) => ({ name, buckets: e.buckets, mean: Math.round((e.sum / e.count) * 1000) / 1000, count: e.count })).slice(0, 12);
       for (const k of PHASE_KEYS) phases[k] = Math.round(phases[k] * 10) / 10;
-      return { timed, histogram: histogram.slice(0, last + 1), slowest, byType, failingChecks, flaky: flaky.sort((a, b) => b.attempts - a.attempts).slice(0, 20), scores: scored, ...(phases.requests ? { phases } : {}) };
+      return { timed, histogram: histogram.slice(0, last + 1), slowest, byType, failingChecks, flaky: flaky.sort((a, b) => b.attempts - a.attempts).slice(0, 20), scores: scored, ...(phases.requests ? { phases } : {}), ...(owasp.coverage().some((c) => c.tests) ? { owasp: owasp.coverage() } : {}) };
     },
   };
 }

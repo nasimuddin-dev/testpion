@@ -312,7 +312,7 @@ export function RagMetricMatrix({
           <RagByTag m={m} />
         </div>
       )}
-      {view === 'charts' && <RagCharts m={m} />}
+      {view === 'charts' && <RagCharts m={m} runId={runId} />}
       {view === 'compare' && <RagCompare runId={runId} runs={runs} />}
       {view === 'pivot' && <RagPivot runs={runs} />}
       {view === 'trend' && (evaluation ?? evaluationName) && <RagTrend evaluation={(evaluation ?? evaluationName)!} />}

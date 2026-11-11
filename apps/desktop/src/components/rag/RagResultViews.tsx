@@ -7,6 +7,7 @@ import { asError, call } from '../../api';
 import { toastError } from '../../store';
 import type { CheckConfig, ProviderConfig } from '../../types';
 import { ChartCard } from '../charts';
+import { RunOwasp } from '../OwaspCoverage';
 import { Badge, Button, Callout, cx, Empty, Field, Input, Modal, NamedOptions, SectionTitle, Select, Spinner, useDebounced } from '../ui';
 import { RagEstimateView } from './RagEstimate';
 import { RagJudgeOptions } from './RagJudgeOptions';
@@ -23,7 +24,7 @@ const tint = (v: number | null | undefined, lower?: boolean) => (v === null || v
 /* ------------------------------------------------------------------ charts: one histogram per metric, a metric by tag */
 
 /** The distribution of every metric (ten bins over 0..1, pass mark marked) and each metric's mean by tag. */
-export function RagCharts({ m }: { m: MetricMatrix }) {
+export function RagCharts({ m, runId }: { m: MetricMatrix; runId?: string }) {
   return (
     <div className="p-3 overflow-auto h-full grid gap-4" data-rag-charts>
       <div>
@@ -53,6 +54,7 @@ export function RagCharts({ m }: { m: MetricMatrix }) {
         </div>
       </div>
       <RagByTag m={m} />
+      {runId && <RunOwasp runId={runId} />}
     </div>
   );
 }

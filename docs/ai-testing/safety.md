@@ -52,6 +52,8 @@ Without a text, the planted instruction tells the agent to reply only with the m
 
 `-r sarif` on `testpion test`, `run` and `run-collection` (and `--sarif <file>` on `testpion rag run`) writes the failed checks as SARIF 2.1.0, the format code-scanning views read (GitHub code scanning, Azure DevOps, GitLab). Each failed check is one finding, with the test file when there is one.
 
+In the app, the **Charts** tab of a run has the same table (**OWASP Top 10 for LLM applications**): each of the ten categories with the tests that covered it, the ones that failed, or *not tested*. `testpion run … --json` breakdowns and the MCP tool `run_breakdown` carry it as `owasp`.
+
 A check that tests a risk of the **OWASP Top 10 for LLM applications (2025)** carries its category, and the report says for all ten how many tests covered it and how many failed:
 
 | Category | Checks counted |

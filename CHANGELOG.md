@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Red teaming
+
+- A run's **Charts** tab shows the **OWASP Top 10 for LLM applications**: which of the ten categories the run tested, where a test failed, and which it did not test.
+
 ### Check an MCP server
 
 - **Which tool does each model pick?** is now in the app (**Server info**): write the cases with AI, name the models, and read each model's share, misses and confused tools. Agents run it with `mcp_server_tools` and `select`. A run is listed in the workspace's AI usage.

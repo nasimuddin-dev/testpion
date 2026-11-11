@@ -29,7 +29,7 @@ const steps = [
     'which-tool-each-model-picks-starts-without-cases',
     `(async () => {
       const box = await __t.waitFor(() => document.querySelector('[data-mcp-selection]'), 8000); if (!box) return 'NO SECTION';
-      return 'state: ' + box.getAttribute('data-mcp-selection') + ' | file: ' + /datasets\/mcp-selection-[a-z0-9-]+\.jsonl/.test(box.querySelector('[data-mcp-selection-text]').textContent) + ' | write button: ' + box.querySelector('[data-mcp-selection-write]').textContent.trim() + ' | run button: ' + !!box.querySelector('[data-mcp-selection-run]');
+      return 'state: ' + box.getAttribute('data-mcp-selection') + ' | file: ' + box.querySelector('[data-mcp-selection-text]').textContent.includes('datasets/mcp-selection-') + ' | write button: ' + box.querySelector('[data-mcp-selection-write]').textContent.trim() + ' | run button: ' + !!box.querySelector('[data-mcp-selection-run]');
     })()`,
   ],
 ];
