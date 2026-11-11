@@ -259,7 +259,7 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
-    'probe-sets-in-ai-lab': /^sets: 7 \| benign in workspace: true \(6 records\) \| add button gone: true$/,
+    'probe-sets-in-ai-lab': /^sets: 8 \| benign in workspace: true \(6 records\) \| add button gone: true$/,
     'a-rag-evaluation-with-the-metrics-tab': /^presets: .*agentic-rag.*conversational.*multimodal.*safety.* \| groups: .*conversation.*multimodal.*$|^presets: (?=.*safety)(?=.*conversational)(?=.*agentic-rag)(?=.*multimodal).* \| groups: (?=.*conversation)(?=.*multimodal).*$/,
     'a-required-option-is-marked-and-typed': /^required mark: true \| flagged while empty: true \| typed: a polite clinic receptionist \| flag gone: true$/,
     'a-metric-can-wait-for-another': /^before: always \| after: unless \| default condition: faithfulness < 0\.8 \| typed: faithfulness < 0\.7$/,
