@@ -14,6 +14,7 @@ import {
   findSavedEvaluation,
   importBeir,
   importOtelTraces,
+  startOtlpReceiver,
   importRagRecords,
   metricScoreColumns,
   parseRagImportText,
@@ -43,6 +44,28 @@ function targetFromFile(file: string): RagTarget {
 }
 
 const shortText = (s: string, n = 90) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** Receives OTLP/JSON traces on 127.0.0.1 until Ctrl+C or the time is up; progress goes to stderr so stdout stays the dataset. */
+async function receiveTraces(port: number, seconds: number | undefined, quiet: boolean): Promise<Array<Record<string, unknown>>> {
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError('--listen takes a port (0 for a free one)', EXIT.CONFIG_ERROR);
+  if (seconds !== undefined && !(seconds > 0)) throw new CliError('--for takes a number of seconds', EXIT.CONFIG_ERROR);
+  const rx = await startOtlpReceiver({ port, onBatch: (n) => !quiet && process.stderr.write(dim(`  received ${n} span${n === 1 ? '' : 's'}\n`)) });
+  if (!quiet) {
+    console.error(`${green('Listening')} for traces on ${rx.endpoint}/v1/traces ${dim(seconds ? `for ${seconds} s` : '(Ctrl+C to stop and write the records)')}`);
+    console.error(dim(`On your application: OTEL_EXPORTER_OTLP_ENDPOINT=${rx.endpoint} OTEL_EXPORTER_OTLP_PROTOCOL=http/json`));
+  }
+  await new Promise<void>((done) => {
+    const stop = () => done();
+    process.once('SIGINT', stop);
+    process.once('SIGTERM', stop);
+    if (seconds) setTimeout(stop, seconds * 1000).unref?.();
+  });
+  await rx.close();
+  const s = rx.stats();
+  if (!quiet) console.error(dim(`${s.requests} request${s.requests === 1 ? '' : 's'}, ${s.spans} span${s.spans === 1 ? '' : 's'}${s.refused ? `, ${s.refused} refused (not OTLP/JSON traces)` : ''}`));
+  if (!s.requests) throw new CliError(`No traces arrived${s.refused ? ` (${s.refused} request${s.refused === 1 ? ' was' : 's were'} refused: the exporter must send JSON, OTEL_EXPORTER_OTLP_PROTOCOL=http/json)` : ''}`, EXIT.CONFIG_ERROR);
+  return rx.batches();
+}
 
 export function registerRagCommands(program: Command): void {
   const rag = program.command('rag').description('RAG systems under test: connect and probe a target, the metric catalogue, run an evaluation with metrics and gates, re-score and compare runs, convert datasets from and to Ragas, DeepEval, BEIR, NVIDIA and promptfoo');
@@ -113,24 +136,30 @@ export function registerRagCommands(program: Command): void {
   rag
     .command('import')
     .description('convert a dataset of another tool (Ragas, DeepEval, BEIR queries + qrels, NVIDIA retriever data, promptfoo tests, or traces of your AI application exported from OpenTelemetry as OTLP/JSON; JSON, JSONL, CSV or YAML; only data is read, nothing is executed) into a TestPion RAG dataset: question, reference, reference_contexts, reference_ids')
-    .argument('<file>', 'the dataset file')
+    .argument('[file]', 'the dataset file (not with --listen)')
     .addOption(new Option('--from <format>', `the format of the file (default: found by its columns): ${FORMATS}`).choices([...RAG_DATASET_FORMATS]))
     .option('--qrels <file>', 'BEIR: the qrels file (query-id, corpus-id, score)')
     .option('--corpus <file>', 'BEIR: the corpus (corpus.jsonl), to fill reference_contexts')
     .option('--limit <n>', 'BEIR: only the first n queries; traces: only the first n records')
     .option('--only-errors', 'traces (--from otel): only the traces where a span failed')
+    .option('--listen [port]', 'traces: instead of a file, receive them from your application over OTLP/HTTP as JSON on 127.0.0.1 (default port 4318) until Ctrl+C or --for, then write the records')
+    .option('--for <seconds>', 'with --listen: stop after this many seconds')
     .option('-o, --out <file>', 'write the dataset here (JSON Lines; default: print it)')
     .option('--format <format>', 'jsonl or json output', 'jsonl')
     .option('--json', 'print { from, records, notes } as JSON')
-    .action((file: string, o: { from?: RagDatasetFormat; qrels?: string; corpus?: string; limit?: string; onlyErrors?: boolean; out?: string; format: string; json?: boolean }) => {
-      const text0 = readFileSync(resolve(file), 'utf8');
+    .action(async (file: string | undefined, o: { from?: RagDatasetFormat; qrels?: string; corpus?: string; limit?: string; onlyErrors?: boolean; out?: string; format: string; json?: boolean; listen?: string | boolean; for?: string }) => {
+      if (!o.listen && !file) throw new CliError('Give the dataset file, or --listen to receive traces from your application', EXIT.CONFIG_ERROR);
+      const text0 = o.listen ? '' : readFileSync(resolve(file!), 'utf8');
       let r: ReturnType<typeof importRagRecords>;
       try {
-        if (o.from === 'beir') {
+        if (o.listen) {
+          const t = importOtelTraces(await receiveTraces(o.listen === true ? 4318 : Number(o.listen), o.for ? Number(o.for) : undefined, !!o.json), { limit: o.limit ? Number(o.limit) : undefined, onlyErrors: !!o.onlyErrors });
+          r = { records: t.records, notes: t.notes, from: 'otel' };
+        } else if (o.from === 'beir') {
           if (!o.qrels) throw new CliError('A BEIR import needs --qrels <file> (and --corpus <file> for the texts)', EXIT.CONFIG_ERROR);
           r = { ...importBeir({ queries: text0, qrels: readFileSync(resolve(o.qrels), 'utf8'), corpus: o.corpus ? readFileSync(resolve(o.corpus), 'utf8') : undefined }, { limit: o.limit ? Number(o.limit) : undefined }), from: 'beir' };
         } else {
-          const raw = parseRagImportText(text0, file, o.from);
+          const raw = parseRagImportText(text0, file!, o.from);
           // an OpenTelemetry export: traces of an AI application become records with the answer the system gave
           if (o.from === 'otel' || (!o.from && raw[0] && 'resourceSpans' in raw[0])) {
             const t = importOtelTraces(raw, { limit: o.limit ? Number(o.limit) : undefined, onlyErrors: !!o.onlyErrors });

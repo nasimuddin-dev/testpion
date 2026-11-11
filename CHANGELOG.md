@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Test data from traces
+
+- `testpion rag import --listen` receives traces straight from your application (OTLP/HTTP as JSON, on this computer only) until Ctrl+C or `--for`, then writes the dataset records: no export file in between.
+
 ### Simulated users
 
 - **Your own personas.** *RAG Bots ▸ Bots ▸ Personas for simulated users* lists the built-in personas and lets you write your own (an id, a name, the user in words, attacker or not). They are kept in `personas.yaml` of the workspace, and a test case names one in its `persona` column. `testpion rag personas -w <workspace>` lists them.

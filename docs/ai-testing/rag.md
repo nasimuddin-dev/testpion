@@ -484,6 +484,15 @@ requires to be on this computer) and `reward-score` (a Nemotron reward model on 
 `attributes`, `scalar` or `genrm`). The classifier and the reward model obey the same rules as every judge: privacy level *Full*, redaction,
 *Local only*, one ledger row per call.
 
+
+**Without an export file.** `testpion rag import --listen -o datasets/from-traces.jsonl` receives the traces itself: it listens on `http://127.0.0.1:4318` (another port: `--listen 4400`; a free one: `--listen 0`) until Ctrl+C or `--for <seconds>`, then writes the records. Point the application at it for the session:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/json python app.py
+```
+
+It reads OTLP as JSON (an exporter that sends protobuf is told so), takes traces only, listens on this computer only and keeps at most 128 MB in memory. It collects test data; it is not a collector and forwards nothing.
+
 ### From the terminal and CI {#cli}
 
 ```bash
