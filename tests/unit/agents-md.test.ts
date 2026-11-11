@@ -259,7 +259,7 @@ describe('initAgentFiles', () => {
     expect(parseAgentTargets(undefined)).toEqual(['agents']);
     expect(parseAgentTargets('cursor, claude')).toEqual(['agents', 'claude', 'cursor']);
     expect(parseAgentTargets(['CLAUDE'])).toEqual(['agents', 'claude']);
-    expect(() => parseAgentTargets('agents,windsurf')).toThrow(/Unknown target "windsurf": use agents, claude, cursor/);
+    expect(() => parseAgentTargets('agents,windsurf')).toThrow(/Unknown target "windsurf": use agents, claude, cursor, skill/);
   });
 
   it('writes the files, then reports them unchanged; a dry run writes nothing', () => {
@@ -410,5 +410,32 @@ describe('the team note', () => {
     s.updateWorkspace({ description: '  Use Staging first.  ' } as never);
     expect(agentWorkspaceFacts(s).note).toBe('Use Staging first.');
     s.close();
+  });
+});
+
+describe('the Agent Skill target', () => {
+  it('writes .claude/skills/testpion/SKILL.md with its front matter first, and updates only its marked part', () => {
+    const t = tempDir('tp-skill-');
+    const s = WorkspaceStore.create(join(t.dir, 'ws'), 'Skill WS');
+    try {
+      const r = initAgentFiles(s, { targets: ['skill'] });
+      expect(r.files.map((f) => `${f.path}=${f.status}`)).toEqual(['AGENTS.md=created', '.claude/skills/testpion/SKILL.md=created']);
+      const file = join(s.root, '.claude', 'skills', 'testpion', 'SKILL.md');
+      const text = readFileSync(file, 'utf8');
+      expect(text.startsWith('---\nname: testpion\ndescription: Test and debug APIs, MCP servers and AI systems')).toBe(true);
+      expect(text).toContain('# TestPion workspace "Skill WS"');
+      expect(text).toContain('testpion agent-info --json -w .');
+      expect(text).toContain('testpion mcp --server <name> --check --json -w .');
+      expect(text).toContain('Never pass `--allow-production`');
+      // the user's own words around the block stay; a second run changes nothing
+      writeFileSync(file, text + '\nOur team also runs the smoke suite before a deploy.\n');
+      const again = initAgentFiles(s, { targets: ['skill'] });
+      expect(again.files.find((f) => f.target === 'skill')!.status).toBe('unchanged');
+      expect(readFileSync(file, 'utf8')).toContain('Our team also runs the smoke suite');
+      expect(parseAgentTargets('skill')).toEqual(['agents', 'skill']);
+    } finally {
+      s.close();
+      t.cleanup();
+    }
   });
 });

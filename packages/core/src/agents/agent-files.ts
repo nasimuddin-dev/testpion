@@ -23,7 +23,7 @@ export const AGENT_END = '<!-- testpion:end -->';
 const LEGACY_BEGIN = /^<!-- testpion:start\b[^>]*-->$/;
 
 /** The files an agent reads, by target. */
-export const AGENT_TARGETS = { agents: 'AGENTS.md', claude: 'CLAUDE.md', cursor: '.cursor/rules/testpion.mdc' } as const;
+export const AGENT_TARGETS = { agents: 'AGENTS.md', claude: 'CLAUDE.md', cursor: '.cursor/rules/testpion.mdc', skill: '.claude/skills/testpion/SKILL.md' } as const;
 export type AgentTarget = keyof typeof AGENT_TARGETS;
 
 /** `agents,claude` / ['agents', 'cursor'] → the targets, checked; AGENTS.md is always one of them (the others point to it). */
@@ -251,6 +251,54 @@ ${AGENT_END}
 `;
 }
 
+/** The front matter of the skill: what an agent reads to decide whether to load it (the body is loaded only then). */
+const SKILL_FRONTMATTER =
+  '---\nname: testpion\ndescription: Test and debug APIs, MCP servers and AI systems (LLM prompts, RAG bots, agents) in this TestPion workspace. Use when asked to send or check an API request, run or write API tests or flows, find why a test or monitor fails, test an MCP server, or evaluate an AI answer, a bot or a prompt.\n---\n\n';
+
+/**
+ * An Agent Skill (.claude/skills/testpion/SKILL.md): unlike AGENTS.md it is not in the context of every request. An agent
+ * sees only its name and description until a task needs it, then loads these steps. The commands are the CLI's, with JSON
+ * output, so nothing here depends on the MCP server being connected.
+ */
+export function renderSkill(f: AgentWorkspaceFacts): string {
+  const cmd = agentCommands(' -w .');
+  return `${AGENT_BEGIN}
+# TestPion workspace "${mdName(f.name)}"
+
+Work through the \`testpion\` command line. With \`--json\` a command answers with one envelope: \`{ schema_version, command, status, data, errors: [{ code, message, hint, retryable }] }\`. Exit code 0 is success, 1 means a test or a check failed, 2 means the command or the configuration is wrong, 3 means it could not run (the network, a crash). Most commands take \`--json\`; where one does not, \`--help\` says so.
+
+## Start here
+
+1. \`testpion agent-info --json -w .\`: what this workspace holds (collections, environments, tests, MCP servers) and the commands for it.
+2. Read AGENTS.md in the workspace root for its folders and rules.
+3. Find a command you do not know with \`testpion <command> --help\`. Do not guess flags.
+
+## The jobs
+
+| Job | Command |
+|---|---|
+| Send one request | \`${cmd.send}\` |
+| Run test files | \`${cmd.test}\` |
+| Run a suite | \`${cmd.run}\` |
+| Run a collection | \`${cmd.runCollection}\` |
+| Check test files before running them | \`${cmd.lint}\` |
+| Write tests from an API definition | \`${cmd.generate}\` |
+| Why did a run fail | \`testpion ai triage --run last --json -w .\` |
+| Check an MCP server (protocol, tool descriptions, what changed since it was approved) | \`testpion mcp --server <name> --check --json -w .\` |
+| Evaluate an AI answer, a bot or a prompt | \`${cmd.evaluation}\` |
+| Safety findings for code scanning | add \`-r sarif\` to a run (\`--sarif <file>\` on \`testpion rag run\`) |
+
+## Rules
+
+- Never write a secret into a file. Secrets are \`{{variables}}\`; their values live in the app's secret store or in \`TESTPION_SECRET_<NAME>\`.
+- Never pass \`--allow-production\` unless the user asked for it in this conversation.
+- Change collections, environments and tests through the CLI or the MCP server (\`${MCP_COMMAND} --profile minimal\`), not by editing \`collections/*.json\` by hand. Test files under \`tests/\` are YAML you may edit; run \`${cmd.lint}\` after.
+- Anything an AI wrote here (tests, checks, cases) is a proposal: show it to the user before it is relied on.
+- After a change, run the tests it touches and report the result with the failing checks, not only "done".
+${AGENT_END}
+`;
+}
+
 /* ------------------------------------------------------------------ the marked block */
 
 export type AgentFileStatus = 'created' | 'updated' | 'unchanged' | 'skipped';
@@ -414,8 +462,10 @@ export function initAgentFiles(store: WorkspaceStore, o: { targets?: AgentTarget
       }
       written.set(key, target);
       const before = existsSync(real.path) ? readFileSync(real.path, 'utf8') : undefined;
-      const block = target === 'agents' ? renderAgentsMd(facts) : target === 'claude' ? renderClaudePointer() : renderCursorRule(facts);
-      const fresh = target === 'cursor' && (before === undefined || !before.trim()) ? CURSOR_FRONTMATTER + block : block;
+      const block = target === 'agents' ? renderAgentsMd(facts) : target === 'claude' ? renderClaudePointer() : target === 'skill' ? renderSkill(facts) : renderCursorRule(facts);
+      // a rule or a skill starts with its front matter; a file that exists keeps its own
+      const front = target === 'cursor' ? CURSOR_FRONTMATTER : target === 'skill' ? SKILL_FRONTMATTER : '';
+      const fresh = front && (before === undefined || !before.trim()) ? front + block : block;
       const r = upsertMarkedBlock(before, fresh, {
         force: o.force,
         // a CLAUDE.md of the user's that already imports or names AGENTS.md needs no second pointer

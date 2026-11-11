@@ -1,5 +1,7 @@
 import { defineConfig, type HeadConfig } from 'vitepress';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { llmsFull, pageMarkdown, plainPage } from './llms-full';
 import { fileURLToPath } from 'node:url';
 
 // The application version is read from the root package.json, never typed here.
@@ -223,6 +225,16 @@ export default defineConfig({
   ignoreDeadLinks: false,
   markdown: { theme: { light: 'github-light-high-contrast', dark: 'github-dark' } },
   sitemap: { hostname: SITE, transformItems: (items) => items.filter((i) => !/(^|\/)404$/.test(i.url)) },
+  // for AI agents (llmstxt.org): every page as <page>.md next to its HTML, and all of them in llms-full.txt
+  buildEnd(site) {
+    const pages = [...site.pages].sort().map((path) => plainPage(path, readFileSync(join(site.srcDir, path), 'utf8'), SITE));
+    for (const p of pages) {
+      const out = join(site.outDir, p.path);
+      mkdirSync(dirname(out), { recursive: true });
+      writeFileSync(out, pageMarkdown(p));
+    }
+    writeFileSync(join(site.outDir, 'llms-full.txt'), llmsFull(pages, { site: SITE, name: 'TestPion', summary: 'TestPion is a local-first desktop app and CLI for testing and debugging REST, GraphQL and MCP servers, LLM APIs, RAG pipelines and AI agents.', version: app.version }));
+  },
   head: [
     ['link', { rel: 'icon', type: 'image/png', sizes: '192x192', href: `${BASE}icon-192.png` }],
     ['link', { rel: 'icon', href: `${BASE}favicon.ico`, sizes: '48x48' }],

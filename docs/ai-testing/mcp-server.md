@@ -380,6 +380,7 @@ When environments have a group (a tenant), AGENTS.md shows *Acme ▸ Staging* an
 - the check types and the test file format.
 
 - Tick **Also CLAUDE.md** (a one-line pointer: `See @AGENTS.md …`) and **Also a Cursor rule** (`.cursor/rules/testpion.mdc`) for those agents; `--targets agents,claude,cursor` on the command line.
+- `--targets skill` also writes an **Agent Skill**, `.claude/skills/testpion/SKILL.md`. AGENTS.md is in the agent's context for every request; a skill is not: the agent sees only its name and one line of description until a task needs TestPion, and loads the steps then. The skill works through the command line (`--json`), so it does not need the MCP server connected. Use it when the workspace sits inside a larger repository and most of the agent's work is not API testing.
 - Only the part between `<!-- testpion:begin -->` and `<!-- testpion:end -->` is TestPion's: what you wrote around it stays, and writing it again refreshes only that part (the result says per file: created, updated, unchanged or skipped and why).
 - A file with broken markers is left alone unless `--force` (the tool: `force` with `confirm: true`); `--dry-run` (the tool: `dryRun`) reports what would be written and writes nothing.
 - No variable value and no path of your machine is written, so the files can be committed with the workspace.

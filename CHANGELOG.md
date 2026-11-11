@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### For AI agents
+
+- `testpion agents init --targets skill` writes an Agent Skill (`.claude/skills/testpion/SKILL.md`): a coding agent loads the TestPion steps only when a task needs them, instead of carrying them in every request.
+- The docs site now serves every page as plain Markdown (`<page>.md`) and all pages in one file (`llms-full.txt`), for agents that read documentation.
+
 ### Test data from traces
 
 - `testpion rag import traces.json --from otel` (and *Import…* in the app) turns an OpenTelemetry export of your AI application's traces into dataset records: the question, the answer the system gave, what it retrieved and the tools it ran. `--only-errors` keeps the traces where something failed. The records can be scored as they are, without calling your system.

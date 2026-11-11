@@ -47,7 +47,7 @@ export function agentCommands(w: string): Record<string, string> {
     lint: `testpion lint-tests${w} --json`,
     generate: `testpion tests-from-spec specs/<api>.yaml${w} --json · testpion integration-suite <spec | collection>${w} --json`,
     mcpServer: `testpion mcp-server${w} [--profile minimal] [--read-only]`,
-    agentsInit: `testpion agents init${w} [--targets agents,claude,cursor] --json`,
+    agentsInit: `testpion agents init${w} [--targets agents,claude,cursor,skill] --json`,
     doctor: 'testpion doctor --json',
     open: `testpion open <ref>${w} [--json]: the app opens the item a "ref" names (the ItemRef in --json output and MCP results: {kind, …ids})`,
   };
