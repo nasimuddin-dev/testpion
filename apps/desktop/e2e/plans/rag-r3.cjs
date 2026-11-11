@@ -56,6 +56,25 @@ const steps = [
      return 'sets: ' + sets + ' | benign in workspace: ' + info.inWorkspace + ' (' + info.records + ' records) | add button gone: ' + !!gone;`,
   ),
   step(
+    'a-persona-of-the-workspace',
+    `const box = await __t.waitFor(() => document.querySelector('[data-rag-personas] [data-rag-persona]') && document.querySelector('[data-rag-personas]'), 8000); if (!box) return 'NO PERSONAS';
+     const builtIn = box.querySelectorAll('[data-rag-persona][data-source="built-in"]').length;
+     const open = box.querySelector('[data-rag-persona-new]'); open.scrollIntoView({ block: 'center' }); await __t.sleep(300);
+     await __t.real.click(open);
+     const dlg = await __t.waitFor(() => document.querySelector('[data-rag-persona-dialog]'), 5000); if (!dlg) return 'NO DIALOG';
+     const save = () => document.querySelector('[data-rag-persona-save]');
+     const offWhy = save().disabled + ':' + save().title;
+     await __t.real.click('[data-rag-persona-id]'); await __t.real.type('night-nurse'); await __t.sleep(150);
+     await __t.real.click('[data-rag-persona-text]'); await __t.real.type('Short messages with abbreviations.'); await __t.sleep(300);
+     await __t.real.click(save());
+     const row = await __t.waitFor(() => document.querySelector('[data-rag-persona="night-nurse"][data-source="workspace"]'), 6000); if (!row) return 'NOT SAVED';
+     const listed = (await window.aps.invoke('rag.personas')).filter((x) => x.source === 'workspace').map((x) => x.id + ':' + x.text).join(',');
+     row.scrollIntoView({ block: 'center' }); await __t.sleep(300);
+     await __t.real.click('[data-rag-persona-delete="night-nurse"]');
+     const gone = await __t.waitFor(() => !document.querySelector('[data-rag-persona="night-nurse"]'), 6000);
+     return 'built in: ' + builtIn + ' | save off: ' + offWhy + ' | saved: ' + listed + ' | deleted: ' + !!gone;`,
+  ),
+  step(
     'a-rag-evaluation-with-the-metrics-tab',
     `await __t.view('Bot checks'); await __t.sleep(800);
      ${setSelect(`document.querySelector('select[aria-label="Evaluation type"]')`, 'Bot with sources')}
@@ -261,6 +280,7 @@ const steps = [
 module.exports = withExpect(
   steps,
   {
+    'a-persona-of-the-workspace': /^built in: 9 \| save off: true:Give it an id: lower-case letters, digits and dashes \| saved: night-nurse:Short messages with abbreviations\. \| deleted: true$/,
     'probe-sets-in-ai-lab': /^sets: 8 \| benign in workspace: true \(6 records\) \| add button gone: true$/,
     'a-rag-evaluation-with-the-metrics-tab': /^presets: .*agentic-rag.*conversational.*multimodal.*safety.* \| groups: .*conversation.*multimodal.*$|^presets: (?=.*safety)(?=.*conversational)(?=.*agentic-rag)(?=.*multimodal).* \| groups: (?=.*conversation)(?=.*multimodal).*$/,
     'a-required-option-is-marked-and-typed': /^required mark: true \| flagged while empty: true \| typed: a polite clinic receptionist \| flag gone: true$/,

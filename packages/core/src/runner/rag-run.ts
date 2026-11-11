@@ -7,6 +7,7 @@
  * A record with `turns` is a conversation: its user messages are replayed against the target one after another (eval/rag/
  * conversation.ts) and the transcript, with the system's own answers, is what the conversational metrics judge.
  */
+import { readPersonas } from '../eval/rag/personas.js';
 import type { RagToolCallRef } from '@testpion/shared';
 import type { CheckResult, RagTest, TestCase, TokenUsage } from '../model/types.js';
 import type { VariableScope } from '../vars/variables.js';
@@ -41,12 +42,13 @@ const KEEP_TURN_CHARS = 2000;
 const compactTurns = (turns: ConversationTurn[]): ConversationTurn[] =>
   turns.map((t) => (t.contexts ? { ...t, contexts: t.contexts.slice(0, KEEP_TURN_DOCS).map((d) => ({ ...d, text: d.text.slice(0, KEEP_TURN_CHARS) })) } : t));
 
-export async function runRagTargetTest(test: RagTest, scope: VariableScope, span: SpanHandle, run: StepRunner, guard?: (step: TestCase, scope: VariableScope) => void, sim?: { host?: RagJudgeHost; signal?: AbortSignal }): Promise<RagRunResult> {
+export async function runRagTargetTest(test: RagTest, scope: VariableScope, span: SpanHandle, run: StepRunner, guard?: (step: TestCase, scope: VariableScope) => void, sim?: { host?: RagJudgeHost; signal?: AbortSignal; workspaceRoot?: string }): Promise<RagRunResult> {
   const record0 = pickRecord(test.variables);
   const messages = userMessages(record0?.turns);
   const first = scope.resolve(test.question);
   // a record with a persona (or simulate: true): a model plays the user until the goal is met, it gives up, or the turn limit
-  const spec = simulationOf(test.variables, record0);
+  const named = typeof test.variables?.persona === 'string' && test.variables.persona.trim();
+  const spec = simulationOf(test.variables, record0, named && sim?.workspaceRoot ? readPersonas(sim.workspaceRoot) : []);
   const user = spec ? simulatedUser(sim?.host, spec, { opening: first, judge: test.judge, signal: sim?.signal }) : undefined;
   // a conversation asks the last user message of the transcript as "the question" of the single-turn metrics
   const s = span.child(user ? 'rag simulated conversation' : messages.length ? 'rag conversation' : 'rag target', 'internal', { input: messages.length ? messages.join(' → ').slice(0, 500) : first });

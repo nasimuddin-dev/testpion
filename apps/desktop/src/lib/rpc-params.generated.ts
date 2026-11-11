@@ -335,6 +335,9 @@ export interface RpcParamTypes {
   'rag.metric.try': RpcCommonParams & { metric: string; options?: Record<string, unknown>; evaluation?: string; sample?: Record<string, unknown>; resultId?: string; target?: string; question?: string; judge?: Record<string, unknown>; dryRun?: boolean };
   'rag.metricCheck': RpcCommonParams & { name: string; options?: Record<string, unknown> };
   'rag.metrics': RpcCommonParams & { columns?: string[]; hasTarget?: boolean };
+  'rag.personaDelete': RpcCommonParams & { id: string };
+  'rag.personaSave': RpcCommonParams & { persona: Record<string, unknown> };
+  'rag.personas': RpcCommonParams;
   'rag.pivot': RpcCommonParams & { runIds: string[]; labels?: Record<string, unknown> };
   'rag.probe': RpcCommonParams & { target: Record<string, unknown>; question: string };
   'rag.probeSets': RpcCommonParams;
@@ -445,4 +448,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 428;
+export const RPC_METHOD_COUNT = 431;

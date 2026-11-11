@@ -62,7 +62,7 @@ export interface SimulationOutcome {
 }
 
 /** The simulation a record asks for, or undefined (a record with scripted turns is replayed, never simulated). */
-export function simulationOf(vars: Record<string, unknown> | undefined, record: RagRecord | undefined): SimulationSpec | undefined {
+export function simulationOf(vars: Record<string, unknown> | undefined, record: RagRecord | undefined, own: ReadonlyArray<{ id: string; text: string; attack?: boolean }> = []): SimulationSpec | undefined {
   if (!vars || record?.turns?.length) return undefined;
   const raw = typeof vars.persona === 'string' ? vars.persona.trim() : '';
   const attack = vars.attack === true || /^(true|yes|1)$/i.test(String(vars.attack ?? '').trim());
@@ -70,7 +70,8 @@ export function simulationOf(vars: Record<string, unknown> | undefined, record: 
   if (!raw && !on) return undefined;
   const goal = record?.expectedOutcome?.trim();
   if (!goal) throw new ApsError('ValidationError', 'A simulated user needs a goal', { why: 'The record has a persona (or simulate: true) but no "goal" or "expected_outcome" column, so the simulated user would not know what it wants or when to stop.', suggestions: ['Add a "goal" column: what the user wants to achieve, in words.'] });
-  const preset = raw ? PERSONAS.find((p) => p.id === raw.toLowerCase()) : PERSONAS[0];
+  // a built-in persona, one of the workspace's own (personas.yaml), or the record's own words
+  const preset = raw ? (PERSONAS.find((p) => p.id === raw.toLowerCase()) ?? own.find((p) => p.id === raw.toLowerCase())) : PERSONAS[0];
   const n = Number(vars.max_turns ?? vars.maxTurns);
   const maxTurns = Number.isFinite(n) && n >= 1 ? Math.min(SIMULATE_MAX_TURNS, Math.floor(n)) : SIMULATE_DEFAULT_TURNS;
   return { persona: preset?.text ?? raw, ...(preset ? { personaId: preset.id } : {}), ...(preset?.attack || attack ? { attack: true } : {}), goal: goal.slice(0, 4000), maxTurns };

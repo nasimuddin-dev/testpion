@@ -133,6 +133,7 @@ export * from './eval/rag/prompts-r2.js';
 export { templateMetric, runTemplate, type Template, type TemplateInput } from './eval/rag/judge-templates.js';
 export * from './eval/rag/record.js';
 export { PROBE_SETS, listProbeSets, seedProbeSets, type ProbeSetInfo } from './eval/rag/probes.js';
+export { PERSONAS_FILE, deletePersona, listPersonas, readPersonas, savePersona, type ListedPersona, type Persona } from './eval/rag/personas.js';
 export { findPii, ALL_PII_KINDS, DEFAULT_PII_KINDS, type PiiKind } from './eval/rag/pii.js';
 export { IMAGE_LIMITS, imageRefOf, loadImages, defaultImageSource, toChatImages, imageMeta, scrubDocImage, storableRecord, sampleImageRefs, type ImageSource } from './eval/rag/images.js';
 export { prepareImage, sniffImage, stripJpegMetadata, stripPngMetadata, imageTokens, type PreparedImage } from './util/image-info.js';

@@ -12,6 +12,9 @@ import {
   listProbeSets,
   loadImages,
   seedProbeSets,
+  listPersonas,
+  savePersona,
+  deletePersona,
   METRIC_GROUPS,
   METRIC_PRESETS,
   applyMapping,
@@ -164,6 +167,10 @@ export function ragHandlers(be: Backend): Handlers {
     },
     /** The seeded safety probe sets, and which are in the workspace. */
     'rag.probeSets': () => listProbeSets(be.ws),
+    /** Personas for simulated users: the built-in ones and the workspace's own (personas.yaml). */
+    'rag.personas': () => listPersonas(be.ws.root),
+    'rag.personaSave': ({ persona }: { persona: unknown }) => savePersona(be.ws.root, persona),
+    'rag.personaDelete': ({ id }: { id: string }) => deletePersona(be.ws.root, id),
     /** Write probe sets into the workspace as datasets (a file that exists is left as it is). */
     'rag.probeSets.add': ({ sets }: { sets?: string[] } = {}) => seedProbeSets(be.ws, sets),
     /**

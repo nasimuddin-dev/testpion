@@ -10,6 +10,7 @@ import { RagConnectDialog } from '../../components/rag/RagConnectDialog';
 import { CustomMetricsList, MetricEditor } from '../../components/rag/CustomMetrics';
 import { RagDataIntro, RagDatasetsList } from '../../components/rag/RagDataPanel';
 import { ProbeSets } from '../../components/rag/ProbeSets';
+import { Personas } from '../../components/rag/Personas';
 import { Badge, Button, Empty } from '../../components/ui';
 import { inSettings } from '../../lib/ui-names';
 
@@ -113,6 +114,7 @@ export function Rag({ side, openTarget, connectAt }: { side: 'bots' | 'questions
               <li>A measure decided by an AI reviewer needs a reviewer model: choose one for the evaluation, or set {inSettings('assistant')}. It never falls back on a mock silently.</li>
               <li>Metrics: write your own measure, check it against examples, and use it in the picker like any other.</li>
             </ol>
+            <Personas />
             <ProbeSets />
           </>
         )}

@@ -523,6 +523,19 @@ be called or a judged metric has no judge.
 * **Trends, nightly runs and CI**: metric means run by run, a rotating nightly sample with a budget, a regression gate against a
   baseline: [RAG: trends, nightly runs and CI](./rag-monitoring.md).
 
+
+### Your own personas {#own-personas}
+
+The built-in personas are general. A persona of your own describes a user of *your* system: **RAG Bots ▸ Bots ▸ Personas for simulated users ▸ New persona** takes an id, a name and the user in words (how they write, what they leave out until asked, when they give up); tick **An attacker** for a red-team persona. They are kept in `personas.yaml` next to `workspace.json`, a file git carries and you can edit by hand:
+
+```yaml
+- id: night-nurse
+  label: Night nurse
+  text: A nurse at the end of a night shift who writes short messages with abbreviations, and stops after one answer that does not help.
+```
+
+A test case names it like a built-in one (`"persona": "night-nurse"`). `testpion rag personas -w <workspace>` lists both kinds (`--json`: `source` is `built-in` or `workspace`). An id of a built-in persona cannot be reused.
+
 ## Recipes {#recipes}
 
 **Is my retriever the problem?** Run the *Retrieval only* preset: it needs the gold ids and no model. A low `recall@5` with a high
