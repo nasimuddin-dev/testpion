@@ -360,6 +360,7 @@ ${cyan(r.url)}`);
     .description('connect to an MCP server and print its tools, resources and prompts; with --call, call one tool and print the result')
     .option('--url <url>', 'Streamable HTTP endpoint')
     .option('--sse <url>', 'legacy SSE endpoint')
+    .addOption(new Option('--protocol <mode>', 'which MCP revisions to speak: auto asks the server first and uses 2026-07-28 when it offers it (the default for --url); legacy is the 2025 handshake only (the default for --sse and a command)').choices(['auto', 'legacy']))
     .option('-s, --server <nameOrId>', 'a server saved in the workspace (mcp-servers.json), with the environment\'s variables')
     .option('-w, --workspace <nameOrPath>', 'workspace name or directory (default: nearest)')
     .option('-e, --environment <name>', 'environment for {{variables}} in the server settings')
@@ -380,7 +381,8 @@ ${cyan(r.url)}`);
     .argument('[command...]', 'stdio command, e.g. -- node server.js')
     .action(async (command: string[], o) => {
       /** Connect, then list what the server offers, or call one tool. */
-      const talk = async (cfg: McpServerConfig, root?: string, ws?: { store: WorkspaceStore; ctx: EngineContext }) => {
+      const talk = async (cfg0: McpServerConfig, root?: string, ws?: { store: WorkspaceStore; ctx: EngineContext }) => {
+        const cfg = o.protocol ? { ...cfg0, protocol: o.protocol as 'auto' | 'legacy' } : cfg0;
         const s = new McpSession(cfg);
         await s.connect();
         try {

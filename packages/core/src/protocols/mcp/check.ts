@@ -15,7 +15,7 @@ import { atomicWrite } from '../../storage/fsutil.js';
 import type { McpDiscovery, McpSession } from './client.js';
 
 /** The MCP revisions this client can speak (the SDK's list), newest first. */
-export const MCP_KNOWN_REVISIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'] as const;
+export const MCP_KNOWN_REVISIONS = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'] as const;
 
 export interface ConformanceFinding {
   level: 'error' | 'warn' | 'tip';
@@ -81,11 +81,14 @@ export async function mcpConformance(session: Session, d: McpDiscovery, o: { pro
     check(!out || out.type === 'object', 'error', 'output-schema-type', `The output schema of ${t.name} is not an object schema (type: object).`, t.name);
   }
 
-  try {
-    await session.ping();
-    check(true, 'error', 'ping', '');
-  } catch (e) {
-    check(false, 'error', 'ping', `The server does not answer a ping (${(e as Error).message.slice(0, 120)}): every server must.`);
+  // the 2026-07-28 revision has no ping (a request is its own liveness check)
+  if (!d.protocolVersion || d.protocolVersion < '2026-07-28') {
+    try {
+      await session.ping();
+      check(true, 'error', 'ping', '');
+    } catch (e) {
+      check(false, 'error', 'ping', `The server does not answer a ping (${(e as Error).message.slice(0, 120)}): every server must.`);
+    }
   }
 
   if (caps.tools) {

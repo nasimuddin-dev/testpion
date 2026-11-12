@@ -102,10 +102,10 @@ export function Personas() {
             {p.source === 'workspace' && (
               <>
                 <IconButton label={`Edit ${p.label}`} onClick={() => setDraft({ id: p.id, label: p.label, text: p.text, attack: !!p.attack, existing: true })}>
-                  <Pencil size={13} />
+                  <Pencil />
                 </IconButton>
                 <IconButton label={`Delete ${p.label}`} onClick={() => void remove(p)} data-rag-persona-delete={p.id}>
-                  <Trash2 size={13} />
+                  <Trash2 />
                 </IconButton>
               </>
             )}
@@ -135,7 +135,7 @@ export function Personas() {
                 disabled={draft.existing}
                 onChange={(e) => setDraft({ ...draft, id: e.target.value })}
                 placeholder="night-nurse"
-                autoFocus={!draft.existing}
+               
                 data-rag-persona-id
               />
             </Field>

@@ -569,6 +569,15 @@ function ServerSettings({ s, onChange, folders = [] }: { s: McpServerConfig; onC
                 </Field>
               </>
             )}
+            {s.transport !== 'mock' && (
+              <Field label="MCP revision" hint="Ask first: the server is asked which revisions it speaks, and 2026-07-28 is used when it offers it. 2025 only: the handshake older servers know, with no question first (for a server that fails on it).">
+                <Select className="w-72" aria-label="MCP revision" value={s.protocol ?? ''} onChange={(e) => onChange({ ...s, protocol: (e.target.value || undefined) as McpServerConfig['protocol'] })} data-mcp-protocol>
+                  <option value="">{s.transport === 'streamable-http' ? 'Default (ask the server first)' : 'Default (2025 only)'}</option>
+                  <option value="auto">Ask the server first</option>
+                  <option value="legacy">2025 only</option>
+                </Select>
+              </Field>
+            )}
           </>
         )}
         <p className="text-xs text-muted">Save with Ctrl+S; Connect saves first. Servers are kept in the workspace (mcp-servers.json).</p>

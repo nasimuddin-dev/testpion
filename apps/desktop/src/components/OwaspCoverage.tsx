@@ -18,7 +18,7 @@ export interface OwaspRow {
 export function OwaspCard({ rows }: { rows: OwaspRow[] }) {
   const covered = rows.filter((r) => r.tests).length;
   return (
-    <ChartCard title="OWASP Top 10 for LLM applications" aside={`${covered} of ${rows.length} tested`}>
+    <ChartCard title="OWASP top 10 for LLM applications" aside={`${covered} of ${rows.length} tested`}>
       <div className="flex flex-col" data-run-owasp>
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-2 py-1 text-xs min-w-0" data-run-owasp-row={r.id} data-state={!r.tests ? 'untested' : r.failed ? 'failed' : 'passed'}>

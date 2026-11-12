@@ -20,7 +20,7 @@ const steps = [
      value.focus(); setVal(value, 'abc'); await __t.sleep(400);
      const kept = [...envTable().querySelectorAll('input')].some((i) => i.value === 'abc');
      const key = [...envTable().querySelectorAll('input')].find((i) => i.getAttribute('aria-label')?.startsWith('Key') && !i.value); setVal(key, 'MY_TOKEN'); await __t.sleep(400);
-     return 'value kept before a key: ' + kept + ' | rows: ' + [...envTable().querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('input:not([type=checkbox])')].map((i) => i.value).join('=')).filter((x) => x !== '=').join(', ');`,
+     return 'value kept before a key: ' + kept + ' | rows: ' + [...envTable().querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('input:not([type=checkbox])')].map((i) => i.value).join('=')).filter((x) => x !== '=').join(', ') + ' | revision: ' + [...(document.querySelector('[data-mcp-protocol]')?.options ?? [])].map((o) => o.textContent).join(' / ');`,
   ),
   step(
     'suggestions-say-where-from',
@@ -44,7 +44,7 @@ const steps = [
 ];
 
 module.exports = withExpect(steps, {
-  'value-before-key': /^value kept before a key: true \| rows: MY_TOKEN=abc$/,
+  'value-before-key': /^value kept before a key: true \| rows: MY_TOKEN=abc \| revision: Default \(2025 only\) \/ Ask the server first \/ 2025 only$/,
   'suggestions-say-where-from': /^options: true \| note: From the active environment, the workspace and the globals\. Collection variables only apply to that collection's requests: copy them to an environment to use them here\.$/,
   'copy-collection-variables': /Copy 1 variable of "Scripts & chaining \(JSONPlaceholder\)" to the environment "Public APIs"\?.* \| environment now has userId: true$/,
 });

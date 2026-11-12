@@ -152,7 +152,7 @@ type McpTransportConfig =
   /** An MCP mock running in-process from a definition file (`mocks/*.mcp-mock.yaml`, relative to the workspace). */
   | { transport: 'mock'; mockFile: string };
 
-export type McpServerConfig = { id: string; name: string; /** Folder in the MCP view's server list. */ folder?: string } & McpTransportConfig;
+export type McpServerConfig = { id: string; name: string; /** Folder in the MCP view's server list. */ folder?: string; /** Which MCP revisions to speak: `auto` asks the server first (2026-07-28 when it offers it), `legacy` uses the 2025 handshake only. Default: auto over Streamable HTTP, legacy elsewhere. */ protocol?: 'auto' | 'legacy' } & McpTransportConfig;
 
 /* ------------------------------------------------------------------ ai */
 

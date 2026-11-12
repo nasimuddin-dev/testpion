@@ -149,7 +149,7 @@ const ENVIRONMENT_KEY_ORDER = ['id', 'name', 'isProduction', 'color', 'order', '
 const WORKSPACE_KEY_ORDER = ['schemaVersion', 'id', 'name', 'description', 'variables', 'createdAt', 'updatedAt'];
 const LIBRARY_KEY_ORDER = ['schemaVersion', 'folders', 'items'];
 const LIBRARY_ITEM_KEY_ORDER = ['id', 'name', 'folder', 'collectionId', 'data'];
-const MCP_SERVER_KEY_ORDER = ['id', 'name', 'folder', 'transport', 'command', 'args', 'cwd', 'env', 'url', 'headers', 'mockFile'];
+const MCP_SERVER_KEY_ORDER = ['id', 'name', 'folder', 'transport', 'protocol', 'command', 'args', 'cwd', 'env', 'url', 'headers', 'mockFile'];
 const PROVIDER_KEY_ORDER = ['id', 'name', 'kind', 'baseUrl', 'apiKey', 'defaultModel', 'embeddingModel', 'apiVersion', 'region', 'headers', 'rateLimit', 'timeoutMs'];
 const RULES_KEY_ORDER = ['active', 'profiles', 'filterPresets'];
 

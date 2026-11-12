@@ -5,16 +5,16 @@ import { assertProcessesAllowed, assertUrlAllowed } from '../../net/policy.js';
 import { killProcessTree } from '../../net/process.js';
 import { ensureProxyApplied } from '../../net/proxy.js';
 import type { CookieJar } from '../../cookies/cookie-jar.js';
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { mcpClient, mcpClientHttp, mcpClientSse, mcpClientStdio, mcpInMemory, mcpTypes } from '../../mcp-server/sdk.js';
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import type { CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult } from '@modelcontextprotocol/sdk/types.js';
+import type { Client, CreateMessageRequest, CreateMessageResult, ElicitRequest, ElicitResult, JSONRPCMessage, Transport } from '@modelcontextprotocol/client';
+import { mcpClient, mcpClientStdio } from '../../mcp-server/sdk.js';
 import type { McpServerConfig } from '../../model/types.js';
 import { ApsError } from '../../errors.js';
 import type { Redactor } from '../../util/redact.js';
 import { shortId } from '../../util/ids.js';
 import { netFetch } from '../../net/proxy.js';
+
+/** An inspector shows what the server says now: lists and resources are always fetched, never answered from the SDK's response cache. */
+const FRESH = { cacheMode: 'refresh' } as const;
 
 /** One protocol-level event in an MCP session (spec §12.4). */
 export interface McpTraceEvent {
@@ -210,15 +210,18 @@ export class McpSession {
     if (features.has('roots')) capabilities.roots = { listChanged: false };
     if (features.has('sampling')) capabilities.sampling = {};
     if (features.has('elicitation')) capabilities.elicitation = {};
-    this.client = new (mcpClient().Client)({ name: 'testpion', version: ENGINE_VERSION }, { capabilities });
-    if (features.has('roots')) this.client.setRequestHandler(mcpTypes().ListRootsRequestSchema, async () => ({ roots: this.handlers.roots?.() ?? [] }));
+    // Streamable HTTP asks the server which revision it speaks (server/discover) and falls back to the 2025 handshake; a local
+    // program or an SSE endpoint is not probed unless its entry says so: a server that leaves on an unknown first request would not start
+    const mode = process.env.TESTPION_MCP_PROTOCOL === 'auto' || process.env.TESTPION_MCP_PROTOCOL === 'legacy' ? process.env.TESTPION_MCP_PROTOCOL : (config.protocol ?? (config.transport === 'streamable-http' ? 'auto' : 'legacy'));
+    this.client = new (mcpClient().Client)({ name: 'testpion', version: ENGINE_VERSION }, { capabilities, versionNegotiation: { mode } });
+    if (features.has('roots')) this.client.setRequestHandler('roots/list', async () => ({ roots: this.handlers.roots?.() ?? [] }));
     if (features.has('sampling'))
-      this.client.setRequestHandler(mcpTypes().CreateMessageRequestSchema, async (req) => {
+      this.client.setRequestHandler('sampling/createMessage', async (req) => {
         if (!this.handlers.sampling) throw new Error('Sampling is not answered here: set a sampling reply for this test');
         return this.handlers.sampling(req.params);
       });
     if (features.has('elicitation'))
-      this.client.setRequestHandler(mcpTypes().ElicitRequestSchema, async (req) => (this.handlers.elicitation ? this.handlers.elicitation(req.params) : { action: 'decline' }));
+      this.client.setRequestHandler('elicitation/create', async (req) => (this.handlers.elicitation ? this.handlers.elicitation(req.params) : { action: 'decline' }));
   }
 
   /** Change how server requests (roots, sampling, elicitation) are answered. */
@@ -321,14 +324,14 @@ export class McpSession {
       case 'mock': {
         // in-process: the mock server and this client are joined by an in-memory channel
         const def = loadMcpMock(readFileSync(c.mockFile, 'utf8'));
-        const [client, server] = mcpInMemory().InMemoryTransport.createLinkedPair();
+        const [client, server] = mcpClient().InMemoryTransport.createLinkedPair();
         void createMcpMockServer(def).connect(server);
         return client;
       }
       case 'streamable-http':
-        return new (mcpClientHttp().StreamableHTTPClientTransport)(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch });
+        return new (mcpClient().StreamableHTTPClientTransport)(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch });
       case 'sse':
-        return new (mcpClientSse().SSEClientTransport)(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch, eventSourceInit: { fetch: jarFetch } });
+        return new (mcpClient().SSEClientTransport)(new URL(c.url), { requestInit: { headers: headersOf(c.headers) }, fetch: jarFetch, eventSourceInit: { fetch: jarFetch } });
     }
   }
 
@@ -343,10 +346,10 @@ export class McpSession {
       metadata: this.redactor?.redact({ ...this.config }) ?? { ...this.config },
     });
     this.transport = new TracingTransport(this.createTransport(), this.emit, this.redactor);
-    this.client.setNotificationHandler(mcpTypes().LoggingMessageNotificationSchema, () => {
+    this.client.setNotificationHandler('notifications/message', () => {
       /* recorded by the tracing transport */
     });
-    this.client.setNotificationHandler(mcpTypes().ResourceUpdatedNotificationSchema, (n) => {
+    this.client.setNotificationHandler('notifications/resources/updated', (n) => {
       for (const l of this.updateListeners) l(n.params.uri);
     });
     try {
@@ -396,15 +399,15 @@ export class McpSession {
     };
     if (caps.tools) out.tools = await this.listTools();
     if (caps.resources) {
-      out.resources = await this.paginate((cursor) => this.client.listResources(cursor ? { cursor } : undefined), 'resources');
-      out.resourceTemplates = await this.paginate<McpDiscovery['resourceTemplates'][number]>((cursor) => this.client.listResourceTemplates(cursor ? { cursor } : undefined), 'resourceTemplates').catch(() => []);
+      out.resources = await this.paginate((cursor) => this.client.listResources(cursor ? { cursor } : undefined, FRESH), 'resources');
+      out.resourceTemplates = await this.paginate<McpDiscovery['resourceTemplates'][number]>((cursor) => this.client.listResourceTemplates(cursor ? { cursor } : undefined, FRESH), 'resourceTemplates').catch(() => []);
     }
-    if (caps.prompts) out.prompts = await this.paginate((cursor) => this.client.listPrompts(cursor ? { cursor } : undefined), 'prompts');
+    if (caps.prompts) out.prompts = await this.paginate((cursor) => this.client.listPrompts(cursor ? { cursor } : undefined, FRESH), 'prompts');
     return out;
   }
 
   async listTools(): Promise<McpToolInfo[]> {
-    return this.paginate((cursor) => this.client.listTools(cursor ? { cursor } : undefined), 'tools');
+    return this.paginate((cursor) => this.client.listTools(cursor ? { cursor } : undefined, FRESH), 'tools');
   }
 
   private async paginate<T>(fn: (cursor?: string) => Promise<Record<string, unknown>>, key: string): Promise<T[]> {
@@ -421,7 +424,7 @@ export class McpSession {
 
   async callTool(name: string, args: Record<string, unknown> = {}, opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<McpCallResult> {
     const t0 = performance.now();
-    const r = (await this.client.callTool({ name, arguments: args }, undefined, { signal: opts.signal, timeout: opts.timeoutMs ?? 60_000 })) as {
+    const r = (await this.client.callTool({ name, arguments: args }, { signal: opts.signal, timeout: opts.timeoutMs ?? 60_000 })) as {
       isError?: boolean;
       content?: unknown[];
       structuredContent?: unknown;
@@ -437,7 +440,7 @@ export class McpSession {
 
   async readResource(uri: string, opts: { signal?: AbortSignal } = {}): Promise<{ contents: unknown[]; durationMs: number }> {
     const t0 = performance.now();
-    const r = await this.client.readResource({ uri }, { signal: opts.signal });
+    const r = await this.client.readResource({ uri }, { signal: opts.signal, ...FRESH });
     return { contents: r.contents, durationMs: Math.round(performance.now() - t0) };
   }
 
@@ -447,9 +450,11 @@ export class McpSession {
     return { messages: r.messages, description: r.description, durationMs: Math.round(performance.now() - t0) };
   }
 
+  /** The time a ping takes. The 2026-07-28 revision has no ping: there the tool list is asked instead (any request shows the server is there). */
   async ping(): Promise<number> {
     const t0 = performance.now();
-    await this.client.ping();
+    if (this.client.getProtocolEra() === 'modern') await this.client.listTools({ cursor: undefined }, { cacheMode: 'bypass' });
+    else await this.client.ping();
     return Math.round(performance.now() - t0);
   }
 

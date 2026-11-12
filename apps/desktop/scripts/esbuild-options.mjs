@@ -30,17 +30,12 @@ export const preloadBundleOptions = rest;
 export const LAZY_MODULES = ['marked', 'yaml', 'js-yaml', 'fast-xml-parser', 'jsonpath-plus', 'kafkajs', 'mqtt', 'socket.io-client', 'mysql2/promise', 'node-forge', 'node-html-parser', 'handlebars', 'undici', 'graphql', 'quickjs-emscripten-core', '@jitl/quickjs-singlefile-mjs-release-sync', 'pg', 'ajv', 'ajv-formats', 'acorn', 'electron-updater', 'qrcode'];
 
 /** The MCP SDK's entry points the engine uses: built into ONE lazy file so zod and the SDK's types are one instance, whichever entry asks. */
+// (the client is the v2 SDK, which speaks the 2026-07-28 revision; TestPion's own server and the mocks are on the 1.x line)
 export const MCP_SDK_ENTRIES = [
-  'types.js',
-  'inMemory.js',
-  'client/index.js',
-  'client/stdio.js',
-  'client/streamableHttp.js',
-  'client/sse.js',
-  'server/index.js',
-  'server/stdio.js',
-  'server/streamableHttp.js',
-].map((e) => `@modelcontextprotocol/sdk/${e}`);
+  ...['types.js', 'inMemory.js', 'server/index.js', 'server/stdio.js', 'server/streamableHttp.js'].map((e) => `@modelcontextprotocol/sdk/${e}`),
+  '@modelcontextprotocol/client',
+  '@modelcontextprotocol/client/stdio',
+];
 
 const lazyFile = (spec) => `${spec.replace(/[^\w.-]/g, '_')}.cjs`;
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, (c) => `\\${c}`);

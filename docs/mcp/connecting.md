@@ -32,6 +32,17 @@ Servers are saved in `mcp-servers.json` in the workspace:
 - Anything the server writes to stderr is captured in the trace, which helps diagnose startup failures.
 - From the terminal, `testpion mcp -- node server.js` lists a server's tools, resources and prompts; `testpion mcp --server "My server" -w . --call get_forecast --args '{"city":"Paris"}'` calls a tool of a server saved in the workspace (`--json` for scripts and CI: the result is in the envelope's `.data`). AI agents do the same through the `mcp_server_tools` and `mcp_call_tool` tools of the workspace's MCP server.
 
+## Which MCP revision is spoken {#revision}
+
+MCP has revisions, named by date. The 2025 revisions start a connection with a handshake (`initialize`); **2026-07-28** has no handshake and no session: the client asks the server what it speaks (`server/discover`) and every request stands alone.
+
+- Over **Streamable HTTP** TestPion asks first. A server that offers 2026-07-28 is spoken to in that revision; any other server answers that it does not know the question, and gets the 2025 handshake. The **Protocol trace** shows which happened, and **Server info** says *The server speaks MCP 2026-07-28* (or the 2025 revision).
+- A **local program** (stdio) and an **SSE** endpoint are not asked first: a server that exits on a request it does not know would never start. For one that speaks 2026-07-28, open the server's **Settings** tab and set **MCP revision** to **Ask the server first**.
+- **2025 only** in the same field skips the question for a server that fails on it. In `mcp-servers.json` the field is `"protocol": "auto"` or `"legacy"`; on the command line, `testpion mcp --url … --protocol legacy`.
+- The 2026-07-28 revision has no ping: **Ping** asks for the tool list there, and the check of a server does not expect one.
+
+TestPion's own server for agents (`testpion mcp-server`) and its mock servers speak the 2025 revisions (up to 2025-11-25), which every client still understands.
+
 <figure class="aps-screenshot">
   <img src="/images/mcp-delete-undo.jpg" alt="The Petstore MCP server deleted from the Collections sidebar: the message Deleted the MCP server Petstore MCP, Recently deleted keeps it for 30 days, with Undo" width="1440" height="900" loading="lazy">
 </figure>

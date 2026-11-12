@@ -14,6 +14,10 @@
 
 - A run's **Charts** tab shows the **OWASP Top 10 for LLM applications**: which of the ten categories the run tested, where a test failed, and which it did not test.
 
+### MCP 2026-07-28
+
+- TestPion connects to servers of the **2026-07-28** revision of MCP (no handshake, no session). Over Streamable HTTP it asks the server first and falls back to the 2025 handshake for older servers; a local program or an SSE endpoint is asked when you set **MCP revision** to **Ask the server first** in its settings (`"protocol": "auto"`, `testpion mcp --protocol auto`). Server info and `mcp --check` say which revision is spoken.
+
 ### Check an MCP server
 
 - **Which tool does each model pick?** is now in the app (**Server info**): write the cases with AI, name the models, and read each model's share, misses and confused tools. Agents run it with `mcp_server_tools` and `select`. A run is listed in the workspace's AI usage.
