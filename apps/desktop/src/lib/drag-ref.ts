@@ -78,7 +78,14 @@ function endDragSession(e?: Event): void {
   // (capturing, the window also sees every element's blur: only its own counts)
   if (e?.type === 'blur' && e.target !== window) return;
   stopListening();
-  for (const clear of [...clears]) clear();
+  const clearAll = () => {
+    for (const clear of [...clears]) clear();
+  };
+  // A drop: the row it lands on handles it after this listener, and reads what is dragged from its tree's state. Cleared
+  // here, that state would be rendered away before the row's handler runs (the page renders between two listeners of a
+  // user's event), and the drop would find nothing to move. So the trees are cleared once the drop has been handled.
+  if (e?.type === 'drop') setTimeout(clearAll, 0);
+  else clearAll();
 }
 
 function stopListening(): void {
@@ -91,8 +98,7 @@ function stopListening(): void {
 export function beginDragSession(): void {
   if (listening || typeof window === 'undefined') return;
   listening = true;
-  // capture phase: a drop target that stops the event (the trees do) cannot hide the end from the window; the
-  // target's handler still runs after it with the drag state of its render
+  // capture phase: a drop target that stops the event (the trees do) cannot hide the end from the window
   for (const t of END_EVENTS) window.addEventListener(t, endDragSession, CAPTURE);
 }
 

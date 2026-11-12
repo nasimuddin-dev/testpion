@@ -34,7 +34,7 @@ const steps = [
      const sub = await __t.waitFor(() => [...document.querySelectorAll('[role=menuitem]')].find((m) => m.textContent.trim().startsWith('New request') && m.getAttribute('aria-haspopup')), 3000);
      if (!sub) { const all = [...document.querySelectorAll('[role=menuitem]')].map((m) => m.textContent.trim()).join(' | '); await __t.esc(); return 'NO SUBMENU: ' + all; }
      sub.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true })); sub.dispatchEvent(new PointerEvent('pointermove', { bubbles: true })); sub.click();
-     const items = await __t.waitFor(() => { const l = [...document.querySelectorAll('[role=menuitem]')].map((m) => m.textContent.trim()).filter((t) => /^New .* request$/.test(t)); return l.length >= 4 ? l : null; }, 3000);
+     const items = await __t.waitFor(() => { const l = [...document.querySelectorAll('[role=menuitem]')].map((m) => m.textContent.trim()).filter((t) => /^New .* (request|connection)$/.test(t)); return l.length >= 7 ? l : null; }, 3000);
      await __t.esc();
      return 'kinds: ' + (items ? items.join(' | ') : 'NONE');`,
   ),
@@ -116,7 +116,7 @@ const steps = [
 
 module.exports = withExpect(steps, {
   'a-folder-holds-every-kind': /^rows: e2e-mixed, e2e-mixed:e2e-pay, e2e-mixed:e2e-list, e2e-mixed:grpc:e2e-pay-grpc, e2e-mixed:e2e-gql, e2e-mixed:websocket:e2e-feed, e2e-mixed:e2e-other$/,
-  'new-request-in-a-folder-offers-every-kind': /^kinds: .*New GraphQL request.*New SOAP request.*New gRPC request.*New WebSocket & MQTT request/,
+  'new-request-in-a-folder-offers-every-kind': /^kinds: .*New GraphQL request.*New SOAP request.*New gRPC request.*New WebSocket request.*New Socket\.IO request.*New MQTT request.*New Kafka connection/,
   'a-call-dropped-on-a-folder-moves-into-it': /^folder: e2e-other \| rows: .*e2e-mixed:e2e-other, e2e-mixed:websocket:e2e-feed$/,
   'opening-a-call-reveals-it-in-its-folder': /^folded before: true \| shown after: true$/,
   'a-call-dropped-before-its-next-request-stays-in-place': /^after: e2e-list \| between: true$/,

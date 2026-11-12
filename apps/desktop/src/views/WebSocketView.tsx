@@ -155,6 +155,9 @@ export function WebSocketView() {
   // global search → open a saved connection
   useIntent('websocket', (p) => {
     if (p?.collectionId && !p.savedId) (setCollectionId(p.collectionId as string), setFolderId(p.folderId as string | undefined));
+    // New Socket.IO request / MQTT request / Kafka connection of a collection or folder: the new tab starts as that kind
+    const mode = p?.mode;
+    if (!p?.savedId && (mode === 'websocket' || mode === 'socketio' || mode === 'mqtt' || mode === 'kafka')) setD((x) => ({ ...x, mode }));
     if (p?.savedId) void open(p.savedId);
     // a connection from History: its address in a new tab
     const r = p?.request as { url?: string } | undefined;

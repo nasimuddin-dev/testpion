@@ -42,6 +42,21 @@ export type { ExtraGroup } from '../lib/tree-rows';
 
 /** The one name of "new request of this kind" in every menu and button: New HTTP request, New GraphQL request … */
 const newRequestOf = (cat: RequestCategory) => (cat === 'rest' ? 'New HTTP request' : `New ${CATEGORY_META[cat].label} request`);
+/** What the WebSocket editor connects with: each is a kind of request of its own in the New request menu. */
+export type ConnectionMode = 'websocket' | 'socketio' | 'mqtt' | 'kafka';
+/**
+ * Every other kind of request a collection or a folder can get (New request ▸), named as its new tab is
+ * (NEW_TAB_TITLE). WebSocket, Socket.IO, MQTT and Kafka share one editor and each has its own entry.
+ */
+const OTHER_KINDS: ReadonlyArray<{ cat: Exclude<RequestCategory, 'rest'>; mode?: ConnectionMode; label: string }> = [
+  { cat: 'graphql', label: newRequestOf('graphql') },
+  { cat: 'soap', label: newRequestOf('soap') },
+  { cat: 'grpc', label: newRequestOf('grpc') },
+  { cat: 'websocket', mode: 'websocket', label: 'New WebSocket request' },
+  { cat: 'websocket', mode: 'socketio', label: 'New Socket.IO request' },
+  { cat: 'websocket', mode: 'mqtt', label: 'New MQTT request' },
+  { cat: 'websocket', mode: 'kafka', label: 'New Kafka connection' },
+];
 
 /** Per collection: sent requests and how many are failing now; refreshed after requests and runs (debounced). */
 function useCollectionsHealth(): Record<string, { sent: number; failing: number }> {
@@ -141,7 +156,7 @@ export const CollectionTree = memo(function CollectionTree({
   /** The saved gRPC call or connection being renamed in place (its id): the owner of the lists keeps that state. */
   extraRenaming?: string;
   /** Create a request of this kind in a collection or one of its folders (New request ▸ in their menus). */
-  onNewOfCategory?(c: Collection, cat: RequestCategory, folderId?: string): void;
+  onNewOfCategory?(c: Collection, cat: RequestCategory, folderId?: string, mode?: ConnectionMode): void;
   /**
    * A saved gRPC call or connection was dropped on a collection, on a folder, or before a request or another call
    * (`after`: the sibling it follows now; `others`: the calls around it that follow something else now).
@@ -505,7 +520,7 @@ export const CollectionTree = memo(function CollectionTree({
   const collectionMenu = (c: Collection): NodeMenuCtx => {
     if (c.problem) return { name: c.name, on: {} };
     const ref = { kind: 'collection' as const, collectionId: c.id };
-    const others = onNewOfCategory ? (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat) })) : [];
+    const others = onNewOfCategory ? OTHER_KINDS.map((k) => ({ label: k.label, icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, k.cat, undefined, k.mode) })) : [];
     return {
       ref,
       name: c.name,
@@ -544,10 +559,10 @@ export const CollectionTree = memo(function CollectionTree({
       ref,
       name: n.name,
       repo: canHistory,
-      // any kind of request in any folder: New request ▸ GraphQL, SOAP, gRPC, WebSocket … into this folder
+      // any kind of request in any folder: New request ▸ GraphQL, SOAP, gRPC, WebSocket, Socket.IO, MQTT, Kafka into this folder
       create: [
         { label: newRequestLabel ?? 'New HTTP request', icon: <FilePlus2 size={14} />, onSelect: () => newRequest(c, n.id) },
-        ...(onNewOfCategory ? [{ label: LABEL.newRequest, icon: <FilePlus2 size={14} />, onSelect: () => undefined, items: (['graphql', 'soap', 'grpc', 'websocket'] as const).map((cat) => ({ label: newRequestOf(cat), icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, cat, n.id) })) }] : []),
+        ...(onNewOfCategory ? [{ label: LABEL.newRequest, icon: <FilePlus2 size={14} />, onSelect: () => undefined, items: OTHER_KINDS.map((k) => ({ label: k.label, icon: <FilePlus2 size={14} />, onSelect: () => onNewOfCategory(c, k.cat, n.id, k.mode) })) }] : []),
       ],
       on: {
         newFolder: newFolderIn(c, n.id),
