@@ -95,6 +95,11 @@ describe('drag image chip and drag session', () => {
       win.dispatchEvent(key('a'));
       expect(clear).toHaveBeenCalledTimes(n);
       win.dispatchEvent(end);
+      // a drop is cleared once it has been handled: the row it lands on reads what is dragged after the window's listener
+      if (end.type === 'drop') {
+        expect(clear).toHaveBeenCalledTimes(n);
+        await new Promise((r) => setTimeout(r, 0));
+      }
       expect(clear).toHaveBeenCalledTimes(++n);
       // the listeners are gone once it ended: nothing more is cleared until the next drag
       win.dispatchEvent(new Event('drop'));
@@ -103,6 +108,7 @@ describe('drag image chip and drag session', () => {
     off();
     start();
     win.dispatchEvent(new Event('drop'));
+    await new Promise((r) => setTimeout(r, 0));
     expect(clear).toHaveBeenCalledTimes(n);
     frames.splice(0).forEach((f) => f());
   });
