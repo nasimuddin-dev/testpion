@@ -4,7 +4,8 @@
 
 ### Test data from traces
 
-- `testpion rag import --listen` receives traces straight from your application (OTLP/HTTP as JSON, on this computer only) until Ctrl+C or `--for`, then writes the dataset records: no export file in between.
+- `testpion rag import --listen` receives traces straight from your application (OTLP over HTTP, on this computer only) until Ctrl+C or `--for`, then writes the dataset records: no export file in between.
+- Traces are read as **protobuf** too, the form OpenTelemetry exporters send by default: the receiver takes it without a setting on the application, and `rag import` reads a trace export file in protobuf.
 
 ### Simulated users
 

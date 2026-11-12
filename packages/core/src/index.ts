@@ -175,6 +175,7 @@ export * from './eval/rag/targets.js';
 export * from './eval/rag/dataset-formats.js';
 export { importOtelTraces, type TraceImport } from './eval/rag/otel-traces.js';
 export { startOtlpReceiver, type OtlpReceiver } from './eval/rag/otel-receiver.js';
+export { decodeOtlpTraces, looksBinary } from './eval/rag/otlp-proto.js';
 export * from './eval/rag/dataset-imports.js';
 export * from './eval/rag/preflight.js';
 export * from './runner/rag-probe.js';

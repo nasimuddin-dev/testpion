@@ -166,7 +166,7 @@ a file is executed) and writes TestPion records:
 | BEIR | `queries.jsonl` + the qrels file (query-id, corpus-id, score; TREC's four columns work) + optionally `corpus.jsonl` | `question`, `reference_ids` (the documents with a positive score, best grade first), `reference_contexts` |
 | NVIDIA retriever data | `query` / `question` with `pos_doc`, `positive_passages` or `positive_ctxs` (and negatives) | gold ids and texts of the positives; negatives kept as `negative_contexts` |
 | promptfoo | a config or a list of `tests` (YAML or JSON): the question variable, the expected value of an `equals` / `contains` / `similar` / `context-recall` assertion, a `context` variable | `question`, `reference`, `reference_contexts` |
-| Traces of your application (OpenTelemetry) | an OTLP/JSON export of traces (`resourceSpans`; one object, or one a line) | `question`, `answer`, `contexts`, `tool_calls`, `turns`, `model`, `latency_ms`, tokens; see [From traces](#from-traces) |
+| Traces of your application (OpenTelemetry) | an OTLP export of traces: JSON (`resourceSpans`; one object, or one a line) or protobuf | `question`, `answer`, `contexts`, `tool_calls`, `turns`, `model`, `latency_ms`, tokens; see [From traces](#from-traces) |
 
 The format is found from the column names (or give `--from ragas|deepeval|nvidia|promptfoo|beir|otel`; BEIR also takes `--qrels` and
 `--corpus`). A multi-turn Ragas sample becomes a conversation record (see [Conversations](#r3-conversations)); promptfoo assertions other than the expected value are left out and named in the notes.
@@ -348,7 +348,7 @@ records and export back (`reference` is the goal, `expected_outcome`; `reference
 
 #### From traces of your application {#from-traces}
 
-What real users asked is the best test data you have. If your application is traced with OpenTelemetry, export the traces as OTLP/JSON and import them:
+What real users asked is the best test data you have. If your application is traced with OpenTelemetry, export the traces as OTLP (JSON, or the protobuf an exporter writes) and import them:
 
 ```bash
 testpion rag import traces.json --from otel -o datasets/from-production.jsonl
@@ -488,10 +488,10 @@ requires to be on this computer) and `reward-score` (a Nemotron reward model on 
 **Without an export file.** `testpion rag import --listen -o datasets/from-traces.jsonl` receives the traces itself: it listens on `http://127.0.0.1:4318` (another port: `--listen 4400`; a free one: `--listen 0`) until Ctrl+C or `--for <seconds>`, then writes the records. Point the application at it for the session:
 
 ```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/json python app.py
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf python app.py
 ```
 
-It reads OTLP as JSON (an exporter that sends protobuf is told so), takes traces only, listens on this computer only and keeps at most 128 MB in memory. It collects test data; it is not a collector and forwards nothing.
+It reads OTLP over HTTP, as protobuf (what most exporters send) or as JSON (`http/json`); an exporter set to gRPC must be switched to one of them. It takes traces only, listens on this computer only and keeps at most 128 MB in memory. It collects test data; it is not a collector and forwards nothing.
 
 ### From the terminal and CI {#cli}
 

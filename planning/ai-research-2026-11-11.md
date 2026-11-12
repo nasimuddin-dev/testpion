@@ -60,6 +60,6 @@ demand found in this pass), pairwise/Elo ranking (matrix + baseline covers the n
 | N-1 | The workspace's own personas: `personas.yaml`, a list and dialog in RAG Bots, `rag personas -w`. | — |
 | N-2 | Tool selection in the app (Server info), as `select` of `mcp_server_tools`, and in the AI usage ledger (`eval/mcp-selection-server.ts`). | — |
 | N-3 | OWASP Top 10 coverage on a run's Charts tab and as `owasp` of the run breakdown. | LLM03, LLM04, LLM08 still have no checks of their own. |
-| N-4 | `rag import --listen`: an OTLP/HTTP receiver (JSON, 127.0.0.1). | Protobuf OTLP is refused with what to set; traces of one conversation are still one record a trace. |
+| N-4 | `rag import --listen`: an OTLP/HTTP receiver (JSON, 127.0.0.1). | Protobuf is read too (`eval/rag/otlp-proto.ts`, receiver and file). gRPC is not received; traces of one conversation are still one record a trace. |
 | N-5 | `minimal` is the default profile of the served MCP server (found tools join the list, `search_tools { name, arguments }` calls any tool); long runs as MCP tasks (`mcp-tasks.ts`). | — |
 | N-6 | The inspector client is the v2 SDK (`@modelcontextprotocol/client` 2.4.0): it speaks 2026-07-28 (asked first over Streamable HTTP; `protocol: auto` for stdio and SSE) and falls back to the 2025 handshake. | TestPion's own server and the mocks stay on SDK 1.x (2025-11-25): the v2 server has no task store and a different HTTP model, so moving them means rebuilding tasks and the mock's HTTP serving. Every client still speaks 2025-11-25, so nothing is blocked by it. |
