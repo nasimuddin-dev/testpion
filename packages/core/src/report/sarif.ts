@@ -5,7 +5,8 @@
  * applications (2025) carries the category, and the run says per category how many tests covered it and how many failed.
  *
  * The mapping is by what a check measures, and deliberately small: a check that only loosely relates to a category is
- * left unmapped, so the table never claims coverage a run does not have.
+ * left unmapped, so the table never claims coverage a run does not have. One category (Supply Chain) is not something
+ * a run of a system can test at all; it says so, and where TestPion does help with it.
  */
 import type { CheckResult, RunSummary, TestResult } from '../model/types.js';
 import { atomicWrite } from '../storage/fsutil.js';
@@ -13,12 +14,18 @@ import { atomicWrite } from '../storage/fsutil.js';
 export interface OwaspCategory {
   id: string;
   name: string;
+  /** For a category no run can test: why, and what covers part of it instead. */
+  outside?: string;
 }
 
 export const OWASP_LLM_2025: readonly OwaspCategory[] = [
   { id: 'LLM01:2025', name: 'Prompt Injection' },
   { id: 'LLM02:2025', name: 'Sensitive Information Disclosure' },
-  { id: 'LLM03:2025', name: 'Supply Chain' },
+  {
+    id: 'LLM03:2025',
+    name: 'Supply Chain',
+    outside: 'Where the model, its data and its tools come from: a run of your system cannot test that. For MCP servers, approve what a server lists and check it for changes (testpion mcp --check).',
+  },
   { id: 'LLM04:2025', name: 'Data and Model Poisoning' },
   { id: 'LLM05:2025', name: 'Improper Output Handling' },
   { id: 'LLM06:2025', name: 'Excessive Agency' },
@@ -48,13 +55,31 @@ const BY_CHECK: Record<string, string> = {
   cost: 'LLM10:2025',
 };
 /** The kinds of a safety probe (`probe` of a record) that test a category whatever the check. */
-const BY_PROBE: Record<string, string> = { jailbreak: 'LLM01:2025', injection: 'LLM01:2025', 'multi-turn': 'LLM01:2025', 'indirect-injection': 'LLM01:2025', pii: 'LLM02:2025', 'system-prompt': 'LLM07:2025' };
+const BY_PROBE: Record<string, string> = {
+  jailbreak: 'LLM01:2025',
+  injection: 'LLM01:2025',
+  'multi-turn': 'LLM01:2025',
+  'indirect-injection': 'LLM01:2025',
+  pii: 'LLM02:2025',
+  'system-prompt': 'LLM07:2025',
+  poisoning: 'LLM04:2025',
+  'cross-context': 'LLM08:2025',
+};
+/**
+ * Probes whose kind says more than the check that reads the answer: a planted fact is found by its canary like a planted
+ * instruction, and a request for the system prompt by a leak check, but what the record tests is its own category.
+ */
+const PROBE_FIRST: ReadonlySet<string> = new Set(['system-prompt', 'poisoning', 'cross-context']);
+/** The checks that read whether the system resisted or leaked; on a probe above they count for the probe's category. */
+const RESISTANCE = new Set(['LLM01:2025', 'LLM02:2025']);
 
 const probeOf = (r: TestResult): string | undefined => (r.metadata as { rag?: { record?: { probe?: string } } } | undefined)?.rag?.record?.probe;
 
 /** The OWASP category a check of a result tests, if any. */
 export function owaspOf(check: Pick<CheckResult, 'type'>, result?: TestResult): OwaspCategory | undefined {
-  const id = BY_CHECK[check.type] ?? BY_CHECK[check.type.replace(/^rag-/, '')] ?? (result ? BY_PROBE[probeOf(result) ?? ''] : undefined);
+  const byCheck = BY_CHECK[check.type] ?? BY_CHECK[check.type.replace(/^rag-/, '')];
+  const probe = result ? (probeOf(result) ?? '') : '';
+  const id = PROBE_FIRST.has(probe) && (!byCheck || RESISTANCE.has(byCheck)) ? BY_PROBE[probe] : (byCheck ?? BY_PROBE[probe]);
   return id ? OWASP_LLM_2025.find((c) => c.id === id) : undefined;
 }
 

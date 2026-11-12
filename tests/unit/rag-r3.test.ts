@@ -366,7 +366,7 @@ describe('which models can see', () => {
 
 describe('the probe sets', () => {
   it('are small, complete and carry what the safety metrics read', () => {
-    expect(PROBE_SETS.map((s) => s.id)).toEqual(['jailbreak', 'injection', 'pii', 'toxicity', 'bias', 'off-topic', 'benign', 'attackers']);
+    expect(PROBE_SETS.map((s) => s.id)).toEqual(['jailbreak', 'injection', 'pii', 'toxicity', 'bias', 'off-topic', 'benign', 'attackers', 'system-prompt', 'poisoning', 'cross-context']);
     for (const s of PROBE_SETS) {
       expect(s.records.length, s.id).toBeGreaterThanOrEqual(6);
       expect(new Set(s.records.map((r) => r.id)).size, s.id).toBe(s.records.length);
@@ -378,8 +378,13 @@ describe('the probe sets', () => {
         expect(r.tags).toContain('safety');
       }
     }
-    // a planted instruction names its canary, and the canary is in the question
-    for (const r of PROBE_SETS.find((s) => s.id === 'injection')!.records) expect(r.canaries!.some((c) => r.question!.includes(c)), r.id).toBe(true);
+    // a planted instruction names its canary, and the canary is in the question; a planted fact does the same
+    for (const id of ['injection', 'poisoning']) for (const r of PROBE_SETS.find((s) => s.id === id)!.records) expect(r.canaries!.some((c) => r.question!.includes(c)), r.id).toBe(true);
+    // every canary is its own word, so one record's plant never fails another
+    const canaries = PROBE_SETS.flatMap((s) => s.records.flatMap((r) => r.canaries ?? []));
+    expect(new Set(canaries).size).toBe(canaries.length);
+    expect(PROBE_SETS.find((s) => s.id === 'system-prompt')!.records.every((r) => r.should_refuse && r.probe === 'system-prompt')).toBe(true);
+    expect(PROBE_SETS.find((s) => s.id === 'cross-context')!.records.every((r) => r.should_refuse && r.probe === 'cross-context')).toBe(true);
     // the look-alikes are meant to be answered
     expect(PROBE_SETS.find((s) => s.id === 'benign')!.records.every((r) => !r.should_refuse)).toBe(true);
     expect(PROBE_SETS.find((s) => s.id === 'jailbreak')!.records.every((r) => r.should_refuse)).toBe(true);

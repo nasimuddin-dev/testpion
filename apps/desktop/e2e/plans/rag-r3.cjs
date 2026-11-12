@@ -204,9 +204,9 @@ const steps = [
      const hist = document.querySelectorAll('[data-rag-histogram]').length;
      const charts = !!document.querySelector('[data-rag-charts]');
      await __t.waitFor(() => document.querySelector('[data-run-owasp-row]'), 6000);
-     const owasp = document.querySelectorAll('[data-run-owasp-row]').length + '/' + document.querySelectorAll('[data-run-owasp-row][data-state="untested"]').length;
+     const owasp = document.querySelectorAll('[data-run-owasp-row]').length + '/' + document.querySelectorAll('[data-run-owasp-row][data-state="untested"]').length + '/' + document.querySelectorAll('[data-run-owasp-row="LLM03:2025"][data-state="outside"]').length;
      ${view('Samples')}
-     return 'tags: ' + tags.sort().join(',') + ' | charts: ' + charts + ' | histograms: ' + hist + ' | owasp rows/untested: ' + owasp;`,
+     return 'tags: ' + tags.sort().join(',') + ' | charts: ' + charts + ' | histograms: ' + hist + ' | owasp rows/untested/outside: ' + owasp;`,
   ),
   step(
     'score-again-then-compare-and-the-pivot',
@@ -281,7 +281,7 @@ module.exports = withExpect(
   steps,
   {
     'a-persona-of-the-workspace': /^built in: 9 \| save off: true:Give it an id: lower-case letters, digits and dashes \| saved: night-nurse:Short messages with abbreviations\. \| deleted: true$/,
-    'probe-sets-in-ai-lab': /^sets: 8 \| benign in workspace: true \(6 records\) \| add button gone: true$/,
+    'probe-sets-in-ai-lab': /^sets: 11 \| benign in workspace: true \(6 records\) \| add button gone: true$/,
     'a-rag-evaluation-with-the-metrics-tab': /^presets: .*agentic-rag.*conversational.*multimodal.*safety.* \| groups: .*conversation.*multimodal.*$|^presets: (?=.*safety)(?=.*conversational)(?=.*agentic-rag)(?=.*multimodal).* \| groups: (?=.*conversation)(?=.*multimodal).*$/,
     'a-required-option-is-marked-and-typed': /^required mark: true \| flagged while empty: true \| typed: a polite clinic receptionist \| flag gone: true$/,
     'a-metric-can-wait-for-another': /^before: always \| after: unless \| default condition: faithfulness < 0\.8 \| typed: faithfulness < 0\.7$/,
@@ -291,7 +291,7 @@ module.exports = withExpect(
     'the-picture-is-judged': /^score: 1 \| .* \| judge calls: 1$/,
     'the-connect-dialog-maps-tools-a-session-and-a-picture': /^slots: toolCalls:true,toolCall\.name:true,toolCall\.arguments:true,conversationId:true,context\.image:true \| modes: ,stateless-history,server-session \| chosen: server-session$/,
     'a-run-for-the-views': /^runs: 1 \| total: 3$/,
-    'by-tag-and-charts': /^tags: hours,policy \| charts: true \| histograms: [1-9]\d* \| owasp rows\/untested: 10\/[1-9]$/,
+    'by-tag-and-charts': /^tags: hours,policy \| charts: true \| histograms: [1-9]\d* \| owasp rows\/untested\/outside: 10\/[1-9]\/1$/,
     'score-again-then-compare-and-the-pivot': /^runs: 2 \| dialog closed: true \| compare: true rows [1-9]\d* \| summary: .* \| pivot rows: [1-9]/,
     'the-matrix-export-offers-the-files': /formats: .*CSV.*JSON.*HTML/,
     'the-monitor-editor-has-the-rag-fields': /^evaluation chosen: R3 views \| fields: Gates:true,Share of samples judged:true,Daily judge budget in USD:true \| gates typed: faithfulness=0\.8$/,

@@ -129,6 +129,19 @@ describe('a run as SARIF, with the OWASP LLM Top 10 category of a failed safety 
     expect(owaspOf({ type: 'rag-faithfulness' })?.name).toBe('Misinformation');
     expect(owaspOf({ type: 'contains' })).toBeUndefined();
     expect(owaspOf({ type: 'refusal-correctness' }, results[2])?.id).toBe('LLM01:2025');
+    // a probe of the system prompt, of planted knowledge or of other people's documents counts for its own category,
+    // whatever check read the answer; a check of another risk on the same record keeps its own
+    const probe = (kind: string) => result({ metadata: { rag: { record: { probe: kind } } } as never });
+    expect(owaspOf({ type: 'no-leak' }, probe('system-prompt'))?.name).toBe('System Prompt Leakage');
+    expect(owaspOf({ type: 'refusal-correctness' }, probe('system-prompt'))?.id).toBe('LLM07:2025');
+    expect(owaspOf({ type: 'prompt-injection-resistance' }, probe('poisoning'))?.name).toBe('Data and Model Poisoning');
+    expect(owaspOf({ type: 'pii-leakage' }, probe('cross-context'))?.name).toBe('Vector and Embedding Weaknesses');
+    expect(owaspOf({ type: 'tokens' }, probe('poisoning'))?.id).toBe('LLM10:2025');
+    expect(owaspOf({ type: 'no-leak' }, probe('pii'))?.id).toBe('LLM02:2025');
+    expect(owaspOf({ type: 'jailbreak-resistance' }, probe('pii'))?.id).toBe('LLM01:2025');
+    // every category has a test behind it or says why a run cannot test it
+    const reached = new Set([...PROBE_SETS.flatMap((s) => s.records.map((r) => owaspOf({ type: s.metrics[0]! }, probe(r.probe))?.id)), ...['json-schema', 'allowed-tools', 'faithfulness', 'tokens'].map((type) => owaspOf({ type })?.id)]);
+    expect(OWASP_LLM_2025.filter((c) => !reached.has(c.id)).map((c) => [c.id, !!c.outside])).toEqual([['LLM03:2025', true]]);
     const tally = new OwaspTally();
     for (const r of results) tally.add(r);
     expect(tally.coverage().filter((c) => c.tests)).toEqual([

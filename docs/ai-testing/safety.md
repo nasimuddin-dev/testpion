@@ -52,7 +52,7 @@ Without a text, the planted instruction tells the agent to reply only with the m
 
 `-r sarif` on `testpion test`, `run` and `run-collection` (and `--sarif <file>` on `testpion rag run`) writes the failed checks as SARIF 2.1.0, the format code-scanning views read (GitHub code scanning, Azure DevOps, GitLab). Each failed check is one finding, with the test file when there is one.
 
-In the app, the **Charts** tab of a run has the same table (**OWASP Top 10 for LLM applications**): each of the ten categories with the tests that covered it, the ones that failed, or *not tested*. `testpion run … --json` breakdowns and the MCP tool `run_breakdown` carry it as `owasp`.
+In the app, the **Charts** tab of a run has the same table (**OWASP Top 10 for LLM applications**): each of the ten categories with the tests that covered it, the ones that failed, or *not tested* (Supply Chain says *not a test of a run*: see below). `testpion run … --json` breakdowns and the MCP tool `run_breakdown` carry it as `owasp`.
 
 A check that tests a risk of the **OWASP Top 10 for LLM applications (2025)** carries its category, and the report says for all ten how many tests covered it and how many failed:
 
@@ -60,11 +60,15 @@ A check that tests a risk of the **OWASP Top 10 for LLM applications (2025)** ca
 |---|---|
 | LLM01 Prompt Injection | `prompt-injection-resistance`, `jailbreak-resistance`, `attack-resisted`, and any check on a `jailbreak`, `injection` or `multi-turn` probe |
 | LLM02 Sensitive Information Disclosure | `pii-leakage`, `no-leak`, any check on a `pii` probe |
+| LLM03 Supply Chain | none: where the model, its data and its tools come from is not something a run of your system can test. For MCP servers, [approve what a server lists and check it for changes](/mcp/tools#check) |
+| LLM04 Data and Model Poisoning | the refusal, leak and injection checks on a `poisoning` probe (the probe set **Planted facts**: a false "fact" handed to the system as knowledge) |
 | LLM05 Improper Output Handling | `json-schema`, `tool-args-valid` |
 | LLM06 Excessive Agency | `tool-not-called`, `allowed-tools`, `tool-sequence` |
+| LLM07 System Prompt Leakage | the refusal, leak and injection checks on a `system-prompt` probe (the probe set **The system prompt**) |
+| LLM08 Vector and Embedding Weaknesses | the refusal, leak and injection checks on a `cross-context` probe (the probe set **Other people's documents**: what a retrieval system must not hand out) |
 | LLM09 Misinformation | `faithfulness`, `groundedness`, `hallucination`, `answer-correctness` |
 | LLM10 Unbounded Consumption | `tokens`, `cost` |
 
-The mapping is deliberately small: a check that only loosely relates to a category is not counted. A category with 0 tests (supply chain, poisoning, system prompt leakage, embedding weaknesses unless you tag probes for them) means **not tested by this run**, not safe.
+The mapping is deliberately small: a check that only loosely relates to a category is not counted. A category with 0 tests means **not tested by this run**, not safe. The three probe sets above ask from outside, as a user can: they show what the system takes in or gives away, not how its index or its training data is protected.
 
 :::

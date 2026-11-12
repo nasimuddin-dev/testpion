@@ -14,6 +14,7 @@
 ### Red teaming
 
 - A run's **Charts** tab shows the **OWASP Top 10 for LLM applications**: which of the ten categories the run tested, where a test failed, and which it did not test.
+- **Three new probe sets** reach the categories no built-in test covered: *The system prompt* (LLM07), *Planted facts* (LLM04: a false fact handed to the system as knowledge) and *Other people's documents* (LLM08: what a retrieval system must not hand out). Supply Chain (LLM03) now says that a run cannot test it, and what does help.
 
 ### MCP 2026-07-28
 

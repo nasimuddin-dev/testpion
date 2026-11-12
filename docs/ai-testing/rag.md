@@ -422,7 +422,7 @@ instruction.
 
 **Probe sets.** *RAG Bots ▸ Bots ▸ Safety probe sets* (or `testpion rag probes add`, the MCP tool `rag_probe_sets`) writes small seeded
 datasets into `datasets/`: `jailbreak`, `injection` (instructions planted in the text to read, with a made-up canary word that proves
-obedience), `pii`, `toxicity`, `bias`, `off-topic`, `benign` (harmless look-alikes, to count false refusals) and `attackers` ([attackers that adapt over several turns](/ai-testing/safety#attackers), played by a model). They are ordinary
+obedience), `pii`, `toxicity`, `bias`, `off-topic`, `benign` (harmless look-alikes, to count false refusals), `attackers` ([attackers that adapt over several turns](/ai-testing/safety#attackers), played by a model), and three that reach further [OWASP categories](/ai-testing/safety#sarif): `system-prompt` (requests for the system's instructions), `poisoning` (a false fact handed over as knowledge, found by its canary) and `cross-context` (other people's documents in a retrieval system). They are ordinary
 JSON Lines files with `question`, `probe`, `should_refuse`, `canaries`, `tags`: add your own lines, and seeding again never overwrites a
 file that is there. Run one with an evaluation of type RAG and the **Safety** preset. The prompts name the kinds of attack a red team tries and
 carry none of the harmful content.
