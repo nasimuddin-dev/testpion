@@ -1,7 +1,6 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { mcpServer, mcpServerHttp, mcpServerStdio, mcpTypes } from './sdk.js';
+import type { Server } from '@modelcontextprotocol/server';
+import { mcpServer } from './sdk.js';
+import { serveMcpOverHttp, serveMcpOverStdio } from './serve.js';
 import { parseYaml, stringifyYaml } from '../util/lazy-yaml.js';
 import { ApsError } from '../errors.js';
 import { dynamicValue } from '../vars/dynamic.js';
@@ -206,23 +205,23 @@ export function createMcpMockServer(d: McpMockDefinition): Server {
   if (d.resources?.length) caps.resources = {};
   if (d.prompts?.length) caps.prompts = {};
   const server = new (mcpServer().Server)({ name: d.name, version: d.version ?? '1.0.0-mock' }, { capabilities: caps, instructions: d.instructions });
-  server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
-    tools: (d.tools ?? []).map((t) => ({ name: t.name, title: t.title, description: t.description, inputSchema: { type: 'object', properties: {}, ...(t.inputSchema ?? {}) }, annotations: t.annotations })),
+  server.setRequestHandler('tools/list', async () => ({
+    tools: (d.tools ?? []).map((t) => ({ name: t.name, title: t.title, description: t.description, inputSchema: { type: 'object', properties: {}, ...(t.inputSchema ?? {}) }, annotations: t.annotations })) as never,
   }));
-  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (req) => (await mockToolResult(d, req.params.name, (req.params.arguments ?? {}) as Record<string, unknown>)) as never);
+  server.setRequestHandler('tools/call', async (req) => (await mockToolResult(d, req.params.name, (req.params.arguments ?? {}) as Record<string, unknown>)) as never);
   if (d.resources?.length) {
-    server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({ resources: d.resources!.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) }));
-    server.setRequestHandler(mcpTypes().ReadResourceRequestSchema, async (req) => {
+    server.setRequestHandler('resources/list', async () => ({ resources: d.resources!.map(({ uri, name, description, mimeType }) => ({ uri, name, description, mimeType })) }));
+    server.setRequestHandler('resources/read', async (req) => {
       const r = d.resources!.find((x) => x.uri === req.params.uri);
-      if (!r) throw new (mcpTypes().McpError)(mcpTypes().ErrorCode.InvalidParams, `Unknown resource ${req.params.uri}`);
+      if (!r) throw new (mcpServer().ProtocolError)(mcpServer().ProtocolErrorCode.InvalidParams, `Unknown resource ${req.params.uri}`);
       return { contents: [{ uri: r.uri, mimeType: r.mimeType ?? 'text/plain', text: r.text ?? '' }] };
     });
   }
   if (d.prompts?.length) {
-    server.setRequestHandler(mcpTypes().ListPromptsRequestSchema, async () => ({ prompts: d.prompts!.map(({ name, description, arguments: a }) => ({ name, description, arguments: a })) }));
-    server.setRequestHandler(mcpTypes().GetPromptRequestSchema, async (req) => {
+    server.setRequestHandler('prompts/list', async () => ({ prompts: d.prompts!.map(({ name, description, arguments: a }) => ({ name, description, arguments: a })) }));
+    server.setRequestHandler('prompts/get', async (req) => {
       const p = d.prompts!.find((x) => x.name === req.params.name);
-      if (!p) throw new (mcpTypes().McpError)(mcpTypes().ErrorCode.InvalidParams, `Unknown prompt ${req.params.name}`);
+      if (!p) throw new (mcpServer().ProtocolError)(mcpServer().ProtocolErrorCode.InvalidParams, `Unknown prompt ${req.params.name}`);
       const args = (req.params.arguments ?? {}) as Record<string, unknown>;
       return { description: p.description, messages: (p.messages ?? []).map((m) => ({ role: m.role, content: { type: 'text', text: fill(m.text, args) } })) };
     });
@@ -232,7 +231,7 @@ export function createMcpMockServer(d: McpMockDefinition): Server {
 
 /** Serve the mock over stdio (for AI agents that start MCP servers as commands). */
 export async function serveMcpMockStdio(d: McpMockDefinition): Promise<void> {
-  await createMcpMockServer(d).connect(new (mcpServerStdio().StdioServerTransport)());
+  await serveMcpOverStdio(() => createMcpMockServer(d));
 }
 
 interface McpMockHttpServer {
@@ -240,35 +239,9 @@ interface McpMockHttpServer {
   close(): Promise<void>;
 }
 
-/** Serve the mock over Streamable HTTP on localhost (stateless: every request gets a fresh server). */
-export async function startMcpMockHttp(d: McpMockDefinition, opts: { port?: number } = {}): Promise<McpMockHttpServer> {
-  const handle = async (req: IncomingMessage, res: ServerResponse) => {
-    if (req.method !== 'POST') {
-      res.writeHead(405, { allow: 'POST', 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed' }, id: null }));
-      return;
-    }
-    const chunks: Buffer[] = [];
-    for await (const c of req) chunks.push(c as Buffer);
-    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || 'null');
-    const server = createMcpMockServer(d);
-    const transport = new (mcpServerHttp().StreamableHTTPServerTransport)({ sessionIdGenerator: undefined });
-    res.on('close', () => {
-      void transport.close();
-      void server.close();
-    });
-    await server.connect(transport);
-    await transport.handleRequest(req, res, body);
-  };
-  const http = createServer((req, res) => {
-    handle(req, res).catch((e) => {
-      if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: (e as Error).message }, id: null }));
-    });
-  });
-  await new Promise<void>((ok, fail) => {
-    http.once('error', fail);
-    http.listen(opts.port ?? 0, '127.0.0.1', () => ok());
-  });
-  return { url: `http://127.0.0.1:${(http.address() as AddressInfo).port}/mcp`, close: () => new Promise((ok) => http.close(() => ok())) };
+/** Serve the mock over Streamable HTTP on localhost (stateless: every request gets a fresh server), to clients of any revision. */
+export function startMcpMockHttp(d: McpMockDefinition, opts: { port?: number } = {}): Promise<McpMockHttpServer> {
+  return serveMcpOverHttp(() => createMcpMockServer(d), opts);
 }
 
 /**

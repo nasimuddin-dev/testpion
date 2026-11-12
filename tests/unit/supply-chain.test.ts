@@ -44,9 +44,14 @@ describe('supply chain', () => {
   it('the dependencies named by advisories are at or above the fixed versions', () => {
     // Handlebars (GHSA-8r5x-fm3f-whwj, GHSA-p8wg-vrv2-v86f): the app embeds it and renders in the sandbox; the package stays current anyway
     expect(atLeast(JSON.parse(read('node_modules/handlebars/package.json')).version, '4.7.10')).toBe(true);
-    // the MCP SDK's HTTP client re-sent headers across origins before 1.32.0 (GHSA-6prh-2h8m-c8cw)
+    // the MCP SDK's HTTP client re-sent headers across origins before 1.32.0 (GHSA-6prh-2h8m-c8cw). The engine ships the v2 SDK
+    // (client and server, one version of both); the 1.x SDK is a development dependency (the tests' clients and fixtures), kept at a fixed version too
     expect(atLeast(JSON.parse(read('node_modules/@modelcontextprotocol/sdk/package.json')).version, '1.32.0')).toBe(true);
-    expect(JSON.parse(read('packages/core/package.json')).dependencies['@modelcontextprotocol/sdk']).toMatch(/\^1\.3[2-9]|\^1\.[4-9]\d/);
+    const core = JSON.parse(read('packages/core/package.json')).dependencies as Record<string, string>;
+    expect(core['@modelcontextprotocol/sdk']).toBeUndefined();
+    expect(core['@modelcontextprotocol/client']).toMatch(/^\^2\.\d+\.\d+$/);
+    expect(core['@modelcontextprotocol/server']).toBe(core['@modelcontextprotocol/client']);
+    expect(JSON.parse(read('node_modules/@modelcontextprotocol/server/package.json')).version).toBe(JSON.parse(read('node_modules/@modelcontextprotocol/client/package.json')).version);
   });
 
   // the 2026-10-27 security review: npm audit --omit=dev was red (4 high, 4 moderate); these are the fixed versions, installed and declared

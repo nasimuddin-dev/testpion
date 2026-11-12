@@ -1,8 +1,12 @@
 /**
- * Long runs as MCP tasks (the 2025-11-25 revision; experimental in the SDK): a client that asks for it (`task` in
+ * Long runs as MCP tasks (the 2025-11-25 revision): a client that asks for it (`task` in
  * tools/call) gets a task at once instead of waiting for a run that takes minutes, polls `tasks/get`, and reads the
  * result with `tasks/result`. A client that does not ask gets the result as before. Only the tools that run things take
  * it (`execution.taskSupport: optional`); the others answer a task request with an error, as the protocol says.
+ *
+ * Tasks are part of the 2025-11-25 revision only: the 2026-07-28 revision has none, and the SDK (v2) leaves them to the
+ * server. So the four task methods are served here (serveTasks), and a client of the 2026 revision is not told about
+ * tasks at all (the SDK takes `tasks` out of the capabilities and `execution` out of the tool list for it).
  *
  * Tasks live in this server process only: they end with the session, are kept an hour at most, and a server holds
  * twenty at a time, so an agent cannot fill memory with them.
@@ -103,7 +107,7 @@ interface RequestStore {
  * Answers a tools/call that asked for a task: the task now, the run in the background, its result (or its error, as an
  * error result) stored when it ends. A tool that does not take tasks refuses, as the protocol says.
  */
-export async function startToolTask(tool: string, extra: { taskStore?: unknown }, asked: { ttl?: number | null }, run: () => Promise<Result>): Promise<{ task: Task }> {
+export async function startToolTask(tool: string, extra: { taskStore?: unknown }, asked: { ttl?: number | null }, run: () => Promise<Result>): Promise<{ task: Task; content: Array<{ type: 'text'; text: string }> }> {
   const store = extra.taskStore as RequestStore | undefined;
   if (!store || !TASK_TOOLS.has(tool))
     throw new ApsError('ValidationError', `${tool} does not run as a task`, { suggestions: [`Call it without "task". The tools that take one: ${[...TASK_TOOLS].join(', ')}.`] });
@@ -114,5 +118,46 @@ export async function startToolTask(tool: string, extra: { taskStore?: unknown }
       (e: unknown) => store.storeTaskResult(task.taskId, 'failed', { isError: true, content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }] }),
     )
     .catch(() => undefined);
-  return { task };
+  // the text is for a client that reads a tools/call answer as a result whatever it holds
+  return { task, content: [{ type: 'text', text: `${tool} runs as task ${task.taskId}: tasks/get says where it is, tasks/result gives its result.` }] };
+}
+
+/** A schema that takes what it is given: the task methods check their own parameters (and say what is wrong in words). */
+const ANY = { '~standard': { version: 1 as const, vendor: 'testpion', validate: (value: unknown) => ({ value }) } };
+const RELATED_TASK = 'io.modelcontextprotocol/related-task';
+
+interface TaskHost {
+  setRequestHandler(method: string, schemas: { params: unknown; result: unknown }, handler: (params: Record<string, unknown> | undefined, ctx: { mcpReq?: { signal?: AbortSignal } }) => Promise<unknown>): void;
+}
+
+/** Serves tasks/get, tasks/list, tasks/cancel and tasks/result of one server from its store. */
+export function serveTasks(server: unknown, store: BoundedTaskStore): void {
+  const host = server as TaskHost;
+  const schemas = { params: ANY, result: ANY };
+  const need = async (params: Record<string, unknown> | undefined): Promise<Task> => {
+    const id = params?.taskId;
+    if (typeof id !== 'string' || !id) throw new ApsError('ValidationError', 'taskId is needed: the id tools/call gave when it started the task');
+    const task = await store.getTask(id);
+    if (!task) throw new ApsError('ValidationError', `No task ${id.slice(0, 64)} (tasks are kept an hour at most, and end with the session)`);
+    return task;
+  };
+  host.setRequestHandler('tasks/get', schemas, need);
+  host.setRequestHandler('tasks/list', schemas, () => store.listTasks());
+  host.setRequestHandler('tasks/cancel', schemas, async (params) => {
+    const task = await need(params);
+    if (terminal(task.status)) throw new ApsError('ValidationError', `Task ${task.taskId} is already ${task.status}`);
+    await store.updateTaskStatus(task.taskId, 'cancelled', 'Cancelled by the client');
+    return need(params);
+  });
+  // the result waits for the run to end, as the protocol says; a client that stops waiting (cancels the request) ends the wait
+  host.setRequestHandler('tasks/result', schemas, async (params, ctx) => {
+    let task = await need(params);
+    while (!terminal(task.status)) {
+      if (ctx.mcpReq?.signal?.aborted) throw new ApsError('ValidationError', `Stopped waiting for task ${task.taskId}`);
+      await new Promise((r) => setTimeout(r, 200));
+      task = await need(params);
+    }
+    const result = await store.getTaskResult(task.taskId);
+    return { ...result, _meta: { ...(result._meta as Record<string, unknown> | undefined), [RELATED_TASK]: { taskId: task.taskId } } };
+  });
 }

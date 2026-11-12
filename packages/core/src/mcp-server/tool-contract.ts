@@ -689,12 +689,3 @@ export function contractCallResult(r: ContractResult): { isError?: true; content
   return { ...(isError ? { isError: true as const } : {}), content: [{ type: 'text', text: JSON.stringify(r.value, null, 2) }, ...notes], structuredContent: structured };
 }
 
-/** A confirmer that asks the user through MCP elicitation, when the connected client supports it. */
-export function elicitationConfirmer(server: unknown): Confirmer {
-  const s = server as { getClientCapabilities?(): { elicitation?: unknown } | undefined; elicitInput?(p: unknown): Promise<{ action: string; content?: Record<string, unknown> }> };
-  return async (message) => {
-    if (!s.getClientCapabilities?.()?.elicitation || typeof s.elicitInput !== 'function') return undefined;
-    const r = await s.elicitInput({ message, requestedSchema: { type: 'object', properties: { confirm: { type: 'boolean', title: 'Go ahead', description: message } }, required: ['confirm'] } });
-    return r.action === 'accept' ? r.content?.confirm === true : false;
-  };
-}

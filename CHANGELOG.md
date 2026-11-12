@@ -7,6 +7,11 @@
 - `testpion rag import --listen` receives traces straight from your application (OTLP over HTTP, on this computer only) until Ctrl+C or `--for`, then writes the dataset records: no export file in between.
 - Traces are read as **protobuf** too, the form OpenTelemetry exporters send by default: the receiver takes it without a setting on the application, and `rag import` reads a trace export file in protobuf.
 
+### Collections
+
+- **Dragging a request or a folder onto another folder works again.** A drop with the mouse moved nothing: the tree forgot what was being dragged just before the drop was handled.
+- A folder's and a collection's **New request ▸** now lists **Socket.IO**, **MQTT** and **Kafka** by name, next to HTTP, GraphQL, SOAP, gRPC and WebSocket; the new tab starts as that kind and is saved in that folder.
+
 ### Simulated users
 
 - **Your own personas.** *RAG Bots ▸ Bots ▸ Personas for simulated users* lists the built-in personas and lets you write your own (an id, a name, the user in words, attacker or not). They are kept in `personas.yaml` of the workspace, and a test case names one in its `persona` column. `testpion rag personas -w <workspace>` lists them.
@@ -19,6 +24,8 @@
 ### MCP 2026-07-28
 
 - TestPion connects to servers of the **2026-07-28** revision of MCP (no handshake, no session). Over Streamable HTTP it asks the server first and falls back to the 2025 handshake for older servers; a local program or an SSE endpoint is asked when you set **MCP revision** to **Ask the server first** in its settings (`"protocol": "auto"`, `testpion mcp --protocol auto`). Server info and `mcp --check` say which revision is spoken.
+
+- **TestPion's own MCP server and its mock servers speak 2026-07-28 too.** `testpion mcp-server` (and the server the app starts for an agent) answers a client of the new revision without a handshake, and a client of the 2025 revisions as before. A confirmation before deleting or overwriting is asked the way each revision does it. `testpion mock-mcp` serves a mock to clients of either revision, over stdio and HTTP: a way to try your own client against both.
 
 ### Check an MCP server
 

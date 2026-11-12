@@ -33,7 +33,7 @@
     "@grpc/proto-loader": "^0.8.1",
     "@jitl/quickjs-singlefile-mjs-release-sync": "^0.32.0",
     "@modelcontextprotocol/client": "^2.4.0",
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@testpion/shared": "0.56.0",
     "acorn": "^8.19.0",
     "ajv": "^8.20.0",

@@ -41,7 +41,7 @@ MCP has revisions, named by date. The 2025 revisions start a connection with a h
 - **2025 only** in the same field skips the question for a server that fails on it. In `mcp-servers.json` the field is `"protocol": "auto"` or `"legacy"`; on the command line, `testpion mcp --url … --protocol legacy`.
 - The 2026-07-28 revision has no ping: **Ping** asks for the tool list there, and the check of a server does not expect one.
 
-TestPion's own server for agents (`testpion mcp-server`) and its mock servers speak the 2025 revisions (up to 2025-11-25), which every client still understands.
+TestPion's own server for agents (`testpion mcp-server`) and its [mock servers](/mcp/mocking) speak both: a client that asks first is answered in 2026-07-28, and one that starts with the handshake gets the 2025 revision it asks for. So a mock is also a way to try your own client against a server of either revision.
 
 <figure class="aps-screenshot">
   <img src="/images/mcp-delete-undo.jpg" alt="The Petstore MCP server deleted from the Collections sidebar: the message Deleted the MCP server Petstore MCP, Recently deleted keeps it for 30 days, with Undo" width="1440" height="900" loading="lazy">

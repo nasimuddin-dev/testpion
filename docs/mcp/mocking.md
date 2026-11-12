@@ -95,7 +95,7 @@ The [MCP server](/ai-testing/mcp-server) has the same as `mock_tools` (it takes 
 
 **In the app:** add an MCP server with the transport **Mock** and the file's path in the workspace. The mock runs inside TestPion; saved MCP tests can use it like any other server.
 
-**For AI agents and other clients:** serve it with the CLI.
+**For AI agents and other clients:** serve it with the CLI. A mock answers clients of every MCP revision: one that asks first (`server/discover`) is spoken to in **2026-07-28**, one that starts with the handshake in the 2025 revision it asks for.
 
 ```bash
 testpion mock-mcp mocks/customer.mcp-mock.yaml              # stdio: the command an agent starts

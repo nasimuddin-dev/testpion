@@ -79,7 +79,7 @@ Every list comes a page at a time with the same arguments and the same answer, w
 
 ## Long runs as tasks {#tasks}
 
-A collection run, a test run, an evaluation or a load test can take minutes, longer than many clients wait for one tool call. The tools that run things (`run_collection`, `run_tests`, `run_evaluation`, `run_monitor`, `rag_run`, `load_test`, `flow_data_run`, `security_tests_run`) say `execution.taskSupport: optional`: a client that supports MCP **tasks** (the 2025-11-25 revision) asks for a task in `tools/call`, gets it at once, polls `tasks/get` and reads the result with `tasks/result`; `tasks/list` and `tasks/cancel` work too. A client that does not ask gets the result when the run ends, as before.
+A collection run, a test run, an evaluation or a load test can take minutes, longer than many clients wait for one tool call. The tools that run things (`run_collection`, `run_tests`, `run_evaluation`, `run_monitor`, `rag_run`, `load_test`, `flow_data_run`, `security_tests_run`) say `execution.taskSupport: optional`: a client that supports MCP **tasks** (the 2025-11-25 revision) asks for a task in `tools/call`, gets it at once, polls `tasks/get` and reads the result with `tasks/result`; `tasks/list` and `tasks/cancel` work too. A client that does not ask gets the result when the run ends, as before. Tasks are part of the 2025-11-25 revision: a client that speaks **2026-07-28** (which has no tasks) is not offered them and waits for the result.
 
 Tasks live in the server process: they end with the session, are kept an hour at most (less when the client asks for less), and a server runs twenty at a time. Cancelling a task stops waiting for it; a run that already started finishes and is in the run history.
 

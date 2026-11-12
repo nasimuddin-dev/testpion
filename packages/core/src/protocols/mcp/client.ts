@@ -1,6 +1,7 @@
 import { ENGINE_VERSION } from '../../version.js';
 import { readFileSync } from 'node:fs';
 import { createMcpMockServer, loadMcpMock } from '../../mcp-server/mcp-mock.js';
+import { serveMcpOverTransport } from '../../mcp-server/serve.js';
 import { assertProcessesAllowed, assertUrlAllowed } from '../../net/policy.js';
 import { killProcessTree } from '../../net/process.js';
 import { ensureProxyApplied } from '../../net/proxy.js';
@@ -325,7 +326,7 @@ export class McpSession {
         // in-process: the mock server and this client are joined by an in-memory channel
         const def = loadMcpMock(readFileSync(c.mockFile, 'utf8'));
         const [client, server] = mcpClient().InMemoryTransport.createLinkedPair();
-        void createMcpMockServer(def).connect(server);
+        serveMcpOverTransport(() => createMcpMockServer(def), server);
         return client;
       }
       case 'streamable-http':

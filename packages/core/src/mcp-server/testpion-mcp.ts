@@ -1,6 +1,7 @@
 import { ENGINE_VERSION } from '../version.js';
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { mcpServer, mcpServerStdio, mcpTypes } from './sdk.js';
+import type { Server } from '@modelcontextprotocol/server';
+import { mcpServer } from './sdk.js';
+import { serveMcpOverStdio } from './serve.js';
 import type { AppSettings, Collection } from '../model/types.js';
 import { AGENT_PROMPTS, agentGuide, toolAnnotations } from './agent-kit.js';
 import { checkTypes } from '../eval/checks.js';
@@ -12,10 +13,11 @@ import type { SecretStore } from '../storage/secrets.js';
 import { compactTool, SHARED_PARAMETER_NOTE } from './compact.js';
 import { MinimalList, throughSearchTools, toolsOfCall } from './minimal-list.js';
 import { errorCallResult, plainCallResult } from './call-result.js';
-import { BoundedTaskStore, TASKS_CAPABILITY, startToolTask, taskExecution } from './mcp-tasks.js';
+import { BoundedTaskStore, TASKS_CAPABILITY, serveTasks, startToolTask, taskExecution } from './mcp-tasks.js';
+import { NeedsInput, callThatCanAsk, inputConfirmer } from './confirm-input.js';
 import { flowTools } from './tools/flow-tools.js';
 import { moduleTools } from './tools/index.js';
-import { ConfirmCodes, contractCallResult, elicitationConfirmer, isContractResult, TOOL_DETAILS, withToolContract, type Confirmer } from './tool-contract.js';
+import { ConfirmCodes, contractCallResult, isContractResult, TOOL_DETAILS, withToolContract, type Confirmer } from './tool-contract.js';
 import { TOOL_DOCS } from './tool-docs.js';
 import type { DebuggerExchange } from '../debugger/proxy.js';
 import { withEnvironmentSecrets, withProductionConsent, type Tool } from './tool.js';
@@ -144,16 +146,18 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     { name: 'testpion', version: opts.version ?? ENGINE_VERSION },
     {
       capabilities: { tools: profile === 'minimal' ? { listChanged: true } : {}, resources: {}, prompts: {}, tasks: TASKS_CAPABILITY },
-      taskStore: new BoundedTaskStore() as never,
       instructions: `TestPion workspace "${store.workspace.name}". list_kinds says what every kind of item can do and which deletes can be undone. what_needs_attention lists what is failing or about to (monitors, certificates, runs, requests, flaky tests). Use list_collections and list_requests to find requests, get_request or collection_docs to understand them${opts.readOnly ? '' : ', send_request to call one and run_collection to run tests'}. list_monitors and monitor_results show scheduled checks${opts.readOnly ? '' : ' (run_monitor runs one now)'}. parse_request_snippet reads a cURL / fetch / PowerShell command${opts.readOnly ? '' : ' and save_request stores it in a collection (secrets become {{variables}})'}. Values of secrets are never returned. Read testpion_guide (or the testpion://guide resource) for the check types and the test file format before writing tests${opts.readOnly ? '' : ' (set_request_checks, write_test_file)'}; the prompts investigate_failures, write_tests, debug_request, api_health_report and import_and_test walk through the common jobs. ${profile === 'minimal' ? 'This is the minimal profile: the listed tools cover the common jobs; search_tools finds the others (mocks, the debugger, git, load tests, certificates …), and any tool it names can be called.' : 'search_tools finds a tool by what you want to do.'}${profile === 'verbose' ? '' : ` ${SHARED_PARAMETER_NOTE}`}`,
     },
   );
-  server.setRequestHandler(mcpTypes().ListToolsRequestSchema, async () => ({
+  // tasks belong to the 2025-11-25 revision: served here, and the SDK does not offer them to a client of 2026-07-28
+  const taskStore = new BoundedTaskStore();
+  serveTasks(server, taskStore);
+  server.setRequestHandler('tools/list', async () => ({
     tools: listedTools().map(({ name, description, inputSchema, outputSchema, write }) => {
       // the title is the tool's own field; repeating it inside the annotations was 6 KB of a full list
       const { title, ...annotations } = toolAnnotations(name, !!write);
       return { name, title, description, inputSchema, ...(outputSchema ? { outputSchema } : {}), annotations, ...taskExecution(name) };
-    }),
+    }) as never,
   }));
   // resources: what an agent (or its user, e.g. with @ in Claude Code) can read as context without calling tools
   const json = (uri: string, data: unknown) => ({ contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(data, null, 2) }] });
@@ -162,7 +166,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     const r = await tools().find((t) => t.name === name)!.run(args);
     return isContractResult(r) ? r.value : r;
   };
-  server.setRequestHandler(mcpTypes().ListResourcesRequestSchema, async () => ({
+  server.setRequestHandler('resources/list', async () => ({
     resources: [
       { uri: 'testpion://guide', name: 'guide', title: 'TestPion guide for agents', description: 'Which tool to use for what, variables, check types and the test file format', mimeType: 'text/markdown' },
       { uri: 'testpion://workspace', name: 'workspace', title: `Workspace "${store.workspace.name}"`, description: 'Collections (with request counts), environments (variable names) and monitors', mimeType: 'application/json' },
@@ -170,13 +174,13 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
       ...collections().map((c) => ({ uri: `testpion://collections/${encodeURIComponent(c.id)}`, name: c.name, title: `Collection "${c.name}"`, description: 'Its documentation: every request with parameters, headers, body and examples', mimeType: 'text/markdown' })),
     ],
   }));
-  server.setRequestHandler(mcpTypes().ListResourceTemplatesRequestSchema, async () => ({
+  server.setRequestHandler('resources/templates/list', async () => ({
     resourceTemplates: [
       { uriTemplate: 'testpion://collections/{collection}', name: 'collection', title: 'A collection\'s documentation', description: 'Collection name or id', mimeType: 'text/markdown' },
       { uriTemplate: 'testpion://collections/{collection}/requests/{request}', name: 'request', title: 'A saved request', description: 'Its method, URL, headers, body, auth type, scripts and checks (secrets masked)', mimeType: 'application/json' },
     ],
   }));
-  server.setRequestHandler(mcpTypes().ReadResourceRequestSchema, async (req) => {
+  server.setRequestHandler('resources/read', async (req) => {
     const uri = req.params.uri;
     if (uri === 'testpion://guide') return { contents: [{ uri, mimeType: 'text/markdown', text: agentGuide({ workspace: store.workspace.name, checkTypes: checkTypes(), readOnly: opts.readOnly, toolDetails: TOOL_DETAILS }) }] };
     if (uri === 'testpion://workspace')
@@ -190,10 +194,10 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     }
     throw new ApsError('ConfigurationError', `Unknown resource ${uri}`);
   });
-  server.setRequestHandler(mcpTypes().ListPromptsRequestSchema, async () => ({
+  server.setRequestHandler('prompts/list', async () => ({
     prompts: AGENT_PROMPTS.filter((p) => !opts.readOnly || p.name === 'investigate_failures' || p.name === 'api_health_report').map(({ name, title, description, arguments: args }) => ({ name, title, description, arguments: args })),
   }));
-  server.setRequestHandler(mcpTypes().GetPromptRequestSchema, async (req) => {
+  server.setRequestHandler('prompts/get', async (req) => {
     const p = AGENT_PROMPTS.find((x) => x.name === req.params.name);
     if (!p) throw new ApsError('ConfigurationError', `Unknown prompt ${req.params.name}. Available: ${AGENT_PROMPTS.map((x) => x.name).join(', ')}`);
     const args = (req.params.arguments ?? {}) as Record<string, string | undefined>;
@@ -207,7 +211,7 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
     registry = { ...registry!, listed: registry!.tools.filter((t) => minimal.has(t.name)).map(compactTool) };
     void server.sendToolListChanged().catch(() => undefined);
   };
-  server.setRequestHandler(mcpTypes().CallToolRequestSchema, async (call, extra) => {
+  server.setRequestHandler('tools/call', async (call, ctx) => {
     const req = { ...call, params: throughSearchTools(call.params) };
     const tool = tools().find((t) => t.name === req.params.name);
     if (!tool) return { isError: true, content: [{ type: 'text', text: `Unknown tool ${req.params.name}. search_tools finds a tool by what you want to do.` }], structuredContent: { error: errorEnvelope(new ApsError('ValidationError', `Unknown tool ${req.params.name}`, { suggestions: ['search_tools finds a tool by what you want to do.'] })) } };
@@ -218,14 +222,16 @@ export function createTestPionMcpServer(opts: TestPionMcpOptions): Server {
         if (isContractResult(r)) return contractCallResult(r);
         return plainCallResult(r);
       } catch (e) {
+        if (e instanceof NeedsInput) throw e;
         return errorCallResult(e, !!listedTools().find((t) => t.name === req.params.name)?.outputSchema);
       }
     };
     // a client that asks for a task (a long run) gets it at once and polls; the others wait for the result as before
-    return req.params.task ? startToolTask(tool.name, extra, req.params.task, exec) : exec();
+    const task = (call.params as { task?: { ttl?: number | null } }).task;
+    return (task ? startToolTask(tool.name, { taskStore }, task, exec) : callThatCanAsk(server, ctx, exec)) as never;
   });
-  // a deleting or overwriting call without confirm: true asks the user when the client can (MCP elicitation)
-  confirmer = elicitationConfirmer(server);
+  // a deleting or overwriting call without confirm: true asks the user when the client can (MCP elicitation, confirm-input.ts)
+  confirmer = inputConfirmer;
   return server;
 }
 
@@ -237,9 +243,7 @@ export async function serveTestPionMcp(opts: TestPionMcpOptions & { stdio?: { in
   // the person sees the confirmation codes here (stderr: the terminal or the host's log), the agent does not read them
   const announce = (i: { code: string; tool: string; what: string }) => process.stderr.write(`[testpion mcp] Confirmation needed: ${i.tool} will ${i.what}\n[testpion mcp] If you approve, give your agent this code: ${i.code}\n`);
   const codesOff = opts.confirmCodes === false || process.env.TESTPION_MCP_CONFIRM_CODES === '0';
-  const server = createTestPionMcpServer({ ...opts, profile: resolveMcpProfile(opts.profile, 'minimal'), confirmCodes: codesOff ? false : (opts.confirmCodes ?? { announce }) });
-  const transport = new (mcpServerStdio().StdioServerTransport)(opts.stdio?.input as never, opts.stdio?.output as never);
-  const closed = new Promise<void>((resolve) => (server.onclose = () => resolve()));
-  await server.connect(transport);
-  await closed;
+  const made = { ...opts, profile: resolveMcpProfile(opts.profile, 'minimal'), confirmCodes: codesOff ? false : (opts.confirmCodes ?? { announce }) };
+  // the client's first message says which revision it speaks (serve.ts); the server is made for it then
+  await serveMcpOverStdio(() => createTestPionMcpServer(made), opts.stdio);
 }

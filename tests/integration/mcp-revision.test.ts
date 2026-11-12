@@ -76,20 +76,41 @@ describe('the MCP revision of a connection', () => {
     }
   }, 40_000);
 
-  it('a server of the 2025 revisions is asked, says no, and gets the handshake it knows (HTTP, a local program asked to, a mock)', async () => {
+  it('a server of the 2025 revisions is asked, says no, and gets the handshake it knows', async () => {
+    // a server built on the 1.x SDK: it knows nothing of server/discover
+    const s = await open({ transport: 'stdio', command: process.execPath, args: [join(process.cwd(), 'tests', 'fixtures', 'mcp-client-features-server.mjs')], protocol: 'auto' });
+    try {
+      const d = await s.discover();
+      expect(d.protocolVersion).toBe('2025-11-25');
+      expect(d.tools.length).toBeGreaterThan(0);
+    } finally {
+      await s.close();
+    }
+  }, 60_000);
+
+  it('TestPion’s own servers speak both: its mocks (HTTP, in the app) and the workspace server answer in 2026-07-28 when asked first, and in 2025-11-25 otherwise', async () => {
     const mockFile = join(process.cwd(), 'examples', 'public-workspace', 'mocks', 'weather.mcp-mock.yaml');
     const mock = await startMcpMockHttp(loadMcpMock(readFileSync(mockFile, 'utf8')));
+    const workspaceServer = { transport: 'stdio' as const, command: process.execPath, args: [cliPath, 'mcp-server', '-w', join(process.cwd(), 'examples', 'public-workspace'), '--read-only'] };
     try {
-      for (const cfg of [
-        { transport: 'streamable-http' as const, url: mock.url },
-        { transport: 'mock' as const, mockFile, protocol: 'auto' as const },
-        { transport: 'stdio' as const, command: process.execPath, args: [cliPath, 'mcp-server', '-w', join(process.cwd(), 'examples', 'public-workspace'), '--read-only'], protocol: 'auto' as const },
-      ]) {
+      for (const [cfg, version] of [
+        [{ transport: 'streamable-http' as const, url: mock.url }, '2026-07-28'],
+        [{ transport: 'streamable-http' as const, url: mock.url, protocol: 'legacy' as const }, '2025-11-25'],
+        [{ transport: 'mock' as const, mockFile, protocol: 'auto' as const }, '2026-07-28'],
+        [{ transport: 'mock' as const, mockFile }, '2025-11-25'],
+        [{ ...workspaceServer, protocol: 'auto' as const }, '2026-07-28'],
+        [workspaceServer, '2025-11-25'],
+      ] as const) {
+        const label = `${cfg.transport} ${'protocol' in cfg ? cfg.protocol : 'default'}`;
         const s = await open(cfg);
         try {
           const d = await s.discover();
-          expect(d.protocolVersion, cfg.transport).toBe('2025-11-25');
-          expect(d.tools.length, cfg.transport).toBeGreaterThan(0);
+          expect(d.protocolVersion, label).toBe(version);
+          expect(d.tools.length, label).toBeGreaterThan(0);
+          // a call goes through on either revision
+          const tool = d.tools.find((t) => t.name === 'list_collections' || t.name === 'get_weather') ?? d.tools[0]!;
+          const r = await s.callTool(tool.name, tool.name === 'list_collections' ? {} : { city: 'Paris' });
+          expect(r.content.length, label).toBeGreaterThan(0);
         } finally {
           await s.close();
         }
@@ -97,7 +118,7 @@ describe('the MCP revision of a connection', () => {
     } finally {
       await mock.close();
     }
-  }, 60_000);
+  }, 120_000);
 
   it('the command line: --url asks first, --protocol legacy does not', async () => {
     const auto = await runCli(['mcp', '--url', strict, '--check', '--json']);

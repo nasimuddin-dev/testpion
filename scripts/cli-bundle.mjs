@@ -76,7 +76,7 @@ export function bundleCli({ root, outfile }) {
 export function bundleMcpSdk({ root, outfile }) {
   return build({
     stdin: {
-      contents: "module.exports = { types: require('@modelcontextprotocol/sdk/types.js'), server: require('@modelcontextprotocol/sdk/server/index.js'), stdio: require('@modelcontextprotocol/sdk/server/stdio.js') };",
+      contents: "module.exports = { server: require('@modelcontextprotocol/server'), stdio: require('@modelcontextprotocol/server/stdio') };",
       resolveDir: join(root, 'packages', 'core'),
       loader: 'js',
     },
