@@ -144,8 +144,9 @@ export function decodeOtlpTraces(buf: Buffer): { resourceSpans: Rec[] } {
   return { resourceSpans };
 }
 
-/** True when the bytes are not JSON text (a file given to a trace import is then read as protobuf). */
-export const looksBinary = (buf: Buffer): boolean => {
-  const first = buf.find((b) => b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d && b !== 0xef && b !== 0xbb && b !== 0xbf);
-  return first !== undefined && first !== 0x7b && first !== 0x5b;
-};
+/**
+ * True when the bytes are not a text file (a file given to a trace import is then read as protobuf, not as JSON, YAML
+ * or CSV). Text has no control characters but tab and line ends; a protobuf trace export has them at once (its field
+ * tags, ids and times).
+ */
+export const looksBinary = (buf: Buffer): boolean => buf.subarray(0, 65536).some((b) => b < 0x09 || (b > 0x0d && b < 0x20));

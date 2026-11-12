@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import protobuf from 'protobufjs';
-import { decodeOtlpTraces, importOtelTraces, startOtlpReceiver } from '@testpion/core';
+import { decodeOtlpTraces, importOtelTraces, looksBinary, startOtlpReceiver } from '@testpion/core';
 import { cliPath, runCli } from '../helpers.js';
 
 const attr = (o: Record<string, string>) => Object.entries(o).map(([key, v]) => ({ key, value: { stringValue: v } }));
@@ -240,6 +240,9 @@ describe('testpion rag import --listen', () => {
       const data = JSON.parse(r.out).data as { from: string; records: Array<{ question: string; answer: string }> };
       expect(data.from).toBe('otel');
       expect(data.records.map((x) => [x.question, x.answer])).toEqual([['Do you board cats?', 'Yes, up to two weeks.']]);
+      // a text dataset of any format is never taken for protobuf
+      for (const text of ['tests:\n  - vars:\n      question: Hi\n', 'question,reference\nHi,Hello\n', '\ufeff[{"question":"Hi"}]', '\n\n{"question":"Grüß Gott 你好"}\n']) expect(looksBinary(Buffer.from(text)), text).toBe(false);
+      expect(looksBinary(protoTrace('Q?', 'A.'))).toBe(true);
       writeFileSync(file, Buffer.from([0xff, 0xff, 0xff, 0x01, 0x02]));
       const bad = await runCli(['rag', 'import', file, '--json']);
       expect(bad.status).not.toBe(0);
