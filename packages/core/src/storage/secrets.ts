@@ -204,6 +204,20 @@ export class EncryptedFileSecretStore implements SecretStore {
   }
 }
 
+/** A store that is only read here: its values are found, nothing is written to it (the CLI's runs read the vault; only `testpion vault` writes it). */
+export function readOnlySecrets(store: SecretStore): SecretStore {
+  return {
+    kind: store.kind,
+    writable: false,
+    get: (name) => store.get(name),
+    set: async () => {
+      throw new ApsError('ConfigurationError', 'This secret store is read only here', { suggestions: ['`testpion vault set` keeps a secret for the command line.'] });
+    },
+    delete: async () => undefined,
+    list: () => store.list(),
+  };
+}
+
 /** Reads from the first store that has the value; writes go to the first writable store. */
 export class ChainSecretStore implements SecretStore {
   readonly kind: string;

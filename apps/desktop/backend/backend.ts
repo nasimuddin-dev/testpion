@@ -8,11 +8,8 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import {
   ApsError,
-  ChainSecretStore,
-  EnvSecretStore,
   Logger,
   McpSession,
-  MemorySecretStore,
   Redactor,
   WebSocketSession,
   SocketIoSession,
@@ -90,7 +87,7 @@ import {
   type OutputDeps,
 } from '@testpion/core';
 import { trustShared } from './shared-trust.js';
-import { encryptedSecrets, reportStartupProblem, closeStoreAfterRuns, noteProblem, noteSlowCall, recordBestEffort, reportMetaProblem, scheduleSweep, settleWithin } from './backend-health.js';
+import { appSecrets, reportStartupProblem, closeStoreAfterRuns, noteProblem, noteSlowCall, recordBestEffort, reportMetaProblem, scheduleSweep, settleWithin } from './backend-health.js';
 import { appHandlers } from './handlers/app.js';
 import { workspaceHandlers } from './handlers/workspace.js';
 import { collectionsHandlers } from './handlers/collections.js';
@@ -286,10 +283,7 @@ export class Backend {
     if (host.serverMode) setNetworkPolicy({ allowLocalFiles: false, localFileRoots: [host.userRoot ?? host.appDir] });
     this.settings = this.manager.loadSettings();
     if (host.serverMode) this.settings = { ...this.settings, envVariables: [] };
-    const stores: SecretStore[] = [];
-    stores.push(host.cipher ? encryptedSecrets(this, join(host.appDir, 'secrets.json'), host.cipher) : new MemorySecretStore());
-    stores.push(new EnvSecretStore());
-    this.secrets = new ChainSecretStore(stores);
+    this.secrets = appSecrets(this, host);
     this.logger = new Logger(this.settings.logLevel, new Redactor(this.settings.redactFields));
     this.logger.addSink(fileSink(join(host.appDir, 'logs', 'app.log')));
     setBigFileNotifier((p, b) => this.logger.warn(`${p} is ${Math.round(b / 1048576)} MB: it is read from disk each time (consider splitting it)`));

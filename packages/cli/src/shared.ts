@@ -6,6 +6,9 @@ import {
   ApsError,
   ChainSecretStore,
   EnvSecretStore,
+  defaultAppDir,
+  VaultSecretStore,
+  readOnlySecrets,
   WorkspaceManager,
   WorkspaceStore,
   createEngineContext,
@@ -147,8 +150,15 @@ export async function withWorkspace<T>(ref: string | undefined, fn: (store: Work
 /** This very CLI as a command line (forward slashes: git runs it with sh), for git hooks and the merge and diff drivers. */
 export const cliSelf = () => `"${process.execPath.split('\\').join('/')}" "${process.argv[1]!.split('\\').join('/')}"`;
 
-/** The CLI has no OS keychain: secret variables come from TESTPION_SECRET_* environment variables. */
-export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore()]);
+/** The vault of this computer's app folder (`testpion vault`, storage/vault.ts): the secret store the command line can write to. */
+export const cliVault = () => new VaultSecretStore(process.env.TESTPION_HOME || defaultAppDir());
+
+/**
+ * The CLI's secrets: TESTPION_SECRET_* environment variables first (CI decides), then the vault, read only: a run never
+ * writes a secret (only `testpion vault` and `git fix-secrets --apply` do), and the vault's key is asked for only when a
+ * name is in it.
+ */
+export const cliSecrets = () => new ChainSecretStore([new EnvSecretStore(), readOnlySecrets(cliVault())]);
 
 /** An engine context as every command builds it: the workspace, the CLI's secrets, the app settings and an environment. */
 export function cliContext(store: WorkspaceStore, environment?: string, extra: Partial<Omit<ContextOptions, 'store' | 'secrets' | 'settings' | 'environment'>> = {}): EngineContext {

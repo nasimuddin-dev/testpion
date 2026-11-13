@@ -341,6 +341,7 @@ export * from './debugger/share-bundle.js';
 export * from './storage/trust.js';
 export * from './scripts/script-trust.js';
 export * from './storage/secrets.js';
+export * from './storage/vault.js';
 export * from './storage/metastore.js';
 export * from './storage/storage-usage.js';
 export * from './storage/certificates.js';

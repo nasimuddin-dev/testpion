@@ -33,6 +33,7 @@ import { registerAgentInfoCommand } from './commands/agent-info.js';
 import { registerAgentsCommands } from './commands/agents.js';
 import { registerOpenCommand } from './commands/open.js';
 import { registerSecretsCommands } from './commands/secrets.js';
+import { registerVaultCommands } from './commands/vault.js';
 import { registerHistoryCommands } from './commands/history.js';
 import { registerOpenApiCommands } from './commands/openapi.js';
 import { registerGenerateCommands } from './commands/generate.js';
@@ -87,6 +88,7 @@ export function buildProgram(): Command {
   registerOpenCommand(program);
   registerMonitorCommands(program);
   registerSecretsCommands(program);
+  registerVaultCommands(program);
   registerHistoryCommands(program);
   registerOpenApiCommands(program);
   registerGenerateCommands(program);

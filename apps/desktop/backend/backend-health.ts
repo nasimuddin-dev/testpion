@@ -1,4 +1,5 @@
-import { EncryptedFileSecretStore, acquireWorkspaceLock, lockMessage, normalizeError, placeCollectionCalls, sweepWorkspaceAsync, type WorkspaceLock, type WorkspaceStore } from '@testpion/core';
+import { join } from 'node:path';
+import { ChainSecretStore, EncryptedFileSecretStore, EnvSecretStore, MemorySecretStore, VaultSecretStore, readOnlySecrets, acquireWorkspaceLock, lockMessage, normalizeError, placeCollectionCalls, sweepWorkspaceAsync, type SecretStore, type WorkspaceLock, type WorkspaceStore } from '@testpion/core';
 import type { Backend } from './backend.js';
 
 /**
@@ -102,8 +103,19 @@ export function reportStartupProblem(be: Backend, path: string | undefined, e: u
   }
 }
 
+/**
+ * The app's secrets: its own encrypted store (written here), then what `testpion vault set` kept on this computer (read
+ * only here; not on a server, where the app folder is not a person's), then TESTPION_SECRET_* environment variables.
+ */
+export function appSecrets(be: Backend, host: { appDir: string; cipher?: ConstructorParameters<typeof EncryptedFileSecretStore>[1]; serverMode?: boolean }): ChainSecretStore {
+  const stores: SecretStore[] = [host.cipher ? encryptedSecrets(be, join(host.appDir, 'secrets.json'), host.cipher) : new MemorySecretStore()];
+  if (!host.serverMode) stores.push(readOnlySecrets(new VaultSecretStore(host.appDir)));
+  stores.push(new EnvSecretStore());
+  return new ChainSecretStore(stores);
+}
+
 /** The encrypted secret store, with its problems (a damaged file, values of another user) told to the window. */
-export function encryptedSecrets(be: Backend, file: string, cipher: ConstructorParameters<typeof EncryptedFileSecretStore>[1]): EncryptedFileSecretStore {
+function encryptedSecrets(be: Backend, file: string, cipher: ConstructorParameters<typeof EncryptedFileSecretStore>[1]): EncryptedFileSecretStore {
   const enc = new EncryptedFileSecretStore(file, cipher);
   enc.onProblem = (m) => reportSecretsProblem(be, m);
   if (enc.problem) setImmediate(() => reportSecretsProblem(be, enc.problem!));

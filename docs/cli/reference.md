@@ -76,6 +76,7 @@ testpion export <c> -f http    Write a collection as an .http file (REST Client,
 testpion export <c> -f asyncapi Write a collection's connections as an AsyncAPI 3.0 document
 testpion openapi-ops <spec>    List an OpenAPI document's operations by tag (--json: schemas and a request per operation)
 testpion secrets <environment> Check an environment's secret manager references (op://, vault://, aws-sm:// …)
+testpion vault status|list|set|delete   The secret store the command line can write to (the app reads it too): `vault set <name> [-e <environment> | --global | --provider] [-w <ws>] [--from-env VAR]` reads the value from standard input
 testpion record <target>      Record traffic through a local reverse proxy; -w saves it as a collection (see Record traffic)
 testpion debug (or debugger) [capture] [--throttle modem|edge|slow-3g|3g|slow-4g|custom [--down-kbps n --up-kbps n --latency-ms n]] [-p port] [-o session.har] [--rules debugger/rules.json] [--decrypt] [--system-proxy --yes] [--dry-run] [-w workspace] [--json] [--save-collection [name] | --to <collection>] [--group host|path|none]   The HTTP Debugger's proxy: other programs' traffic (HTTP_PROXY=…), printed as it happens (program, process id, server); rules applied
 testpion debugger remap [host=target] [--keep-host] [--scheme auto|http|https] [--list] [--remove <host>] [--import-hosts [file]] [--rules file] [--dry-run] [--json]   Host remapping rules of a rules file (default: the workspace's debugger/rules.json); the hosts-file entries are imported switched off
@@ -217,7 +218,8 @@ The app's settings (the ones in Settings in the window, per computer) for script
 |---|---|
 | `TESTPION_HOME` | The app's data folder (settings, workspaces, secrets) instead of the default one |
 | `TESTPION_NON_INTERACTIVE=1` | Never wait for input (also set by `CI`) |
-| `TESTPION_SECRET_<NAME>` | The value of a secret variable (the CLI has no OS keychain) |
+| `TESTPION_SECRET_<NAME>` | The value of a secret variable (it wins over the vault) |
+| `TESTPION_VAULT_PASSPHRASE` | The passphrase of the vault (`testpion vault`) where no OS keyring is available: CI, containers |
 | `TESTPION_AI_PROVIDER`, `TESTPION_AI_MODEL` (`_SMALL`, `_LARGE`), `TESTPION_AI_LOCAL_ONLY` | The AI model the CLI and CI use |
 | `TESTPION_NO_PROXY`, `TESTPION_USE_SYSTEM_CA`, `TESTPION_CA_FILE` | Outbound proxy off, the OS certificate store, extra CA certificates |
 | `TESTPION_BLOCK_PRIVATE_NETWORKS`, `TESTPION_ALLOW_HOSTS`, `TESTPION_ALLOW_PROCESSES` | The network policy for shared use ([privacy](/security/privacy)) |

@@ -12,6 +12,12 @@
 - **Uses and used by…** in an item's menu lists what the item names in the workspace (API definitions, datasets, protos, mocks, script packages, MCP servers, environments, its collection) and what names it (tests, flows, monitors, calls, collections). The same reading as *Export with everything it uses*; nothing runs.
 - `testpion item uses <ref> [--json]` and the MCP tool `item_uses` answer the same: check before you delete or rename something.
 
+### Secrets for the command line
+
+- **`testpion vault`**: a secret store the command line can write to, and the app reads too. `vault set` takes the value from standard input or an environment variable (never as an argument), `vault list` prints names only, `vault status` says whether it opens here. Every value is encrypted on its own; the key is kept by the operating system (Windows DPAPI, the macOS Keychain, the Linux Secret Service) or derived from `TESTPION_VAULT_PASSPHRASE` in CI and containers.
+- The CLI reads `TESTPION_SECRET_*` first, then the vault, so pipelines keep working as they are. A run never writes the vault.
+- **`testpion git fix-secrets --apply`** now moves secrets typed into staged files to the vault and writes the `{{variables}}`, as *Fix all* does in the app. Before, the command line could only print the plan.
+
 ### Smaller changes
 
 - A test file or a flow has **Move to…** (a new path inside `tests/`).

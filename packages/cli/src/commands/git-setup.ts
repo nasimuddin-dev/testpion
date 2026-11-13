@@ -28,7 +28,7 @@ import {
   type GitFixResult,
   type LargeResult,
 } from '@testpion/core';
-import { EXIT, CliError, bold, cliSelf, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
+import { EXIT, CliError, bold, cliSelf, cliVault, dim, green, printJson, red, withWorkspace, yellow, JSON_OPTION } from '../shared.js';
 
 const out = (json: boolean, value: unknown, text: () => void) => (json ? printJson(value) : text());
 const mb = (n: number) => `${(n / 1048576).toFixed(n >= 10485760 ? 0 : 1)} MB`;
@@ -228,19 +228,21 @@ export function registerGitSetupCommands(git: Command): void {
       .description(
         'what the one-click fix would do for secrets typed into staged MCP servers, providers, library items, tests and other files: the {{variable}} each value becomes (the values themselves move to secret variables in the TestPion app, whose secret store the command line does not have)',
       )
-      .requiredOption('-e, --environment <name>', 'the environment whose secret variables would keep the values'),
+      .requiredOption('-e, --environment <name>', 'the environment whose secret variables would keep the values')
+      .option('--apply', 'do it: the values move to the vault of this computer (`testpion vault`), the files get the {{variables}}; `testpion git undo` takes the file changes back'),
   ).action((o) =>
     withWorkspace(o.workspace, async (s) => {
       const env = s.getEnvironment(String(o.environment));
       if (!env) throw new CliError(`No environment "${o.environment}"`, EXIT.CONFIG_ERROR);
       const scan = await scanStagedSecrets(s.root);
       const files = [...new Set([...scan.blocking, ...scan.confirm].map((f) => f.file))];
-      const r = await fixStagedFiles(s, undefined, { files, environmentId: env.id, dryRun: true });
+      const r = await fixStagedFiles(s, o.apply ? cliVault() : undefined, { files, environmentId: env.id, dryRun: !o.apply });
       out(o.json, r, () => {
         if (!r.fixed.length) console.log(green('Nothing the fix could move.'));
         for (const f of r.fixed) console.log(`  ${f.item}: ${f.field} ${dim(`→ ${f.variable}  (${f.file})`)}`);
         for (const k of r.skipped) console.log(yellow(`  ${k.file}: ${k.reason}`));
-        if (r.fixed.length) console.log(dim('Apply it in TestPion: Git view ▸ Fix all (the values move to secret variables of the chosen environment).'));
+        if (r.fixed.length && o.apply) console.log(green(`Moved ${r.fixed.length} value${r.fixed.length === 1 ? '' : 's'} to the vault (the app reads it too). Stage the changed files and commit; \`testpion git undo\` takes the file changes back.`));
+        else if (r.fixed.length) console.log(dim('Apply it with --apply (the values move to the vault of this computer), or in TestPion: Git view ▸ Fix all.'));
       });
     }),
   );

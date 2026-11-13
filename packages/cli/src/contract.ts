@@ -93,6 +93,8 @@ export const WRITE_COMMANDS = new Set([
   'git allow-secret',
   'git disallow-secret',
   'git fix-secrets',
+  'vault set',
+  'vault delete',
   'git undo',
   'settings set',
   'settings reset',
