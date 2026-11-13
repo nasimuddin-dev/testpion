@@ -23,7 +23,7 @@ module.exports = withExpect(steps, {
   // kinds fold into New request ▸, Convert scripts to pm.* moved to Export ▸ For Postman (pm.*)…
   'collection-menu-groups': /^New HTTP request \| New request \| New folder… \| Import here… ‖ Expand all \| Collapse all ‖ Run collection ‖ Copy link \| Export ‖ Monitor on a schedule… \| Run in CI… \| Create test file from collection… \| AI \| Settings, runner & docs \| Convert scripts to tp\.\* ‖ Rename \| Duplicate ‖ Delete…$/,
   'folder-menu-groups': /^New HTTP request \| New request \| New folder… \| Import here… ‖ Expand all \| Collapse all ‖ Run folder ‖ Copy link \| Export… ‖ Monitor on a schedule… \| Run in CI… \| Create test file from folder… \| AI \| Edit folder \(scripts, variables, auth\) ‖ Rename \| Duplicate \| Move to… ‖ Delete…$/,
-  'request-menu-groups': /^Open \| Open in new tab ‖ Copy link \| Copy as \| Export… ‖ Monitor on a schedule… \| Save as test… \| Suggest checks with AI… ‖ Rename \| Duplicate \| Move to… \| (Add to|Remove from) favorites ‖ Delete…$/,
+  'request-menu-groups': /^Open \| Open in new tab ‖ Copy link \| Copy as \| Export… ‖ Monitor on a schedule… \| Save as test… \| Uses and used by… \| Suggest checks with AI… ‖ Rename \| Duplicate \| Move to… \| (Add to|Remove from) favorites ‖ Delete…$/,
   'mcp-menu': /^Add an MCP server \| New folder…/,
   'new-from-menu': (r) => { const m = /tabs (\d+) -> (\d+)/.exec(r); return (m && +m[2] === +m[1] + 1) || 'a new tab should open'; },
   'monitors-header': /^New monitor \| New folder…/,
