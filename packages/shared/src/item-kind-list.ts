@@ -33,7 +33,7 @@ const FILE_ITEM: Capabilities = {
   // (a request is imported as a copied command or a request file; the others of this base have no import of their own yet)
   import: { planned: '0.58' },
   uses: { planned: '0.58' },
-  versioned: { planned: '0.57' },
+  versioned: { planned: '0.58' },
   'git-history': { planned: '0.58' },
   'git-discard': { planned: '0.58' },
   'git-stage': { planned: '0.58' },

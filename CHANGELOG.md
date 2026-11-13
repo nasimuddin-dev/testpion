@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.57.0 — 2026-11-12
 
 ### Test data from traces
 
