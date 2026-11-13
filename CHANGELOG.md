@@ -12,6 +12,12 @@
 - **Uses and used by…** in an item's menu lists what the item names in the workspace (API definitions, datasets, protos, mocks, script packages, MCP servers, environments, its collection) and what names it (tests, flows, monitors, calls, collections). The same reading as *Export with everything it uses*; nothing runs.
 - `testpion item uses <ref> [--json]` and the MCP tool `item_uses` answer the same: check before you delete or rename something.
 
+### Repro bundle of a failed run
+
+- **Repro bundle…** in a run's menu writes the run's failed HTTP steps as one file to hand to a colleague or attach to a bug: each request as it was sent and the answer it got, with notes that say which checks failed (expected and actual) and which errors came. It is the Debugger's share bundle (`.tpbundle`), so whoever gets it opens it in TestPion and resends a request or saves it.
+- Secrets are masked the strict way (authorization and cookie headers, tokens in URLs and bodies): the bundle shows what happened, it does not carry the credentials to do it again.
+- `testpion debug-export --run <runId|latest> -w <ws> --bundle repro.tpbundle` (with `--all-steps` for the passing steps too); for agents, `debugger_session` with `action: "bundle"` and `run`.
+
 ### API catalog
 
 - **A catalog of every API in the workspace**: for each collection, its requests and where they go, the API definition it implements and how many of that definition's operations have a request, the environments that define its variables, its monitors with their latest result, the test files and flows that run it, and its owners. Open it with the book button in the Collections header or from the command palette; every name is a link to the item.

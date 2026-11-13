@@ -209,8 +209,8 @@ The menus of every kind, as the app builds them ("New …" stands for the kind's
 | Folder of a list (monitors, prompts, load tests, evaluations) | New … |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… |  |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
 | Tests section (and its blank area) | New …, Import… |  | Expand all <kbd>*</kbd>, Collapse all |  | Export… | Run in CI… |  |  |  |
 | Folder of test files | New … |  | Expand all <kbd>*</kbd>, Collapse all | Run folder | Export… | Run in CI… |  | Rename folder <kbd>F2</kbd> | Delete folder… <kbd>Del</kbd> |
-| Test file |  | Open <kbd>Enter</kbd>, Reveal file |  | Run, Run with data…, Run in several environments… | Copy link, Copy path, Copy CLI command, Export as Arazzo…, Export… | Monitor on a schedule…, Run in CI…, Uses and used by…, Expose as MCP tool… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
-| Run |  | Open <kbd>Enter</kbd> |  | Rerun failed | Copy link, Copy CLI command, Copy run id, Export report… | Run in CI…, Explain and fix failures with AI… |  |  | Delete… <kbd>Del</kbd> |
+| Test file |  | Open <kbd>Enter</kbd>, Reveal file |  | Run, Run with data…, Run in several environments… | Copy link, Copy path, Copy CLI command, Export as Arazzo…, Export… | Monitor on a schedule…, Run in CI…, Expose as MCP tool… | Git | Rename <kbd>F2</kbd>, Duplicate, Move to… | Delete… <kbd>Del</kbd> |
+| Run |  | Open <kbd>Enter</kbd> |  | Rerun failed | Copy link, Copy CLI command, Copy run id, Export report…, Repro bundle… | Run in CI…, Explain and fix failures with AI… |  |  | Delete… <kbd>Del</kbd> |
 | History entry |  | Open <kbd>Enter</kbd>, Open request, Open trace |  |  | Copy link | Save as test… |  |  | Delete… <kbd>Del</kbd> |
 | Trace |  | Open <kbd>Enter</kbd>, Open run |  |  | Copy link |  |  |  |  |
 | Environment |  | Open <kbd>Enter</kbd> |  | Make active | Copy link, Export… | Uses and used by… | Git | Rename <kbd>F2</kbd>, Duplicate, Move up <kbd>Alt+↑</kbd>, Move down <kbd>Alt+↓</kbd> | Delete… <kbd>Del</kbd> |

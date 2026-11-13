@@ -120,6 +120,7 @@ export const LABEL = {
   exposeMcp: 'Expose as MCP tool…',
   exportArazzo: 'Export as Arazzo…',
   exportReport: 'Export report…',
+  reproBundle: 'Repro bundle…',
   copyRunId: 'Copy run id',
   triageWithAi: 'Explain and fix failures with AI…',
   openRequest: 'Open request',

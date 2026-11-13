@@ -24,6 +24,7 @@ import { str, type Tool, limitArg } from '../tool.js';
 import { connectionProperties, diffForAgent, exchangesFromFile, gatewayFromArgs } from './debugger-enterprise-tools.js';
 import { exchangesToSaz } from '../../debugger/saz-export.js';
 import { createShareBundle } from '../../debugger/bundle.js';
+import { reproBundle } from '../../debugger/repro.js';
 import { rulesFromFarx, describeFarxImport } from '../../debugger/farx.js';
 import { planLaunch, startLaunch, LAUNCH_KINDS, type LaunchKind } from '../../debugger/launcher.js';
 import { strictHarRedactor } from '../../debugger/har.js';
@@ -370,14 +371,15 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', enum: ['save', 'open', 'export_saz', 'bundle', 'diff'], description: 'export_saz writes a masked Fiddler archive; bundle writes a masked .tpbundle (HAR, active rules, environment facts, notes) to share; diff compares the session with the earlier run in path (or path with other)' },
+          action: { type: 'string', enum: ['save', 'open', 'export_saz', 'bundle', 'diff'], description: 'export_saz writes a masked Fiddler archive; bundle writes a masked .tpbundle to share (HAR, rules, notes); diff compares the session with the earlier run in path (or path with other)' },
           path: str('The file: .har (open also reads .saz and .tpbundle); export_saz: the .saz to write; bundle: the .tpbundle; diff: the earlier run (HAR, SAZ or bundle)'),
-          other: str('With diff: a second file to compare path with, instead of the captured session'),
-          notes: str('With bundle: a text for the person who opens it (masked like the rest)'),
-          with_rules: { type: 'boolean', description: 'With bundle: include the active rules (default true)' },
-          ignore_query: { type: 'boolean', description: 'With diff: match requests without their query string' },
-          include_size: { type: 'boolean', description: 'With diff: also report a different response size' },
-          append: { type: 'boolean', description: 'With open: add to the session instead of replacing it' },
+          other: str('With diff: a second file to compare path with (default: the session)'),
+          notes: str('With bundle: a text for who opens it (masked)'),
+          run: str('With bundle: a run id, for a repro bundle of its failed HTTP steps'),
+          with_rules: { type: 'boolean', description: 'With bundle: the active rules too (default true)' },
+          ignore_query: { type: 'boolean', description: 'With diff: ignore query strings' },
+          include_size: { type: 'boolean', description: 'With diff: report size changes too' },
+          append: { type: 'boolean', description: 'With open: add to the session, not replace it' },
         },
         required: ['action', 'path'],
       },
@@ -386,6 +388,12 @@ export function debuggerTools(d: { redactor: Redactor; store?: WorkspaceStore; /
         if (a.action === 'export_saz') {
           writeFileSync(file, await exchangesToSaz(session, strictHarRedactor(red)));
           return { saved: file, exchanges: session.length, masked: true };
+        }
+        if (a.action === 'bundle' && typeof a.run === 'string' && a.run) {
+          if (!d.store) throw new ApsError('ConfigurationError', 'A repro bundle of a run needs a workspace');
+          const r = await reproBundle(d.store, a.run, { notes: typeof a.notes === 'string' ? a.notes : undefined, redactor: d.redactor });
+          writeFileSync(file, r.bytes);
+          return { saved: file, masked: true, run: r.run, steps: r.steps, skipped: r.skipped };
         }
         if (a.action === 'bundle') {
           const { bytes, manifest } = await createShareBundle({ name: String(a.path).replace(/^.*[\\/]/, '').replace(/\.tpbundle$/i, ''), exchanges: session, rules: a.with_rules === false ? [] : rules.filter((r) => r.enabled), notes: typeof a.notes === 'string' ? a.notes : undefined, redactor: red, state: { running: !!proxy, port: proxy?.port, systemProxy: !!systemProxy, networkSpeed: speed ? describeNetworkSpeed(speed) : undefined } });

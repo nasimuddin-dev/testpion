@@ -364,6 +364,7 @@ export interface RpcParamTypes {
   'runs.latestResults': RpcCommonParams & { names: string[] };
   'runs.openReport': RpcCommonParams & { runId: string; format: string };
   'runs.paused': RpcCommonParams & { runId: string };
+  'runs.repro': RpcCommonParams & { runId: string; all?: boolean };
   'runs.resume': RpcCommonParams & { runId: string; action: string; vars?: Record<string, unknown> };
   'runs.runAgain': RpcCommonParams & { runId: string; resultIds?: string[] };
   'runs.scoreTrend': RpcCommonParams & { runIds?: string[]; name?: string; limit?: number };
@@ -452,4 +453,4 @@ export interface RpcParamTypes {
   'wsock.connect': RpcCommonParams & { url: string; protocols?: string[]; headers?: unknown[] };
 }
 
-export const RPC_METHOD_COUNT = 435;
+export const RPC_METHOD_COUNT = 436;

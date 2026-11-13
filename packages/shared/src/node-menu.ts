@@ -98,6 +98,7 @@ export type MenuLabelKey =
   | 'exportArazzo'
   | 'triageWithAi'
   | 'exportReport'
+  | 'reproBundle'
   | 'openRequest'
   | 'openTrace'
   | 'openRun'
@@ -369,6 +370,8 @@ const LIST_ACTIONS = [
   { id: 'exposeMcp', group: 'tools', label: 'exposeMcp', icon: 'bot', kinds: ['test'] },
   { id: 'exportArazzo', group: 'share', label: 'exportArazzo', icon: 'workflow', kinds: ['test'] },
   { id: 'exportReport', group: 'share', label: 'exportReport', icon: 'download', kinds: ['run'] },
+  // the run's failed HTTP steps as one masked file for a colleague (debugger/repro.ts)
+  { id: 'reproBundle', group: 'share', label: 'reproBundle', icon: 'archive-restore', kinds: ['run'] },
   // history, traces, environments
   { id: 'openRequest', group: 'open', label: 'openRequest', icon: 'external-link', kinds: ['history'] },
   { id: 'openTrace', group: 'open', label: 'openTrace', icon: 'file-text', kinds: ['history'] },

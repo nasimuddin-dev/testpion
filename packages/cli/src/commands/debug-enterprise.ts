@@ -15,6 +15,8 @@ import {
   Redactor,
   cleanGateway,
   createShareBundle,
+  latestFinishedRun,
+  reproBundle,
   describeDiff,
   describeFarxImport,
   describeGateway,
@@ -109,7 +111,11 @@ export function registerDebugEnterpriseCommands(program: Command): void {
   program
     .command('debug-export')
     .description('write a captured session (HAR, Fiddler SAZ or bundle) in another format, secrets masked: --saz for Fiddler, --bundle for a colleague or support (masked HAR, active rules, environment facts, notes), --har for HAR')
-    .argument('<file>', 'the session: a .har, .saz or .tpbundle')
+    .argument('[file]', 'the session: a .har, .saz or .tpbundle (not with --run)')
+    .option('--run <runId>', 'instead of a session file: a repro bundle of this run of the workspace (`latest`: the latest run), its failed HTTP steps as sent and answered with notes that say what failed; needs -w and --bundle')
+    .option('--all-steps', 'with --run: every HTTP step of the run, the passing ones too')
+    .option('--result <id...>', 'with --run: only these results')
+    .option('-w, --workspace <nameOrPath>', 'with --run: the workspace')
     .option('--saz <file>', 'write a Fiddler session archive')
     .option('--bundle <file>', 'write a share bundle (.tpbundle)')
     .option('--har <file>', 'write a HAR')
@@ -117,7 +123,22 @@ export function registerDebugEnterpriseCommands(program: Command): void {
     .option('--rules <file.json>', 'with --bundle: the rules file whose enabled rules travel inside (default: none)')
     .option('--dry-run', 'change nothing: say what would be written')
     .option(...JSON_RESULT_OPTION)
-    .action(async (file: string, o: { saz?: string; bundle?: string; har?: string; notes?: string; rules?: string; dryRun?: boolean; json?: boolean }) => {
+    .action(async (file: string | undefined, o: { saz?: string; bundle?: string; har?: string; notes?: string; rules?: string; dryRun?: boolean; json?: boolean; run?: string; allSteps?: boolean; result?: string[]; workspace?: string }) => {
+      if (o.run) {
+        if (!o.bundle) throw new CliError('A repro bundle is written with --bundle <file.tpbundle>', EXIT.CONFIG_ERROR);
+        if (!o.workspace) throw new CliError('Name the workspace of the run with -w', EXIT.CONFIG_ERROR);
+        const r = await withWorkspace(o.workspace, (store) => {
+          const id = o.run === 'latest' ? latestFinishedRun(store, () => true)?.runId : o.run;
+          if (!id) throw new CliError('This workspace has no finished run yet', EXIT.CONFIG_ERROR);
+          return reproBundle(store, id, { all: !!o.allSteps, results: o.result, notes: o.notes });
+        });
+        if (!o.dryRun) writeFileSync(resolve(o.bundle), r.bytes);
+        if (o.json) return printJson({ file: resolve(o.bundle), run: r.run, steps: r.steps, skipped: r.skipped, bytes: r.bytes.length, masked: true, dryRun: !!o.dryRun });
+        console.log(`${green(o.dryRun ? 'Would write' : 'Wrote')} ${resolve(o.bundle)} (${r.steps.length} request${r.steps.length === 1 ? '' : 's'} of the run ${r.run.id}, secrets masked)`);
+        for (const s of r.skipped) console.log(dim(`  not in it: ${s.name} (${s.why})`));
+        return;
+      }
+      if (!file) throw new CliError('Name the session file (a .har, .saz or .tpbundle), or pass --run <runId> for a repro bundle of a run', EXIT.CONFIG_ERROR);
       if (!o.saz && !o.bundle && !o.har) throw new CliError('Say what to write: --saz <file>, --bundle <file> or --har <file>', EXIT.CONFIG_ERROR);
       let opened: ReturnType<typeof exchangesFromFile>;
       try {

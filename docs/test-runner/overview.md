@@ -113,6 +113,8 @@ Requests use `{{baseUrl}}` and the auth variables an import uses (`{{accessToken
   <img src="/images/output-run-results.jpg" alt="A test run's results with the ▾ menu open: HTML report, JSON results, JUnit XML (CI), Markdown summary, Results (CSV) and All reports (ZIP)" width="1440" height="900" loading="lazy">
 </figure>
 
+**Hand a failure to someone else.** **Repro bundle…** in a run's menu (right-click the run in **Tests ▸ Runs**) writes the run's failed HTTP steps as one `.tpbundle` file: each request as it was sent and the answer it got, with notes that say which checks failed (expected and actual) and which errors came. The colleague opens it in TestPion (**Debugger ▸ Open session**) and resends a request or saves it. Secrets are masked the strict way, so the bundle shows what happened without carrying the credentials. On the command line: `testpion debug-export --run latest -w . --bundle repro.tpbundle`.
+
 - In the editor, the preview of a test file shows each test's latest result and when it ran (click it to open that run).
 - Select a result and open **History** to see the same test in the latest runs: whether it passed, its time per run (with the median) and the checks that failed, flagged as *flaky?* when the result keeps flipping, with **Why is this flaky?** ([the pattern and a fix, proven by running the test 5 times](/ai-testing/ai-features#why-is-this-flaky)); click a run to open it.
 - `testpion history test "<name>"` and the `test_history` MCP tool give the same.

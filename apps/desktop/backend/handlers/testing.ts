@@ -49,6 +49,7 @@ import {
   readExposure,
   setExposure,
   type FlowExposure,
+  reproBundle,
 } from '@testpion/core';
 import type { Backend, Handlers, EvalRunParams } from '../backend.js';
 import { previewTests } from '../test-preview.js';
@@ -213,6 +214,12 @@ export function testingHandlers(be: Backend): Handlers {
       const src = join(be.ws.runDir(runId), file);
       if (!existsSync(src)) throw new ApsError('ConfigurationError', `Run ${runId} has no ${format} report`);
       return be.saveOrDownload(file, undefined, (dest) => copyFileSync(src, dest), () => readFileSync(src));
+    },
+    /** A repro bundle of the run's failures (its failed HTTP steps as sent and answered, masked, with notes), saved where the user picks. */
+    'runs.repro': async ({ runId, all }: { runId: string; all?: boolean }) => {
+      const r = await reproBundle(be.ws, runId, { all: all === true, redactor: be.logger.redactor });
+      const saved = await be.saveOrDownload(r.name, [{ name: 'TestPion bundle', extensions: ['tpbundle'] }], (dest) => writeFileSync(dest, r.bytes), () => r.bytes);
+      return { ...saved, steps: r.steps.length, skipped: r.skipped };
     },
     /** The workspace report (activity, collection health, monitors, runs) as one HTML file, saved where the user picks. */
     'report.workspace': async ({ days, tzOffsetMin }: { days?: number; tzOffsetMin?: number } = {}) => {
